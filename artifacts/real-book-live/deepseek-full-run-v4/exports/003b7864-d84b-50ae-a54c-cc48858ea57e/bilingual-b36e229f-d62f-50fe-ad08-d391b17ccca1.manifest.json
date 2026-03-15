@@ -1,0 +1,1879 @@
+{
+  "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+  "chapter_title": "1 What is an AI agent?",
+  "export_type": "bilingual_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v4/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/bilingual-b36e229f-d62f-50fe-ad08-d391b17ccca1.html",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "e83cb5e8-032c-57b0-b1a8-fbc548491087",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "ec38816e-ec06-581d-ac00-69a0a93bfdf9",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "version": 1
+      },
+      {
+        "snapshot_id": "dc87fe8c-3394-5f05-be6a-65f77300f858",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "e8a322ab-e34e-55be-8f2e-0b15fdf7e451",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "00780214-a8c4-5f08-adfb-70ed07f37abd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "00c784d4-0ecc-51b3-bf2f-6ed2e82972f1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "011cfc56-4e6c-543b-aa36-9c7958aad541",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "01a384a5-f5cb-5863-8fcb-3ab9543d3995",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "021896ca-1009-5b10-82c6-7b7ce4fb40ec",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "03439471-bc84-5348-ac3d-3eb6f4e75eeb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0399d3df-c6cb-5cdb-be0e-62a74b86f314",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "040d44b4-5880-5217-80e7-04015cab8854",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "045f405d-0633-5a8f-8938-cda3a18df8ee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "066945da-d9f9-5cca-b043-1e7814b2dbab",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "073e44d8-64c3-57af-ab9d-fa2e4c73f476",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "08132e18-f17c-5f17-8c1f-ff8e46a791e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "085c3f69-1b29-5e8d-a2c0-dd10957df5ab",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0aad0177-47e8-511a-a772-19d4d110ac74",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0f696285-5fbf-5a68-853a-80dd828636e8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "108ca783-d959-5b36-b2c0-d0da6ab5aa27",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "11430031-d47a-5750-88fe-f109c102f247",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "12dec313-b993-5398-957a-67103f93eb55",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "14454bae-c495-552d-844c-aafc675899c1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "155e786b-b648-5d97-8241-ad5e61522ff3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "17fb2ba3-0581-5f00-9357-973dee036dde",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1973651d-85ea-54b5-8eab-43d293d42467",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "199cb5ff-b3c3-5bcb-b50d-4fbad59734d9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "19c3a003-d6a6-5994-87f2-f51af83deab0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1ffad4be-3764-5c12-b828-615fce9ae39a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "21f44ab4-f8ca-5555-88aa-df3db30f77cd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "22b0027a-fea3-5557-a06f-0a574fa9c480",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "25215417-b1ee-548d-94ad-476f14114966",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "29805c94-670c-5b61-83c7-bd86de8cd03f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2d119a30-f37e-512c-95c1-0ac00d9a52a9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2eaf5877-175b-59b8-bf3d-429c4b1f9b06",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "31e857e6-7ee7-5503-be0f-c4a890999374",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "329dfbad-555b-5013-87ae-38b04711f690",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "337e2a91-8c19-5831-a128-e09bfbd5f455",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "338f4634-3cab-532e-9506-5b4d8f81026a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "35381ff0-0f21-58c1-9b95-f1c5bf554c63",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "35d5d40d-ad64-5491-b15e-ebbfd798d9b6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3802f6df-aec7-5241-b2e1-ba869a95c2d8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3c5f4482-df17-5938-966f-3137eb2af264",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3ddf90e5-5113-5eb8-a183-a4e7195075c4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e26530f-6770-5236-843f-489132deaade",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3ef3d3ef-f37d-5a40-a8c2-1164d975c8e4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "40b541e3-b05b-576e-920c-b00592ab7152",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "431ab7d7-76ff-55cd-968f-f0a628144ba0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "43daacdb-b33f-59dc-a669-7f225292f414",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "464bcfae-5ea7-51c3-9872-24c66d7456da",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "49b4dc2a-6d40-5bbd-a919-840b5b2ec410",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4a625132-af86-52dd-8c3d-f044a405d823",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4b8c204c-4c3c-5062-bb70-3245e6d250a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4cf87068-7e5c-5886-803c-13a1e1c789bf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4e774219-5099-5d65-ad74-1f3486330bce",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4f278cd7-bbba-58bc-b3bf-c63ad6e96927",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4f8dc355-72b7-56f4-8ff2-90c7a758c972",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "507472e4-a76e-52aa-987b-221bd790791c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5211a160-4c37-57d3-8190-b1ccc4766383",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "526f37a6-bd4d-50e2-be39-ecb427c69c67",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53534e2a-9a95-5f65-ad51-208f3b926acc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "54a826e8-6e9c-5836-a17f-4068a7d4c8ea",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "54b98d1a-191d-5393-a8ca-a00cd754df69",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "55bedba3-7ffe-5d03-95c8-937f870ad832",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "560a0213-3f76-5117-a5f5-13167c1ee0d1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "561f7490-1c5b-5e59-9ff5-d84af04d1c8b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5a1d2cde-7c6a-5c80-98ac-6d8372b241ba",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5b8b7cf0-020e-5cf5-be01-86cee108e0c0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "600f7336-c6aa-54be-b4a0-71625addbc23",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "60806db1-3784-5eaf-b475-165bd0209a53",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6191cc38-88fd-5089-8685-32a65c1be836",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6289c2ca-932d-5406-aa78-8579eeb40f2c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "66608182-6b5f-50bc-99fe-f02e45276f8c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "673cc7ec-5b35-55d4-9745-55f824b9d987",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "674369ec-23a6-5055-b0d5-b7faf86ba884",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6af4fad2-725a-5ed3-94b8-cf7608992505",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6af6e7a0-360f-5318-8395-ef65388d66b2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6c65eb6d-53be-58ce-9979-ef392ba02592",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "73dd1277-94bc-58d0-a252-f297939cf7a4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "73e043b4-2829-5237-8199-8d1feceaed34",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "743c7d30-c39b-5c9d-a1a5-2f36f21274e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "74c8b12f-f62f-5524-897d-c24cecf5d3f9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "75df0edc-b13f-5f0e-a03f-49e89402d257",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "76e56bee-4a09-5688-8331-3bd276e1e54c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "785ee22e-638a-5f70-b188-a73c041b192a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7aa46c6a-4f32-566a-899f-c2b230a11af6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7dc6c4d7-e6f8-5f9e-8197-9faac3b0acc1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7fc02979-68d6-532a-b91b-8d254acc79a9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81b96450-c628-5e59-b8b2-bd30800a9a2a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81f9ec93-3916-54c5-bcf3-965957450c37",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "82c9cdf5-30d9-5286-a8c4-f5445a6ed705",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "858a3aa2-1d6b-572e-b742-410baf0bfc07",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "860d0474-b53f-50c0-b642-0ff21cd37dc7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "88fe14dc-d9c0-57cb-adc9-eea603809006",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8c2303b2-ea77-57e1-8ccf-1670b107acd1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8d139a9f-a34a-5b77-b1e7-c0edec4d5d84",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8dfd6aca-2c13-5d9e-a202-70b8b1f84ec1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "91cb761a-155f-5387-bd36-17a30a54a0e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "91e72fd5-56dc-5dea-8aab-b88f0ccf9df8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "92a0af72-5c7c-58b3-bf2b-8c24f99ef609",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "92e8b776-fa09-574d-8b89-a49a506ac37e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "92ebe91d-e218-5d5c-9dad-628a91657d4a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "93fbb96f-9dc1-5d9e-95ca-8bede6cd69ea",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "94976377-a555-5fac-bbab-3c3d490e96e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9648d716-4636-59cd-b244-66e062e567db",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9a3e3459-0dd8-5f67-8a1c-5866e36a7b7f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9b21a4b4-93da-527a-aa1c-d416be73978b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9d5f0448-4379-50e8-ac13-a99a9a6fadda",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9da4f576-f827-514f-a628-0c75c385e4f3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9dc1b8e1-2093-544f-a6f3-c2abc01595c5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a2001915-1bbf-574d-83ec-1b2171457fee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a417159c-4cd4-54ae-8f34-02a250d6f9d7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a6072aed-5435-535f-9c49-56aa3fbdeaa0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a6404101-0ec0-58b1-8a3a-c403b115fb52",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a67c0888-f9cc-53d0-91da-a34f1e3f14bb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a6b084ff-5577-5e98-86af-eadd3340f830",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a860ad98-2b6c-5ec8-892f-03340ee37c1a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aa1153e3-f0c2-5c95-9a47-ef73c7ebdeb1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ab6ddc6d-2e8b-547d-aec0-b9324847b70d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad0a520c-3703-58f0-866a-df4ee1783c84",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad0a631d-5153-5046-afb3-808d4c9601bc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad4e4938-c9df-5ed1-9f37-c2e198b71f7a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad7042ca-a861-5251-a0eb-b3889acdb4af",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "af6bc29b-0a56-5e43-805a-48531cc5eb32",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b055bc8b-1e94-5c55-99e3-927688b6e323",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b37be9a4-3049-5301-b73f-623307980f37",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b3913bff-e361-526f-a13f-fd4355013dc3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b52395b3-856f-5029-8e97-5dce08ba17f4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b5332e6d-bc91-50e0-b7f9-f1034abd6787",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b6927b19-3962-50fd-a026-5cbbd764577b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b84e94e3-e806-5a91-8b5c-cbc218e53500",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b88a974b-b402-5081-9675-b6b4b9bc6108",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b944763e-f4d4-57bd-b5c5-863c5a9194f2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b9f51917-5596-5ce1-866f-ebf93bc93d4f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ba005e79-ecc1-573f-9694-d1c6c4eaf108",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "baa327d5-7cf5-5092-9b9b-21cd087e871b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bc6b2997-230e-5349-ab09-4d31c857cd64",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bcfcd569-1f04-5a5a-a668-018b85c3ed5f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "be357fba-a331-5604-8099-1cf4963184b2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bf317bfb-7bfe-5b45-853b-f68db7ef0713",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bf9be6fb-fa7b-53f1-9409-f26afcae8c51",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c1b24967-fea3-50a2-b5a4-527266de2964",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c2af36c7-0670-5679-b802-6d45d23d6758",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c2b7f064-5511-5fdb-ad64-e966cedf416c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c59df550-2c07-5ea6-8e33-182dc866e43c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c6bad788-b0c4-52e2-acba-8076449e81e8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c83169c0-d0a2-5334-9ebc-e2e845a09d33",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c89c2a3d-b637-5b2d-b151-f4dfd70e49e4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c93409c5-1913-5072-befc-8b38a5a7ab3d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "caf1daf8-3985-5d7b-8d2a-7d3ad72d119e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cb688d0e-5aee-5a06-84f4-32560572e7c5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cbe6701d-2f04-5a6a-96ca-b44c550642a3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d2beb60f-8d7f-5d90-84c1-7a4cb7a6ca3a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d47c858b-4fea-5cff-832b-e17252ffbc52",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d60be6ca-5e21-5ee2-9fe5-6de0bbab5847",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d81b6127-4c58-5677-8fe0-58b43bcf7c1b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d8a8511e-6f50-561e-acf2-8f520bf50caf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d9f83ac4-53f1-593e-a507-2ebd33d9ca84",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "daeaf5d3-8fbf-589a-8766-260bb7eed3e1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dd2dceef-0735-5578-85c4-15807c23212a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "de5c08bc-6ed8-5389-9358-26ee43689b2f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e07ab841-b179-5225-8835-27d09941f605",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e451623e-76b0-54c9-bf14-05df9cf024af",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e5749920-4663-570c-8803-cbf9e895ebc8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e6609099-b397-5f38-8d9d-bb40ce1735dd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e72607d9-b266-578e-b07c-c3de657488a6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e9f18459-90e0-5474-9fc6-64420bb9e49a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ed4c2b77-51aa-5a1b-90db-7d09a2352be8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ef2af0fd-df95-5ccb-b2c0-6c7a83bfb935",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ef9853e2-d640-572e-bd48-8719e68ec669",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0096ae2-d961-53ef-80a5-d3ed23d5f365",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0df807a-46d8-5e8e-af35-ceee2a45ce5e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f6314653-b90f-57bb-a67c-07a2f7d85fb5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f65e1d3a-c32a-5e6c-8136-12afd51dd568",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f776ddec-1972-567c-a41e-cd084b3a74bd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f78c256f-f526-549c-9a85-f659c375065f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f794f700-bf55-5e92-bc67-6a66ad0fb018",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f8155f83-4b4b-5cf9-a0bf-53df348bb4e0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f84dab20-d724-5553-8f27-fae4fbb85ec0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f9e4014c-cf97-5ab9-905c-f8d40bd536fe",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "faa1886f-73f6-5a29-8328-f24f69e7c98a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ff2729a2-d20f-5c91-badb-203703229890",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ffec5a11-4dc0-57a4-b6b8-530c3f4e4616",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "row_summary": {
+    "sentence_row_count": 400,
+    "aligned_sentence_count": 400,
+    "target_segment_count": 397,
+    "orphan_target_segment_count": 0,
+    "alignment_edge_count": 400,
+    "inactive_alignment_target_count": 0
+  },
+  "issue_summary": {
+    "total_issue_count": 1,
+    "open_issue_count": 0,
+    "issue_type_counts": {
+      "FORMAT_POLLUTION": 1
+    }
+  }
+}

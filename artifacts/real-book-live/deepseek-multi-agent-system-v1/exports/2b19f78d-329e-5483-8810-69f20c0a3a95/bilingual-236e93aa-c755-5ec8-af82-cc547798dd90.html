@@ -1,0 +1,281 @@
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>附录C：实现PydanticFunctionTool</title><style>:root{--paper:#f5efe6;--card:#fffdfa;--ink:#1f2933;--muted:#5f6b7a;--accent:#0f6c7a;--border:#d9cdbd;--shadow:0 18px 36px rgba(70,54,34,.08);--font-body:'Iowan Old Style','Palatino Linotype','Book Antiqua',Georgia,serif;--font-display:'Avenir Next Condensed','Gill Sans','Trebuchet MS',sans-serif;--font-ui:'Helvetica Neue','Segoe UI',sans-serif;}*{box-sizing:border-box;}body{margin:0;background:linear-gradient(180deg,#f7f1e7 0%,#fbf8f2 38%,#f3ede2 100%);color:var(--ink);font-family:var(--font-body);line-height:1.72;}.page{max-width:980px;margin:0 auto;padding:28px 18px 52px;}.hero{margin-bottom:22px;padding:28px 30px 24px;background:radial-gradient(circle at top left,rgba(217,238,240,.9),rgba(255,253,248,.95) 38%,rgba(255,253,248,1) 100%);border:1px solid var(--border);border-radius:26px;box-shadow:var(--shadow);}.hero-kicker{font-family:var(--font-ui);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;}.hero h1{margin:12px 0 0;font-family:var(--font-display);font-size:clamp(30px,5vw,48px);line-height:1;color:#15313a;}.source-title{margin-top:10px;font-family:var(--font-ui);font-size:14px;color:var(--muted);}.chapter{padding:28px 30px;background:var(--card);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow);}.block{margin:22px 0;}.block .zh{font-size:19px;color:#16202a;max-width:36em;text-wrap:pretty;}.heading .zh{font-family:var(--font-display);font-size:28px;line-height:1.12;color:#17313a;}.paragraph .zh,.list_item .zh,.quote .zh{hyphens:auto;}.block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}.block details summary{cursor:pointer;font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}.block .source{margin-top:8px;color:var(--muted);font-family:var(--font-ui);font-size:14px;white-space:pre-wrap;}.artifact{background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);border:1px solid rgba(184,197,218,.85);border-radius:18px;padding:18px 18px 16px;box-shadow:0 8px 22px rgba(60,74,97,.06);}.artifact .artifact-note{font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}.artifact pre{margin:0;white-space:pre;overflow-x:auto;tab-size:4;font-family:'SFMono-Regular',Menlo,Monaco,monospace;font-size:14px;line-height:1.68;color:#102033;background:#eef3fa;border-radius:12px;padding:14px;}.artifact .artifact-body{white-space:pre-wrap;font-family:'SFMono-Regular',Menlo,Monaco,monospace;font-size:14px;line-height:1.68;color:#102033;background:#f5f8fc;border-radius:12px;padding:14px;}.artifact.image-anchor .artifact-body,.artifact.reference .artifact-body{font-family:var(--font-ui);}.artifact.image-anchor .artifact-body div{margin:4px 0;}.artifact-figure{margin:0;display:grid;gap:12px;}.artifact-image{display:block;max-width:100%;height:auto;border-radius:14px;border:1px solid rgba(184,197,218,.9);background:#fff;box-shadow:0 12px 28px rgba(60,74,97,.08);}.artifact-figure figcaption{font-family:var(--font-ui);font-size:14px;line-height:1.6;color:var(--muted);}.artifact.reference .artifact-body{word-break:break-all;}.quote{border-left:5px solid #8cc4ce;padding-left:18px;margin-left:4px;}.footnote .zh,.caption .zh{font-size:16px;color:#334155;}.inline-token{font-family:'SFMono-Regular',Menlo,Monaco,monospace;background:#e3edf4;padding:1px 6px;border-radius:6px;font-size:.92em;}.empty-state{font-family:var(--font-ui);font-size:14px;color:var(--muted);padding:18px 0;}@media (max-width: 860px){.page{padding:18px 12px 36px;}.hero,.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}@media print{body{background:#fff;}.page{max-width:none;padding:0;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;}.artifact{box-shadow:none;}}</style></head><body><main class='page'><header class='hero'><div class='hero-kicker'>Chapter Export</div><h1>附录C：实现PydanticFunctionTool</h1><div class='source-title'>Appendix_C._Implementing_The_PydanticFunctionTool</div></header><section class='chapter'><section class='block heading'><div class='zh'>附录C：实现PydanticFunctionTool</div><details><summary>Source</summary><div class='source'>Appendix C. Implementing The PydanticFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>在第二章中，我们介绍了PydanticFunctionTool及其在我们框架中的使用模式，作为我们从头构建的SimpleFunctionTool的替代方案。<br/>PydanticFunctionTool的主要优势在于为关联函数的参数生成更健壮的JSON Schema，以及通过pydantic库实现更强大的验证功能。<br/>在本附录中，我们将详细介绍PydanticFunctionTool的完整实现，以及其异步版本AsyncPydanticFunctionTool的实现过程。</div><details><summary>Source</summary><div class='source'>In Chapter 2, we introduced the PydanticFunctionTool and its usage pattern with our framework, as an alternative to our from-scratch SimpleFunctionTool. The main benefits of the PydanticFunctionTool are more robust JSON Schema generation for the associated function’s parameters, as well as more powerful validation through the pydantic library. In this appendix, we provide a walkthrough on the full implementation of the PydanticFunctionTool as well as its asynchronous version, AsyncPydanticFunctionTool.</div></details></section><section class='block heading'><div class='zh'>C.1 实现PydanticFunctionTool</div><details><summary>Source</summary><div class='source'>C.1 Implementing PydanticFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>现在我们将构建PydanticFunctionTool包装器类，以实现我们刚刚展示的使用模式。<br/>正如我们当时所见，我们包装了一个函数，该函数接收一个单一参数params，该参数是pydantic.BaseModel。<br/>为了方便并遵循我们已在框架中开始建立的类型化实践，让我们为这类函数创建一个指定的类型。</div><details><summary>Source</summary><div class='source'>We now will build the PydanticFunctionTool wrapper class that will enable the usage pattern that we just showed. As we saw then, we wrap a function which takes in a single parameter params that is pydantic.BaseModel. For convenience and to conform to our typing practices that we’ve begun to establish in our framework, let’s create a designated type for these kinds of functions.</div></details></section><section class='block paragraph'><div class='zh'>我们将这类函数类型称为PydanticFunction，因为它们将参数打包在pydantic.BaseModel类型中，正如我们在HailstoneParams中所见。<br/>下一份清单提供了其定义。</div><details><summary>Source</summary><div class='source'>We’ll call such function types PydanticFunction since they package their parameters in a pydantic.BaseModel type as we saw in HailstoneParams. The next listing provides its definition.</div></details></section><section class='block heading'><div class='zh'>清单C.1 实现PydanticFunction协议</div><details><summary>Source</summary><div class='source'>Listing C.1 Implementing the PydanticFunction Protocol</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/pydantic_function.py
+from typing import Any, Protocol
+from pydantic import BaseModel
+ 
+ 
+class PydanticFunction(Protocol):
+    &quot;&quot;&quot;PydanticFunction Protocol.&quot;&quot;&quot;
+ 
+    __name__: str
+    __doc__: str | None
+ 
+    def __call__(
+        self,
+        params: BaseModel,
+        *args: Any,
+        **kwargs: Any
+    ) -&gt; Any:
+        &quot;&quot;&quot;Callable interface.
+ 
+        Args:
+            params (BaseModel): The function&#x27;s params as a 
+                ~pydantic.BaseModel.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+ 
+        Returns:
+            Any: The result of the function call.
+        &quot;&quot;&quot;
+        ...  #A</code></pre></section><section class='block paragraph'><div class='zh'>上面的列表显示，我们选择将PydanticFunction实现为typing.Protocol的子类，这类协议用于定义可在运行时进行类型检查的接口。<br/>此接口要求的唯一方法是特殊的__call__方法，重要的是它接收一个类型为pydantic.BaseModel的参数params。<br/>作为接口方法，我们只需提供省略号（即…），在此上下文中表示实际函数提供具体实现。</div><details><summary>Source</summary><div class='source'>The listing above shows that we have chosen to implement the PydanticFunction as a subclass of typing.Protocol, which are meant for defining interfaces that can be typed-checked at runtime. The lone method that we requires with this interface is the special __call__ method, which importantly takes in a parameter, params, that is of type pydantic.BaseModel. As an interface method, we need only supply elipsis (i.e., …), which in this context indicates that the actual function provides the implementation.</div></details></section><section class='block paragraph'><div class='zh'>在此接口中我们需要的其他属性是特殊的Python属性__name__和__doc__，这些属性默认已在Python函数中定义。<br/>换句话说，任何函数只要其签名包含一个名为params、类型为pydantic.BaseModel的单一变量，就满足PydanticFunction协议——这正是我们所需要的。</div><details><summary>Source</summary><div class='source'>The other attributes we require in this interface are special Python attributes __name__ and __doc__, which are defined by default for Python functions. In other words, any function that has a signature involving a single variable named params of type pydantic.BaseModel, satisfies the PydanticFunction protocol—this is precisely what we need.</div></details></section><section class='block paragraph'><div class='zh'>将PydanticFunction定义为typing.Protocol的另一个额外好处是，现代集成开发环境（IDE），如VSCode，支持类型提示并提供有用的类型提示。</div><details><summary>Source</summary><div class='source'>Another added benefit of defining our PydanticFunction as a typing.Protocol is that modern Integrated Development Environments (IDEs), such as VSCode, support typing and provide helpful type hints.</div></details></section><section class='block paragraph'><div class='zh'>既然我们已经为要用PydanticFunctionTool包装的函数定义了一个特殊类型，接下来就让我们继续处理下一项任务。<br/>为了使我们的实现更加健壮，我们应该确保任何希望用这个类包装的函数确实是一个PydanticFunction。<br/>接下来，我们将通过实现特定的验证逻辑来处理这个问题。</div><details><summary>Source</summary><div class='source'>Now that we have defined a special type for our functions to be wrapped by PydanticFunctionTool, let’s move onto the next order of business. To make our implementation more robust, we should ensure that any function that we wish to wrap with this class is indeed a PydanticFunction. We will handle this by implementing specific validation logic next.</div></details></section><section class='block heading'><div class='zh'>清单C.2 通过签名检查验证函数</div><details><summary>Source</summary><div class='source'>Listing C.2 Validating functions by signature inspection</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/pydantic_function.py
+import inspect
+from typing import Any, Awaitable, Callable, Protocol, get_type_hints
+from pydantic import BaseModel
+ 
+ 
+def _validate_pydantic_function(func: Callable) -&gt; type[BaseModel]:
+    &quot;&quot;&quot;Validates func as a proper `PydanticFunction`.
+ 
+    Args:
+        func (Callable): The function to validate as `PydanticFunction`.
+ 
+    Raises:
+        RuntimeError: If validation of `func` fails.
+    &quot;&quot;&quot;
+    sig = inspect.signature(func)
+    type_hints = get_type_hints(func)
+ 
+    if &quot;params&quot; not in sig.parameters:  #A
+        raise RuntimeError(
+            &quot;Validation of `func` failed: Missing `params` argument.&quot;,
+        )
+ 
+    if annotation := type_hints.get(&quot;params&quot;):
+        if not issubclass(annotation, BaseModel):  #B
+            msg = (
+                f&quot;Validation of `func` failed: {annotation} is not&quot;
+                &quot; a subclass of `~pydantic.BaseModel`.&quot;
+            )
+            raise RuntimeError(msg)
+    else:
+        msg = (
+            &quot;Validation of `func` failed: `params` argument must have &quot;
+            &quot;type annotation.&quot;
+        )
+        raise RuntimeError(msg)
+ 
+    return annotation  #C</code></pre></section><section class='block paragraph'><div class='zh'>让我们一步步走查验证逻辑。<br/>第一段代码应该看起来熟悉，因为我们再次需要对函数签名进行内省，就像我们为SimpleFunctionTool从头构建将函数签名转换为JSON Schema的逻辑时那样。<br/>和那时一样，我们在这里依赖inspect.signature和typing.get_type_hints的组合，从提供的函数签名中提取参数及其注解类型。</div><details><summary>Source</summary><div class='source'>Let’s walkthrough our validation logic step-by-step. The first bit of code should hopefully look familiar, as we’re again needing to perform introspection on the function signature, as we did when we built logic to transform function signatures to JSON Schemas from scratch for SimpleFunctionTool. As we did then, we rely on the combination of inspect.signature and typing.get_type_hints here to extract the parameters and their annotated types from the supplied function’s signature.</div></details></section><section class='block paragraph'><div class='zh'>接着，我们检查提取出的参数中是否存在名为“params”的参数。<br/>如果存在，我们进一步检查其标注类型是否为pydantic.BaseModel。<br/>如果其中任一检查失败，我们会抛出一个RuntimeError，并附带说明验证失败原因的信息。</div><details><summary>Source</summary><div class='source'>We then check if a parameter with the specific name “params” exists in the extracted parameters. If it does, then we next check that its annotated type is a pydantic.BaseModel. If either of these checks fail, then we raise a RunTimeError with a message indicating as to why the validation failed.</div></details></section><section class='block paragraph'><div class='zh'>如果两项检查都通过，那么我们就得到了一个有效的PydanticFunction，并返回params所标注的pydantic.BaseModel类型或其子类。<br/>让我们用hailstone_pydantic_fn快速演示一下这个验证过程。</div><details><summary>Source</summary><div class='source'>If both checks pass, then we have a valid PydanticFunction, and we return the type or subclass of pydantic.BaseModel with which params is annotated. Let’s quickly demonstrate this validation with our hailstone_pydantic_fn.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>from llm_agents_from_scratch.tools.pydantic_function import (
+    _validate_pydantic_function,
+)
+ 
+print(_validate_pydantic_function(hailstone_pydantic_fn))</code></pre></section><section class='block paragraph'><div class='zh'>上述打印语句应返回与以下内容相似的输出。</div><details><summary>Source</summary><div class='source'>The above print statement should return an output similar to the following.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>__main__.HailstoneParams</code></pre></section><section class='block paragraph'><div class='zh'>我们现在可以开始实现PydanticFunctionTool了，它像SimpleFunctionTool一样继承自我们的BaseTool类。<br/>由于我们已经了解了如何创建BaseTool的子类，我们将直接在下方的代码清单中展示完整实现，然后进行讨论，而不是像之前那样逐步实现各个方法。</div><details><summary>Source</summary><div class='source'>We are now in a position to start implementing our PydanticFunctionTool, which, like SimpleFunctionTool, inherits our BaseTool class. As we have already seen how to create a subclass of BaseTool, we’ll present the entire implementation in the listing below and then discuss it, rather than implementing methods incrementally as we did before.</div></details></section><section class='block heading'><div class='zh'>清单C.3 实现PydanticFunctionTool</div><details><summary>Source</summary><div class='source'>Listing C.3 Implementing PydanticFunctionTool</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>#llm_agents_from_scratch/tools/pydantic_function.py
+import inspect
+from typing import Any, Awaitable, Callable, Protocol, get_type_hints
+from pydantic import BaseModel
+from llm_agents_from_scratch.base.tool import BaseTool
+from llm_agents_from_scratch.data_structures import (
+    ToolCall,
+    ToolCallResult,
+)
+ 
+…  #A
+ 
+class PydanticFunctionTool(BaseTool):
+    &quot;&quot;&quot;Pydantic function calling tool.
+ 
+    Turn a Python function that takes in a ~pydantic.BaseModel params 
+    Object into a tool for an LLM.
+ 
+    Attributes:
+        func: PydanticFunction to represent as a tool.
+        params_mdl: The params BaseModel.
+        desc: Description of the PydanticFunction.
+    &quot;&quot;&quot;
+ 
+    def __init__(
+        self,
+        func: PydanticFunction,
+        desc: str | None = None,
+    ):
+        &quot;&quot;&quot;Initialize a PydanticFunctionTool.
+ 
+        Args:
+            func (PydanticFunction): The Pydantic function to expose as a 
+                tool to the LLM.
+            desc (str | None, optional): Description of the function.
+                Defaults to None.
+        &quot;&quot;&quot;
+        self.func = func
+        self.desc = desc or func.__doc__ or f&quot;Tool for {func.__name__}&quot;
+        self.params_mdl = _validate_pydantic_function(func)  #B
+
+    @property
+    def name(self) -&gt; str:
+        &quot;&quot;&quot;Name of function tool.&quot;&quot;&quot;
+        return self.func.__name__
+
+    @property
+    def description(self) -&gt; str:
+        &quot;&quot;&quot;Description of what this function tool does.&quot;&quot;&quot;
+        return self.desc
+
+    @property
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON schema for tool parameters.&quot;&quot;&quot;
+        return self.params_mdl.model_json_schema()  #C
+
+    def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        &quot;&quot;&quot;Execute the function tool with a ToolCall.
+
+        Args:
+            tool_call (ToolCall): The ToolCall to execute.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            ToolCallResult: The result of the tool call execution.
+        &quot;&quot;&quot;
+        try:
+            params = self.params_mdl.model_validate(tool_call.arguments)  #D
+            # execute the function
+            res = self.func(params)  #E
+            content = str(res)
+            error = False
+        except Exception as e:
+            content = f&quot;Failed to execute function call: {e}&quot;
+            error = True
+
+        return ToolCallResult(
+            tool_call=tool_call,
+            content=content,
+            error=error,
+        )</code></pre></section><section class='block paragraph'><div class='zh'>从__init__方法开始，我们可以看到其逻辑与SimpleFunctionTool.__init__完全相同，但增加了用于验证和自动提取参数模型的语句。<br/>正如我们所讨论的，_validate_pydantic_function返回函数参数的类型（或类）。<br/>这可以视为一种额外的便利，因为我们不需要用户提供此信息，而是从提供的PydanticFunction中自动提取。</div><details><summary>Source</summary><div class='source'>Beginning with the __init__ method, we can see that it has the exact same logic as SimpleFunctionTool.__init__, however, with the added statement for validation and automatic extraction of the params model. As we discussed, _validate_pydantic_function returns the type (or class) of the function’s params argument. This can be seen as a bit of added convenience, as we don’t require the user to supply this information, but rather extract it from the supplied PydanticFunction automatically.</div></details></section><section class='block paragraph'><div class='zh'>接下来，属性name和desc的实现方式与SimpleFunctionTool相同。<br/>然而，我们当前对parameters_json_schema的实现与SimpleFunctionTool有所不同。<br/>这里，我们只需调用方法params_mdl.model_json_schema，这是一个类方法，返回params_mdl（一种pydantic.BaseModel类型）的JSON Schema表示。<br/>与SimpleFunctionTool不同，在SimpleFunctionTool中我们依赖从头编写的代码将函数签名转换为JSON Schema表示，而现在我们利用pydantic库从params_mdl为我们构建这个JSON Schema。</div><details><summary>Source</summary><div class='source'>Next, the implementations for the property attributes name and desc are the same as those for SimpleFunctionTool. Our current implementation of parameters_json_schema, however, is different from that of SimpleFunctionTool. Here, we simply call the method params_mdl.model_json_schema, which is a class method that returns the JSON Schema representation of params_mdl (a type of pydantic.BaseModel). Unlike SimpleFunctionTool, where we relied on our from-scratch code to convert function signatures to their JSON Schema representations, we now utilize the pydantic library to build this JSON Schema from the params_mdl for us.</div></details></section><section class='block paragraph'><div class='zh'>最后，__call__方法的实现还涉及对包装函数func的委托调用。<br/>然而，由于func是PydanticFunction，我们需要向其传递一个params_mdl类型的实例，该实例必须使用LLM在其工具调用请求中提供的参数来构建。<br/>同样，这里我们利用了pydantic库，但这次是为了其强大的JSON验证功能。<br/>具体来说，我们调用工厂方法params_mdl.model_validate，该方法接收一个Python字典形式的JSON数据，该数据首先会针对params_mdl的JSON Schema进行验证。<br/>如果验证成功，输入数据将用于初始化params_mdl的一个实例，我们将其存储在params变量中，并作为输入传递给func。<br/>__call__方法的其余实现与SimpleFunctionTool类似，包括我们在验证工具参数或委托给包装函数时处理可能遇到的任何错误的方法。</div><details><summary>Source</summary><div class='source'>Finally, our implementation of __call__ also involves a delegation to the wrapped function func. However, since func is PydanticFunction, we need to pass it an instance of the params_mdl type, which we must build using the arguments supplied by the LLM in its tool call request. Again, here we leverage the pydantic library but this time for its powerful JSON validation. Specifically, we call the factory method params_mdl.model_validate, which takes in a Python dictionary of JSON data that is first validated against JSON Schema for params_mdl. If validation is successful, then the input data gets used to initialize an instance of params_mdl, which we store in the params variable and pass as input to func. The rest of our implementation for __call__ is similar to that of SimpleFunctionTool, including our approach for handling any errors that may be encountered during the validation of tool parameters or the delegation to the wrapped function.</div></details></section><section class='block paragraph'><div class='zh'>我们在本节开头定义的hailstone_pydantic_fn_tool应该能够与我们刚刚开发的内容按预期工作。</div><details><summary>Source</summary><div class='source'>The hailstone_pydantic_fn_tool that we defined at the start of this section should work as intended with what we just developed.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>print(hailstone_pydantic_fn_tool.description)
+print(hailstone_pydantic_fn_tool.name)
+print(hailstone_pydantic_fn_tool.parameters_json_schema)</code></pre></section><section class='block paragraph'><div class='zh'>这些语句应打印出以下结果。</div><details><summary>Source</summary><div class='source'>These statements should print the following results.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>hailstone_pydantic_fn
+Perform a single step of the Hailstone sequence.
+{&#x27;properties&#x27;: {&#x27;x&#x27;: {&#x27;title&#x27;: &#x27;X&#x27;, &#x27;type&#x27;: &#x27;integer&#x27;}}, &#x27;required&#x27;: [&#x27;x&#x27;], &#x27;title&#x27;: &#x27;HailstoneParams&#x27;, &#x27;type&#x27;: &#x27;object&#x27;}</code></pre></section><section class='block paragraph'><div class='zh'>我们同样可以使用hailstone_pydantic_fn_tool，配合之前章节中为hailstone_tool（一个SimpleFunctionTool）快速演示时所用的相同工具调用请求。</div><details><summary>Source</summary><div class='source'>We can also use hailstone_pydantic_fn_tool with the same tool call request that we had for our quick demonstration of hailstone_tool (a SimpleFunctionTool) in the previous section.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>from llm_agents_from_scratch.data_structures import ToolCall
+ 
+tool_call = ToolCall(
+    tool_name=&quot;hailstone_pydantic_fn_tool&quot;,
+    arguments={&quot;x&quot;: 3}
+)
+ 
+res = hailstone_pydantic_fn_tool(tool_call)
+print(res)</code></pre></section><section class='block paragraph'><div class='zh'>打印语句的输出应如下所示。</div><details><summary>Source</summary><div class='source'>The print statement should print output as follows.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>tool_call=ToolCall(tool_name=&#x27;hailstone_pydantic_fn&#x27;, arguments={&#x27;x&#x27;: 3}) content=&#x27;10&#x27; error=False</code></pre></section><section class='block paragraph'><div class='zh'>至此，我们完成了PydanticFunctionTool的实现，这是一种使用我们的LLM智能体框架从Python函数构建工具的替代方法。<br/>然而，与SimpleFunctionTool类似，此包装器类仅适用于同步函数。<br/>因此，正如我们之前所做的那样，现在需要快速添加此包装器类的异步版本以支持异步函数。</div><details><summary>Source</summary><div class='source'>This wraps up our implementation of PydanticFunctionTool, an alternative approach to building tools from Python functions using our LLM agent framework. Like SimpleFunctionTool, however, this wrapper class only works with synchronous functions. And, as we did then, we’ll now need to quickly add an async version of this wrapper class to work with asynchronous functions.</div></details></section><section class='block heading'><div class='zh'>C.2 AsyncPydanticFunctionTool</div><details><summary>Source</summary><div class='source'>C.2 The AsyncPydanticFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>让我们快速添加一个适用于异步函数的PydanticFunctionTool异步版本，其工作方式类似于AsyncSimpleFunctionTool。<br/>我们将在这里快速推进，因为其实现与异步版本非常相似，只有细微差别，这些差别类似于SimpleFunctionTool与AsyncSimpleFunctionTool之间的差异。</div><details><summary>Source</summary><div class='source'>Let’s quickly add an async version of PydanticFunctionTool that works with asynchronous functions much like AsyncSimpleFunctionTool does. We will move rather quickly here since the implementation is very similar to the async version, with only minor differences that are similar to the differences observed between SimpleFunctionTool and AsyncSimpleFunctionTool.</div></details></section><section class='block paragraph'><div class='zh'>首先，我们需要一个异步版本的PydanticFunction协议。<br/>我们将此函数协议称为AsyncPydanticFunction，并在下一节中展示其实现。</div><details><summary>Source</summary><div class='source'>First, we’ll require an async version of our PydanticFunction protocol. We’ll call this function protocol AsyncPydanticFunction and present its implementation in the next listing.</div></details></section><section class='block heading'><div class='zh'>清单C.4 实现AsyncPydanticFunction协议</div><details><summary>Source</summary><div class='source'>Listing C.4 Implementing the AsyncPydanticFunction Protocol</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/pydantic_function.py
+from typing import Any, Protocol
+from pydantic import BaseModel
+ 
+ 
+class AsyncPydanticFunction(Protocol):
+    &quot;&quot;&quot;Asynchronous PydanticFunction Protocol.&quot;&quot;&quot;
+ 
+    __name__: str
+    __doc__: str | None
+ 
+    async def __call__(  #A
+        self,
+        params: BaseModel,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; Awaitable[Any]:  #B
+        &quot;&quot;&quot;Asynchronous callable interface.
+ 
+        Args:
+            params (BaseModel): The function&#x27;s params as a 
+                ~pydantic.BaseModel.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+ 
+        Returns:
+            Awaitable[Any]: The result of the function call.
+        &quot;&quot;&quot;
+        ...</code></pre></section><section class='block paragraph'><div class='zh'>此AsyncPydanticFunction与之前的PydanticFunction的唯一区别在于，异步协议要求该函数的__call__方法是一个返回~typing.Awaitable类型的异步函数。</div><details><summary>Source</summary><div class='source'>The only difference between this AsyncPydanticFunction and PydanticFunction from before is that the async protocol stipulates that the function’s __call__ method be an async function that returns an ~typing.Awaitable type.</div></details></section><section class='block paragraph'><div class='zh'>定义了这种异步函数类型后，我们现在可以展示AsyncPydanticFunctionTool的完整实现。</div><details><summary>Source</summary><div class='source'>With this async function type defined, we can now present the complete implementation of AsyncPydanticFunctionTool.</div></details></section><section class='block heading'><div class='zh'>清单C.5 实现AsyncPydanticFunctionTool</div><details><summary>Source</summary><div class='source'>Listing C.5 Implementing AsyncPydanticFunctionTool</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/pydantic_function.py
+import inspect
+from typing import Any, Awaitable, Callable, Protocol, get_type_hints
+from pydantic import BaseModel
+from llm_agents_from_scratch.base.tool import AsyncBaseTool, BaseTool
+from llm_agents_from_scratch.data_structures import (
+    ToolCall,
+    ToolCallResult,
+)
+ 
+ 
+class AsyncPydanticFunctionTool(AsyncBaseTool):
+    &quot;&quot;&quot;Async Pydantic function calling tool.
+ 
+    Turn an async Python function that takes in a ~pydantic.BaseModel 
+    Params object into a tool for an LLM.
+ 
+    Attributes:
+        func: AsyncPydanticFunction to represent as a tool.
+        params_mdl: The params BaseModel.
+        desc: Description of the PydanticFunction.
+    &quot;&quot;&quot;
+ 
+    def __init__(
+        self,
+        func: AsyncPydanticFunction,
+        desc: str | None = None,
+    ):
+        &quot;&quot;&quot;Initialize an AsyncPydanticFunctionTool.
+ 
+        Args:
+            func (AsyncPydanticFunction): The async Pydantic function to 
+                expose as a tool to the LLM.
+            desc (str | None, optional): Description of the function.
+                Defaults to None.
+        &quot;&quot;&quot;
+        self.func = func
+        self.desc = desc or func.__doc__ or f&quot;Tool for {func.__name__}&quot;
+        self.params_mdl = _validate_pydantic_function(func)
+ 
+    @property
+    def name(self) -&gt; str:
+        &quot;&quot;&quot;Name of function tool.&quot;&quot;&quot;
+        return self.func.__name__
+ 
+    @property
+    def description(self) -&gt; str:
+        &quot;&quot;&quot;Description of what this function tool does.&quot;&quot;&quot;
+        return self.desc
+ 
+    @property
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON schema for tool parameters.&quot;&quot;&quot;
+        return self.params_mdl.model_json_schema()
+ 
+    async def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        &quot;&quot;&quot;Execute the function tool with a ToolCall.
+ 
+        Args:
+            tool_call (ToolCall): The ToolCall to execute.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+ 
+        Returns:
+            ToolCallResult: The result of the tool call execution.
+        &quot;&quot;&quot;
+        try:
+            params = self.params_mdl.model_validate(tool_call.arguments)
+            # execute the function
+            res = await self.func(params)
+            content = str(res)
+            error = False
+        except Exception as e:
+            content = f&quot;Failed to execute function call: {e}&quot;
+            error = True
+ 
+        return ToolCallResult(
+            tool_call=tool_call,
+            content=content,
+            error=error,
+        )</code></pre></section><section class='block paragraph'><div class='zh'>AsyncPydanticFunctionTool 的实现与 PydanticFunctionTool 非常相似，唯一的区别在于这里我们继承自 AsyncBaseTool，并且 __call__ 方法现在是异步的。</div><details><summary>Source</summary><div class='source'>The implementation of AsyncPydanticFunctionTool is very similar to that of PydanticFunctionTool, with the only differences being that here we inherit from AsyncBaseTool and that the __call__ method is now async.</div></details></section></section></main></body></html>

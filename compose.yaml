@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: book-agent-postgres
+    environment:
+      POSTGRES_DB: book_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d book_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+    container_name: book-agent-app
+    environment:
+      BOOK_AGENT_EXPORT_ROOT: /app/artifacts/exports
+      BOOK_AGENT_TRANSLATION_BACKEND: echo
+    ports:
+      - "58000:8000"
+    volumes:
+      - ./:/app
+    command: ["uvicorn", "book_agent.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+volumes:
+  postgres_data:

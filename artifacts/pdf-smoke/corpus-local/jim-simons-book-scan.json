@@ -1,0 +1,28 @@
+{
+  "case_name": "jim-simons-book-scan",
+  "case_status": "passed",
+  "expectation_failures": [],
+  "source_path": "/Users/smy/Downloads/洞悉市場的人：量化交易之父吉姆 · 西蒙斯與文藝復興公司的故事 = The Man Who Solved the Market How Jim Simons Launched the Quant Revolution (古格里 · 祖克曼 (Gregor... (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "profile": {
+    "pdf_kind": "scanned_pdf",
+    "page_count": 476,
+    "has_extractable_text": false,
+    "outline_present": false,
+    "layout_risk": "high",
+    "ocr_required": true,
+    "extractor_kind": "basic",
+    "average_text_density": 0.0,
+    "average_span_count": 0.0,
+    "multi_column_page_count": 0,
+    "fragment_page_count": 0,
+    "suspicious_page_numbers": [],
+    "recovery_lane": null,
+    "trailing_reference_page_count": 0,
+    "academic_paper_candidate": false
+  },
+  "bootstrap": {
+    "status": "failed",
+    "error_type": "ValueError",
+    "error": "OCR-required or scanned PDFs are not supported yet; text PDFs only in P1-A"
+  }
+}

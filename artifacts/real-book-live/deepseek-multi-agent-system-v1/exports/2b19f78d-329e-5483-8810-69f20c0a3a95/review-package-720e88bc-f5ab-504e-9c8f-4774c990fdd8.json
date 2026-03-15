@@ -1,0 +1,4404 @@
+{
+  "chapter_id": "720e88bc-f5ab-504e-9c8f-4774c990fdd8",
+  "chapter_title": "2_Working_with_Tools",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "720e88bc-f5ab-504e-9c8f-4774c990fdd8",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "b73d4692-14aa-57bd-842c-437444aa00d1",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "720e88bc-f5ab-504e-9c8f-4774c990fdd8",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "0197958e-dd30-544c-8fe3-de667354d487",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0247b763-5fe2-5e81-8e97-3751c57cf970",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "068203a0-24da-59c5-80cd-0772fb3b68dd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "09128d12-c25d-5a7f-9af8-2fcef257781c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "095ccb58-5ab6-59c9-a181-e17a4cc9fc13",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0a96c482-f336-5f38-813e-26cfe0bfc8fd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0ace8a1f-b3e3-5bd6-892a-06d79c61b912",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0b2754d6-37cd-5f25-a937-098851c01c6c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0c018744-3f62-5746-9fd0-fbed05551704",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0cca62ff-f1e7-5f22-afe8-6b89b3f921f6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0d7b88e5-9113-5e66-9f74-6c82a6610f80",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0d809cff-9ba1-5f72-92e3-d22d6304a994",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0dae6b59-4a9d-5577-991b-7b29ee1a53ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "10617bbd-a7cc-5245-8be5-671c35808cb8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "121d7f55-0633-501b-abed-1c4bfac1d7ac",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "134d991d-f468-55ae-810a-52173a199b8f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "14d616c3-9dcc-5b1c-9e6a-7956913eb714",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "16e831f6-60c5-52c6-a4b8-e87ebc3f6f66",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "174b5063-5789-5366-9899-6b9b511a4112",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "19bbc945-faa0-569a-a1f9-1c2a42e02ab8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1c7bf8d7-ce53-5655-811d-9d66b82777a8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "20389a0d-5b11-5d92-b2f6-92bcd0b71de2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "23ca578c-fbc0-5b7c-8943-e2825bc1c03a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "23f0ec5e-98b5-562b-a392-e00389569faa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "24145dcd-708e-5e21-acce-0ad5376208d4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2421ddb7-c53f-51a7-b5e4-082ac1ca208b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "24dd026e-be3f-51e0-9a01-edad1b852446",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "25a93286-059a-59b3-aec7-d99096b81f4e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "264c3590-30f0-5962-93ed-6c39a56406b0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "26b33ac7-680f-5193-9477-e34b484d89cd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "28039de1-6a4c-5743-b759-65372ece164b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2b6952e4-c1fd-5fc9-8a1d-6c370ca53729",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2f3947c9-bd23-51fd-9070-c4a726f2efb5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2fbc6a47-d821-537f-8710-d5c7f498f0de",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "30261f8e-52cc-5a99-bf1f-07aef4ebf864",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "35237964-f424-5793-8d9c-11288320ea94",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "355e6c9c-523e-5268-b3ff-e1594c78b8ef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "37b3ff31-8627-566b-b5d2-722666dd3bef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "38e79be3-e56b-586c-afc5-85eb31175a3d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "39e6da21-2769-50e2-ad34-bf0a3f1b1e76",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3a024430-c4b8-5289-b0b0-bced020851d0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3c5935ab-775f-5e80-acbf-1c4ba2475903",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3cdeadfc-1467-568b-9225-15227a826655",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e4b27b0-66ad-5dd0-a803-1c55c1aa0e19",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e89abe1-b900-5e0c-99d3-c1f1d5624399",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3ee1ffc1-9bc1-5786-9d83-8a192ae66ca6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4117d399-97ff-51fc-996b-7ca139898f65",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "42061297-6e99-5466-a185-9b9954679bfc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "43d98b31-132c-5f97-9ac0-ad7db02874d4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4558f5a1-85c7-565a-995d-5a09eca4fa6b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "45cc131e-395e-5d46-818c-3798eec6731d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "48a79f24-7235-565c-a5de-3715ef2cc7b0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "48c78cdb-2a0e-5b20-8f74-92968f57ceb6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4912787b-296d-55fb-b36e-b3d1517a5b21",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4940bffe-5bcc-5d1d-8c91-93942592978c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4c1c08ed-850e-530a-bee8-d66ca6d55b73",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4d918a1e-5a4f-58a5-8f2e-c8c4ae3b0a1b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4e5f8b3a-c61c-5874-864f-676c4fd9a1ff",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4eb2cd96-072c-535f-980b-807ed4d5f250",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4f053003-c3ec-5c78-af97-f1f8f1b87c6c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4f338193-efa5-5610-98fb-bc386578ac05",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4fb8a03d-371a-5998-8a31-45252171f7ad",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53c14dee-dc38-59be-9ce8-f7bb11ed2924",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "576d4202-a65f-5fe7-b9d1-5e8dec118dde",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5bf03faf-bef6-5438-a536-1525fb23c870",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5ef0121a-97a9-57c1-b3ed-c01135556905",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5f4362a1-47bd-5e8a-bab4-e96c1c7836cf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6362b676-2dcb-5289-9180-45e8e13f022b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "63f1674c-faf2-5104-aca2-8e23ffd8880f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "642021f8-7b8c-59f5-a8d2-0aadc942a8db",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "67dc1884-141f-50a0-9ca8-57f49a1c7edb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6bbd076f-a903-58fb-82a3-5ed43514192d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6bd13209-421e-5452-ae47-7020dd869e94",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6de726b0-249a-5440-acb3-b7c94a9bf8ee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "70636f8d-a3b5-5cb3-8163-1181332ac6ef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "709663d4-fbe8-5534-8c48-063a8a828409",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "72895905-5ff7-5121-8ee9-e69f6e1191aa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "74a9fc23-76f6-52ef-a4d9-f4b36e6bca84",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "74f177fe-dbcd-5b0d-8585-4818d21e0141",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "757a5d32-2212-5240-9779-dd7b6dfbe5ec",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "76d0b6e6-407b-593d-b34b-8a943cbb0264",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "775d83f3-eb76-5950-9dd4-17e4338cd091",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "77a2575b-31a5-5dea-a8cd-cb222055dc7c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "77d6c678-f3cb-543e-a4ee-e5e395ac0f41",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7a85e402-b5ea-59c8-a8ec-1460c761c7ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7aba6454-02ba-518d-b0b4-f78c13d0d03c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7c4eee27-9c9c-531c-b64c-ae67ecb54436",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7d578063-6c74-5e72-915c-711fbb0e1b9d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81f9f7ca-4269-5db0-bcb1-e21985398480",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "84a13e63-7251-5308-afff-0941d72f769e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8ac33ca8-e1e3-502e-bc12-4f8601ab97ad",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8ad84ec3-6295-5dc1-baba-ce89cd4b3d84",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8d2af086-017e-57aa-b893-4937a18a19da",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "93524cbc-8057-5bd6-914b-6141ea371160",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9787cdc7-b430-53a5-bcb2-1f438298bfbd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "995750c8-e3d6-5f13-a60e-cab91997631b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9bfe5c82-3841-509c-8e27-a8e5736a7c23",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9dbe50eb-706e-52b4-94e8-a395805e40c3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a02e492f-b294-5d59-91ee-92bc2dbddb57",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a26d91e5-7ed9-5961-9205-f7577549c6cc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a36bde1c-9071-50e3-b64f-766cd10284e7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a3a16494-0cb1-54be-b62c-423b8ed84a9c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a4b8a755-5e5d-5441-a852-6ab3e2520865",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a7e9191f-1031-5dd6-86a3-2d10c47e5504",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aa6bf978-6b7a-55a5-ae15-5c0ebd71f243",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "abe9b759-8909-56da-870c-7232a0d296fd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "acabe5c2-6dea-5be2-8633-350def4ab41a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad1ced25-bbc6-5262-8f8c-31fa4b529bb2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad390e7c-2be9-5206-a7df-edfa488fcf6d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aeae5a8c-ab44-5e5e-9eea-262d16044cf3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b07119c6-6382-5c4f-9cba-6732cae1876e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b4927f7e-213a-5a8d-81a9-17c03bc10c26",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b4953fb1-4b36-5229-8bd9-06d4d60e0742",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b6b89569-4c4c-52f4-bf88-8313ef3fcff0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b754755e-cef4-5cfb-a256-e87034630c98",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b7e9d0a2-8d55-5457-b306-ca041d13c3b4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bac3669b-89cf-53f0-a4d4-15ddda0e2d47",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bba81856-e845-5966-8256-40bc5803b317",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bc0eb180-b309-5833-b301-d76c0601130c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bd8a73f3-032d-5dea-829a-8bc027a13191",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "be7ae9ce-7bdf-51d3-afe4-b5da85eb4ddc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c27924d6-b9dc-5c3f-9744-ab521700045f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c40d968b-a89c-5652-9d93-e3bee20f4a49",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c5509ab0-134b-54e0-b9d7-afc997dc3bfb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c59a4fe7-092c-5e6d-af1e-76e8aea66706",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c7f7108b-1b2c-5c6d-ab83-1c93df23e3f0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c9320b99-6f51-5600-8f13-18e6ba506712",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c97aa429-3f69-55e8-8be3-61d7f0234af7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cacd27ac-f722-5d35-837b-5aae71280a1d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ce8b8f15-91f2-5f55-8bf0-38dfaead2cb5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cf35d907-f7c6-5dbd-a5e8-5f8934748f52",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cf404cd7-05f9-5f6c-a16f-2e6a6eb90638",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d243394d-40a6-520a-aa99-6d6e7d1941f4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d4ac3a39-4537-5e85-9875-e8c778d18250",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d6841648-261a-525c-ad55-6126d65d10a1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "daadbcc9-770d-5d19-9688-2c1c689a8a50",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "db4a4641-f64c-57cb-ae75-51cd1edc7828",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dcb66293-cfdc-564a-95a9-dd03507f5779",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ddd87ea7-0740-59d6-8ddf-a150adf5d8dc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "df5fa650-3b64-581a-b67c-6ebad35ab6bc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dfc88913-4b89-5c57-89db-604e6b63898f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dfd10357-22f5-5258-bf19-9a99b42fa1ca",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e01c4da0-1124-5a6c-b5c3-2040fd11f9ec",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e07dbaae-ac61-5b72-b919-390393a0a99e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e6a42e8d-3639-5c04-8b7e-c6a218564e9d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e787758b-5b05-54c2-8a36-412a157e6edf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e79dfde7-8c53-5c99-a785-f2d52c8ef284",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e7afbcfa-4935-5732-b8e1-444cacf2a3c9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "eb425893-7724-5aa3-8724-8ebd123ff1c4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "eb84c678-e4ec-588d-b221-fa2ea7535097",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ef8befb3-505c-554c-9b11-8bb5dec079ec",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0bcdda9-a26e-572b-af47-1a66637d4218",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f2a5eb41-4372-5d3b-a1d3-fb4de2a6ba8d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f2b0f07d-85e9-5f49-ab62-f42b3212aae8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f3b6acbb-e591-5c61-9596-ba972702e9a4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f6140378-cac9-5918-8e9e-5f7c219b7d46",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f7174173-e5a5-5ad8-9680-b39b2847acbe",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f83f0808-1e6d-5b17-8026-e1c025d56f38",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f99a2e4d-6393-53cd-a444-d93938a81be7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fadb6bc2-512a-523b-acd3-b26b2c595753",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fba2d050-60f5-5e09-8e47-076375425a85",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fc92b765-3d91-52f3-a634-793489346e58",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fd8577b5-79e1-509d-8103-4165d2936c4c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ffef523c-7840-5df5-beb2-9b6115fb7807",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "e7ed6e7b-291d-55d2-a022-7e1826c8defd",
+      "source_text": "2 Working with Tools",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2 使用工具"
+      ]
+    },
+    {
+      "sentence_id": "f51a8393-bd57-5e7e-b1b3-babb6f7c57a9",
+      "source_text": "This chapter covers",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章涵盖"
+      ]
+    },
+    {
+      "sentence_id": "b2a2895a-a767-59ba-8029-9ca8133c150e",
+      "source_text": "Specifying the base class for tools to standardize how they are used in our framework",
+      "sentence_status": "translated",
+      "target_texts": [
+        "指定工具的基础类，以标准化它们在我们框架中的使用方式"
+      ]
+    },
+    {
+      "sentence_id": "eb58a795-eba0-50d4-afda-e7a1890a1fda",
+      "source_text": "Defining the data structures for facilitating a tool-call process",
+      "sentence_status": "translated",
+      "target_texts": [
+        "定义用于促进工具调用过程的数据结构"
+      ]
+    },
+    {
+      "sentence_id": "4cc93916-7aff-5c1d-ae23-27f101716e03",
+      "source_text": "Turning Python functions into tools to use with LLMs and LLM agents",
+      "sentence_status": "translated",
+      "target_texts": [
+        "将Python函数转化为工具，以便与LLM及LLM智能体配合使用"
+      ]
+    },
+    {
+      "sentence_id": "b9d869e7-3354-5a83-a7d9-ba9b922fb72f",
+      "source_text": "You now know that tools are a crucial part of LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在您已经了解到，工具是LLM智能体的关键组成部分。"
+      ]
+    },
+    {
+      "sentence_id": "bd63daaf-6e7f-50b5-84c3-8939ff56551c",
+      "source_text": "Tools, such as those for performing web searches, plotting data, and executing code in a sandboxed environment, increase the potential of LLM agents and expand the range of tasks they can perform.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "诸如执行网络搜索、绘制数据图表以及在沙盒环境中运行代码等工具，能够增强LLM智能体的潜力，并扩展其可执行任务的范围。"
+      ]
+    },
+    {
+      "sentence_id": "5f8369db-3a4a-5b29-a65a-75028e253af1",
+      "source_text": "Equipping an LLM with a tool requires us to provide a textual description of the tool so that the LLM can understand how to use it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为大型语言模型配备工具时，我们需要提供该工具的文本描述，以便模型能够理解如何使用它。"
+      ]
+    },
+    {
+      "sentence_id": "79e33165-c336-5634-a5da-9ce90f66f52e",
+      "source_text": "LLMs can use a tool through the tool-calling process, which involves the LLM generating a tool-call request, invoking the tool, and finally returning the result to the LLM for synthesis and response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "大型语言模型可以通过工具调用过程来使用工具，这一过程包括模型生成工具调用请求、调用工具，最后将结果返回给模型进行综合和响应。"
+      ]
+    },
+    {
+      "sentence_id": "747fb826-8500-5f1e-90c1-0ed63cc8fc15",
+      "source_text": "The focus of this chapter, as illustrated in figure 2.1, is to build the required infrastructure for defining tools and how they can be used.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章的重点，如图2.1所示，是构建定义工具及其使用方式所需的基础设施。"
+      ]
+    },
+    {
+      "sentence_id": "131f20fe-6855-5161-b844-fe8474ed5fba",
+      "source_text": "We’ll package all our code in our own LLM agent framework, called llm-agents-from-scratch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将把所有代码打包到我们自己的LLM智能体框架中，该框架名为llm-agents-from-scratch。"
+      ]
+    },
+    {
+      "sentence_id": "92d62633-8943-531d-b3d7-3b83a69f76c8",
+      "source_text": "Figure 2.1 The focus of the current chapter, through the lens of our build plan introduced in Chapter 1. Before we can build an LLM agent, we first need to properly define tools and how they can be used within our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.1 通过第1章介绍的构建计划视角，展示当前章节的重点。在构建LLM智能体之前，我们首先需要正确定义工具及其在我们的框架中的使用方式。"
+      ]
+    },
+    {
+      "sentence_id": "a6115dec-16c1-5b60-9321-dafd878af17e",
+      "source_text": "To be more specific, we’ll define a base class interface for tools, BaseTool, which will serve as a blueprint for adding tools to our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具体来说，我们将为工具定义一个基类接口BaseTool，它将作为向框架中添加工具的蓝图。"
+      ]
+    },
+    {
+      "sentence_id": "bba6ac7b-6191-5d82-9a46-c6cc8a5fde45",
+      "source_text": "This blueprint will also help to standardize how tool calls are performed, as well as how the textual descriptions of tools are prepared and passed to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个蓝图还将帮助标准化工具调用的执行方式，以及如何准备工具的文字描述并传递给LLM。"
+      ]
+    },
+    {
+      "sentence_id": "ba34c6b7-b6a4-5d47-a819-ae134c62a7d3",
+      "source_text": "To completely standardize the tool calling process in our framework, we’ll need to introduce a couple of new data structures that represent the input and output of tool calls.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了在框架中完全标准化工具调用过程，我们需要引入几个新的数据结构来表示工具调用的输入和输出。"
+      ]
+    },
+    {
+      "sentence_id": "ea8817b5-978a-5cff-957a-67934d599d0f",
+      "source_text": "In addition to defining the base class and adding the necessary data structures, we’ll also implement a couple of subclasses that will help us to create LLM tools from Python functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "除了定义基类并添加必要的数据结构外，我们还将实现几个子类，以帮助我们从Python函数创建LLM工具。"
+      ]
+    },
+    {
+      "sentence_id": "c783cab3-d79e-503d-a968-c04fb2830eba",
+      "source_text": "To follow along with the code examples, I recommend forking the book’s GitHub repository and activating the framework’s dedicated virtual environment.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了配合代码示例，我建议您fork本书的GitHub仓库，并激活框架专用的虚拟环境。"
+      ]
+    },
+    {
+      "sentence_id": "7c3bf7bb-4596-5d20-a642-ad892f296516",
+      "source_text": "You can do so by running the following terminal commands while in the project’s root directory.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以通过在项目根目录下运行以下终端命令来实现。"
+      ]
+    },
+    {
+      "sentence_id": "9c96985c-df1c-558b-926f-779d681c573b",
+      "source_text": "uv sync #A # mac or linux source .venv/bin/activate # windows (powershell) .venv\\Scripts\\activate",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "970e5429-617c-587a-9862-074721d8900f",
+      "source_text": "Additionally, a Jupyter notebook containing executable code for the example demonstrations in this chapter has been prepared and can be found in the book’s GitHub repository: https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch02.ipynb.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此外，本章示例演示的可执行代码已整理在一个Jupyter笔记本中，可在本书的GitHub仓库中找到：https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch02.ipynb。"
+      ]
+    },
+    {
+      "sentence_id": "c2d0dce2-69b0-521a-940d-c2d7504a94cf",
+      "source_text": "Code snippets marked with # Included in examples/ch02.ipynb are available in this notebook for you to run.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "标有# Included in examples/ch02.ipynb的代码片段均可在该笔记本中运行。"
+      ]
+    },
+    {
+      "sentence_id": "14cf5e87-529f-5084-a555-f733fcb66032",
+      "source_text": "I recommend using uv to launch Jupyter Lab to ensure all the necessary packages are installed for you to run these examples.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我建议使用uv启动Jupyter Lab，以确保安装所有必要的包，以便您能够运行这些示例。"
+      ]
+    },
+    {
+      "sentence_id": "7060c351-ad86-5a5f-9a55-3ca3f3cd4e37",
+      "source_text": "You can do this by running the following terminal command in the project’s root directory (where pyproject.toml can be found).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以通过在项目根目录（即pyproject.toml所在位置）运行以下终端命令来实现。"
+      ]
+    },
+    {
+      "sentence_id": "556db038-dd74-5689-b4bb-ec47e8fa156e",
+      "source_text": "uv run --with jupyter jupyter lab",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "7d28d9b9-9b10-5f6b-a4cb-7249bdcd4185",
+      "source_text": "2.1 BaseTool: a blueprint for tools",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.1 BaseTool：工具的蓝图"
+      ]
+    },
+    {
+      "sentence_id": "5218ec63-c983-5679-aa21-f37baf0f1627",
+      "source_text": "Tools can differ significantly in their functionality.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具的功能可能存在显著差异。"
+      ]
+    },
+    {
+      "sentence_id": "7b8f33bf-051a-50ea-8bcf-4fb2aa3ff18a",
+      "source_text": "For example, a tool that performs web searches is obviously very different from another tool that can plot pie charts.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，执行网络搜索的工具与能够绘制饼图的工具显然截然不同。"
+      ]
+    },
+    {
+      "sentence_id": "608e57bc-1e4e-5195-b7b8-670f894d0e6d",
+      "source_text": "LLM agents with tools of various functionalities have the potential to be more potent and versatile.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "配备多种功能工具的LLM智能体，其潜力和通用性可能更为强大。"
+      ]
+    },
+    {
+      "sentence_id": "b0ba2ffb-832b-521d-b8b4-7a9e9af5525d",
+      "source_text": "However, if these tools also differ significantly in how they’re invoked, then it would be challenging to realize such potential.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，如果这些工具的调用方式也存在显著差异，那么实现这种潜力将变得极具挑战性。"
+      ]
+    },
+    {
+      "sentence_id": "6762a64b-c336-5d40-8623-00431aaa05ad",
+      "source_text": "These differences might also lead to the LLM making mistakes when requesting tool calls.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些差异也可能导致LLM在请求工具调用时出错。"
+      ]
+    },
+    {
+      "sentence_id": "9ec0b11e-6e10-5adf-ac80-05fe7c87b4ab",
+      "source_text": "A better approach would be to define a standard way for calling tools, regardless of their different functionalities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更好的方法是定义一种标准方式来调用工具，无论它们的功能有何不同。"
+      ]
+    },
+    {
+      "sentence_id": "3138b94d-cf99-5eab-91df-66f629740a85",
+      "source_text": "For similar reasons, we’d also want to standardize the way in which textual descriptions of tools are formatted.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "出于类似的原因，我们也希望标准化工具文本描述的格式化方式。"
+      ]
+    },
+    {
+      "sentence_id": "f16601ae-b609-5c23-8a55-55e2070ff0d9",
+      "source_text": "This standardization will pave the way for us to write reliable code that enables LLMs and LLM agents to work with these tools—as you’ll see later, in Chapters 3 and 4.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这种标准化将为我们编写可靠代码铺平道路，使LLM和LLM代理能够使用这些工具——正如您将在第3章和第4章中看到的那样。"
+      ]
+    },
+    {
+      "sentence_id": "127ea294-7236-5f95-af48-4281748303ae",
+      "source_text": "We will define this standard for tools through a special base class, BaseTool, which we’ll implement in this section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将通过一个特殊的基类BaseTool来定义工具的这一标准，并在本节中实现它。"
+      ]
+    },
+    {
+      "sentence_id": "50fc0207-9998-550d-8c65-b48a8aab182e",
+      "source_text": "To be even more precise, though, we’ll also be implementing a related base class called AsyncBaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了更加精确，我们还将实现一个相关的基类AsyncBaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "025f09e4-75d3-5e09-b2b0-6e77cc3a67f0",
+      "source_text": "Together, these base classes define the standard that every tool added to our framework must conform to.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些基类共同定义了添加到我们框架中的每个工具都必须遵循的标准。"
+      ]
+    },
+    {
+      "sentence_id": "01209b6b-26cf-5442-88d2-cfd98a06804f",
+      "source_text": "To keep things simple, let’s consider only BaseTool for now and revisit AsyncBaseTool later.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为简化起见，我们先只考虑BaseTool，稍后再讨论AsyncBaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "fcf7ade1-06cd-5810-9376-c09404ef3b48",
+      "source_text": "Figure 2.2 illustrates the same LLM agent from before, along with its tools, each of which is now shown to inherit from BaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.2展示了之前提到的同一个LLM智能体及其工具，现在每个工具都显示为继承自BaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "e9e1c08a-2fcd-5237-bc82-22ffa8459680",
+      "source_text": "Figure 2.2 Each tool inherits from the BaseTool class, allowing the LLM agent to access the textual descriptions and execute the logic of each tool in the same manner.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.2 每个工具都继承自BaseTool类，这使得LLM代理能够以相同的方式访问每个工具的文本描述并执行其逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "6cd70476-8488-564c-aecd-5cb0ff9fe133",
+      "source_text": "Our BaseTool class will specify a set of methods and attributes, which every tool that inherits from it must also support.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们的BaseTool类将定义一组方法和属性，所有继承自它的工具都必须支持这些方法和属性。"
+      ]
+    },
+    {
+      "sentence_id": "28ccdcc1-94c9-53ec-adb8-dd3d5d97e75f",
+      "source_text": "For simplicity, figure 2.2 shows only the __call__() method and the parameters_json_schema attribute, but we will soon see the full structure of BaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为简化起见，图2.2仅展示了__call__()方法和parameters_json_schema属性，但我们很快将看到BaseTool的完整结构。"
+      ]
+    },
+    {
+      "sentence_id": "430b2449-4c70-5276-8bb4-0f8e39877c9a",
+      "source_text": "As mentioned earlier, defining the BaseTool only gets us part of the way toward implementing a standardized tool-calling process in our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，仅定义BaseTool只能让我们在框架中实现标准化工具调用过程的一部分。"
+      ]
+    },
+    {
+      "sentence_id": "2ac9b5ae-7048-52cc-8ab5-81700944421b",
+      "source_text": "We also need to define two new data structures for representing the input and output of a tool call.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们还需要定义两个新的数据结构，用于表示工具调用的输入和输出。"
+      ]
+    },
+    {
+      "sentence_id": "a29b4e5b-8bb3-50a5-8661-5aa46e66a71c",
+      "source_text": "The ToolCall class will define our tool-call input, and the ToolCallResult class will define our tool-call output.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ToolCall类将定义工具调用的输入，而ToolCallResult类将定义工具调用的输出。"
+      ]
+    },
+    {
+      "sentence_id": "887e4251-a2c7-5825-9f99-e0f2769c6c38",
+      "source_text": "Before we write any code, let’s quickly revisit the tool-calling process that we covered in the previous chapter, and see how our new classes fit into it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在编写任何代码之前，让我们快速回顾一下上一章介绍的工具调用过程，并看看我们新增的类如何融入其中。"
+      ]
+    },
+    {
+      "sentence_id": "59cadb1a-af26-5ce7-b75b-ac7bb54df967",
+      "source_text": "Figure 2.3 shows the familiar tool-calling process diagram, but with our new classes incorporated into it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.3展示了熟悉的工具调用过程图，但其中已融入了我们新增的类。"
+      ]
+    },
+    {
+      "sentence_id": "c2f9059c-825a-5e23-ab8c-8944dfad88c6",
+      "source_text": "Figure 2.3 Incorporating our new classes—BaseTool, ToolCall, and ToolCallResult—into the tool-calling process, first shown in Chapter 1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.3展示了如何将新类——BaseTool、ToolCall和ToolCallResult——整合到工具调用流程中，该流程首次在第1章中介绍。"
+      ]
+    },
+    {
+      "sentence_id": "b343570f-e1a6-529c-9713-38c658fd8315",
+      "source_text": "As you learned in the previous chapter, the first step to the tool-call process is for the LLM to select a tool and generate a tool-call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如你在前一章所学，工具调用过程的第一步是LLM选择工具并生成工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "e6b5ffe9-a11c-5a0d-a918-5cebd1a90189",
+      "source_text": "We can now add more structure to this step by packaging the generated request into a ToolCall object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，我们可以通过将生成的请求打包成ToolCall对象，为这一步添加更多结构。"
+      ]
+    },
+    {
+      "sentence_id": "f8d9e901-3deb-567f-b4ad-92419dde75a0",
+      "source_text": "The next step would be to execute the selected tool’s logic using the parameters specified in the tool-call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "下一步是使用工具调用请求中指定的参数来执行所选工具的逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "f8633a47-f969-56dc-a867-8f69499e3a8a",
+      "source_text": "Since all tools will conform to the standard interface defined in BaseTool, we will be able to execute every tool’s logic in the same way.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于所有工具都将遵循BaseTool中定义的标准接口，我们将能够以相同的方式执行每个工具的逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "8377400c-38ff-5342-af28-2e92bf90b59c",
+      "source_text": "That is, through the selected tool’s __call__() method, which would accept the previously created ToolCall object as input.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "也就是说，通过所选工具的__call__()方法，该方法将接受先前创建的ToolCall对象作为输入。"
+      ]
+    },
+    {
+      "sentence_id": "a6eaf4ed-ca7f-5518-a0cf-9a5f03f9f376",
+      "source_text": "After the tool’s logic is executed, the result is then packaged into a ToolCallResult object, which can then be passed back to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具逻辑执行完毕后，结果会被打包成ToolCallResult对象，然后可以传回给LLM。"
+      ]
+    },
+    {
+      "sentence_id": "4c5d39ad-e393-5a6a-af5e-e72e96cf55cb",
+      "source_text": "Now that we have outlined how these new classes will work together, let’s delve into their structural details, which are provided in the UML class diagrams seen in figure 2.4.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经概述了这些新类将如何协同工作，现在让我们深入探讨其结构细节，这些细节在图2.4所示的UML类图中提供。"
+      ]
+    },
+    {
+      "sentence_id": "868ca05f-b13e-5fc1-ac0e-4f88093a01bf",
+      "source_text": "Figure 2.4 The UML class diagrams for BaseTool, ToolCall and ToolCallResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.4 BaseTool、ToolCall和ToolCallResult的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "3105bd86-4c48-5f7b-8cac-a3c53da7fb21",
+      "source_text": "We covered a few of the basics for UML class diagrams in Chapter 1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在第1章中介绍了UML类图的一些基础知识。"
+      ]
+    },
+    {
+      "sentence_id": "e4bb0c9e-6ae2-5f9d-99ce-fba12d589d51",
+      "source_text": "You may recall from that previous discussion that attributes are outlined in the top section of the rectangular box, while methods are provided in the bottom section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可能还记得之前的讨论中提到，属性在矩形框的上半部分列出，而方法在下半部分提供。"
+      ]
+    },
+    {
+      "sentence_id": "64d94a3b-8695-5155-be66-6bd34bf5fe47",
+      "source_text": "Figure 2.4 shows that ToolCall consists of three attributes—id_, tool_name, and arguments—and no methods.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.4显示ToolCall包含三个属性——id_、tool_name和arguments——没有方法。"
+      ]
+    },
+    {
+      "sentence_id": "32c61ed1-1949-53af-98dc-fe1455d5b72d",
+      "source_text": "The ToolCallResult class also has three attributes and no methods.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ToolCallResult类同样具有三个属性，没有方法。"
+      ]
+    },
+    {
+      "sentence_id": "70c1b1e0-d0aa-5c0d-be11-f3605677ceb9",
+      "source_text": "Those attributes are tool_call_id, content, and error.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些属性是tool_call_id、content和error。"
+      ]
+    },
+    {
+      "sentence_id": "72245c2b-9913-55bf-b4dd-cc21f9f45b7c",
+      "source_text": "We’ll go over what these attributes represent when we write the code for these two classes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将在为这两个类编写代码时，详细说明这些属性的含义。"
+      ]
+    },
+    {
+      "sentence_id": "e902e7c2-df16-52fc-8f85-c69d1d5f5fc0",
+      "source_text": "Figure 2.4 also shows the full structure of the BaseTool class, which we covered only partially at the beginning of this section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.4还展示了BaseTool类的完整结构，我们在本节开头仅部分介绍了它。"
+      ]
+    },
+    {
+      "sentence_id": "22a7c984-3bf3-5879-905b-59adb4f8b89a",
+      "source_text": "We were previously familiar with the parameters_json_schema attribute and the __call__() method, but now we can see two additional attributes: name and description.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们之前已经熟悉了parameters_json_schema属性和__call__()方法，但现在可以看到两个额外的属性：name和description。"
+      ]
+    },
+    {
+      "sentence_id": "893d455e-8dd2-5c6f-9f48-514fc835a5b2",
+      "source_text": "Finally, figure 2.4 illustrates a couple of new UML concepts that we’ll now go over.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后，图2.4展示了几个新的UML概念，我们现在将逐一讲解。"
+      ]
+    },
+    {
+      "sentence_id": "bd0f62ae-492a-58a5-9834-5cf0aecf7340",
+      "source_text": "First is the inheritance relationship, which is indicated by a solid line with a hollow triangle arrowhead pointing from the child class to the parent class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先是继承关系，它由一条实线表示，空心三角形箭头从子类指向父类。"
+      ]
+    },
+    {
+      "sentence_id": "0224ce86-251b-5a4c-9489-d4188f670634",
+      "source_text": "You can see that both ToolCall and ToolCallResult inherit from the external pydantic.BaseModel class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "可以看到，ToolCall和ToolCallResult都继承自外部pydantic.BaseModel类。"
+      ]
+    },
+    {
+      "sentence_id": "712ca909-fed3-5413-b254-b96af28eb9e0",
+      "source_text": "Second, you may have noticed that, rather than the usual circle with a “C” beside the BaseTool text, there is a circle with an “A” instead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其次，您可能注意到，BaseTool文本旁边不是通常的带“C”的圆圈，而是带“A”的圆圈。"
+      ]
+    },
+    {
+      "sentence_id": "eec869e7-549c-5c1b-9fef-46e8128555ca",
+      "source_text": "This “A” stands for abstract and indicates that any tool that extends the BaseTool class must provide implementations for the methods which have been marked as abstract; these are methods that have no default implementation in the base class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个“A”代表抽象，表示任何扩展BaseTool类的工具都必须为标记为抽象的方法提供实现；这些方法在基类中没有默认实现。"
+      ]
+    },
+    {
+      "sentence_id": "6000c6ba-2360-546d-8697-6a6e229a1876",
+      "source_text": "You’ll see how we mark methods as abstract when we implement the BaseTool class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在实现BaseTool类时，您将看到我们如何将方法标记为抽象。"
+      ]
+    },
+    {
+      "sentence_id": "d8298e54-76c7-548a-9671-b9b3245ee88f",
+      "source_text": "TIP",
+      "sentence_status": "translated",
+      "target_texts": [
+        "提示"
+      ]
+    },
+    {
+      "sentence_id": "c4195e68-7e93-5ce0-9c26-4417aacff510",
+      "source_text": "Pydantic is a Python library that is especially useful in defining data models that require robust validation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Pydantic是一个Python库，特别适用于定义需要强健验证的数据模型。"
+      ]
+    },
+    {
+      "sentence_id": "1901773d-15aa-5149-903c-662319dab349",
+      "source_text": "Now that we understand how these classes are structured and work together in the tool-calling process, let's implement them!",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经理解了这些类在工具调用过程中的结构和协作方式，现在就来实现它们吧！"
+      ]
+    },
+    {
+      "sentence_id": "4e405c49-543e-5115-9368-773026fd01c6",
+      "source_text": "2.1.1 Implementing ToolCall and ToolCallResult",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.1.1 实现ToolCall与ToolCallResult"
+      ]
+    },
+    {
+      "sentence_id": "34e3bdc8-2022-5ebd-9e59-ec1afb31efff",
+      "source_text": "We’ll implement our two new data structures, one at a time, starting with ToolCall.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将逐一实现两个新的数据结构，首先从ToolCall开始。"
+      ]
+    },
+    {
+      "sentence_id": "7f615558-9a0c-52b8-9d80-05d5965d807f",
+      "source_text": "The three attributes of ToolCall were shown in figure 2.4.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ToolCall的三个属性已在图2.4中展示。"
+      ]
+    },
+    {
+      "sentence_id": "11081590-ac7c-5988-9f75-b16a78d26fb8",
+      "source_text": "The id_ attribute provides a string identifier for a ToolCall object, while tool_name and arguments represent the selected tool’s name and the parameter values we’ll use to invoke it, respectively.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "id_属性为ToolCall对象提供字符串标识符，而tool_name和arguments分别表示所选工具的名称以及调用该工具时使用的参数值。"
+      ]
+    },
+    {
+      "sentence_id": "8a8a7cfe-6c10-55bc-bc9e-a2068e30740c",
+      "source_text": "The following listing shows the implementation of ToolCall.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下列表展示了ToolCall的实现。"
+      ]
+    },
+    {
+      "sentence_id": "8c7cf458-1667-5ddc-8b0b-a02ab33d5fd2",
+      "source_text": "Listing 2.1 Implementing ToolCall",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.1 实现ToolCall"
+      ]
+    },
+    {
+      "sentence_id": "d8b907c5-5544-5104-a7ee-4c83a42e720d",
+      "source_text": "# llm_agents_from_scratch/data_structures/tool.py #A import uuid from typing import Any from pydantic import BaseModel, Field class ToolCall(BaseModel): \"\"\"Tool call. Attributes: id_: A string identifier for the tool call. tool_name: Name of tool to call. arguments: The arguments to pass to the tool execution. \"\"\" id_: str = Field(default_factory=lambda: str(uuid.uuid4())) tool_name: str #B arguments: dict[str, Any] #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "c7d942a4-a534-5522-b29f-65dd217808e0",
+      "source_text": "Since ToolCall inherits from pydantic.BaseModel, we specify attributes under the class declaration.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于ToolCall继承自pydantic.BaseModel，我们在类声明下指定属性。"
+      ]
+    },
+    {
+      "sentence_id": "8e629ec2-8cf2-5002-b95a-c120a43da8ff",
+      "source_text": "With pydantic, the three attributes are also called model fields.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在pydantic中，这三个属性也被称为模型字段。"
+      ]
+    },
+    {
+      "sentence_id": "a13a23fc-2320-5dd7-848b-9de799cf348a",
+      "source_text": "We can add customizations to any of the fields, such as providing a default factory method, as we’ve done for id_.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们可以为任何字段添加自定义设置，例如为id_提供一个默认工厂方法，正如我们之前所做的那样。"
+      ]
+    },
+    {
+      "sentence_id": "d418b53d-0560-5b5a-b156-97516b278791",
+      "source_text": "This means that we do not need to supply a value for id_ when creating a ToolCall object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这意味着在创建ToolCall对象时，我们不需要为id_提供值。"
+      ]
+    },
+    {
+      "sentence_id": "fb49d3d4-ded8-5a51-b959-341108a6246c",
+      "source_text": "I should also mention that a default constructor is provided for pydantic.BaseModel objects, which explains why we don’t need to define an __init__() method ourselves.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我还应该提到，pydantic.BaseModel对象提供了一个默认构造函数，这解释了为什么我们不需要自己定义__init__()方法。"
+      ]
+    },
+    {
+      "sentence_id": "0bcd8e03-5fcf-5149-bfa8-8dd345032295",
+      "source_text": "As discussed earlier, we need to package the tool-call requests generated by LLMs into ToolCall objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，我们需要将LLM生成的工具调用请求打包成ToolCall对象。"
+      ]
+    },
+    {
+      "sentence_id": "f0d63620-5dc7-525e-b874-74c4fff5cf17",
+      "source_text": "Let’s revisit our best-value croissant in New York City example from the previous chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们回顾前一章中关于纽约市最佳性价比可颂的示例。"
+      ]
+    },
+    {
+      "sentence_id": "3d39e059-c829-5e82-8599-16a6485a1071",
+      "source_text": "Suppose the backbone LLM generates a tool-call request in natural language text: “I need to use the web-search-tool to run the search query: ‘Croissant bakeries in New York City and their prices’.” Figure 2.5 shows how we create a ToolCall object from this request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "假设骨干LLM以自然语言文本生成工具调用请求：“我需要使用web-search-tool来运行搜索查询：‘纽约市的可颂面包店及其价格’。”图2.5展示了我们如何从该请求创建ToolCall对象。"
+      ]
+    },
+    {
+      "sentence_id": "d5442938-d591-574b-93e0-46f05a1033b1",
+      "source_text": "Figure 2.5 Creating a ToolCall object from an LLM’s natural language tool-call request. Since the web-search tool is a BaseTool, we must first convert the request into a ToolCall object before invoking it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.5展示了如何从LLM的自然语言工具调用请求创建ToolCall对象。由于网络搜索工具是一个BaseTool，我们必须在调用它之前先将请求转换为ToolCall对象。"
+      ]
+    },
+    {
+      "sentence_id": "de47a7ce-f796-53cc-95a7-84b1f06b5b24",
+      "source_text": "Converting this request to a ToolCall object requires identifying the selected tool’s name as well as the arguments we’ll use to invoke it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "将这一请求转换为ToolCall对象，需要识别所选工具的名称以及调用该工具时所需的参数。"
+      ]
+    },
+    {
+      "sentence_id": "60832410-664e-5e04-a2e8-416ffb3db407",
+      "source_text": "The following code snippet demonstrates how we can use these identified elements to create our ToolCall object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码片段展示了如何利用这些已识别的元素来创建我们的ToolCall对象。"
+      ]
+    },
+    {
+      "sentence_id": "a2840734-2cc8-568a-8e7f-b319665475d9",
+      "source_text": "# Included in examples/ch02.ipynb #A from llm_agents_from_scratch.data_structures.tool import ToolCall croissant_tool_call = ToolCall( tool_name=\"web-search-tool\", #B arguments={ \"query\": \"Croissant bakeries in New York City and their prices.\", #C } )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "d918c473-8a6b-5ccc-bac5-2cd52d7aafdd",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "a6e3bc32-820c-56b4-a300-7770c2924212",
+      "source_text": "In practice, we use APIs or Software Development Kits (SDKs) provided by LLM providers to elicit tool-call requests.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在实践中，我们使用LLM提供商提供的API或软件开发工具包（SDK）来引发工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "7961807e-4586-5942-8add-c624fda0cab6",
+      "source_text": "In contrast to our example, these requests are typically generated according to a pre-specified structured format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与我们的示例不同，这些请求通常按照预先指定的结构化格式生成。"
+      ]
+    },
+    {
+      "sentence_id": "3f3d26fd-686b-5959-9202-81e0390889fc",
+      "source_text": "This is beneficial because working with unstructured text would be brittle and pose significant challenges when extracting the required elements to build ToolCall objects consistently.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这样做的好处在于，处理非结构化文本会非常脆弱，并且在提取所需元素以一致地构建ToolCall对象时，会带来重大挑战。"
+      ]
+    },
+    {
+      "sentence_id": "fb38363e-f81f-542f-870e-f277190e047f",
+      "source_text": "We’ll work with one such API in the next chapter when we build out the base class for LLMs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在下一章中，当我们构建LLM的基类时，将使用其中一个这样的API。"
+      ]
+    },
+    {
+      "sentence_id": "f84652b5-105e-55b0-bce7-d165d43da8b8",
+      "source_text": "With our ToolCall object created, we can now invoke the tool’s __call__() method to execute the requested web search.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "创建了ToolCall对象后，我们现在可以调用工具的__call__()方法来执行请求的网络搜索。"
+      ]
+    },
+    {
+      "sentence_id": "1817ff2d-df85-57da-a101-33291b5ee488",
+      "source_text": "Since we haven’t yet implemented our BaseTool class, we’ll have to wait a little longer before we can see this step in action.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于我们尚未实现BaseTool类，因此还需要稍等片刻才能看到这一步的实际效果。"
+      ]
+    },
+    {
+      "sentence_id": "d4772d3b-1705-5319-938d-552e28cc4ac7",
+      "source_text": "For now, let’s continue with our planned implementation of ToolCallResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，让我们继续按计划实现ToolCallResult。"
+      ]
+    },
+    {
+      "sentence_id": "2a8215fd-0f2b-544c-a42d-74859c868c89",
+      "source_text": "You saw earlier from figure 2.4 that ToolCallResult has three attributes: tool_call_id, content, and error.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您之前从图2.4中看到，ToolCallResult具有三个属性：tool_call_id、content和error。"
+      ]
+    },
+    {
+      "sentence_id": "e22258a5-3fb4-5ff3-8aa7-d51bd545efcb",
+      "source_text": "The content attribute stores the results of the tool-call execution, while the error attribute specifies whether or not an error was encountered.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "content属性存储工具调用执行的结果，而error属性则指明是否遇到了错误。"
+      ]
+    },
+    {
+      "sentence_id": "6c031404-f5bd-5869-b22a-04acdb597ad8",
+      "source_text": "The tool_call_id attribute helps to tie back the result to its associated tool-call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "tool_call_id属性有助于将结果与其关联的工具调用请求对应起来。"
+      ]
+    },
+    {
+      "sentence_id": "f08c5a9d-f2ac-55dd-b906-119f37f02132",
+      "source_text": "Figure 2.6 shows how the creation of the ToolCallResult object is dependent on the outcome of a tool execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.6展示了ToolCallResult对象的创建如何依赖于工具执行的结果。"
+      ]
+    },
+    {
+      "sentence_id": "d8f72988-4c08-550c-a4d9-f1656bee0708",
+      "source_text": "Figure 2.6 Creating a ToolCallResult object from the selected tool’s execution, handling both successful and failed executions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.6展示了如何从所选工具的执行中创建ToolCallResult对象，并处理成功和失败的执行情况。"
+      ]
+    },
+    {
+      "sentence_id": "3330513e-19b9-535d-a339-4202d7f4a113",
+      "source_text": "After a successful execution, the result is assigned to the content attribute and the error is set to False.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "执行成功后，结果被赋值给content属性，error属性设为False。"
+      ]
+    },
+    {
+      "sentence_id": "d1191d17-c224-5887-96ba-aea5e523df15",
+      "source_text": "If an error is encountered during the tool’s execution, the content and error attributes are set to None and True, respectively.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果在工具执行过程中遇到错误，content和error属性分别设为None和True。"
+      ]
+    },
+    {
+      "sentence_id": "32997484-c366-5e9c-a2ab-c84425a3df42",
+      "source_text": "The following code implements the ToolCallResult class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码实现了ToolCallResult类。"
+      ]
+    },
+    {
+      "sentence_id": "844e38b9-8417-5985-8ac6-8db27488eac4",
+      "source_text": "Listing 2.2 Implementing ToolCallResult",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.2 实现ToolCallResult"
+      ]
+    },
+    {
+      "sentence_id": "8eca5e2d-0050-5c10-9717-9faff937e532",
+      "source_text": "# llm_agents_from_scratch/data_structures/tool.py import uuid from typing import Any from pydantic import BaseModel, Field … #A class ToolCallResult(BaseModel): \"\"\"Result of a tool call execution. Attributes: tool_call_id: The id of the associated tool call. content: The content of tool call. error: Whether or not the tool call yielded an error. \"\"\" tool_call_id: str #B content: Any | None #C error: bool = False #D",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "29e2b3b1-d292-539e-be32-45c781cb2c2f",
+      "source_text": "As you can see, the implementation of ToolCallResult is similar to that of ToolCall since both classes inherit from pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如您所见，ToolCallResult的实现与ToolCall类似，因为这两个类都继承自pydantic.BaseModel。"
+      ]
+    },
+    {
+      "sentence_id": "95b86928-c823-5b43-9633-0c6955db4161",
+      "source_text": "Continuing our previous example, if we imagine a successful execution of the web-search-tool, we’d create a ToolCallResult object with its content set to the execution result and its error set to False, as the following code snippet demonstrates.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "延续之前的示例，假设网络搜索工具成功执行，我们将创建一个ToolCallResult对象，将其内容设置为执行结果，错误设置为False，如下面的代码片段所示。"
+      ]
+    },
+    {
+      "sentence_id": "fa177e99-4b6a-5bd6-8fbf-66aa14feb5b5",
+      "source_text": "# Included in examples/ch02.ipynb #A from llm_agents_from_scratch.data_structures.tool import ToolCallResult result = ToolCallResult( tool_call_id=tool_call.id_, #B content={ \"search_results\": … #C } )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "b30023f3-2ed8-5a24-8749-ecf9de2bbd08",
+      "source_text": "2.1.2 Implementing BaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.1.2 实现 BaseTool"
+      ]
+    },
+    {
+      "sentence_id": "462cc566-6033-5575-a276-bc9376ad7dfd",
+      "source_text": "Now that we’ve implemented the necessary data structures for working with the BaseTool class, let’s move on to its implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经为使用BaseTool类实现了必要的数据结构，接下来就让我们进入其实现部分。"
+      ]
+    },
+    {
+      "sentence_id": "887f18d3-80c2-517b-8bfd-1666b5ba41d8",
+      "source_text": "As we saw from the UML class diagram in figure 2.4, BaseTool is an abstract class with three attributes and one method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如我们在图2.4的UML类图中所见，BaseTool是一个抽象类，具有三个属性和一个方法。"
+      ]
+    },
+    {
+      "sentence_id": "adca398c-ad2a-5db0-a9d6-1c9f676ea5fa",
+      "source_text": "The three attributes—name, description, and parameters_json_schema—provide the information needed to equip an LLM with the BaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "三个属性——名称、描述和参数JSON模式——提供了为LLM配备BaseTool所需的信息。"
+      ]
+    },
+    {
+      "sentence_id": "8c8810cd-235c-5385-a055-24caa96cb42e",
+      "source_text": "More specifically, they are used to prepare the textual descriptions passed to the LLM, as shown in figure 2.7.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更具体地说，它们用于准备传递给LLM的文本描述，如图2.7所示。"
+      ]
+    },
+    {
+      "sentence_id": "ed1b43f5-734d-529a-b899-f6a70bde1ef9",
+      "source_text": "Figure 2.7 Revisiting the tool-equipping process. With a BaseTool, we can use its attributes to fill in the values required for textual descriptions that are passed to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.7 回顾工具装配过程。通过BaseTool，我们可以利用其属性来填充传递给LLM的文本描述所需的值。"
+      ]
+    },
+    {
+      "sentence_id": "71fb5839-d0d7-5568-b74d-8ec44e3bb9e6",
+      "source_text": "Once a tool is equipped to the LLM, it can be used in a tool-call process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一旦工具被装备到LLM中，它就可以在工具调用过程中使用。"
+      ]
+    },
+    {
+      "sentence_id": "65e2ec08-1bdb-597d-a591-71f48896651c",
+      "source_text": "As we've already discussed, the __call__() method is now responsible for the tool's execution, which takes in a ToolCall and outputs a ToolCallResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如我们之前讨论过的，__call__()方法现在负责工具的执行，它接收一个ToolCall并输出一个ToolCallResult。"
+      ]
+    },
+    {
+      "sentence_id": "0877721f-25d3-5a4c-8780-0587d9722830",
+      "source_text": "We’ll mark this __call__() method as abstract, implying that subclasses will need to provide an implementation for it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将把此__call__()方法标记为抽象方法，这意味着子类需要为其提供具体实现。"
+      ]
+    },
+    {
+      "sentence_id": "cb5e15c8-90ad-53f8-a329-1943b32b6743",
+      "source_text": "The following listing shows the code for BaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下清单展示了BaseTool的代码。"
+      ]
+    },
+    {
+      "sentence_id": "bac17d09-d1b5-510a-af48-5bcdb1d55d8d",
+      "source_text": "Listing 2.3 Implementing BaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 2.3 实现 BaseTool"
+      ]
+    },
+    {
+      "sentence_id": "ad7700ea-75ea-5a7a-bb99-7cf3c9853fc2",
+      "source_text": "# llm_agents_from_scratch/base/tool.py #A from abc import ABC, abstractmethod from llm_agents_from_scratch.data_structures.tool import ( ToolCall, #B ToolCallResult, #B ) class BaseTool(ABC): \"\"\"Base Tool Class.\"\"\" @property #C @abstractmethod def name(self) -> str: \"\"\"Name of tool.\"\"\" @property @abstractmethod #D def description(self) -> str: \"\"\"Description of what this tool does.\"\"\" @property @abstractmethod def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON Schema for tool parameters.\"\"\" @abstractmethod def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: \"\"\"Execute the tool call.\"\"\" #E",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "3a54e3a3-52b7-5c3d-9b9e-443f71641c88",
+      "source_text": "You can see that we’ve marked the __call__() method as abstract by applying the @abstractmethod decorator to it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以看到，我们通过应用@abstractmethod装饰器将__call__()方法标记为抽象方法。"
+      ]
+    },
+    {
+      "sentence_id": "c5f403e0-8bab-5974-89c8-0f8144b1299a",
+      "source_text": "For our three attributes, you may be surprised to see that we have marked them with @abstractmethod as well.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于我们的三个属性，您可能会惊讶地发现我们也用@abstractmethod标记了它们。"
+      ]
+    },
+    {
+      "sentence_id": "50002839-af71-5d83-8bfd-79370c1a480c",
+      "source_text": "While they’re marked as abstract methods, the @property decorator gives us the attribute-like behavior we want.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然它们被标记为抽象方法，但@property装饰器为我们提供了所需的类似属性的行为。"
+      ]
+    },
+    {
+      "sentence_id": "11648c76-1145-58e3-b821-044023df7e4c",
+      "source_text": "This provides some flexibility in terms of hiding internal attributes and performing validation when needed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这提供了一定的灵活性，可以在需要时隐藏内部属性并进行验证。"
+      ]
+    },
+    {
+      "sentence_id": "e62dc201-3c61-5382-80c8-95ced7195127",
+      "source_text": "However, the main reason I have chosen to use property attributes here is for a consistent interface.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，我选择在此处使用属性属性的主要原因是为了保持一致的接口。"
+      ]
+    },
+    {
+      "sentence_id": "89063feb-95cf-5f2e-86da-b67f77b60512",
+      "source_text": "All subclasses must provide implementations for name, description, parameters_json_schema, and __call__(), and failing to do so would raise an AbstractMethodError.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "所有子类都必须为name、description、parameters_json_schema和__call__()提供实现，否则会引发AbstractMethodError。"
+      ]
+    },
+    {
+      "sentence_id": "9ae416cb-42c1-5e3e-9e92-83ee8b613811",
+      "source_text": "NOTe",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "356e899e-7198-59b8-af82-c0499d4f679e",
+      "source_text": "Most, if not all, LLM providers have designed their LLM tool-calling APIs and SDKs to accept outlines of the tool’s parameters that adhere to the JSON Schema specification.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "大多数（即便不是全部）LLM提供商设计的LLM工具调用API和SDK，都要求工具的参数字段遵循JSON Schema规范。"
+      ]
+    },
+    {
+      "sentence_id": "618f3533-8d35-5d9f-a8b9-012f880ac257",
+      "source_text": "Using JSON Schema for our framework is a technically sound choice that also happens to maximize compatibility with existing LLM tools and services.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在我们的框架中使用JSON Schema，不仅技术上合理，还能最大限度地兼容现有的LLM工具和服务。"
+      ]
+    },
+    {
+      "sentence_id": "a964c9f2-1b07-5c80-b9f8-826ede7fc410",
+      "source_text": "Let’s look at a simple example of building a tool by subclassing the BaseTool class we just implemented.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们看一个通过子类化刚才实现的BaseTool类来构建工具的简单示例。"
+      ]
+    },
+    {
+      "sentence_id": "c02a5d60-498a-5837-89e2-26012000c3f8",
+      "source_text": "For this example, we’ll create a tool called the Hailstone tool that applies a single step of the Hailstone sequence to a given positive integer.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这个示例中，我们将创建一个名为Hailstone的工具，它会对给定的正整数应用Hailstone序列的单个步骤。"
+      ]
+    },
+    {
+      "sentence_id": "f0a20903-2e63-54a4-8c14-62dd764d400e",
+      "source_text": "If the integer is even, the Hailstone tool outputs the result of halving it; if odd, the Hailstone tool outputs the result of multiplying it by three and adding one.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果整数是偶数，Hailstone工具会输出将其减半的结果；如果是奇数，则输出将其乘以三再加一的结果。"
+      ]
+    },
+    {
+      "sentence_id": "34d28149-dcad-5dae-8298-7518aa356dca",
+      "source_text": "Figure 2.8 illustrates the Hailstone tool and its execution logic as part of a tool-call process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.8展示了Hailstone工具及其作为工具调用流程一部分的执行逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "6ee7bc57-5c41-57c2-96e9-65ea756e414b",
+      "source_text": "Figure 2.8 The Hailstone tool performs a Hailstone step on a given positive integer. By implementing the Hailstone tool as a subclass of BaseTool, we can use it within the tool-call process for LLMs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.8 Hailstone工具对给定的正整数执行Hailstone步骤。通过将Hailstone工具实现为BaseTool的子类，我们可以在LLM的工具调用过程中使用它。"
+      ]
+    },
+    {
+      "sentence_id": "e6750bea-99ba-582b-b025-b6cc87428ae9",
+      "source_text": "To implement the Hailstone tool as a BaseTool, we know from before that we’ll have to write implementations for name, description, parameters_json_schema, and __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要将Hailstone工具实现为BaseTool，根据之前的了解，我们需要为name、description、parameters_json_schema和__call__()编写具体实现。"
+      ]
+    },
+    {
+      "sentence_id": "925eba7f-69d5-58fa-8b57-7269b6d36329",
+      "source_text": "For name and description, we’ll use “hailstone” and “A tool that performs a Hailstone step on a given input number,” respectively.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于name和description，我们将分别使用“hailstone”和“对给定输入数字执行Hailstone步骤的工具”。"
+      ]
+    },
+    {
+      "sentence_id": "50dfe8de-f711-5192-bba5-91924955d227",
+      "source_text": "For parameters_json_schema, we need to provide a schema of the Hailstone tool’s parameters that conforms to the JSON Schema specification.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于parameters_json_schema，我们需要提供符合JSON模式规范的Hailstone工具参数模式。"
+      ]
+    },
+    {
+      "sentence_id": "0a09f0f1-1806-52b3-82de-f55ba9e9c489",
+      "source_text": "We’ll create this manually for this simple example, but later in this chapter, we’ll build a helper function to generate these JSON Schemas automatically.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这个简单的示例中，我们将手动创建它，但本章稍后部分，我们将构建一个辅助函数来自动生成这些JSON模式。"
+      ]
+    },
+    {
+      "sentence_id": "26af838c-42d8-53a7-983a-2dbf7022de61",
+      "source_text": "The Hailstone tool requires only one input parameter: the integer to which we want to apply the Hailstone step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Hailstone工具只需要一个输入参数：我们要对其应用Hailstone步骤的整数。"
+      ]
+    },
+    {
+      "sentence_id": "1916af51-7b58-51ec-b58a-96bd30b1de20",
+      "source_text": "If we call this input parameter x, which aligns with the naming used in figure 2.8, the JSON Schema for the Hailstone tool’s parameters looks like the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果我们把这个输入参数称为x，这与图2.8中使用的命名方式一致，那么Hailstone工具参数的JSON Schema如下所示。"
+      ]
+    },
+    {
+      "sentence_id": "12a35c99-43ad-59a3-aeb2-02c1e5718abc",
+      "source_text": "{ \"type\": \"object\", \"properties\": { #A \"x\": { #B \"type\": \"number\", \"description\": \"The input number.\" }, }, \"required\": [\"x\"], #C }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "78064854-df57-526d-bf43-6ab9a4c46246",
+      "source_text": "As you can see, the input parameter x is specified and listed as required.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如您所见，输入参数x被指定并列为必需项。"
+      ]
+    },
+    {
+      "sentence_id": "0698d323-cfe3-5664-aa2e-0932dcfad05a",
+      "source_text": "JSON Schemas like the one we just created are simply JSON documents that use a set of reserved keywords to describe their data requirements.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "像我们刚刚创建的JSON模式，本质上就是使用一组保留关键字来描述其数据需求的JSON文档。"
+      ]
+    },
+    {
+      "sentence_id": "697d73ad-61bb-54f8-92ff-14b54e793d2b",
+      "source_text": "Readers unfamiliar with the JSON Schema specification may find it helpful to read the sidebar, which provides an overview of the basics of JSON Schema.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "不熟悉JSON模式规范的读者可能会发现阅读侧边栏很有帮助，它提供了JSON模式基础知识的概述。"
+      ]
+    },
+    {
+      "sentence_id": "f6993ec1-e623-52f7-b2f1-e61db700ef30",
+      "source_text": "JSON Schema basics",
+      "sentence_status": "translated",
+      "target_texts": [
+        "JSON Schema 基础知识"
+      ]
+    },
+    {
+      "sentence_id": "9c71a8ff-34d7-55ab-bfd2-7128adf14d2f",
+      "source_text": "JSON Schemas are themselves JSON documents that are used to describe the shape and format of data.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "JSON Schema本身也是JSON文档，用于描述数据的结构和格式。"
+      ]
+    },
+    {
+      "sentence_id": "6b494f7c-423f-5bbd-94cc-8ccad678c636",
+      "source_text": "This specification makes it easier to create and share data.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这一规范使得创建和共享数据变得更加容易。"
+      ]
+    },
+    {
+      "sentence_id": "8923e5a7-5373-5f7e-9d59-b05d7252b2d3",
+      "source_text": "For example, JSON Schemas can be used to specify the shape of data representing transactions from a retail store.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，JSON Schema可用于规定零售商店交易数据的结构。"
+      ]
+    },
+    {
+      "sentence_id": "93d4a607-8316-5bfa-af35-a0c698c5082b",
+      "source_text": "As another example, a JSON Schema can also be used to describe LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "再举一例，JSON Schema也可用于描述LLM智能体。"
+      ]
+    },
+    {
+      "sentence_id": "1c230b19-0cc6-547c-a363-89aa085024df",
+      "source_text": "Let’s say that we want to have LLM agents specified by their backbone LLM and the list of its equipped tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "假设我们希望通过指定其骨干LLM及其配备的工具列表来定义LLM智能体。"
+      ]
+    },
+    {
+      "sentence_id": "9d196e21-91d3-5f0a-a8a0-5a6958b80e94",
+      "source_text": "To accomplish this, we’d structure the overall JSON Schema using the type object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了实现这一点，我们将使用类型为object的JSON Schema来构建整体结构。"
+      ]
+    },
+    {
+      "sentence_id": "f1518647-a492-57fe-9ee7-73a4a057d739",
+      "source_text": "This object JSON data type is analogous to the Python dict type.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这种object JSON数据类型类似于Python中的字典类型。"
+      ]
+    },
+    {
+      "sentence_id": "75705936-0c58-52f5-baa2-dc16e49d818d",
+      "source_text": "Within an object, we can define its properties, or key-value pairs, that represent the object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在对象内部，我们可以定义其属性或键值对，以表示该对象。"
+      ]
+    },
+    {
+      "sentence_id": "c11b03c4-465e-515e-9aa8-7788ecd894fe",
+      "source_text": "For our LLM agent, we would have two properties: llm and tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于我们的LLM代理，将有两个属性：llm和tools。"
+      ]
+    },
+    {
+      "sentence_id": "a4ea0649-b526-5038-a7af-f75c39471620",
+      "source_text": "Each property in JSON Schema is defined by a schema object that specifies its data type and constraints.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "JSON Schema中的每个属性都由一个模式对象定义，该对象指定其数据类型和约束。"
+      ]
+    },
+    {
+      "sentence_id": "986eddaf-c9ed-5ce7-8118-1b9380f4fd47",
+      "source_text": "We may want the llm property, for example, to specify the name of the LLM model, like “gpt-5”.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，我们可能希望llm属性指定LLM模型的名称，比如“gpt-5”。"
+      ]
+    },
+    {
+      "sentence_id": "23e7dc82-1aba-53f0-a551-b5c5554ddb50",
+      "source_text": "In this case, we’d specify the llm property type to be the string JSON type.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这种情况下，我们会将llm属性类型指定为字符串JSON类型。"
+      ]
+    },
+    {
+      "sentence_id": "eea5ae9c-6611-5df3-a880-e39999568dfd",
+      "source_text": "In contrast, the tools property would be an array JSON type, which is analogous to the Python list data type.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "相比之下，tools属性将是数组JSON类型，这类似于Python的列表数据类型。"
+      ]
+    },
+    {
+      "sentence_id": "f6da39fd-9d63-584a-b2b5-cb8a85dc95bd",
+      "source_text": "In addition to specifying the data type, we can also provide a name or title to each JSON Schema fragment.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "除了指定数据类型外，我们还可以为每个JSON Schema片段提供名称或标题。"
+      ]
+    },
+    {
+      "sentence_id": "2ff669ad-d63b-56bf-9459-41be5b5bda68",
+      "source_text": "The following code shows the JSON Schema that we just described.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码展示了我们刚刚描述的JSON Schema。"
+      ]
+    },
+    {
+      "sentence_id": "f2d1016a-0353-574a-bf0f-779c929054e4",
+      "source_text": "{ \"title\": \"LLMAgent\", \"type\": \"object\", #A \"properties\": { \"llm\": { #B \"title\": \"Llm\", \"type\": \"string\" #C }, \"tools\": { #D \"items\": { #E \"additionalProperties\": true, \"type\": \"object\" }, \"title\": \"Tools\", \"type\": \"array\" #F }, }, \"required\": [ #G \"llm\", \"tools\" ] }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "80afe4ce-c410-551d-a5eb-1e307cdee079",
+      "source_text": "With this JSON Schema, we know precisely how to create a valid LLM agent data record.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "借助这份JSON Schema，我们能够精确地知道如何创建有效的LLM代理数据记录。"
+      ]
+    },
+    {
+      "sentence_id": "e194d4fa-9d1a-5fe9-8967-3e5b180e6912",
+      "source_text": "We see the shape and format of this data and understand that a valid LLM agent data record must include both llm and tools properties, as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们看到数据的结构和格式，并理解一个有效的LLM代理数据记录必须包含llm和tools这两个属性，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "5ed30e07-d0cc-5eff-9c16-792eab90f585",
+      "source_text": "{ \"llm\": \"gpt-5\", \"tools\": [ { \"name\": \"websearch-tool\" } ] }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "4ab983c9-69a7-5f2f-958a-18bfd9912296",
+      "source_text": "Failing to have either of these fields or supplying incorrect data types would result in a JSON data validation error.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "缺少其中任一字段或提供不正确的数据类型都会导致JSON数据验证错误。"
+      ]
+    },
+    {
+      "sentence_id": "42b52282-fc8b-5b4a-a483-0a88cab64bbd",
+      "source_text": "The following code shows an invalid LLM agent data record because it is missing the llm property.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码展示了一个无效的LLM代理数据记录，因为它缺少llm属性。"
+      ]
+    },
+    {
+      "sentence_id": "4cf93faa-3d3e-53cc-b470-8e948d8fa2f8",
+      "source_text": "{ \"tools\": [ { \"name\": \"websearch-tool\" } ] }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "ec28bfc4-b486-5bad-b49e-e7465167e296",
+      "source_text": "By passing JSON Schemas of the tool parameters to LLMs, they’ll know exactly how to provide the required information for parameters when making tool-call requests.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过将工具参数的JSON模式传递给LLM，它们就能准确知道在发出工具调用请求时如何提供参数所需的信息。"
+      ]
+    },
+    {
+      "sentence_id": "dccdcfd1-8ff2-5788-859e-4ae02d15c736",
+      "source_text": "For more comprehensive information on JSON Schemas, readers are encouraged to read other resources such as https://json-schema.org/.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "关于JSON Schema的更多详细信息，建议读者查阅其他资源，例如https://json-schema.org/。"
+      ]
+    },
+    {
+      "sentence_id": "b07adc76-fdcc-5dda-888b-1989e68e8657",
+      "source_text": "The last item to implement for our Hailstone tool is its __call__() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为我们的Hailstone工具实现的最后一项是其__call__()方法。"
+      ]
+    },
+    {
+      "sentence_id": "dea85277-fad7-5d51-bc06-87ca85014602",
+      "source_text": "With our parameter’s JSON Schema established, we can now expect ToolCall objects passed to the Hailstone tool to contain the key x in their arguments dictionary.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在建立了参数的JSON Schema后，我们现在可以预期传递给Hailstone工具的ToolCall对象在其arguments字典中包含键x。"
+      ]
+    },
+    {
+      "sentence_id": "ed6e9bdf-1f27-5833-aa9c-ef2317ad7c32",
+      "source_text": "The value for this key is the input number to which we’ll apply the Hailstone step logic.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "该键的值是我们要应用Hailstone步骤逻辑的输入数字。"
+      ]
+    },
+    {
+      "sentence_id": "26192e77-d6bf-537a-932c-4d354d700df3",
+      "source_text": "The following code implements this logic after extracting the input number from a given ToolCall object called tool_call.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码在从名为tool_call的ToolCall对象中提取输入数字后，实现了这一逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "8a502149-3a1e-5400-8ab0-2fa774eee7e3",
+      "source_text": "x = tool_call.arguments.get(\"x\") #A if x % 2 == 0: result = x // 2 #B else: result = (x * 3) + 1 #C return ToolCallResult( #D tool_call_id=tool_call.id_, content=result, error=False, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "33f83741-795b-5af4-adea-ca678574ccfc",
+      "source_text": "Our code successfully implements the Hailstone step and packages the result into a ToolCallResult, as required by the __call__() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们的代码成功实现了Hailstone步骤，并将结果打包成ToolCallResult，符合__call__()方法的要求。"
+      ]
+    },
+    {
+      "sentence_id": "33ca2f31-be6d-551b-b632-0d440c3e8746",
+      "source_text": "This implementation keeps things simple at this stage, but a more robust version could include validation and error handling for the input parameter x.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此实现目前保持简单，但更健壮的版本可包含对输入参数x的验证和错误处理。"
+      ]
+    },
+    {
+      "sentence_id": "97f2d6dd-63fb-5973-8b9e-67a27a02a721",
+      "source_text": "The following code ties everything back together, providing the entire implementation for the Hailstone tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码将所有内容整合起来，提供了Hailstone工具的完整实现。"
+      ]
+    },
+    {
+      "sentence_id": "de2f0f6e-2b34-5a71-9d21-3053e8bca37c",
+      "source_text": "# Included in examples/ch02.ipynb #A from typing import Any from llm_agents_from_scratch.base.tool import BaseTool from llm_agents_from_scratch.data_structures.tool import ( ToolCall, ToolCallResult, ) class Hailstone(BaseTool): #B @property def name(self) -> str: return \"hailstone\" @property def description(self) -> str: return \"A tool that performs a Hailstone step on a given input number.\" @property def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON Schema for tool parameters.\"\"\" return { \"type\": \"object\", \"properties\": { \"x\": { \"type\": \"number\", \"description\": \"The input number.\" }, }, \"required\": [\"x\"] } def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: \"\"\"Execute the tool call.\"\"\" x = tool_call.arguments.get(\"x\") if x % 2 == 0: result = x // 2 else: result = (x * 3) + 1 return ToolCallResult( tool_call_id=tool_call.id_, content=result, error=False, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "60716c26-d2fa-500d-981f-a9a2807b9959",
+      "source_text": "We can run the Hailstone tool call shown in figure 2.8 as follows:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们可以按照图2.8所示运行Hailstone工具调用，具体操作如下："
+      ]
+    },
+    {
+      "sentence_id": "9a931a4e-e71b-5cf6-bc53-23a8488d24d5",
+      "source_text": "# Included in examples/ch02.ipynb #A hailstone_tool = Hailstone() #B tool_call = ToolCall( #C tool_name=\"hailstone\", arguments={\"x\": 3}, ) tool_call_result = hailstone_tool(tool_call) #D print(tool_call_result)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "e27c8d9f-6b1b-58c1-97a1-db662b6668d8",
+      "source_text": "The returned ToolCallResult object contains the result of applying the Hailstone step to x = 3, which is 10.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "返回的ToolCallResult对象包含将Hailstone步骤应用于x=3的结果，即10。"
+      ]
+    },
+    {
+      "sentence_id": "9ed8440e-ff15-580d-9dd7-788998f9fb0c",
+      "source_text": "tool_call_id='112233', content='10', error=False",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "a793cad9-1eb5-5311-99f6-4172d08cdd94",
+      "source_text": "A demonstration of using the Hailstone tool’s name, description, and parameters_json_schema to prepare a textual description for an LLM will have to wait until we’ve implemented the BaseLLM class, which is the subject of the next chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "关于如何使用Hailstone工具的名称、描述和参数JSON模式来为LLM准备文本描述的演示，需要等到我们实现BaseLLM类之后才能进行，这将是下一章的主题。"
+      ]
+    },
+    {
+      "sentence_id": "5af2fd7e-9390-50a2-9155-77dc3bad53df",
+      "source_text": "For now, let’s go over the other base class that we mentioned earlier: AsyncBaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，让我们回顾一下之前提到的另一个基类：AsyncBaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "b7d0f1fb-463d-5b3d-bac1-b476beb6a2a9",
+      "source_text": "2.1.3 The AsyncBaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.1.3 AsyncBaseTool"
+      ]
+    },
+    {
+      "sentence_id": "09f2ecd8-099d-5ca8-8715-a8c4bbb99dc5",
+      "source_text": "To conclude this section, we’ll present an important variation of the BaseTool class: the AsyncBaseTool, which is designed for tools whose logic executes asynchronously.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为本节的总结，我们将介绍BaseTool类的一个重要变体：AsyncBaseTool，它专为逻辑异步执行的工具而设计。"
+      ]
+    },
+    {
+      "sentence_id": "971ecdab-3a33-5365-8555-9831dc396105",
+      "source_text": "Tools that make external API calls, such as for checking weather data, are best suited for asynchronous execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "进行外部API调用的工具（例如查询天气数据）最适合采用异步执行方式。"
+      ]
+    },
+    {
+      "sentence_id": "09965808-3a0e-59a7-b45a-ce27be940026",
+      "source_text": "While waiting for the result of an external API call, asynchronous tools allow other parts of an application’s code to execute simultaneously.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在等待外部API调用结果时，异步工具允许应用程序的其他代码部分同时执行。"
+      ]
+    },
+    {
+      "sentence_id": "020b9d10-9d03-593a-bf1f-e0729f0975b0",
+      "source_text": "Figure 2.9 illustrates the difference in execution mechanics between BaseTool, which is synchronous and therefore blocking, and the non-blocking AsyncBaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.9展示了BaseTool与AsyncBaseTool在执行机制上的差异：BaseTool是同步的，因此会阻塞执行；而AsyncBaseTool是非阻塞的。"
+      ]
+    },
+    {
+      "sentence_id": "95c91948-1400-57ce-9d44-d23bb94055d2",
+      "source_text": "Figure 2.9 Comparing synchronous and asynchronous tool executions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.9 比较同步和异步工具执行。"
+      ]
+    },
+    {
+      "sentence_id": "01874fcf-6ec3-526e-969e-a1522064b089",
+      "source_text": "During the execution of an AsyncBaseTool, if it must wait for external results, other parts of an application can start or continue running.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在执行AsyncBaseTool期间，若需等待外部结果，应用程序的其他部分可以开始或继续运行。"
+      ]
+    },
+    {
+      "sentence_id": "08fbea44-2a67-577a-b8cf-cfd36634cb11",
+      "source_text": "This concurrent execution often yields significant speed gains due to improved resource utilization compared with the synchronous execution of its BaseTool counterpart.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与同步执行的BaseTool相比，这种并发执行通常能因资源利用率提升而带来显著的速度增益。"
+      ]
+    },
+    {
+      "sentence_id": "7116322a-253b-544c-8734-ddf12840b0c3",
+      "source_text": "Figure 2.10 shows the UML class diagram of the AsyncBaseTool class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.10展示了AsyncBaseTool类的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "0804d5c2-65ed-5f5e-bd85-8182b406d6e1",
+      "source_text": "Figure 2.10 The UML class diagram for AsyncBaseTool, which shows a nearly identical structure to the BaseTool class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.10展示了AsyncBaseTool的UML类图，其结构与BaseTool类几乎完全相同。"
+      ]
+    },
+    {
+      "sentence_id": "1ff45c7a-b719-50df-b1b8-c286d7bb9dc1",
+      "source_text": "The AsyncBaseTool class exposes an interface similar to BaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncBaseTool类提供了与BaseTool类似的接口。"
+      ]
+    },
+    {
+      "sentence_id": "03b5e2f3-69b9-509f-bef1-8e20dd7cdb07",
+      "source_text": "It shares the same attributes as BaseTool, and also supports a __call__() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它共享与BaseTool相同的属性，并且也支持__call__()方法。"
+      ]
+    },
+    {
+      "sentence_id": "514f563c-de2e-5188-8334-e181ff5063ac",
+      "source_text": "However, the __call__() method of AsyncBaseTool is asynchronous.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，AsyncBaseTool的__call__()方法是异步的。"
+      ]
+    },
+    {
+      "sentence_id": "6e9bcbbe-c8e6-59da-bf54-ea26f14be4f0",
+      "source_text": "In Python, we mark methods as asynchronous by using the keyword async just before declaring the method signature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在 Python 中，我们通过在方法签名前使用关键字 async 来将方法标记为异步。"
+      ]
+    },
+    {
+      "sentence_id": "0f37574e-f63a-5cdd-8606-15a24687b2d4",
+      "source_text": "The complete implementation for AsyncBaseTool is provided in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncBaseTool 的完整实现见以下代码。"
+      ]
+    },
+    {
+      "sentence_id": "8c2d5b22-3356-5cfe-b86d-23b083fdc590",
+      "source_text": "Listing 2.4 Implementing AsyncBaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.4 实现AsyncBaseTool"
+      ]
+    },
+    {
+      "sentence_id": "9b252421-d170-55e0-a73b-30c084cbbc89",
+      "source_text": "# llm_agents_from_scratch/base/tool.py from abc import ABC, abstractmethod from llm_agents_from_scratch.data_structures.tool import ( ToolCall, ToolCallResult, ) class BaseTool(ABC): \"\"\"Base Tool Class.\"\"\" … #A class AsyncBaseTool(ABC): \"\"\"Async Base Tool Class.\"\"\" @property @abstractmethod def name(self) -> str: \"\"\"Name of tool.\"\"\" @property @abstractmethod def description(self) -> str: \"\"\"Description of what this tool does.\"\"\" @property @abstractmethod def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON schema for tool parameters.\"\"\" @abstractmethod async def __call__( #B self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: \"\"\"Asynchronously execute the tool call.\"\"\"",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "cbe041de-71de-5c77-8267-7133300273fe",
+      "source_text": "As an example, if the Hailstone tool from earlier inherited from AsyncBaseTool instead of BaseTool, we would invoke it with the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，如果之前的Hailstone工具继承自AsyncBaseTool而非BaseTool，我们将通过以下代码调用它。"
+      ]
+    },
+    {
+      "sentence_id": "cc44228f-08de-58c1-872f-a5eff42f4f91",
+      "source_text": "hailstone_tool = Hailstone() #A tool_call = ToolCall( #B tool_name=\"hailstone\", arguments={\"x\": 3}, ) tool_call_result = await hailstone_tool(tool_call) #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "d2c54815-1b99-589e-a9c8-6ea43ca10dcb",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "e1d99377-2ae3-5fd5-940f-8a31524ed0f4",
+      "source_text": "The async keyword turns a function into an asynchronous one that returns a coroutine when called.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "async关键字可将函数转换为异步函数，调用时返回一个协程。"
+      ]
+    },
+    {
+      "sentence_id": "a7b673b3-759b-50c5-a8b5-bb23d068ea98",
+      "source_text": "Coroutines are non-blocking objects that enable concurrent execution within an asynchronous event loop, such as the ones provided by the asyncio library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "协程是非阻塞对象，可在异步事件循环（如asyncio库提供的事件循环）中实现并发执行。"
+      ]
+    },
+    {
+      "sentence_id": "29e8f7c2-20fe-51ed-85a8-37da39462882",
+      "source_text": "Results of coroutines must be awaited using the await keyword when called from an asynchronous method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在异步方法中调用协程时，必须使用await关键字来等待其结果。"
+      ]
+    },
+    {
+      "sentence_id": "af851dce-66e2-569e-a9e8-50ed6c89364c",
+      "source_text": "To run a coroutine from synchronous code, you can use asyncio.run().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "若要从同步代码中运行协程，可以使用asyncio.run()函数。"
+      ]
+    },
+    {
+      "sentence_id": "1254447d-7cec-559c-a000-e93224faaba6",
+      "source_text": "Exercise 2.1 Hailstone as an AsyncBaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "练习 2.1 将冰雹序列实现为 AsyncBaseTool"
+      ]
+    },
+    {
+      "sentence_id": "ea1b50c5-38d6-58c6-b79d-5ff31ef12472",
+      "source_text": "Re-implement the Hailstone tool from earlier, but this time make it inherit from AsyncBaseTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "重新实现之前的Hailstone工具，但这次让它继承自AsyncBaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "9240fdf3-3118-5c2f-971c-b30b105cb33f",
+      "source_text": "For its execution logic, introduce a 1-second sleep before performing the Hailstone step by using asyncio.sleep(1).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在执行逻辑中，通过使用asyncio.sleep(1)引入1秒的休眠，然后再执行Hailstone步骤。"
+      ]
+    },
+    {
+      "sentence_id": "0bdd605e-d45f-5a5f-aa2e-07e1c1548a23",
+      "source_text": "2.2 SimpleFunctionTool: a subclass of BaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.2 SimpleFunctionTool：BaseTool的子类"
+      ]
+    },
+    {
+      "sentence_id": "1e0f993d-b2f3-53e1-be7e-441e84fa702b",
+      "source_text": "While we were able to implement the Hailstone tool with relative ease, we can add extra convenience by developing an abstraction that automatically builds BaseTool objects from Python functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然我们能够相对轻松地实现Hailstone工具，但通过开发一个能够自动从Python函数构建BaseTool对象的抽象层，我们可以增加额外的便利性。"
+      ]
+    },
+    {
+      "sentence_id": "522f026b-b928-5022-8790-4f934a14c679",
+      "source_text": "In this section, we’ll create SimpleFunctionTool, a subclass of BaseTool that serves as a wrapper class for creating tools in this manner.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在本节中，我们将创建SimpleFunctionTool，这是一个BaseTool的子类，作为以这种方式创建工具的包装类。"
+      ]
+    },
+    {
+      "sentence_id": "d41eddbc-8ce9-5739-8486-7883007ad324",
+      "source_text": "When supplied with a function, SimpleFunctionTool automatically implements name, description, parameters_json_schema, and __call__() using the information encapsulated in the function, as shown in Figure 2.11.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当提供函数时，SimpleFunctionTool会自动实现name、description、parameters_json_schema和__call__()方法，这些信息封装在函数中，如图2.11所示。"
+      ]
+    },
+    {
+      "sentence_id": "55b18be0-ec26-54aa-a791-3e3f355be7f2",
+      "source_text": "Figure 2.11 Wrapping Python functions with SimpleFunctionTool so that they can be used as tools for LLMs and LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.11展示了如何使用SimpleFunctionTool包装Python函数，使其能够作为LLM和LLM代理的工具使用。"
+      ]
+    },
+    {
+      "sentence_id": "396a37a8-176c-5077-875a-af4391339d21",
+      "source_text": "We’ll also implement the asynchronous version of SimpleFunctionTool, for creating AsyncBaseTool objects derived from asynchronous Python functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们还将实现SimpleFunctionTool的异步版本，用于从异步Python函数派生AsyncBaseTool对象。"
+      ]
+    },
+    {
+      "sentence_id": "21979db7-06ea-516f-bc7d-0c8206da66e4",
+      "source_text": "Figure 2.12 shows the UML class diagrams for SimpleFunctionTool and AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.12展示了SimpleFunctionTool和AsyncSimpleFunctionTool的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "d6b1264e-588f-5d49-b780-30e47a08f6c8",
+      "source_text": "Figure 2.12 UML class diagrams for SimpleFunctionTool and AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.12 SimpleFunctionTool和AsyncSimpleFunctionTool的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "8347949b-74d6-5a88-ba82-d34701c005a3",
+      "source_text": "Both classes inherit from their corresponding base tool classes and add a new attribute called func, which is the function they wrap.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这两个类都继承自它们对应的基础工具类，并添加了一个名为func的新属性，该属性是它们所包装的函数。"
+      ]
+    },
+    {
+      "sentence_id": "fe0f61ff-9506-58d3-aa95-2f27eae1ea1e",
+      "source_text": "For SimpleFunctionTool, the wrapped function is synchronous, while for AsyncSimpleFunctionTool, it is asynchronous.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于SimpleFunctionTool，包装的函数是同步的；而对于AsyncSimpleFunctionTool，包装的函数是异步的。"
+      ]
+    },
+    {
+      "sentence_id": "c37af7e0-2d83-5ef0-82c2-60cdf18bd5ef",
+      "source_text": "If we reconsider the Hailstone tool, the new SimpleFunctionTool class enables an alternative implementation based on a function that implements the Hailstone step logic, as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果我们重新审视Hailstone工具，新的SimpleFunctionTool类提供了一种基于实现Hailstone步骤逻辑的函数的替代实现方式，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "af38e8e5-049a-5aec-961c-1fbeb628c392",
+      "source_text": "# Included in examples/ch02.ipynb #A def hailstone_step_func(x: int) -> int: \"\"\"Performs a single step of the Hailstone sequence.\"\"\" if x % 2 == 0: return x // 2 #B else: return 3 * x + 1 #B",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "edaec021-24a0-592e-b096-80e5465526d9",
+      "source_text": "The idea is to have SimpleFunctionTool wrap the hailstone_step_func() to create a new tool that an LLM or LLM agent can use in a tool-call process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其思路是让SimpleFunctionTool包装hailstone_step_func()，以创建一个新工具，供LLM或LLM代理在工具调用过程中使用。"
+      ]
+    },
+    {
+      "sentence_id": "77c7abf0-b9a7-5cc2-a5a3-100c1e03404a",
+      "source_text": "2.2.1 Implementing SimpleFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.2.1 实现 SimpleFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "9412deaf-321d-5e16-b24d-9e8e715e420a",
+      "source_text": "Now that we have an idea of what we’re trying to accomplish, let’s implement SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经明确了目标，现在就来实现SimpleFunctionTool。"
+      ]
+    },
+    {
+      "sentence_id": "fe2bcfb3-fb49-5e23-94fd-1084e20bc4fb",
+      "source_text": "Since SimpleFunctionTool inherits from BaseTool, as shown in figure 2.12, we know that we’ll need to implement name, description, parameters_json_schema, and __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于SimpleFunctionTool继承自BaseTool，如图2.12所示，我们知道需要实现name、description、parameters_json_schema和__call__()方法。"
+      ]
+    },
+    {
+      "sentence_id": "6e94e0f2-8321-5d11-8f2d-009859aed6c1",
+      "source_text": "As previously discussed, we’ll derive these implementations automatically based on the supplied function and a new attribute, func.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，我们将根据提供的函数和一个新属性func自动派生这些实现。"
+      ]
+    },
+    {
+      "sentence_id": "7ac6f631-e758-5e5b-8203-f7411546e316",
+      "source_text": "To start, for the name attribute, we’ll use the name of the Python function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先，对于名称属性，我们将使用Python函数的名称。"
+      ]
+    },
+    {
+      "sentence_id": "480dc54e-04ba-5476-bafa-aff2a2ce7980",
+      "source_text": "For description, we can use the docstring of the Python function if it exists; otherwise, we fall back to some pre-specified template.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于描述，如果Python函数存在文档字符串，我们可以使用它；否则，我们将回退到某个预定义的模板。"
+      ]
+    },
+    {
+      "sentence_id": "434b0a40-fb4b-510b-a48e-e404e8ac5664",
+      "source_text": "The implementations of these first two attributes, as well as the constructor __init__() method are shown in listing 2.5.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "前两个属性的实现，以及构造函数__init__()方法，如清单2.5所示。"
+      ]
+    },
+    {
+      "sentence_id": "d81e72b0-e9d3-5195-9917-cab1b20fa2e7",
+      "source_text": "Listing 2.5 Implementing SimpleFunctionTool.(__init__(), name, description)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.5 实现SimpleFunctionTool。（__init__()、name、description）"
+      ]
+    },
+    {
+      "sentence_id": "5ade0417-6f53-51ba-ab36-f6b2fe0c7b4e",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py from typing import Any, Callable from llm_agents_from_scratch.base.tool import BaseTool class SimpleFunctionTool(BaseTool): \"\"\"Simple function calling tool. Turn a Python function into a tool for an LLM. \"\"\" def __init__( self, func: Callable[..., Any], #A desc: str | None = None, ) -> None: \"\"\"Initialize a SimpleFunctionTool. Args: func (Callable): The Python function to expose as a tool to the LLM. desc (str | None, optional): Description of the function. Defaults to None. \"\"\" self.func = func self._desc = desc #B @property def name(self) -> str: \"\"\"Name of function tool.\"\"\" return self.func.__name__ #C @property def description(self) -> str: \"\"\"Description of what this function tool does.\"\"\" return ( self._desc or self.func.__doc__ or f\"Tool for {self.func.__name__}\" #D )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "ce8d1914-1a9f-500c-8615-f7a2dec58de4",
+      "source_text": "Let’s now move on to implementing parameters_json_schema for SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，让我们继续为SimpleFunctionTool实现parameters_json_schema。"
+      ]
+    },
+    {
+      "sentence_id": "d28d5651-babb-5fa6-bb4e-a44f5fcbfe4b",
+      "source_text": "When we implemented the Hailstone tool earlier, we created the parameters JSON Schema manually.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "之前实现Hailstone工具时，我们手动创建了参数JSON模式。"
+      ]
+    },
+    {
+      "sentence_id": "67e67ba4-c527-5907-918b-a171c8ac6c21",
+      "source_text": "I mentioned then that we’d later build a helper function to automate the generation of these schemas.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我之前提到过，我们稍后会构建一个辅助函数来自动生成这些模式。"
+      ]
+    },
+    {
+      "sentence_id": "8a399ed9-38fb-5f1b-af54-dce1d8b07db2",
+      "source_text": "We’ll do this now by implementing a helper that derives the JSON Schema from func by inspecting its method signature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，我们将通过实现一个辅助函数来完成这项工作，该函数通过检查方法签名来从func推导出JSON模式。"
+      ]
+    },
+    {
+      "sentence_id": "e115c6d6-f8cd-555a-a3c5-e6183bcbaf19",
+      "source_text": "We’ll call this helper function: function_signature_to_json_schema().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将调用这个辅助函数：function_signature_to_json_schema()。"
+      ]
+    },
+    {
+      "sentence_id": "5af2c62c-6ac6-56e8-9bce-0e0ed7b916ba",
+      "source_text": "Implementing function_signature_to_json_schema() mainly involves mapping Python data types to the corresponding JSON Schema data types, as well as determining which of the function parameters are required because they have no defined default values.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "实现function_signature_to_json_schema()主要涉及将Python数据类型映射到相应的JSON Schema数据类型，并确定哪些函数参数是必需的，因为它们没有定义默认值。"
+      ]
+    },
+    {
+      "sentence_id": "7a0368ec-0660-56ed-bda9-411a91d1f0b2",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "e8d97b64-571a-5018-a74f-23cad60bf42e",
+      "source_text": "We’re coding a JSON Schema builder from scratch with our implementation of function_signature_to_json_schema() to deepen our understanding of how the textual descriptions of tools are prepared for an LLM to consume.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们正在从头开始编写一个JSON Schema构建器，通过实现function_signature_to_json_schema()函数，以加深对工具文本描述如何为LLM使用而准备的理解。"
+      ]
+    },
+    {
+      "sentence_id": "35acde77-d1d5-5b82-a859-85cfab55fbfe",
+      "source_text": "In the next section, we will introduce yet another BaseTool subclass that handles this aspect more robustly by leveraging the JSON Schema generation capabilities offered by the pydantic library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在下一节中，我们将介绍另一个BaseTool子类，它通过利用pydantic库提供的JSON Schema生成功能，更稳健地处理这一方面。"
+      ]
+    },
+    {
+      "sentence_id": "f549e739-9d4d-54d6-af6d-b650e2a263eb",
+      "source_text": "There is quite a bit of logic that needs to be implemented in function_signature_to_json_schema().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "function_signature_to_json_schema() 函数中需要实现相当多的逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "536d30c9-bb50-5aa0-a1b5-357484445b8f",
+      "source_text": "To help you better understand all of it, I’ve illustrated the logic in figure 2.13.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了帮助您更好地理解这一切，我在图2.13中展示了相关逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "e4f3d312-1f95-58f6-b307-7f6ed9d2ad18",
+      "source_text": "Let’s walk through all of it together before seeing the entire implementation in a listing.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在查看完整实现代码之前，让我们先一起逐步梳理整个过程。"
+      ]
+    },
+    {
+      "sentence_id": "5d2fa7c5-f085-5a42-9ffe-cf863595f092",
+      "source_text": "Figure 2.13 A visual breakdown of the three steps involved in the implementation of the helper function_signature_to_json_schema.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.13 辅助函数_signature_to_json_schema实现过程的三个步骤可视化分解。"
+      ]
+    },
+    {
+      "sentence_id": "2fa3b1fb-b79a-52b7-9ee0-41beb216be03",
+      "source_text": "As shown in figure 2.13, there are three steps to implement.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如图2.13所示，实现过程包含三个步骤。"
+      ]
+    },
+    {
+      "sentence_id": "e7d52379-a2a6-5fcc-83a0-767a9cbffe39",
+      "source_text": "First, we introspect the function signature to identify the parameters and their annotated types.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先，我们通过内省函数签名来识别参数及其标注类型。"
+      ]
+    },
+    {
+      "sentence_id": "0d3c4aa9-f5ff-52e4-ae5e-60f310061212",
+      "source_text": "Second, we loop through all the identified parameters to build a JSON Schema fragment for each of them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其次，我们遍历所有已识别的参数，为每个参数构建JSON Schema片段。"
+      ]
+    },
+    {
+      "sentence_id": "08a25ba4-dadd-5a90-8d4d-246c23d9a5ae",
+      "source_text": "This step involves mapping the parameter’s type to the corresponding JSON data type and determining if the parameter is required.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此步骤涉及将参数类型映射到相应的JSON数据类型，并确定参数是否为必需项。"
+      ]
+    },
+    {
+      "sentence_id": "7a983e8e-323f-599f-b794-5e09c300b490",
+      "source_text": "Third, we assemble and return the overall JSON Schema.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第三，我们组装并返回完整的JSON Schema。"
+      ]
+    },
+    {
+      "sentence_id": "03555b8c-3a5d-503a-93b6-a3626a43b44b",
+      "source_text": "The complete implementation of function_signature_to_json_schema() is provided next in listing 2.6.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "function_signature_to_json_schema() 的完整实现将在接下来的清单 2.6 中提供。"
+      ]
+    },
+    {
+      "sentence_id": "5721c4b5-ca6d-5149-8120-a4f81649ba16",
+      "source_text": "Listing 2.6 Helper for turning a function signature into a JSON Schema",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.6：将函数签名转换为JSON Schema的辅助工具"
+      ]
+    },
+    {
+      "sentence_id": "8b4fdf8e-2c88-5a11-a56f-433b71893bc5",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py import inspect from typing import Any, Callable, get_type_hints def function_signature_to_json_schema(func: Callable) -> dict[str, Any]: \"\"\"Turn a function signature into a JSON schema. Inspects the signature of the function and maps types to the appropriate JSON schema type. Args: func (Callable): The function for which to get the JSON schema. Returns: dict[str, Any]: The JSON schema \"\"\" sig = inspect.signature(func) #A type_hints = get_type_hints(func) python_to_json_schema_type = { #B str: \"string\", int: \"number\", float: \"number\", dict: \"object\", list: \"array\", type(None): \"null\", bool: \"boolean\", tuple: \"array\", bytes: \"string\", set: \"array\", } properties = {} required = [] for param in sig.parameters.values(): #C # skip args and kwargs if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD): continue annotation = type_hints.get(param.name, param.annotation) if annotation in python_to_json_schema_type: this_params_json_schema = { \"type\": python_to_json_schema_type[annotation], } else: # fallback schema, that accepts everything this_params_json_schema = {} properties[param.name] = this_params_json_schema # check if param is required if param.default == inspect._empty: #D required.append(param.name) return { #E \"type\": \"object\", \"properties\": properties, \"required\": required, }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "bf69f1fa-3389-5c20-bb0f-68f53dbbbbf8",
+      "source_text": "Phew, that was a lot of work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "呼，这真是费了不少功夫。"
+      ]
+    },
+    {
+      "sentence_id": "1cc32062-bfcc-5dfc-a51b-2b1bedbc8fe2",
+      "source_text": "Fortunately, all that remains to implement parameters_json_schema is to invoke our helper function, as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "幸运的是，实现parameters_json_schema只需调用我们的辅助函数，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "f1d8b5d3-dd02-5129-af02-de2c1011baff",
+      "source_text": "Listing 2.7 Implementing SimpleFunctionTool.parameters_json_schema",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.7 实现SimpleFunctionTool.parameters_json_schema"
+      ]
+    },
+    {
+      "sentence_id": "18ca4736-d6a1-5ef2-9c8e-7b11d38e5041",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py import inspect from typing import Any, Callable, get_type_hints from llm_agents_from_scratch.base.tool import BaseTool def function_signature_to_json_schema(func: Callable) -> dict[str, Any]: … #A class SimpleFunctionTool(BaseTool): \"\"\"Simple function calling tool. Turn a Python function into a tool for an LLM. \"\"\" … #B @property def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON schema for tool parameters.\"\"\" return function_signature_to_json_schema(self.func) #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "53186a59-70e0-52b0-bd54-51ba21fed159",
+      "source_text": "Let’s move on to the final required implementation, __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接下来，我们继续讨论最后一个必需的实现——__call__()。"
+      ]
+    },
+    {
+      "sentence_id": "a9c9b71c-1ebd-5192-9f8f-ccd32c1e200c",
+      "source_text": "Since SimpleFunctionTool serves as a wrapper class to create a tool from func, we’ll simply delegate to func within __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于SimpleFunctionTool是一个包装类，用于从func创建工具，我们将在__call__()中直接委托给func。"
+      ]
+    },
+    {
+      "sentence_id": "b56da2eb-8e64-5d9a-b6f0-ddd376811fee",
+      "source_text": "Before this delegation, however, we’ll first perform validation on the parameter data provided by the LLM in its tool-call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，在委托之前，我们将首先对LLM在其工具调用请求中提供的参数数据进行验证。"
+      ]
+    },
+    {
+      "sentence_id": "03a25898-a2c2-5953-baa9-3b7c0980de45",
+      "source_text": "Figure 2.14 shows these validation and delegation steps when __call__() is invoked.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.14展示了当__call__()被调用时，这些验证和委托步骤。"
+      ]
+    },
+    {
+      "sentence_id": "144577c2-ac28-58f8-a78d-7ee204f0d7af",
+      "source_text": "Figure 2.14 Executing a SimpleFunctionTool involves validating the parameter data of the ToolCall object and subsequently delegating to the wrapped function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.14展示了执行SimpleFunctionTool的过程，包括验证ToolCall对象的参数数据，随后将调用委托给包装的函数。"
+      ]
+    },
+    {
+      "sentence_id": "95005ec2-072b-5baa-b9f4-b549cbf1f70a",
+      "source_text": "Any failures experienced in either the validation or delegation stages are handled by returning a ToolCallResult with error set to True and content set to a JSON-serialized string containing information on the error.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在验证或委托阶段遇到的任何失败，都会通过返回一个ToolCallResult来处理，其中error设置为True，content设置为包含错误信息的JSON序列化字符串。"
+      ]
+    },
+    {
+      "sentence_id": "a87afd48-a067-5c4f-bf76-d540aa9473d8",
+      "source_text": "To perform the parameter data validation, we’ll use the jsonschema library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为执行参数数据验证，我们将使用jsonschema库。"
+      ]
+    },
+    {
+      "sentence_id": "bd59bc2c-ca2d-5662-8169-ed8eea47f6d7",
+      "source_text": "When a ToolCall object, say tool_call, is passed to __call__(), we validate tool_call.arguments against the tool’s parameters_json_schema.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当ToolCall对象（例如tool_call）传递给__call__()时，我们会根据工具的parameters_json_schema验证tool_call.arguments。"
+      ]
+    },
+    {
+      "sentence_id": "be126447-748b-5ade-afc8-7ed81cd0c53e",
+      "source_text": "The following listing shows this validation aspect of the overall __call__() implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下清单展示了__call__()整体实现中的这一验证环节。"
+      ]
+    },
+    {
+      "sentence_id": "c6684a07-d6a5-53fc-b3e0-2f957fc06e41",
+      "source_text": "Listing 2.8 Implementing SimpleFunctionTool.__call__() (validation)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 2.8 实现 SimpleFunctionTool.__call__()（验证）"
+      ]
+    },
+    {
+      "sentence_id": "3243d836-539e-56aa-a580-8cd548b42083",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py … #A from jsonschema import SchemaError, ValidationError, validate class SimpleFunctionTool(BaseTool): \"\"\"Simple function calling tool. Turn a Python function into a tool for an LLM. \"\"\" … #B def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: … #C try: # validate the arguments validate(tool_call.arguments, #D schema=self.parameters_json_schema) except (SchemaError, ValidationError) as e: error_details = { \"error_type\": e.__class__.__name__, \"message\": e.message, } return ToolCallResult( #E tool_call_id=tool_call.id_, content=json.dumps(error_details), error=True, ) … #F",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "fc41bf80-66ff-5c88-b0a6-63ed45714a73",
+      "source_text": "Delegating to the wrapped function, func, amounts to passing the validated tool_call.arguments to it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "委托给包装函数func，实质上就是将经过验证的tool_call.arguments传递给它。"
+      ]
+    },
+    {
+      "sentence_id": "6491e4dd-783d-5fe7-9512-07c5b8e605e4",
+      "source_text": "Listing 2.9 implements the delegation portion of __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.9实现了__call__()方法中的委托部分。"
+      ]
+    },
+    {
+      "sentence_id": "2396e5b0-a5e6-541f-b6d8-d3f969ee2797",
+      "source_text": "Listing 2.9 Implementing SimpleFunctionTool.__call__() (delegation)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 2.9 实现 SimpleFunctionTool.__call__()（委托）"
+      ]
+    },
+    {
+      "sentence_id": "fb11ab61-3b26-5b42-81fc-753552812663",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py … #A class SimpleFunctionTool(BaseTool): \"\"\"Simple function calling tool. Turn a Python function into a tool for an LLM. \"\"\" … #B def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: … #C … #D try: # execute the function res = self.func(**tool_call.arguments) #E except Exception as e: error_details = { \"error_type\": e.__class__.__name__, \"message\": f\"Internal error while executing tool: {str(e)}\", } return ToolCallResult( #F tool_call_id=tool_call.id_, content=json.dumps(error_details), error=True, ) return ToolCallResult( tool_call_id=tool_call.id_, content=str(res), error=False, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "33b9ec1f-a5f1-5ae2-b113-a62109c8fe00",
+      "source_text": "We have now completed our implementation of SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "至此，我们已经完成了SimpleFunctionTool的实现。"
+      ]
+    },
+    {
+      "sentence_id": "e13ab846-a90b-5d08-a1e2-1518dbcf9298",
+      "source_text": "To celebrate, let’s complete the alternative implementation of the Hailstone tool, based on the hailstone_step_func() we coded earlier.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了庆祝，让我们基于之前编写的hailstone_step_func()函数，完成Hailstone工具的替代实现。"
+      ]
+    },
+    {
+      "sentence_id": "11226742-a0d7-5b05-831d-e7c597ebfe41",
+      "source_text": "# Included in examples/ch02.ipynb #A from llm_agents_from_scratch.tools.simple_function import ( SimpleFunctionTool ) # convert our Python function to a BaseTool hailstone_tool = SimpleFunctionTool(hailstone_step_func) print(hailstone_tool.name) print(hailstone_tool.description) print(hailstone_tool.parameters_json_schema)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "adf49dc5-0045-50ac-b099-910845e92fb5",
+      "source_text": "The resulting print statements should return the values of the attributes that were automatically derived from the supplied hailstone_step_func().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "生成的打印语句应返回从提供的hailstone_step_func()自动推导出的属性值。"
+      ]
+    },
+    {
+      "sentence_id": "8a66ffa2-0daf-5c0f-8614-387a51d6fd78",
+      "source_text": "hailstone_step_func #A Performs a single step of the Hailstone sequence. #B {'type': 'object', 'properties': {'x': {'type': 'number'}}, 'required': ['x']} #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "b33e4010-8486-5db6-afb5-ef45cd2b7cb2",
+      "source_text": "Running this version of hailstone_tool with a ToolCall object works in the same manner as our original implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用 ToolCall 对象运行此版本的 hailstone_tool，其工作方式与我们最初的实现相同。"
+      ]
+    },
+    {
+      "sentence_id": "c34bae14-d0ce-5fe9-b3e2-0252b94b9723",
+      "source_text": "# Included in examples/ch02.ipynb #A from llm_agents_from_scratch.data_structures import ToolCall tool_call = ToolCall( tool_name=\"hailstone_fn\", arguments={\"x\": 3} ) res = hailstone_tool(tool_call) #B",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "f9a1199d-2d29-5ea9-8d58-8332587ca543",
+      "source_text": "This is great.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这很棒。"
+      ]
+    },
+    {
+      "sentence_id": "03c0aeb8-bdbc-58f3-8105-f7d757ae918d",
+      "source_text": "With SimpleFunctionTool, we’ve unlocked a useful pattern for building tools from Python functions that LLMs and LLM agents can use.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过SimpleFunctionTool，我们解锁了一种有用的模式，用于从Python函数构建工具，供LLM和LLM代理使用。"
+      ]
+    },
+    {
+      "sentence_id": "741bed2f-bae7-5379-aff9-cd29ed860689",
+      "source_text": "Let’s wrap up this section by quickly implementing its asynchronous counterpart.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们通过快速实现其异步对应部分来结束本节。"
+      ]
+    },
+    {
+      "sentence_id": "ee861208-6c95-5454-bdab-e6464ee6c4af",
+      "source_text": "2.2.2 The AsyncSimpleFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.2.2 AsyncSimpleFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "9dfdd050-fc00-5ea6-a4fb-e920e9772268",
+      "source_text": "With AsyncSimpleFunctionTool, we aim to provide the same automatic tool creation that SimpleFunctionTool enabled, but for asynchronous functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过AsyncSimpleFunctionTool，我们的目标是提供与SimpleFunctionTool相同的自动工具创建功能，但适用于异步函数。"
+      ]
+    },
+    {
+      "sentence_id": "e4c29af5-ad60-52fc-95b4-08a709f7b36c",
+      "source_text": "The mental model for AsyncSimpleFunctionTool is similar to that for SimpleFunctionTool, which was illustrated in figure 2.11.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncSimpleFunctionTool的心智模型与SimpleFunctionTool类似，后者已在图2.11中说明。"
+      ]
+    },
+    {
+      "sentence_id": "83e17c38-f273-5764-8a6e-a68d62e9093a",
+      "source_text": "The adapted version for AsyncSimpleFunctionTool is shown in figure 2.15.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncSimpleFunctionTool的适配版本如图2.15所示。"
+      ]
+    },
+    {
+      "sentence_id": "a21ad120-49ed-5057-bdb3-4c367dcbf5ec",
+      "source_text": "Figure 2.15 Wrapping an asynchronous Python function to create an AsyncBaseTool object automatically.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2.15 自动包装异步Python函数以创建AsyncBaseTool对象。"
+      ]
+    },
+    {
+      "sentence_id": "064ae1db-9bf8-5c93-bb40-6a18791cf03a",
+      "source_text": "You might also recall from the UML class diagrams shown in figure 2.12 that AsyncSimpleFunctionTool and SimpleFunctionTool are structurally very similar.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可能还记得，从图2.12所示的UML类图中可以看出，AsyncSimpleFunctionTool和SimpleFunctionTool在结构上非常相似。"
+      ]
+    },
+    {
+      "sentence_id": "f8fc05cd-3087-5b71-9c10-f0e513fa9f2c",
+      "source_text": "The main difference is that the func attribute of AsyncSimpleFunctionTool stores an asynchronous Python function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "主要区别在于，AsyncSimpleFunctionTool的func属性存储的是一个异步Python函数。"
+      ]
+    },
+    {
+      "sentence_id": "ebb56621-6fdd-571b-bc1f-659ed71c2355",
+      "source_text": "All these shared similarities mean that we can reuse much of the code we wrote for SimpleFunctionTool when implementing AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些共享的相似性意味着，在实现AsyncSimpleFunctionTool时，我们可以复用为SimpleFunctionTool编写的大部分代码。"
+      ]
+    },
+    {
+      "sentence_id": "8be6a569-45ab-52b3-95bf-fb8a3f450a69",
+      "source_text": "Because of this, we’ll only cover the parts of the implementation where differences do exist between the two classes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，我们仅会介绍这两个类在实现上存在差异的部分。"
+      ]
+    },
+    {
+      "sentence_id": "fb761399-930f-563f-bc25-a7ed23ec1648",
+      "source_text": "The first subtle difference lies in the implementation of the constructor, __init__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个细微差别在于构造函数__init__()的实现上。"
+      ]
+    },
+    {
+      "sentence_id": "2705da0d-e7f0-5ded-aea9-09d8782b2c29",
+      "source_text": "Specifically, the type annotation that we’ll use for func is more specialized now: Callable[…, Awaitable[Any]].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具体来说，我们现在为func使用的类型注解更加专门化：Callable[…, Awaitable[Any]]。"
+      ]
+    },
+    {
+      "sentence_id": "e2f3c0e6-4f0d-5bc5-80cf-d1352e3b5e8e",
+      "source_text": "This updated annotation indicates that we’re now working with a function that returns an object that can be awaited by using the await keyword.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个更新后的注解表明，我们现在处理的是一个返回可通过await关键字等待的对象的函数。"
+      ]
+    },
+    {
+      "sentence_id": "da988913-d281-5e0c-b7ad-971a65319dcd",
+      "source_text": "Coroutines, which we previously discussed, are one example of an awaitable object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们之前讨论过的协程就是可等待对象的一个例子。"
+      ]
+    },
+    {
+      "sentence_id": "319a0c18-fa14-5904-bece-61eea47b1879",
+      "source_text": "TIP",
+      "sentence_status": "translated",
+      "target_texts": [
+        "提示"
+      ]
+    },
+    {
+      "sentence_id": "0e191e4e-306a-5231-8de8-17b155b1a1d2",
+      "source_text": "The typing.Awaitable class is more flexible than typing.Coroutine, representing any object that is awaitable, which includes coroutines, asyncio.Futures, and asyncio.Tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "typing.Awaitable类比typing.Coroutine更为灵活，它表示任何可等待的对象，包括协程、asyncio.Futures和asyncio.Tasks。"
+      ]
+    },
+    {
+      "sentence_id": "f7e0e2a7-8544-532a-b05d-6b73b88e7de2",
+      "source_text": "The next and final difference involves the implementation of __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后一个区别涉及__call__()方法的实现。"
+      ]
+    },
+    {
+      "sentence_id": "628f2eea-267f-5536-bb15-bcd46656c48b",
+      "source_text": "Since the wrapped function is asynchronous, we’ll need to use the await keyword when delegating to it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于包装的函数是异步的，在委托调用时需要使用await关键字。"
+      ]
+    },
+    {
+      "sentence_id": "579e9fbe-65f1-595c-b112-e1a92ee152b1",
+      "source_text": "The validation logic is identical to that used for SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "验证逻辑与SimpleFunctionTool所使用的完全相同。"
+      ]
+    },
+    {
+      "sentence_id": "e53864ea-6eab-58db-85f1-cd5a87187f9d",
+      "source_text": "The following code shows the implementation of AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码展示了AsyncSimpleFunctionTool的实现。"
+      ]
+    },
+    {
+      "sentence_id": "2c7e5685-92fa-5f8e-b8d1-94e98563d477",
+      "source_text": "Listing 2.10 Implementing AsyncSimpleFunctionTool (differences only)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单2.10 实现AsyncSimpleFunctionTool（仅显示差异部分）"
+      ]
+    },
+    {
+      "sentence_id": "eb878a48-8700-5b4d-acb3-ea90ec492ee7",
+      "source_text": "# llm_agents_from_scratch/tools/simple_function.py … #A from llm_agents_from_scratch.base.tool import AsyncBaseTool class AsyncSimpleFunctionTool(AsyncBaseTool): #B \"\"\"Async simple function calling tool. Turn a Python function into a tool for an LLM. \"\"\" def __init__( self, func: Callable[..., Awaitable[Any]], #C desc: str | None = None, ) -> None: … #D … #E async def __call__( #F self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: … #G … #H try: # execute the function res = await self.func(**tool_call.arguments) #I … #J",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "d20faddd-2538-57e0-987d-7b63589a1eaa",
+      "source_text": "Exercise 2.2 Alternative async Hailstone implementation",
+      "sentence_status": "translated",
+      "target_texts": [
+        "练习2.2 替代异步冰雹序列实现"
+      ]
+    },
+    {
+      "sentence_id": "337a4133-3034-5fe1-b3e0-56d57a9d9172",
+      "source_text": "Re-implement the async Hailstone you created in Exercise 2.1, but this time using AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "重新实现你在练习2.1中创建的异步Hailstone函数，但这次使用AsyncSimpleFunctionTool。"
+      ]
+    },
+    {
+      "sentence_id": "868d187d-42a3-5d92-8193-55be713d0e16",
+      "source_text": "To do this, you’ll need to turn the hailstone_step_func() into an asynchronous function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为此，你需要将hailstone_step_func()转换为异步函数。"
+      ]
+    },
+    {
+      "sentence_id": "c34365dc-e5e2-5437-8be1-426eabcbbf05",
+      "source_text": "Test both versions on the same input to verify they return identical outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在相同输入上测试两个版本，以验证它们返回相同的输出。"
+      ]
+    },
+    {
+      "sentence_id": "970f3aa6-39b9-59e5-984f-4f4ef5be6473",
+      "source_text": "2.3 PydanticFunctionTool: another subclass of BaseTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.3 PydanticFunctionTool：BaseTool的另一个子类"
+      ]
+    },
+    {
+      "sentence_id": "32e30f80-af02-5ea5-a208-d803af603390",
+      "source_text": "The SimpleFunctionTool from the previous section features our from-scratch helper method function_signature_to_json_schema() for automatically deriving JSON Schemas from function signatures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "上一节介绍的SimpleFunctionTool包含了我们从头编写的辅助方法function_signature_to_json_schema()，用于从函数签名自动推导JSON Schema。"
+      ]
+    },
+    {
+      "sentence_id": "40f7eeb0-43bc-5d01-a7bf-67b239cf1c33",
+      "source_text": "In this final section, we’ll provide an alternative function tool wrapper class, PydanticFunctionTool, with similar capabilities to SimpleFunctionTool, but which leverages the pydantic library for more powerful and robust JSON Schema generation and validation capabilities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在本节最后，我们将提供另一个函数工具包装类PydanticFunctionTool，它具备与SimpleFunctionTool类似的功能，但利用pydantic库实现更强大、更稳健的JSON Schema生成和验证能力。"
+      ]
+    },
+    {
+      "sentence_id": "b5e8542c-05a4-57df-8db6-2e0f081e7c7a",
+      "source_text": "The implementation procedure for PydanticFunctionTool, which also inherits from BaseTool, is very similar to that used to implement SimpleFunctionTool in the previous section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PydanticFunctionTool的实现过程与上一节中实现SimpleFunctionTool的过程非常相似，它也继承自BaseTool。"
+      ]
+    },
+    {
+      "sentence_id": "9abcb462-5637-57a7-82fe-a5305c4c0e2e",
+      "source_text": "For this reason, we won’t cover the full implementation of PydanticFunctionTool here and instead will focus on its usage pattern in our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，我们不会在此详细介绍PydanticFunctionTool的完整实现，而是将重点放在其在我们框架中的使用模式上。"
+      ]
+    },
+    {
+      "sentence_id": "b4d115f4-3abf-5404-a3eb-a8751b567792",
+      "source_text": "Interested readers can refer to Appendix C for a comprehensive walkthrough of the full implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "感兴趣的读者可以参考附录C，那里有完整实现的全面讲解。"
+      ]
+    },
+    {
+      "sentence_id": "2bd62fb2-d0d7-5a2e-ac9c-01ab7a72f135",
+      "source_text": "The usage pattern for our PydanticFunctionTool is slightly different than that of SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PydanticFunctionTool 的使用模式与 SimpleFunctionTool 略有不同。"
+      ]
+    },
+    {
+      "sentence_id": "b212eba0-d09d-5043-b06f-c5f361605106",
+      "source_text": "The main difference is that we’ll now require the parameters of the wrapped function to be supplied via a pydantic.BaseModel as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "主要区别在于，现在要求通过一个 pydantic.BaseModel 来提供包装函数的参数，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "35b50dc3-983b-54ca-8f17-8a8354273ec0",
+      "source_text": "# Included in examples/ch02.ipynb #A from pydantic import BaseModel class MyFuncParams(BaseModel): #B x: int def my_func(params: MyFuncParams) -> int: #C print(params.x) #D",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "39d7e8d8-206a-5a45-ae5d-852038f7a8f2",
+      "source_text": "With my_func() defined, we can use PydanticFunctionTool in a similar manner to SimpleFunctionTool to wrap my_func() to automatically create a tool that an LLM or LLM agent can use.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "定义my_func()后，我们可以类似使用SimpleFunctionTool的方式，使用PydanticFunctionTool来包装my_func()，从而自动创建一个可供LLM或LLM代理使用的工具。"
+      ]
+    },
+    {
+      "sentence_id": "be6028d3-8e38-5f91-8ad6-a9135a7a2fd0",
+      "source_text": "# Included in examples/ch02.ipynb #A from llm_agents_from_scratch.tools.pydantic_function import ( PydanticFunctionTool ) tool = PydanticFunctionTool(my_func) #B",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "d334aa78-3566-5492-8eca-dc2e1d407759",
+      "source_text": "This new tool can take in ToolCall objects to perform the tool-call process like any other tools implemented in this chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个新工具可以接收ToolCall对象，以执行工具调用过程，就像本章中实现的其他工具一样。"
+      ]
+    },
+    {
+      "sentence_id": "bfad734c-cb24-5188-8c2d-f1f8ee91c654",
+      "source_text": "Exercise 2.3 Hailstone tool as an PydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "练习2.3 将Hailstone工具实现为PydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "445065de-b6c8-58d8-8e3d-924b687f3707",
+      "source_text": "Re-implement the Hailstone tool, but this time using PydanticFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "重新实现Hailstone工具，但这次使用PydanticFunctionTool。"
+      ]
+    },
+    {
+      "sentence_id": "1c455e4b-1370-548e-8142-a59fcfda5427",
+      "source_text": "Refer to Appendix C for usage guidance to complete this exercise.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请参考附录C的使用指南来完成本练习。"
+      ]
+    },
+    {
+      "sentence_id": "5e230b7a-801a-5fdb-b2a5-95a7cffd5a0e",
+      "source_text": "The main benefits of PydanticFunctionTool are not directly obvious from the usage pattern we’ve just covered.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PydanticFunctionTool的主要优势，并非直接体现在我们刚刚介绍的使用模式中。"
+      ]
+    },
+    {
+      "sentence_id": "d850b4f4-7f05-513a-a67e-8d1aabd3035c",
+      "source_text": "Instead, the benefits are seen in the implementation of the parameters_json_schema attribute and the validation portion within __call__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "相反，其优势体现在parameters_json_schema属性的实现以及__call__()方法内的验证部分。"
+      ]
+    },
+    {
+      "sentence_id": "e405ab22-e3e0-590a-996a-af5c6753fea1",
+      "source_text": "For these, we now rely on Pydantic’s more robust JSON Schema generation and validation capabilities through BaseModel.model_json_schema() and BaseModel.model_validate(), respectively.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于这些功能，我们现在分别通过BaseModel.model_json_schema()和BaseModel.model_validate()，依赖Pydantic更强大的JSON Schema生成和验证能力。"
+      ]
+    },
+    {
+      "sentence_id": "d4cc00d6-5202-5517-bfcd-258a30135428",
+      "source_text": "In addition to the PydanticFunctionTool, its asynchronous counterpart, AsyncPydanticFunctionTool has also been added to the framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "除了PydanticFunctionTool之外，其异步版本AsyncPydanticFunctionTool也已添加到框架中。"
+      ]
+    },
+    {
+      "sentence_id": "5e429cf1-f5fb-5736-b57b-11a4c5c3d914",
+      "source_text": "Both classes can be imported from llm_agents_from_scratch.tools.pydantic_function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这两个类都可以从 llm_agents_from_scratch.tools.pydantic_function 中导入。"
+      ]
+    },
+    {
+      "sentence_id": "0fbae7c2-8a64-51e4-99be-0a46a3fb30e8",
+      "source_text": "We have covered a lot of ground in this chapter by implementing the base tool interfaces as well as adding a couple of handy tool factory classes that turn Python functions into tools which LLMs and LLM agents can use.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在本章中，我们通过实现基础工具接口，并添加了几个实用的工具工厂类，将Python函数转换为可供LLM和LLM代理使用的工具，从而覆盖了大量内容。"
+      ]
+    },
+    {
+      "sentence_id": "382f493b-06c1-5dba-a1f9-797bbb76d68d",
+      "source_text": "In the next chapter, we’ll crucially implement our BaseLLM class as well as the OllamaLLM subclass of it that will allow us to work with LLMs supported by Ollama, a popular open-source LLM inference framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在下一章中，我们将关键地实现BaseLLM类及其子类OllamaLLM，这将使我们能够使用Ollama支持的LLM，Ollama是一个流行的开源LLM推理框架。"
+      ]
+    },
+    {
+      "sentence_id": "3f5e20bd-1bb7-5bed-822e-cd959879b69b",
+      "source_text": "2.4 Summary",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2.4 总结"
+      ]
+    },
+    {
+      "sentence_id": "b1417df7-8364-560f-b71c-655e169c3ae3",
+      "source_text": "To build an LLM agent, we need to build the required infrastructure, including abstractions representing tools that they work with to perform tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要构建一个LLM智能体，我们需要构建所需的基础设施，包括抽象表示其用于执行任务的工具。"
+      ]
+    },
+    {
+      "sentence_id": "39e28751-feac-5312-a1a8-b247809ac64b",
+      "source_text": "LLMs require the following information to be able to make a tool call request for a given tool: its name, a description of its functionality, and a JSON Schema of its input parameters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要让LLM能够针对特定工具发出工具调用请求，需要提供以下信息：工具名称、功能描述以及输入参数的JSON模式。"
+      ]
+    },
+    {
+      "sentence_id": "afeb3a5b-b9dd-5621-8f96-7a248e9da1bc",
+      "source_text": "A BaseTool object executes a single ToolCall and returns a single ToolCallResult object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "BaseTool对象执行单个ToolCall并返回单个ToolCallResult对象。"
+      ]
+    },
+    {
+      "sentence_id": "93b58081-13ab-57cb-af95-d20b65de4aee",
+      "source_text": "The AsyncBaseTool class is designed for tools that execute their logic asynchronously.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncBaseTool类专为以异步方式执行其逻辑的工具而设计。"
+      ]
+    },
+    {
+      "sentence_id": "82033274-616a-5613-8065-25ae37fbb63e",
+      "source_text": "The SimpleFunctionTool is a wrapper class for turning Python functions into a BaseTool objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "SimpleFunctionTool 是一个包装类，用于将 Python 函数转换为 BaseTool 对象。"
+      ]
+    },
+    {
+      "sentence_id": "7343783f-2193-55eb-a194-af08daed48f5",
+      "source_text": "The AsyncSimpleFunctionTool is a wrapper class for turning async Python functions into a AsyncBaseTool objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncSimpleFunctionTool 是一个包装类，用于将异步 Python 函数转换为 AsyncBaseTool 对象。"
+      ]
+    },
+    {
+      "sentence_id": "526f9836-04e3-5df4-a6a2-cc8bc70ab4ed",
+      "source_text": "The PydanticFunctionTool is similar to the SimpleFunctionTool, but wraps a special function we called PydanticFunction instead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PydanticFunctionTool与SimpleFunctionTool类似，但它包装的是一个我们称为PydanticFunction的特殊函数。"
+      ]
+    },
+    {
+      "sentence_id": "17a61674-3dc1-5700-97cf-0fa24bbe39d6",
+      "source_text": "These functions get passed their input parameters for logic execution through a ~pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些函数通过~pydantic.BaseModel接收输入参数以执行逻辑。"
+      ]
+    }
+  ],
+  "issues": []
+}

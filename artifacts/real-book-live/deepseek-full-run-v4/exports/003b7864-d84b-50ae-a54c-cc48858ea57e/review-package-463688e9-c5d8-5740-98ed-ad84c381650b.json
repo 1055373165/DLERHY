@@ -1,0 +1,323 @@
+{
+  "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+  "chapter_title": "welcome",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "e83cb5e8-032c-57b0-b1a8-fbc548491087",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "ba3b6a31-13c5-593a-a41e-668247dc9bf7",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "version": 1
+      },
+      {
+        "snapshot_id": "dc87fe8c-3394-5f05-be6a-65f77300f858",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "e8a322ab-e34e-55be-8f2e-0b15fdf7e451",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "090512f0-cccc-5add-a572-04b81af0310f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2278f84e-0e54-59d5-be45-01b224e9bed7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "804de1f2-2722-5972-af15-ff895a926cc5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a4751da2-682d-5fa4-9152-81a8267dafd3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a7c661ca-4093-5b99-b3bd-184367304fa2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fa48b7f2-f2d8-5f5d-b5a7-ba286237f717",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fac18381-eba7-5933-9781-f3d51f987217",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fdee0f76-312c-588d-ad0d-bc831de8a326",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "11b84801-8bb5-5ebd-a9d0-084f6f1f6c5f",
+      "source_text": "welcome",
+      "sentence_status": "translated",
+      "target_texts": [
+        "欢迎"
+      ]
+    },
+    {
+      "sentence_id": "69c87200-9c3b-5031-8394-15e8b140fe42",
+      "source_text": "Thank you for purchasing the MEAP edition of Build an AI Agent (From Scratch).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "感谢您购买《从零开始构建AI智能体》的MEAP版本。"
+      ]
+    },
+    {
+      "sentence_id": "b55a0de0-d47d-5865-bda3-969fcc210a5b",
+      "source_text": "To get the most out of this book, you don’t need to be an expert in AI or machine learning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要充分利用本书，你不需要成为AI或机器学习专家。"
+      ]
+    },
+    {
+      "sentence_id": "48400a35-9296-5191-8758-2ee698f59e79",
+      "source_text": "If you are comfortable with the basics of Python—things like writing simple functions and classes—know how to call and use APIs, and have some familiarity with Git and GitHub, you’ll be more than ready to follow along.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果你熟悉Python的基础知识——比如编写简单的函数和类——知道如何调用和使用API，并且对Git和GitHub有一定了解，那么你完全可以跟上本书的节奏。"
+      ]
+    },
+    {
+      "sentence_id": "b30c75d3-fd3b-53c9-80c5-d9cab5a37396",
+      "source_text": "That’s all the background you need.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这就是你需要的全部背景知识。"
+      ]
+    },
+    {
+      "sentence_id": "39ff64d7-77ac-5273-bb7a-6532cb57e3bb",
+      "source_text": "When I first started exploring the world of AI agents, I found myself overwhelmed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当我最初开始探索AI智能体领域时，我感到不知所措。"
+      ]
+    },
+    {
+      "sentence_id": "4f7eca1c-cb4a-5c16-80f5-6e0e2e471266",
+      "source_text": "Every week, it seemed like a new agent framework, research paper, or tool was being released.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "几乎每周都有新的智能体框架、研究论文或工具发布。"
+      ]
+    },
+    {
+      "sentence_id": "9b43861d-2858-5932-ac11-ecfff9c21c9b",
+      "source_text": "Even as an engineer, I struggled to make sense of the rapid changes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "即便身为工程师，我也难以理清这些快速的变化。"
+      ]
+    },
+    {
+      "sentence_id": "14b8d9e2-2291-55f1-8c49-1e8371b7fa0f",
+      "source_text": "I realized that if I only stayed a user of these frameworks, I would never truly understand how they worked or how to evaluate which ones to trust.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我意识到，如果我只停留在使用这些框架的层面，就永远无法真正理解它们的工作原理，也无法判断哪些值得信赖。"
+      ]
+    },
+    {
+      "sentence_id": "7d076e38-b5b2-522f-99f4-7b8a485649af",
+      "source_text": "That’s when I decided to dig deeper—and ultimately, that path led me to writing this book.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正是在那时，我决定深入探究——最终，这条探索之路引领我撰写了这本书。"
+      ]
+    },
+    {
+      "sentence_id": "a92be1f4-3b3b-5164-b88a-875da7b70e2c",
+      "source_text": "At the heart of this book is a hands-on project: together, we’ll build a simple but educational agent framework called scratch_agents and use it to create agents that solve problems step by step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本书的核心是一个实践项目：我们将共同构建一个简单但富有教育意义的智能体框架scratch_agents，并用它来创建能够逐步解决问题的智能体。"
+      ]
+    },
+    {
+      "sentence_id": "0d932d95-ad9c-517c-877f-61af6fd111f5",
+      "source_text": "As we build this framework, you’ll also discover that the essence of an agent lies in delivering the right context to an LLM so that its intelligence can be fully utilized.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在构建这个框架的过程中，你还会发现智能体的本质在于向大语言模型提供恰当的上下文，从而充分发挥其智能。"
+      ]
+    },
+    {
+      "sentence_id": "0a7d0515-74ed-5081-a955-790883706052",
+      "source_text": "We call this process Context Engineering.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将这个过程称为上下文工程。"
+      ]
+    },
+    {
+      "sentence_id": "fa1d7af6-49d3-5345-add2-42821fc60bfe",
+      "source_text": "Agent frameworks are essentially designed to manage this challenge effectively, and through this book you’ll learn how to design, implement, and experiment with this idea in practice.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "智能体框架本质上就是为了有效管理这一挑战而设计的，通过本书，你将学习如何在实践中设计、实现并实验这一理念。"
+      ]
+    },
+    {
+      "sentence_id": "2cd48f2b-a6b5-5136-9ac1-f2c5826632a7",
+      "source_text": "This book is not about giving you yet another tool to memorize.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这本书的目的不是让你又多一个需要死记硬背的工具。"
+      ]
+    },
+    {
+      "sentence_id": "3cd892ad-179a-5a18-b9d2-43db249f5e0a",
+      "source_text": "It’s about empowering you to understand the inner workings of agent frameworks so you can go beyond surface-level usage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它旨在让你理解智能体框架的内部工作原理，从而超越表面使用。"
+      ]
+    },
+    {
+      "sentence_id": "c34ddca1-e665-5780-9f05-030d0e2fa3ac",
+      "source_text": "By the end of this journey, you won’t just be using existing frameworks—you’ll know how to open them up, understand their trade-offs, and even build your own when needed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这段学习之旅结束时，你将不仅会使用现有框架——还会知道如何剖析它们、理解其权衡取舍，甚至在需要时构建自己的框架。"
+      ]
+    },
+    {
+      "sentence_id": "b077d183-c5e6-5fd6-b0b4-f9fa95ff81b5",
+      "source_text": "That’s the kind of confidence and clarity this book aims to give you.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这正是本书希望带给你的那种自信与清晰。"
+      ]
+    },
+    {
+      "sentence_id": "21debca0-417d-5434-b9a4-0f47040883ed",
+      "source_text": "I hope this book helps you cut through the noise in this fast-moving field and gives you both confidence and clarity in working with AI agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我希望本书能帮助您在这个快速发展的领域拨开迷雾，让您在处理AI智能体时既充满信心又思路清晰。"
+      ]
+    },
+    {
+      "sentence_id": "45a364f3-cfeb-5e3b-b6f7-e9d2a7ecc91c",
+      "source_text": "Please share your thoughts and questions in the liveBook discussion forum—your feedback will be invaluable in making this book the best it can be.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请在liveBook讨论论坛分享您的想法和问题——您的反馈对于完善本书至关重要。"
+      ]
+    },
+    {
+      "sentence_id": "7fc60e3e-9036-5f2c-8e1a-323c6f99c237",
+      "source_text": "—Younghee Song & Jungjun Hur",
+      "sentence_status": "translated",
+      "target_texts": [
+        "宋英熙 & 许正俊"
+      ]
+    }
+  ],
+  "issues": []
+}

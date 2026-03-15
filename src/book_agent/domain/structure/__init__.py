@@ -1,0 +1,2 @@
+"""Document structure extraction."""
+

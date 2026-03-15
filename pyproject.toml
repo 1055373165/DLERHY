@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "book-agent"
+version = "0.1.0"
+description = "Long-document translation agent for English books to Chinese."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14,<2.0",
+  "fastapi>=0.116,<1.0",
+  "pydantic>=2.11,<3.0",
+  "pydantic-settings>=2.7,<3.0",
+  "python-multipart>=0.0.9,<1.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "sqlalchemy>=2.0,<3.0",
+  "uvicorn[standard]>=0.35,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1.0",
+  "pytest>=8.3,<9.0",
+  "pytest-asyncio>=0.26,<1.0",
+  "ruff>=0.11,<1.0",
+]
+
+[project.scripts]
+book-agent = "book_agent.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/book_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

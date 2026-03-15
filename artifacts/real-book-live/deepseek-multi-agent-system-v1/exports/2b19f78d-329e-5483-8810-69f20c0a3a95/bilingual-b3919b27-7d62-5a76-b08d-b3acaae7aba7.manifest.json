@@ -1,0 +1,156 @@
+{
+  "chapter_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+  "chapter_title": "Build a Multi-Agent System (from Scratch)",
+  "export_type": "bilingual_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-multi-agent-system-v1/exports/2b19f78d-329e-5483-8810-69f20c0a3a95/bilingual-b3919b27-7d62-5a76-b08d-b3acaae7aba7.html",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "4a6b662e-e1db-5cbc-a28d-d5fb617fd547",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "009421f8-2c14-5b5e-8749-af6cd063377a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e4f8983-3aa9-5f88-a7a6-16e900ce418c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7cecb275-43c9-5638-a133-0f7439372479",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a26cc048-0d52-54eb-858a-3b56bc9b95eb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d4fb2af1-6bc1-5793-8c64-137de2320ef2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e197c927-3f42-56d4-913a-55158e9cf61c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "row_summary": {
+    "sentence_row_count": 6,
+    "aligned_sentence_count": 6,
+    "target_segment_count": 6,
+    "orphan_target_segment_count": 0,
+    "alignment_edge_count": 6,
+    "inactive_alignment_target_count": 0
+  },
+  "issue_summary": {
+    "total_issue_count": 0,
+    "open_issue_count": 0,
+    "issue_type_counts": {}
+  },
+  "render_summary": {
+    "render_block_count": 6,
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 6
+    },
+    "expected_source_only_block_count": 0
+  }
+}

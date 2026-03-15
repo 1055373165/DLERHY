@@ -1,0 +1,93 @@
+{
+  "chapter_id": "f5a1b3cd-a96f-571e-a1f7-a90369f70efa",
+  "chapter_title": null,
+  "export_type": "bilingual_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-multi-agent-system-v1/exports/2b19f78d-329e-5483-8810-69f20c0a3a95/bilingual-f5a1b3cd-a96f-571e-a1f7-a90369f70efa.html",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "f5a1b3cd-a96f-571e-a1f7-a90369f70efa",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "9fabffe3-214d-5ba6-b011-48231b33a3d3",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "f5a1b3cd-a96f-571e-a1f7-a90369f70efa",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": []
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "row_summary": {
+    "sentence_row_count": 0,
+    "aligned_sentence_count": 0,
+    "target_segment_count": 0,
+    "orphan_target_segment_count": 0,
+    "alignment_edge_count": 0,
+    "inactive_alignment_target_count": 0
+  },
+  "issue_summary": {
+    "total_issue_count": 0,
+    "open_issue_count": 0,
+    "issue_type_counts": {}
+  },
+  "render_summary": {
+    "render_block_count": 0,
+    "render_mode_counts": {},
+    "expected_source_only_block_count": 0
+  }
+}

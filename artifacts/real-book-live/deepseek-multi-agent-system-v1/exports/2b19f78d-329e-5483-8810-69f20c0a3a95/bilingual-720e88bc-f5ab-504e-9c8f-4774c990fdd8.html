@@ -1,0 +1,508 @@
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>2 使用工具</title><style>:root{--paper:#f5efe6;--card:#fffdfa;--ink:#1f2933;--muted:#5f6b7a;--accent:#0f6c7a;--border:#d9cdbd;--shadow:0 18px 36px rgba(70,54,34,.08);--font-body:'Iowan Old Style','Palatino Linotype','Book Antiqua',Georgia,serif;--font-display:'Avenir Next Condensed','Gill Sans','Trebuchet MS',sans-serif;--font-ui:'Helvetica Neue','Segoe UI',sans-serif;}*{box-sizing:border-box;}body{margin:0;background:linear-gradient(180deg,#f7f1e7 0%,#fbf8f2 38%,#f3ede2 100%);color:var(--ink);font-family:var(--font-body);line-height:1.72;}.page{max-width:980px;margin:0 auto;padding:28px 18px 52px;}.hero{margin-bottom:22px;padding:28px 30px 24px;background:radial-gradient(circle at top left,rgba(217,238,240,.9),rgba(255,253,248,.95) 38%,rgba(255,253,248,1) 100%);border:1px solid var(--border);border-radius:26px;box-shadow:var(--shadow);}.hero-kicker{font-family:var(--font-ui);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;}.hero h1{margin:12px 0 0;font-family:var(--font-display);font-size:clamp(30px,5vw,48px);line-height:1;color:#15313a;}.source-title{margin-top:10px;font-family:var(--font-ui);font-size:14px;color:var(--muted);}.chapter{padding:28px 30px;background:var(--card);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow);}.block{margin:22px 0;}.block .zh{font-size:19px;color:#16202a;max-width:36em;text-wrap:pretty;}.heading .zh{font-family:var(--font-display);font-size:28px;line-height:1.12;color:#17313a;}.paragraph .zh,.list_item .zh,.quote .zh{hyphens:auto;}.block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}.block details summary{cursor:pointer;font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}.block .source{margin-top:8px;color:var(--muted);font-family:var(--font-ui);font-size:14px;white-space:pre-wrap;}.artifact{background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);border:1px solid rgba(184,197,218,.85);border-radius:18px;padding:18px 18px 16px;box-shadow:0 8px 22px rgba(60,74,97,.06);}.artifact .artifact-note{font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}.artifact pre{margin:0;white-space:pre;overflow-x:auto;tab-size:4;font-family:'SFMono-Regular',Menlo,Monaco,monospace;font-size:14px;line-height:1.68;color:#102033;background:#eef3fa;border-radius:12px;padding:14px;}.artifact .artifact-body{white-space:pre-wrap;font-family:'SFMono-Regular',Menlo,Monaco,monospace;font-size:14px;line-height:1.68;color:#102033;background:#f5f8fc;border-radius:12px;padding:14px;}.artifact.image-anchor .artifact-body,.artifact.reference .artifact-body{font-family:var(--font-ui);}.artifact.image-anchor .artifact-body div{margin:4px 0;}.artifact-figure{margin:0;display:grid;gap:12px;}.artifact-image{display:block;max-width:100%;height:auto;border-radius:14px;border:1px solid rgba(184,197,218,.9);background:#fff;box-shadow:0 12px 28px rgba(60,74,97,.08);}.artifact-figure figcaption{font-family:var(--font-ui);font-size:14px;line-height:1.6;color:var(--muted);}.artifact.reference .artifact-body{word-break:break-all;}.quote{border-left:5px solid #8cc4ce;padding-left:18px;margin-left:4px;}.footnote .zh,.caption .zh{font-size:16px;color:#334155;}.inline-token{font-family:'SFMono-Regular',Menlo,Monaco,monospace;background:#e3edf4;padding:1px 6px;border-radius:6px;font-size:.92em;}.empty-state{font-family:var(--font-ui);font-size:14px;color:var(--muted);padding:18px 0;}@media (max-width: 860px){.page{padding:18px 12px 36px;}.hero,.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}@media print{body{background:#fff;}.page{max-width:none;padding:0;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;}.artifact{box-shadow:none;}}</style></head><body><main class='page'><header class='hero'><div class='hero-kicker'>Chapter Export</div><h1>2 使用工具</h1><div class='source-title'>2_Working_with_Tools</div></header><section class='chapter'><section class='block heading'><div class='zh'>2 使用工具</div><details><summary>Source</summary><div class='source'>2 Working with Tools</div></details></section><section class='block heading'><div class='zh'>本章涵盖</div><details><summary>Source</summary><div class='source'>This chapter covers</div></details></section><section class='block list_item'><div class='zh'>指定工具的基础类，以标准化它们在我们框架中的使用方式</div><details><summary>Source</summary><div class='source'>Specifying the base class for tools to standardize how they are used in our framework</div></details></section><section class='block list_item'><div class='zh'>定义用于促进工具调用过程的数据结构</div><details><summary>Source</summary><div class='source'>Defining the data structures for facilitating a tool-call process</div></details></section><section class='block list_item'><div class='zh'>将Python函数转化为工具，以便与LLM及LLM智能体配合使用</div><details><summary>Source</summary><div class='source'>Turning Python functions into tools to use with LLMs and LLM agents</div></details></section><section class='block paragraph'><div class='zh'>现在您已经了解到，工具是LLM智能体的关键组成部分。<br/>诸如执行网络搜索、绘制数据图表以及在沙盒环境中运行代码等工具，能够增强LLM智能体的潜力，并扩展其可执行任务的范围。</div><details><summary>Source</summary><div class='source'>You now know that tools are a crucial part of LLM agents. Tools, such as those for performing web searches, plotting data, and executing code in a sandboxed environment, increase the potential of LLM agents and expand the range of tasks they can perform.</div></details></section><section class='block paragraph'><div class='zh'>为大型语言模型配备工具时，我们需要提供该工具的文本描述，以便模型能够理解如何使用它。<br/>大型语言模型可以通过工具调用过程来使用工具，这一过程包括模型生成工具调用请求、调用工具，最后将结果返回给模型进行综合和响应。</div><details><summary>Source</summary><div class='source'>Equipping an LLM with a tool requires us to provide a textual description of the tool so that the LLM can understand how to use it. LLMs can use a tool through the tool-calling process, which involves the LLM generating a tool-call request, invoking the tool, and finally returning the result to the LLM for synthesis and response.</div></details></section><section class='block paragraph'><div class='zh'>本章的重点，如图2.1所示，是构建定义工具及其使用方式所需的基础设施。<br/>我们将把所有代码打包到我们自己的LLM智能体框架中，该框架名为llm-agents-from-scratch。</div><details><summary>Source</summary><div class='source'>The focus of this chapter, as illustrated in figure 2.1, is to build the required infrastructure for defining tools and how they can be used. We’ll package all our code in our own LLM agent framework, called llm-agents-from-scratch.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.1 通过第1章介绍的构建计划视角，展示当前章节的重点。在构建LLM智能体之前，我们首先需要正确定义工具及其在我们的框架中的使用方式。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image001.png' alt='Figure 2.1 The focus of the current chapter, through the lens of our build plan introduced in Chapter 1. Before we can build an LLM agent, we first need to properly define tools and how they can be used within our framework.'/><figcaption>Figure 2.1 The focus of the current chapter, through the lens of our build plan introduced in Chapter 1. Before we can build an LLM agent, we first need to properly define tools and how they can be used within our framework.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>具体来说，我们将为工具定义一个基类接口BaseTool，它将作为向框架中添加工具的蓝图。<br/>这个蓝图还将帮助标准化工具调用的执行方式，以及如何准备工具的文字描述并传递给LLM。<br/>为了在框架中完全标准化工具调用过程，我们需要引入几个新的数据结构来表示工具调用的输入和输出。</div><details><summary>Source</summary><div class='source'>To be more specific, we’ll define a base class interface for tools, BaseTool, which will serve as a blueprint for adding tools to our framework. This blueprint will also help to standardize how tool calls are performed, as well as how the textual descriptions of tools are prepared and passed to the LLM. To completely standardize the tool calling process in our framework, we’ll need to introduce a couple of new data structures that represent the input and output of tool calls.</div></details></section><section class='block paragraph'><div class='zh'>除了定义基类并添加必要的数据结构外，我们还将实现几个子类，以帮助我们从Python函数创建LLM工具。</div><details><summary>Source</summary><div class='source'>In addition to defining the base class and adding the necessary data structures, we’ll also implement a couple of subclasses that will help us to create LLM tools from Python functions.</div></details></section><section class='block paragraph'><div class='zh'>为了配合代码示例，我建议您fork本书的GitHub仓库，并激活框架专用的虚拟环境。<br/>您可以通过在项目根目录下运行以下终端命令来实现。</div><details><summary>Source</summary><div class='source'>To follow along with the code examples, I recommend forking the book’s GitHub repository and activating the framework’s dedicated virtual environment. You can do so by running the following terminal commands while in the project’s root directory.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>uv sync  #A
+ 
+# mac or linux
+source .venv/bin/activate
+ 
+# windows (powershell)
+.venv\Scripts\activate</code></pre></section><section class='block paragraph'><div class='zh'>此外，本章示例演示的可执行代码已整理在一个Jupyter笔记本中，可在本书的GitHub仓库中找到：https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch02.ipynb。<br/>标有# Included in examples/ch02.ipynb的代码片段均可在该笔记本中运行。</div><details><summary>Source</summary><div class='source'>Additionally, a Jupyter notebook containing executable code for the example demonstrations in this chapter has been prepared and can be found in the book’s GitHub repository: https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch02.ipynb. Code snippets marked with # Included in examples/ch02.ipynb are available in this notebook for you to run.</div></details></section><section class='block paragraph'><div class='zh'>我建议使用uv启动Jupyter Lab，以确保安装所有必要的包，以便您能够运行这些示例。<br/>您可以通过在项目根目录（即pyproject.toml所在位置）运行以下终端命令来实现。</div><details><summary>Source</summary><div class='source'>I recommend using uv to launch Jupyter Lab to ensure all the necessary packages are installed for you to run these examples. You can do this by running the following terminal command in the project’s root directory (where pyproject.toml can be found).</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>uv run --with jupyter jupyter lab</code></pre></section><section class='block heading'><div class='zh'>2.1 BaseTool：工具的蓝图</div><details><summary>Source</summary><div class='source'>2.1 BaseTool: a blueprint for tools</div></details></section><section class='block paragraph'><div class='zh'>工具的功能可能存在显著差异。<br/>例如，执行网络搜索的工具与能够绘制饼图的工具显然截然不同。<br/>配备多种功能工具的LLM智能体，其潜力和通用性可能更为强大。<br/>然而，如果这些工具的调用方式也存在显著差异，那么实现这种潜力将变得极具挑战性。<br/>这些差异也可能导致LLM在请求工具调用时出错。</div><details><summary>Source</summary><div class='source'>Tools can differ significantly in their functionality. For example, a tool that performs web searches is obviously very different from another tool that can plot pie charts. LLM agents with tools of various functionalities have the potential to be more potent and versatile. However, if these tools also differ significantly in how they’re invoked, then it would be challenging to realize such potential. These differences might also lead to the LLM making mistakes when requesting tool calls.</div></details></section><section class='block paragraph'><div class='zh'>更好的方法是定义一种标准方式来调用工具，无论它们的功能有何不同。<br/>出于类似的原因，我们也希望标准化工具文本描述的格式化方式。<br/>这种标准化将为我们编写可靠代码铺平道路，使LLM和LLM代理能够使用这些工具——正如您将在第3章和第4章中看到的那样。</div><details><summary>Source</summary><div class='source'>A better approach would be to define a standard way for calling tools, regardless of their different functionalities. For similar reasons, we’d also want to standardize the way in which textual descriptions of tools are formatted. This standardization will pave the way for us to write reliable code that enables LLMs and LLM agents to work with these tools—as you’ll see later, in Chapters 3 and 4.</div></details></section><section class='block paragraph'><div class='zh'>我们将通过一个特殊的基类BaseTool来定义工具的这一标准，并在本节中实现它。<br/>为了更加精确，我们还将实现一个相关的基类AsyncBaseTool。<br/>这些基类共同定义了添加到我们框架中的每个工具都必须遵循的标准。</div><details><summary>Source</summary><div class='source'>We will define this standard for tools through a special base class, BaseTool, which we’ll implement in this section. To be even more precise, though, we’ll also be implementing a related base class called AsyncBaseTool. Together, these base classes define the standard that every tool added to our framework must conform to.</div></details></section><section class='block paragraph'><div class='zh'>为简化起见，我们先只考虑BaseTool，稍后再讨论AsyncBaseTool。<br/>图2.2展示了之前提到的同一个LLM智能体及其工具，现在每个工具都显示为继承自BaseTool。</div><details><summary>Source</summary><div class='source'>To keep things simple, let’s consider only BaseTool for now and revisit AsyncBaseTool later. Figure 2.2 illustrates the same LLM agent from before, along with its tools, each of which is now shown to inherit from BaseTool.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.2 每个工具都继承自BaseTool类，这使得LLM代理能够以相同的方式访问每个工具的文本描述并执行其逻辑。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image002.png' alt='Figure 2.2 Each tool inherits from the BaseTool class, allowing the LLM agent to access the textual descriptions and execute the logic of each tool in the same manner.'/><figcaption>Figure 2.2 Each tool inherits from the BaseTool class, allowing the LLM agent to access the textual descriptions and execute the logic of each tool in the same manner.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>我们的BaseTool类将定义一组方法和属性，所有继承自它的工具都必须支持这些方法和属性。<br/>为简化起见，图2.2仅展示了__call__()方法和parameters_json_schema属性，但我们很快将看到BaseTool的完整结构。</div><details><summary>Source</summary><div class='source'>Our BaseTool class will specify a set of methods and attributes, which every tool that inherits from it must also support. For simplicity, figure 2.2 shows only the __call__() method and the parameters_json_schema attribute, but we will soon see the full structure of BaseTool.</div></details></section><section class='block paragraph'><div class='zh'>如前所述，仅定义BaseTool只能让我们在框架中实现标准化工具调用过程的一部分。<br/>我们还需要定义两个新的数据结构，用于表示工具调用的输入和输出。<br/>ToolCall类将定义工具调用的输入，而ToolCallResult类将定义工具调用的输出。</div><details><summary>Source</summary><div class='source'>As mentioned earlier, defining the BaseTool only gets us part of the way toward implementing a standardized tool-calling process in our framework. We also need to define two new data structures for representing the input and output of a tool call. The ToolCall class will define our tool-call input, and the ToolCallResult class will define our tool-call output.</div></details></section><section class='block paragraph'><div class='zh'>在编写任何代码之前，让我们快速回顾一下上一章介绍的工具调用过程，并看看我们新增的类如何融入其中。<br/>图2.3展示了熟悉的工具调用过程图，但其中已融入了我们新增的类。</div><details><summary>Source</summary><div class='source'>Before we write any code, let’s quickly revisit the tool-calling process that we covered in the previous chapter, and see how our new classes fit into it. Figure 2.3 shows the familiar tool-calling process diagram, but with our new classes incorporated into it.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.3展示了如何将新类——BaseTool、ToolCall和ToolCallResult——整合到工具调用流程中，该流程首次在第1章中介绍。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image003.png' alt='Figure 2.3 Incorporating our new classes—BaseTool, ToolCall, and ToolCallResult—into the tool-calling process, first shown in Chapter 1.'/><figcaption>Figure 2.3 Incorporating our new classes—BaseTool, ToolCall, and ToolCallResult—into the tool-calling process, first shown in Chapter 1.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>正如你在前一章所学，工具调用过程的第一步是LLM选择工具并生成工具调用请求。<br/>现在，我们可以通过将生成的请求打包成ToolCall对象，为这一步添加更多结构。<br/>下一步是使用工具调用请求中指定的参数来执行所选工具的逻辑。<br/>由于所有工具都将遵循BaseTool中定义的标准接口，我们将能够以相同的方式执行每个工具的逻辑。<br/>也就是说，通过所选工具的__call__()方法，该方法将接受先前创建的ToolCall对象作为输入。<br/>工具逻辑执行完毕后，结果会被打包成ToolCallResult对象，然后可以传回给LLM。</div><details><summary>Source</summary><div class='source'>As you learned in the previous chapter, the first step to the tool-call process is for the LLM to select a tool and generate a tool-call request. We can now add more structure to this step by packaging the generated request into a ToolCall object. The next step would be to execute the selected tool’s logic using the parameters specified in the tool-call request. Since all tools will conform to the standard interface defined in BaseTool, we will be able to execute every tool’s logic in the same way. That is, through the selected tool’s __call__() method, which would accept the previously created ToolCall object as input. After the tool’s logic is executed, the result is then packaged into a ToolCallResult object, which can then be passed back to the LLM.</div></details></section><section class='block paragraph'><div class='zh'>既然我们已经概述了这些新类将如何协同工作，现在让我们深入探讨其结构细节，这些细节在图2.4所示的UML类图中提供。</div><details><summary>Source</summary><div class='source'>Now that we have outlined how these new classes will work together, let’s delve into their structural details, which are provided in the UML class diagrams seen in figure 2.4.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.4 BaseTool、ToolCall和ToolCallResult的UML类图。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image004.png' alt='Figure 2.4 The UML class diagrams for BaseTool, ToolCall and ToolCallResult.'/><figcaption>Figure 2.4 The UML class diagrams for BaseTool, ToolCall and ToolCallResult.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>我们在第1章中介绍了UML类图的一些基础知识。<br/>您可能还记得之前的讨论中提到，属性在矩形框的上半部分列出，而方法在下半部分提供。<br/>图2.4显示ToolCall包含三个属性——id_、tool_name和arguments——没有方法。<br/>ToolCallResult类同样具有三个属性，没有方法。<br/>这些属性是tool_call_id、content和error。<br/>我们将在为这两个类编写代码时，详细说明这些属性的含义。</div><details><summary>Source</summary><div class='source'>We covered a few of the basics for UML class diagrams in Chapter 1. You may recall from that previous discussion that attributes are outlined in the top section of the rectangular box, while methods are provided in the bottom section. Figure 2.4 shows that ToolCall consists of three attributes—id_, tool_name, and arguments—and no methods. The ToolCallResult class also has three attributes and no methods. Those attributes are tool_call_id, content, and error. We’ll go over what these attributes represent when we write the code for these two classes.</div></details></section><section class='block paragraph'><div class='zh'>图2.4还展示了BaseTool类的完整结构，我们在本节开头仅部分介绍了它。<br/>我们之前已经熟悉了parameters_json_schema属性和__call__()方法，但现在可以看到两个额外的属性：name和description。</div><details><summary>Source</summary><div class='source'>Figure 2.4 also shows the full structure of the BaseTool class, which we covered only partially at the beginning of this section. We were previously familiar with the parameters_json_schema attribute and the __call__() method, but now we can see two additional attributes: name and description.</div></details></section><section class='block paragraph'><div class='zh'>最后，图2.4展示了几个新的UML概念，我们现在将逐一讲解。<br/>首先是继承关系，它由一条实线表示，空心三角形箭头从子类指向父类。<br/>可以看到，ToolCall和ToolCallResult都继承自外部pydantic.BaseModel类。<br/>其次，您可能注意到，BaseTool文本旁边不是通常的带“C”的圆圈，而是带“A”的圆圈。<br/>这个“A”代表抽象，表示任何扩展BaseTool类的工具都必须为标记为抽象的方法提供实现；这些方法在基类中没有默认实现。<br/>在实现BaseTool类时，您将看到我们如何将方法标记为抽象。</div><details><summary>Source</summary><div class='source'>Finally, figure 2.4 illustrates a couple of new UML concepts that we’ll now go over. First is the inheritance relationship, which is indicated by a solid line with a hollow triangle arrowhead pointing from the child class to the parent class. You can see that both ToolCall and ToolCallResult inherit from the external pydantic.BaseModel class. Second, you may have noticed that, rather than the usual circle with a “C” beside the BaseTool text, there is a circle with an “A” instead. This “A” stands for abstract and indicates that any tool that extends the BaseTool class must provide implementations for the methods which have been marked as abstract; these are methods that have no default implementation in the base class. You’ll see how we mark methods as abstract when we implement the BaseTool class.</div></details></section><section class='block artifact reference heading'><div class='zh'>提示</div><div class='artifact-note'>参考标识保留</div><div class='artifact-body'>TIP</div></section><section class='block paragraph'><div class='zh'>Pydantic是一个Python库，特别适用于定义需要强健验证的数据模型。</div><details><summary>Source</summary><div class='source'>Pydantic is a Python library that is especially useful in defining data models that require robust validation.</div></details></section><section class='block paragraph'><div class='zh'>既然我们已经理解了这些类在工具调用过程中的结构和协作方式，现在就来实现它们吧！</div><details><summary>Source</summary><div class='source'>Now that we understand how these classes are structured and work together in the tool-calling process, let&#x27;s implement them!</div></details></section><section class='block heading'><div class='zh'>2.1.1 实现ToolCall与ToolCallResult</div><details><summary>Source</summary><div class='source'>2.1.1 Implementing ToolCall and ToolCallResult</div></details></section><section class='block paragraph'><div class='zh'>我们将逐一实现两个新的数据结构，首先从ToolCall开始。<br/>ToolCall的三个属性已在图2.4中展示。<br/>id_属性为ToolCall对象提供字符串标识符，而tool_name和arguments分别表示所选工具的名称以及调用该工具时使用的参数值。</div><details><summary>Source</summary><div class='source'>We’ll implement our two new data structures, one at a time, starting with ToolCall. The three attributes of ToolCall were shown in figure 2.4. The id_ attribute provides a string identifier for a ToolCall object, while tool_name and arguments represent the selected tool’s name and the parameter values we’ll use to invoke it, respectively.</div></details></section><section class='block paragraph'><div class='zh'>以下列表展示了ToolCall的实现。</div><details><summary>Source</summary><div class='source'>The following listing shows the implementation of ToolCall.</div></details></section><section class='block heading'><div class='zh'>清单2.1 实现ToolCall</div><details><summary>Source</summary><div class='source'>Listing 2.1 Implementing ToolCall</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/data_structures/tool.py  #A
+import uuid
+from typing import Any
+ 
+from pydantic import BaseModel, Field
+ 
+ 
+class ToolCall(BaseModel):
+    &quot;&quot;&quot;Tool call.
+ 
+    Attributes:
+        id_: A string identifier for the tool call.
+        tool_name: Name of tool to call.
+        arguments: The arguments to pass to the tool execution.
+    &quot;&quot;&quot;
+    
+    id_: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tool_name: str  #B
+    arguments: dict[str, Any]  #C</code></pre></section><section class='block paragraph'><div class='zh'>由于ToolCall继承自pydantic.BaseModel，我们在类声明下指定属性。<br/>在pydantic中，这三个属性也被称为模型字段。<br/>我们可以为任何字段添加自定义设置，例如为id_提供一个默认工厂方法，正如我们之前所做的那样。<br/>这意味着在创建ToolCall对象时，我们不需要为id_提供值。<br/>我还应该提到，pydantic.BaseModel对象提供了一个默认构造函数，这解释了为什么我们不需要自己定义__init__()方法。</div><details><summary>Source</summary><div class='source'>Since ToolCall inherits from pydantic.BaseModel, we specify attributes under the class declaration. With pydantic, the three attributes are also called model fields. We can add customizations to any of the fields, such as providing a default factory method, as we’ve done for id_. This means that we do not need to supply a value for id_ when creating a ToolCall object. I should also mention that a default constructor is provided for pydantic.BaseModel objects, which explains why we don’t need to define an __init__() method ourselves.</div></details></section><section class='block paragraph'><div class='zh'>如前所述，我们需要将LLM生成的工具调用请求打包成ToolCall对象。<br/>让我们回顾前一章中关于纽约市最佳性价比可颂的示例。<br/>假设骨干LLM以自然语言文本生成工具调用请求：“我需要使用web-search-tool来运行搜索查询：‘纽约市的可颂面包店及其价格’。”图2.5展示了我们如何从该请求创建ToolCall对象。</div><details><summary>Source</summary><div class='source'>As discussed earlier, we need to package the tool-call requests generated by LLMs into ToolCall objects. Let’s revisit our best-value croissant in New York City example from the previous chapter. Suppose the backbone LLM generates a tool-call request in natural language text: “I need to use the web-search-tool to run the search query: ‘Croissant bakeries in New York City and their prices’.” Figure 2.5 shows how we create a ToolCall object from this request.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.5展示了如何从LLM的自然语言工具调用请求创建ToolCall对象。由于网络搜索工具是一个BaseTool，我们必须在调用它之前先将请求转换为ToolCall对象。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image005.png' alt='Figure 2.5 Creating a ToolCall object from an LLM’s natural language tool-call request. Since the web-search tool is a BaseTool, we must first convert the request into a ToolCall object before invoking it.'/><figcaption>Figure 2.5 Creating a ToolCall object from an LLM’s natural language tool-call request. Since the web-search tool is a BaseTool, we must first convert the request into a ToolCall object before invoking it.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>将这一请求转换为ToolCall对象，需要识别所选工具的名称以及调用该工具时所需的参数。<br/>以下代码片段展示了如何利用这些已识别的元素来创建我们的ToolCall对象。</div><details><summary>Source</summary><div class='source'>Converting this request to a ToolCall object requires identifying the selected tool’s name as well as the arguments we’ll use to invoke it. The following code snippet demonstrates how we can use these identified elements to create our ToolCall object.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from llm_agents_from_scratch.data_structures.tool import ToolCall
+ 
+croissant_tool_call = ToolCall(
+    tool_name=&quot;web-search-tool&quot;,  #B
+    arguments={
+        &quot;query&quot;: &quot;Croissant bakeries in New York City and their      
+            prices.&quot;,  #C
+    }
+)</code></pre></section><section class='block artifact reference heading'><div class='zh'>注意</div><div class='artifact-note'>参考标识保留</div><div class='artifact-body'>NOTE</div></section><section class='block paragraph'><div class='zh'>在实践中，我们使用LLM提供商提供的API或软件开发工具包（SDK）来引发工具调用请求。<br/>与我们的示例不同，这些请求通常按照预先指定的结构化格式生成。<br/>这样做的好处在于，处理非结构化文本会非常脆弱，并且在提取所需元素以一致地构建ToolCall对象时，会带来重大挑战。<br/>在下一章中，当我们构建LLM的基类时，将使用其中一个这样的API。</div><details><summary>Source</summary><div class='source'>In practice, we use APIs or Software Development Kits (SDKs) provided by LLM providers to elicit tool-call requests. In contrast to our example, these requests are typically generated according to a pre-specified structured format. This is beneficial because working with unstructured text would be brittle and pose significant challenges when extracting the required elements to build ToolCall objects consistently. We’ll work with one such API in the next chapter when we build out the base class for LLMs.</div></details></section><section class='block paragraph'><div class='zh'>创建了ToolCall对象后，我们现在可以调用工具的__call__()方法来执行请求的网络搜索。<br/>由于我们尚未实现BaseTool类，因此还需要稍等片刻才能看到这一步的实际效果。</div><details><summary>Source</summary><div class='source'>With our ToolCall object created, we can now invoke the tool’s __call__() method to execute the requested web search. Since we haven’t yet implemented our BaseTool class, we’ll have to wait a little longer before we can see this step in action.</div></details></section><section class='block paragraph'><div class='zh'>现在，让我们继续按计划实现ToolCallResult。<br/>您之前从图2.4中看到，ToolCallResult具有三个属性：tool_call_id、content和error。<br/>content属性存储工具调用执行的结果，而error属性则指明是否遇到了错误。<br/>tool_call_id属性有助于将结果与其关联的工具调用请求对应起来。<br/>图2.6展示了ToolCallResult对象的创建如何依赖于工具执行的结果。</div><details><summary>Source</summary><div class='source'>For now, let’s continue with our planned implementation of ToolCallResult. You saw earlier from figure 2.4 that ToolCallResult has three attributes: tool_call_id, content, and error. The content attribute stores the results of the tool-call execution, while the error attribute specifies whether or not an error was encountered. The tool_call_id attribute helps to tie back the result to its associated tool-call request. Figure 2.6 shows how the creation of the ToolCallResult object is dependent on the outcome of a tool execution.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.6展示了如何从所选工具的执行中创建ToolCallResult对象，并处理成功和失败的执行情况。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image006.png' alt='Figure 2.6 Creating a ToolCallResult object from the selected tool’s execution, handling both successful and failed executions.'/><figcaption>Figure 2.6 Creating a ToolCallResult object from the selected tool’s execution, handling both successful and failed executions.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>执行成功后，结果被赋值给content属性，error属性设为False。<br/>如果在工具执行过程中遇到错误，content和error属性分别设为None和True。</div><details><summary>Source</summary><div class='source'>After a successful execution, the result is assigned to the content attribute and the error is set to False. If an error is encountered during the tool’s execution, the content and error attributes are set to None and True, respectively.</div></details></section><section class='block paragraph'><div class='zh'>以下代码实现了ToolCallResult类。</div><details><summary>Source</summary><div class='source'>The following code implements the ToolCallResult class.</div></details></section><section class='block heading'><div class='zh'>清单2.2 实现ToolCallResult</div><details><summary>Source</summary><div class='source'>Listing 2.2 Implementing ToolCallResult</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/data_structures/tool.py
+import uuid
+from typing import Any
+ 
+from pydantic import BaseModel, Field
+ 
+ 
+…  #A
+ 
+class ToolCallResult(BaseModel):
+    &quot;&quot;&quot;Result of a tool call execution.
+ 
+    Attributes:
+        tool_call_id: The id of the associated tool call.
+        content: The content of tool call.
+        error: Whether or not the tool call yielded an error.
+    &quot;&quot;&quot;
+ 
+    tool_call_id: str  #B
+    content: Any | None  #C
+    error: bool = False  #D</code></pre></section><section class='block paragraph'><div class='zh'>如您所见，ToolCallResult的实现与ToolCall类似，因为这两个类都继承自pydantic.BaseModel。</div><details><summary>Source</summary><div class='source'>As you can see, the implementation of ToolCallResult is similar to that of ToolCall since both classes inherit from pydantic.BaseModel.</div></details></section><section class='block paragraph'><div class='zh'>延续之前的示例，假设网络搜索工具成功执行，我们将创建一个ToolCallResult对象，将其内容设置为执行结果，错误设置为False，如下面的代码片段所示。</div><details><summary>Source</summary><div class='source'>Continuing our previous example, if we imagine a successful execution of the web-search-tool, we’d create a ToolCallResult object with its content set to the execution result and its error set to False, as the following code snippet demonstrates.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from llm_agents_from_scratch.data_structures.tool import ToolCallResult
+ 
+result = ToolCallResult(
+    tool_call_id=tool_call.id_,  #B
+    content={
+        &quot;search_results&quot;: …  #C
+    }
+)</code></pre></section><section class='block heading'><div class='zh'>2.1.2 实现 BaseTool</div><details><summary>Source</summary><div class='source'>2.1.2 Implementing BaseTool</div></details></section><section class='block paragraph'><div class='zh'>既然我们已经为使用BaseTool类实现了必要的数据结构，接下来就让我们进入其实现部分。<br/>正如我们在图2.4的UML类图中所见，BaseTool是一个抽象类，具有三个属性和一个方法。</div><details><summary>Source</summary><div class='source'>Now that we’ve implemented the necessary data structures for working with the BaseTool class, let’s move on to its implementation. As we saw from the UML class diagram in figure 2.4, BaseTool is an abstract class with three attributes and one method.</div></details></section><section class='block paragraph'><div class='zh'>三个属性——名称、描述和参数JSON模式——提供了为LLM配备BaseTool所需的信息。<br/>更具体地说，它们用于准备传递给LLM的文本描述，如图2.7所示。</div><details><summary>Source</summary><div class='source'>The three attributes—name, description, and parameters_json_schema—provide the information needed to equip an LLM with the BaseTool. More specifically, they are used to prepare the textual descriptions passed to the LLM, as shown in figure 2.7.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.7 回顾工具装配过程。通过BaseTool，我们可以利用其属性来填充传递给LLM的文本描述所需的值。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image007.png' alt='Figure 2.7 Revisiting the tool-equipping process. With a BaseTool, we can use its attributes to fill in the values required for textual descriptions that are passed to the LLM.'/><figcaption>Figure 2.7 Revisiting the tool-equipping process. With a BaseTool, we can use its attributes to fill in the values required for textual descriptions that are passed to the LLM.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>一旦工具被装备到LLM中，它就可以在工具调用过程中使用。<br/>正如我们之前讨论过的，__call__()方法现在负责工具的执行，它接收一个ToolCall并输出一个ToolCallResult。</div><details><summary>Source</summary><div class='source'>Once a tool is equipped to the LLM, it can be used in a tool-call process. As we&#x27;ve already discussed, the __call__() method is now responsible for the tool&#x27;s execution, which takes in a ToolCall and outputs a ToolCallResult.</div></details></section><section class='block paragraph'><div class='zh'>我们将把此__call__()方法标记为抽象方法，这意味着子类需要为其提供具体实现。<br/>以下清单展示了BaseTool的代码。</div><details><summary>Source</summary><div class='source'>We’ll mark this __call__() method as abstract, implying that subclasses will need to provide an implementation for it. The following listing shows the code for BaseTool.</div></details></section><section class='block heading'><div class='zh'>清单 2.3 实现 BaseTool</div><details><summary>Source</summary><div class='source'>Listing 2.3 Implementing BaseTool</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/base/tool.py  #A
+from abc import ABC, abstractmethod
+from llm_agents_from_scratch.data_structures.tool import (
+    ToolCall,  #B
+    ToolCallResult,  #B
+)
+ 
+class BaseTool(ABC):
+    &quot;&quot;&quot;Base Tool Class.&quot;&quot;&quot;
+ 
+    @property  #C
+    @abstractmethod
+    def name(self) -&gt; str:
+        &quot;&quot;&quot;Name of tool.&quot;&quot;&quot;
+ 
+ 
+    @property
+    @abstractmethod  #D
+    def description(self) -&gt; str:
+        &quot;&quot;&quot;Description of what this tool does.&quot;&quot;&quot;
+ 
+    @property
+    @abstractmethod
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON Schema for tool parameters.&quot;&quot;&quot;
+ 
+    @abstractmethod
+    def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        &quot;&quot;&quot;Execute the tool call.&quot;&quot;&quot;  #E</code></pre></section><section class='block paragraph'><div class='zh'>您可以看到，我们通过应用@abstractmethod装饰器将__call__()方法标记为抽象方法。</div><details><summary>Source</summary><div class='source'>You can see that we’ve marked the __call__() method as abstract by applying the @abstractmethod decorator to it.</div></details></section><section class='block paragraph'><div class='zh'>对于我们的三个属性，您可能会惊讶地发现我们也用@abstractmethod标记了它们。<br/>虽然它们被标记为抽象方法，但@property装饰器为我们提供了所需的类似属性的行为。<br/>这提供了一定的灵活性，可以在需要时隐藏内部属性并进行验证。<br/>然而，我选择在此处使用属性属性的主要原因是为了保持一致的接口。<br/>所有子类都必须为name、description、parameters_json_schema和__call__()提供实现，否则会引发AbstractMethodError。</div><details><summary>Source</summary><div class='source'>For our three attributes, you may be surprised to see that we have marked them with @abstractmethod as well. While they’re marked as abstract methods, the @property decorator gives us the attribute-like behavior we want. This provides some flexibility in terms of hiding internal attributes and performing validation when needed. However, the main reason I have chosen to use property attributes here is for a consistent interface. All subclasses must provide implementations for name, description, parameters_json_schema, and __call__(), and failing to do so would raise an AbstractMethodError.</div></details></section><section class='block heading'><div class='zh'>注意</div><details><summary>Source</summary><div class='source'>NOTe</div></details></section><section class='block paragraph'><div class='zh'>大多数（即便不是全部）LLM提供商设计的LLM工具调用API和SDK，都要求工具的参数字段遵循JSON Schema规范。<br/>在我们的框架中使用JSON Schema，不仅技术上合理，还能最大限度地兼容现有的LLM工具和服务。</div><details><summary>Source</summary><div class='source'>Most, if not all, LLM providers have designed their LLM tool-calling APIs and SDKs to accept outlines of the tool’s parameters that adhere to the JSON Schema specification. Using JSON Schema for our framework is a technically sound choice that also happens to maximize compatibility with existing LLM tools and services.</div></details></section><section class='block paragraph'><div class='zh'>让我们看一个通过子类化刚才实现的BaseTool类来构建工具的简单示例。<br/>在这个示例中，我们将创建一个名为Hailstone的工具，它会对给定的正整数应用Hailstone序列的单个步骤。<br/>如果整数是偶数，Hailstone工具会输出将其减半的结果；如果是奇数，则输出将其乘以三再加一的结果。<br/>图2.8展示了Hailstone工具及其作为工具调用流程一部分的执行逻辑。</div><details><summary>Source</summary><div class='source'>Let’s look at a simple example of building a tool by subclassing the BaseTool class we just implemented. For this example, we’ll create a tool called the Hailstone tool that applies a single step of the Hailstone sequence to a given positive integer. If the integer is even, the Hailstone tool outputs the result of halving it; if odd, the Hailstone tool outputs the result of multiplying it by three and adding one. Figure 2.8 illustrates the Hailstone tool and its execution logic as part of a tool-call process.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.8 Hailstone工具对给定的正整数执行Hailstone步骤。通过将Hailstone工具实现为BaseTool的子类，我们可以在LLM的工具调用过程中使用它。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image008.png' alt='Figure 2.8 The Hailstone tool performs a Hailstone step on a given positive integer. By implementing the Hailstone tool as a subclass of BaseTool, we can use it within the tool-call process for LLMs.'/><figcaption>Figure 2.8 The Hailstone tool performs a Hailstone step on a given positive integer. By implementing the Hailstone tool as a subclass of BaseTool, we can use it within the tool-call process for LLMs.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>要将Hailstone工具实现为BaseTool，根据之前的了解，我们需要为name、description、parameters_json_schema和__call__()编写具体实现。</div><details><summary>Source</summary><div class='source'>To implement the Hailstone tool as a BaseTool, we know from before that we’ll have to write implementations for name, description, parameters_json_schema, and __call__().</div></details></section><section class='block paragraph'><div class='zh'>对于name和description，我们将分别使用“hailstone”和“对给定输入数字执行Hailstone步骤的工具”。<br/>对于parameters_json_schema，我们需要提供符合JSON模式规范的Hailstone工具参数模式。<br/>在这个简单的示例中，我们将手动创建它，但本章稍后部分，我们将构建一个辅助函数来自动生成这些JSON模式。</div><details><summary>Source</summary><div class='source'>For name and description, we’ll use “hailstone” and “A tool that performs a Hailstone step on a given input number,” respectively. For parameters_json_schema, we need to provide a schema of the Hailstone tool’s parameters that conforms to the JSON Schema specification. We’ll create this manually for this simple example, but later in this chapter, we’ll build a helper function to generate these JSON Schemas automatically.</div></details></section><section class='block paragraph'><div class='zh'>Hailstone工具只需要一个输入参数：我们要对其应用Hailstone步骤的整数。<br/>如果我们把这个输入参数称为x，这与图2.8中使用的命名方式一致，那么Hailstone工具参数的JSON Schema如下所示。</div><details><summary>Source</summary><div class='source'>The Hailstone tool requires only one input parameter: the integer to which we want to apply the Hailstone step. If we call this input parameter x, which aligns with the naming used in figure 2.8, the JSON Schema for the Hailstone tool’s parameters looks like the following code.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>{
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;properties&quot;: {  #A
+        &quot;x&quot;: {  #B
+            &quot;type&quot;: &quot;number&quot;,
+            &quot;description&quot;: &quot;The input number.&quot;
+        },
+    },
+    &quot;required&quot;: [&quot;x&quot;],  #C
+}</code></pre></section><section class='block paragraph'><div class='zh'>如您所见，输入参数x被指定并列为必需项。</div><details><summary>Source</summary><div class='source'>As you can see, the input parameter x is specified and listed as required.</div></details></section><section class='block paragraph'><div class='zh'>像我们刚刚创建的JSON模式，本质上就是使用一组保留关键字来描述其数据需求的JSON文档。<br/>不熟悉JSON模式规范的读者可能会发现阅读侧边栏很有帮助，它提供了JSON模式基础知识的概述。</div><details><summary>Source</summary><div class='source'>JSON Schemas like the one we just created are simply JSON documents that use a set of reserved keywords to describe their data requirements. Readers unfamiliar with the JSON Schema specification may find it helpful to read the sidebar, which provides an overview of the basics of JSON Schema.</div></details></section><section class='block heading'><div class='zh'>JSON Schema 基础知识</div><details><summary>Source</summary><div class='source'>JSON Schema basics</div></details></section><section class='block paragraph'><div class='zh'>JSON Schema本身也是JSON文档，用于描述数据的结构和格式。<br/>这一规范使得创建和共享数据变得更加容易。<br/>例如，JSON Schema可用于规定零售商店交易数据的结构。<br/>再举一例，JSON Schema也可用于描述LLM智能体。</div><details><summary>Source</summary><div class='source'>JSON Schemas are themselves JSON documents that are used to describe the shape and format of data. This specification makes it easier to create and share data. For example, JSON Schemas can be used to specify the shape of data representing transactions from a retail store. As another example, a JSON Schema can also be used to describe LLM agents.</div></details></section><section class='block paragraph'><div class='zh'>假设我们希望通过指定其骨干LLM及其配备的工具列表来定义LLM智能体。<br/>为了实现这一点，我们将使用类型为object的JSON Schema来构建整体结构。<br/>这种object JSON数据类型类似于Python中的字典类型。<br/>在对象内部，我们可以定义其属性或键值对，以表示该对象。</div><details><summary>Source</summary><div class='source'>Let’s say that we want to have LLM agents specified by their backbone LLM and the list of its equipped tools. To accomplish this, we’d structure the overall JSON Schema using the type object. This object JSON data type is analogous to the Python dict type. Within an object, we can define its properties, or key-value pairs, that represent the object.</div></details></section><section class='block paragraph'><div class='zh'>对于我们的LLM代理，将有两个属性：llm和tools。<br/>JSON Schema中的每个属性都由一个模式对象定义，该对象指定其数据类型和约束。<br/>例如，我们可能希望llm属性指定LLM模型的名称，比如“gpt-5”。<br/>在这种情况下，我们会将llm属性类型指定为字符串JSON类型。</div><details><summary>Source</summary><div class='source'>For our LLM agent, we would have two properties: llm and tools. Each property in JSON Schema is defined by a schema object that specifies its data type and constraints. We may want the llm property, for example, to specify the name of the LLM model, like “gpt-5”. In this case, we’d specify the llm property type to be the string JSON type.</div></details></section><section class='block paragraph'><div class='zh'>相比之下，tools属性将是数组JSON类型，这类似于Python的列表数据类型。<br/>除了指定数据类型外，我们还可以为每个JSON Schema片段提供名称或标题。<br/>以下代码展示了我们刚刚描述的JSON Schema。</div><details><summary>Source</summary><div class='source'>In contrast, the tools property would be an array JSON type, which is analogous to the Python list data type. In addition to specifying the data type, we can also provide a name or title to each JSON Schema fragment. The following code shows the JSON Schema that we just described.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>{
+    &quot;title&quot;: &quot;LLMAgent&quot;,
+    &quot;type&quot;: &quot;object&quot;,  #A
+    &quot;properties&quot;: {
+        &quot;llm&quot;: {  #B
+            &quot;title&quot;: &quot;Llm&quot;,
+            &quot;type&quot;: &quot;string&quot;  #C
+        },
+        &quot;tools&quot;: {  #D
+            &quot;items&quot;: {  #E
+                &quot;additionalProperties&quot;: true,
+                &quot;type&quot;: &quot;object&quot;
+            },
+            &quot;title&quot;: &quot;Tools&quot;,
+            &quot;type&quot;: &quot;array&quot;  #F
+        },
+    },
+    &quot;required&quot;: [  #G
+        &quot;llm&quot;, 
+        &quot;tools&quot;
+    ]
+}</code></pre></section><section class='block paragraph'><div class='zh'>借助这份JSON Schema，我们能够精确地知道如何创建有效的LLM代理数据记录。<br/>我们看到数据的结构和格式，并理解一个有效的LLM代理数据记录必须包含llm和tools这两个属性，如下方代码所示。</div><details><summary>Source</summary><div class='source'>With this JSON Schema, we know precisely how to create a valid LLM agent data record. We see the shape and format of this data and understand that a valid LLM agent data record must include both llm and tools properties, as shown in the following code.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>{
+    &quot;llm&quot;: &quot;gpt-5&quot;,
+    &quot;tools&quot;: [
+        {
+            &quot;name&quot;: &quot;websearch-tool&quot;
+        }
+    ]
+}</code></pre></section><section class='block paragraph'><div class='zh'>缺少其中任一字段或提供不正确的数据类型都会导致JSON数据验证错误。<br/>以下代码展示了一个无效的LLM代理数据记录，因为它缺少llm属性。</div><details><summary>Source</summary><div class='source'>Failing to have either of these fields or supplying incorrect data types would result in a JSON data validation error. The following code shows an invalid LLM agent data record because it is missing the llm property.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>{
+    &quot;tools&quot;: [
+        {
+            &quot;name&quot;: &quot;websearch-tool&quot;
+        }
+    ]
+}</code></pre></section><section class='block paragraph'><div class='zh'>通过将工具参数的JSON模式传递给LLM，它们就能准确知道在发出工具调用请求时如何提供参数所需的信息。</div><details><summary>Source</summary><div class='source'>By passing JSON Schemas of the tool parameters to LLMs, they’ll know exactly how to provide the required information for parameters when making tool-call requests.</div></details></section><section class='block paragraph'><div class='zh'>关于JSON Schema的更多详细信息，建议读者查阅其他资源，例如https://json-schema.org/。</div><details><summary>Source</summary><div class='source'>For more comprehensive information on JSON Schemas, readers are encouraged to read other resources such as https://json-schema.org/.</div></details></section><section class='block paragraph'><div class='zh'>为我们的Hailstone工具实现的最后一项是其__call__()方法。<br/>在建立了参数的JSON Schema后，我们现在可以预期传递给Hailstone工具的ToolCall对象在其arguments字典中包含键x。<br/>该键的值是我们要应用Hailstone步骤逻辑的输入数字。<br/>以下代码在从名为tool_call的ToolCall对象中提取输入数字后，实现了这一逻辑。</div><details><summary>Source</summary><div class='source'>The last item to implement for our Hailstone tool is its __call__() method. With our parameter’s JSON Schema established, we can now expect ToolCall objects passed to the Hailstone tool to contain the key x in their arguments dictionary. The value for this key is the input number to which we’ll apply the Hailstone step logic. The following code implements this logic after extracting the input number from a given ToolCall object called tool_call.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>x = tool_call.arguments.get(&quot;x&quot;)  #A
+if x % 2 == 0:
+    result = x // 2  #B
+else:
+    result = (x * 3) + 1  #C
+ 
+return ToolCallResult(  #D
+    tool_call_id=tool_call.id_,
+    content=result,
+    error=False,
+)</code></pre></section><section class='block paragraph'><div class='zh'>我们的代码成功实现了Hailstone步骤，并将结果打包成ToolCallResult，符合__call__()方法的要求。<br/>此实现目前保持简单，但更健壮的版本可包含对输入参数x的验证和错误处理。</div><details><summary>Source</summary><div class='source'>Our code successfully implements the Hailstone step and packages the result into a ToolCallResult, as required by the __call__() method. This implementation keeps things simple at this stage, but a more robust version could include validation and error handling for the input parameter x.</div></details></section><section class='block paragraph'><div class='zh'>以下代码将所有内容整合起来，提供了Hailstone工具的完整实现。</div><details><summary>Source</summary><div class='source'>The following code ties everything back together, providing the entire implementation for the Hailstone tool.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from typing import Any
+from llm_agents_from_scratch.base.tool import BaseTool
+from llm_agents_from_scratch.data_structures.tool import (
+   ToolCall,
+   ToolCallResult,
+)
+ 
+ 
+class Hailstone(BaseTool):  #B
+    @property
+    def name(self) -&gt; str:
+        return &quot;hailstone&quot;
+ 
+    @property
+    def description(self) -&gt; str:
+        return &quot;A tool that performs a Hailstone step on a given input
+            number.&quot;
+    
+    @property
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON Schema for tool parameters.&quot;&quot;&quot;
+        return {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {
+                &quot;x&quot;: {
+                    &quot;type&quot;: &quot;number&quot;,
+                    &quot;description&quot;: &quot;The input number.&quot;
+                },
+            },
+            &quot;required&quot;: [&quot;x&quot;]
+        }
+ 
+    def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        &quot;&quot;&quot;Execute the tool call.&quot;&quot;&quot;
+        x = tool_call.arguments.get(&quot;x&quot;)
+        if x % 2 == 0:
+            result = x // 2
+        else:
+            result = (x * 3) + 1
+ 
+        return ToolCallResult(
+            tool_call_id=tool_call.id_,
+            content=result,
+            error=False,
+        )</code></pre></section><section class='block paragraph'><div class='zh'>我们可以按照图2.8所示运行Hailstone工具调用，具体操作如下：</div><details><summary>Source</summary><div class='source'>We can run the Hailstone tool call shown in figure 2.8 as follows:</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+hailstone_tool = Hailstone()  #B
+ 
+tool_call = ToolCall(  #C
+    tool_name=&quot;hailstone&quot;,
+    arguments={&quot;x&quot;: 3},
+)
+ 
+tool_call_result = hailstone_tool(tool_call)  #D
+print(tool_call_result)</code></pre></section><section class='block paragraph'><div class='zh'>返回的ToolCallResult对象包含将Hailstone步骤应用于x=3的结果，即10。</div><details><summary>Source</summary><div class='source'>The returned ToolCallResult object contains the result of applying the Hailstone step to x = 3, which is 10.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>tool_call_id=&#x27;112233&#x27;, content=&#x27;10&#x27;, error=False</code></pre></section><section class='block paragraph'><div class='zh'>关于如何使用Hailstone工具的名称、描述和参数JSON模式来为LLM准备文本描述的演示，需要等到我们实现BaseLLM类之后才能进行，这将是下一章的主题。<br/>现在，让我们回顾一下之前提到的另一个基类：AsyncBaseTool。</div><details><summary>Source</summary><div class='source'>A demonstration of using the Hailstone tool’s name, description, and parameters_json_schema to prepare a textual description for an LLM will have to wait until we’ve implemented the BaseLLM class, which is the subject of the next chapter. For now, let’s go over the other base class that we mentioned earlier: AsyncBaseTool.</div></details></section><section class='block heading'><div class='zh'>2.1.3 AsyncBaseTool</div><details><summary>Source</summary><div class='source'>2.1.3 The AsyncBaseTool</div></details></section><section class='block paragraph'><div class='zh'>作为本节的总结，我们将介绍BaseTool类的一个重要变体：AsyncBaseTool，它专为逻辑异步执行的工具而设计。<br/>进行外部API调用的工具（例如查询天气数据）最适合采用异步执行方式。<br/>在等待外部API调用结果时，异步工具允许应用程序的其他代码部分同时执行。<br/>图2.9展示了BaseTool与AsyncBaseTool在执行机制上的差异：BaseTool是同步的，因此会阻塞执行；而AsyncBaseTool是非阻塞的。</div><details><summary>Source</summary><div class='source'>To conclude this section, we’ll present an important variation of the BaseTool class: the AsyncBaseTool, which is designed for tools whose logic executes asynchronously. Tools that make external API calls, such as for checking weather data, are best suited for asynchronous execution. While waiting for the result of an external API call, asynchronous tools allow other parts of an application’s code to execute simultaneously. Figure 2.9 illustrates the difference in execution mechanics between BaseTool, which is synchronous and therefore blocking, and the non-blocking AsyncBaseTool.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.9 比较同步和异步工具执行。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image009.png' alt='Figure 2.9 Comparing synchronous and asynchronous tool executions.'/><figcaption>Figure 2.9 Comparing synchronous and asynchronous tool executions.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>在执行AsyncBaseTool期间，若需等待外部结果，应用程序的其他部分可以开始或继续运行。<br/>与同步执行的BaseTool相比，这种并发执行通常能因资源利用率提升而带来显著的速度增益。</div><details><summary>Source</summary><div class='source'>During the execution of an AsyncBaseTool, if it must wait for external results, other parts of an application can start or continue running. This concurrent execution often yields significant speed gains due to improved resource utilization compared with the synchronous execution of its BaseTool counterpart.</div></details></section><section class='block paragraph'><div class='zh'>图2.10展示了AsyncBaseTool类的UML类图。</div><details><summary>Source</summary><div class='source'>Figure 2.10 shows the UML class diagram of the AsyncBaseTool class.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.10展示了AsyncBaseTool的UML类图，其结构与BaseTool类几乎完全相同。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image010.png' alt='Figure 2.10 The UML class diagram for AsyncBaseTool, which shows a nearly identical structure to the BaseTool class.'/><figcaption>Figure 2.10 The UML class diagram for AsyncBaseTool, which shows a nearly identical structure to the BaseTool class.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>AsyncBaseTool类提供了与BaseTool类似的接口。<br/>它共享与BaseTool相同的属性，并且也支持__call__()方法。<br/>然而，AsyncBaseTool的__call__()方法是异步的。</div><details><summary>Source</summary><div class='source'>The AsyncBaseTool class exposes an interface similar to BaseTool. It shares the same attributes as BaseTool, and also supports a __call__() method. However, the __call__() method of AsyncBaseTool is asynchronous.</div></details></section><section class='block paragraph'><div class='zh'>在 Python 中，我们通过在方法签名前使用关键字 async 来将方法标记为异步。<br/>AsyncBaseTool 的完整实现见以下代码。</div><details><summary>Source</summary><div class='source'>In Python, we mark methods as asynchronous by using the keyword async just before declaring the method signature. The complete implementation for AsyncBaseTool is provided in the following code.</div></details></section><section class='block heading'><div class='zh'>清单2.4 实现AsyncBaseTool</div><details><summary>Source</summary><div class='source'>Listing 2.4 Implementing AsyncBaseTool</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/base/tool.py
+from abc import ABC, abstractmethod
+from llm_agents_from_scratch.data_structures.tool import (
+    ToolCall,
+    ToolCallResult,
+)
+ 
+class BaseTool(ABC):
+    &quot;&quot;&quot;Base Tool Class.&quot;&quot;&quot;
+    …  #A
+ 
+class AsyncBaseTool(ABC):
+    &quot;&quot;&quot;Async Base Tool Class.&quot;&quot;&quot;
+ 
+    @property
+    @abstractmethod
+    def name(self) -&gt; str:
+        &quot;&quot;&quot;Name of tool.&quot;&quot;&quot;
+ 
+    @property
+    @abstractmethod
+    def description(self) -&gt; str:
+        &quot;&quot;&quot;Description of what this tool does.&quot;&quot;&quot;
+ 
+    @property
+    @abstractmethod
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON schema for tool parameters.&quot;&quot;&quot;
+ 
+    @abstractmethod
+    async def __call__(  #B
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        &quot;&quot;&quot;Asynchronously execute the tool call.&quot;&quot;&quot;</code></pre></section><section class='block paragraph'><div class='zh'>例如，如果之前的Hailstone工具继承自AsyncBaseTool而非BaseTool，我们将通过以下代码调用它。</div><details><summary>Source</summary><div class='source'>As an example, if the Hailstone tool from earlier inherited from AsyncBaseTool instead of BaseTool, we would invoke it with the following code.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>hailstone_tool = Hailstone()  #A
+ 
+tool_call = ToolCall(  #B
+    tool_name=&quot;hailstone&quot;,
+    arguments={&quot;x&quot;: 3},
+)
+ 
+tool_call_result = await hailstone_tool(tool_call)  #C</code></pre></section><section class='block heading'><div class='zh'>注意</div><details><summary>Source</summary><div class='source'>note</div></details></section><section class='block paragraph'><div class='zh'>async关键字可将函数转换为异步函数，调用时返回一个协程。<br/>协程是非阻塞对象，可在异步事件循环（如asyncio库提供的事件循环）中实现并发执行。<br/>在异步方法中调用协程时，必须使用await关键字来等待其结果。<br/>若要从同步代码中运行协程，可以使用asyncio.run()函数。</div><details><summary>Source</summary><div class='source'>The async keyword turns a function into an asynchronous one that returns a coroutine when called. Coroutines are non-blocking objects that enable concurrent execution within an asynchronous event loop, such as the ones provided by the asyncio library. Results of coroutines must be awaited using the await keyword when called from an asynchronous method. To run a coroutine from synchronous code, you can use asyncio.run().</div></details></section><section class='block heading'><div class='zh'>练习 2.1 将冰雹序列实现为 AsyncBaseTool</div><details><summary>Source</summary><div class='source'>Exercise 2.1 Hailstone as an AsyncBaseTool</div></details></section><section class='block paragraph'><div class='zh'>重新实现之前的Hailstone工具，但这次让它继承自AsyncBaseTool。<br/>在执行逻辑中，通过使用asyncio.sleep(1)引入1秒的休眠，然后再执行Hailstone步骤。</div><details><summary>Source</summary><div class='source'>Re-implement the Hailstone tool from earlier, but this time make it inherit from AsyncBaseTool. For its execution logic, introduce a 1-second sleep before performing the Hailstone step by using asyncio.sleep(1).</div></details></section><section class='block heading'><div class='zh'>2.2 SimpleFunctionTool：BaseTool的子类</div><details><summary>Source</summary><div class='source'>2.2 SimpleFunctionTool: a subclass of BaseTool</div></details></section><section class='block paragraph'><div class='zh'>虽然我们能够相对轻松地实现Hailstone工具，但通过开发一个能够自动从Python函数构建BaseTool对象的抽象层，我们可以增加额外的便利性。<br/>在本节中，我们将创建SimpleFunctionTool，这是一个BaseTool的子类，作为以这种方式创建工具的包装类。</div><details><summary>Source</summary><div class='source'>While we were able to implement the Hailstone tool with relative ease, we can add extra convenience by developing an abstraction that automatically builds BaseTool objects from Python functions. In this section, we’ll create SimpleFunctionTool, a subclass of BaseTool that serves as a wrapper class for creating tools in this manner.</div></details></section><section class='block paragraph'><div class='zh'>当提供函数时，SimpleFunctionTool会自动实现name、description、parameters_json_schema和__call__()方法，这些信息封装在函数中，如图2.11所示。</div><details><summary>Source</summary><div class='source'>When supplied with a function, SimpleFunctionTool automatically implements name, description, parameters_json_schema, and __call__() using the information encapsulated in the function, as shown in Figure 2.11.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.11展示了如何使用SimpleFunctionTool包装Python函数，使其能够作为LLM和LLM代理的工具使用。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image011.png' alt='Figure 2.11 Wrapping Python functions with SimpleFunctionTool so that they can be used as tools for LLMs and LLM agents.'/><figcaption>Figure 2.11 Wrapping Python functions with SimpleFunctionTool so that they can be used as tools for LLMs and LLM agents.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>我们还将实现SimpleFunctionTool的异步版本，用于从异步Python函数派生AsyncBaseTool对象。<br/>图2.12展示了SimpleFunctionTool和AsyncSimpleFunctionTool的UML类图。</div><details><summary>Source</summary><div class='source'>We’ll also implement the asynchronous version of SimpleFunctionTool, for creating AsyncBaseTool objects derived from asynchronous Python functions. Figure 2.12 shows the UML class diagrams for SimpleFunctionTool and AsyncSimpleFunctionTool.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.12 SimpleFunctionTool和AsyncSimpleFunctionTool的UML类图。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image012.png' alt='Figure 2.12 UML class diagrams for SimpleFunctionTool and AsyncSimpleFunctionTool.'/><figcaption>Figure 2.12 UML class diagrams for SimpleFunctionTool and AsyncSimpleFunctionTool.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>这两个类都继承自它们对应的基础工具类，并添加了一个名为func的新属性，该属性是它们所包装的函数。<br/>对于SimpleFunctionTool，包装的函数是同步的；而对于AsyncSimpleFunctionTool，包装的函数是异步的。</div><details><summary>Source</summary><div class='source'>Both classes inherit from their corresponding base tool classes and add a new attribute called func, which is the function they wrap. For SimpleFunctionTool, the wrapped function is synchronous, while for AsyncSimpleFunctionTool, it is asynchronous.</div></details></section><section class='block paragraph'><div class='zh'>如果我们重新审视Hailstone工具，新的SimpleFunctionTool类提供了一种基于实现Hailstone步骤逻辑的函数的替代实现方式，如下方代码所示。</div><details><summary>Source</summary><div class='source'>If we reconsider the Hailstone tool, the new SimpleFunctionTool class enables an alternative implementation based on a function that implements the Hailstone step logic, as shown in the following code.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+def hailstone_step_func(x: int) -&gt; int:
+    &quot;&quot;&quot;Performs a single step of the Hailstone sequence.&quot;&quot;&quot;
+    if x % 2 == 0:
+        return x // 2  #B
+    else:
+        return 3 * x + 1  #B</code></pre></section><section class='block paragraph'><div class='zh'>其思路是让SimpleFunctionTool包装hailstone_step_func()，以创建一个新工具，供LLM或LLM代理在工具调用过程中使用。</div><details><summary>Source</summary><div class='source'>The idea is to have SimpleFunctionTool wrap the hailstone_step_func() to create a new tool that an LLM or LLM agent can use in a tool-call process.</div></details></section><section class='block heading'><div class='zh'>2.2.1 实现 SimpleFunctionTool</div><details><summary>Source</summary><div class='source'>2.2.1 Implementing SimpleFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>既然我们已经明确了目标，现在就来实现SimpleFunctionTool。<br/>由于SimpleFunctionTool继承自BaseTool，如图2.12所示，我们知道需要实现name、description、parameters_json_schema和__call__()方法。<br/>如前所述，我们将根据提供的函数和一个新属性func自动派生这些实现。</div><details><summary>Source</summary><div class='source'>Now that we have an idea of what we’re trying to accomplish, let’s implement SimpleFunctionTool. Since SimpleFunctionTool inherits from BaseTool, as shown in figure 2.12, we know that we’ll need to implement name, description, parameters_json_schema, and __call__(). As previously discussed, we’ll derive these implementations automatically based on the supplied function and a new attribute, func.</div></details></section><section class='block paragraph'><div class='zh'>首先，对于名称属性，我们将使用Python函数的名称。<br/>对于描述，如果Python函数存在文档字符串，我们可以使用它；否则，我们将回退到某个预定义的模板。<br/>前两个属性的实现，以及构造函数__init__()方法，如清单2.5所示。</div><details><summary>Source</summary><div class='source'>To start, for the name attribute, we’ll use the name of the Python function. For description, we can use the docstring of the Python function if it exists; otherwise, we fall back to some pre-specified template. The implementations of these first two attributes, as well as the constructor __init__() method are shown in listing 2.5.</div></details></section><section class='block heading'><div class='zh'>清单2.5 实现SimpleFunctionTool。（__init__()、name、description）</div><details><summary>Source</summary><div class='source'>Listing 2.5 Implementing SimpleFunctionTool.(__init__(), name, description)</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+from typing import Any, Callable
+from llm_agents_from_scratch.base.tool import BaseTool
+ 
+ 
+class SimpleFunctionTool(BaseTool):
+    &quot;&quot;&quot;Simple function calling tool.
+ 
+    Turn a Python function into a tool for an LLM.
+    &quot;&quot;&quot;
+    def __init__(
+        self,
+        func: Callable[..., Any],  #A
+        desc: str | None = None,
+    ) -&gt; None:
+        &quot;&quot;&quot;Initialize a SimpleFunctionTool.
+ 
+        Args:
+            func (Callable): The Python function to expose as a tool to the             
+                LLM.
+            desc (str | None, optional): Description of the function.
+                Defaults to None.
+        &quot;&quot;&quot;
+        self.func = func
+        self._desc = desc  #B
+ 
+    @property
+    def name(self) -&gt; str:
+        &quot;&quot;&quot;Name of function tool.&quot;&quot;&quot;
+        return self.func.__name__  #C
+ 
+    @property
+    def description(self) -&gt; str:
+        &quot;&quot;&quot;Description of what this function tool does.&quot;&quot;&quot;
+        return (
+            self._desc or self.func.__doc__ or f&quot;Tool for 
+                {self.func.__name__}&quot;  #D
+        )</code></pre></section><section class='block paragraph'><div class='zh'>现在，让我们继续为SimpleFunctionTool实现parameters_json_schema。<br/>之前实现Hailstone工具时，我们手动创建了参数JSON模式。<br/>我之前提到过，我们稍后会构建一个辅助函数来自动生成这些模式。<br/>现在，我们将通过实现一个辅助函数来完成这项工作，该函数通过检查方法签名来从func推导出JSON模式。<br/>我们将调用这个辅助函数：function_signature_to_json_schema()。</div><details><summary>Source</summary><div class='source'>Let’s now move on to implementing parameters_json_schema for SimpleFunctionTool. When we implemented the Hailstone tool earlier, we created the parameters JSON Schema manually. I mentioned then that we’d later build a helper function to automate the generation of these schemas. We’ll do this now by implementing a helper that derives the JSON Schema from func by inspecting its method signature. We’ll call this helper function: function_signature_to_json_schema().</div></details></section><section class='block paragraph'><div class='zh'>实现function_signature_to_json_schema()主要涉及将Python数据类型映射到相应的JSON Schema数据类型，并确定哪些函数参数是必需的，因为它们没有定义默认值。</div><details><summary>Source</summary><div class='source'>Implementing function_signature_to_json_schema() mainly involves mapping Python data types to the corresponding JSON Schema data types, as well as determining which of the function parameters are required because they have no defined default values.</div></details></section><section class='block artifact reference heading'><div class='zh'>注意</div><div class='artifact-note'>参考标识保留</div><div class='artifact-body'>NOTE</div></section><section class='block paragraph'><div class='zh'>我们正在从头开始编写一个JSON Schema构建器，通过实现function_signature_to_json_schema()函数，以加深对工具文本描述如何为LLM使用而准备的理解。<br/>在下一节中，我们将介绍另一个BaseTool子类，它通过利用pydantic库提供的JSON Schema生成功能，更稳健地处理这一方面。</div><details><summary>Source</summary><div class='source'>We’re coding a JSON Schema builder from scratch with our implementation of function_signature_to_json_schema() to deepen our understanding of how the textual descriptions of tools are prepared for an LLM to consume. In the next section, we will introduce yet another BaseTool subclass that handles this aspect more robustly by leveraging the JSON Schema generation capabilities offered by the pydantic library.</div></details></section><section class='block paragraph'><div class='zh'>function_signature_to_json_schema() 函数中需要实现相当多的逻辑。<br/>为了帮助您更好地理解这一切，我在图2.13中展示了相关逻辑。<br/>在查看完整实现代码之前，让我们先一起逐步梳理整个过程。</div><details><summary>Source</summary><div class='source'>There is quite a bit of logic that needs to be implemented in function_signature_to_json_schema(). To help you better understand all of it, I’ve illustrated the logic in figure 2.13. Let’s walk through all of it together before seeing the entire implementation in a listing.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.13 辅助函数_signature_to_json_schema实现过程的三个步骤可视化分解。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image013.png' alt='Figure 2.13 A visual breakdown of the three steps involved in the implementation of the helper function_signature_to_json_schema.'/><figcaption>Figure 2.13 A visual breakdown of the three steps involved in the implementation of the helper function_signature_to_json_schema.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>如图2.13所示，实现过程包含三个步骤。<br/>首先，我们通过内省函数签名来识别参数及其标注类型。<br/>其次，我们遍历所有已识别的参数，为每个参数构建JSON Schema片段。<br/>此步骤涉及将参数类型映射到相应的JSON数据类型，并确定参数是否为必需项。<br/>第三，我们组装并返回完整的JSON Schema。</div><details><summary>Source</summary><div class='source'>As shown in figure 2.13, there are three steps to implement. First, we introspect the function signature to identify the parameters and their annotated types. Second, we loop through all the identified parameters to build a JSON Schema fragment for each of them. This step involves mapping the parameter’s type to the corresponding JSON data type and determining if the parameter is required. Third, we assemble and return the overall JSON Schema.</div></details></section><section class='block paragraph'><div class='zh'>function_signature_to_json_schema() 的完整实现将在接下来的清单 2.6 中提供。</div><details><summary>Source</summary><div class='source'>The complete implementation of function_signature_to_json_schema() is provided next in listing 2.6.</div></details></section><section class='block heading'><div class='zh'>清单2.6：将函数签名转换为JSON Schema的辅助工具</div><details><summary>Source</summary><div class='source'>Listing 2.6 Helper for turning a function signature into a JSON Schema</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+import inspect
+from typing import Any, Callable, get_type_hints
+ 
+def function_signature_to_json_schema(func: Callable) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Turn a function signature into a JSON schema.
+ 
+    Inspects the signature of the function and maps types to the 
+    appropriate JSON schema type.
+ 
+    Args:
+        func (Callable): The function for which to get the JSON schema.
+ 
+    Returns:
+        dict[str, Any]: The JSON schema
+    &quot;&quot;&quot;
+    sig = inspect.signature(func)  #A
+    type_hints = get_type_hints(func)
+    python_to_json_schema_type = {  #B
+        str: &quot;string&quot;,
+        int: &quot;number&quot;,
+        float: &quot;number&quot;,
+        dict: &quot;object&quot;,
+        list: &quot;array&quot;,
+        type(None): &quot;null&quot;,
+        bool: &quot;boolean&quot;,
+        tuple: &quot;array&quot;,
+        bytes: &quot;string&quot;,
+        set: &quot;array&quot;,
+    }
+ 
+    properties = {}
+    required = []
+    for param in sig.parameters.values():  #C
+        # skip args and kwargs
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+ 
+        annotation = type_hints.get(param.name, param.annotation)
+        if annotation in python_to_json_schema_type:
+            this_params_json_schema = {
+                &quot;type&quot;: python_to_json_schema_type[annotation],
+            }
+        else:
+            # fallback schema, that accepts everything
+            this_params_json_schema = {}
+        properties[param.name] = this_params_json_schema
+ 
+        # check if param is required
+        if param.default == inspect._empty:  #D
+            required.append(param.name)
+ 
+    return {  #E
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: properties,
+        &quot;required&quot;: required,
+    }</code></pre></section><section class='block paragraph'><div class='zh'>呼，这真是费了不少功夫。<br/>幸运的是，实现parameters_json_schema只需调用我们的辅助函数，如下方代码所示。</div><details><summary>Source</summary><div class='source'>Phew, that was a lot of work. Fortunately, all that remains to implement parameters_json_schema is to invoke our helper function, as shown in the following code.</div></details></section><section class='block heading'><div class='zh'>清单2.7 实现SimpleFunctionTool.parameters_json_schema</div><details><summary>Source</summary><div class='source'>Listing 2.7 Implementing SimpleFunctionTool.parameters_json_schema</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+import inspect
+from typing import Any, Callable, get_type_hints
+from llm_agents_from_scratch.base.tool import BaseTool
+ 
+ 
+def function_signature_to_json_schema(func: Callable) -&gt; dict[str, Any]:
+    …  #A
+ 
+class SimpleFunctionTool(BaseTool):
+    &quot;&quot;&quot;Simple function calling tool.
+ 
+    Turn a Python function into a tool for an LLM.
+    &quot;&quot;&quot;
+    …  #B
+ 
+    @property
+    def parameters_json_schema(self) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;JSON schema for tool parameters.&quot;&quot;&quot;
+        return function_signature_to_json_schema(self.func)  #C</code></pre></section><section class='block paragraph'><div class='zh'>接下来，我们继续讨论最后一个必需的实现——__call__()。<br/>由于SimpleFunctionTool是一个包装类，用于从func创建工具，我们将在__call__()中直接委托给func。<br/>然而，在委托之前，我们将首先对LLM在其工具调用请求中提供的参数数据进行验证。<br/>图2.14展示了当__call__()被调用时，这些验证和委托步骤。</div><details><summary>Source</summary><div class='source'>Let’s move on to the final required implementation, __call__(). Since SimpleFunctionTool serves as a wrapper class to create a tool from func, we’ll simply delegate to func within __call__(). Before this delegation, however, we’ll first perform validation on the parameter data provided by the LLM in its tool-call request. Figure 2.14 shows these validation and delegation steps when __call__() is invoked.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.14展示了执行SimpleFunctionTool的过程，包括验证ToolCall对象的参数数据，随后将调用委托给包装的函数。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image014.png' alt='Figure 2.14 Executing a SimpleFunctionTool involves validating the parameter data of the ToolCall object and subsequently delegating to the wrapped function.'/><figcaption>Figure 2.14 Executing a SimpleFunctionTool involves validating the parameter data of the ToolCall object and subsequently delegating to the wrapped function.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>在验证或委托阶段遇到的任何失败，都会通过返回一个ToolCallResult来处理，其中error设置为True，content设置为包含错误信息的JSON序列化字符串。</div><details><summary>Source</summary><div class='source'>Any failures experienced in either the validation or delegation stages are handled by returning a ToolCallResult with error set to True and content set to a JSON-serialized string containing information on the error.</div></details></section><section class='block paragraph'><div class='zh'>为执行参数数据验证，我们将使用jsonschema库。<br/>当ToolCall对象（例如tool_call）传递给__call__()时，我们会根据工具的parameters_json_schema验证tool_call.arguments。<br/>以下清单展示了__call__()整体实现中的这一验证环节。</div><details><summary>Source</summary><div class='source'>To perform the parameter data validation, we’ll use the jsonschema library. When a ToolCall object, say tool_call, is passed to __call__(), we validate tool_call.arguments against the tool’s parameters_json_schema. The following listing shows this validation aspect of the overall __call__() implementation.</div></details></section><section class='block heading'><div class='zh'>清单 2.8 实现 SimpleFunctionTool.__call__()（验证）</div><details><summary>Source</summary><div class='source'>Listing 2.8 Implementing SimpleFunctionTool.__call__() (validation)</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+…  #A
+from jsonschema import SchemaError, ValidationError, validate
+ 
+class SimpleFunctionTool(BaseTool):
+    &quot;&quot;&quot;Simple function calling tool.
+ 
+    Turn a Python function into a tool for an LLM.
+    &quot;&quot;&quot;
+    …  #B
+ 
+    def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        …  #C
+        try:
+            # validate the arguments
+            validate(tool_call.arguments,  #D
+                   schema=self.parameters_json_schema)
+        except (SchemaError, ValidationError) as e:
+            error_details = {
+                &quot;error_type&quot;: e.__class__.__name__,
+                &quot;message&quot;: e.message,
+            }
+            return ToolCallResult(  #E
+                tool_call_id=tool_call.id_,
+                content=json.dumps(error_details),
+                error=True,
+            )
+ 
+        …  #F</code></pre></section><section class='block paragraph'><div class='zh'>委托给包装函数func，实质上就是将经过验证的tool_call.arguments传递给它。<br/>清单2.9实现了__call__()方法中的委托部分。</div><details><summary>Source</summary><div class='source'>Delegating to the wrapped function, func, amounts to passing the validated tool_call.arguments to it. Listing 2.9 implements the delegation portion of __call__().</div></details></section><section class='block heading'><div class='zh'>清单 2.9 实现 SimpleFunctionTool.__call__()（委托）</div><details><summary>Source</summary><div class='source'>Listing 2.9 Implementing SimpleFunctionTool.__call__() (delegation)</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+…  #A
+ 
+ 
+class SimpleFunctionTool(BaseTool):
+    &quot;&quot;&quot;Simple function calling tool.
+ 
+    Turn a Python function into a tool for an LLM.
+    &quot;&quot;&quot;
+    …  #B
+ 
+    def __call__(
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        …  #C
+ 
+        …  #D
+ 
+        try:
+            # execute the function
+            res = self.func(**tool_call.arguments)  #E
+        except Exception as e:
+            error_details = {
+                &quot;error_type&quot;: e.__class__.__name__,
+                &quot;message&quot;: f&quot;Internal error while executing tool: 
+                    {str(e)}&quot;,
+            }
+            return ToolCallResult(  #F
+                tool_call_id=tool_call.id_,
+                content=json.dumps(error_details),
+                error=True,
+            )
+ 
+        return ToolCallResult(
+            tool_call_id=tool_call.id_,
+            content=str(res),
+            error=False,
+        )</code></pre></section><section class='block paragraph'><div class='zh'>至此，我们已经完成了SimpleFunctionTool的实现。<br/>为了庆祝，让我们基于之前编写的hailstone_step_func()函数，完成Hailstone工具的替代实现。</div><details><summary>Source</summary><div class='source'>We have now completed our implementation of SimpleFunctionTool. To celebrate, let’s complete the alternative implementation of the Hailstone tool, based on the hailstone_step_func() we coded earlier.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from llm_agents_from_scratch.tools.simple_function import (
+    SimpleFunctionTool
+)
+ 
+# convert our Python function to a BaseTool
+hailstone_tool = SimpleFunctionTool(hailstone_step_func)
+ 
+print(hailstone_tool.name)
+print(hailstone_tool.description)
+print(hailstone_tool.parameters_json_schema)</code></pre></section><section class='block paragraph'><div class='zh'>生成的打印语句应返回从提供的hailstone_step_func()自动推导出的属性值。</div><details><summary>Source</summary><div class='source'>The resulting print statements should return the values of the attributes that were automatically derived from the supplied hailstone_step_func().</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code>hailstone_step_func  #A
+Performs a single step of the Hailstone sequence.  #B
+{&#x27;type&#x27;: &#x27;object&#x27;, &#x27;properties&#x27;: {&#x27;x&#x27;: {&#x27;type&#x27;: &#x27;number&#x27;}}, &#x27;required&#x27;: [&#x27;x&#x27;]}  #C</code></pre></section><section class='block paragraph'><div class='zh'>使用 ToolCall 对象运行此版本的 hailstone_tool，其工作方式与我们最初的实现相同。</div><details><summary>Source</summary><div class='source'>Running this version of hailstone_tool with a ToolCall object works in the same manner as our original implementation.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from llm_agents_from_scratch.data_structures import ToolCall
+ 
+tool_call = ToolCall(
+    tool_name=&quot;hailstone_fn&quot;,
+    arguments={&quot;x&quot;: 3}
+)
+ 
+res = hailstone_tool(tool_call)  #B</code></pre></section><section class='block paragraph'><div class='zh'>这很棒。<br/>通过SimpleFunctionTool，我们解锁了一种有用的模式，用于从Python函数构建工具，供LLM和LLM代理使用。<br/>让我们通过快速实现其异步对应部分来结束本节。</div><details><summary>Source</summary><div class='source'>This is great. With SimpleFunctionTool, we’ve unlocked a useful pattern for building tools from Python functions that LLMs and LLM agents can use. Let’s wrap up this section by quickly implementing its asynchronous counterpart.</div></details></section><section class='block heading'><div class='zh'>2.2.2 AsyncSimpleFunctionTool</div><details><summary>Source</summary><div class='source'>2.2.2 The AsyncSimpleFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>通过AsyncSimpleFunctionTool，我们的目标是提供与SimpleFunctionTool相同的自动工具创建功能，但适用于异步函数。<br/>AsyncSimpleFunctionTool的心智模型与SimpleFunctionTool类似，后者已在图2.11中说明。<br/>AsyncSimpleFunctionTool的适配版本如图2.15所示。</div><details><summary>Source</summary><div class='source'>With AsyncSimpleFunctionTool, we aim to provide the same automatic tool creation that SimpleFunctionTool enabled, but for asynchronous functions. The mental model for AsyncSimpleFunctionTool is similar to that for SimpleFunctionTool, which was illustrated in figure 2.11. The adapted version for AsyncSimpleFunctionTool is shown in figure 2.15.</div></details></section><section class='block artifact image-anchor caption'><div class='zh'>图2.15 自动包装异步Python函数以创建AsyncBaseTool对象。</div><div class='artifact-note'>图片锚点保留</div><div class='artifact-body'><figure class='artifact-figure'><img class='artifact-image' src='assets/EPUB/images/02__image015.png' alt='Figure 2.15 Wrapping an asynchronous Python function to create an AsyncBaseTool object automatically.'/><figcaption>Figure 2.15 Wrapping an asynchronous Python function to create an AsyncBaseTool object automatically.</figcaption></figure></div></section><section class='block paragraph'><div class='zh'>您可能还记得，从图2.12所示的UML类图中可以看出，AsyncSimpleFunctionTool和SimpleFunctionTool在结构上非常相似。<br/>主要区别在于，AsyncSimpleFunctionTool的func属性存储的是一个异步Python函数。</div><details><summary>Source</summary><div class='source'>You might also recall from the UML class diagrams shown in figure 2.12 that AsyncSimpleFunctionTool and SimpleFunctionTool are structurally very similar. The main difference is that the func attribute of AsyncSimpleFunctionTool stores an asynchronous Python function.</div></details></section><section class='block paragraph'><div class='zh'>这些共享的相似性意味着，在实现AsyncSimpleFunctionTool时，我们可以复用为SimpleFunctionTool编写的大部分代码。<br/>因此，我们仅会介绍这两个类在实现上存在差异的部分。</div><details><summary>Source</summary><div class='source'>All these shared similarities mean that we can reuse much of the code we wrote for SimpleFunctionTool when implementing AsyncSimpleFunctionTool. Because of this, we’ll only cover the parts of the implementation where differences do exist between the two classes.</div></details></section><section class='block paragraph'><div class='zh'>第一个细微差别在于构造函数__init__()的实现上。<br/>具体来说，我们现在为func使用的类型注解更加专门化：Callable[…, Awaitable[Any]]。<br/>这个更新后的注解表明，我们现在处理的是一个返回可通过await关键字等待的对象的函数。<br/>我们之前讨论过的协程就是可等待对象的一个例子。</div><details><summary>Source</summary><div class='source'>The first subtle difference lies in the implementation of the constructor, __init__(). Specifically, the type annotation that we’ll use for func is more specialized now: Callable[…, Awaitable[Any]]. This updated annotation indicates that we’re now working with a function that returns an object that can be awaited by using the await keyword. Coroutines, which we previously discussed, are one example of an awaitable object.</div></details></section><section class='block artifact reference heading'><div class='zh'>提示</div><div class='artifact-note'>参考标识保留</div><div class='artifact-body'>TIP</div></section><section class='block paragraph'><div class='zh'>typing.Awaitable类比typing.Coroutine更为灵活，它表示任何可等待的对象，包括协程、asyncio.Futures和asyncio.Tasks。</div><details><summary>Source</summary><div class='source'>The typing.Awaitable class is more flexible than typing.Coroutine, representing any object that is awaitable, which includes coroutines, asyncio.Futures, and asyncio.Tasks.</div></details></section><section class='block paragraph'><div class='zh'>最后一个区别涉及__call__()方法的实现。<br/>由于包装的函数是异步的，在委托调用时需要使用await关键字。<br/>验证逻辑与SimpleFunctionTool所使用的完全相同。<br/>以下代码展示了AsyncSimpleFunctionTool的实现。</div><details><summary>Source</summary><div class='source'>The next and final difference involves the implementation of __call__(). Since the wrapped function is asynchronous, we’ll need to use the await keyword when delegating to it. The validation logic is identical to that used for SimpleFunctionTool. The following code shows the implementation of AsyncSimpleFunctionTool.</div></details></section><section class='block heading'><div class='zh'>清单2.10 实现AsyncSimpleFunctionTool（仅显示差异部分）</div><details><summary>Source</summary><div class='source'>Listing 2.10 Implementing AsyncSimpleFunctionTool (differences only)</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># llm_agents_from_scratch/tools/simple_function.py
+…  #A
+from llm_agents_from_scratch.base.tool import AsyncBaseTool
+ 
+ 
+class AsyncSimpleFunctionTool(AsyncBaseTool):  #B
+    &quot;&quot;&quot;Async simple function calling tool.
+ 
+    Turn a Python function into a tool for an LLM.
+    &quot;&quot;&quot;
+ 
+    def __init__(
+        self,
+        func: Callable[..., Awaitable[Any]],  #C
+        desc: str | None = None,
+    ) -&gt; None:
+        …  #D
+ 
+    …  #E
+ 
+    async def __call__(  #F
+        self,
+        tool_call: ToolCall,
+        *args: Any,
+        **kwargs: Any,
+    ) -&gt; ToolCallResult:
+        …  #G
+        
+        …  #H
+ 
+        try:
+            # execute the function
+            res = await self.func(**tool_call.arguments)  #I
+        …  #J
+ </code></pre></section><section class='block heading'><div class='zh'>练习2.2 替代异步冰雹序列实现</div><details><summary>Source</summary><div class='source'>Exercise 2.2 Alternative async Hailstone implementation</div></details></section><section class='block paragraph'><div class='zh'>重新实现你在练习2.1中创建的异步Hailstone函数，但这次使用AsyncSimpleFunctionTool。<br/>为此，你需要将hailstone_step_func()转换为异步函数。<br/>在相同输入上测试两个版本，以验证它们返回相同的输出。</div><details><summary>Source</summary><div class='source'>Re-implement the async Hailstone you created in Exercise 2.1, but this time using AsyncSimpleFunctionTool. To do this, you’ll need to turn the hailstone_step_func() into an asynchronous function. Test both versions on the same input to verify they return identical outputs.</div></details></section><section class='block heading'><div class='zh'>2.3 PydanticFunctionTool：BaseTool的另一个子类</div><details><summary>Source</summary><div class='source'>2.3 PydanticFunctionTool: another subclass of BaseTool</div></details></section><section class='block paragraph'><div class='zh'>上一节介绍的SimpleFunctionTool包含了我们从头编写的辅助方法function_signature_to_json_schema()，用于从函数签名自动推导JSON Schema。<br/>在本节最后，我们将提供另一个函数工具包装类PydanticFunctionTool，它具备与SimpleFunctionTool类似的功能，但利用pydantic库实现更强大、更稳健的JSON Schema生成和验证能力。</div><details><summary>Source</summary><div class='source'>The SimpleFunctionTool from the previous section features our from-scratch helper method function_signature_to_json_schema() for automatically deriving JSON Schemas from function signatures. In this final section, we’ll provide an alternative function tool wrapper class, PydanticFunctionTool, with similar capabilities to SimpleFunctionTool, but which leverages the pydantic library for more powerful and robust JSON Schema generation and validation capabilities.</div></details></section><section class='block paragraph'><div class='zh'>PydanticFunctionTool的实现过程与上一节中实现SimpleFunctionTool的过程非常相似，它也继承自BaseTool。<br/>因此，我们不会在此详细介绍PydanticFunctionTool的完整实现，而是将重点放在其在我们框架中的使用模式上。<br/>感兴趣的读者可以参考附录C，那里有完整实现的全面讲解。</div><details><summary>Source</summary><div class='source'>The implementation procedure for PydanticFunctionTool, which also inherits from BaseTool, is very similar to that used to implement SimpleFunctionTool in the previous section. For this reason, we won’t cover the full implementation of PydanticFunctionTool here and instead will focus on its usage pattern in our framework. Interested readers can refer to Appendix C for a comprehensive walkthrough of the full implementation.</div></details></section><section class='block paragraph'><div class='zh'>PydanticFunctionTool 的使用模式与 SimpleFunctionTool 略有不同。<br/>主要区别在于，现在要求通过一个 pydantic.BaseModel 来提供包装函数的参数，如下方代码所示。</div><details><summary>Source</summary><div class='source'>The usage pattern for our PydanticFunctionTool is slightly different than that of SimpleFunctionTool. The main difference is that we’ll now require the parameters of the wrapped function to be supplied via a pydantic.BaseModel as shown in the following code.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from pydantic import BaseModel
+ 
+class MyFuncParams(BaseModel):  #B
+    x: int
+ 
+ 
+def my_func(params: MyFuncParams) -&gt; int:  #C
+    print(params.x)  #D</code></pre></section><section class='block paragraph'><div class='zh'>定义my_func()后，我们可以类似使用SimpleFunctionTool的方式，使用PydanticFunctionTool来包装my_func()，从而自动创建一个可供LLM或LLM代理使用的工具。</div><details><summary>Source</summary><div class='source'>With my_func() defined, we can use PydanticFunctionTool in a similar manner to SimpleFunctionTool to wrap my_func() to automatically create a tool that an LLM or LLM agent can use.</div></details></section><section class='block artifact code'><div class='artifact-note'>代码保持原样</div><pre><code># Included in examples/ch02.ipynb  #A
+from llm_agents_from_scratch.tools.pydantic_function import (
+    PydanticFunctionTool
+)
+ 
+tool = PydanticFunctionTool(my_func)  #B</code></pre></section><section class='block paragraph'><div class='zh'>这个新工具可以接收ToolCall对象，以执行工具调用过程，就像本章中实现的其他工具一样。</div><details><summary>Source</summary><div class='source'>This new tool can take in ToolCall objects to perform the tool-call process like any other tools implemented in this chapter.</div></details></section><section class='block heading'><div class='zh'>练习2.3 将Hailstone工具实现为PydanticFunctionTool</div><details><summary>Source</summary><div class='source'>Exercise 2.3 Hailstone tool as an PydanticFunctionTool</div></details></section><section class='block paragraph'><div class='zh'>重新实现Hailstone工具，但这次使用PydanticFunctionTool。<br/>请参考附录C的使用指南来完成本练习。</div><details><summary>Source</summary><div class='source'>Re-implement the Hailstone tool, but this time using PydanticFunctionTool. Refer to Appendix C for usage guidance to complete this exercise.</div></details></section><section class='block paragraph'><div class='zh'>PydanticFunctionTool的主要优势，并非直接体现在我们刚刚介绍的使用模式中。<br/>相反，其优势体现在parameters_json_schema属性的实现以及__call__()方法内的验证部分。<br/>对于这些功能，我们现在分别通过BaseModel.model_json_schema()和BaseModel.model_validate()，依赖Pydantic更强大的JSON Schema生成和验证能力。<br/>除了PydanticFunctionTool之外，其异步版本AsyncPydanticFunctionTool也已添加到框架中。<br/>这两个类都可以从 llm_agents_from_scratch.tools.pydantic_function 中导入。</div><details><summary>Source</summary><div class='source'>The main benefits of PydanticFunctionTool are not directly obvious from the usage pattern we’ve just covered. Instead, the benefits are seen in the implementation of the parameters_json_schema attribute and the validation portion within __call__(). For these, we now rely on Pydantic’s more robust JSON Schema generation and validation capabilities through BaseModel.model_json_schema() and BaseModel.model_validate(), respectively. In addition to the PydanticFunctionTool, its asynchronous counterpart, AsyncPydanticFunctionTool has also been added to the framework. Both classes can be imported from llm_agents_from_scratch.tools.pydantic_function.</div></details></section><section class='block paragraph'><div class='zh'>在本章中，我们通过实现基础工具接口，并添加了几个实用的工具工厂类，将Python函数转换为可供LLM和LLM代理使用的工具，从而覆盖了大量内容。</div><details><summary>Source</summary><div class='source'>We have covered a lot of ground in this chapter by implementing the base tool interfaces as well as adding a couple of handy tool factory classes that turn Python functions into tools which LLMs and LLM agents can use.</div></details></section><section class='block paragraph'><div class='zh'>在下一章中，我们将关键地实现BaseLLM类及其子类OllamaLLM，这将使我们能够使用Ollama支持的LLM，Ollama是一个流行的开源LLM推理框架。</div><details><summary>Source</summary><div class='source'>In the next chapter, we’ll crucially implement our BaseLLM class as well as the OllamaLLM subclass of it that will allow us to work with LLMs supported by Ollama, a popular open-source LLM inference framework.</div></details></section><section class='block heading'><div class='zh'>2.4 总结</div><details><summary>Source</summary><div class='source'>2.4 Summary</div></details></section><section class='block list_item'><div class='zh'>要构建一个LLM智能体，我们需要构建所需的基础设施，包括抽象表示其用于执行任务的工具。</div><details><summary>Source</summary><div class='source'>To build an LLM agent, we need to build the required infrastructure, including abstractions representing tools that they work with to perform tasks.</div></details></section><section class='block list_item'><div class='zh'>要让LLM能够针对特定工具发出工具调用请求，需要提供以下信息：工具名称、功能描述以及输入参数的JSON模式。</div><details><summary>Source</summary><div class='source'>LLMs require the following information to be able to make a tool call request for a given tool: its name, a description of its functionality, and a JSON Schema of its input parameters.</div></details></section><section class='block list_item'><div class='zh'>BaseTool对象执行单个ToolCall并返回单个ToolCallResult对象。</div><details><summary>Source</summary><div class='source'>A BaseTool object executes a single ToolCall and returns a single ToolCallResult object.</div></details></section><section class='block list_item'><div class='zh'>AsyncBaseTool类专为以异步方式执行其逻辑的工具而设计。</div><details><summary>Source</summary><div class='source'>The AsyncBaseTool class is designed for tools that execute their logic asynchronously.</div></details></section><section class='block list_item'><div class='zh'>SimpleFunctionTool 是一个包装类，用于将 Python 函数转换为 BaseTool 对象。</div><details><summary>Source</summary><div class='source'>The SimpleFunctionTool is a wrapper class for turning Python functions into a BaseTool objects.</div></details></section><section class='block list_item'><div class='zh'>AsyncSimpleFunctionTool 是一个包装类，用于将异步 Python 函数转换为 AsyncBaseTool 对象。</div><details><summary>Source</summary><div class='source'>The AsyncSimpleFunctionTool is a wrapper class for turning async Python functions into a AsyncBaseTool objects.</div></details></section><section class='block list_item'><div class='zh'>PydanticFunctionTool与SimpleFunctionTool类似，但它包装的是一个我们称为PydanticFunction的特殊函数。<br/>这些函数通过~pydantic.BaseModel接收输入参数以执行逻辑。</div><details><summary>Source</summary><div class='source'>The PydanticFunctionTool is similar to the SimpleFunctionTool, but wraps a special function we called PydanticFunction instead. These functions get passed their input parameters for logic execution through a ~pydantic.BaseModel.</div></details></section></section></main></body></html>

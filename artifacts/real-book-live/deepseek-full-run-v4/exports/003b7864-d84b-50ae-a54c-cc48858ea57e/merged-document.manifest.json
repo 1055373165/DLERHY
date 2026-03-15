@@ -1,0 +1,334 @@
+{
+  "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+  "title": "Build an AI Agent (From Scratch)",
+  "author": "Jungjun Hur and Younghee Song",
+  "export_type": "merged_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v4/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/merged-document.html",
+  "chapter_count": 11,
+  "translation_usage_summary": {
+    "run_count": 1802,
+    "succeeded_run_count": 1802,
+    "total_token_in": 1611997,
+    "total_token_out": 494921,
+    "total_cost_usd": 0.618079,
+    "total_latency_ms": 15925168,
+    "avg_latency_ms": 8837.496,
+    "latest_run_at": "2026-03-14T22:06:21.139775"
+  },
+  "translation_usage_breakdown": [
+    {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 1802,
+      "succeeded_run_count": 1802,
+      "total_token_in": 1611997,
+      "total_token_out": 494921,
+      "total_cost_usd": 0.618079,
+      "total_latency_ms": 15925168,
+      "avg_latency_ms": 8837.496,
+      "latest_run_at": "2026-03-14T22:06:21.139775"
+    }
+  ],
+  "translation_usage_timeline": [
+    {
+      "bucket_start": "2026-03-14",
+      "bucket_granularity": "day",
+      "run_count": 1802,
+      "succeeded_run_count": 1802,
+      "total_token_in": 1611997,
+      "total_token_out": 494921,
+      "total_cost_usd": 0.618079,
+      "total_latency_ms": 15925168,
+      "avg_latency_ms": 8837.496
+    }
+  ],
+  "translation_usage_highlights": {
+    "top_cost_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 1802,
+      "succeeded_run_count": 1802,
+      "total_token_in": 1611997,
+      "total_token_out": 494921,
+      "total_cost_usd": 0.618079,
+      "total_latency_ms": 15925168,
+      "avg_latency_ms": 8837.496,
+      "latest_run_at": "2026-03-14T22:06:21.139775"
+    },
+    "top_latency_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 1802,
+      "succeeded_run_count": 1802,
+      "total_token_in": 1611997,
+      "total_token_out": 494921,
+      "total_cost_usd": 0.618079,
+      "total_latency_ms": 15925168,
+      "avg_latency_ms": 8837.496,
+      "latest_run_at": "2026-03-14T22:06:21.139775"
+    },
+    "top_volume_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 1802,
+      "succeeded_run_count": 1802,
+      "total_token_in": 1611997,
+      "total_token_out": 494921,
+      "total_cost_usd": 0.618079,
+      "total_latency_ms": 15925168,
+      "avg_latency_ms": 8837.496,
+      "latest_run_at": "2026-03-14T22:06:21.139775"
+    }
+  },
+  "issue_status_summary": {
+    "issue_count": 2,
+    "open_issue_count": 0,
+    "resolved_issue_count": 2,
+    "blocking_issue_count": 1
+  },
+  "render_summary": {
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 1797,
+      "source_artifact_full_width": 206,
+      "reference_preserve_with_translated_label": 5
+    },
+    "expected_source_only_block_count": 211
+  },
+  "chapters": [
+    {
+      "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+      "ordinal": 1,
+      "title_src": null,
+      "status": "exported",
+      "block_count": 0,
+      "sentence_count": 0,
+      "render_block_count": 0,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+      "ordinal": 2,
+      "title_src": "Build an AI Agent (From Scratch)",
+      "status": "exported",
+      "block_count": 6,
+      "sentence_count": 6,
+      "render_block_count": 6,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+      "ordinal": 3,
+      "title_src": "welcome",
+      "status": "exported",
+      "block_count": 8,
+      "sentence_count": 21,
+      "render_block_count": 8,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+      "ordinal": 4,
+      "title_src": "Brief contents",
+      "status": "exported",
+      "block_count": 14,
+      "sentence_count": 14,
+      "render_block_count": 14,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+      "ordinal": 5,
+      "title_src": "1 What is an AI agent?",
+      "status": "exported",
+      "block_count": 179,
+      "sentence_count": 400,
+      "render_block_count": 179,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+      "ordinal": 6,
+      "title_src": "2 The brain of AI agents: LLMs",
+      "status": "exported",
+      "block_count": 285,
+      "sentence_count": 538,
+      "render_block_count": 285,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+      "ordinal": 7,
+      "title_src": "3 Enabling actions: Tool use",
+      "status": "exported",
+      "block_count": 322,
+      "sentence_count": 595,
+      "render_block_count": 322,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+      "ordinal": 8,
+      "title_src": "4 Implementing a basic ReAct agent",
+      "status": "exported",
+      "block_count": 321,
+      "sentence_count": 569,
+      "render_block_count": 321,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+      "ordinal": 9,
+      "title_src": "5 Building knowledge bases with RAG",
+      "status": "exported",
+      "block_count": 279,
+      "sentence_count": 575,
+      "render_block_count": 279,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+      "ordinal": 10,
+      "title_src": "6 Adding memory to your agent",
+      "status": "exported",
+      "block_count": 427,
+      "sentence_count": 761,
+      "render_block_count": 427,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+      "ordinal": 11,
+      "title_src": "7 Planning and reflection for complex tasks",
+      "status": "exported",
+      "block_count": 167,
+      "sentence_count": 328,
+      "render_block_count": 167,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    }
+  ]
+}

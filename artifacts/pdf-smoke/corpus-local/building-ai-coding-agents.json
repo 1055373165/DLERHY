@@ -1,0 +1,2639 @@
+{
+  "case_name": "building-ai-coding-agents",
+  "case_status": "passed",
+  "expectation_failures": [],
+  "source_path": "/Users/smy/Downloads/zlibrary/Building AI Coding Agents for the Terminal Scaffolding, Harness, Context Engineering, and Lessons Learned (Nghi D. Q. Bui) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "profile": {
+    "pdf_kind": "text_pdf",
+    "page_count": 81,
+    "has_extractable_text": true,
+    "outline_present": false,
+    "layout_risk": "medium",
+    "ocr_required": false,
+    "extractor_kind": "basic",
+    "average_text_density": 3494.185,
+    "average_span_count": 1169.541,
+    "multi_column_page_count": 0,
+    "fragment_page_count": 25,
+    "suspicious_page_numbers": [
+      2,
+      6,
+      7,
+      8,
+      10,
+      14,
+      17,
+      19,
+      20,
+      21,
+      23,
+      24,
+      26,
+      29,
+      30,
+      31,
+      33,
+      35,
+      38,
+      39,
+      40,
+      48,
+      49,
+      50,
+      52
+    ],
+    "recovery_lane": null,
+    "trailing_reference_page_count": 8,
+    "academic_paper_candidate": false
+  },
+  "bootstrap": {
+    "status": "succeeded",
+    "document_id": "767f72ab-3785-5a71-9f1b-846bc9896cfa",
+    "source_type": "pdf_text",
+    "chapter_count": 6,
+    "block_count": 208,
+    "sentence_count": 1826,
+    "chapters": [
+      {
+        "ordinal": 1,
+        "title_src": "Chapter 1",
+        "risk_level": "high",
+        "source_page_start": 1,
+        "source_page_end": 51,
+        "pdf_section_family": "body",
+        "structure_flags": [
+          "layout_risk_medium",
+          "cross_page_repaired"
+        ]
+      },
+      {
+        "ordinal": 2,
+        "title_src": "References",
+        "risk_level": "high",
+        "source_page_start": 52,
+        "source_page_end": 59,
+        "pdf_section_family": "references",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ]
+      },
+      {
+        "ordinal": 3,
+        "title_src": "Appendix A Complete Tool Catalog",
+        "risk_level": "high",
+        "source_page_start": 60,
+        "source_page_end": 63,
+        "pdf_section_family": "appendix",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_appendix",
+          "page_family_appendix",
+          "page_family_source_appendix_intro",
+          "page_family_source_continuation"
+        ]
+      },
+      {
+        "ordinal": 4,
+        "title_src": "Appendix K Full System Prompt Templates",
+        "risk_level": "high",
+        "source_page_start": 64,
+        "source_page_end": 70,
+        "pdf_section_family": "appendix",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_appendix",
+          "page_family_appendix",
+          "page_family_source_appendix_intro",
+          "page_family_source_continuation"
+        ]
+      },
+      {
+        "ordinal": 5,
+        "title_src": "Appendix K.3 Thinking Mode Templates",
+        "risk_level": "high",
+        "source_page_start": 71,
+        "source_page_end": 72,
+        "pdf_section_family": "appendix",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_appendix",
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ]
+      },
+      {
+        "ordinal": 6,
+        "title_src": "Appendix K.4 Specialized Standalone Templates",
+        "risk_level": "high",
+        "source_page_start": 73,
+        "source_page_end": 81,
+        "pdf_section_family": "appendix",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_appendix",
+          "footnote_orphaned",
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ]
+      }
+    ]
+  },
+  "parse_summary": {
+    "title": "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned",
+    "chapter_count": 6,
+    "chapter_titles": [
+      "Chapter 1",
+      "References",
+      "Appendix A Complete Tool Catalog",
+      "Appendix K Full System Prompt Templates",
+      "Appendix K.3 Thinking Mode Templates",
+      "Appendix K.4 Specialized Standalone Templates"
+    ],
+    "chapter_section_families": [
+      "body",
+      "references",
+      "appendix",
+      "appendix",
+      "appendix",
+      "appendix"
+    ],
+    "extractor_kind": "basic",
+    "page_count": 81,
+    "page_families": {
+      "1": "body",
+      "2": "body",
+      "3": "body",
+      "4": "body",
+      "5": "body",
+      "6": "body",
+      "7": "body",
+      "8": "body",
+      "9": "body",
+      "10": "body",
+      "11": "body",
+      "12": "body",
+      "13": "body",
+      "14": "body",
+      "15": "body",
+      "16": "body",
+      "17": "body",
+      "18": "body",
+      "19": "body",
+      "20": "body",
+      "21": "body",
+      "22": "body",
+      "23": "body",
+      "24": "body",
+      "25": "body",
+      "26": "body",
+      "27": "body",
+      "28": "body",
+      "29": "body",
+      "30": "body",
+      "31": "body",
+      "32": "body",
+      "33": "body",
+      "34": "body",
+      "35": "body",
+      "36": "body",
+      "37": "body",
+      "38": "body",
+      "39": "body",
+      "40": "body",
+      "41": "body",
+      "42": "body",
+      "43": "body",
+      "44": "body",
+      "45": "body",
+      "46": "body",
+      "47": "body",
+      "48": "body",
+      "49": "body",
+      "50": "body",
+      "51": "body",
+      "52": "references",
+      "53": "references",
+      "54": "references",
+      "55": "references",
+      "56": "references",
+      "57": "references",
+      "58": "references",
+      "59": "references",
+      "60": "appendix",
+      "61": "appendix",
+      "62": "appendix",
+      "63": "appendix",
+      "64": "appendix",
+      "65": "appendix",
+      "66": "appendix",
+      "67": "appendix",
+      "68": "appendix",
+      "69": "appendix",
+      "70": "appendix",
+      "71": "appendix",
+      "72": "appendix",
+      "73": "appendix",
+      "74": "appendix",
+      "75": "appendix",
+      "76": "appendix",
+      "77": "appendix",
+      "78": "appendix",
+      "79": "appendix",
+      "80": "appendix",
+      "81": "appendix"
+    },
+    "layout_signals": {
+      "1": [],
+      "2": [
+        "column_fragment"
+      ],
+      "3": [],
+      "4": [],
+      "5": [],
+      "6": [
+        "column_fragment"
+      ],
+      "7": [
+        "column_fragment"
+      ],
+      "8": [
+        "column_fragment"
+      ],
+      "9": [],
+      "10": [
+        "column_fragment"
+      ],
+      "11": [],
+      "12": [],
+      "13": [],
+      "14": [
+        "column_fragment"
+      ],
+      "15": [],
+      "16": [],
+      "17": [
+        "column_fragment"
+      ],
+      "18": [],
+      "19": [
+        "column_fragment"
+      ],
+      "20": [
+        "column_fragment"
+      ],
+      "21": [
+        "column_fragment"
+      ],
+      "22": [],
+      "23": [
+        "column_fragment"
+      ],
+      "24": [
+        "column_fragment"
+      ],
+      "25": [],
+      "26": [
+        "column_fragment"
+      ],
+      "27": [],
+      "28": [],
+      "29": [
+        "column_fragment"
+      ],
+      "30": [
+        "column_fragment"
+      ],
+      "31": [
+        "column_fragment"
+      ],
+      "32": [],
+      "33": [
+        "column_fragment"
+      ],
+      "34": [],
+      "35": [
+        "column_fragment"
+      ],
+      "36": [],
+      "37": [],
+      "38": [
+        "column_fragment"
+      ],
+      "39": [
+        "column_fragment"
+      ],
+      "40": [
+        "column_fragment"
+      ],
+      "41": [],
+      "42": [],
+      "43": [],
+      "44": [],
+      "45": [],
+      "46": [],
+      "47": [],
+      "48": [
+        "column_fragment"
+      ],
+      "49": [
+        "column_fragment"
+      ],
+      "50": [
+        "column_fragment"
+      ],
+      "51": [],
+      "52": [
+        "column_fragment"
+      ],
+      "53": [],
+      "54": [],
+      "55": [],
+      "56": [],
+      "57": [],
+      "58": [],
+      "59": [],
+      "60": [],
+      "61": [],
+      "62": [],
+      "63": [],
+      "64": [],
+      "65": [],
+      "66": [],
+      "67": [],
+      "68": [],
+      "69": [],
+      "70": [],
+      "71": [],
+      "72": [],
+      "73": [],
+      "74": [],
+      "75": [],
+      "76": [],
+      "77": [],
+      "78": [],
+      "79": [],
+      "80": [],
+      "81": []
+    },
+    "layout_suspect_pages": [
+      2,
+      6,
+      7,
+      8,
+      10,
+      14,
+      17,
+      19,
+      20,
+      21,
+      23,
+      24,
+      26,
+      29,
+      30,
+      31,
+      33,
+      35,
+      38,
+      39,
+      40,
+      48,
+      49,
+      50,
+      52
+    ],
+    "pdf_pages": [
+      {
+        "page_number": 1,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 2,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 3,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 4,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 5,
+        "raw_block_count": 7,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 6,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 7,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 8,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 9,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 10,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 11,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 12,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 13,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 14,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 15,
+        "raw_block_count": 3,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 16,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 17,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 18,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 19,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 20,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 21,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 22,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 23,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 24,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 25,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 26,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 27,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 28,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 29,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 30,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 31,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 32,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 33,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 34,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 35,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 36,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 37,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 38,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 39,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 40,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 41,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 42,
+        "raw_block_count": 4,
+        "recovered_block_count": 4,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3,
+          "footer": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 43,
+        "raw_block_count": 11,
+        "recovered_block_count": 11,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 11
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 44,
+        "raw_block_count": 7,
+        "recovered_block_count": 7,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 7
+        },
+        "recovery_flags": [
+          "cross_page_repaired"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 45,
+        "raw_block_count": 6,
+        "recovered_block_count": 6,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 6
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 46,
+        "raw_block_count": 5,
+        "recovered_block_count": 5,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 47,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 48,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 49,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 50,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 51,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 52,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 53,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 54,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 55,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 56,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 57,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 58,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 59,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 60,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "appendix",
+        "page_family_source": "appendix_intro",
+        "page_family_heading": "Appendix A Complete Tool Catalog",
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_appendix_intro"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 61,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 62,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 63,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 64,
+        "raw_block_count": 9,
+        "recovered_block_count": 9,
+        "page_family": "appendix",
+        "page_family_source": "appendix_intro",
+        "page_family_heading": "Appendix K Full System Prompt Templates",
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 8,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_appendix_intro"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 65,
+        "raw_block_count": 11,
+        "recovered_block_count": 10,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 9,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [
+          {
+            "label": "K.2.2",
+            "depth": 2,
+            "title": "Interaction and Tool Guidance \\050Priority 40\\22650\\051",
+            "full_title": "Appendix K.2.2 Interaction and Tool Guidance \\050Priority 40\\22650\\051"
+          }
+        ],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 66,
+        "raw_block_count": 6,
+        "recovered_block_count": 5,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [
+          {
+            "label": "K.2.3",
+            "depth": 2,
+            "title": "Code Quality",
+            "full_title": "Appendix K.2.3 Code Quality"
+          }
+        ],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 67,
+        "raw_block_count": 7,
+        "recovered_block_count": 5,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 68,
+        "raw_block_count": 4,
+        "recovered_block_count": 3,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 69,
+        "raw_block_count": 5,
+        "recovered_block_count": 4,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [
+          {
+            "label": "K.2.4",
+            "depth": 2,
+            "title": "Conditional Sections \\050Priority 70\\22680\\051",
+            "full_title": "Appendix K.2.4 Conditional Sections \\050Priority 70\\22680\\051"
+          }
+        ],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 70,
+        "raw_block_count": 8,
+        "recovered_block_count": 6,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 71,
+        "raw_block_count": 12,
+        "recovered_block_count": 10,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 9,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [
+          {
+            "label": "K.2.5",
+            "depth": 2,
+            "title": "Context Awar",
+            "full_title": "Appendix K.2.5 Context Awar"
+          }
+        ],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 72,
+        "raw_block_count": 7,
+        "recovered_block_count": 7,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 6,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 73,
+        "raw_block_count": 9,
+        "recovered_block_count": 9,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 7,
+          "footer": 2
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 74,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "footer": 1,
+          "footnote": 1
+        },
+        "recovery_flags": [
+          "footnote_orphaned",
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 1,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 75,
+        "raw_block_count": 5,
+        "recovered_block_count": 5,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 76,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 77,
+        "raw_block_count": 4,
+        "recovered_block_count": 4,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 78,
+        "raw_block_count": 21,
+        "recovered_block_count": 5,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 79,
+        "raw_block_count": 7,
+        "recovered_block_count": 7,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 6,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 80,
+        "raw_block_count": 10,
+        "recovered_block_count": 9,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 7,
+          "footer": 1,
+          "footnote": 1
+        },
+        "recovery_flags": [
+          "footnote_orphaned",
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 1,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 81,
+        "raw_block_count": 7,
+        "recovered_block_count": 7,
+        "page_family": "appendix",
+        "page_family_source": "continuation",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 6,
+          "footer": 1
+        },
+        "recovery_flags": [
+          "page_family_appendix",
+          "page_family_source_continuation"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  }
+}

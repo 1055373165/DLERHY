@@ -1,0 +1,245 @@
+{
+  "root_count": 1,
+  "scanned_file_count": 8,
+  "candidate_count": 8,
+  "candidate_kind_counts": {
+    "pass_path": 1,
+    "ocr_path": 7
+  },
+  "recommended_case_count": 1,
+  "recommended_cases": [
+    {
+      "name": "llms-in-production-from-language-models-to-successful-products-christopher-brousseau-matthew-sharp-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 88,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Long document will be more expensive to use as a recurring smoke sample."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 456,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 2822.48,
+        "average_span_count": 961.203,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      },
+      "suggested_manifest_case": {
+        "name": "llms-in-production-from-language-models-to-successful-products-christopher-brousseau-matthew-sharp-z-library-sk-1lib-sk-z-lib-sk",
+        "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Principles of Building AI Agents (Sam Bhagwat) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 18,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "mixed_pdf",
+        "page_count": 149,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "medium",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 1917.933,
+        "average_span_count": 744.198,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic AI For Dummies® (Pam Baker) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic AI in Enterprise Harnessing Agentic AI for Business Transformation (Sumit Ranjan, Divya Chembachere etc.) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gullí) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMOps Managing Large Language Models in Production (Abi Aryan) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Mastering AI Agents A comprehensive guide for evaluating AI agents (Pratik Bhavsar) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Visualizing Generative AI How AI Paints, Writes, and Assists (Priyanka Vergadia, Valliappa Lakshmanan) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": []
+      }
+    }
+  ]
+}

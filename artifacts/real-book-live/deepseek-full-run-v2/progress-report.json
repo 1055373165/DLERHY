@@ -1,0 +1,148 @@
+{
+  "generated_at": "2026-03-14T19:10:21.285537+00:00",
+  "source_path": "/Users/smy/project/book-agent/books/build-an-ai-agent.epub",
+  "document": {
+    "id": "003b7864d84b50aea54ccc48858ea57e",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song"
+  },
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "progress": {
+    "packet_count": 1802,
+    "translated_packets": 20,
+    "completed_batches": 1,
+    "batch_size": 20,
+    "estimated_total_batches": 91,
+    "completion_ratio": 0.011099
+  },
+  "throughput_baseline": {
+    "first_run_at": "2026-03-14 19:03:57.644963",
+    "last_run_at": "2026-03-14 19:07:53.275539",
+    "observed_seconds_for_first_20_packets": 235.630576,
+    "estimated_hours_for_full_book_single_thread": 5.9
+  },
+  "artifacts": {
+    "database": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v2/full.sqlite",
+    "exports_dir": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v2/exports"
+  },
+  "samples": [
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "MEAP Edition Manning Early Access Program",
+      "text_zh": "MEAP版本 Manning早期访问计划",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "Build an AI Agent (From Scratch)",
+      "text_zh": "构建AI智能体（从零开始）",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "Agents that reason, plan, and act autonomously",
+      "text_zh": "能够推理、规划并自主行动的智能体",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "Version 3",
+      "text_zh": "版本 3",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "Copyright 2026 Manning Publications",
+      "text_zh": "© 2026 Manning Publications",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "source_text": "For more information on this and other Manning titles go to manning.com.",
+      "text_zh": "有关本书及其他Manning出版物的更多信息，请访问manning.com。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "welcome",
+      "text_zh": "欢迎",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "Thank you for purchasing the MEAP edition of Build an AI Agent (From Scratch).",
+      "text_zh": "感谢您购买《从零开始构建AI智能体》的MEAP版本。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "This book is not about giving you yet another tool to memorize.",
+      "text_zh": "本书并非旨在提供又一个需要死记硬背的工具。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "I hope this book helps you cut through the noise in this fast-moving field and gives you both confidence and clarity in working with AI agents.",
+      "text_zh": "希望本书能帮助您在这个快速发展的领域中拨开迷雾，让您在处理AI智能体时既充满信心又思路清晰。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "—Younghee Song & Jungjun Hur",
+      "text_zh": "Younghee Song & Jungjun Hur",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "If you are comfortable with the basics of Python—things like writing simple functions and classes—know how to call and use APIs, and have some familiarity with Git and GitHub, you’ll be more than ready to follow along.",
+      "text_zh": "如果你熟悉Python的基础知识——比如编写简单的函数和类——知道如何调用和使用API，并且对Git和GitHub有一定了解，那么你完全有能力跟上本书的内容。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "We call this process Context Engineering.",
+      "text_zh": "我们将这一过程称为上下文工程。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "I realized that if I only stayed a user of these frameworks, I would never truly understand how they worked or how to evaluate which ones to trust.",
+      "text_zh": "我意识到，如果我只是停留在使用这些框架的层面，就永远无法真正理解它们的工作原理，也无法评估哪些框架值得信赖。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "When I first started exploring the world of AI agents, I found myself overwhelmed.",
+      "text_zh": "当我最初开始探索AI智能体领域时，我感到不知所措。",
+      "model_name": "deepseek-chat"
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "source_text": "As we build this framework, you’ll also discover that the essence of an agent lies in delivering the right context to an LLM so that its intelligence can be fully utilized.",
+      "text_zh": "在构建这一框架的过程中，您还会发现智能体的本质在于为大型语言模型提供恰当的上下文，从而使其智能得到充分发挥。",
+      "model_name": "deepseek-chat"
+    }
+  ],
+  "notes": [
+    "This report reflects committed live DeepSeek translations from the first completed batch.",
+    "The full-book run was intentionally stopped after the first committed batch because the observed single-thread throughput implies a 5h+ runtime.",
+    "usage tokens/cost are still zero in persisted records because provider usage parsing has not been implemented yet for this backend path."
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright\\(\\) as p:\n    browser = p.chromium.launch\\(headless=True\\)\n    page = browser.new_page\\(viewport={'width': 1440, 'height': 900}\\)\n    page.goto\\('http://127.0.0.1:8000'\\)\n    page.wait_for_load_state\\('networkidle'\\)\n    page.screenshot\\(path='/tmp/book-agent-current-full.png', full_page=True\\)\n    page.screenshot\\(path='/tmp/book-agent-current-hero.png'\\)\n    browser.close\\(\\)\nprint\\('Screenshots saved'\\)\n\")",
+      "Bash(python3 -c \"\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright\\(\\) as p:\n    browser = p.chromium.launch\\(headless=True\\)\n    page = browser.new_page\\(viewport={'width': 1440, 'height': 900}\\)\n    page.goto\\('http://127.0.0.1:8000'\\)\n    page.wait_for_load_state\\('networkidle'\\)\n    page.screenshot\\(path='/tmp/book-agent-v2-hero.png'\\)\n    page.screenshot\\(path='/tmp/book-agent-v2-full.png', full_page=True\\)\n    browser.close\\(\\)\nprint\\('Screenshots saved'\\)\n\")",
+      "Bash(python3 -c \"\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright\\(\\) as p:\n    browser = p.chromium.launch\\(headless=True\\)\n    page = browser.new_page\\(viewport={'width': 1440, 'height': 900}\\)\n    page.goto\\('http://127.0.0.1:8000'\\)\n    page.wait_for_load_state\\('networkidle'\\)\n    page.screenshot\\(path='/tmp/book-agent-v3-hero.png'\\)\n    page.evaluate\\('window.scrollTo\\(0, 600\\)'\\)\n    page.wait_for_timeout\\(300\\)\n    page.screenshot\\(path='/tmp/book-agent-v3-mid.png'\\)\n    page.screenshot\\(path='/tmp/book-agent-v3-full.png', full_page=True\\)\n    browser.close\\(\\)\nprint\\('Screenshots saved'\\)\n\")"
+    ]
+  }
+}

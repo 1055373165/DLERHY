@@ -1,0 +1,186 @@
+{
+  "chapter_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+  "chapter_title": "Build a Multi-Agent System (from Scratch)",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "4a6b662e-e1db-5cbc-a28d-d5fb617fd547",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "009421f8-2c14-5b5e-8749-af6cd063377a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e4f8983-3aa9-5f88-a7a6-16e900ce418c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7cecb275-43c9-5638-a133-0f7439372479",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a26cc048-0d52-54eb-858a-3b56bc9b95eb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d4fb2af1-6bc1-5793-8c64-137de2320ef2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e197c927-3f42-56d4-913a-55158e9cf61c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "e0b7815a-6962-5e87-9ab9-0dfe84a4f1ed",
+      "source_text": "Build a Multi-Agent System (from Scratch)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从零开始构建多智能体系统"
+      ]
+    },
+    {
+      "sentence_id": "d8bee2a7-7472-5d42-a595-1ecf230a455d",
+      "source_text": "welcome",
+      "sentence_status": "translated",
+      "target_texts": [
+        "欢迎"
+      ]
+    },
+    {
+      "sentence_id": "547082fb-59f4-5346-baf2-398540f3633c",
+      "source_text": "1_What_are_LLM_Agents_and_Multi-Agent_Systems?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1_什么是LLM智能体与多智能体系统？"
+      ]
+    },
+    {
+      "sentence_id": "6c7d3edf-297e-59c3-8619-a7e8436c5581",
+      "source_text": "2_Working_with_Tools",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2_使用工具"
+      ]
+    },
+    {
+      "sentence_id": "e1cbe928-6ae9-5219-945f-d4621852edbb",
+      "source_text": "3_Working_with_LLMs",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3_使用大型语言模型"
+      ]
+    },
+    {
+      "sentence_id": "8c79a3a7-6fa7-58c5-a8aa-936254009e1a",
+      "source_text": "Appendix_C._Implementing_The_PydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "附录C. 实现PydanticFunctionTool"
+      ]
+    }
+  ],
+  "issues": []
+}

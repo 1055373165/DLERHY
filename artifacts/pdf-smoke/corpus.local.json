@@ -1,0 +1,333 @@
+{
+  "cases": [
+    {
+      "name": "ai-agents-in-action",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "skip_reason": "local_low_risk_text_pdf_sample_missing",
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        },
+        {
+          "path": "bootstrap.chapter_count",
+          "equals": 16
+        },
+        {
+          "path": "parse_summary.chapter_count",
+          "equals": 16
+        },
+        {
+          "path": "parse_summary.chapter_titles.0",
+          "equals": "Front Matter"
+        },
+        {
+          "path": "parse_summary.chapter_titles.1",
+          "equals": "Introduction to agents and their world"
+        },
+        {
+          "path": "parse_summary.chapter_titles.11",
+          "equals": "Agent planning and feedback"
+        },
+        {
+          "path": "parse_summary.chapter_titles.12",
+          "equals": "Appendix A Accessing OpenAI"
+        },
+        {
+          "path": "parse_summary.chapter_titles.13",
+          "equals": "Appendix B Python development"
+        },
+        {
+          "path": "parse_summary.chapter_titles.14",
+          "equals": "Index"
+        },
+        {
+          "path": "parse_summary.chapter_titles.15",
+          "equals": "Back Matter"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.15",
+          "equals": "backmatter"
+        },
+        {
+          "path": "parse_summary.page_families.123",
+          "equals": "body"
+        },
+        {
+          "path": "parse_summary.page_families.327",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.page_families.333",
+          "equals": "index"
+        },
+        {
+          "path": "parse_summary.page_families.340",
+          "equals": "backmatter"
+        },
+        {
+          "path": "parse_summary.page_families.342",
+          "equals": "backmatter"
+        }
+      ]
+    },
+    {
+      "name": "attention-is-all-you-need",
+      "source_path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+      "optional": true,
+      "skip_reason": "local_text_pdf_sample_missing",
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.layout_risk",
+          "equals": "medium"
+        },
+        {
+          "path": "profile.recovery_lane",
+          "equals": "academic_paper"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        },
+        {
+          "path": "bootstrap.chapter_count",
+          "equals": 2
+        },
+        {
+          "path": "parse_summary.chapter_count",
+          "equals": 2
+        },
+        {
+          "path": "parse_summary.page_families.1",
+          "equals": "body"
+        },
+        {
+          "path": "parse_summary.page_families.10",
+          "equals": "references"
+        },
+        {
+          "path": "parse_summary.page_families.11",
+          "equals": "references"
+        }
+      ]
+    },
+    {
+      "name": "jim-simons-book-scan",
+      "source_path": "/Users/smy/Downloads/洞悉市場的人：量化交易之父吉姆 · 西蒙斯與文藝復興公司的故事 = The Man Who Solved the Market How Jim Simons Launched the Quant Revolution (古格里 · 祖克曼 (Gregor... (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "skip_reason": "local_scanned_pdf_sample_missing",
+      "include_parse_summary": false,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "scanned_pdf"
+        },
+        {
+          "path": "profile.ocr_required",
+          "equals": true
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "high"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "failed"
+        },
+        {
+          "path": "bootstrap.error",
+          "contains": "OCR-required"
+        }
+      ]
+    },
+    {
+      "name": "building-ai-coding-agents",
+      "source_path": "/Users/smy/Downloads/zlibrary/Building AI Coding Agents for the Terminal Scaffolding, Harness, Context Engineering, and Lessons Learned (Nghi D. Q. Bui) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "skip_reason": "local_medium_risk_text_pdf_sample_missing",
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "medium"
+        },
+        {
+          "path": "profile.extractor_kind",
+          "equals": "basic"
+        },
+        {
+          "path": "profile.multi_column_page_count",
+          "equals": 0
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        },
+        {
+          "path": "bootstrap.chapter_count",
+          "equals": 6
+        },
+        {
+          "path": "parse_summary.chapter_count",
+          "equals": 6
+        },
+        {
+          "path": "parse_summary.chapter_titles.1",
+          "equals": "References"
+        },
+        {
+          "path": "parse_summary.chapter_titles.2",
+          "equals": "Appendix A Complete Tool Catalog"
+        },
+        {
+          "path": "parse_summary.chapter_titles.3",
+          "equals": "Appendix K Full System Prompt Templates"
+        },
+        {
+          "path": "parse_summary.chapter_titles.4",
+          "equals": "Appendix K.3 Thinking Mode Templates"
+        },
+        {
+          "path": "parse_summary.chapter_titles.5",
+          "equals": "Appendix K.4 Specialized Standalone Templates"
+        },
+        {
+          "path": "parse_summary.page_families.52",
+          "equals": "references"
+        },
+        {
+          "path": "parse_summary.page_families.60",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.layout_signals.2",
+          "contains": "column_fragment"
+        }
+      ]
+    },
+    {
+      "name": "llms-in-production",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "skip_reason": "local_long_book_text_pdf_sample_missing",
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "profile.extractor_kind",
+          "equals": "basic"
+        },
+        {
+          "path": "profile.multi_column_page_count",
+          "equals": 0
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        },
+        {
+          "path": "bootstrap.chapter_count",
+          "equals": 18
+        },
+        {
+          "path": "parse_summary.chapter_count",
+          "equals": 18
+        },
+        {
+          "path": "parse_summary.chapter_titles.0",
+          "equals": "Front Matter"
+        },
+        {
+          "path": "parse_summary.chapter_titles.1",
+          "equals": "Words awakening: Why large language models have captured attention"
+        },
+        {
+          "path": "parse_summary.chapter_titles.7",
+          "equals": "Prompt engineering: Becoming an LLM whisperer"
+        },
+        {
+          "path": "parse_summary.chapter_titles.13",
+          "equals": "Appendix A"
+        },
+        {
+          "path": "parse_summary.chapter_titles.14",
+          "equals": "Appendix B Reinforcement learning"
+        },
+        {
+          "path": "parse_summary.chapter_titles.15",
+          "equals": "Appendix C"
+        },
+        {
+          "path": "parse_summary.chapter_titles.16",
+          "equals": "Index"
+        },
+        {
+          "path": "parse_summary.chapter_titles.17",
+          "equals": "Back Matter"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.0",
+          "equals": "frontmatter"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.13",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.16",
+          "equals": "index"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.17",
+          "equals": "backmatter"
+        },
+        {
+          "path": "parse_summary.page_families.430",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.page_families.438",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.page_families.442",
+          "equals": "appendix"
+        },
+        {
+          "path": "parse_summary.page_families.449",
+          "equals": "index"
+        },
+        {
+          "path": "parse_summary.page_families.455",
+          "equals": "backmatter"
+        },
+        {
+          "path": "parse_summary.page_families.456",
+          "equals": "backmatter"
+        }
+      ]
+    }
+  ]
+}

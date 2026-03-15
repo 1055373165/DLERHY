@@ -1,0 +1,327 @@
+{
+  "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+  "chapter_title": "Brief contents",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "e83cb5e8-032c-57b0-b1a8-fbc548491087",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "7cc3f9dd-28a7-59f7-a007-a512652a1264",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "version": 1
+      },
+      {
+        "snapshot_id": "dc87fe8c-3394-5f05-be6a-65f77300f858",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "e8a322ab-e34e-55be-8f2e-0b15fdf7e451",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "049d5273-c191-5911-9ef4-29845f0b5695",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "07ef87c7-dc56-53f5-80a3-8b5a460ea02f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0ae5f50a-bd43-5764-874d-c6b87754535e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "20aab512-8356-55d3-b998-3b4dabf94b02",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "47ca6262-4242-5c54-81d6-8fb8d2440366",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "720c2942-1dc4-5ec7-b78d-50db4d86be53",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "74d96549-d2d7-5d70-8799-6973b9a7d4b5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "74dbecd5-436f-5f6f-81c4-30b815aa4bde",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9036fa31-e16b-587f-91bc-f6be36ca48b8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9ea64e98-1f12-526c-9f3b-3df8eaacd576",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aa5755bd-5aab-551f-ba80-3d7d5c70c2ca",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "af370d90-b94e-5533-8674-589515df05c1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c824bb12-b0a4-5ca5-947c-5a54d801dd34",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "de5a2a32-8240-50e2-8d8b-3bcf4cdfdb29",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "9d4068a7-c21f-5527-b933-57a5c21904a5",
+      "source_text": "Brief contents",
+      "sentence_status": "translated",
+      "target_texts": [
+        "简要目录"
+      ]
+    },
+    {
+      "sentence_id": "aeca521d-0ac8-51fa-920c-6c85c975a0e6",
+      "source_text": "PART 1: BUILDING YOUR FIRST LLM AGENT",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一部分：构建你的第一个LLM智能体"
+      ]
+    },
+    {
+      "sentence_id": "0ac95f45-e2af-52ab-ba1a-c13561dd38dc",
+      "source_text": "1 What is an AI agent?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1 什么是AI智能体？"
+      ]
+    },
+    {
+      "sentence_id": "1a85fb42-43d7-5e43-b25e-040533ed99fe",
+      "source_text": "2 The brain of AI agents: LLMs",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2 AI智能体的大脑：大语言模型"
+      ]
+    },
+    {
+      "sentence_id": "0eb0d9a5-9052-522e-a7f4-32302a04fd8e",
+      "source_text": "3 Enabling actions: Tool use",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3 赋能行动：工具使用"
+      ]
+    },
+    {
+      "sentence_id": "55ef9d54-b2b9-59a8-ad8f-dc2a2dab0edf",
+      "source_text": "4 Implementing a basic ReAct agent",
+      "sentence_status": "translated",
+      "target_texts": [
+        "4 实现一个基础的ReAct智能体"
+      ]
+    },
+    {
+      "sentence_id": "fddd88d2-8dfa-5f8a-a950-a467a61bfc02",
+      "source_text": "PART 2: DEVELOPING ADVANCED AGENT CAPABILITIES",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第二部分：开发高级智能体能力"
+      ]
+    },
+    {
+      "sentence_id": "c0a65706-ecd4-5401-9227-54f5954bf3f1",
+      "source_text": "5 Building knowledge bases with RAG",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5 使用RAG构建知识库"
+      ]
+    },
+    {
+      "sentence_id": "d3a6e1c4-b52e-57e3-8102-289e8ce223af",
+      "source_text": "6 Adding memory to your agent",
+      "sentence_status": "translated",
+      "target_texts": [
+        "6 为你的智能体添加记忆功能"
+      ]
+    },
+    {
+      "sentence_id": "81dc054e-c26d-52c6-8d8a-896b6bb8def4",
+      "source_text": "7 Planning and reflection for complex tasks",
+      "sentence_status": "translated",
+      "target_texts": [
+        "7 复杂任务的规划与反思"
+      ]
+    },
+    {
+      "sentence_id": "ac58265f-3c12-5b4a-9ba8-8e41712f2330",
+      "source_text": "8 Creating code agents that write their own tools",
+      "sentence_status": "translated",
+      "target_texts": [
+        "创建能够编写自身工具的程序代理"
+      ]
+    },
+    {
+      "sentence_id": "36362700-6d39-52ab-8f4c-56ad9dba35c4",
+      "source_text": "9 Coordinating multi-agent systems",
+      "sentence_status": "translated",
+      "target_texts": [
+        "9 协调多智能体系统"
+      ]
+    },
+    {
+      "sentence_id": "5cbc43f3-e9c1-5b2d-80b9-0ef875f85fa6",
+      "source_text": "PART 3: DEPLOYING AGENTS IN PRODUCTION",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第三部分：在生产环境中部署智能体"
+      ]
+    },
+    {
+      "sentence_id": "d3b7c24b-2e02-5e63-99e1-8a957210fd62",
+      "source_text": "10 Evaluating performance and monitoring agent behavior",
+      "sentence_status": "translated",
+      "target_texts": [
+        "评估性能并监控智能体行为"
+      ]
+    }
+  ],
+  "issues": []
+}

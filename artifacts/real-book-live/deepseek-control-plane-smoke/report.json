@@ -1,0 +1,775 @@
+{
+  "started_at": "2026-03-14T20:56:54.960250+00:00",
+  "source_path": "/Users/smy/project/book-agent/books/build-an-ai-agent.epub",
+  "database_url": "sqlite+pysqlite:////Users/smy/project/book-agent/artifacts/real-book-live/deepseek-control-plane-smoke/full.sqlite",
+  "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-control-plane-smoke/exports",
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "translate_batch_size": 20,
+  "parallel_workers": 2,
+  "bootstrap": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "source_type": "epub",
+    "status": "active",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song",
+    "chapter_count": 11,
+    "block_count": 2008,
+    "sentence_count": 3807,
+    "packet_count": 1802,
+    "open_issue_count": 0,
+    "chapters": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "ordinal": 1,
+        "title_src": null,
+        "status": "packet_built",
+        "sentence_count": 0,
+        "packet_count": 0,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+        "ordinal": 2,
+        "title_src": "Build an AI Agent (From Scratch)",
+        "status": "packet_built",
+        "sentence_count": 6,
+        "packet_count": 6,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "ordinal": 3,
+        "title_src": "welcome",
+        "status": "packet_built",
+        "sentence_count": 21,
+        "packet_count": 8,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "ordinal": 4,
+        "title_src": "Brief contents",
+        "status": "packet_built",
+        "sentence_count": 14,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "ordinal": 5,
+        "title_src": "1 What is an AI agent?",
+        "status": "packet_built",
+        "sentence_count": 400,
+        "packet_count": 179,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+        "ordinal": 6,
+        "title_src": "2 The brain of AI agents: LLMs",
+        "status": "packet_built",
+        "sentence_count": 538,
+        "packet_count": 263,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+        "ordinal": 7,
+        "title_src": "3 Enabling actions: Tool use",
+        "status": "packet_built",
+        "sentence_count": 595,
+        "packet_count": 281,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+        "ordinal": 8,
+        "title_src": "4 Implementing a basic ReAct agent",
+        "status": "packet_built",
+        "sentence_count": 569,
+        "packet_count": 278,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+        "ordinal": 9,
+        "title_src": "5 Building knowledge bases with RAG",
+        "status": "packet_built",
+        "sentence_count": 575,
+        "packet_count": 243,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+        "ordinal": 10,
+        "title_src": "6 Adding memory to your agent",
+        "status": "packet_built",
+        "sentence_count": 761,
+        "packet_count": 372,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "ordinal": 11,
+        "title_src": "7 Planning and reflection for complex tasks",
+        "status": "packet_built",
+        "sentence_count": 328,
+        "packet_count": 158,
+        "open_issue_count": 0,
+        "quality_summary": null
+      }
+    ]
+  },
+  "document_summary_after_bootstrap": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "source_type": "epub",
+    "status": "active",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song",
+    "chapter_count": 11,
+    "block_count": 2008,
+    "sentence_count": 3807,
+    "packet_count": 1802,
+    "open_issue_count": 0,
+    "chapters": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "ordinal": 1,
+        "title_src": null,
+        "status": "packet_built",
+        "sentence_count": 0,
+        "packet_count": 0,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+        "ordinal": 2,
+        "title_src": "Build an AI Agent (From Scratch)",
+        "status": "packet_built",
+        "sentence_count": 6,
+        "packet_count": 6,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "ordinal": 3,
+        "title_src": "welcome",
+        "status": "packet_built",
+        "sentence_count": 21,
+        "packet_count": 8,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "ordinal": 4,
+        "title_src": "Brief contents",
+        "status": "packet_built",
+        "sentence_count": 14,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "ordinal": 5,
+        "title_src": "1 What is an AI agent?",
+        "status": "packet_built",
+        "sentence_count": 400,
+        "packet_count": 179,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+        "ordinal": 6,
+        "title_src": "2 The brain of AI agents: LLMs",
+        "status": "packet_built",
+        "sentence_count": 538,
+        "packet_count": 263,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+        "ordinal": 7,
+        "title_src": "3 Enabling actions: Tool use",
+        "status": "packet_built",
+        "sentence_count": 595,
+        "packet_count": 281,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+        "ordinal": 8,
+        "title_src": "4 Implementing a basic ReAct agent",
+        "status": "packet_built",
+        "sentence_count": 569,
+        "packet_count": 278,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+        "ordinal": 9,
+        "title_src": "5 Building knowledge bases with RAG",
+        "status": "packet_built",
+        "sentence_count": 575,
+        "packet_count": 243,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+        "ordinal": 10,
+        "title_src": "6 Adding memory to your agent",
+        "status": "packet_built",
+        "sentence_count": 761,
+        "packet_count": 372,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "ordinal": 11,
+        "title_src": "7 Planning and reflection for complex tasks",
+        "status": "packet_built",
+        "sentence_count": 328,
+        "packet_count": 158,
+        "open_issue_count": 0,
+        "quality_summary": null
+      }
+    ]
+  },
+  "run_seed": {
+    "run_id": "2b7fd093-b6db-4efe-8eaa-e9aa1dfb6d11",
+    "seeded_work_item_count": 1802,
+    "pending_packet_count_initial": 1802
+  },
+  "run": {
+    "run_id": "2b7fd093-b6db-4efe-8eaa-e9aa1dfb6d11",
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "run_type": "translate_full",
+    "status": "paused",
+    "backend": "openai_compatible",
+    "model_name": "deepseek-chat",
+    "requested_by": "cli.real-book-runner",
+    "priority": 100,
+    "resume_from_run_id": null,
+    "stop_reason": "budget.cost_exceeded",
+    "status_detail_json": {
+      "source_path": "/Users/smy/project/book-agent/books/build-an-ai-agent.epub",
+      "report_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-control-plane-smoke/report.json",
+      "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-control-plane-smoke/exports",
+      "usage_summary": {
+        "token_in": 27752,
+        "token_out": 8310,
+        "cost_usd": 0.01051881,
+        "latency_ms": 262738
+      },
+      "control_counters": {
+        "seeded_work_item_count": 1802,
+        "completed_work_item_count": 31,
+        "retryable_failure_count": 0,
+        "terminal_failure_count": 0,
+        "expired_lease_reclaim_count": 0,
+        "consecutive_failures": 0
+      },
+      "last_control": {
+        "action": "run.paused",
+        "actor_id": "system.run-control",
+        "note": "budget.cost_exceeded",
+        "detail_json": {
+          "total_cost_usd": 0.01021448,
+          "max_total_cost_usd": 0.01
+        },
+        "at": "2026-03-14T20:59:09.795281+00:00"
+      },
+      "last_progress": {
+        "packet_id": "7ab7e905-b4c3-5cc8-973a-7d0031c1b2fb",
+        "translation_run_id": "515d7f0d-35ae-5b46-a64f-69ed231a0401",
+        "completed_at": "2026-03-14T20:59:10.772471+00:00"
+      }
+    },
+    "created_at": "2026-03-14T12:56:58+00:00",
+    "updated_at": "2026-03-14T12:59:10+00:00",
+    "started_at": "2026-03-14T12:56:58.310605+00:00",
+    "finished_at": null,
+    "budget": {
+      "max_wall_clock_seconds": 900,
+      "max_total_cost_usd": 0.01,
+      "max_total_token_in": null,
+      "max_total_token_out": null,
+      "max_retry_count_per_work_item": 2,
+      "max_consecutive_failures": 10,
+      "max_parallel_workers": 2,
+      "max_parallel_requests_per_provider": 2,
+      "max_auto_followup_attempts": 2
+    },
+    "work_items": {
+      "total_count": 1802,
+      "status_counts": {
+        "pending": 1771,
+        "leased": 0,
+        "running": 0,
+        "succeeded": 31,
+        "retryable_failed": 0,
+        "terminal_failed": 0,
+        "cancelled": 0
+      },
+      "stage_counts": {
+        "bootstrap": 0,
+        "translate": 1802,
+        "review": 0,
+        "repair": 0,
+        "export": 0
+      }
+    },
+    "worker_leases": {
+      "total_count": 31,
+      "status_counts": {
+        "active": 0,
+        "released": 31,
+        "expired": 0
+      },
+      "latest_heartbeat_at": "2026-03-14T12:59:10.772471+00:00"
+    },
+    "events": {
+      "event_count": 97,
+      "latest_event_at": "2026-03-14T12:59:10.772471+00:00"
+    }
+  },
+  "translate": {
+    "run_id": "2b7fd093-b6db-4efe-8eaa-e9aa1dfb6d11",
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "run_status": "paused",
+    "stop_reason": "budget.cost_exceeded",
+    "total_packet_count": 1802,
+    "translated_packet_count": 31,
+    "pending_packet_count": 1771,
+    "retryable_failed_packet_count": 0,
+    "terminal_failed_packet_count": 0,
+    "inflight_packet_count": 0,
+    "remaining_packet_count": 1771,
+    "usage_summary": {
+      "token_in": 27752,
+      "token_out": 8310,
+      "cost_usd": 0.01051881,
+      "latency_ms": 262738
+    },
+    "control_counters": {
+      "seeded_work_item_count": 1802,
+      "completed_work_item_count": 31,
+      "retryable_failure_count": 0,
+      "terminal_failure_count": 0,
+      "expired_lease_reclaim_count": 0,
+      "consecutive_failures": 0
+    },
+    "last_progress": {
+      "packet_id": "7ab7e905-b4c3-5cc8-973a-7d0031c1b2fb",
+      "translation_run_id": "515d7f0d-35ae-5b46-a64f-69ed231a0401",
+      "completed_at": "2026-03-14T20:59:10.772471+00:00"
+    },
+    "last_failure": {},
+    "elapsed_seconds": 28932.475,
+    "avg_packet_seconds": 933.306,
+    "estimated_remaining_seconds": 1652884.926,
+    "estimated_finish_at": "2026-04-03T00:07:15.711922+00:00"
+  },
+  "translate_recent_results": [
+    {
+      "work_item_id": "0064b3d5-371d-438d-96b9-22e7d9c1fd1d",
+      "packet_id": "8f1aa361-7eb3-5513-a8af-51e57a45d386",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "f8f28af9-8486-53a4-9a0b-cce38aed6fab",
+      "review_required_sentence_ids": [],
+      "token_in": 893,
+      "token_out": 272,
+      "cost_usd": 0.00034815,
+      "latency_ms": 9041
+    },
+    {
+      "work_item_id": "00607649-4505-4ca4-8650-19f93f977d80",
+      "packet_id": "f75ca122-b7d2-5ee0-b699-353fda44ae31",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9bf15a16-b7e0-5c57-92fe-61d07be552e3",
+      "review_required_sentence_ids": [],
+      "token_in": 934,
+      "token_out": 388,
+      "cost_usd": 0.00040835,
+      "latency_ms": 12019
+    },
+    {
+      "work_item_id": "00787ba6-4918-4749-92f5-aa3bf4241c40",
+      "packet_id": "6b3e06e2-d5fd-5211-b0f3-438c08f903ce",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "64520af0-e5de-567f-94a7-8ec51f23057e",
+      "review_required_sentence_ids": [],
+      "token_in": 870,
+      "token_out": 169,
+      "cost_usd": 0.00029845,
+      "latency_ms": 5923
+    },
+    {
+      "work_item_id": "008be0ce-6776-4758-be0a-714927ec6803",
+      "packet_id": "30e0a3bd-19d5-5180-8a90-bfeee8445ac9",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9e37cfd8-6791-57ff-a055-1d29f4f4e5f9",
+      "review_required_sentence_ids": [],
+      "token_in": 935,
+      "token_out": 475,
+      "cost_usd": 0.00044517,
+      "latency_ms": 14326
+    },
+    {
+      "work_item_id": "00e40e4e-6c34-4137-be27-f162b5a5a230",
+      "packet_id": "234d630b-35c9-52ae-9d88-6dbe0a15c7c6",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "317d990c-f716-5685-adc4-e49e39e7b492",
+      "review_required_sentence_ids": [],
+      "token_in": 871,
+      "token_out": 171,
+      "cost_usd": 0.00029957,
+      "latency_ms": 5726
+    },
+    {
+      "work_item_id": "0090e8eb-4944-4e7a-870c-2e4b0c8cca15",
+      "packet_id": "6f03d45a-da5f-5020-ab42-d048885c22b4",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "921a9524-3bfb-5e11-824e-0c6c7f342ebc",
+      "review_required_sentence_ids": [],
+      "token_in": 999,
+      "token_out": 695,
+      "cost_usd": 0.00055549,
+      "latency_ms": 20316
+    },
+    {
+      "work_item_id": "0126e6d5-8e51-45d5-8b44-b9bb6b2a2ba8",
+      "packet_id": "31884544-a80c-5d6c-b92f-07548dc62bf5",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b4720189-f95d-5f71-9c75-07c5c7d5ba5f",
+      "review_required_sentence_ids": [],
+      "token_in": 866,
+      "token_out": 167,
+      "cost_usd": 0.00029649,
+      "latency_ms": 5696
+    },
+    {
+      "work_item_id": "018c3073-e480-49ea-a65e-d5d90e77e19e",
+      "packet_id": "e83eec04-4c30-5e4b-8a01-0907729031a9",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "8941e728-6391-5850-81e3-7941f70e9a30",
+      "review_required_sentence_ids": [],
+      "token_in": 911,
+      "token_out": 292,
+      "cost_usd": 0.00036159,
+      "latency_ms": 8853
+    },
+    {
+      "work_item_id": "01819f08-de51-45db-b99f-7dfacd2b31e3",
+      "packet_id": "3ac0301e-961f-527b-b5e6-5ab47c04aa28",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "55a514de-6003-50ed-a753-9aa554352056",
+      "review_required_sentence_ids": [],
+      "token_in": 928,
+      "token_out": 401,
+      "cost_usd": 0.00041213,
+      "latency_ms": 12558
+    },
+    {
+      "work_item_id": "01b2eeaa-e019-4016-9af0-01911ec18224",
+      "packet_id": "b09c4aa6-a4e4-5b21-941d-e0064223c8d7",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "06e73502-b566-588a-802e-aa0f0f717863",
+      "review_required_sentence_ids": [],
+      "token_in": 916,
+      "token_out": 380,
+      "cost_usd": 0.00039995,
+      "latency_ms": 11464
+    },
+    {
+      "work_item_id": "01f36a35-2006-4698-9294-a8e4ce4d011f",
+      "packet_id": "55b40a86-0bd3-57e2-81a3-d344225cee3e",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "ac4ce6af-c77e-523d-93f4-07f6c9063da2",
+      "review_required_sentence_ids": [],
+      "token_in": 916,
+      "token_out": 376,
+      "cost_usd": 0.00039827,
+      "latency_ms": 11285
+    },
+    {
+      "work_item_id": "021f0650-2b59-4f2e-bab4-3a2f7d29ed37",
+      "packet_id": "002bfb3d-25e2-593c-b5f8-f4126b7bcdc0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "d6292e55-dfdc-5da9-8b27-f5d5ae5b55fe",
+      "review_required_sentence_ids": [],
+      "token_in": 873,
+      "token_out": 170,
+      "cost_usd": 0.00028358,
+      "latency_ms": 5699
+    },
+    {
+      "work_item_id": "01f8f58b-bb09-4b80-b04e-6ed118c3e3bc",
+      "packet_id": "45999bec-4775-5386-8576-6a83d00ebacc",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "96e96a78-4cd6-5610-86bb-1e228439ca31",
+      "review_required_sentence_ids": [],
+      "token_in": 909,
+      "token_out": 371,
+      "cost_usd": 0.00039421,
+      "latency_ms": 11213
+    },
+    {
+      "work_item_id": "02464694-03c6-4e0f-9e47-5e2f34117905",
+      "packet_id": "368d0957-0671-5078-9b34-1676d6fa8690",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "6b91f1e8-f541-57d4-878a-08775b7a6520",
+      "review_required_sentence_ids": [],
+      "token_in": 896,
+      "token_out": 282,
+      "cost_usd": 0.00035319,
+      "latency_ms": 8778
+    },
+    {
+      "work_item_id": "024a9d53-6888-4de6-8f64-766f67744b89",
+      "packet_id": "b493f8f0-bd61-55a3-bc95-9781e9c9e3da",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "2933e53f-bbde-5446-865b-1e21d6bbf066",
+      "review_required_sentence_ids": [],
+      "token_in": 871,
+      "token_out": 169,
+      "cost_usd": 0.00029873,
+      "latency_ms": 5813
+    },
+    {
+      "work_item_id": "025ca21a-5e0d-413a-b733-5be11f919a60",
+      "packet_id": "2805398b-271b-599b-a882-44ffd6082e50",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "cc624eae-de55-5b03-a8e0-98c64a16be71",
+      "review_required_sentence_ids": [],
+      "token_in": 862,
+      "token_out": 162,
+      "cost_usd": 0.00029327,
+      "latency_ms": 5470
+    },
+    {
+      "work_item_id": "02640f38-73e5-47a8-a1de-10d240421832",
+      "packet_id": "29acc1c3-b62c-5673-b113-6754c181fdf5",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "3457f903-95b8-53be-bb24-7327598c61c3",
+      "review_required_sentence_ids": [],
+      "token_in": 898,
+      "token_out": 201,
+      "cost_usd": 0.00031973,
+      "latency_ms": 6590
+    },
+    {
+      "work_item_id": "02b65434-6f9e-4d1c-bfa5-3a82fd3d99d6",
+      "packet_id": "14f6326b-0a62-5e7a-8442-a4f7f245f7b1",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "4a35ac9e-f1af-5427-b830-3e86497c2c31",
+      "review_required_sentence_ids": [],
+      "token_in": 900,
+      "token_out": 275,
+      "cost_usd": 0.00035137,
+      "latency_ms": 8585
+    },
+    {
+      "work_item_id": "033cf4d8-2e21-4ecd-8468-f48ec0665457",
+      "packet_id": "d2e11dc9-4eb5-549f-be1f-e5c7867f5ec9",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "257253d5-0ce6-5e92-9c7c-f7c1f38ca617",
+      "review_required_sentence_ids": [],
+      "token_in": 860,
+      "token_out": 162,
+      "cost_usd": 0.00029271,
+      "latency_ms": 5786
+    },
+    {
+      "work_item_id": "032232b9-05f8-4ae4-9911-f6dc3daca54b",
+      "packet_id": "f8155f83-4b4b-5cf9-a0bf-53df348bb4e0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b6db88ce-e9c4-51c7-9d3b-52a6ba3da1e8",
+      "review_required_sentence_ids": [],
+      "token_in": 932,
+      "token_out": 399,
+      "cost_usd": 0.00041241,
+      "latency_ms": 12457
+    },
+    {
+      "work_item_id": "038823ce-f1c7-4316-bf4d-14c060056b9c",
+      "packet_id": "bdbf0415-9374-5add-8e8d-c7a9e3fb61dd",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "cb86fced-a43c-5a6d-9231-5bd632ece4b5",
+      "review_required_sentence_ids": [],
+      "token_in": 872,
+      "token_out": 170,
+      "cost_usd": 0.00029943,
+      "latency_ms": 5587
+    },
+    {
+      "work_item_id": "036cc62d-3fe6-44d5-a887-1293988312df",
+      "packet_id": "f0524699-e08e-5eb8-b0a3-6a2fdc49e547",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "6cf437e5-a2a1-59a7-b295-9e4d64b27e56",
+      "review_required_sentence_ids": [],
+      "token_in": 896,
+      "token_out": 275,
+      "cost_usd": 0.00035025,
+      "latency_ms": 8402
+    },
+    {
+      "work_item_id": "03b89912-656e-4c1a-9a0c-d5a0d6bda9e9",
+      "packet_id": "199cb5ff-b3c3-5bcb-b50d-4fbad59734d9",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "4906db8b-e2c4-5f42-8eeb-cc9d505a5e70",
+      "review_required_sentence_ids": [],
+      "token_in": 854,
+      "token_out": 158,
+      "cost_usd": 0.00027322,
+      "latency_ms": 5356
+    },
+    {
+      "work_item_id": "03c50998-7255-436d-a2dd-5d74390a189a",
+      "packet_id": "e84fa35f-50c9-5778-8bcd-d774815fa852",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "91144abb-cc4d-5af4-a62e-a057f139be73",
+      "review_required_sentence_ids": [],
+      "token_in": 859,
+      "token_out": 164,
+      "cost_usd": 0.00029327,
+      "latency_ms": 5815
+    },
+    {
+      "work_item_id": "03d6ab77-7738-47ad-a0a8-a6bbbfa70d47",
+      "packet_id": "ec663aa5-a8ed-53fe-bc29-798856f05383",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "8fd9c030-d4ef-5819-b8e8-4f01bfff64e7",
+      "review_required_sentence_ids": [],
+      "token_in": 885,
+      "token_out": 197,
+      "cost_usd": 0.00031441,
+      "latency_ms": 6547
+    },
+    {
+      "work_item_id": "0417a828-8b05-4ef4-8680-37e503fba874",
+      "packet_id": "52ba9c14-7ba1-5018-9842-82049bb7a2b6",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "d4bee351-dfbf-5b69-ac26-201c159949bb",
+      "review_required_sentence_ids": [],
+      "token_in": 868,
+      "token_out": 169,
+      "cost_usd": 0.00029789,
+      "latency_ms": 5776
+    },
+    {
+      "work_item_id": "041e52e8-3598-4448-8dee-8fd94c95fa30",
+      "packet_id": "e91f91ce-96cc-5b99-9002-2052d3414715",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "7792095e-6911-50e0-9984-8fd6f9759e73",
+      "review_required_sentence_ids": [],
+      "token_in": 901,
+      "token_out": 280,
+      "cost_usd": 0.00035375,
+      "latency_ms": 8630
+    },
+    {
+      "work_item_id": "043c6571-581e-4e9b-9cc2-2d6399c785f6",
+      "packet_id": "2278f84e-0e54-59d5-be45-01b224e9bed7",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9c41d889-f528-570b-82f3-88e83e4981bd",
+      "review_required_sentence_ids": [],
+      "token_in": 932,
+      "token_out": 288,
+      "cost_usd": 0.00015613,
+      "latency_ms": 8736
+    },
+    {
+      "work_item_id": "04aac981-7a3e-435b-8d20-214643d16d22",
+      "packet_id": "e3da3b56-c793-5009-8e66-1ee0668f85fe",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "c80b3cd0-679e-59b7-9bc0-09485700a6cb",
+      "review_required_sentence_ids": [],
+      "token_in": 870,
+      "token_out": 173,
+      "cost_usd": 0.00030013,
+      "latency_ms": 5667
+    },
+    {
+      "work_item_id": "04ac0575-6f75-41cf-ad60-7a412944d54c",
+      "packet_id": "9da4f576-f827-514f-a628-0c75c385e4f3",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "ebeb7304-0dfa-5d98-b71a-91e15c2126a0",
+      "review_required_sentence_ids": [],
+      "token_in": 896,
+      "token_out": 282,
+      "cost_usd": 0.00035319,
+      "latency_ms": 8743
+    },
+    {
+      "work_item_id": "04e8aac3-59f7-41bf-92a5-c49de9907339",
+      "packet_id": "7ab7e905-b4c3-5cc8-973a-7d0031c1b2fb",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "515d7f0d-35ae-5b46-a64f-69ed231a0401",
+      "review_required_sentence_ids": [],
+      "token_in": 879,
+      "token_out": 177,
+      "cost_usd": 0.00030433,
+      "latency_ms": 5881
+    }
+  ],
+  "run_housekeeping": {
+    "expired_lease_count": 0,
+    "reclaimed_work_item_ids": [],
+    "budget_exceeded": false,
+    "budget_stop_reason": null
+  },
+  "finished_at": "2026-03-14T20:59:10.786446+00:00",
+  "duration_seconds": 135.826
+}

@@ -1,0 +1,44 @@
+{
+  "cases": [
+    {
+      "name": "llms-in-production-from-language-models-to-successful-products-christopher-brousseau-matthew-sharp-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    },
+    {
+      "name": "ai-agents-in-action-micheal-lanham-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    }
+  ]
+}

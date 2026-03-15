@@ -1,0 +1,165 @@
+{
+  "root_count": 1,
+  "scanned_file_count": 4,
+  "candidate_count": 4,
+  "candidate_kind_counts": {
+    "pass_path": 1,
+    "reject_path": 1,
+    "ocr_path": 2
+  },
+  "recommended_case_count": 1,
+  "recommended_cases": [
+    {
+      "name": "ai-agents-in-action-micheal-lanham-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 88,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Long document will be more expensive to use as a recurring smoke sample."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 346,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "average_text_density": 2076.763,
+        "average_span_count": 355.723,
+        "suspicious_page_numbers": []
+      },
+      "suggested_manifest_case": {
+        "name": "ai-agents-in-action-micheal-lanham-z-library-sk-1lib-sk-z-lib-sk",
+        "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Building AI Coding Agents for the Terminal Scaffolding, Harness, Context Engineering, and Lessons Learned (Nghi D. Q. Bui) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "reject_path",
+      "candidate_score": 36,
+      "recommendation_reasons": [
+        "Text PDF with elevated layout risk can exercise the guarded recovery path.",
+        "Profiler already flagged 25 suspicious page(s)."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 81,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": false,
+        "average_text_density": 3494.185,
+        "average_span_count": 1169.541,
+        "suspicious_page_numbers": [
+          2,
+          6,
+          7,
+          8,
+          10,
+          14,
+          17,
+          19,
+          20,
+          21,
+          23,
+          24,
+          26,
+          29,
+          30,
+          31,
+          33,
+          35,
+          38,
+          39,
+          40,
+          48,
+          49,
+          50,
+          52
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gullí) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Building Applications with AI Agents Designing and Implementing Multiagent Systems (Michael Albada) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "suspicious_page_numbers": []
+      }
+    }
+  ]
+}

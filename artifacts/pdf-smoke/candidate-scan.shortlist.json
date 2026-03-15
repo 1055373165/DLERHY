@@ -1,0 +1,76 @@
+{
+  "root_count": 4,
+  "scanned_file_count": 3,
+  "candidate_count": 3,
+  "candidate_kind_counts": {
+    "ocr_path": 3
+  },
+  "recommended_case_count": 0,
+  "recommended_cases": [],
+  "candidates": [
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/字节跳动核心业务深度研究报告.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 6,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Page count is short enough for fast smoke debugging.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 37,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Documents/resume/孙梦宇后端开发最新简历（one page）.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "suspicious_page_numbers": []
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Building Applications with AI Agents Designing and Implementing Multiagent Systems (Michael Albada) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "suspicious_page_numbers": []
+      }
+    }
+  ]
+}

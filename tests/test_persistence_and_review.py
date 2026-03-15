@@ -1,0 +1,468 @@
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+import sys
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from book_agent.domain.enums import ActionType, JobScopeType, LockLevel, MemoryScopeType, SnapshotType, TermStatus, TermType
+from book_agent.domain.models import ArtifactInvalidation, ChapterQualitySummary, Export, MemorySnapshot, TermEntry
+from book_agent.infra.db.base import Base
+from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.infra.repositories.bootstrap import BootstrapRepository
+from book_agent.infra.repositories.export import ExportRepository
+from book_agent.infra.repositories.ops import OpsRepository
+from book_agent.infra.repositories.review import ReviewRepository
+from book_agent.infra.repositories.translation import TranslationRepository
+from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+from book_agent.services.actions import IssueActionExecutor
+from book_agent.services.export import ExportGateError, ExportService
+from book_agent.services.review import ReviewService
+from book_agent.services.translation import TranslationService
+from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
+
+
+CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml" />
+  </rootfiles>
+</container>
+"""
+
+CONTENT_OPF = """<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Business Strategy Handbook</dc:title>
+    <dc:creator>Test Author</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml" />
+  </manifest>
+  <spine>
+    <itemref idref="chap1" />
+  </spine>
+</package>
+"""
+
+NAV_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="chapter1.xhtml">Chapter One</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>
+"""
+
+CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Pricing power matters. Strategy compounds.</p>
+    <blockquote>A quoted paragraph.</blockquote>
+  </body>
+</html>
+"""
+
+
+class DuplicateWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="DuplicateWorker",
+            model_name="duplicate-test",
+            prompt_version="test.duplication.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            temp_id = f"temp-{sentence.id}"
+            if any(token in sentence.source_text for token in ["Pricing power", "Strategy compounds"]):
+                text = "完全重复的译文片段。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class SplitSegmentWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="SplitSegmentWorker",
+            model_name="split-segment-test",
+            prompt_version="test.split-segment.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "Pricing power" in sentence.source_text:
+                temp_intro = f"temp-{sentence.id}-a"
+                temp_tail = f"temp-{sentence.id}-b"
+                target_segments.extend(
+                    [
+                        TranslationTargetSegment(
+                            temp_id=temp_intro,
+                            text_zh="定价权很重要。",
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id],
+                            confidence=0.95,
+                        ),
+                        TranslationTargetSegment(
+                            temp_id=temp_tail,
+                            text_zh="它会持续复利。",
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id],
+                            confidence=0.95,
+                        ),
+                    ]
+                )
+                alignments.append(
+                    AlignmentSuggestion(
+                        source_sentence_ids=[sentence.id],
+                        target_temp_ids=[temp_intro, temp_tail],
+                        relation_type="1:n",
+                        confidence=0.95,
+                    )
+                )
+                continue
+
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=f"译文::{sentence.source_text}",
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class PersistenceAndReviewTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = build_engine("sqlite+pysqlite:///:memory:")
+        self.addCleanup(self.engine.dispose)
+        Base.metadata.create_all(self.engine)
+        self.session_factory = build_session_factory(engine=self.engine)
+
+    def _bootstrap_to_db(self) -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+
+            artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+        return artifacts.document.id, artifacts.translation_packets[0].id
+
+    def test_bootstrap_persists_to_sqlite(self) -> None:
+        document_id, _ = self._bootstrap_to_db()
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            self.assertEqual(bundle.document.id, document_id)
+            self.assertEqual(len(bundle.chapters), 1)
+            self.assertEqual(len(bundle.chapters[0].blocks), 3)
+            self.assertEqual(len(bundle.chapters[0].sentences), 4)
+            self.assertEqual(len(bundle.chapters[0].translation_packets), 3)
+
+    def test_translation_and_review_generate_issue_and_action(self) -> None:
+        document_id, packet_id = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            translation_service = TranslationService(TranslationRepository(session))
+            translation_service.execute_packet(packet_id)
+
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = document_bundle.chapters[0].chapter.id
+            sentence_id = next(
+                sentence.id
+                for sentence in document_bundle.chapters[0].sentences
+                if "Pricing power" in sentence.source_text
+            )
+            session.add(
+                TermEntry(
+                    id="00000000-0000-0000-0000-000000000001",
+                    document_id=document_id,
+                    scope_type=MemoryScopeType.GLOBAL,
+                    scope_id=None,
+                    source_term="pricing power",
+                    target_term="定价权",
+                    term_type=TermType.CONCEPT,
+                    lock_level=LockLevel.LOCKED,
+                    status=TermStatus.ACTIVE,
+                    evidence_sentence_id=sentence_id,
+                    version=1,
+                )
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertGreaterEqual(len(review_artifacts.issues), 1)
+            self.assertTrue(any(issue.issue_type == "TERM_CONFLICT" for issue in review_artifacts.issues))
+            self.assertTrue(any(action.action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED for action in review_artifacts.actions))
+            self.assertTrue(any(action.scope_type == JobScopeType.CHAPTER for action in review_artifacts.actions))
+            persisted_summary = session.query(ChapterQualitySummary).filter_by(chapter_id=chapter_id).one()
+            self.assertGreaterEqual(persisted_summary.issue_count, 1)
+            self.assertEqual(persisted_summary.action_count, len(review_artifacts.actions))
+            self.assertFalse(persisted_summary.term_ok)
+
+    def test_action_execution_and_export(self) -> None:
+        document_id, packet_id = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session)).execute_packet(packet_id)
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = document_bundle.chapters[0].chapter.id
+            sentence_id = next(
+                sentence.id
+                for sentence in document_bundle.chapters[0].sentences
+                if "Pricing power" in sentence.source_text
+            )
+            session.add(
+                TermEntry(
+                    id="00000000-0000-0000-0000-000000000002",
+                    document_id=document_id,
+                    scope_type=MemoryScopeType.GLOBAL,
+                    scope_id=None,
+                    source_term="pricing power",
+                    target_term="定价权",
+                    term_type=TermType.CONCEPT,
+                    lock_level=LockLevel.LOCKED,
+                    status=TermStatus.ACTIVE,
+                    evidence_sentence_id=sentence_id,
+                    version=1,
+                )
+            )
+            session.commit()
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+                review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+                action_id = review_artifacts.actions[0].id
+                execution = IssueActionExecutor(OpsRepository(session)).execute(action_id)
+                review_export = ExportService(ExportRepository(session), output_root=outdir).export_review_package(chapter_id)
+                session.commit()
+
+                self.assertGreaterEqual(len(execution.invalidations), 1)
+                self.assertTrue(review_export.file_path.exists())
+                with self.assertRaises(ExportGateError):
+                    ExportService(ExportRepository(session), output_root=outdir).export_bilingual_html(chapter_id)
+                self.assertGreaterEqual(session.query(ArtifactInvalidation).count(), 1)
+                self.assertGreaterEqual(session.query(Export).count(), 1)
+
+    def test_review_detects_packet_context_failure_and_routes_to_packet_rebuild(self) -> None:
+        document_id, packet_id = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session)).execute_packet(packet_id)
+            packet = session.get(TranslationPacket, packet_id)
+            assert packet is not None
+            packet_json = dict(packet.packet_json)
+            packet_json["open_questions"] = ["speaker_reference_ambiguous"]
+            packet.packet_json = packet_json
+            session.merge(packet)
+            session.commit()
+
+        with self.session_factory() as session:
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            context_issue = next(issue for issue in review_artifacts.issues if issue.issue_type == "CONTEXT_FAILURE")
+            context_action = next(action for action in review_artifacts.actions if action.issue_id == context_issue.id)
+
+            self.assertEqual(context_issue.root_cause_layer.value, "packet")
+            self.assertEqual(context_action.action_type, ActionType.REBUILD_PACKET_THEN_RERUN)
+            self.assertEqual(context_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(context_action.scope_id, packet_id)
+
+    def test_review_detects_chapter_brief_context_failure_and_routes_to_brief_rebuild(self) -> None:
+        document_id, packet_id = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session)).execute_packet(packet_id)
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            chapter_brief = session.scalars(
+                session.query(MemorySnapshot).filter(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter_id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF,
+                ).statement
+            ).first()
+            assert chapter_brief is not None
+            content_json = dict(chapter_brief.content_json)
+            content_json["open_questions"] = ["entity_state_missing"]
+            chapter_brief.content_json = content_json
+            session.merge(chapter_brief)
+            session.commit()
+
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            context_issue = next(issue for issue in review_artifacts.issues if issue.issue_type == "CONTEXT_FAILURE")
+            context_action = next(action for action in review_artifacts.actions if action.issue_id == context_issue.id)
+
+            self.assertEqual(context_issue.root_cause_layer.value, "memory")
+            self.assertEqual(context_action.action_type, ActionType.REBUILD_CHAPTER_BRIEF)
+            self.assertEqual(context_action.scope_type, JobScopeType.CHAPTER)
+            self.assertEqual(context_action.scope_id, chapter_id)
+
+    def test_review_detects_duplication_and_routes_to_packet_rebuild(self) -> None:
+        document_id, _ = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_id = next(
+                packet.id
+                for packet in document_bundle.chapters[0].translation_packets
+                if any(len(block.get("sentence_ids", [])) >= 2 for block in packet.packet_json.get("current_blocks", []))
+            )
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session), worker=DuplicateWorker()).execute_packet(packet_id)
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            duplication_issue = next(issue for issue in review_artifacts.issues if issue.issue_type == "DUPLICATION")
+            duplication_action = next(action for action in review_artifacts.actions if action.issue_id == duplication_issue.id)
+
+            self.assertEqual(duplication_issue.root_cause_layer.value, "packet")
+            self.assertEqual(duplication_action.action_type, ActionType.REBUILD_PACKET_THEN_RERUN)
+            self.assertEqual(duplication_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(duplication_action.scope_id, packet_id)
+
+    def test_review_detects_recoverable_alignment_failure_and_routes_to_realign(self) -> None:
+        document_id, _ = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_id = next(
+                packet.id
+                for packet in document_bundle.chapters[0].translation_packets
+                if any(len(block.get("sentence_ids", [])) >= 2 for block in packet.packet_json.get("current_blocks", []))
+            )
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session)).execute_packet(packet_id)
+            latest_run_id = session.scalars(
+                select(TranslationRun.id)
+                .where(TranslationRun.packet_id == packet_id)
+                .order_by(TranslationRun.attempt.desc())
+            ).first()
+            target_segment_id = session.scalars(
+                select(TargetSegment.id)
+                .where(TargetSegment.translation_run_id == latest_run_id)
+                .order_by(TargetSegment.ordinal)
+            ).first()
+            session.execute(delete(AlignmentEdge).where(AlignmentEdge.target_segment_id == target_segment_id))
+            session.commit()
+
+        with self.session_factory() as session:
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            alignment_issue = next(issue for issue in review_artifacts.issues if issue.issue_type == "ALIGNMENT_FAILURE")
+            alignment_action = next(action for action in review_artifacts.actions if action.issue_id == alignment_issue.id)
+
+            self.assertEqual(alignment_issue.root_cause_layer.value, "alignment")
+            self.assertEqual(alignment_action.action_type, ActionType.REALIGN_ONLY)
+            self.assertEqual(alignment_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(alignment_action.scope_id, packet_id)
+
+    def test_review_detects_orphan_target_segment_and_routes_to_realign(self) -> None:
+        document_id, _ = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_id = next(
+                packet.id
+                for packet in document_bundle.chapters[0].translation_packets
+                if any(len(block.get("sentence_ids", [])) >= 2 for block in packet.packet_json.get("current_blocks", []))
+            )
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session), worker=SplitSegmentWorker()).execute_packet(packet_id)
+            latest_run_id = session.scalars(
+                select(TranslationRun.id)
+                .where(TranslationRun.packet_id == packet_id)
+                .order_by(TranslationRun.attempt.desc())
+            ).first()
+            orphan_target_id = session.scalars(
+                select(TargetSegment.id)
+                .where(TargetSegment.translation_run_id == latest_run_id)
+                .order_by(TargetSegment.ordinal.desc())
+            ).first()
+            session.execute(delete(AlignmentEdge).where(AlignmentEdge.target_segment_id == orphan_target_id))
+            session.commit()
+
+        with self.session_factory() as session:
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            alignment_issue = next(issue for issue in review_artifacts.issues if issue.issue_type == "ALIGNMENT_FAILURE")
+            alignment_action = next(action for action in review_artifacts.actions if action.issue_id == alignment_issue.id)
+
+            self.assertIn(orphan_target_id, alignment_issue.evidence_json["orphan_target_segment_ids"])
+            self.assertEqual(alignment_action.action_type, ActionType.REALIGN_ONLY)
+            self.assertEqual(alignment_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(alignment_action.scope_id, packet_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

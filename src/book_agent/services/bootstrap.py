@@ -1,0 +1,501 @@
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from hashlib import sha256
+from pathlib import Path
+from typing import Iterable
+
+from book_agent.core.ids import stable_id
+from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
+from book_agent.domain.context.builders import (
+    BookProfileBuilder,
+    ChapterBriefBuilder,
+    ContextPacketBuilder,
+)
+from book_agent.domain.enums import (
+    ArtifactStatus,
+    BlockType,
+    ChapterStatus,
+    DocumentStatus,
+    JobScopeType,
+    JobStatus,
+    JobType,
+    Severity,
+    SourceType,
+)
+from book_agent.domain.models import Block, BookProfile, Chapter, Document, JobRun, MemorySnapshot, Sentence
+from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
+from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
+from book_agent.domain.structure.epub import EPUBParser
+from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler, PdfFileProfile
+from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
+
+
+@dataclass(slots=True)
+class ParseArtifacts:
+    document: Document
+    chapters: list[Chapter]
+    blocks: list[Block]
+    job_run: JobRun
+
+
+@dataclass(slots=True)
+class SegmentationArtifacts:
+    document: Document
+    chapters: list[Chapter]
+    sentences: list[Sentence]
+    job_run: JobRun
+
+
+@dataclass(slots=True)
+class BootstrapArtifacts:
+    document: Document
+    chapters: list[Chapter]
+    blocks: list[Block]
+    sentences: list[Sentence]
+    book_profile: BookProfile | None = None
+    memory_snapshots: list[MemorySnapshot] = field(default_factory=list)
+    translation_packets: list[TranslationPacket] = field(default_factory=list)
+    packet_sentence_maps: list[PacketSentenceMap] = field(default_factory=list)
+    job_runs: list[JobRun] = field(default_factory=list)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_text(text: str) -> str:
+    return " ".join(text.split()).strip()
+
+
+def _compose_anchor(href: str, anchor: str | None) -> str:
+    return f"{href}#{anchor}" if anchor else href
+
+
+def _mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _pdf_chapter_risk_level(
+    layout_risk: str | None,
+    parse_confidence: float | None,
+    structure_flags: list[str],
+) -> Severity | None:
+    if layout_risk == "high":
+        return Severity.CRITICAL
+    if layout_risk == "medium":
+        return Severity.HIGH
+    if parse_confidence is not None and parse_confidence < 0.85:
+        return Severity.MEDIUM
+    if structure_flags:
+        return Severity.LOW
+    return Severity.LOW if layout_risk == "low" else None
+
+
+class IngestService:
+    def __init__(self, pdf_profiler: PdfFileProfiler | None = None):
+        self.pdf_profiler = pdf_profiler or PdfFileProfiler()
+
+    def ingest(self, file_path: str | Path) -> tuple[Document, JobRun]:
+        path = Path(file_path)
+        fingerprint = sha256(path.read_bytes()).hexdigest()
+        source_type, pdf_profile = self._detect_source_type(path)
+        now = _utcnow()
+
+        document = Document(
+            id=stable_id("document", fingerprint),
+            source_type=source_type,
+            file_fingerprint=fingerprint,
+            source_path=str(path),
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "file_name": path.name,
+                **({"pdf_profile": pdf_profile.to_dict()} if pdf_profile is not None else {}),
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        job = JobRun(
+            id=stable_id("job", JobType.INGEST.value, document.id),
+            job_type=JobType.INGEST,
+            scope_type=JobScopeType.DOCUMENT,
+            scope_id=document.id,
+            status=JobStatus.SUCCEEDED,
+            started_at=now,
+            ended_at=now,
+            created_at=now,
+        )
+        return document, job
+
+    def _detect_source_type(self, path: Path) -> tuple[SourceType, PdfFileProfile | None]:
+        suffix = path.suffix.lower()
+        if suffix == ".epub":
+            return SourceType.EPUB, None
+        if suffix == ".pdf":
+            pdf_profile = self.pdf_profiler.profile(path)
+            if pdf_profile.pdf_kind == "text_pdf":
+                return SourceType.PDF_TEXT, pdf_profile
+            return SourceType.PDF_SCAN, pdf_profile
+        raise ValueError(f"Unsupported source file type: {path.suffix}")
+
+
+class ParseService:
+    def __init__(
+        self,
+        epub_parser: EPUBParser | None = None,
+        pdf_parser: PDFParser | None = None,
+    ):
+        self.epub_parser = epub_parser or EPUBParser()
+        self.pdf_parser = pdf_parser or PDFParser()
+
+    def parse(self, document: Document, file_path: str | Path) -> ParseArtifacts:
+        if document.source_type == SourceType.EPUB:
+            parsed = self.epub_parser.parse(file_path)
+        elif document.source_type == SourceType.PDF_TEXT:
+            pdf_profile = document.metadata_json.get("pdf_profile")
+            if isinstance(pdf_profile, dict) and pdf_profile.get("layout_risk") == "high":
+                raise ValueError("P1-A only supports low-risk or medium-risk text PDFs; layout_risk=high")
+            parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+        elif document.source_type == SourceType.PDF_SCAN:
+            raise ValueError("OCR-required or scanned PDFs are not supported yet; text PDFs only in P1-A")
+        else:
+            raise ValueError(f"Unsupported source type: {document.source_type}")
+
+        now = _utcnow()
+        document.title = parsed.title
+        document.author = parsed.author
+        if parsed.language:
+            document.src_lang = parsed.language
+        document.metadata_json = {**document.metadata_json, **parsed.metadata}
+        document.status = DocumentStatus.PARSED
+        document.updated_at = now
+
+        chapters: list[Chapter] = []
+        blocks: list[Block] = []
+        for ordinal, parsed_chapter in enumerate(parsed.chapters, start=1):
+            chapter = self._build_chapter(document, parsed_chapter, ordinal, now)
+            chapters.append(chapter)
+            for parsed_block in parsed_chapter.blocks:
+                blocks.append(self._build_block(document, chapter, parsed_block, now))
+
+        job = JobRun(
+            id=stable_id("job", JobType.PARSE.value, document.id, document.parser_version),
+            job_type=JobType.PARSE,
+            scope_type=JobScopeType.DOCUMENT,
+            scope_id=document.id,
+            status=JobStatus.SUCCEEDED,
+            started_at=now,
+            ended_at=now,
+            created_at=now,
+        )
+        return ParseArtifacts(document=document, chapters=chapters, blocks=blocks, job_run=job)
+
+    def _build_chapter(
+        self,
+        document: Document,
+        parsed_chapter: ParsedChapter,
+        ordinal: int,
+        now: datetime,
+    ) -> Chapter:
+        first_anchor = parsed_chapter.blocks[0].anchor if parsed_chapter.blocks else None
+        last_anchor = parsed_chapter.blocks[-1].anchor if parsed_chapter.blocks else None
+        chapter_metadata, risk_level = self._chapter_metadata(document, parsed_chapter)
+        return Chapter(
+            id=stable_id("chapter", document.id, ordinal, parsed_chapter.href),
+            document_id=document.id,
+            ordinal=ordinal,
+            title_src=parsed_chapter.title,
+            anchor_start=_compose_anchor(parsed_chapter.href, first_anchor),
+            anchor_end=_compose_anchor(parsed_chapter.href, last_anchor),
+            status=ChapterStatus.READY,
+            risk_level=risk_level,
+            metadata_json=chapter_metadata,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def _chapter_metadata(
+        self,
+        document: Document,
+        parsed_chapter: ParsedChapter,
+    ) -> tuple[dict[str, object], Severity | None]:
+        metadata: dict[str, object] = {"href": parsed_chapter.href, **parsed_chapter.metadata}
+        if document.source_type != SourceType.PDF_TEXT:
+            return metadata, None
+
+        parse_confidences = [
+            float(block.parse_confidence)
+            for block in parsed_chapter.blocks
+            if block.parse_confidence is not None
+        ]
+        parse_confidence = _mean(parse_confidences)
+        role_counts = Counter(
+            str(block.metadata.get("pdf_block_role"))
+            for block in parsed_chapter.blocks
+            if block.metadata.get("pdf_block_role")
+        )
+        page_family_counts = Counter(
+            str(block.metadata.get("pdf_page_family"))
+            for block in parsed_chapter.blocks
+            if block.metadata.get("pdf_page_family")
+        )
+        recovery_flags = sorted(
+            {
+                str(flag)
+                for block in parsed_chapter.blocks
+                for flag in block.metadata.get("recovery_flags", [])
+            }
+        )
+        pdf_profile = document.metadata_json.get("pdf_profile", {})
+        layout_risk = str(metadata.get("pdf_layout_risk") or pdf_profile.get("layout_risk") or "low")
+        source_page_start = metadata.get("source_page_start")
+        source_page_end = metadata.get("source_page_end")
+        suspicious_pages = [
+            int(page)
+            for page in pdf_profile.get("suspicious_page_numbers", [])
+            if (
+                isinstance(source_page_start, int)
+                and isinstance(source_page_end, int)
+                and source_page_start <= int(page) <= source_page_end
+            )
+        ]
+        structure_flags = [
+            *([f"layout_risk_{layout_risk}"] if layout_risk != "low" else []),
+            *(
+                [f"page_family_{metadata.get('pdf_section_family')}"]
+                if metadata.get("pdf_section_family") not in {None, "body"}
+                else []
+            ),
+            *recovery_flags,
+        ]
+        risk_level = _pdf_chapter_risk_level(layout_risk, parse_confidence, structure_flags)
+        metadata.update(
+            {
+                "parse_confidence": round(parse_confidence, 3) if parse_confidence is not None else None,
+                "pdf_layout_risk": layout_risk,
+                "pdf_role_counts": dict(role_counts),
+                "pdf_page_family_counts": dict(page_family_counts),
+                "structure_flags": structure_flags,
+                "suspicious_page_numbers": suspicious_pages,
+            }
+        )
+        return metadata, risk_level
+
+    def _build_block(
+        self,
+        document: Document,
+        chapter: Chapter,
+        parsed_block: ParsedBlock,
+        now: datetime,
+    ) -> Block:
+        block_type = BlockType(parsed_block.block_type)
+        return Block(
+            id=stable_id(
+                "block",
+                document.id,
+                chapter.id,
+                parsed_block.ordinal,
+                parsed_block.source_path,
+                parsed_block.anchor or "no-anchor",
+            ),
+            chapter_id=chapter.id,
+            ordinal=parsed_block.ordinal,
+            block_type=block_type,
+            source_text=parsed_block.text,
+            normalized_text=_normalize_text(parsed_block.text),
+            source_anchor=_compose_anchor(parsed_block.source_path, parsed_block.anchor),
+            source_span_json={
+                "source_path": parsed_block.source_path,
+                "anchor": parsed_block.anchor,
+                **parsed_block.metadata,
+            },
+            parse_confidence=parsed_block.parse_confidence if parsed_block.parse_confidence is not None else 1.0,
+            protected_policy=protected_policy_for_block(block_type.value, parsed_block.metadata),
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+
+
+class SegmentationService:
+    def __init__(self, segmenter: EnglishSentenceSegmenter | None = None):
+        self.segmenter = segmenter or EnglishSentenceSegmenter()
+
+    def segment(self, document: Document, chapters: list[Chapter], blocks: list[Block]) -> SegmentationArtifacts:
+        now = _utcnow()
+        blocks_by_chapter: dict[str, list[Block]] = {}
+        for block in blocks:
+            blocks_by_chapter.setdefault(block.chapter_id, []).append(block)
+
+        sentences: list[Sentence] = []
+        for chapter in chapters:
+            for block in sorted(blocks_by_chapter.get(chapter.id, []), key=lambda item: item.ordinal):
+                for sentence in self._build_sentences(document, chapter, block, now):
+                    sentences.append(sentence)
+            chapter.status = ChapterStatus.SEGMENTED
+            chapter.updated_at = now
+
+        job = JobRun(
+            id=stable_id("job", JobType.SEGMENT.value, document.id, document.segmentation_version),
+            job_type=JobType.SEGMENT,
+            scope_type=JobScopeType.DOCUMENT,
+            scope_id=document.id,
+            status=JobStatus.SUCCEEDED,
+            started_at=now,
+            ended_at=now,
+            created_at=now,
+        )
+        return SegmentationArtifacts(document=document, chapters=chapters, sentences=sentences, job_run=job)
+
+    def _build_sentences(
+        self,
+        document: Document,
+        chapter: Chapter,
+        block: Block,
+        now: datetime,
+    ) -> list[Sentence]:
+        segmented = self.segmenter.segment_text(block.normalized_text or block.source_text)
+        if block.block_type in {BlockType.HEADING, BlockType.CODE, BlockType.FOOTNOTE, BlockType.CAPTION}:
+            segmented = [block.normalized_text or block.source_text]
+
+        translatable, nontranslatable_reason, initial_status = translatability_for_block(
+            block.block_type,
+            block.source_span_json,
+        )
+        output: list[Sentence] = []
+        for ordinal, text in enumerate(segmented, start=1):
+            output.append(
+                Sentence(
+                    id=stable_id(
+                        "sentence",
+                        document.id,
+                        block.id,
+                        document.segmentation_version,
+                        ordinal,
+                    ),
+                    block_id=block.id,
+                    chapter_id=chapter.id,
+                    document_id=document.id,
+                    ordinal_in_block=ordinal,
+                    source_text=text,
+                    normalized_text=_normalize_text(text),
+                    source_lang=document.src_lang,
+                    translatable=translatable,
+                    nontranslatable_reason=nontranslatable_reason,
+                    source_anchor=block.source_anchor,
+                    source_span_json={
+                        "block_id": block.id,
+                        "block_type": block.block_type.value,
+                        "ordinal_in_block": ordinal,
+                    },
+                    upstream_confidence=block.parse_confidence,
+                    sentence_status=initial_status,
+                    active_version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        return output
+
+
+class BootstrapPipeline:
+    def __init__(
+        self,
+        ingest_service: IngestService | None = None,
+        parse_service: ParseService | None = None,
+        segmentation_service: SegmentationService | None = None,
+        profile_builder: BookProfileBuilder | None = None,
+        chapter_brief_builder: ChapterBriefBuilder | None = None,
+        context_packet_builder: ContextPacketBuilder | None = None,
+    ):
+        self.ingest_service = ingest_service or IngestService()
+        self.parse_service = parse_service or ParseService()
+        self.segmentation_service = segmentation_service or SegmentationService()
+        self.profile_builder = profile_builder or BookProfileBuilder()
+        self.chapter_brief_builder = chapter_brief_builder or ChapterBriefBuilder()
+        self.context_packet_builder = context_packet_builder or ContextPacketBuilder()
+
+    def run(self, file_path: str | Path) -> BootstrapArtifacts:
+        document, ingest_job = self.ingest_service.ingest(file_path)
+        parse_artifacts = self.parse_service.parse(document, file_path)
+        segment_artifacts = self.segmentation_service.segment(
+            parse_artifacts.document,
+            parse_artifacts.chapters,
+            parse_artifacts.blocks,
+        )
+
+        profile_result = self.profile_builder.build(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+        )
+        chapter_briefs = self.chapter_brief_builder.build_many(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=segment_artifacts.sentences,
+        )
+        packet_result = self.context_packet_builder.build_many(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=segment_artifacts.sentences,
+            book_profile=profile_result.book_profile,
+            chapter_briefs=chapter_briefs,
+            termbase_snapshot=profile_result.termbase_snapshot,
+            entity_snapshot=profile_result.entity_snapshot,
+        )
+
+        now = _utcnow()
+        for chapter in parse_artifacts.chapters:
+            chapter.status = ChapterStatus.PACKET_BUILT
+            chapter.updated_at = now
+        document.status = DocumentStatus.ACTIVE
+        document.active_book_profile_version = profile_result.book_profile.version
+        document.updated_at = now
+
+        return BootstrapArtifacts(
+            document=document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=segment_artifacts.sentences,
+            book_profile=profile_result.book_profile,
+            memory_snapshots=[
+                profile_result.termbase_snapshot,
+                profile_result.entity_snapshot,
+                *chapter_briefs,
+            ],
+            translation_packets=packet_result.translation_packets,
+            packet_sentence_maps=packet_result.packet_sentence_maps,
+            job_runs=[
+                ingest_job,
+                parse_artifacts.job_run,
+                segment_artifacts.job_run,
+                profile_result.job_run,
+                *profile_result.seed_jobs,
+                *self._build_brief_jobs(document.id, chapter_briefs),
+                *packet_result.job_runs,
+            ],
+        )
+
+    def _build_brief_jobs(self, document_id: str, chapter_briefs: Iterable[MemorySnapshot]) -> list[JobRun]:
+        now = _utcnow()
+        jobs: list[JobRun] = []
+        for brief in chapter_briefs:
+            jobs.append(
+                JobRun(
+                    id=stable_id("job", JobType.BRIEF.value, document_id, brief.scope_id, brief.version),
+                    job_type=JobType.BRIEF,
+                    scope_type=JobScopeType.CHAPTER,
+                    scope_id=brief.scope_id,
+                    status=JobStatus.SUCCEEDED,
+                    started_at=now,
+                    ended_at=now,
+                    created_at=now,
+                )
+            )
+        return jobs

@@ -1,0 +1,2002 @@
+{
+  "chapter_id": "60738b9a-4195-58bb-951c-5a5ebc750cec",
+  "chapter_title": "1_What_are_LLM_Agents_and_Multi-Agent_Systems?",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "60738b9a-4195-58bb-951c-5a5ebc750cec",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "c486e3f6-7d82-5e14-a2dd-6c80bec3dadd",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "60738b9a-4195-58bb-951c-5a5ebc750cec",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "004825ab-90fc-5968-9eb5-49ab83318f4c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "00aea3d5-818e-5b05-adb5-ddf2ca0acc4c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "074ca2fb-f888-594e-a492-7c4761f0ac38",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0aaefa10-1517-5820-aa7b-2081eafd1a4f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "11f66e2f-8d05-56ea-9524-730770e4adaa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "133dc6d2-ea43-5b7f-bbc9-aea4bd50bb5b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "185d2019-b016-5b85-b30c-c8e34692d389",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1a9702e8-adab-5efa-b31f-8fd255d727d2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1b6298c0-3f28-52e5-a95b-14743c1c3a56",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "25e559d1-39c0-5ee3-adb9-2f0e1221ca6f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2bf761de-e1d3-5395-b895-e52424b96661",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2e1611b1-7432-50dd-a061-077287c1392e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3061a21a-56c4-5cea-bc45-5fdb4a4605b9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "34abf9e6-882f-516f-808c-e6ed64b57a9a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "376f63c7-cd6f-5bf3-82cc-6a8df0a1490e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "38041085-4321-5549-8809-4fe923266920",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "38f6ee48-f9aa-5ce4-a500-475ccaddc427",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3a286506-d1d2-5007-b3bb-34a0577820e5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4109aa8f-ede4-54dc-84e4-4b61a38dfe15",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "42b7241e-6e60-5b6c-9d69-2709e088eff6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "47e430b6-a749-5048-86ee-135bc0f1d3a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4b770750-023d-5ba2-b0b0-5bf3da02fa77",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4e84c4d6-bbb4-56d9-9350-02225120a6ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4f77f7cd-a51e-5942-a139-d95eac57e024",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5051b61c-b1ba-55fb-8051-ff770ad881c9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "59771ba7-e22c-5c44-a26f-88b16b74fe6f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5fc0b88d-31db-5b84-8e21-e050d873fc64",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6111a9db-4a57-5897-beb7-246d93acdf0c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "617ea59c-3b2d-5fde-81f5-7fc1a72dc968",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "61cdfe0e-c003-55e6-b69a-f9cc97c94c2e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "62c4c09b-3bba-58c9-a6c5-24d7d0b1845d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "68775f7f-a5c8-58b6-84c9-b47cb33f7015",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6be71648-ba8b-5607-8bb6-90ce6034f06e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6cec282d-2da4-5be1-9043-78f810b84815",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "75b782da-d9c6-5576-89da-dbaef827b1c6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "768f346f-684e-53bd-94e9-3d8fb4356c5a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "782bdde1-bca5-5b08-b039-bb3033c42f38",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "884ae544-495c-5188-9f5c-969dcd8e1f7f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8b7c7c85-3aa2-5673-bdc3-0c883741d70b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8c58f173-7e2b-5eb7-ac89-548ac0f6f107",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8d88c76c-f814-59a1-af4d-218c4d875acb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8db8aabc-c4a0-5632-8f36-bc945b6b96d4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8f2e674e-d4b6-506d-8941-f3725aba2ed0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "90c615fa-4a2c-57c0-a18f-600acb395eff",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "94178ae3-7915-5863-91a2-ca71f240e005",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9b651699-25a6-51ee-ad90-138f6acc6583",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a2833efc-ab09-5905-8332-e5d933929512",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a2926e9f-d320-5b21-a7e5-3ef50d0b23fb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad82dda3-78de-55e3-bd43-07a3b6e2a38d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ae74ef04-518b-5db2-abd9-c4711db0e922",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ae8d94da-2193-542a-8dc5-b46030ae15c2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b008520d-5346-5d13-85df-eb8044aefbef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b63c35dc-0bbe-5b08-b866-b16b9d8f4155",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c0b1a538-0478-5f74-81ac-ea3b3d66fb3c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c905cff8-77f5-5f27-b9e9-12c7a8467748",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cb1f3f87-d0b0-5f36-a7fe-bee3a081b021",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cf68a59d-40e2-5d9c-b6eb-92619d6a7df2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cf899990-fdc6-54e3-a915-54a51bf0fa71",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d01865a4-b41e-547e-a426-97e15b5a5bb2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d55f1d55-ac9b-59d6-9ddd-a03629324b72",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dea23b6a-37bb-566c-b26f-9d39d3a37815",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e1e9b552-ab64-5bfc-804a-d7106e2d6c0d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e33fd893-bf78-5f4e-8eb2-de1f3e3f10ab",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e344b1e3-0f95-5707-b22e-13b2a72a7064",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e4730eb9-d3b5-5290-8f92-1afa3cc45b8e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e7ffadcf-6f62-5200-a5df-1345c73fef89",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e9f9da41-bcac-576f-9172-b1faa783a21b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ec374b98-be78-53ed-8eb9-230bcef2d0f7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ecae18ec-1b3b-5eb8-b12a-a1302f6bc3ea",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fa73f1e9-5260-5e02-8127-a6d58edaf472",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fc62ae01-792d-570d-aa92-1359258d8e75",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fcad8911-25c1-5c02-94fa-9507915a14e2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "eadb7489-237c-564d-833d-bdfed8beaa0e",
+      "source_text": "1 What are LLM Agents and Multi-Agent Systems?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1 什么是LLM智能体与多智能体系统？"
+      ]
+    },
+    {
+      "sentence_id": "85701922-a86c-5e0f-bd1d-14e43e06421f",
+      "source_text": "This chapter covers",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章涵盖"
+      ]
+    },
+    {
+      "sentence_id": "86906791-3e8d-5471-87c8-b30e469737a6",
+      "source_text": "Current real-world applications of LLM agents and multi-agent systems",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体与多智能体系统的当前实际应用"
+      ]
+    },
+    {
+      "sentence_id": "1a0adf6c-6252-5ca1-a694-72c22c287b52",
+      "source_text": "What LLM agents are and why LLMs alone are insufficient",
+      "sentence_status": "translated",
+      "target_texts": [
+        "什么是LLM智能体，以及为何仅凭LLM本身是不够的"
+      ]
+    },
+    {
+      "sentence_id": "d56b804a-2412-534d-9a7f-410939590cf3",
+      "source_text": "Important design patterns, enhancements, and protocols for LLM agents",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体的重要设计模式、增强方法与协议"
+      ]
+    },
+    {
+      "sentence_id": "f70d213e-02d8-5598-85b4-dd2032e73882",
+      "source_text": "When applications may benefit from multi-agent systems",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当应用可能受益于多智能体系统时"
+      ]
+    },
+    {
+      "sentence_id": "0dff33dc-b95d-5602-9adb-4303a7ef460f",
+      "source_text": "A roadmap for developing LLM agents and multi-agent systems",
+      "sentence_status": "translated",
+      "target_texts": [
+        "开发LLM智能体和多智能体系统的路线图"
+      ]
+    },
+    {
+      "sentence_id": "af456f9b-2384-5ab2-a16a-8f019f3a4cbe",
+      "source_text": "If a user asks a Large Language Model (LLM) where to find the best value in croissants in New York City, the LLM might respond, ‚ÄúI will search the web for highly-rated croissants and their prices.‚Äù LLMs are very good at expressing intent to act toward a specific goal‚Äîto generate text that tells us what they are going to do to resolve a query.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果用户询问大语言模型（LLM）在纽约哪里能找到性价比最高的牛角面包，LLM可能会回答：“我将搜索网络，查找评价高且价格合理的牛角面包。”LLM非常擅长表达为达成特定目标而采取行动的意图——即生成文本，告诉我们它们将如何解决查询。"
+      ]
+    },
+    {
+      "sentence_id": "73a0d471-7212-5f28-8585-18ad648afd2e",
+      "source_text": "At this point, however, we run into a critical limitation: since LLMs are only text-generators, they cannot act on their intentions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，此时我们遇到了一个关键限制：由于大语言模型（LLM）仅仅是文本生成器，它们无法根据其意图采取行动。"
+      ]
+    },
+    {
+      "sentence_id": "f5ca5aac-59d8-5f4a-8902-da11e9d1e9c2",
+      "source_text": "They can articulate a plan for processing a task, but cannot carry it out‚Äîunless they are surrounded by a system to orchestrate the plan and execute the actions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它们能够阐述处理任务的计划，但无法执行该计划——除非它们被置于一个能够协调计划并执行行动的系统之中。"
+      ]
+    },
+    {
+      "sentence_id": "5b076bc5-eab2-5a9b-afe0-abffc62664dc",
+      "source_text": "These orchestration systems are called LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些编排系统被称为LLM智能体。"
+      ]
+    },
+    {
+      "sentence_id": "afa58b70-100b-5bea-8891-4e7e4eaab3ce",
+      "source_text": "We‚Äôll add some nuance to this definition soon, but for our purposes, LLM agents are systems that automatically turn the LLM‚Äôs intentions into actions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们很快会对这个定义进行一些细微的补充，但就我们的目的而言，LLM智能体是能够自动将LLM的意图转化为行动的系统。"
+      ]
+    },
+    {
+      "sentence_id": "455e0ca9-4c56-57b7-9c8c-00762da661cf",
+      "source_text": "LLM agents work by interfacing with a key capability of modern LLMs: tool-calling.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体通过利用现代大型语言模型的一项关键能力——工具调用——来工作。"
+      ]
+    },
+    {
+      "sentence_id": "02ec5ca8-dfeb-5307-bb71-d98f294a8e8d",
+      "source_text": "By tool-calling, we mean we can give the LLM (in text) a list of tools and a description of what those tools do, and the LLM can generate (in text) a tool-call request to call on the appropriate tool to carry out its intent when queried.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "所谓工具调用，是指我们可以（以文本形式）向LLM提供一个工具列表及其功能描述，当被查询时，LLM能够（以文本形式）生成一个工具调用请求，以调用适当的工具来执行其意图。"
+      ]
+    },
+    {
+      "sentence_id": "86c8a9af-1c03-57c5-ae74-cee091296ed9",
+      "source_text": "The actual processing of this request occurs elsewhere in the application, and its results are sent back to the LLM for synthesis and response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "该请求的实际处理发生在应用程序的其他部分，处理结果会返回给LLM进行综合并生成响应。"
+      ]
+    },
+    {
+      "sentence_id": "27b4cfea-2670-5374-9b0a-1079331b4c07",
+      "source_text": "LLM agents utilize tool-calling extensively when performing tasks for users.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM代理在执行用户任务时会广泛使用工具调用功能。"
+      ]
+    },
+    {
+      "sentence_id": "edcff3f9-2922-580b-b058-a3d3ba21f2a9",
+      "source_text": "They ensure that the tool-call requests made by the LLMs are processed, and results are sent back to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它们确保LLM发出的工具调用请求得到处理，并将结果返回给LLM。"
+      ]
+    },
+    {
+      "sentence_id": "7e9946e7-c228-5324-bb58-04382085132f",
+      "source_text": "Without an LLM agent, users would have to manage this back-and-forth between tool processing and querying the LLM themselves.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果没有LLM代理，用户就需要自己处理工具处理与查询LLM之间的来回交互。"
+      ]
+    },
+    {
+      "sentence_id": "c3e13f46-a46f-50a5-b5a5-b66d2cf09e25",
+      "source_text": "As in real life, the more tools in your toolbox, the more you can do; equipping an LLM with tools for web search, math calculations, and code interpreters, for instance, makes it capable of handling a variety of tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如现实生活一样，工具箱中的工具越多，能做的事情就越多；例如，为LLM配备网络搜索、数学计算和代码解释器等工具，使其能够处理各种任务。"
+      ]
+    },
+    {
+      "sentence_id": "0552d6e4-779c-519b-b0f6-354ef7b18103",
+      "source_text": "We can build our own tools for LLMs to use, but we can also rely on the tools that others have created.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们可以为LLM构建自己的工具，也可以利用他人创建的工具。"
+      ]
+    },
+    {
+      "sentence_id": "8487629a-e306-5c1c-89b0-ab3a87b7ee2c",
+      "source_text": "Anthropic‚Äôs Model Context Protocol (MCP) is a popular standard for how LLM agents access third-party tools with which they can equip their underlying LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Anthropic的模型上下文协议（MCP）是一个流行标准，用于规范LLM智能体如何访问第三方工具，从而为其底层LLM配备能力。"
+      ]
+    },
+    {
+      "sentence_id": "1105669d-8af4-5209-abe0-a97bab18eb10",
+      "source_text": "Many tools, as well as other resources, are made available through MCP, and tapping into them dramatically increases an LLM agent‚Äôs potential.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "许多工具及其他资源通过MCP提供，利用这些资源能极大提升LLM智能体的潜力。"
+      ]
+    },
+    {
+      "sentence_id": "cd2916c0-f2d6-55d3-ad78-6665426bc653",
+      "source_text": "It is also possible to combine multiple LLM agents into a single system in order to improve task performance.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "还可以将多个LLM智能体组合成一个单一系统，以提高任务性能。"
+      ]
+    },
+    {
+      "sentence_id": "67f06cb9-8b72-56a3-944c-3a847cd1f5bd",
+      "source_text": "We refer to such systems as multi-agent systems (MAS).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将此类系统称为多智能体系统（MAS）。"
+      ]
+    },
+    {
+      "sentence_id": "5cdfc5cf-0876-514b-83be-a4506ebfb0bc",
+      "source_text": "In MAS, individual LLM agents collaborate with each other to perform tasks on behalf of a user.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在多智能体系统（MAS）中，单个LLM智能体相互协作，代表用户执行任务。"
+      ]
+    },
+    {
+      "sentence_id": "8f41f428-afef-5fed-b966-7afe8d3b9c4d",
+      "source_text": "Google‚Äôs Agent2Agent (A2A) protocol helps facilitate these collaborations by defining a standard for agent-to-agent interactions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "谷歌的Agent2Agent（A2A）协议通过定义智能体间交互的标准，有助于促进这些协作。"
+      ]
+    },
+    {
+      "sentence_id": "999f4c80-9d0b-5037-8b57-d702fa474a04",
+      "source_text": "With A2A, even LLM agents built using different frameworks can collaborate with each other to accomplish a task.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "借助A2A，即使使用不同框架构建的LLM智能体也能相互协作以完成任务。"
+      ]
+    },
+    {
+      "sentence_id": "6d189d69-e39c-5483-b369-2452a7dcb01a",
+      "source_text": "To work with LLM agents and multi-agent systems, and make the most of them, it‚Äôs important to have a deep understanding of how they work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要有效运用LLM智能体和多智能体系统，并充分发挥其潜力，关键在于深入理解它们的工作原理。"
+      ]
+    },
+    {
+      "sentence_id": "13d11a66-2e52-55c9-9a68-219aabce16cd",
+      "source_text": "To gain that understanding, we will",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了获得这种理解，我们将"
+      ]
+    },
+    {
+      "sentence_id": "b44fbd97-20d0-5378-8d6e-541b698d4001",
+      "source_text": "build our very own LLM agents and multi-agent systems from scratch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从零开始构建我们自己的LLM智能体和多智能体系统。"
+      ]
+    },
+    {
+      "sentence_id": "6d5beaec-fc43-5c29-8e72-3ab78d3f39b5",
+      "source_text": "We will build the complete infrastructure for LLM agents and MAS from the ground up, including interfaces for LLMs, tools, MCP resources, and A2A connectivity.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将从零开始构建LLM智能体和多智能体系统的完整基础设施，包括LLM接口、工具、MCP资源以及A2A连接。"
+      ]
+    },
+    {
+      "sentence_id": "1d76a09b-fe50-53c7-b103-6ac281a3e8f9",
+      "source_text": "And we‚Äôll package all of these into our very own LLM agent framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将把这些全部打包进我们自己的LLM智能体框架中。"
+      ]
+    },
+    {
+      "sentence_id": "56653806-2201-5874-9d03-e60c0c456079",
+      "source_text": "Several LLM agent frameworks already exist, and most AI engineers and practitioners use one of them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "目前已经存在多个LLM智能体框架，大多数AI工程师和实践者都在使用其中之一。"
+      ]
+    },
+    {
+      "sentence_id": "dd6d9d84-7cb1-51b5-843d-5e62361b1706",
+      "source_text": "But the goal of this book is to give you a deeper understanding of how these LLM agents function, so you can work confidently and efficiently with these existing frameworks or build specialized solutions specific to your needs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "但本书的目标是让您更深入地理解这些LLM智能体的工作原理，以便您能自信高效地使用现有框架，或根据特定需求构建专门的解决方案。"
+      ]
+    },
+    {
+      "sentence_id": "143ddb65-02a4-5b18-a065-b620b265e590",
+      "source_text": "That‚Äôs why we are building ours from scratch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这就是为什么我们要从头开始构建自己的框架。"
+      ]
+    },
+    {
+      "sentence_id": "af99363d-c1b6-596b-8eec-90160102e609",
+      "source_text": "1.1 Where LLM Agents and Multi-Agent Systems are useful",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1 LLM智能体与多智能体系统的应用场景"
+      ]
+    },
+    {
+      "sentence_id": "9d2eed79-eaf9-5e54-a4d6-271ae443d6b2",
+      "source_text": "To get an idea of the broad usefulness of LLM agents and MAS, let‚Äôs discuss a few real-world use cases, some of which are depicted in figure 1.1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了了解LLM智能体和多智能体系统（MAS）的广泛实用性，我们来讨论几个现实世界的应用案例，其中一些如图1.1所示。"
+      ]
+    },
+    {
+      "sentence_id": "b38d9eeb-8f17-52c3-bfc5-76abe4c9675c",
+      "source_text": "Figure 1.1 The applications for LLM agents are many, including agentic RAG, report generation, deep search and computer use, all of which can benefit from MAS.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.1 LLM智能体的应用场景众多，包括智能检索增强生成（RAG）、报告生成、深度搜索和计算机使用等，所有这些都可以从多智能体系统（MAS）中受益。"
+      ]
+    },
+    {
+      "sentence_id": "6f462753-4179-5531-a75a-9943ac72d2fe",
+      "source_text": "1.1.1 Report generation",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.1 报告生成"
+      ]
+    },
+    {
+      "sentence_id": "94b43b43-1013-57fa-94cd-bb0e021c5af2",
+      "source_text": "The typical process for producing a report involves the collection of a large body of information, synthesizing it into key insights, and summarizing these insights into a structured output format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "生成报告的典型流程包括收集大量信息，将其综合为关键见解，并将这些见解总结为结构化的输出格式。"
+      ]
+    },
+    {
+      "sentence_id": "aa38d28f-8de4-53d1-91aa-c7ea3f2ba5ae",
+      "source_text": "Since LLMs can synthesize large bodies of text information, the report generation task has become a popular task for LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于LLM能够综合大量文本信息，报告生成任务已成为LLM代理的热门应用场景。"
+      ]
+    },
+    {
+      "sentence_id": "c2d4d4b8-8212-5cda-aae5-61b5fab2eec4",
+      "source_text": "For instance, we might task an LLM agent to collect statistics on a variety of investment opportunities, and then provide a risk-and-opportunity assessment report for each of them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，我们可以指派一个LLM代理收集各类投资机会的统计数据，然后为每个机会提供风险与机遇评估报告。"
+      ]
+    },
+    {
+      "sentence_id": "a884e30e-51ad-5814-8feb-7ea679d31217",
+      "source_text": "Note: reports like these can be marred by LLM hallucinations, so monitoring is crucial.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意：此类报告可能因LLM幻觉而受到影响，因此监控至关重要。"
+      ]
+    },
+    {
+      "sentence_id": "2fb75468-4f4a-5f79-a4ab-f25dd2e83ed8",
+      "source_text": "1.1.2 Web search and deep search",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.2 网络搜索与深度搜索"
+      ]
+    },
+    {
+      "sentence_id": "1885005f-eb6d-5641-8cdc-021b6b494d91",
+      "source_text": "Performing searches against general user queries is a common use for LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "针对一般用户查询进行搜索是LLM代理的常见用途。"
+      ]
+    },
+    {
+      "sentence_id": "2d804400-75cc-51b0-9c7a-a810c5ade49f",
+      "source_text": "Here, the LLM agents feature an LLM that has likely been fine-tuned for enhanced reasoning capabilities and web search tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这些应用中，LLM代理通常包含一个经过微调以增强推理能力和网络搜索工具的LLM。"
+      ]
+    },
+    {
+      "sentence_id": "1db7a4f5-bd3c-5e42-b4c0-d3f4bff2bae0",
+      "source_text": "Perplexity.ai is one of the new web search engine companies that use LLM agents, but OpenAI‚Äôs ChatGPT and Anthropic‚Äôs Claude web applications have also recently added web search.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Perplexity.ai是使用LLM代理的新型网络搜索引擎公司之一，但OpenAI的ChatGPT和Anthropic的Claude网络应用最近也添加了网络搜索功能。"
+      ]
+    },
+    {
+      "sentence_id": "ee6edaa4-c4d0-58d1-838a-0dbb88c8241c",
+      "source_text": "An extension of web search is deep research, which involves a multi-step orchestration logic that executes steps of deep browsing of webpages, followed by synthesis and report generation steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "深度研究是网络搜索的延伸，它采用多步骤编排逻辑，包括对网页进行深度浏览，随后进行信息综合和报告生成。"
+      ]
+    },
+    {
+      "sentence_id": "6ab4901c-ff8f-52e2-9b7f-78d722ddcbbb",
+      "source_text": "Google‚Äôs Gemini Deep Research product employs an orchestration logic that involves planning, searching, reasoning, and reporting.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "谷歌的Gemini深度研究产品采用了一种包含规划、搜索、推理和报告生成的编排逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "2651abf9-727c-57a9-871e-08655da2961d",
+      "source_text": "The other large LLM providers offer their own versions of deep research.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其他大型LLM提供商也推出了各自版本的深度研究功能。"
+      ]
+    },
+    {
+      "sentence_id": "8793eae1-95f6-5c84-a382-4a59b04d4613",
+      "source_text": "Later in this book, we‚Äôll implement our very own deep research agent using our LLM agent build.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本书后续章节中，我们将使用我们的LLM智能体构建工具，实现我们自己的深度研究智能体。"
+      ]
+    },
+    {
+      "sentence_id": "34ee7624-2094-50a9-92bd-5e4ab472a9d2",
+      "source_text": "1.1.3 Agentic RAG",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.3 智能体化检索增强生成"
+      ]
+    },
+    {
+      "sentence_id": "3f668cb4-a567-53ec-af63-875207bd85a3",
+      "source_text": "LLM agents can also be used as part of a retrieval-augmented generation (RAG) system, otherwise known as Agentic RAG systems.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体也可作为检索增强生成（RAG）系统的一部分，即所谓的智能体化RAG系统。"
+      ]
+    },
+    {
+      "sentence_id": "eb1a6d3c-169e-583c-ac49-5612bdc6e958",
+      "source_text": "In these applications, LLM agents are equipped with tools for querying previously built knowledge stores that contain artifacts to help answer user queries.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在此类应用中，LLM智能体配备了查询工具，可访问预先构建的知识库，这些知识库包含有助于回答用户查询的文档。"
+      ]
+    },
+    {
+      "sentence_id": "79447ad3-c7e8-5787-84b4-0711f4692cd7",
+      "source_text": "Imagine a company with all its meeting notes and internal documentation indexed into a set of knowledge stores.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "设想一家公司将其所有会议记录和内部文档索引至一系列知识库中。"
+      ]
+    },
+    {
+      "sentence_id": "c2f6b23d-3209-550c-8f60-e3e48a68dbf8",
+      "source_text": "An agentic RAG system can then retrieve context from these documents to answer queries supplied by the company‚Äôs employees.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "智能体化RAG系统随后可从这些文档中检索上下文，以回答公司员工提出的查询。"
+      ]
+    },
+    {
+      "sentence_id": "7a882d96-4b37-5b86-9273-d9d6440a8898",
+      "source_text": "1.1.4 Coding LLM agents",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.4 编码LLM智能体"
+      ]
+    },
+    {
+      "sentence_id": "f34ad8ac-15fc-5f4d-b983-df9b733dc5fb",
+      "source_text": "One of the more popular uses for LLMs and LLM agents has been for coding and software development.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM和LLM智能体最受欢迎的用途之一便是编码和软件开发。"
+      ]
+    },
+    {
+      "sentence_id": "bdf2ddd7-3d2d-5b88-85e9-424485af565d",
+      "source_text": "There‚Äôs even a new term, ‚Äúvibe coding,‚Äù for giving the reins over to an LLM or LLM agent to code entire projects or applications, with the human only providing natural language instructions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "甚至出现了一个新术语“氛围编码”，指的是将整个项目或应用程序的编码工作完全交由LLM或LLM智能体处理，人类仅提供自然语言指令。"
+      ]
+    },
+    {
+      "sentence_id": "12f5a98d-23a8-55b9-8369-1eb84a5e6c6f",
+      "source_text": "Coding LLM agents can also work together to contribute to an application‚Äôs code base, very much like how human software developer teams contribute to a project.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "编码LLM智能体也能协同工作，为应用程序的代码库做出贡献，这与人类软件开发团队参与项目的方式非常相似。"
+      ]
+    },
+    {
+      "sentence_id": "7de39d3c-e591-5e3a-b5f7-abb64f6044cd",
+      "source_text": "In these applications, LLM agents can be equipped with sandboxed code interpreters for executing arbitrary code in secure environments.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这些应用中，LLM智能体可以配备沙盒化的代码解释器，以便在安全环境中执行任意代码。"
+      ]
+    },
+    {
+      "sentence_id": "90a53d09-fc07-52f0-aec6-3bd7ff70fbdc",
+      "source_text": "1.1.5 Computer use",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.5 计算机使用"
+      ]
+    },
+    {
+      "sentence_id": "51a5d28e-741c-5f5b-83f6-0ab40da860c0",
+      "source_text": "LLM agents have also recently been equipped with tools that increase their scope and permissions, including those providing controls to entire applications, such as web browsers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最近，LLM智能体还被配备了各种工具，以扩大其应用范围和权限，包括那些能够控制整个应用程序（如网页浏览器）的工具。"
+      ]
+    },
+    {
+      "sentence_id": "da79bcba-4dc1-523a-bddf-830d2d0db2cd",
+      "source_text": "With computer-use applications, the LLM agents can even be given control of the entirety of the operating software.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在计算机应用场景中，LLM智能体甚至可以被授予对整个操作系统软件的控制权。"
+      ]
+    },
+    {
+      "sentence_id": "cd002607-4015-526c-9c0f-19d518abdbdb",
+      "source_text": "With these kinds of permissions, LLM agents can perform tasks such as ordering food, buying concert tickets, and more, all through using a computer, much like how humans would.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "凭借这类权限，LLM智能体能够执行诸如订餐、购买音乐会门票等任务，这一切都通过计算机完成，方式与人类操作类似。"
+      ]
+    },
+    {
+      "sentence_id": "be36c6c3-60f7-5eba-a01b-2a93516729fd",
+      "source_text": "In this way, LLM agents can be viewed as next-generation Robot Process Automation (RPA) systems, which traditionally are rules-based and cannot flexibly adapt or apply reasoning to make decisions like LLM agents can.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从这个角度看，LLM智能体可被视为新一代的机器人流程自动化（RPA）系统。传统的RPA系统基于规则，无法像LLM智能体那样灵活适应或运用推理进行决策。"
+      ]
+    },
+    {
+      "sentence_id": "8b1d017f-7265-54eb-bc60-67687839c2aa",
+      "source_text": "1.1.6 Enhancing applications with MAS",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.1.6 利用多智能体系统增强应用"
+      ]
+    },
+    {
+      "sentence_id": "85dede26-e289-5a9e-841e-226033cb7fff",
+      "source_text": "All of these uses for LLM agents may be enhanced through MAS by using specialized agents across different components of an overall task.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "所有这些LLM智能体的应用，都可以通过多智能体系统得到增强，即在整体任务的不同组件中使用专门的智能体。"
+      ]
+    },
+    {
+      "sentence_id": "81f5a542-13af-548a-b401-c314656fa77f",
+      "source_text": "In the report generation application, you might have a specialized LLM agent that can more effectively summarize or extract information from domain-specific datasets, like financial documents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在报告生成应用中，可以有一个专门的LLM智能体，能够更有效地从领域特定数据集（如财务文档）中总结或提取信息。"
+      ]
+    },
+    {
+      "sentence_id": "1770851a-ead3-5e59-9a4e-6c8b07c3df11",
+      "source_text": "This agent might collaborate with another LLM agent that is responsible for producing well-structured reports.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个智能体可能会与另一个负责生成结构良好报告的LLM智能体协作。"
+      ]
+    },
+    {
+      "sentence_id": "613a3811-b64f-525e-a1a1-9e25c8b29eb2",
+      "source_text": "Or we might employ a team of coding LLM agents for building a full-stack application: you might have one that builds front-end code and another that creates the backend.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "或者，我们可能采用一个编码LLM智能体团队来构建全栈应用：一个负责构建前端代码，另一个负责创建后端。"
+      ]
+    },
+    {
+      "sentence_id": "29e35f64-8579-5210-8c78-84f0b1fdd7bd",
+      "source_text": "In principle, MAS excel when complex tasks can be decomposed into smaller sub-tasks, where focused LLM agents outperform general-purpose ones.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "原则上，当复杂任务能够分解为更小的子任务时，多智能体系统表现卓越，此时专注于特定领域的LLM智能体优于通用型智能体。"
+      ]
+    },
+    {
+      "sentence_id": "c6599a8c-f50b-5361-b451-3fffd338b996",
+      "source_text": "1.2 What is an LLM agent?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.2 什么是LLM智能体？"
+      ]
+    },
+    {
+      "sentence_id": "f6d2a692-33f0-533c-a5bf-bef82d8baf5a",
+      "source_text": "A simple definition of an agent is some entity that acts autonomously to perform a task.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "智能体的一个简单定义是：能够自主行动以执行任务的实体。"
+      ]
+    },
+    {
+      "sentence_id": "b64f69df-0b92-53a4-b8f8-46f753ac03a1",
+      "source_text": "Since LLMs can only generate text and cannot act, they cannot be viewed as agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于大语言模型只能生成文本而无法执行行动，因此不能被视为智能体。"
+      ]
+    },
+    {
+      "sentence_id": "cae280fb-219c-5e4e-a0f2-cd3989f9f090",
+      "source_text": "As mentioned, LLMs can, however, express intent to act through text.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，LLM能够通过文本来表达行动意图。"
+      ]
+    },
+    {
+      "sentence_id": "8c2470c5-7495-5d15-9f56-c42efb875008",
+      "source_text": "They can generate tool call requests and can formulate plans to perform tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它们能够生成工具调用请求，并能够制定执行任务的计划。"
+      ]
+    },
+    {
+      "sentence_id": "89d2b4ee-69cc-583c-bbea-e6950af873be",
+      "source_text": "So if we build a system around an LLM that can orchestrate the executions of these generated tool-call requests and plans, that system could be viewed as an agent.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，如果我们围绕一个能够编排这些生成的工具调用请求和计划执行的LLM构建一个系统，那么该系统可被视为一个智能体。"
+      ]
+    },
+    {
+      "sentence_id": "6759e949-8d7d-5033-8120-a601b85137ec",
+      "source_text": "Definition",
+      "sentence_status": "translated",
+      "target_texts": [
+        "定义"
+      ]
+    },
+    {
+      "sentence_id": "7cf599c6-0ec4-552e-b4d0-24050ee643b5",
+      "source_text": "An LLM agent is an autonomous system, comprised of a backbone LLM and tools, that acts on tool-call requests and plans formulated by the LLM to perform tasks on behalf of a user.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体是一个自主系统，由骨干LLM和工具组成，它根据LLM生成的工具调用请求和规划来执行任务，代表用户行事。"
+      ]
+    },
+    {
+      "sentence_id": "e5513d34-3b32-5c4f-bb90-3c96dde3db90",
+      "source_text": "Figure 1.2 shows an LLM agent that utilizes the Qwen3-7b (i.e., the 7 billion parameter version of Qwen3) model as its backbone LLM and is equipped with five tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.2展示了一个LLM智能体，它采用Qwen3-7b模型（即Qwen3的70亿参数版本）作为其核心LLM，并配备了五个工具。"
+      ]
+    },
+    {
+      "sentence_id": "e41e7be9-3e3f-5a59-9688-d59eaee73d7b",
+      "source_text": "Three of these tools are accessed through Anthopic‚Äôs MCP, meaning third-party tool providers could have created them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其中三个工具通过Anthopic的MCP访问，这意味着第三方工具提供商可能创建了它们。"
+      ]
+    },
+    {
+      "sentence_id": "489e91d9-2381-5703-9f70-9801dc8e3152",
+      "source_text": "Figure 1.2 An LLM agent is comprised of a backbone LLM and its equipped tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.2：一个LLM智能体由骨干LLM及其配备的工具组成。"
+      ]
+    },
+    {
+      "sentence_id": "84bd5f5d-380b-5784-af96-2256b96856f8",
+      "source_text": "1.2.1 Prerequisite LLM capabilities",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.2.1 必备的LLM能力"
+      ]
+    },
+    {
+      "sentence_id": "bbe28be7-1fa4-5abd-8a49-810fd7aa21c0",
+      "source_text": "By our definition, an LLM agent depends on the backbone LLM‚Äôs plans and requests for tool calls to accomplish tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "根据我们的定义，LLM智能体依赖骨干LLM制定的计划和工具调用请求来完成各项任务。"
+      ]
+    },
+    {
+      "sentence_id": "2004064e-17bc-5797-8db2-e474cfcb4158",
+      "source_text": "To be effective, LLM agents require their backbone LLM to make sensible choices for the next actions, including which tool calls to perform, after synthesizing the results of previous actions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要有效运作，LLM智能体需要其骨干LLM在综合先前行动结果后，为后续行动（包括执行哪些工具调用）做出合理选择。"
+      ]
+    },
+    {
+      "sentence_id": "dc2cc0f2-9537-5446-83fc-9263d9c4b15b",
+      "source_text": "Two LLM capabilities that can meet this requirement are planning and tool calling.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "能够满足这一要求的两项LLM能力是规划能力和工具调用能力。"
+      ]
+    },
+    {
+      "sentence_id": "c9288bf6-1195-539e-8724-1c2dc41301f1",
+      "source_text": "Planning",
+      "sentence_status": "translated",
+      "target_texts": [
+        "规划"
+      ]
+    },
+    {
+      "sentence_id": "1626efdd-165d-5c4a-9c37-d6d7d65ba60d",
+      "source_text": "LLM agents are often implemented so that their backbone LLMs create initial plans to execute a given task.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体通常被设计成其骨干大语言模型会为给定任务生成初始执行计划。"
+      ]
+    },
+    {
+      "sentence_id": "eaa933a3-f155-5caa-9845-d419c1dfe012",
+      "source_text": "This happens at the very beginning of the task execution and clearly relies on the overall capability of the backbone LLM to formulate plans.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这一过程发生在任务执行的初始阶段，显然依赖于骨干大语言模型制定计划的整体能力。"
+      ]
+    },
+    {
+      "sentence_id": "fd48a373-da98-57fc-8c3c-c1e3f05924a0",
+      "source_text": "Setting an incorrect plan at the very beginning of the task execution can lead to catastrophic outcomes such as incorrect task results, task execution timeouts, or massive inefficiencies.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在任务执行之初设定错误的计划，可能导致灾难性后果，例如任务结果错误、执行超时或效率极度低下。"
+      ]
+    },
+    {
+      "sentence_id": "dcc6ba7c-41a7-5d92-a514-1c11a814b190",
+      "source_text": "Suppose we were to execute on our task of finding the best-value croissants in New York City.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "假设我们要执行在纽约市寻找性价比最高可颂面包的任务。"
+      ]
+    },
+    {
+      "sentence_id": "2cbd2052-42d0-54ef-930e-b55874e89a62",
+      "source_text": "The LLM agent might first receive the original user request and formulate an initial plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体首先会接收原始用户请求，并制定初步计划。"
+      ]
+    },
+    {
+      "sentence_id": "433e7576-1606-5187-a0f3-7457801a3d46",
+      "source_text": "It does this through text generation, of course, and could look something like the following:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这当然是通过文本生成实现的，可能类似于以下示例："
+      ]
+    },
+    {
+      "sentence_id": "0ddbb9aa-a375-5a49-97dc-71797b9cd202",
+      "source_text": "\"I need to find all of the bakeries in New York City that sell croissants and check their prices as well as their ratings. Then, I need to build an analysis with this information to determine the best-value croissants in NYC.\"",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "c2ec8dc2-9f36-586f-863a-8ed6ef1b27bf",
+      "source_text": "This initial plan typically forms the start of a new sub-step execution, which is part of the broader task processing.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这一初始规划通常构成新子步骤执行的起点，而该子步骤是更广泛任务处理的一部分。"
+      ]
+    },
+    {
+      "sentence_id": "8b1b7bb6-73d9-55c0-9e7d-b719160a4f25",
+      "source_text": "As you can imagine, planning is not only used at the beginning of the task execution, but also throughout its entirety.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如你所想象的，规划不仅用于任务执行的开始阶段，而是贯穿其全过程。"
+      ]
+    },
+    {
+      "sentence_id": "cf349ba7-0799-5698-90cf-a1ed57d7a79f",
+      "source_text": "One common way to implement a task execution is through a processing loop that produces steps or actions towards task completion.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "实现任务执行的一种常见方式是通过一个处理循环，该循环生成朝向任务完成的步骤或行动。"
+      ]
+    },
+    {
+      "sentence_id": "21cf0357-744d-528f-b72d-6473d0813722",
+      "source_text": "We utilize the LLM‚Äôs planning capability to synthesize the results of the previous steps or actions and their contribution to the overall task execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们利用LLM的规划能力，综合前几步或行动的结果及其对整体任务执行的贡献。"
+      ]
+    },
+    {
+      "sentence_id": "4b1b824b-49c9-575b-855a-cdfaf97b99b3",
+      "source_text": "It is here that the LLM agent, through its backbone LLM, can adapt its current plan to a new one based on these past results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正是在这里，LLM智能体通过其核心LLM，能够基于这些过往结果调整当前计划，形成新的计划。"
+      ]
+    },
+    {
+      "sentence_id": "e8bf5ac5-391e-50f6-918a-6acb3de3b6cc",
+      "source_text": "The LLM agent could, for example, course-correct if it deems that the past steps have led the execution down a not-so-happy path, or it could determine that the task has been completed, perhaps earlier than anticipated, and exit the task execution with the appropriate task result.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，如果LLM智能体认为过去的步骤将执行引向了不理想的路径，它可以进行纠偏；或者，它可能判定任务已完成（可能早于预期），并以适当的任务结果退出任务执行。"
+      ]
+    },
+    {
+      "sentence_id": "36aca7d4-5248-5cf2-841a-cc311be55ad0",
+      "source_text": "Figure 1.3 shows how LLM agents plan with LLMs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.3展示了LLM智能体如何利用LLMs进行规划。"
+      ]
+    },
+    {
+      "sentence_id": "5fa71a9f-6a73-5f13-8d94-7479bda7db6d",
+      "source_text": "Figure 1.3 LLM agents utilize the planning capability of backbone LLMs to formulate initial plans for tasks, as well as to adapt current plans based on the results of past steps or actions taken towards task completion.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.3 LLM智能体利用骨干大语言模型的规划能力，为任务制定初始计划，并根据过去步骤的结果或为完成任务所采取的行动来调整当前计划。"
+      ]
+    },
+    {
+      "sentence_id": "18972e09-24a1-5d0a-a50d-2b6a044563fc",
+      "source_text": "Planning vs Chain-of-Thought and Reasoning LLMs",
+      "sentence_status": "translated",
+      "target_texts": [
+        "规划与思维链及推理型LLM"
+      ]
+    },
+    {
+      "sentence_id": "9106908a-e9f8-57a1-8a66-b777bc5692a2",
+      "source_text": "A related concept to planning is Chain-of-Thought, an LLM-prompting technique that attempts to have LLMs provide their reasoning and deduction steps, in addition to the final response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与规划相关的一个概念是思维链，这是一种大型语言模型提示技术，旨在让大型语言模型除了提供最终答案外，还展示其推理和演绎步骤。"
+      ]
+    },
+    {
+      "sentence_id": "10737c23-6f91-5df1-8c3c-0831843afaed",
+      "source_text": "Prompts used to elicit these chains of thought from LLMs to answer questions could include demonstrative examples, known as few-shot exemplars.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "用于引导大型语言模型通过思维链回答问题的提示可能包含示范性示例，即少样本示例。"
+      ]
+    },
+    {
+      "sentence_id": "646f51bc-5466-59c3-8f8d-0eed88082bbf",
+      "source_text": "For instance, ‚ÄúThe number 77 is divisible by 7 and 11.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，“数字77可被7和11整除。”"
+      ]
+    },
+    {
+      "sentence_id": "225a3625-55f8-5c01-8cd1-ed44c81d81a4",
+      "source_text": "Thus, 77 is not a prime number‚Äù would be an exemplar answer to the question ‚ÄúIs 77 a prime number?‚Äù that could be included under an examples section of a prompt.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，“77不是质数”可作为“77是质数吗？”这一问题的示例答案，可包含在提示的示例部分中。"
+      ]
+    },
+    {
+      "sentence_id": "2e19f538-769f-5019-8679-0462d9651ec4",
+      "source_text": "These prompts also typically include words like ‚Äúshow your or work‚Äù or ‚Äúlet‚Äôs solve this step-by-step‚Äù in the system-context setting portion of the prompt.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些提示通常还会在系统上下文设置部分包含诸如“展示你的工作”或“让我们逐步解决这个问题”等词语。"
+      ]
+    },
+    {
+      "sentence_id": "e256b5b7-7a2e-55ac-ab5d-4896794107d6",
+      "source_text": "In recent times, LLMs have been further trained to generate long chains of thought, and such LLMs have come to be known as ‚Äúreasoning LLMs.‚Äù These generated sequences of text are often included in the final text output, typically enclosed in a section marked by the tags ‚Äú‚Äù and ‚Äú‚Äù.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "近年来，大型语言模型经过进一步训练，能够生成长链的思维过程，这类模型被称为“推理型大型语言模型”。这些生成的文本序列通常包含在最终输出中，一般被标记为“”和“”标签所包围。"
+      ]
+    },
+    {
+      "sentence_id": "0264a290-80de-55bb-b1b9-bff39623e1f6",
+      "source_text": "As a result of their post-training, reasoning LLMs may also have increased abilities to plan, and could therefore be a worthy candidate as the backbone LLM for LLM agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "经过后训练，推理型大语言模型在规划能力上可能也有所增强，因此可作为LLM智能体的核心大语言模型的有力候选。"
+      ]
+    },
+    {
+      "sentence_id": "f5bf32ff-f224-527d-a153-6f8772629805",
+      "source_text": "Tool Calling",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用"
+      ]
+    },
+    {
+      "sentence_id": "e2cab5b2-cc61-558e-92c1-6d270339fe6b",
+      "source_text": "The second prerequisite capability for the backbone LLM is tool calling.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为骨干的大型语言模型所需的第二项先决能力是工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "0f78b2db-0313-5c60-99c0-562883858d32",
+      "source_text": "Earlier, we discussed how to equip an LLM with a tool by providing it with textual descriptions of the tool‚Äôs functionality and parameters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "之前我们讨论了如何通过提供工具功能与参数的文本描述，来为大型语言模型配备工具。"
+      ]
+    },
+    {
+      "sentence_id": "f637454f-0487-539a-9717-bb0a0f9e7de0",
+      "source_text": "By doing so, we enable the LLM to express an intent to use the tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过这种方式，我们使大型语言模型能够表达使用工具的意图。"
+      ]
+    },
+    {
+      "sentence_id": "9cfb65bc-7f27-5fea-9fec-54931bcf5a07",
+      "source_text": "You can see this tool-equipping process in figure 1.4",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以在图1.4中看到这个工具配备过程。"
+      ]
+    },
+    {
+      "sentence_id": "d070ffd6-8de5-58cd-afe5-59b8b4a3ad27",
+      "source_text": "Figure 1.4 An illustration of the tool-equipping process, where a textual description of the tool that contains the tool‚Äôs name, description and its parameters is provided to the LLM agent.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.4展示了工具装备过程的示意图，其中向LLM智能体提供了包含工具名称、描述及其参数的工具文本描述。"
+      ]
+    },
+    {
+      "sentence_id": "3f6a7544-1c7f-5da5-aec6-91ef45aa4fc5",
+      "source_text": "Let‚Äôs unpack the rest of the broader tool-calling process and overall capability.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们来详细解析更广泛的工具调用过程及其整体能力。"
+      ]
+    },
+    {
+      "sentence_id": "e6693ea8-f995-5e59-9988-1a9211d11942",
+      "source_text": "Tools that are equipped to the LLM agent can be used for future tool calls.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "配备给LLM代理的工具可用于未来的工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "95d9412d-7a97-5cb3-bffe-ad41dd94bd00",
+      "source_text": "The entire tool-call process is shown in figure 1.5",
+      "sentence_status": "translated",
+      "target_texts": [
+        "整个工具调用过程如图1.5所示。"
+      ]
+    },
+    {
+      "sentence_id": "f9942db8-6568-5af8-9a88-893b2047dde6",
+      "source_text": "Figure 1.5 The tool-calling process, where any equipped tool can be used.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.5：工具调用过程，其中任何已配备的工具均可使用。"
+      ]
+    },
+    {
+      "sentence_id": "eb4b8a02-8419-57d8-9391-39288b1021aa",
+      "source_text": "Each tool-call process begins with an LLM making a tool-call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "每个工具调用过程都始于大语言模型发出工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "2df7aa9d-691a-5c37-af44-51f270a552d8",
+      "source_text": "This tool-call request is text generated by the LLM, which includes the tool identifier as well as the values for the required parameters of the selected tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此工具调用请求是由大语言模型生成的文本，其中包含工具标识符以及所选工具所需参数的取值。"
+      ]
+    },
+    {
+      "sentence_id": "13d5c9f0-b6c4-5025-9027-4d4f9ea0910b",
+      "source_text": "LLMs often make these tool-call requests through a structured output, such as a JSON format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "大语言模型通常通过结构化输出（例如JSON格式）发出这些工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "e8457040-fba4-59ef-9d55-fc8de3bab001",
+      "source_text": "For example, and in continuation with our task to find the best-value croissants in New York City, the LLM may generate a web-search tool-call request that looks something like the following:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "例如，延续我们寻找纽约市最佳性价比可颂的任务，大语言模型可能会生成类似如下的网络搜索工具调用请求："
+      ]
+    },
+    {
+      "sentence_id": "03d26947-64cb-5809-9a72-1d2c870a04ac",
+      "source_text": "{ \"tool_name\": \"web-search-tool\", #A \"parameters\": { #B \"query\": \"Croissant bakeries in New York City and their prices.\", } }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "5e230d8c-5aa2-5f4a-a559-23166aa797b1",
+      "source_text": "As you can see, the tool request that the LLM makes contains not only the tool selection but also the values for the selected tool‚Äôs parameters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如你所见，LLM发出的工具请求不仅包含工具选择，还包含所选工具的参数值。"
+      ]
+    },
+    {
+      "sentence_id": "e422aa56-150f-5e25-9d24-2e9aa032ca98",
+      "source_text": "After an LLM has made a tool call request, the tool is executed with the provided parameters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在LLM发出工具调用请求后，工具会使用提供的参数执行。"
+      ]
+    },
+    {
+      "sentence_id": "8e488104-2cd7-51d8-a776-4f1a9572a836",
+      "source_text": "The results of the tool call execution are then sent back to the LLM, allowing it to synthesize the information and generate an appropriate response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用执行的结果随后被发送回LLM，使其能够综合信息并生成适当的响应。"
+      ]
+    },
+    {
+      "sentence_id": "b892eda2-7a09-5c81-bf10-742588821d4f",
+      "source_text": "Teaching LLMs how to tool-call",
+      "sentence_status": "translated",
+      "target_texts": [
+        "教授LLM如何调用工具"
+      ]
+    },
+    {
+      "sentence_id": "f42bdf7a-f6d4-55f4-844b-e28d2132aee4",
+      "source_text": "To provide LLMs with this tool-calling capability, often also referred to as ‚Äútool usage‚Äù, LLMs typically undergo supervised fine-tuning, a form of post-training.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了赋予LLM这种工具调用能力（通常也称为“工具使用”），LLM通常需要经过监督微调，这是一种后训练形式。"
+      ]
+    },
+    {
+      "sentence_id": "f709d50d-f2c2-59d7-a707-5f5a6dc74d1f",
+      "source_text": "This training uses instruction examples that demonstrate the types of tool calls the LLM should learn to generate.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这种训练使用指令示例，展示LLM应学会生成的工具调用类型。"
+      ]
+    },
+    {
+      "sentence_id": "33c702a8-2235-5e62-98d3-35a1c5cb8cd0",
+      "source_text": "The objective is to teach the LLM to adhere to the specified format for making tool call requests and to learn when tool calls would be appropriate.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其目标是教会LLM遵循指定的工具调用请求格式，并学会判断何时适合进行工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "097f4890-1dec-5f14-8ea5-e779e234cc7d",
+      "source_text": "An LLM that cannot generate tool call requests would undoubtedly be a bad choice for the backbone LLM of an LLM agent.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一个无法生成工具调用请求的LLM，无疑不适合作为LLM智能体的核心LLM。"
+      ]
+    },
+    {
+      "sentence_id": "f23245b6-809f-5cbe-83fc-d6dc785f4c0d",
+      "source_text": "Having discussed the two prerequisite capabilities of the backbone LLM, let's now see how the LLM agent uses these capabilities to perform tasks through its processing loop.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在讨论了骨干大语言模型的两个先决能力之后，现在让我们看看大语言模型代理如何通过其处理循环利用这些能力来执行任务。"
+      ]
+    },
+    {
+      "sentence_id": "74856c32-de6c-5e69-84c7-477685f762f9",
+      "source_text": "1.3 The processing loop",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1.3 处理循环"
+      ]
+    },
+    {
+      "sentence_id": "5b5d8bbe-328b-504f-a49f-5fe856ee538b",
+      "source_text": "The processing loop of an LLM agent is where all the action takes place.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体的处理循环是所有行动发生的地方。"
+      ]
+    },
+    {
+      "sentence_id": "e3fc3abb-f5b7-5362-a77c-3cb8c4c56074",
+      "source_text": "Plans are developed, tool calls are made, and steps are taken to complete the task.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "计划被制定、工具被调用、步骤被执行以完成任务。"
+      ]
+    },
+    {
+      "sentence_id": "2633ca33-855f-5dff-9f14-ef1244af149a",
+      "source_text": "When initial plans fail, they can be adapted to perform the task successfully.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当初始计划失败时，可以调整计划以成功完成任务。"
+      ]
+    },
+    {
+      "sentence_id": "ecbf5a83-3365-5ccf-8016-c9d3add7ca56",
+      "source_text": "LLM planning and tool-calling capabilities are repeatedly used within a processing loop.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM的规划能力和工具调用能力在处理循环中被反复使用。"
+      ]
+    },
+    {
+      "sentence_id": "005e8b6a-b78b-5c2b-9724-ba28c99ae502",
+      "source_text": "Figure 1.6 shows the processing loop and how tasks are performed within it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.6展示了处理循环及其内部任务执行过程。"
+      ]
+    },
+    {
+      "sentence_id": "6abf6ef6-5966-5c37-96b9-81d316b1341e",
+      "source_text": "Let‚Äôs walk through this mental model together.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们一起来探索这个心智模型。"
+      ]
+    },
+    {
+      "sentence_id": "231affd3-c72f-535c-9a05-eca9636e7ffc",
+      "source_text": "Figure 1.6 A mental model of an LLM agent performing a task through its processing loop, where tool calling and planning are used repeatedly. The task is executed through a series of sub-steps, a typical approach for performing tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1.6展示了一个LLM代理执行任务的心理模型，通过其处理循环反复使用工具调用和规划。任务通过一系列子步骤执行，这是执行任务的典型方法。"
+      ]
+    },
+    {
+      "sentence_id": "9209cd50-5005-5230-a62e-961c3ee8c073",
+      "source_text": "A processing loop is initiated when a task is submitted to the LLM agent for execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当任务提交给LLM智能体执行时，会启动一个处理循环。"
+      ]
+    },
+    {
+      "sentence_id": "efe40d00-786b-5a37-9b42-00712f1fd1c8",
+      "source_text": "The actual approach for executing tasks within a processing loop is a design choice.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在处理循环内执行任务的具体方法是一个设计选择。"
+      ]
+    },
+    {
+      "sentence_id": "3d5b9eb0-058f-5ca1-adda-789363027d40",
+      "source_text": "For our LLM agent framework, our approach is to execute the task through a series of sub-steps, as shown in figure 1.6.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在我们的LLM智能体框架中，我们的方法是通过一系列子步骤来执行任务，如图1.6所示。"
+      ]
+    },
+    {
+      "sentence_id": "971b0a59-d8f0-5360-a9a3-75ee801ac2c4",
+      "source_text": "At the start of every step, the LLM agent synthesizes the results and progress made so far on the task to create the next intermediate plan or step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在每一步开始时，LLM智能体会综合任务迄今的成果与进展，以制定下一步的中间计划或步骤。"
+      ]
+    },
+    {
+      "sentence_id": "98b404c4-49a9-5268-ae3f-6398aaa862bf",
+      "source_text": "For the very first step of task execution, since no prior progress has been made, the LLM agent simply uses the user‚Äôs request or task instruction to formulate the initial step‚Äôs plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于任务执行的第一个步骤，由于尚无先前的进展，LLM智能体直接依据用户的请求或任务指令来制定初始步骤的计划。"
+      ]
+    },
+    {
+      "sentence_id": "c3135c2a-df1a-5ac1-bf2f-fbe1b6688d93",
+      "source_text": "The LLM agent can make tool calls within any step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM智能体可以在任何步骤中进行工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "dec373aa-1503-50a1-928e-c2876a01274a",
+      "source_text": "For our example task of finding the best-value croissants in New York City, let‚Äôs suppose that the initial plan and tool call presented in the previous sections, where we discussed the prerequisite LLM capabilities, form the first sub-step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以我们在纽约市寻找性价比最高的羊角面包这一示例任务为例，假设先前章节中讨论必备LLM能力时提出的初始计划和工具调用构成了第一个子步骤。"
+      ]
+    },
+    {
+      "sentence_id": "b0b92c39-0ea0-52a3-8bfe-d2ac900b2350",
+      "source_text": "Here‚Äôs an outline of this first step, as it fits within the overall task execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下是第一步的概述，因为它符合整体任务执行的框架。"
+      ]
+    }
+  ],
+  "issues": []
+}

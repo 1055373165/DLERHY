@@ -1,0 +1,97 @@
+{
+  "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+  "translated_packet_count": 6,
+  "translation_run_count": 6,
+  "samples": [
+    {
+      "chapter_ordinal": 2,
+      "chapter_title": "Build an AI Agent (From Scratch)",
+      "packet_id": "c211c9b4-7091-5486-b843-b181b4c5e5d4",
+      "source_text": "For more information on this and other Manning titles go to manning.com.",
+      "source_sentences": [
+        "For more information on this and other Manning titles go to manning.com."
+      ],
+      "target_segments": [
+        "有关本书及Manning其他图书的更多信息，请访问manning.com。"
+      ]
+    },
+    {
+      "chapter_ordinal": 3,
+      "chapter_title": "welcome",
+      "packet_id": "fdee0f76-312c-588d-ad0d-bc831de8a326",
+      "source_text": "Thank you for purchasing the MEAP edition of Build an AI Agent (From Scratch).",
+      "source_sentences": [
+        "Thank you for purchasing the MEAP edition of Build an AI Agent (From Scratch)."
+      ],
+      "target_segments": [
+        "感谢您购买《从零开始构建AI智能体》的MEAP版本。"
+      ]
+    },
+    {
+      "chapter_ordinal": 5,
+      "chapter_title": "1 What is an AI agent?",
+      "packet_id": "ad0a631d-5153-5046-afb3-808d4c9601bc",
+      "source_text": "You may have heard of agent-building frameworks like LangGraph, CrewAI, AutoGen, or OpenAI Agents. These frameworks make it easy to build agents quickly, but they also hide what's actually happening inside. This book takes a different approach: we'll build agents from scratch, understanding every component before relying on any framework.",
+      "source_sentences": [
+        "You may have heard of agent-building frameworks like LangGraph, CrewAI, AutoGen, or OpenAI Agents.",
+        "This book takes a different approach: we'll build agents from scratch, understanding every component before relying on any framework.",
+        "These frameworks make it easy to build agents quickly, but they also hide what's actually happening inside."
+      ],
+      "target_segments": [
+        "你可能听说过像LangGraph、CrewAI、AutoGen或OpenAI Agents这样的智能体构建框架。",
+        "本书采用不同的方法：我们将从零开始构建智能体，在依赖任何框架之前，先理解每一个组件。",
+        "这些框架虽然能让你快速构建智能体，但它们也隐藏了内部的实际运作机制。"
+      ]
+    },
+    {
+      "chapter_ordinal": 6,
+      "chapter_title": "2 The brain of AI agents: LLMs",
+      "packet_id": "096df5f7-bbca-5da8-8ca9-2569dbd77419",
+      "source_text": "Throughout this book, we'll build a Research Agent, a system that can interpret requests like \"survey recent work on X\" or \"extract key findings from these PDFs,\" gather information from multiple sources, and synthesize findings into comprehensive answers. At the heart of this agent lies the LLM, serving as its decision-making brain. But before we can build an effective agent, we need to answer some fundamental questions: Which LLM should we use? How do we communicate with it programmatically? And crucially, what can an LLM do on its own, and where does it fall short?",
+      "source_sentences": [
+        "But before we can build an effective agent, we need to answer some fundamental questions: Which LLM should we use?",
+        "At the heart of this agent lies the LLM, serving as its decision-making brain.",
+        "Throughout this book, we'll build a Research Agent, a system that can interpret requests like \"survey recent work on X\" or \"extract key findings from these PDFs,\" gather information from multiple sources, and synthesize findings into comprehensive answers.",
+        "How do we communicate with it programmatically?",
+        "And crucially, what can an LLM do on its own, and where does it fall short?"
+      ],
+      "target_segments": [
+        "但在构建一个有效的智能体之前，我们需要回答一些基本问题：应该使用哪种大语言模型？",
+        "这个智能体的核心是大语言模型，它充当着决策大脑的角色。",
+        "在本书中，我们将构建一个研究智能体——一个能够理解诸如“调研X领域的最新工作”或“从这些PDF中提取关键发现”等请求，从多个来源收集信息，并将发现综合成全面答案的系统。",
+        "我们如何以编程方式与之交互？",
+        "最关键的是，大语言模型自身能做什么，又在哪些方面存在局限？"
+      ]
+    },
+    {
+      "chapter_ordinal": 7,
+      "chapter_title": "3 Enabling actions: Tool use",
+      "packet_id": "5ce4607a-ce18-5536-8ad3-ba4c982cef0c",
+      "source_text": "On their own, LLMs can't access external data or interact with external systems. They need tools and the ability to select and utilize those tools, which is central to implementing agents. A basic agent performs tasks step by step by repeatedly selecting the next action to take, and tools make this possible.",
+      "source_sentences": [
+        "They need tools and the ability to select and utilize those tools, which is central to implementing agents.",
+        "On their own, LLMs can't access external data or interact with external systems.",
+        "A basic agent performs tasks step by step by repeatedly selecting the next action to take, and tools make this possible."
+      ],
+      "target_segments": [
+        "它们需要工具以及选择和运用这些工具的能力，这对于实现智能体至关重要。",
+        "仅凭自身能力，大语言模型无法访问外部数据或与外部系统交互。",
+        "一个基本的智能体通过反复选择下一步要执行的动作来逐步完成任务，而工具使这成为可能。"
+      ]
+    },
+    {
+      "chapter_ordinal": 8,
+      "chapter_title": "4 Implementing a basic ReAct agent",
+      "packet_id": "b59c4ca8-e25f-568c-b242-50ecf7e9b9d1",
+      "source_text": "We’ve explored how LLMs work and given them the ability to use tools. Now it's time to combine these pieces into something more powerful: an agent that can reason about what it needs, take actions to get it, and continue until it solves the problem.",
+      "source_sentences": [
+        "We’ve explored how LLMs work and given them the ability to use tools.",
+        "Now it's time to combine these pieces into something more powerful: an agent that can reason about what it needs, take actions to get it, and continue until it solves the problem."
+      ],
+      "target_segments": [
+        "我们已经探讨了大型语言模型的工作原理，并赋予了它们使用工具的能力。",
+        "现在，是时候将这些部分组合成一个更强大的系统：一个能够推理自身需求、采取行动获取所需信息，并持续运作直至解决问题的智能体。"
+      ]
+    }
+  ]
+}

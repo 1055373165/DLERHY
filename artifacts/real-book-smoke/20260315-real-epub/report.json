@@ -1,0 +1,154 @@
+{
+  "generated_at": "2026-03-14T18:28:55.267190Z",
+  "source_path": "/Users/smy/project/book-agent/books/build-an-ai-agent.epub",
+  "translation_backend": "echo",
+  "translation_model": "echo-worker",
+  "bootstrap": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song",
+    "chapter_count": 11,
+    "block_count": 2008,
+    "sentence_count": 3807,
+    "packet_count": 1802,
+    "zero_packet_chapters": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "ordinal": 1,
+        "title_src": null,
+        "sentence_count": 0,
+        "packet_count": 0,
+        "status": "packet_built"
+      }
+    ]
+  },
+  "translate": {
+    "translated_packet_count": 1802,
+    "translation_run_count": 1802,
+    "review_required_sentence_count": 0,
+    "skipped_packet_count": 0
+  },
+  "review": {
+    "total_issue_count": 2,
+    "total_action_count": 2,
+    "chapter_result_count": 11,
+    "blocking_issue_count": 1,
+    "issue_type_counts": {
+      "CONTEXT_FAILURE": 1,
+      "FORMAT_POLLUTION": 1
+    },
+    "issues": [
+      {
+        "issue_id": "b5164955-67f7-5943-943f-3fa5c30680a2",
+        "issue_type": "CONTEXT_FAILURE",
+        "root_cause_layer": "memory",
+        "severity": "high",
+        "blocking": true,
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "packet_id": null,
+        "sentence_id": null,
+        "evidence": {
+          "open_questions": "missing_chapter_title",
+          "chapter_brief_version": "1"
+        }
+      },
+      {
+        "issue_id": "9b016cc9-bf35-5009-b45a-37fbd9803d63",
+        "issue_type": "FORMAT_POLLUTION",
+        "root_cause_layer": "translation",
+        "severity": "medium",
+        "blocking": false,
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "packet_id": "76e56bee-4a09-5688-8331-3bd276e1e54c",
+        "sentence_id": "4c2c0f5e-3d38-5196-a88a-e03ce881606b",
+        "evidence": {
+          "actual_target_text": "ZH::The reasoning model doesn't answer immediately but first generates thinking tokens starting with <think>.",
+          "block_type": "paragraph"
+        }
+      }
+    ],
+    "action_types": [
+      "REBUILD_CHAPTER_BRIEF",
+      "RERUN_PACKET"
+    ]
+  },
+  "review_export": {
+    "document_status": "active",
+    "chapter_result_count": 11,
+    "chapter_results": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "export_id": "39d9458c-952c-53e8-b53f-80d0717b897f",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-7c08b889-351e-5f01-80ed-b013c6a5982b.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+        "export_id": "f2c53497-a20e-5446-abd8-3a6a6bee24b1",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-26b50b78-c75b-5b3f-8d4f-f0f2944d6969.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "export_id": "92b755d0-12d8-52a7-b850-37cbde1add0e",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-463688e9-c5d8-5740-98ed-ad84c381650b.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "export_id": "4497ca0a-5762-5402-9322-5e4a40638faa",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-149921ff-8761-5374-a266-ca51a0810db4.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "export_id": "00f65b77-0cd6-523e-bd0f-a0aa8981bc33",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-b36e229f-d62f-50fe-ad08-d391b17ccca1.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+        "export_id": "39abfd38-5ecd-518f-9966-6f9462c6e526",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-5430aec0-f4fd-5f1a-a614-eec8aa8544d8.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+        "export_id": "f2846848-12a3-5542-a750-66d4bc0600a7",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-69ad07e8-672a-5baa-b0f7-4e84729c069b.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+        "export_id": "f8c1cbb5-b649-57c0-b8a4-1640d1acbae9",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-7da4e2fc-ccda-59d1-bf8a-174d9796c348.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+        "export_id": "4daf7610-a5b7-5aae-b97d-023a1bbf21e6",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-6586cff3-8946-5d84-b746-33bc0fcc8511.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+        "export_id": "cbc4a8ff-a7a0-5048-bfec-60a3b1c4f66e",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "export_id": "3ae735e3-a642-5071-bf26-0f57179996a5",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-smoke/20260315-real-epub/exports/003b7864-d84b-50ae-a54c-cc48858ea57e/review-package-4be7455e-2a3a-59a6-a206-859ef7498734.json",
+        "manifest_path": null
+      }
+    ]
+  },
+  "bilingual_export": {
+    "ok": false,
+    "message": "Chapter 7c08b889-351e-5f01-80ed-b013c6a5982b must pass review before final export; current status is review_required.",
+    "chapter_id": null,
+    "issue_ids": [],
+    "followup_action_count": 0
+  }
+}

@@ -1,0 +1,348 @@
+{
+  "chapter_id": "2ea121e6-abae-587a-af2a-2dadc8fe7cc9",
+  "chapter_title": "welcome",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "2ea121e6-abae-587a-af2a-2dadc8fe7cc9",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "767496a5-bdf5-58fd-a9a8-379a23648260",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "2ea121e6-abae-587a-af2a-2dadc8fe7cc9",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "38d1b037-6505-5a44-a3ad-6bce74e532ff",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "56b5bb68-bc59-5861-afb8-843263c0be18",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5ce88a72-3396-59b9-964a-a49d26fcc854",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6fcff875-068c-50ec-822f-83414ed7c4d6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9b9bfe7d-921d-570f-b7a2-fa029a00ce1b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9bc27761-295c-5dc8-a24a-285812d42724",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c757c028-1d4c-5bbd-ad85-5732b486bb42",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d1dcf608-1d43-5232-9c09-951284e6e3f1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d39ddb81-c1d0-5ff8-a0ed-8a31d2e7931e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e3435d8f-b3a9-5223-92fc-35ba61ebb926",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ff25c055-d556-52dc-ac64-da6c324f4264",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "92794283-1504-550f-ac52-64cad63de946",
+      "source_text": "welcome",
+      "sentence_status": "translated",
+      "target_texts": [
+        "欢迎"
+      ]
+    },
+    {
+      "sentence_id": "318b5fe4-ed2e-5412-9d76-31c6495aa97f",
+      "source_text": "Thank you for purchasing the MEAP for Build a Multi-Agent System (From Scratch).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "感谢您购买《从零开始构建多智能体系统》的MEAP版本。"
+      ]
+    },
+    {
+      "sentence_id": "1e119384-3898-5c5f-ae66-a97d790a3dc1",
+      "source_text": "Multi-agent systems and the LLM agents that comprise them are some of the most discussed and worked on topics in AI today.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "多智能体系统及其构成的LLM智能体，是当今人工智能领域最受讨论和研究的课题之一。"
+      ]
+    },
+    {
+      "sentence_id": "9a5f1976-479a-58ca-ae3a-4f1f6b36c53e",
+      "source_text": "Everyday tasks like searching the web, as well as more complex tasks like building entire codebases of software applications, are some examples where LLM agents have already been deployed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从日常任务如网络搜索，到更复杂的任务如构建整个软件应用的代码库，都是LLM智能体已经部署应用的一些例子。"
+      ]
+    },
+    {
+      "sentence_id": "3bfbdf7f-a6f3-5ecb-b2cc-be5614b57df4",
+      "source_text": "While they are by no means perfect systems, many recognize the great potential for agent-to-agent interactions to reshape the way many tasks are done in our society today.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "尽管它们远非完美系统，但许多人认识到智能体间的交互具有巨大潜力，能够重塑当今社会中许多任务的完成方式。"
+      ]
+    },
+    {
+      "sentence_id": "ebeb4335-7fd5-5089-83c9-4d4377a3ed80",
+      "source_text": "There are more than a handful of LLM agent frameworks that exist today, which I have used extensively and even contributed to building.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "目前已有不少LLM智能体框架，我不仅广泛使用过这些框架，甚至还参与过其中一些的构建工作。"
+      ]
+    },
+    {
+      "sentence_id": "0e5a0a21-e894-5ba1-9771-2554090e5719",
+      "source_text": "In fact, assuming some prior familiarity with LLMs and having past experiences programming with Python or JavaScript/TypeScript, you can probably already create LLM agents as well as multi-agent systems and have them autonomously perform tasks with any one of these frameworks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "事实上，如果你对LLM有一定了解，并且有使用Python或JavaScript/TypeScript编程的经验，那么你可能已经能够创建LLM智能体以及多智能体系统，并让它们通过其中任何一个框架自主执行任务。"
+      ]
+    },
+    {
+      "sentence_id": "b742a2f5-8390-5324-b759-bb89adb10479",
+      "source_text": "This book, however, employs a hands-on approach to help you gain a deeper understanding of the inner workings of a multi-agent system and the LLM agents that comprise them by having you build these from scratch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，本书采用实践方法，通过让您从零开始构建这些系统，帮助您更深入地理解多智能体系统及其组成LLM智能体的内部工作原理。"
+      ]
+    },
+    {
+      "sentence_id": "2f86bfc5-8ba4-5dcc-89ee-d45dd9c13c21",
+      "source_text": "This is not so different from how you might deepen your knowledge in LLMs by learning how to implement attention and transformers yourself.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这与您通过亲自实现注意力机制和Transformer来加深对LLM的理解并无太大不同。"
+      ]
+    },
+    {
+      "sentence_id": "69ada0b6-d40a-59d4-859c-456880d9ea01",
+      "source_text": "To build a multi-agent system from scratch, our journey starts with the building of a foundational LLM agent.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要构建一个从零开始的多智能体系统，我们的旅程始于构建一个基础的LLM智能体。"
+      ]
+    },
+    {
+      "sentence_id": "7052485d-c383-536b-99eb-aebe59b4c8fa",
+      "source_text": "We’ll also incorporate a few significant enhancements to it, such as making it MCP-ready.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们还将为其融入若干重要增强功能，例如使其具备MCP兼容性。"
+      ]
+    },
+    {
+      "sentence_id": "0668401e-94d9-5f72-9ba3-73e5e215930d",
+      "source_text": "The vast network of tools and resources made available through MCP increases the potential of LLM agents that can leverage them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过MCP提供的庞大工具与资源网络，能够利用这些资源的LLM智能体潜力得以提升。"
+      ]
+    },
+    {
+      "sentence_id": "77b7a0db-8929-5530-8eb4-890dbc6b7ecc",
+      "source_text": "It also helps to offload some of the responsibilities for developing robust tooling for LLM agents to external teams and organizations.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这也有助于将开发LLM智能体稳健工具的部分职责，外包给外部团队和组织。"
+      ]
+    },
+    {
+      "sentence_id": "55377af2-33c5-5faf-87d7-99893f672925",
+      "source_text": "We’ll also consider how to implement human-in-the-loop capabilities and memory for LLM agents, before finally taking on the step of assembling multi-agent systems through the Agent2Agent protocol.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在最终通过Agent2Agent协议组装多智能体系统之前，我们还将探讨如何为LLM智能体实现人机协同能力与记忆功能。"
+      ]
+    },
+    {
+      "sentence_id": "9fd88c65-70dc-5a5b-9f3b-2d577fb8c5a1",
+      "source_text": "We’ll package all our code, which includes the required infrastructure, such as interfaces for tools and LLMs, in the book’s very own LLM agent framework that you’ll get to develop for yourself.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将把所有代码打包，包括所需的基础设施，例如工具和大语言模型的接口，整合到本书专属的LLM智能体框架中，该框架将由您亲自开发。"
+      ]
+    },
+    {
+      "sentence_id": "6d78a338-c20d-5e3b-ac55-948aa61d25d2",
+      "source_text": "This framework is primarily designed for educational purposes, rather than being deployed in production settings.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "该框架主要设计用于教育目的，而非部署在生产环境中。"
+      ]
+    },
+    {
+      "sentence_id": "e37d5c9d-130a-5f05-9643-211e09966652",
+      "source_text": "Nevertheless, it will give you the foundation to work more confidently and effectively with any other LLM agent and multi-agent frameworks of your choosing or even to develop your own specialized solutions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "尽管如此，它将为您奠定基础，使您能够更自信、更有效地使用您选择的其他LLM智能体和多智能体框架，甚至开发您自己的专业解决方案。"
+      ]
+    },
+    {
+      "sentence_id": "9e1e6f5d-5ad4-5302-a813-00a357503714",
+      "source_text": "Please be sure to post any questions, comments, or suggestions you have about the book in the liveBook discussion forum.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请务必将您对本书的任何问题、评论或建议发布在 liveBook 讨论论坛中。"
+      ]
+    },
+    {
+      "sentence_id": "0d114146-f9e4-56ee-bb6d-a7a6064a52da",
+      "source_text": "Val Andrei Fajardo, PhD",
+      "sentence_status": "translated",
+      "target_texts": [
+        "瓦莱里·安德烈·法哈多博士"
+      ]
+    },
+    {
+      "sentence_id": "1eed7764-ecfb-5140-8c4b-5b2069dd371a",
+      "source_text": "In this book",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本书中"
+      ]
+    }
+  ],
+  "issues": []
+}

@@ -1,0 +1,502 @@
+{
+  "started_at": "2026-03-14T19:59:20.744294+00:00",
+  "source_path": "/Users/smy/project/book-agent/books/build-an-ai-agent.epub",
+  "database_url": "sqlite+pysqlite:////Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v3/full.sqlite",
+  "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-full-run-v3/exports",
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "translate_batch_size": 8,
+  "parallel_workers": 4,
+  "bootstrap": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "source_type": "epub",
+    "status": "active",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song",
+    "chapter_count": 11,
+    "block_count": 2008,
+    "sentence_count": 3807,
+    "packet_count": 1802,
+    "open_issue_count": 0,
+    "chapters": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "ordinal": 1,
+        "title_src": null,
+        "status": "packet_built",
+        "sentence_count": 0,
+        "packet_count": 0,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+        "ordinal": 2,
+        "title_src": "Build an AI Agent (From Scratch)",
+        "status": "packet_built",
+        "sentence_count": 6,
+        "packet_count": 6,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "ordinal": 3,
+        "title_src": "welcome",
+        "status": "packet_built",
+        "sentence_count": 21,
+        "packet_count": 8,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "ordinal": 4,
+        "title_src": "Brief contents",
+        "status": "packet_built",
+        "sentence_count": 14,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "ordinal": 5,
+        "title_src": "1 What is an AI agent?",
+        "status": "packet_built",
+        "sentence_count": 400,
+        "packet_count": 179,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+        "ordinal": 6,
+        "title_src": "2 The brain of AI agents: LLMs",
+        "status": "packet_built",
+        "sentence_count": 538,
+        "packet_count": 263,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+        "ordinal": 7,
+        "title_src": "3 Enabling actions: Tool use",
+        "status": "packet_built",
+        "sentence_count": 595,
+        "packet_count": 281,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+        "ordinal": 8,
+        "title_src": "4 Implementing a basic ReAct agent",
+        "status": "packet_built",
+        "sentence_count": 569,
+        "packet_count": 278,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+        "ordinal": 9,
+        "title_src": "5 Building knowledge bases with RAG",
+        "status": "packet_built",
+        "sentence_count": 575,
+        "packet_count": 243,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+        "ordinal": 10,
+        "title_src": "6 Adding memory to your agent",
+        "status": "packet_built",
+        "sentence_count": 761,
+        "packet_count": 372,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "ordinal": 11,
+        "title_src": "7 Planning and reflection for complex tasks",
+        "status": "packet_built",
+        "sentence_count": 328,
+        "packet_count": 158,
+        "open_issue_count": 0,
+        "quality_summary": null
+      }
+    ]
+  },
+  "document_summary_after_bootstrap": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "source_type": "epub",
+    "status": "active",
+    "title": "Build an AI Agent (From Scratch)",
+    "author": "Jungjun Hur and Younghee Song",
+    "chapter_count": 11,
+    "block_count": 2008,
+    "sentence_count": 3807,
+    "packet_count": 1802,
+    "open_issue_count": 0,
+    "chapters": [
+      {
+        "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "ordinal": 1,
+        "title_src": null,
+        "status": "packet_built",
+        "sentence_count": 0,
+        "packet_count": 0,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "26b50b78-c75b-5b3f-8d4f-f0f2944d6969",
+        "ordinal": 2,
+        "title_src": "Build an AI Agent (From Scratch)",
+        "status": "packet_built",
+        "sentence_count": 6,
+        "packet_count": 6,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "463688e9-c5d8-5740-98ed-ad84c381650b",
+        "ordinal": 3,
+        "title_src": "welcome",
+        "status": "packet_built",
+        "sentence_count": 21,
+        "packet_count": 8,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "149921ff-8761-5374-a266-ca51a0810db4",
+        "ordinal": 4,
+        "title_src": "Brief contents",
+        "status": "packet_built",
+        "sentence_count": 14,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b36e229f-d62f-50fe-ad08-d391b17ccca1",
+        "ordinal": 5,
+        "title_src": "1 What is an AI agent?",
+        "status": "packet_built",
+        "sentence_count": 400,
+        "packet_count": 179,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "5430aec0-f4fd-5f1a-a614-eec8aa8544d8",
+        "ordinal": 6,
+        "title_src": "2 The brain of AI agents: LLMs",
+        "status": "packet_built",
+        "sentence_count": 538,
+        "packet_count": 263,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "69ad07e8-672a-5baa-b0f7-4e84729c069b",
+        "ordinal": 7,
+        "title_src": "3 Enabling actions: Tool use",
+        "status": "packet_built",
+        "sentence_count": 595,
+        "packet_count": 281,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "7da4e2fc-ccda-59d1-bf8a-174d9796c348",
+        "ordinal": 8,
+        "title_src": "4 Implementing a basic ReAct agent",
+        "status": "packet_built",
+        "sentence_count": 569,
+        "packet_count": 278,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "6586cff3-8946-5d84-b746-33bc0fcc8511",
+        "ordinal": 9,
+        "title_src": "5 Building knowledge bases with RAG",
+        "status": "packet_built",
+        "sentence_count": 575,
+        "packet_count": 243,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "b38e53f0-6cdd-52d8-b5d0-da08a6c3ad67",
+        "ordinal": 10,
+        "title_src": "6 Adding memory to your agent",
+        "status": "packet_built",
+        "sentence_count": 761,
+        "packet_count": 372,
+        "open_issue_count": 0,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "ordinal": 11,
+        "title_src": "7 Planning and reflection for complex tasks",
+        "status": "packet_built",
+        "sentence_count": 328,
+        "packet_count": 158,
+        "open_issue_count": 0,
+        "quality_summary": null
+      }
+    ]
+  },
+  "translate": {
+    "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+    "translated_packet_count": 20,
+    "skipped_packet_ids": [],
+    "translation_run_ids": [
+      "e5aeb19e-aff8-58ae-8c48-ef751b41268e",
+      "3b7566d5-7744-5123-9b02-2bbf599582ca",
+      "adba88e0-5be4-5f0a-b677-44470ad6279b",
+      "93992056-3bd2-5790-93d2-48f8203a1ea3",
+      "a66268f7-260f-5a21-95b7-51fd30d3b5a3",
+      "1933d232-c050-52f6-94b9-4252b80de74f",
+      "8dc1f686-9b22-5df2-b863-3ae6b4f7767f",
+      "92fbfc3c-3670-59a3-901d-4303a266fdfe",
+      "386fb04b-6915-52b4-a158-f806028d4c2a",
+      "88037dca-e1b7-560f-9f90-9398e48fdc5a",
+      "52f95b90-38c9-5cdf-8807-c993f5478f73",
+      "4cd35cd8-7a3d-5036-855e-55f9e24690b6",
+      "8c54b040-0fab-50c3-ab8f-c28370676aa1",
+      "c5919723-9f96-5ee2-a190-bc7ff1291c1c",
+      "5fc195f5-cc97-574a-8da5-e53b4e5c1171",
+      "d365cfbb-52a8-56ae-8545-d733c7f8f590",
+      "89cb0c11-d032-5ad5-a5e5-e3b86a5b1cde",
+      "a8d26e3c-ccfc-5ac2-b215-777c7a039019",
+      "58d57a93-4806-59e3-b3ee-9d13c19e2336",
+      "63d7b78e-5d86-5775-b764-63cdaa129dd3"
+    ],
+    "review_required_sentence_ids": [],
+    "batch_size": 8,
+    "batch_count": 226,
+    "completed_batch_count": 2,
+    "total_packet_count": 1802,
+    "pending_packet_count_initial": 1802,
+    "remaining_packet_count": 1782,
+    "usage_summary": {
+      "token_in": 17844,
+      "token_out": 4726,
+      "cost_usd": 0.00633604,
+      "latency_ms": 172455
+    },
+    "elapsed_seconds": 60.907,
+    "avg_packet_seconds": 3.045,
+    "estimated_remaining_seconds": 5426.19,
+    "estimated_finish_at": "2026-03-14T21:30:47.841633+00:00"
+  },
+  "translate_batches": [
+    {
+      "batch_index": 1,
+      "total_batches": 226,
+      "packet_count": 8,
+      "first_packet_id": "0d772ec8-208d-5b95-ac70-c2ede67c4674",
+      "last_packet_id": "2278f84e-0e54-59d5-be45-01b224e9bed7",
+      "started_at": "2026-03-14T19:59:24.343449+00:00",
+      "finished_at": "2026-03-14T19:59:41.551852+00:00",
+      "duration_seconds": 17.208,
+      "translated_packet_count": 8,
+      "skipped_packet_count": 0,
+      "token_in": 7004,
+      "token_out": 1439,
+      "cost_usd": 0.00230742,
+      "latency_ms": 54423,
+      "packet_results": [
+        {
+          "packet_id": "2b332dd1-1205-563e-beda-7367311e56ce",
+          "skipped": false,
+          "translation_run_id": "e5aeb19e-aff8-58ae-8c48-ef751b41268e",
+          "review_required_sentence_ids": [],
+          "token_in": 858,
+          "token_out": 157,
+          "cost_usd": 0.00027392,
+          "latency_ms": 6093
+        },
+        {
+          "packet_id": "4ed39465-dc1f-57f0-8630-8ffa419a814c",
+          "skipped": false,
+          "translation_run_id": "3b7566d5-7744-5123-9b02-2bbf599582ca",
+          "review_required_sentence_ids": [],
+          "token_in": 868,
+          "token_out": 163,
+          "cost_usd": 0.00027924,
+          "latency_ms": 6332
+        },
+        {
+          "packet_id": "0d772ec8-208d-5b95-ac70-c2ede67c4674",
+          "skipped": false,
+          "translation_run_id": "adba88e0-5be4-5f0a-b677-44470ad6279b",
+          "review_required_sentence_ids": [],
+          "token_in": 867,
+          "token_out": 163,
+          "cost_usd": 0.00027896,
+          "latency_ms": 6402
+        },
+        {
+          "packet_id": "6012887f-ac42-511a-a8e7-b68fecb8e4df",
+          "skipped": false,
+          "translation_run_id": "93992056-3bd2-5790-93d2-48f8203a1ea3",
+          "review_required_sentence_ids": [],
+          "token_in": 865,
+          "token_out": 165,
+          "cost_usd": 0.00027924,
+          "latency_ms": 6460
+        },
+        {
+          "packet_id": "b8e18e96-f68f-55bd-abd7-108edf3c43b1",
+          "skipped": false,
+          "translation_run_id": "a66268f7-260f-5a21-95b7-51fd30d3b5a3",
+          "review_required_sentence_ids": [],
+          "token_in": 868,
+          "token_out": 164,
+          "cost_usd": 0.00027966,
+          "latency_ms": 6063
+        },
+        {
+          "packet_id": "090512f0-cccc-5add-a572-04b81af0310f",
+          "skipped": false,
+          "translation_run_id": "1933d232-c050-52f6-94b9-4252b80de74f",
+          "review_required_sentence_ids": [],
+          "token_in": 871,
+          "token_out": 160,
+          "cost_usd": 0.00027882,
+          "latency_ms": 5923
+        },
+        {
+          "packet_id": "c211c9b4-7091-5486-b843-b181b4c5e5d4",
+          "skipped": false,
+          "translation_run_id": "8dc1f686-9b22-5df2-b863-3ae6b4f7767f",
+          "review_required_sentence_ids": [],
+          "token_in": 875,
+          "token_out": 174,
+          "cost_usd": 0.00028582,
+          "latency_ms": 6435
+        },
+        {
+          "packet_id": "2278f84e-0e54-59d5-be45-01b224e9bed7",
+          "skipped": false,
+          "translation_run_id": "92fbfc3c-3670-59a3-901d-4303a266fdfe",
+          "review_required_sentence_ids": [],
+          "token_in": 932,
+          "token_out": 293,
+          "cost_usd": 0.00035176,
+          "latency_ms": 10715
+        }
+      ]
+    },
+    {
+      "batch_index": 2,
+      "total_batches": 226,
+      "packet_count": 8,
+      "first_packet_id": "804de1f2-2722-5972-af15-ff895a926cc5",
+      "last_packet_id": "07ef87c7-dc56-53f5-80a3-8b5a460ea02f",
+      "started_at": "2026-03-14T19:59:41.552448+00:00",
+      "finished_at": "2026-03-14T20:00:08.340765+00:00",
+      "duration_seconds": 26.788,
+      "translated_packet_count": 8,
+      "skipped_packet_count": 0,
+      "token_in": 7404,
+      "token_out": 2636,
+      "cost_usd": 0.00292216,
+      "latency_ms": 92482,
+      "packet_results": [
+        {
+          "packet_id": "a7c661ca-4093-5b99-b3bd-184367304fa2",
+          "skipped": false,
+          "translation_run_id": "386fb04b-6915-52b4-a158-f806028d4c2a",
+          "review_required_sentence_ids": [],
+          "token_in": 866,
+          "token_out": 154,
+          "cost_usd": 0.0002749,
+          "latency_ms": 5825
+        },
+        {
+          "packet_id": "804de1f2-2722-5972-af15-ff895a926cc5",
+          "skipped": false,
+          "translation_run_id": "88037dca-e1b7-560f-9f90-9398e48fdc5a",
+          "review_required_sentence_ids": [],
+          "token_in": 957,
+          "token_out": 394,
+          "cost_usd": 0.00040118,
+          "latency_ms": 13851
+        },
+        {
+          "packet_id": "fa48b7f2-f2d8-5f5d-b5a7-ba286237f717",
+          "skipped": false,
+          "translation_run_id": "52f95b90-38c9-5cdf-8807-c993f5478f73",
+          "review_required_sentence_ids": [],
+          "token_in": 982,
+          "token_out": 484,
+          "cost_usd": 0.00044598,
+          "latency_ms": 16361
+        },
+        {
+          "packet_id": "a4751da2-682d-5fa4-9152-81a8267dafd3",
+          "skipped": false,
+          "translation_run_id": "4cd35cd8-7a3d-5036-855e-55f9e24690b6",
+          "review_required_sentence_ids": [],
+          "token_in": 997,
+          "token_out": 591,
+          "cost_usd": 0.00049512,
+          "latency_ms": 19853
+        },
+        {
+          "packet_id": "fdee0f76-312c-588d-ad0d-bc831de8a326",
+          "skipped": false,
+          "translation_run_id": "8c54b040-0fab-50c3-ab8f-c28370676aa1",
+          "review_required_sentence_ids": [],
+          "token_in": 883,
+          "token_out": 171,
+          "cost_usd": 0.0002868,
+          "latency_ms": 6393
+        },
+        {
+          "packet_id": "049d5273-c191-5911-9ef4-29845f0b5695",
+          "skipped": false,
+          "translation_run_id": "c5919723-9f96-5ee2-a190-bc7ff1291c1c",
+          "review_required_sentence_ids": [],
+          "token_in": 856,
+          "token_out": 161,
+          "cost_usd": 0.00027504,
+          "latency_ms": 5934
+        },
+        {
+          "packet_id": "fac18381-eba7-5933-9781-f3d51f987217",
+          "skipped": false,
+          "translation_run_id": "5fc195f5-cc97-574a-8da5-e53b4e5c1171",
+          "review_required_sentence_ids": [],
+          "token_in": 995,
+          "token_out": 513,
+          "cost_usd": 0.0004618,
+          "latency_ms": 17369
+        },
+        {
+          "packet_id": "07ef87c7-dc56-53f5-80a3-8b5a460ea02f",
+          "skipped": false,
+          "translation_run_id": "d365cfbb-52a8-56ae-8545-d733c7f8f590",
+          "review_required_sentence_ids": [],
+          "token_in": 868,
+          "token_out": 168,
+          "cost_usd": 0.00028134,
+          "latency_ms": 6896
+        }
+      ]
+    }
+  ],
+  "interrupted": true,
+  "interrupted_at": "2026-03-14T20:00:21.651602+00:00"
+}

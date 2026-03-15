@@ -1,0 +1,399 @@
+{
+  "case_name": "attention-is-all-you-need",
+  "case_status": "passed",
+  "expectation_failures": [],
+  "source_path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+  "profile": {
+    "pdf_kind": "text_pdf",
+    "page_count": 11,
+    "has_extractable_text": true,
+    "outline_present": false,
+    "layout_risk": "medium",
+    "ocr_required": false,
+    "extractor_kind": "basic",
+    "average_text_density": 3176.364,
+    "average_span_count": 406.279,
+    "multi_column_page_count": 0,
+    "fragment_page_count": 2,
+    "suspicious_page_numbers": [
+      2,
+      3
+    ],
+    "recovery_lane": "academic_paper",
+    "trailing_reference_page_count": 3,
+    "academic_paper_candidate": true
+  },
+  "bootstrap": {
+    "status": "succeeded",
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "source_type": "pdf_text",
+    "chapter_count": 2,
+    "block_count": 29,
+    "sentence_count": 253,
+    "chapters": [
+      {
+        "ordinal": 1,
+        "title_src": "Attention Is All Y ou Need",
+        "risk_level": "high",
+        "source_page_start": 1,
+        "source_page_end": 9,
+        "pdf_section_family": "body",
+        "structure_flags": [
+          "layout_risk_medium"
+        ]
+      },
+      {
+        "ordinal": 2,
+        "title_src": "References",
+        "risk_level": "high",
+        "source_page_start": 10,
+        "source_page_end": 11,
+        "pdf_section_family": "references",
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ]
+      }
+    ]
+  },
+  "parse_summary": {
+    "title": "Attention is All you Need",
+    "chapter_count": 2,
+    "chapter_titles": [
+      "Attention Is All Y ou Need",
+      "References"
+    ],
+    "chapter_section_families": [
+      "body",
+      "references"
+    ],
+    "extractor_kind": "basic",
+    "page_count": 11,
+    "page_families": {
+      "1": "body",
+      "2": "body",
+      "3": "body",
+      "4": "body",
+      "5": "body",
+      "6": "body",
+      "7": "body",
+      "8": "body",
+      "9": "body",
+      "10": "references",
+      "11": "references"
+    },
+    "layout_signals": {
+      "1": [],
+      "2": [
+        "column_fragment"
+      ],
+      "3": [
+        "column_fragment"
+      ],
+      "4": [],
+      "5": [],
+      "6": [],
+      "7": [],
+      "8": [],
+      "9": [],
+      "10": [],
+      "11": []
+    },
+    "layout_suspect_pages": [
+      2,
+      3
+    ],
+    "pdf_pages": [
+      {
+        "page_number": 1,
+        "raw_block_count": 3,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": true,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2,
+          "heading": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 2,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 3,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "caption": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 4,
+        "raw_block_count": 11,
+        "recovered_block_count": 8,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 7,
+          "caption": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 5,
+        "raw_block_count": 2,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 6,
+        "raw_block_count": 4,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 7,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 8,
+        "raw_block_count": 8,
+        "recovered_block_count": 4,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 9,
+        "raw_block_count": 53,
+        "recovered_block_count": 4,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 4
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 10,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 11,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  }
+}

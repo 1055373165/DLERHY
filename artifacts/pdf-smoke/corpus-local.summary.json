@@ -1,0 +1,48 @@
+{
+  "case_count": 5,
+  "passed_case_count": 5,
+  "skipped_case_count": 0,
+  "failed_case_count": 0,
+  "cases": [
+    {
+      "name": "ai-agents-in-action",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/ai-agents-in-action.json"
+    },
+    {
+      "name": "attention-is-all-you-need",
+      "source_path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/attention-is-all-you-need.json"
+    },
+    {
+      "name": "jim-simons-book-scan",
+      "source_path": "/Users/smy/Downloads/洞悉市場的人：量化交易之父吉姆 · 西蒙斯與文藝復興公司的故事 = The Man Who Solved the Market How Jim Simons Launched the Quant Revolution (古格里 · 祖克曼 (Gregor... (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/jim-simons-book-scan.json"
+    },
+    {
+      "name": "building-ai-coding-agents",
+      "source_path": "/Users/smy/Downloads/zlibrary/Building AI Coding Agents for the Terminal Scaffolding, Harness, Context Engineering, and Lessons Learned (Nghi D. Q. Bui) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/building-ai-coding-agents.json"
+    },
+    {
+      "name": "llms-in-production",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/llms-in-production.json"
+    }
+  ]
+}

@@ -1,0 +1,4781 @@
+{
+  "chapter_id": "9e818ed5-7030-5dee-8cf8-3aac3c4d4a54",
+  "chapter_title": "3_Working_with_LLMs",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "9e818ed5-7030-5dee-8cf8-3aac3c4d4a54",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "39e49812-4695-5d4d-becc-969943ee60ce",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "9e818ed5-7030-5dee-8cf8-3aac3c4d4a54",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "00c0ba4e-4970-52a2-ac13-c00350616337",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0346a967-d928-57f5-9d17-b00112066bb8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "04d92b45-fc5b-5451-827b-688f0be6303d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0599e71c-4627-564c-9e89-5835275a5f35",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0cea92a1-9cf5-56c7-a2e0-e40effd0d108",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0dd5039f-baaf-55d1-8db0-262c7d0992a6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "131fac5c-2154-5867-b70c-715b03fb283b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1476fa53-22ee-578c-833f-e79114bbf054",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "152405a2-7bd3-5826-bd9c-9b241bb9b1e0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "16b264c0-2c11-5389-868f-7b8e3e243578",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "18585586-9893-5c30-8113-c154a211610e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "19ded201-fc6b-5361-b0d0-5b6e7393ff16",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1aa59940-faeb-5da0-b21c-af2dc1af609e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1ada367c-0dd0-5eac-a465-4541a486b3da",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1c36d40d-f22b-5a86-b115-4af0115b2f18",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1c37bf8d-b585-5b33-925b-0661d72b2540",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1eabdfe0-c954-5e59-98a9-6f8c54f3163a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1fa05801-7402-5ad0-8786-666bac09d3eb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2023288d-f41f-5d38-bf7b-dcbb1463f3ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "231a55d3-1cec-51bf-bd41-ee75d6f1bd56",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2479b425-192b-5392-8304-ba3d4eb2f2c8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "28bff0fa-baa3-5122-b0b2-f939df831b87",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2992c19e-7213-577d-9909-300dcb0f58e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2ad61c82-4ae7-5d62-90c3-3578ce6b1081",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2aeb63ef-c7bd-5e68-8e19-e3c062662870",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2b6d570c-05c1-54b7-b20f-0e0160634658",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "303967f2-5881-5925-be0e-48a71d82404c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "323ba7fe-d8a4-55b5-88fd-78a5d7be6174",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3328f777-4016-5608-ac75-357c08c60f3e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "356c1534-7463-5972-8822-06de472a46cb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3991f5da-c3fa-58ac-9dbc-b981d396471c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3a790452-b923-5929-baeb-ee0583fb4ac5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3d5e57a1-a9bd-5e9a-a53b-9a487872c96d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3fb0a090-1685-553f-83be-4f9fe7e13a3b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3fd6f457-8154-568d-82b1-8f9db7e4fdc5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "408120ea-6635-5683-906c-b60c1c15b516",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "41c902c2-1703-5bd6-908d-6bddd7334316",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "43509050-4f7c-5658-9b06-5dab9a112016",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "436b6272-b38c-507c-b298-a69060699983",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "46898829-6bf5-572e-8234-26265dda558c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "48af2a63-3a58-5278-906b-7ded31a9c867",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4c37110a-9f33-5eb1-93b8-6efc739176ac",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "503997e7-7f36-506c-a743-eb7290dc2eb9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "51fac031-5c9b-527a-9890-1c5c118ec08e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53480f21-b400-5e8d-b58b-83545175c763",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "548fd927-89fa-5dab-bab6-d986d52cce0f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "54cf7e5f-6836-5610-a156-ff4e8b0ddb4c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "56035fd4-b20b-526d-9604-c3e49181cd94",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "564cfb4b-9284-5ff9-8bfc-dd0b8bb33caa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "58a3e438-4917-556d-8fc8-67ca31e15fa9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "592ce44f-50e0-53dc-af30-a5d2e24a2487",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "599cb6eb-0c08-5831-a9cc-52637b6e8781",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5a5d3d83-1a7a-570e-8825-047e8104d29b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5c57da1a-b984-5175-9cf1-b0bc2a164751",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "602a6f63-d7f2-5d7b-87a4-530178559e58",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "602f7480-8694-5563-b9b2-0e6d73d66a42",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "62d3d88b-cfaa-5703-a9c8-d99ad2b03eae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6317ec10-7d40-5869-94f2-3aadebec7ef7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "63bdd18c-1b55-573f-9228-2ffaca10dee0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "642ae1f8-0c3b-5104-a8ca-0f7b755bdb23",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "664cfed1-c29a-5bab-908a-ca932b2c6c06",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6826c2a6-c0f6-5207-98a2-0253693798d8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "69486170-0b4b-5c60-becc-fb7ea5c488c2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6a601baa-af2d-5a1b-b957-d901acc3588f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6b39463e-6d25-5546-a183-4e0a92dbd46c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6c853f66-6bfd-5b0a-82b6-71d25303dcc2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6ce5a0c3-8d3e-5624-b2ae-c193a5a1ff52",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6dac16d0-0044-5a9b-9e0c-6dde96d11add",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6de763be-e927-58fe-ad04-a765e8b943f2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6e099103-813d-5efb-857d-7dd9478b1fce",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6f595995-c8f0-561a-8ceb-6ab250bb88ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "70a492d1-62fd-5dce-b8b2-61088e2fd8cc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7348d321-2835-59ca-94c0-8c4b0f0973a3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "736b7c42-93b5-5e02-b3ca-c631399947db",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "744bff3e-37d0-520c-828f-a34658ffdcc5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "758669cb-9854-5976-b72d-7036ef40eef3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7599df74-5901-59fd-88c1-71411c24adfc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "75f40d2c-1bba-565e-85d6-d52b04e83eed",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7686ab17-9990-51fe-9bbb-056d2ba21f24",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "76e6010f-1346-5b70-85a7-6f464af78583",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7806e46f-9bfc-5b89-aac7-2f42e91c1a77",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7abe589a-89c6-526d-9d5a-a497b79e0a9f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7b513024-c2a7-5f55-a0fc-85a814cd776c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7bfcc85f-aea5-54ef-a02d-9ecc2359c478",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7c7d0cdf-a356-53ca-b332-da63c7cf1869",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7ccb1ede-e32e-5aca-8cdb-694fce3ab4b8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7d732b7f-855f-51af-8821-88ca99f0c5bf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7e31ab68-b0b2-544e-93eb-c2b508162ee5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7e5e21e4-c0f7-5e48-a2cb-a5ede8cfe07d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7ed153cc-a59a-51f8-9733-70ad8d21659b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81901394-f530-5090-96d9-8e4e58fd7214",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "82ead14b-c44c-5d4f-a749-a32f675326e4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "82eb7aa1-0735-5f1d-879d-9efac616dfe4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "843622a9-46f5-5b5d-a610-adfc17d73389",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8495c2f2-cc53-5604-9d1d-4f9b124acfe6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "85903ec2-8405-5689-b5ad-9c05004f381a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8683c389-e1ff-50ff-b43b-fc9db352b3aa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8b51a81d-d89f-5496-97ce-e7c8d3a5d0a6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8dd1469d-d88b-517e-806d-c4a8f0ebd9f0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "90103ec5-c1f6-54c4-992b-e8c61da09139",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "909ab5c4-cd17-59ef-87b4-30c66b5c4015",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9327c9e1-321c-5bc8-ad17-7049f310e5d4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "936901d5-c583-551d-af6a-c321819353fd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "93706789-f7d8-52b1-acf2-a496af1e1def",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9470d9a5-4ef2-5b17-a1c8-4b2c8e94cf60",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "96774c40-19ea-5393-91b7-7d20b42d14bd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "98f49616-aaf1-596d-8b8c-aa7c50471cee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "99f8bcba-319b-5dce-8859-ca21c7f59a2c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9bb9ba27-1c0f-59fc-b5c1-0588bae962a1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9e150eac-1048-5fb4-99a7-43284c08a156",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9fb4bb92-4047-57ab-9cd3-f6c12aa3958a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9fd8f3e7-5b38-5428-ae16-21d98770f100",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a16c119c-ec91-5346-95ac-cd94e7184561",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a39ec079-41c0-5894-9c6e-8c161489f6f8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a53cad90-50f6-53e6-972a-b2148032355d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a5406440-e245-58a8-95fd-81ca029ab17f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a58a3efe-3e20-5ebe-b944-872b69f03986",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a5ffb454-618a-5a8d-b44a-ee6403fbf470",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a69a5dc0-d149-5046-89a4-fb019ee5a886",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a6a0d064-aa50-5def-9829-c18654670304",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a83d8c16-f687-5b5b-b260-a06e550f8486",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a8694fbc-85aa-5775-9dc2-2d124c03e6b8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a9e6b234-8018-50ac-8455-325e14e89e0d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aa81049a-b855-5741-8f56-e44f591eefef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ab5b2391-0803-5e92-93f5-c06805354763",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "adf1d08a-771d-5ae2-9dd0-5955b76ceaf4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ae229063-dcf2-595d-bd87-db147478a397",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aee5eb29-49ca-5568-9ea3-35333a8e5b67",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "af2c43ee-33b7-5420-a649-0240bd54092f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b1902140-e45c-50e4-a329-311c0b59b9bf",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b19124d7-da1b-5c1f-b37f-77d4fe70f439",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b4a4ad89-5703-54b5-a999-1f29ad588cc1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b4d3a6b8-3fb2-54a3-8cb6-55f3844d3d75",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b639c458-528f-5fef-b8b5-3b4590e00b79",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b816e7fb-a605-51e0-864d-0236dd97f375",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b83fd881-6a02-5b32-962e-f3b05de5b755",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b841439a-e994-54d6-8ce3-1b3e170ecf02",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ba435a26-8c95-56ac-82c5-8e4f462caa0f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bca6cda6-abf3-5c14-b9a6-fd607a362ace",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c42e5c5f-ab36-5302-b22e-51586ab562c8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c4954278-e24c-5f1a-8072-5216ec14e90e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c60c8ff2-3db1-5d05-9a60-4721ee427076",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c6557326-3135-5fd9-af17-feb9400a80f7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cb78ae1f-60bc-5994-8a74-5a34750c36c0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cba9c161-cd5e-5ca2-9a1d-32934a69a1f6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ccd2003c-7929-55d5-b3b7-951b9572062f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d1462307-4e4e-51e5-b851-bbaf92855b49",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d222196b-ff91-5b1f-9d93-621a7ef85e5d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d35493a1-bb8d-5cbd-aa9c-e81b3425d433",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "da252322-3c1c-537e-a29e-a155f2714acd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dad379c9-7eb0-5f91-bc1b-45ff4ef45df2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "db19aa92-703f-5895-b3ed-e8f98a9676c6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dc7cc0b4-1f44-5bf7-a626-f50f29127c89",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "de64e65b-e947-54b9-a129-5bb949b53e70",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "df093492-c8df-5e02-ac92-1253038196a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dfa2fd03-c37c-528c-9b33-c7c6d022ab90",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "dfe1ec6d-de31-57b8-a34d-dd9ba40b2ce2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e268eb54-f446-5b6f-9366-54daa790aa2d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e5661aa4-192d-58cb-804d-bfb60e63cbb8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e7420eca-52f9-5c92-8356-5108c4696d6a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e83bf871-8c6c-5ceb-82a6-fed56c06248d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ec2f912c-685c-5c56-baac-14f0258831a9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ef2d05cb-272f-5f38-aa43-de4bb130d542",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0bc4810-780a-58a5-93b9-09d6ff5de58e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f221f743-2d46-5507-95f4-d8c40194a6a8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f2e5ea03-ca2b-55da-9fd8-071451e9987c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f48c9649-51af-5761-bc16-6ec2b6151b99",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f51f7964-35d9-5ca0-9150-3ca28fe065e9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f5be1614-6347-541f-8b17-04623efa6bfb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f691c791-f5c9-57d3-abde-2cf5e249ed91",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f768dced-e55d-54c4-baf7-644e31aa8550",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fba07f61-31f1-50e8-9b27-7a0d4c4aaf4f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fc732eb6-0675-5fb9-ada9-91605abbc8f4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fd4b5c82-d31d-599e-b2b9-b04abab2f6c7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "7e7659c6-b002-5a46-85fc-26fb881cbdc2",
+      "source_text": "3 Working with LLMs",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3 使用大语言模型"
+      ]
+    },
+    {
+      "sentence_id": "a080bb52-491e-5973-842b-dd8ca0bca185",
+      "source_text": "This chapter covers",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章涵盖"
+      ]
+    },
+    {
+      "sentence_id": "09c49f98-f262-5b87-abd5-936f488874a8",
+      "source_text": "The base class for working with LLMs in our LLM agent framework",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这是我们LLM智能体框架中用于处理LLM的基类。"
+      ]
+    },
+    {
+      "sentence_id": "fab0d7fc-44ab-59a4-8e34-a2915432d98e",
+      "source_text": "Implementatingr an LLM class that enables the use of any open-source LLM with Ollama",
+      "sentence_status": "translated",
+      "target_texts": [
+        "实现一个LLM类，使其能够与Ollama配合使用任何开源LLM。"
+      ]
+    },
+    {
+      "sentence_id": "9a14e972-3261-5665-9e83-a056b79ad013",
+      "source_text": "A complete demonstration of the tool-call process",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用过程的完整演示"
+      ]
+    },
+    {
+      "sentence_id": "19b322ac-9f51-5b24-b34f-30795a3dfb62",
+      "source_text": "In the previous chapter, we began our Stage 1 build of llm-agents-from-scratch by writing base classes for tools as well as the necessary data structures that they work with.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在上一章中，我们通过编写工具的基础类及其所需的数据结构，开始了llm-agents-from-scratch的第一阶段构建。"
+      ]
+    },
+    {
+      "sentence_id": "f9add3e3-5110-54ef-9103-fcf6112bea4e",
+      "source_text": "We’ll continue our Stage 1 build here by similarly adding a base class for LLMs and the data structures that will enable the various modes of interacting with LLMs we want to support in our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在此，我们将继续第一阶段构建，类似地添加LLM的基础类以及支持我们框架中各种LLM交互模式所需的数据结构。"
+      ]
+    },
+    {
+      "sentence_id": "0066f494-88fb-51c8-a7b3-e7dcdc7bb8cc",
+      "source_text": "One such mode is the tool-calling process, which we’ll finally be able to execute in its entirety by the end of this chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用流程便是其中一种模式，我们将在本章结束时最终能够完整执行这一流程。"
+      ]
+    },
+    {
+      "sentence_id": "c11d7e19-39b0-5a7f-ac4e-1df3e96877ef",
+      "source_text": "Specifically, we’ll learn how to elicit a tool-call request from an LLM and how to submit the result of the tool invocation we covered in the previous chapter back to the LLM for synthesis and response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具体而言，我们将学习如何从大型语言模型中引出工具调用请求，以及如何将上一章介绍的工具调用结果提交回大型语言模型，以供其综合处理并生成响应。"
+      ]
+    },
+    {
+      "sentence_id": "ba8f380b-460e-598d-b01b-58bbe218951e",
+      "source_text": "After establishing our base class, BaseLLM, we’ll move on to the very exciting task of building an integration with Ollama, a highly popular open-source LLM inference framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在建立了基础类BaseLLM之后，我们将着手进行一项非常令人兴奋的任务：构建与Ollama的集成。Ollama是一个广受欢迎的开源LLM推理框架。"
+      ]
+    },
+    {
+      "sentence_id": "f98c6f69-5b69-5ee8-b2a3-0aa726f39868",
+      "source_text": "We’ll do this by implementing OllamaLLM, a subclass of BaseLLM, which will enable the use of any of the many open-source LLMs supported by Ollama, including those from the Llama and Qwen families of models.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将通过实现OllamaLLM（BaseLLM的子类）来完成这一任务，这将使得能够使用Ollama支持的众多开源LLM中的任意一个，包括来自Llama和Qwen系列模型的那些。"
+      ]
+    },
+    {
+      "sentence_id": "557af02a-f530-5f73-ac59-c950b79d6aa2",
+      "source_text": "Figure 3.1 shows our updated build plan, highlighting the progress we’ve made so far and our current focus.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.1展示了我们更新后的构建计划，突显了迄今为止取得的进展以及当前的工作重点。"
+      ]
+    },
+    {
+      "sentence_id": "cbb20164-d168-53d7-9a1c-2c82fddce098",
+      "source_text": "Figure 3.1 Having added tools to our LLM agent framework, the focus of this chapter is to add the other main component of LLM agents—their backbone LLM—to our framework. We’ll specify the interface that all future LLMs must conform to through the BaseLLM class and implement the OllamaLLM subclass to enable the use of any of the open-source LLMs supported by Ollama.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.1 在为我们的LLM智能体框架添加工具之后，本章的重点是将LLM智能体的另一个主要组成部分——其核心LLM——添加到我们的框架中。我们将通过BaseLLM类来指定所有未来LLM必须遵循的接口，并实现OllamaLLM子类，以便能够使用Ollama支持的任何开源LLM。"
+      ]
+    },
+    {
+      "sentence_id": "4428881a-73be-57d6-a42a-016d8f55ef6b",
+      "source_text": "As a reminder, you can follow along with the code examples by forking the book’s GitHub repository and activating the framework’s dedicated virtual environment as discussed in the previous two chapters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "提醒一下，你可以通过克隆本书的GitHub仓库并激活框架专用的虚拟环境来跟随代码示例，具体操作在前两章中已有讨论。"
+      ]
+    },
+    {
+      "sentence_id": "72ff9c8c-663c-511b-ac8e-7b9dbaaf29a5",
+      "source_text": "For added convenience, I’ve also prepared a Jupyter notebook to provide an execution environment for the coded examples in this chapter: https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch03.ipynb.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为方便起见，我还准备了一个Jupyter笔记本，为本章的代码示例提供执行环境：https://github.com/nerdai/llm-agents-from-scratch/blob/main/examples/ch03.ipynb。"
+      ]
+    },
+    {
+      "sentence_id": "d45c3ba3-0447-569e-a43f-ee1cb69255df",
+      "source_text": "Code snippets marked like the example code below are available in this notebook.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "标记为如下示例代码的代码片段可在该笔记本中找到。"
+      ]
+    },
+    {
+      "sentence_id": "22612ef7-5d1f-5363-b103-1261b6454df1",
+      "source_text": "# Included in examples/ch03.ipynb #A … #B",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "e37a275a-8e3e-5ab1-8aa3-a9a7be7897f8",
+      "source_text": "I recommend using uv to launch Jupyter Lab with all the necessary packages.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我建议使用uv来启动Jupyter Lab，并安装所有必要的包。"
+      ]
+    },
+    {
+      "sentence_id": "13cc449e-597f-5237-8f2c-5f68e8d8fe3f",
+      "source_text": "Run the following terminal command from the project’s root directory.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在项目根目录下运行以下终端命令。"
+      ]
+    },
+    {
+      "sentence_id": "02853f02-e1ac-57a4-bb60-9e0b0d68a712",
+      "source_text": "uv run --with jupyter jupyter lab",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "1253447b-0e70-53f5-8e14-98d8e0ffb533",
+      "source_text": "3.1 BaseLLM: a blueprint for LLMs",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.1 BaseLLM：LLM的蓝图"
+      ]
+    },
+    {
+      "sentence_id": "5052602f-7a66-5719-9ee9-7b4e8f222eea",
+      "source_text": "Several LLM providers exist today.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "当前存在多家LLM提供商。"
+      ]
+    },
+    {
+      "sentence_id": "15e529d0-195e-5507-84b2-440cce4cc9f3",
+      "source_text": "OpenAI, with its GPT series, and Anthropic, with Claude, are two of the mainstream closed-source options.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "其中，OpenAI的GPT系列和Anthropic的Claude是主流的闭源选项。"
+      ]
+    },
+    {
+      "sentence_id": "cde2d918-e618-5df4-8439-d7f2b660b282",
+      "source_text": "On the other hand, open-source LLMs, including those from the Llama, Qwen, and DeepSeek families of models, can be utilized through frameworks such as HuggingFace, Ollama, and vLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "另一方面，开源LLM（包括Llama、Qwen和DeepSeek系列模型）可以通过HuggingFace、Ollama和vLLM等框架来使用。"
+      ]
+    },
+    {
+      "sentence_id": "dc301d21-f1cd-5185-8834-5a75d08b87dc",
+      "source_text": "Interacting with LLMs from these providers and frameworks involves working with their respective APIs or SDKs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与这些提供商和框架的LLM交互，需要用到它们各自的API或SDK。"
+      ]
+    },
+    {
+      "sentence_id": "3e6ef673-9194-59f2-8b0d-aa5d3643d2c8",
+      "source_text": "While all of them support the standard modes of interacting with an LLM, which we’ll cover shortly, there are differences in how they can be used to build applications.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然它们都支持标准的LLM交互模式（我们稍后会介绍），但在如何用于构建应用程序方面存在差异。"
+      ]
+    },
+    {
+      "sentence_id": "29217e67-eedf-51a8-8fc7-529d4532e573",
+      "source_text": "If we were to expose each of these APIs in our framework, it would become challenging and frustrating for us and our users to deal with those inconsistencies.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果我们在框架中直接暴露所有这些API，那么处理这些不一致性对我们和用户来说都会变得困难和令人沮丧。"
+      ]
+    },
+    {
+      "sentence_id": "bbd712ff-e7bb-591a-94be-8d7310722cfe",
+      "source_text": "A more sensible approach is to define a standard and flexible interface through a base class, allowing us to onboard various LLM providers and frameworks under a single, common API.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更明智的做法是通过一个基类定义一个标准且灵活的接口，使我们能够在单一、通用的API下集成各种LLM提供商和框架。"
+      ]
+    },
+    {
+      "sentence_id": "4e330ba7-821b-5223-8d62-2e4652b19325",
+      "source_text": "That standard interface is the BaseLLM class, which we’ll define in this section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个标准接口就是BaseLLM类，我们将在本节中定义它。"
+      ]
+    },
+    {
+      "sentence_id": "066549c0-e02e-5ff1-9209-0158f3ac2961",
+      "source_text": "Text completion and chat are the two most standard LLM interaction modalities, which all LLM providers and frameworks support.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "文本补全和聊天是两种最标准的LLM交互模式，所有LLM提供商和框架都支持这两种模式。"
+      ]
+    },
+    {
+      "sentence_id": "2ae8e09f-e724-59cd-aae2-ce8a885b18f0",
+      "source_text": "Naturally, we’ll also support these modes through the BaseLLM class via the methods complete() and chat().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自然地，我们也将通过BaseLLM类的complete()和chat()方法来支持这些模式。"
+      ]
+    },
+    {
+      "sentence_id": "2012f6be-6485-5f1d-a652-101336faccd6",
+      "source_text": "There are a couple more interaction modes that BaseLLM supports, but I’ve omitted them for now to keep things focused.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "BaseLLM还支持其他几种交互模式，但为了保持重点，我暂时省略了它们。"
+      ]
+    },
+    {
+      "sentence_id": "02b997ca-d8f4-599f-b5d3-27eace0562d5",
+      "source_text": "Figure 3.2 shows our LLM agent from before, but with the backbone LLM inheriting from the new BaseLLM class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.2展示了我们之前的LLM智能体，但其骨干LLM现在继承自新的BaseLLM类。"
+      ]
+    },
+    {
+      "sentence_id": "9ad8f06b-55cb-5ae5-b1c6-4da8851cf828",
+      "source_text": "Figure 3.2 Our LLM agent with its backbone LLM and equipped tools. The backbone LLM is the Qwen3-7b model from the OllamaLLM class that we’ll implement later in this chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.2展示了我们的LLM智能体，其核心是骨干LLM和配备的工具。该骨干LLM是来自OllamaLLM类的Qwen3-7b模型，我们将在本章稍后实现此类。"
+      ]
+    },
+    {
+      "sentence_id": "f790830d-a81a-5010-ba09-a3aa7bd61290",
+      "source_text": "The complete() method is designed for simple LLM text completion of a provided prompt, whereas chat() is for conversational dialogues with an LLM represented as a sequence of messages.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "complete()方法设计用于简单的LLM文本补全，接收提供的提示；而chat()方法则用于与LLM进行对话式交互，对话以一系列消息的形式表示。"
+      ]
+    },
+    {
+      "sentence_id": "e325e1d9-a9c9-5398-88a6-db3d3e6f30fd",
+      "source_text": "Tool-calling with LLMs is typically handled through these chat interactions, which, as you’ll soon see, is how we’ll support it in our framework as well.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用通常通过这类聊天交互来处理，正如您将看到的，这也是我们框架中支持工具调用的方式。"
+      ]
+    },
+    {
+      "sentence_id": "26ebea5b-622b-5abe-b130-5c535d0589e2",
+      "source_text": "Finally, it’s important to note that BaseLLM is an async-first class, meaning all LLM interactions are executed asynchronously.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后需要指出的是，BaseLLM是一个异步优先的类，这意味着所有LLM交互都是异步执行的。"
+      ]
+    },
+    {
+      "sentence_id": "e4f12490-79e5-51f5-82df-bd0874534a1b",
+      "source_text": "As mentioned earlier, we’ll need a few new data structures to standardize the use of LLMs in our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，我们需要一些新的数据结构来标准化LLM在框架中的使用。"
+      ]
+    },
+    {
+      "sentence_id": "16e68476-4d0b-5c93-a1af-57fd86355670",
+      "source_text": "First is CompleteResult, which we’ll use to package the results of a complete() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先是CompleteResult，我们将用它来封装complete()调用的结果。"
+      ]
+    },
+    {
+      "sentence_id": "6f18f9b9-8deb-57be-80de-29b7321bf075",
+      "source_text": "More specifically, we pass a prompt string as input to complete(), which then outputs a CompleteResult object containing the LLM’s generated response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更具体地说，我们将提示字符串作为输入传递给complete()，然后它会输出一个包含LLM生成响应的CompleteResult对象。"
+      ]
+    },
+    {
+      "sentence_id": "5577efda-6607-5bc2-bee9-3733b2ae142d",
+      "source_text": "Figure 3.3 illustrates this process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.3展示了这一过程。"
+      ]
+    },
+    {
+      "sentence_id": "f3c8876e-ea14-5add-9750-0b992ebc1de7",
+      "source_text": "Figure 3.3 Supporting text completion with complete().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.3 使用complete()支持文本补全。"
+      ]
+    },
+    {
+      "sentence_id": "c0cf5f0c-7837-5689-ab8c-cb2f76ef2036",
+      "source_text": "The next new data structure is ChatMessage, which facilitates chat interactions with LLMs. A ChatMessage object contains the content of the message and specifies its sender through another data structure, ChatRole.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "下一个新的数据结构是ChatMessage，它便于与大型语言模型进行聊天交互。ChatMessage对象包含消息内容，并通过另一个数据结构ChatRole指定发送者。"
+      ]
+    },
+    {
+      "sentence_id": "ddf1cbe3-869e-502e-aaf1-7bb9da0a150c",
+      "source_text": "Figure 3.4 shows the process for chatting with LLMs through chat() and these data structures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.4展示了通过chat()函数和这些数据结构与大型语言模型进行聊天的流程。"
+      ]
+    },
+    {
+      "sentence_id": "127a2635-64ff-50a6-b47a-dfabade41113",
+      "source_text": "Figure 3.4 Supporting chat interactions with LLMs via chat().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.4：通过chat()支持与LLMs的聊天交互。"
+      ]
+    },
+    {
+      "sentence_id": "ebfbed53-0347-5cc4-950c-21b1803aadea",
+      "source_text": "We invoke chat() with an input string, an optional chat history of ChatMessage objects, and a list of tools we want to equip the LLM with.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们通过输入字符串、可选的ChatMessage对象聊天历史记录以及我们希望为LLM配备的工具列表来调用chat()。"
+      ]
+    },
+    {
+      "sentence_id": "daa99895-4041-5735-957c-9e77d20c7823",
+      "source_text": "The result of chat() is a new pair of ChatMessage objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "chat()的结果是一对新的ChatMessage对象。"
+      ]
+    },
+    {
+      "sentence_id": "30784f86-d566-57b4-9da2-aac4bf6de4ee",
+      "source_text": "The first ChatMessage object is created from the user’s input, whereas the second is created from the response generated by the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个ChatMessage对象是根据用户的输入创建的，而第二个则是根据LLM生成的响应创建的。"
+      ]
+    },
+    {
+      "sentence_id": "a383a1eb-2b16-582f-91ae-ae4b30b549dc",
+      "source_text": "If tool-call requests are made by the LLM, then they would be packaged in the second ChatMessage object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果LLM发出了工具调用请求，那么这些请求会被打包在第二个ChatMessage对象中。"
+      ]
+    },
+    {
+      "sentence_id": "fddc63e3-69e6-5b87-8706-700ee5246c39",
+      "source_text": "This returned pair can then be appended to the running chat history for the next chat() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然后，这个返回的对可以附加到正在进行的聊天历史记录中，以供下一次chat()调用使用。"
+      ]
+    },
+    {
+      "sentence_id": "0af3397f-43e3-519c-bcc6-c91150a54d8c",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章涵盖了我们LLM智能体框架中用于处理LLM的基类。"
+      ]
+    },
+    {
+      "sentence_id": "f2d00fa2-72c4-563a-810c-6a1db7ba03c7",
+      "source_text": "I’ve elected to accept a simpler input type (i.e., string) for educational purposes and user convenience.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "出于教育目的和用户便利性考虑，我选择接受更简单的输入类型（即字符串）。"
+      ]
+    },
+    {
+      "sentence_id": "eaa70062-20eb-5a82-80e5-3c5af648ff00",
+      "source_text": "Returning both the user input and LLM response as ChatMessage objects makes it easy to maintain a chat history under this design choice.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这种设计选择下，将用户输入和LLM响应都作为ChatMessage对象返回，使得维护聊天历史变得简单。"
+      ]
+    },
+    {
+      "sentence_id": "2f2ad0ec-bbc5-5d52-8591-98ba536a539d",
+      "source_text": "Now that we understand how the BaseLLM class and the new data structures can support the standard LLM interaction modes, let’s go over their structural details.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在我们已经了解了BaseLLM类和新数据结构如何支持标准LLM交互模式，接下来让我们详细探讨它们的结构细节。"
+      ]
+    },
+    {
+      "sentence_id": "5c0e27e4-0581-585b-9c2b-cbc6deb8cd68",
+      "source_text": "Figure 3.5 shows the UML class diagrams of BaseLLM, CompleteResult, ChatMessage, and ChatRole.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.5展示了BaseLLM、CompleteResult、ChatMessage和ChatRole的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "77a739ca-be62-51cc-a62d-a7b4ce21de2e",
+      "source_text": "Figure 3.5 The UML class diagrams for BaseLLM and new data structures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.5 BaseLLM及新数据结构的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "891e7e6d-179a-5b57-a246-0ec7c75cdce7",
+      "source_text": "There are yet a few more new UML concepts introduced in figure 3.5.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.5中还引入了几个新的UML概念。"
+      ]
+    },
+    {
+      "sentence_id": "d3034f38-3872-5d25-a6be-2550eeb93bd9",
+      "source_text": "The first is the specification of ChatRole as an enum class, which is marked by the circle with the letter “E”.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个是将ChatRole指定为枚举类，这通过带字母“E”的圆圈标记表示。"
+      ]
+    },
+    {
+      "sentence_id": "68a0d4ff-3bef-5acd-82d3-2ea53fc27844",
+      "source_text": "Enumerations (or enums for short) are a programming type that specifies a finite set of named constants.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "枚举（简称enum）是一种编程类型，用于指定一组有限的命名常量。"
+      ]
+    },
+    {
+      "sentence_id": "8aad2ff0-11a5-5f0b-9c3b-38198eef1fe6",
+      "source_text": "Each instance can only be assigned one of the predefined values.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "每个实例只能被赋予预定义值中的一个。"
+      ]
+    },
+    {
+      "sentence_id": "cceed061-9a9a-5ed1-9193-de4922dad30d",
+      "source_text": "The enum type is a perfect choice for the ChatRole class, which can only take on values of valid message senders: SYSTEM, USER, ASSISTANT, and TOOL.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "枚举类型是ChatRole类的完美选择，因为它只能取有效消息发送者的值：SYSTEM、USER、ASSISTANT和TOOL。"
+      ]
+    },
+    {
+      "sentence_id": "debd32c6-6493-5eb0-8be1-526533267af1",
+      "source_text": "The next new UML concept is the composition relationship, indicated by a solid line with a filled diamond arrowhead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "下一个新的UML概念是组合关系，由带实心菱形箭头的实线表示。"
+      ]
+    },
+    {
+      "sentence_id": "e9e806bd-113d-5f8c-86e7-1b1fb398f152",
+      "source_text": "Composition relationships describe situations where one class is made up of other classes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "组合关系描述了一个类由其他类构成的情况。"
+      ]
+    },
+    {
+      "sentence_id": "b10da86d-19e3-5ced-ab43-50015ff5aab8",
+      "source_text": "The encompassing class is said to be composed of those other classes, which don’t exist in a meaningful way on their own.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "包含类被认为由其他类组成，而这些类本身没有独立存在的意义。"
+      ]
+    },
+    {
+      "sentence_id": "2dec5eca-96a7-5f72-9412-94731381339c",
+      "source_text": "Figure 3.5 shows that ChatMessage is composed of ChatRole, which aligns with our earlier discussion.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.5显示ChatMessage由ChatRole组成，这与我们之前的讨论一致。"
+      ]
+    },
+    {
+      "sentence_id": "f9346c90-55cd-56bd-978d-8e49288e6168",
+      "source_text": "It’s worth noting that ChatRole doesn’t meaningfully exist without the context of a ChatMessage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "值得注意的是，ChatRole在没有ChatMessage上下文的情况下没有独立存在的意义。"
+      ]
+    },
+    {
+      "sentence_id": "2b251b08-b1e9-5b1c-b773-433e917d38c8",
+      "source_text": "Continuing our discussion of the ChatMessage class, you can see from figure 3.5 that it inherits from pydantic.BaseModel and has three attributes: role, content, and tool_calls.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "继续讨论ChatMessage类，从图3.5可以看出它继承自pydantic.BaseModel，并具有三个属性：role、content和tool_calls。"
+      ]
+    },
+    {
+      "sentence_id": "84e3b622-cf0b-51b9-b183-9fc1650fd568",
+      "source_text": "We’ll discuss the meaning behind these attributes when we implement this data structure.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将在实现此数据结构时讨论这些属性背后的含义。"
+      ]
+    },
+    {
+      "sentence_id": "1ca09417-4774-515f-af0d-0b86b36e2f27",
+      "source_text": "In the meantime, you can also see that ChatMessage has one method, from_tool_call_result(), which has been marked with the <<constructor>> tag.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "同时，您也可以看到ChatMessage有一个方法from_tool_call_result()，该方法已被标记为<<constructor>>标签。"
+      ]
+    },
+    {
+      "sentence_id": "a77601a1-3c65-51a3-b6e1-0d2870003494",
+      "source_text": "This indicates that it's a constructor method, which in Python terminology is analogous to the @classmethod concept.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这表明它是一个构造函数方法，在Python术语中类似于@classmethod的概念。"
+      ]
+    },
+    {
+      "sentence_id": "6551a160-ab41-50ed-acdb-1154aaba0a11",
+      "source_text": "You can interpret from_tool_call_result() as a method that creates a ChatMessage object from a ToolCallResult object, which, you’ll see later, provides some convenience for us when implementing the final step to the tool-calling process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以将from_tool_call_result()理解为从ToolCallResult对象创建ChatMessage对象的方法，这在我们实现工具调用过程的最后一步时会提供一些便利，稍后您会看到。"
+      ]
+    },
+    {
+      "sentence_id": "7b0657b5-1af7-5ab7-b3cc-04ff4a851093",
+      "source_text": "The CompleteResult class also inherits from pydantic.BaseModel and has two attributes: response and prompt.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CompleteResult类同样继承自pydantic.BaseModel，并具有两个属性：response和prompt。"
+      ]
+    },
+    {
+      "sentence_id": "48ff47fe-c07e-5bff-8b3f-ee32feb1f42a",
+      "source_text": "The names of these attributes are self-documenting, but regardless, we’ll discuss them when we implement CompleteResult in the next section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些属性的名称具有自解释性，但无论如何，我们将在下一节实现CompleteResult时讨论它们。"
+      ]
+    },
+    {
+      "sentence_id": "5cd11539-8aa9-5d4a-91d8-8bdf3a9e5198",
+      "source_text": "Finally, the BaseLLM class is an abstract class with no attributes but four methods: complete(), chat(), continue_chat_with_tool_results(), and structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后，BaseLLM类是一个抽象类，没有属性但有四个方法：complete()、chat()、continue_chat_with_tool_results()和structured_output()。"
+      ]
+    },
+    {
+      "sentence_id": "2f66370f-b4c7-5a5c-8613-d70c5e11b0b3",
+      "source_text": "You can also see that BaseLLM is indeed async-first, with all four methods marked with the <<async>> tag to indicate their asynchronous nature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您可以看到BaseLLM确实是异步优先的，所有四个方法都标有<<async>>标签，以表明它们的异步特性。"
+      ]
+    },
+    {
+      "sentence_id": "70fd19db-8df0-589e-900e-933518931320",
+      "source_text": "We’ve already discussed the standard LLM interaction modes, supported by complete() and chat(), and figure 3.5 reinforces how CompleteResult and ChatMessage objects are used to facilitate these interactions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们已经讨论了标准的LLM交互模式，这些模式由complete()和chat()支持，图3.5进一步说明了CompleteResult和ChatMessage对象如何促进这些交互。"
+      ]
+    },
+    {
+      "sentence_id": "19072907-c745-5668-adec-8e8fb9f79823",
+      "source_text": "Let’s now discuss the two new methods and the interaction modes they support.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在我们来讨论这两个新方法及其支持的交互模式。"
+      ]
+    },
+    {
+      "sentence_id": "b361f5a3-4502-5bbf-b609-70ed0493096b",
+      "source_text": "The first new method, continue_chat_with_tool_results(), extends chat() by providing a convenient way to submit tool results back to the LLM for synthesis and response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个新方法continue_chat_with_tool_results()扩展了chat()方法，提供了一种便捷的方式将工具结果提交回LLM进行综合和响应。"
+      ]
+    },
+    {
+      "sentence_id": "ece4d282-9ea1-57fb-a241-46d4ffe9c09b",
+      "source_text": "Since we’re effectively continuing an existing chat interaction with this method, it also works with the already established ChatMessage and ChatRole data structures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于我们实际上是在继续现有的聊天交互，因此该方法也适用于已建立的ChatMessage和ChatRole数据结构。"
+      ]
+    },
+    {
+      "sentence_id": "09a6d01f-ae67-5d6f-a9f1-dbec3f48db04",
+      "source_text": "On the other hand, structured_output() is designed for another useful LLM interaction mode, where we prompt LLMs to return their response in a pre-specified format, most often JSON.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "另一方面，structured_output() 方法设计用于另一种实用的LLM交互模式，即我们提示LLM以预先指定的格式（最常见的是JSON）返回其响应。"
+      ]
+    },
+    {
+      "sentence_id": "96b563ac-a5f4-5bed-8d9e-d25ea37b368b",
+      "source_text": "Figure 3.5 illustrates the use of a generic type, T, in the signature of structured_output(), which enables our users to specify their structured output using custom classes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.5展示了在structured_output()方法签名中使用泛型类型T，这使得用户能够使用自定义类来指定结构化输出。"
+      ]
+    },
+    {
+      "sentence_id": "3a384184-422c-571e-8bb5-2d0162120240",
+      "source_text": "We’ll go over both methods in more detail when we implement the BaseLLM interface.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将在实现BaseLLM接口时更详细地介绍这两种方法。"
+      ]
+    },
+    {
+      "sentence_id": "d9bdac2e-3507-5e17-bc8b-6e3b54354d0e",
+      "source_text": "As we did in Chapter 2, we’ll first implement the new data structures before implementing our main base class, BaseLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与第2章的做法相同，我们将首先实现新的数据结构，然后再实现我们的主要基类BaseLLM。"
+      ]
+    },
+    {
+      "sentence_id": "158ff5d8-af98-5130-9e54-3cdbe09f4537",
+      "source_text": "3.1.1 Implementing CompleteResult, ChatMessage, and ChatRole",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.1.1 实现CompleteResult、ChatMessage和ChatRole"
+      ]
+    },
+    {
+      "sentence_id": "90ecfbc9-d72b-5058-9032-035c908d5747",
+      "source_text": "The first new data structure that we’ll be adding to our framework is CompleteResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将添加到框架中的第一个新数据结构是CompleteResult。"
+      ]
+    },
+    {
+      "sentence_id": "c469aafe-affc-511e-a367-747edee3b17c",
+      "source_text": "It is a simple data structure that contains prompt and response attributes, both of which are of string type, as was shown in figure 3.5.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这是一个简单的数据结构，包含prompt和response两个属性，两者均为字符串类型，如图3.5所示。"
+      ]
+    },
+    {
+      "sentence_id": "0768c91c-dc29-5992-ab22-c0b44260bb72",
+      "source_text": "The prompt attribute stores the input used to prompt the LLM, while the response attribute stores the LLM’s generated response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "prompt属性存储用于提示LLM的输入，而response属性存储LLM生成的响应。"
+      ]
+    },
+    {
+      "sentence_id": "5dfcd98a-c6e6-5254-b3b4-1670d7f03391",
+      "source_text": "Figure 3.6 shows the same text completion interaction process from earlier, but now includes an example input prompt and CompleteResult output object along with its attributes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.6展示了之前相同的文本补全交互过程，但现在包含了一个示例输入提示和CompleteResult输出对象及其属性。"
+      ]
+    },
+    {
+      "sentence_id": "3cc02c5f-8fbc-5c14-b389-afd709fed1a3",
+      "source_text": "Figure 3.6 An example of a CompleteResult object that is returned from an invocation of complete().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.6 一个从complete()调用返回的CompleteResult对象示例。"
+      ]
+    },
+    {
+      "sentence_id": "20919e04-19c4-5b20-baea-d07735fd286a",
+      "source_text": "The following code implements CompleteResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码实现了CompleteResult。"
+      ]
+    },
+    {
+      "sentence_id": "e4bf06f7-db68-55f7-801f-53361ad08547",
+      "source_text": "Listing 3.1 Implementing CompleteResult",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.1 实现CompleteResult"
+      ]
+    },
+    {
+      "sentence_id": "3bd86827-8e53-5af2-82ec-a66f6f721585",
+      "source_text": "# llm_agents_from_scratch/data_structures/llm.py from pydantic import BaseModel from typing_extensions import Self from llm_agents_from_scratch.data_structures.tool import ToolCall class CompleteResult(BaseModel): \"\"\"The LLM completion result data model. Attributes response: The completion response provided by the LLM. full_response: Input prompt and completion text. \"\"\" response: str #A prompt: str #B",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "6af9fcb4-459b-5b94-8e02-2103ae208345",
+      "source_text": "Let’s next implement the data structures that facilitate the chat interactions: ChatMessage and ChatRole.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接下来，我们实现用于促进聊天交互的数据结构：ChatMessage 和 ChatRole。"
+      ]
+    },
+    {
+      "sentence_id": "fe280d65-7597-59f1-ab87-bf4d0502d8f6",
+      "source_text": "Figure 3.7 shows the chat interaction first shown in figure 3.4, but this time layered with examples of these data structures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.7展示了首次在图3.4中出现的聊天交互，但这次叠加了这些数据结构的示例。"
+      ]
+    },
+    {
+      "sentence_id": "3b49d002-0763-5a86-b2e3-130335d77db5",
+      "source_text": "Figure 3.7 Example ChatMessage and ChatRole objects within a chat() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.7 展示了一个chat()调用中的ChatMessage和ChatRole对象示例。"
+      ]
+    },
+    {
+      "sentence_id": "0ae380a3-93f8-5d44-bad5-d5534de7c92a",
+      "source_text": "As you can see, the user’s input is returned as a ChatMessage with the USER role, whereas the LLM’s response is a ChatMessage with the ASSISTANT role.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如您所见，用户的输入以USER角色的ChatMessage形式返回，而LLM的响应则是以ASSISTANT角色的ChatMessage形式返回。"
+      ]
+    },
+    {
+      "sentence_id": "ba73f89d-5e8b-5f0a-ac61-f5021a5a140c",
+      "source_text": "In this example, the LLM’s response carries a ToolCall object, and in these cases, the content of the ChatMessage object is an empty string.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在此示例中，LLM的响应携带了一个ToolCall对象，在这种情况下，ChatMessage对象的内容是一个空字符串。"
+      ]
+    },
+    {
+      "sentence_id": "e14345f2-e3ba-5c13-9387-15bd3c92b8c3",
+      "source_text": "Standardized message roles",
+      "sentence_status": "translated",
+      "target_texts": [
+        "标准化的消息角色"
+      ]
+    },
+    {
+      "sentence_id": "08857289-ef67-5493-a2b6-4b9edbbbe4e7",
+      "source_text": "The role definitions for messages have been standardized to some extent across various LLM providers and frameworks and can be described as follows.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "各类LLM提供商和框架对消息角色定义已在一定程度上实现标准化，具体描述如下。"
+      ]
+    },
+    {
+      "sentence_id": "b63f74ea-6bfc-5843-b2d7-d449ae7453e3",
+      "source_text": "The SYSTEM role is reserved for setting the general context for the LLM or LLM agent, such as defining its role in the upcoming chat interaction.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "SYSTEM角色用于为LLM或LLM智能体设置通用上下文，例如定义其在即将开始的聊天交互中的角色。"
+      ]
+    },
+    {
+      "sentence_id": "84eba0f6-f9bc-5115-86fa-14939c344be4",
+      "source_text": "The USER role is reserved for messages sent by the user, whereas the ASSISTANT role is meant for messages from the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "USER角色保留给用户发送的消息，而ASSISTANT角色则用于LLM生成的消息。"
+      ]
+    },
+    {
+      "sentence_id": "5975a134-18af-5214-8be1-9cb80b9e9c65",
+      "source_text": "Finally, the TOOL role is for messages that carry the tool results sent back to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后，TOOL角色用于承载发送回LLM的工具结果消息。"
+      ]
+    },
+    {
+      "sentence_id": "e00f8685-881f-56c2-898a-621929292bdd",
+      "source_text": "For convenience, ChatMessage objects can also be derived from a ToolCallResult via the constructor method, from_tool_call_result().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为方便起见，ChatMessage对象也可以通过构造函数方法from_tool_call_result()从ToolCallResult派生。"
+      ]
+    },
+    {
+      "sentence_id": "d9b66fa3-2a15-52e6-90c4-2f611a449687",
+      "source_text": "This method returns a ChatMessage object with the TOOL role and whose content is a string serialization of the ToolCallResult object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "该方法返回一个具有TOOL角色的ChatMessage对象，其内容为ToolCallResult对象的字符串序列化。"
+      ]
+    },
+    {
+      "sentence_id": "7e3e68b4-b56f-5809-badb-6586040427d0",
+      "source_text": "The implementations for ChatMessage and ChatRole are shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ChatMessage和ChatRole的实现如下代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "e9afc8ca-24f8-51b4-ab47-bedcf60536f9",
+      "source_text": "Listing 3.2 Implementing ChatMessage and ChatRole",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 3.2 实现 ChatMessage 和 ChatRole"
+      ]
+    },
+    {
+      "sentence_id": "f2dec1a4-d198-562d-ad9a-07d5fa538661",
+      "source_text": "# llm_agents_from_scratch/data_structures/llm.py from pydantic import BaseModel from typing_extensions import Self from llm_agents_from_scratch.data_structures.tool import ToolCall … #A class ChatRole(str, Enum): \"\"\"Roles for chat messages.\"\"\" USER = \"user\" ASSISTANT = \"assistant\" SYSTEM = \"system\" TOOL = \"tool\" class ChatMessage(BaseModel): \"\"\"The chat message data model. Attributes: role: The role of the message. content: The content of the message. tool_calls: Tool calls associated with the message. \"\"\" model_config = ConfigDict(arbitrary_types_allowed=True) role: ChatRole content: str tool_calls: list[ToolCall] | None = None #B @classmethod #C def from_tool_call_result( cls, tool_call_result: ToolCallResult ) -> Self: \"\"\"Create a ChatMessage from a ToolCallResult.\"\"\" return cls( role=ChatRole.TOOL, #D content=tool_call_result.model_dump_json(indent=4), #E )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "7a78e37a-431d-5921-93d6-2648048c3a96",
+      "source_text": "3.1.2 Implementing BaseLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.1.2 实现BaseLLM"
+      ]
+    },
+    {
+      "sentence_id": "d8998fc9-28bc-55e3-a4c4-6376905fa57f",
+      "source_text": "We’re now ready to start implementing the BaseLLM class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们现在可以开始实现BaseLLM类了。"
+      ]
+    },
+    {
+      "sentence_id": "f15e5df0-bf7b-5fdf-bbeb-cf198ab933af",
+      "source_text": "As you saw from the UML class diagrams in figure 3.5, BaseLLM is an abstract class that has no attributes but four methods: complete(), chat(), continue_chat_with_tool_results(), and structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从图3.5的UML类图中可以看到，BaseLLM是一个抽象类，它没有属性，但有四个方法：complete()、chat()、continue_chat_with_tool_results()和structured_output()。"
+      ]
+    },
+    {
+      "sentence_id": "912640ff-f572-53bf-bd0f-a166ae5e3ae9",
+      "source_text": "We'll start with complete() and chat(), both of which will be marked as abstract and whose input and output types we've already covered in great detail.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将从complete()和chat()开始，这两个方法都将被标记为抽象方法，其输入和输出类型我们之前已经详细讨论过。"
+      ]
+    },
+    {
+      "sentence_id": "e24b2669-55e1-5dd7-94e3-395fb2b57c78",
+      "source_text": "The following listing shows their implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "下面的清单展示了它们的实现。"
+      ]
+    },
+    {
+      "sentence_id": "65d8e8cd-74c6-5a48-8db1-258acf2562f2",
+      "source_text": "Listing 3.3 Implementing BaseLLM: chat() and complete()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 3.3 实现 BaseLLM：chat() 和 complete()"
+      ]
+    },
+    {
+      "sentence_id": "44ebac98-bd9f-5a64-8183-5bda63182c06",
+      "source_text": "# llm_agents_from_scratch/base/llm.py from abc import ABC, abstractmethod from llm_agents_from_scratch.base.tool import AsyncBaseTool, BaseTool from llm_agents_from_scratch.data_structures import ( ChatMessage, CompleteResult, ToolCallResult, ) from typing import Any, Sequence Tool: TypeAlias = BaseTool | AsyncBaseTool #A class BaseLLM(ABC): \"\"\"Base LLM Class.\"\"\" @abstractmethod async def complete( self, prompt: str, #B **kwargs: Any ) -> CompleteResult: #C \"\"\"Text Complete.\"\"\" @abstractmethod async def chat( self, input: str, #D chat_messages: Sequence[ChatMessage] | None = None, #E tools: Sequence[Tool] | None = None, #F **kwargs: Any, ) -> tuple[ChatMessage, ChatMessage]: #G \"\"\"Chat interface.\"\"\"",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "00f95519-b54f-5aef-ba6e-26115c38944e",
+      "source_text": "As with BaseTool in Chapter 2, subclasses of BaseLLM will need to provide implementations for all methods marked as abstract.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与第2章中的BaseTool类似，BaseLLM的子类需要为所有标记为抽象的方法提供实现。"
+      ]
+    },
+    {
+      "sentence_id": "1b9b6a00-792f-5be3-af26-99d4a405e82f",
+      "source_text": "Let’s now move on to specifying our convenient extension of chat() used for returning tool call results back to the LLM: continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，让我们继续说明用于将工具调用结果返回给LLM的便捷chat()扩展：continue_chat_with_tool_results()。"
+      ]
+    },
+    {
+      "sentence_id": "f5f7a316-6983-5afb-9cda-51b25c3f5eeb",
+      "source_text": "Before writing any code, let’s revisit the tool-call process one more time.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在编写任何代码之前，让我们再次回顾一下工具调用过程。"
+      ]
+    },
+    {
+      "sentence_id": "e6cf7f7b-96a0-5a20-a077-3d66526aab18",
+      "source_text": "Figure 3.8 illustrates the familiar tool-calling process—first introduced in Chapter 1—but now projected into an LLM chat interaction.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.8展示了熟悉的工具调用流程——最初在第1章介绍——但现在被投射到LLM聊天交互中。"
+      ]
+    },
+    {
+      "sentence_id": "4cc2548c-27ba-58f6-af3c-31bf36624707",
+      "source_text": "Figure 3.8 The familiar tool-calling process, now shown within a chat() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.8 熟悉的工具调用过程，现在展示在chat()调用中。"
+      ]
+    },
+    {
+      "sentence_id": "0e88fdb1-5ff7-56a7-a6a4-d13a4a624474",
+      "source_text": "A tool-call request, within a chat interaction, is represented by a ChatMessage that contains ToolCall objects in its tool_calls attribute.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在聊天交互中，工具调用请求由一个ChatMessage对象表示，该对象的tool_calls属性包含ToolCall对象。"
+      ]
+    },
+    {
+      "sentence_id": "1675452a-528f-59b4-b46d-b2e8badabec3",
+      "source_text": "Note that only ChatMessage objects with the ASSISTANT role can carry tool-call requests.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请注意，只有角色为ASSISTANT的ChatMessage对象才能携带工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "03787102-3324-583a-834c-5ca19dfaa0d4",
+      "source_text": "ToolCall objects need to be extracted from such messages and passed to the __call__() method of the selected tool for execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "需要从这类消息中提取ToolCall对象，并将其传递给所选工具的__call__()方法执行。"
+      ]
+    },
+    {
+      "sentence_id": "1aeb0226-b5d1-5207-8f83-e3a1b105d1a2",
+      "source_text": "After the tool’s execution, we need to send the produced ToolCallResult object(s) back to the LLM for synthesis and response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具执行后，需要将生成的ToolCallResult对象发送回LLM进行综合和响应。"
+      ]
+    },
+    {
+      "sentence_id": "ba1780ed-fc50-56f0-96ac-3fa5168e38db",
+      "source_text": "To do so, we utilize our convenient chat extension method, continue_chat_with_tool_results(), which should first create ChatMessage objects from the supplied ToolCallResult objects before passing them on to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为此，我们使用便捷的聊天扩展方法continue_chat_with_tool_results()，该方法应首先从提供的ToolCallResult对象创建ChatMessage对象，然后再将它们传递给LLM。"
+      ]
+    },
+    {
+      "sentence_id": "aa7eb00b-c72a-518e-bef2-433844209a6e",
+      "source_text": "The inputs for continue_chat_with_tool_results() are almost identical to those for chat(), with the only difference being that, rather than an input string being passed to chat(), ToolCallResult objects are passed instead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "continue_chat_with_tool_results() 的输入参数与 chat() 几乎完全相同，唯一的区别在于：不是向 chat() 传递输入字符串，而是传递 ToolCallResult 对象。"
+      ]
+    },
+    {
+      "sentence_id": "478a80b8-9d22-5579-80a2-4c83389474d5",
+      "source_text": "The output of continue_chat_with_tool_results(), like for chat(), is a tuple of ChatMessage objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与 chat() 类似，continue_chat_with_tool_results() 的输出也是一个由 ChatMessage 对象组成的元组。"
+      ]
+    },
+    {
+      "sentence_id": "bd769202-9da9-565e-80de-13e7b95035c4",
+      "source_text": "The first element is the list of ChatMessage objects derived from the input ToolCallResult objects, each with the TOOL role.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个元素是从输入的 ToolCallResult 对象派生出的 ChatMessage 对象列表，每个对象都具有 TOOL 角色。"
+      ]
+    },
+    {
+      "sentence_id": "b6f8a00d-9a91-5c95-b412-0b73fda94307",
+      "source_text": "The second element is the LLM’s response to the tool-call results as a ChatMessage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第二个元素是 LLM 对工具调用结果的响应，以 ChatMessage 的形式表示。"
+      ]
+    },
+    {
+      "sentence_id": "ab8a8116-0114-527e-ae04-d1f8e30ba5de",
+      "source_text": "This maintains the same pattern for updating your chat history—append both elements of the returned tuple to your running chat history, whether you’re using chat() or continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这保持了更新聊天历史的相同模式——无论您使用 chat() 还是 continue_chat_with_tool_results()，都将返回元组的两个元素都追加到您正在运行的聊天历史中。"
+      ]
+    },
+    {
+      "sentence_id": "ea05c961-cac8-5ea4-b316-fd2f174e1485",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "5fb90781-2bad-5bd9-95dc-75497a8dd858",
+      "source_text": "We could forego the use of continue_chat_with_tool_results() and use chat() directly instead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们可以不使用continue_chat_with_tool_results()方法，而直接使用chat()方法。"
+      ]
+    },
+    {
+      "sentence_id": "2d648d68-9524-5848-b052-58227c7216de",
+      "source_text": "This process would involve having to convert the ToolCallResult objects manually into ChatMessage objects with the appropriate TOOL role and passing them along with the updated chat history to the next chat() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这一过程需要手动将ToolCallResult对象转换为具有适当TOOL角色的ChatMessage对象，并将其与更新后的聊天历史一起传递给下一次chat()调用。"
+      ]
+    },
+    {
+      "sentence_id": "4519aa11-d340-5cfe-95d5-7286e20320d8",
+      "source_text": "However, for both convenience and educational purposes, I’ve elected to include this method to make the entire tool-call process within an LLM chat interaction more explicit.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，出于便利性和教育目的的双重考虑，我选择包含此方法，以使LLM聊天交互中的整个工具调用过程更加明确。"
+      ]
+    },
+    {
+      "sentence_id": "a02a54f7-0189-56e2-82a5-7ba6a031a8b1",
+      "source_text": "The following code shows the implementation of continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码展示了 continue_chat_with_tool_results() 的实现。"
+      ]
+    },
+    {
+      "sentence_id": "56122121-5096-5472-b8c7-b392dbeccc5e",
+      "source_text": "Listing 3.4 Implementing BaseLLM: continue_chat_with_tool_results()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.4 实现BaseLLM：continue_chat_with_tool_results()"
+      ]
+    },
+    {
+      "sentence_id": "4c0620f9-069c-5715-830b-0048549524af",
+      "source_text": "# llm_agents_from_scratch/base/llm.py from abc import ABC, abstractmethod from llm_agents_from_scratch.base.tool import AsyncBaseTool, BaseTool from llm_agents_from_scratch.data_structures import ( ChatMessage, CompleteResult, ToolCallResult, ) from typing import Any class BaseLLM(ABC): \"\"\"Base LLM Class.\"\"\" … #A @abstractmethod async def continue_chat_with_tool_results( self, tool_call_results: Sequence[ToolCallResult], #B chat_history: Sequence[ChatMessage], #C tools: Sequence[Tool] | None = None, **kwargs: Any, ) -> tuple[list[ChatMessage], ChatMessage]: #D \"\"\"Continue a chat submitting tool call results.\"\"\"",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "87b31bad-544f-5240-ac28-39b18d8fbe11",
+      "source_text": "We’ll now move on to implementing the final method for BaseLLM: structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，我们将继续实现BaseLLM的最后一个方法：structured_output()。"
+      ]
+    },
+    {
+      "sentence_id": "48fbb77a-f8be-5810-b1fc-9739c2d0fb46",
+      "source_text": "Before writing any code, let’s first discuss the motivation for including this method in our interface in the first place.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在编写任何代码之前，让我们首先讨论一下为何要在我们的接口中包含这个方法。"
+      ]
+    },
+    {
+      "sentence_id": "8522bf6c-7eab-5d9e-b709-6ac1b45b34d3",
+      "source_text": "As text generators, LLMs can also produce structured outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为文本生成器，LLM也能产生结构化输出。"
+      ]
+    },
+    {
+      "sentence_id": "0a857b70-622a-5385-b60d-b4fbb97e4030",
+      "source_text": "That is, we can elicit LLMs to generate text that conforms to a pre-specified structured format, most typically JSON.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "也就是说，我们可以引导LLM生成符合预先指定结构化格式的文本，最常见的是JSON格式。"
+      ]
+    },
+    {
+      "sentence_id": "19c9653a-4cf9-5d32-8dab-c9e6785e7da6",
+      "source_text": "Structured outputs simplify downstream processing by reducing the need to implement logic that is often brittle and unreliable for extracting the required elements from raw output strings.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "结构化输出简化了下游处理，减少了对通常脆弱且不可靠的逻辑实现的需求，这些逻辑用于从原始输出字符串中提取所需元素。"
+      ]
+    },
+    {
+      "sentence_id": "118b6885-b0a9-545a-ac94-f0c627c7e101",
+      "source_text": "Let’s consider the simple example below, which demonstrates the brittleness of unstructured, raw outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们看下面这个简单的例子，它展示了非结构化原始输出的脆弱性。"
+      ]
+    },
+    {
+      "sentence_id": "1799d900-499a-5807-acb0-1f26cec565ed",
+      "source_text": "Tell me a joke from any of these three subjects: math, physics, and biology.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从数学、物理和生物这三个学科中选一个讲个笑话。"
+      ]
+    },
+    {
+      "sentence_id": "fb1c35cf-4b9a-5d14-94ba-aab8f294b8ee",
+      "source_text": "Also, include the subject of the joke.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "另外，请注明笑话所属的学科。"
+      ]
+    },
+    {
+      "sentence_id": "0f5de5cf-1e7f-5bb8-80b2-c7d90eddb3c5",
+      "source_text": "Here's one:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这里有一个："
+      ]
+    },
+    {
+      "sentence_id": "a440580e-5e87-57cc-b85b-3c0d4fec128e",
+      "source_text": "Why did the DNA go to therapy?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为什么DNA要去看心理医生？"
+      ]
+    },
+    {
+      "sentence_id": "b1befedd-9490-5d60-ac42-136abe8e6993",
+      "source_text": "Because it was feeling a little twisted!",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因为它觉得自己有点扭曲！"
+      ]
+    },
+    {
+      "sentence_id": "3109c1ef-0ae9-5da9-bd91-54e628cc9713",
+      "source_text": "(Biology)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "（生物学）"
+      ]
+    },
+    {
+      "sentence_id": "b73d4943-7076-5ff1-ac04-4fc1da6867fe",
+      "source_text": "From this lone response, we can easily extract the joke’s subject, biology.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "仅从这一回应中，我们就能轻松提取出笑话的主题——生物学。"
+      ]
+    },
+    {
+      "sentence_id": "677bd77e-05d4-57f7-9cc5-156256b8b53d",
+      "source_text": "But even just prompting the LLM a second time with the same prompt as before can lead to a drastically different form of output.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，即使只是用相同的提示再次向LLM提问，也可能导致输出形式截然不同。"
+      ]
+    },
+    {
+      "sentence_id": "9329e8a1-5684-54a4-9487-7328b5416be5",
+      "source_text": "Here's one:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这里有一个："
+      ]
+    },
+    {
+      "sentence_id": "d614064a-404d-5d82-b1e2-a9f54f7bb6bd",
+      "source_text": "Why did the math book look so sad?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为什么那本数学书看起来那么悲伤？"
+      ]
+    },
+    {
+      "sentence_id": "d2931a1c-3a5c-5fe3-bf96-d21275fc1697",
+      "source_text": "Because it had too many problems.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因为它有太多问题了。"
+      ]
+    },
+    {
+      "sentence_id": "7b4fdde9-10d2-5a0d-9ca9-78819b5e1265",
+      "source_text": "Subject: Math",
+      "sentence_status": "translated",
+      "target_texts": [
+        "主题：数学"
+      ]
+    },
+    {
+      "sentence_id": "f8b5e249-45ab-5a04-aea4-792961d9c047",
+      "source_text": "Like with the first output, it’d be easy to extract that the subject is math upon manual inspection.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与第一个输出类似，通过人工检查很容易提取出主题是数学。"
+      ]
+    },
+    {
+      "sentence_id": "52f1be0d-6b25-510d-9887-e68643cdf0ac",
+      "source_text": "However, if we wanted to build robust code that depends on the accurate parsing of this free-form output, we’re likely setting ourselves up for failure.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，如果我们想构建依赖于准确解析这种自由格式输出的稳健代码，很可能是在自找失败。"
+      ]
+    },
+    {
+      "sentence_id": "401be2e9-f083-5107-ae0d-2bbba48b4004",
+      "source_text": "A better approach is to prompt the LLM to produce its output in a structured format, as illustrated next.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更好的方法是提示LLM以结构化格式生成输出，如下所示。"
+      ]
+    },
+    {
+      "sentence_id": "bd30ba98-99af-5713-af4c-6e8effe28617",
+      "source_text": "Tell me a joke from any of these three subjects: math, physics, and biology.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请从数学、物理和生物这三个学科中任选一个，讲一个笑话。"
+      ]
+    },
+    {
+      "sentence_id": "cf7a14c8-1a40-5e12-bbe1-d41b98f2a27a",
+      "source_text": "Also, include the subject of the joke.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "同时，请注明笑话所属的学科。"
+      ]
+    },
+    {
+      "sentence_id": "35a39920-c6f3-5111-9d13-5b5fbe6b7651",
+      "source_text": "Return your output in the format provided below:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "请按照以下格式返回输出：",
+        "在source_sentence_ids和low_confidence_flags.sentence_id中仅使用上面显示的句子别名（例如：S1、S2）。",
+        "返回符合所提供响应模式的JSON。",
+        "返回一个仅包含以下顶级键的JSON对象：packet_id、target_segments、alignment_suggestions、low_confidence_flags、notes。",
+        "packet_id必须等于：e268eb54-f446-5b6f-9366-54daa790aa2d",
+        "请勿使用translation或translations等顶级键。",
+        "每个当前源句必须通过target_segments和alignment_suggestions覆盖。",
+        "当置信度正常时，low_confidence_flags应为[]。notes可为[]。"
+      ]
+    },
+    {
+      "sentence_id": "a2e87562-b1a0-53e5-a8d3-6f6274caa15b",
+      "source_text": "‘{ “subject”: …, “joke”: …, }’",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "80a68b86-5e92-5d20-9d9c-dbcf3cf1b283",
+      "source_text": "{ \"subject\": \"math\", \"joke\": \"Why did the math book look so sad? Because it had too many problems.\" }",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "ec1a5396-d856-54d6-b030-0e55e1ac5e7e",
+      "source_text": "This structured output is much easier to work with than the free-form versions and would allow us to build downstream logic that depends on these formatted outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这种结构化输出比自由格式版本更易于处理，并且允许我们构建依赖于这些格式化输出的下游逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "a1156b2d-5214-5ee2-9803-c5d4382b73f4",
+      "source_text": "Figure 3.9 illustrates how this example can be executed through the structured_output() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.9展示了如何通过structured_output()方法执行此示例。"
+      ]
+    },
+    {
+      "sentence_id": "316665b6-ed90-530a-a296-76feee035cdd",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注"
+      ]
+    },
+    {
+      "sentence_id": "2541cd93-b9b2-503a-b029-f1abe5770510",
+      "source_text": "Similar to tool calling, LLM inference providers and frameworks often provide a dedicated API for structured outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与工具调用类似，LLM推理提供商和框架通常提供专门的API用于结构化输出。"
+      ]
+    },
+    {
+      "sentence_id": "8389d538-8aeb-518f-8520-ec7234328eba",
+      "source_text": "These are usually designed such that the user only needs to supply the desired output schema, typically JSON, and can offload the job of instructing the LLM to produce output in this format to the service provider (or framework).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些API通常设计成用户只需提供期望的输出模式（通常是JSON），就可以将指导LLM按此格式生成输出的工作交给服务提供商（或框架）处理。"
+      ]
+    },
+    {
+      "sentence_id": "5e59f1e1-05f1-5d9b-b352-ca9ede2cfb8f",
+      "source_text": "In contrast, in our example, we manually elicited the LLM to produce output in our desired format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "相比之下，在我们的示例中，我们手动引导LLM以我们期望的格式生成输出。"
+      ]
+    },
+    {
+      "sentence_id": "1d15b588-11fe-5023-8a6e-642c9b7298bf",
+      "source_text": "Figure 3.9 The structured output LLM interaction. An instruction prompt and the desired output format, mdl, are passed as the inputs to structured_output(). The LLM generates a response that can then be used to create an instance of mdl, a subclass of pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.9展示了结构化输出的LLM交互过程。将指令提示和期望的输出格式（mdl）作为输入传递给structured_output()。LLM生成响应后，可用于创建mdl的实例，mdl是pydantic.BaseModel的子类。"
+      ]
+    },
+    {
+      "sentence_id": "46cbc723-3865-5942-85b7-3227ef6bd203",
+      "source_text": "Now that we understand the rationale for this structured_output(), let’s focus on its implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经理解了structured_output()的基本原理，现在让我们聚焦于它的实现。"
+      ]
+    },
+    {
+      "sentence_id": "7f28a13e-25ae-56c6-b54a-26580decaf99",
+      "source_text": "As you saw in Figure 3.5, the signature of structured_output() specifies a prompt string and a mdl parameter as inputs, where mdl allows us to specify the desired output format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如您在图3.5中所见，structured_output()的函数签名指定了一个提示字符串和一个mdl参数作为输入，其中mdl允许我们指定期望的输出格式。"
+      ]
+    },
+    {
+      "sentence_id": "159e3854-401b-5796-a4ac-2807764575b1",
+      "source_text": "This mdl parameter, as you might recall from our earlier discussion, depends on a generic T.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如您可能从我们之前的讨论中回忆起的，这个mdl参数依赖于一个泛型T。"
+      ]
+    },
+    {
+      "sentence_id": "f9d42521-aac4-5591-b713-e2a22b8b789e",
+      "source_text": "We’ll bind T to the pydantic.BaseModel class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将把T绑定到pydantic.BaseModel类。"
+      ]
+    },
+    {
+      "sentence_id": "25ce8d4c-a578-5778-adec-f37b25c8fadb",
+      "source_text": "Doing so means that we must define our desired structured output type via a subclass of pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这意味着我们必须通过pydantic.BaseModel的子类来定义我们期望的结构化输出类型。"
+      ]
+    },
+    {
+      "sentence_id": "f078cf3d-a0c9-5417-9d97-ded61d8bcf5a",
+      "source_text": "The structured_output() method returns an instance of T.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "structured_output()方法返回T的一个实例。"
+      ]
+    },
+    {
+      "sentence_id": "1b8e001a-1fd9-591e-9b22-db61c334b494",
+      "source_text": "In other words, it returns an instance of our desired structured output class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "换句话说，它返回我们所需结构化输出类的一个实例。"
+      ]
+    },
+    {
+      "sentence_id": "4f193edd-141a-573a-961d-f6679a51eacd",
+      "source_text": "For increased clarity, we refer to T as StructuredOutputType in our implementation, as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了更清晰，我们在实现中将T称为StructuredOutputType，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "af924b1a-8dd0-57ab-b08b-b787fad62d6f",
+      "source_text": "Listing 3.5 Implementing BaseLLM: structured_output()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.5 实现BaseLLM：structured_output()"
+      ]
+    },
+    {
+      "sentence_id": "74f38a28-b3ef-57a2-a605-6be17dc69e9f",
+      "source_text": "# llm_agents_from_scratch/base/llm.py from abc import ABC, abstractmethod from typing import Any, Sequence, TypeVar from pydantic import BaseModel from llm_agents_from_scratch.base.tool import AsyncBaseTool, BaseTool from llm_agents_from_scratch.data_structures import ( ChatMessage, CompleteResult, ToolCallResult, ) StructuredOutputType = TypeVar(\"StructuredOutputType\", bound=BaseModel) #A class BaseLLM(ABC): \"\"\"Base LLM Class.\"\"\" … #B @abstractmethod async def structured_output( self, prompt: str, mdl: type[StructuredOutputType], #C **kwargs: Any, ) -> StructuredOutputType: #D \"\"\"Structured output interface for returning ~pydantic.BaseModels.",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "4df4cf8e-caf3-52ac-8449-c99f0b7320bb",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意：请仅使用上面显示的句子别名（例如：S1、S2）作为source_sentence_ids和low_confidence_flags.sentence_id的值。"
+      ]
+    },
+    {
+      "sentence_id": "80ca9cf6-5e35-50c3-a93d-23a0a8f6b3a1",
+      "source_text": "Binding the generic StructuredOutputType to pydantic.BaseModel is an implementation detail that lets us fully leverage the powerful validation checks offered by the pydantic library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "将通用的StructuredOutputType绑定到pydantic.BaseModel是一个实现细节，这使我们能够充分利用pydantic库提供的强大验证功能。"
+      ]
+    },
+    {
+      "sentence_id": "db232580-a5b7-5c66-8a6d-83e9f4e339ae",
+      "source_text": "Let’s take our joke example from before and build a structured output model for it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们以前面的笑话示例为基础，为其构建一个结构化输出模型。"
+      ]
+    },
+    {
+      "sentence_id": "2011d233-3f9b-505a-8503-a9dc76845aec",
+      "source_text": "This structured output model is what we’d supply for the mdl parameter in a structured_output() invocation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这个结构化输出模型就是我们在调用structured_output()时，为mdl参数提供的模型。"
+      ]
+    },
+    {
+      "sentence_id": "eb0e8da5-33d1-57be-b0b3-915e447f14af",
+      "source_text": "As you now know, this model needs to inherit from pydantic.BaseModel as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如您所知，这个模型需要继承自pydantic.BaseModel，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "ef4b77bb-ef5e-542c-918b-1d50a617d6cf",
+      "source_text": "# Included in examples/ch03.ipynb #A from typing import Literal from pydantic import BaseModel class Joke(BaseModel): #B \"\"\"A structured output model for Jokes.\"\"\" subject: Literal[\"math\", \"physics\", \"biology\"] joke: str",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "35240fbc-8bbf-538d-929a-d2c813450712",
+      "source_text": "To demonstrate an actual invocation of structured_output() using this Joke class, we’ll first need a proper subclass of BaseLLM that has an implementation for this method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了演示使用这个Joke类实际调用structured_output()，我们首先需要一个BaseLLM的适当子类，该类已实现此方法。"
+      ]
+    },
+    {
+      "sentence_id": "6d88ae7a-0641-5f21-b465-b8f5b38860e1",
+      "source_text": "This is precisely where we’re heading in the next section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这正是我们下一节要讨论的内容。"
+      ]
+    },
+    {
+      "sentence_id": "b56e5729-9b4d-5075-b299-5ef1055f7d19",
+      "source_text": "Tool calling as structured output and vice versa",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用作为结构化输出，反之亦然"
+      ]
+    },
+    {
+      "sentence_id": "9c5f57de-c6b3-5857-95c1-32188e6bd993",
+      "source_text": "Tool calling can also be viewed as a structured output.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "工具调用也可以被视为一种结构化输出。"
+      ]
+    },
+    {
+      "sentence_id": "f30a637e-fd97-5ec7-9ee0-43a43e1775e5",
+      "source_text": "We could even use the structured_output() method to get the LLM to produce a tool-call request JSON specifying the selected tool’s name and the argument values to invoke the tool with.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们甚至可以使用 structured_output() 方法，让大语言模型生成一个工具调用请求的 JSON，其中指定所选工具的名称以及调用该工具所需的参数值。"
+      ]
+    },
+    {
+      "sentence_id": "48520cf5-2b25-5604-8641-9bcb7bc89e60",
+      "source_text": "However, tool-calling APIs offered by LLM service providers and frameworks have ready-made prompt templates that instruct the LLM to use the specified tools only if necessary.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，LLM服务提供商和框架提供的工具调用API配备了现成的提示模板，这些模板会指示LLM仅在必要时使用指定的工具。"
+      ]
+    },
+    {
+      "sentence_id": "bb318e6d-05be-50c0-9f8e-17601524842a",
+      "source_text": "They also have prompt templates for instructing an LLM to synthesize and respond to tool-call results whenever it receives them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它们还包含用于指示LLM在收到工具调用结果后进行综合并响应的提示模板。"
+      ]
+    },
+    {
+      "sentence_id": "26c3667e-7177-5729-a49f-d1ad6d8e4343",
+      "source_text": "For these reasons, it’s better to rely on these native tool-calling APIs versus trying to make it work with structured outputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，与其尝试通过结构化输出来实现，不如依赖这些原生的工具调用API。"
+      ]
+    },
+    {
+      "sentence_id": "8b7f2da7-0089-585f-9c2f-3228e18e1c95",
+      "source_text": "It's also worth mentioning that it's entirely possible to implement structured output interactions as a tool call.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "同样值得一提的是，完全可以将结构化输出交互实现为工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "bb3c2ae3-95e0-5e7d-91d3-b5d74741e357",
+      "source_text": "That is, by defining a tool that generates the desired structured format and forcefully instructing the LLM to use it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "也就是说，通过定义一个能生成所需结构化格式的工具，并强制指示大型语言模型使用该工具。"
+      ]
+    },
+    {
+      "sentence_id": "4906989e-fbad-519f-b485-dccfe16fdf6e",
+      "source_text": "3.2 OllamaLLM: a subclass of BaseLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.2 OllamaLLM：BaseLLM的子类"
+      ]
+    },
+    {
+      "sentence_id": "d1b8fa16-d998-5ae0-8293-21ef619474df",
+      "source_text": "Now that we’ve specified the way we’ll work with LLMs in our framework, through the BaseLLM class, let’s implement one.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经通过BaseLLM类指定了在框架中使用LLM的方式，现在让我们来实现一个具体的LLM。"
+      ]
+    },
+    {
+      "sentence_id": "83afb99f-c798-51ff-a34d-6f254afa3aab",
+      "source_text": "In this section, we’ll build an integration with the Ollama LLM inference framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在本节中，我们将构建与Ollama LLM推理框架的集成。"
+      ]
+    },
+    {
+      "sentence_id": "f6d1f70a-e099-597c-ab7f-2b7dd0e86333",
+      "source_text": "This integration will enable us to use any open-source LLM supported by Ollama.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此集成将使我们能够使用Ollama支持的任何开源LLM。"
+      ]
+    },
+    {
+      "sentence_id": "2429dc9d-1528-54f3-b363-9abb5d603d62",
+      "source_text": "We’ll implement the OllamaLLM class, which interacts with an Ollama service, typically running locally on your machine.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将实现OllamaLLM类，该类与Ollama服务交互，该服务通常运行在本地机器上。"
+      ]
+    },
+    {
+      "sentence_id": "a8b05cdd-6b8f-58bd-8974-d0ec4164f0d8",
+      "source_text": "Implementing OllamaLLM requires using the ollama Python library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "实现OllamaLLM需要使用ollama Python库。"
+      ]
+    },
+    {
+      "sentence_id": "a874a6e9-7b27-5b15-b2ec-f1e00d96064c",
+      "source_text": "Once implemented, we’ll run through examples for interacting with an LLM via chat(), complete(), continue_chat_with_tool_results(), and structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "实现后，我们将通过chat()、complete()、continue_chat_with_tool_results()和structured_output()等方法，演示如何与LLM进行交互。"
+      ]
+    },
+    {
+      "sentence_id": "6135ebb2-bafc-5547-bba9-c89a861c898b",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "78adccec-b876-51d9-ac21-6d15df66f84d",
+      "source_text": "Building an integration like this often requires reading documentation, source code, and other resources for the library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "构建此类集成通常需要阅读库的文档、源代码及其他相关资源。"
+      ]
+    },
+    {
+      "sentence_id": "53ac6cfe-8788-57ce-aad5-8be2b809a1eb",
+      "source_text": "In writing this section, I referenced the official documentation and even the source code of the ollama library to determine how to build this integration effectively.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在撰写本节内容时，我参考了官方文档乃至ollama库的源代码，以确定如何有效构建这一集成。"
+      ]
+    },
+    {
+      "sentence_id": "e881cec2-198f-57de-80e3-36ff62fe5fb8",
+      "source_text": "While you won’t need to do this for the current Ollama integration, as we’ll walk through the completed code together, it may be helpful to know what resources were referenced.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然您当前无需为Ollama集成进行此项工作（我们将一同逐步查看完整代码），但了解所参考的资源或许有所帮助。"
+      ]
+    },
+    {
+      "sentence_id": "a2c37007-e337-5c6e-a10a-30a9d5c408f5",
+      "source_text": "Figure 3.10 shows our Ollama integration through OllamaLLM, a subclass of BaseLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.10展示了我们通过OllamaLLM实现的Ollama集成，它是BaseLLM的一个子类。"
+      ]
+    },
+    {
+      "sentence_id": "d6ce752d-bbc5-50ee-965e-99b2ed4d265f",
+      "source_text": "Figure 3.10 Integrating with the Ollama LLM inference framework. The OllamaLLM connects to a running Ollama server, often running locally on your machine, to work with any of the supported open-source LLMs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.10展示了与Ollama LLM推理框架的集成。OllamaLLM连接到正在运行的Ollama服务器（通常运行在本地机器上），以便与任何受支持的开源LLM协同工作。"
+      ]
+    },
+    {
+      "sentence_id": "06f1d363-1ef3-5065-af3f-1b67a62af484",
+      "source_text": "In addition to the methods and attributes of BaseLLM, the OllamaLLM class introduces a _client attribute for interacting with a running Ollama service.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "除了BaseLLM的方法和属性外，OllamaLLM类还引入了一个_client属性，用于与正在运行的Ollama服务进行交互。"
+      ]
+    },
+    {
+      "sentence_id": "cad9393b-ec28-54ab-8b66-0744fbfb82dd",
+      "source_text": "The complete structure of OllamaLLM is outlined in its UML class diagram shown in figure 3.11.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "OllamaLLM的完整结构在其UML类图中展示，如图3.11所示。"
+      ]
+    },
+    {
+      "sentence_id": "dd17c851-9565-5909-86ae-caeab12810ea",
+      "source_text": "Figure 3.11 UML class diagram for OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.11 OllamaLLM的UML类图。"
+      ]
+    },
+    {
+      "sentence_id": "08b98b58-ed27-5039-a660-d85b847bfb22",
+      "source_text": "You can see that the OllamaLLM class adds two new attributes and one method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "可以看到，OllamaLLM类新增了两个属性和一个方法。"
+      ]
+    },
+    {
+      "sentence_id": "b3ca768c-2a02-5b1b-bd25-dd3ecb77c4c7",
+      "source_text": "The model attribute specifies which supported LLM to use, while _client connects to a running Ollama service and is of the type AsyncClient from the ollama library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "model属性指定要使用的支持LLM，而_client则连接到正在运行的Ollama服务，其类型为ollama库中的AsyncClient。"
+      ]
+    },
+    {
+      "sentence_id": "12de9ac9-e1d7-536a-8aa2-3cad3bfa923a",
+      "source_text": "Finally, __init__() is used for initializing objects of OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后，__init__()用于初始化OllamaLLM的对象。"
+      ]
+    },
+    {
+      "sentence_id": "b80d7bed-952d-5014-a218-b2bede9fae61",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "cab17db9-c699-5713-a468-5adabc06cd69",
+      "source_text": "To run the code examples in this section, you’ll need Ollama installed on your local machine with its service running.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要运行本节中的代码示例，您需要在本地机器上安装 Ollama 并确保其服务正在运行。"
+      ]
+    },
+    {
+      "sentence_id": "230a6dec-accc-574d-918b-f0b7381bdb9b",
+      "source_text": "To download Ollama, follow the instructions at https://ollama.com/download.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要下载 Ollama，请按照 https://ollama.com/download 上的说明进行操作。"
+      ]
+    },
+    {
+      "sentence_id": "5a4b6719-59b0-5f0a-8ea8-d1dfe7034ca9",
+      "source_text": "After installation, a service may launch automatically.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "安装后，服务可能会自动启动。"
+      ]
+    },
+    {
+      "sentence_id": "1a55971d-da1c-5ca8-953a-e02db0eed73d",
+      "source_text": "If not, you can start one by opening a terminal and running the command ollama serve.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果没有，您可以通过打开终端并运行命令 ollama serve 来启动服务。"
+      ]
+    },
+    {
+      "sentence_id": "4ad47d19-4b05-57a6-b7ff-acbe740eeb9d",
+      "source_text": "3.2.1 Implementing OllamaLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.2.1 实现OllamaLLM"
+      ]
+    },
+    {
+      "sentence_id": "2c1ae116-fc5b-5194-b5f5-4452d2a8982d",
+      "source_text": "We’re going to implement this integration step-by-step, starting with the implementation of the __init__() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将逐步实现这一集成，从实现__init__()方法开始。"
+      ]
+    },
+    {
+      "sentence_id": "1d7d4607-7a2a-57d4-ad6c-9a600499884f",
+      "source_text": "As shown in figure 3.11, the __init__() method takes in model and host parameters as inputs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如图3.11所示，__init__()方法接收model和host参数作为输入。"
+      ]
+    },
+    {
+      "sentence_id": "0cd2391b-316e-54a6-a1c0-72b2b092fb7e",
+      "source_text": "The model parameter is a string type that specifies the LLM we’d like to use, such as llama3.2:1b.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "参数model是字符串类型，用于指定我们想要使用的大语言模型，例如llama3.2:1b。"
+      ]
+    },
+    {
+      "sentence_id": "01245899-4760-547a-87ed-98e2792bc202",
+      "source_text": "The optional host parameter specifies the address for the Ollama service that we’d like to interact with.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "可选参数host指定了我们想要交互的Ollama服务的地址。"
+      ]
+    },
+    {
+      "sentence_id": "d07223f4-c0f5-57da-a34b-47ee4787ae89",
+      "source_text": "If no host is provided, the default Ollama service address will be used.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果未提供host参数，则将使用默认的Ollama服务地址。"
+      ]
+    },
+    {
+      "sentence_id": "e7312b48-5ef9-5fb3-8f63-69f45186fa21",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注"
+      ]
+    },
+    {
+      "sentence_id": "8c51d615-fb7c-54fc-bb61-b85b94fc692e",
+      "source_text": "Running ollama serve on your machine launches a service at the default address http://127.0.0.1:11434.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在您的机器上运行ollama serve会在默认地址http://127.0.0.1:11434启动服务。"
+      ]
+    },
+    {
+      "sentence_id": "8789b1a8-626f-5f4c-ab85-838ebaf56d2a",
+      "source_text": "If you don’t provide a value for host when initializing an OllamaLLM instance, this default address will be used.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果在初始化OllamaLLM实例时未提供host值，则将使用此默认地址。"
+      ]
+    },
+    {
+      "sentence_id": "724252ae-8365-5705-9f17-1e8a0496ba67",
+      "source_text": "Within the __init__() method, we’ll use the provided parameters to set the model and _client attributes of the OllamaLLM instance.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在 __init__() 方法中，我们将使用提供的参数来设置 OllamaLLM 实例的 model 和 _client 属性。"
+      ]
+    },
+    {
+      "sentence_id": "8c5f67a9-2077-5356-b958-a69da21401cf",
+      "source_text": "The following code shows the implementation of __init__().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码展示了 __init__() 方法的实现。"
+      ]
+    },
+    {
+      "sentence_id": "93741020-04d2-58a3-a4c2-8d619eb9bb41",
+      "source_text": "Listing 3.6 Implementing OllamaLLM: __init__()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 3.6 实现 OllamaLLM：__init__()"
+      ]
+    },
+    {
+      "sentence_id": "c0fa7d0c-14c9-5fee-96d8-e6a0c84643e9",
+      "source_text": "# llm_agents_from_scratch/llms/ollama/llm.py from typing import Any from ollama import AsyncClient #A from llm_agents_from_scratch.base.llm import BaseLLM class OllamaLLM(BaseLLM): \"\"\"Ollama LLM class.\"\"\" def __init__( self, model: str, #B host: str | None = None, *args: Any, **kwargs: Any, ) -> None: \"\"\"Create an OllamaLLM instance. Args: model (str): The name of the LLM model. host (str | None): Host of running Ollama service. Defaults to None. *args (Any): Additional positional arguments. **kwargs (Any): Additional keyword arguments. \"\"\" super().__init__(*args, **kwargs) self.model = model self._client = AsyncClient(host=host) #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "4aaf912a-0a7a-5c3d-a702-9b501d784a3c",
+      "source_text": "To see this __init__() method in action, let’s create an instance of our OllamaLLM class that connects to the default host and uses the 3-billion parameter version of the Qwen 2.5 LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要查看这个__init__()方法的具体使用，我们来创建一个OllamaLLM类的实例，它连接到默认主机并使用Qwen 2.5 LLM的30亿参数版本。"
+      ]
+    },
+    {
+      "sentence_id": "884f07f4-3c7d-50e7-aeb1-85ebf81d5334",
+      "source_text": "The following code snippet demonstrates how to do that.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码片段展示了如何实现这一点。"
+      ]
+    },
+    {
+      "sentence_id": "e2fc5807-2ea2-5c0f-808f-358a86d1e614",
+      "source_text": "# Included in examples/ch03.ipynb #A from llm_agents_from_scratch.llms.ollama import OllamaLLM llm = OllamaLLM(model=\"qwen2.5:3b\")",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "e2d8b94f-40dd-571a-ba1f-17035a5429c8",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "2b78e563-91e9-51fa-8945-e1eac94a09e5",
+      "source_text": "The remainder of this chapter uses the qwen2.5:3b model, which Ollama supports.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章剩余部分将使用Ollama支持的qwen2.5:3b模型。"
+      ]
+    },
+    {
+      "sentence_id": "ea33cd9d-57bf-5ab3-bb4d-1616147b13be",
+      "source_text": "You will need to pull this model from Ollama first to run the remaining code snippets by using the terminal command ollama pull qwen2.5:3b.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您需要先通过终端命令ollama pull qwen2.5:3b从Ollama拉取该模型，才能运行后续的代码片段。"
+      ]
+    },
+    {
+      "sentence_id": "be355093-8318-5b49-89f3-daf4303cc6bd",
+      "source_text": "With our __init__() method established, let’s now focus on implementing all the abstract methods required by BaseLLM, starting with the complete() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在__init__()方法确立之后，我们现在将重点实现BaseLLM所需的所有抽象方法，首先从complete()方法开始。"
+      ]
+    },
+    {
+      "sentence_id": "d8684612-aa20-534b-8ded-10c352711e3f",
+      "source_text": "The logic for our complete() method will have us using the instance’s _client attribute to interact with our running Ollama service.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们的 complete() 方法逻辑将使用实例的 _client 属性与正在运行的 Ollama 服务进行交互。"
+      ]
+    },
+    {
+      "sentence_id": "035d9696-2183-5698-8e8b-c420e8cdc4d9",
+      "source_text": "More specifically, the ollama.AsyncClient class contains a method named generate() that is Ollama’s interface for supporting the LLM completion interaction mode.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "更具体地说，ollama.AsyncClient 类包含一个名为 generate() 的方法，这是 Ollama 用于支持 LLM 补全交互模式的接口。"
+      ]
+    },
+    {
+      "sentence_id": "b30e8565-62f4-5b67-a5a3-4c3b9efb0e30",
+      "source_text": "The generate() method of ollama.AsyncClient requires two parameters: model and prompt.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ollama.AsyncClient的generate()方法需要两个参数：model和prompt。"
+      ]
+    },
+    {
+      "sentence_id": "c7bf231d-6872-5d35-ae34-8d2b4374a672",
+      "source_text": "We provide the name of the model to use by passing along our instance’s model attribute.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们通过传递实例的model属性来提供要使用的模型名称。"
+      ]
+    },
+    {
+      "sentence_id": "f8b1533b-eb05-58d3-bf73-93904cf879cc",
+      "source_text": "For the prompt parameter, we simply forward the prompt variable from the outer complete() call.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于prompt参数，我们直接转发外层complete()调用中的prompt变量。"
+      ]
+    },
+    {
+      "sentence_id": "df10c153-02a4-58f6-bb52-0d0d121b5fb4",
+      "source_text": "The result of generate() is an Ollama data type, which we’ll use to derive a CompleteResult object that we’ll return as the final output of complete().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "generate()的结果是一个Ollama数据类型，我们将用它来派生一个CompleteResult对象，作为complete()的最终输出返回。"
+      ]
+    },
+    {
+      "sentence_id": "f7f74c54-169d-525c-9453-d55acca14dac",
+      "source_text": "Figure 3.12 shows how complete() integrates with the ollama library through the generate() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.12展示了complete()如何通过generate()方法与ollama库集成。"
+      ]
+    },
+    {
+      "sentence_id": "b412a237-6085-5de9-9946-718e78b4557b",
+      "source_text": "Figure 3.12 Integrating with Ollama’s text completion interface. A complete() invocation of OllamaLLM invokes the generate() method of the Ollama library and returns an Ollama data type from which we derive the final return type, CompleteResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.12展示了与Ollama文本补全接口的集成。OllamaLLM的complete()调用会触发Ollama库的generate()方法，并返回一个Ollama数据类型，我们从中派生出最终的返回类型CompleteResult。"
+      ]
+    },
+    {
+      "sentence_id": "2f45718d-0fe4-57bb-b965-b50183ab466a",
+      "source_text": "The following code provides the implementation of complete() for OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码提供了OllamaLLM中complete()方法的实现。"
+      ]
+    },
+    {
+      "sentence_id": "0905c2e8-480f-570f-b2de-898ff2068c7e",
+      "source_text": "Listing 3.7 Implementing OllamaLLM: complete()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.7 实现OllamaLLM：complete()"
+      ]
+    },
+    {
+      "sentence_id": "dc7cc7cb-ce5b-52f6-add5-489501205200",
+      "source_text": "# llm_agents_from_scratch/llms/ollama/llm.py from typing import Any from ollama import AsyncClient from llm_agents_from_scratch.base.llm import BaseLLM from llm_agents_from_scratch.data_structures import ( CompleteResult, ) class OllamaLLM(BaseLLM): \"\"\"Ollama LLM class.\"\"\" … #A async def complete(self, prompt: str, **kwargs: Any) -> CompleteResult: \"\"\"Complete a prompt with an Ollama LLM. Args: prompt (str): The prompt to complete. **kwargs (Any): Additional keyword arguments. Returns: CompleteResult: The text completion result. \"\"\" response = await self._client.generate( #B model=self.model, #C prompt=prompt, #D **kwargs, ) return CompleteResult( response=response.response, #E prompt=prompt, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "e43cf48f-0223-587a-a6bd-0dbc0e4c97fb",
+      "source_text": "Let’s go over a demonstration of our now-implemented complete() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在我们来演示一下已实现的complete()方法。"
+      ]
+    },
+    {
+      "sentence_id": "098c6e54-8180-58e9-8e34-2a18c9677673",
+      "source_text": "We’ll use the qwen2.5:3b LLM and have it tell us a joke.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将使用qwen2.5:3b LLM，让它给我们讲个笑话。"
+      ]
+    },
+    {
+      "sentence_id": "d3495b92-79f0-59c9-802d-e90fc89bce3a",
+      "source_text": "# Included in examples/ch03.ipynb #A import asyncio from llm_agents_from_scratch.llms.ollama import OllamaLLM async def main(): llm = OllamaLLM(model=\"qwen2.5:3b\") response = await llm.complete(\"Tell me a joke.\") print(response) asyncio.run(main())",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "7c2a7a7c-14fe-5d6f-b079-4e8e06949d82",
+      "source_text": "You learned that complete() returns a CompleteResult object that contains a response and prompt attribute.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "您已经了解到，complete()方法会返回一个CompleteResult对象，该对象包含response和prompt属性。"
+      ]
+    },
+    {
+      "sentence_id": "fa1fcb40-4ee5-5152-961d-b6376c905b27",
+      "source_text": "Therefore, print(response) outputs the string representation of this class, which should resemble the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，print(response)会输出该类的字符串表示形式，其代码应类似于以下示例。"
+      ]
+    },
+    {
+      "sentence_id": "1c65342b-25b6-5d3c-ae99-0d5820b6d7c3",
+      "source_text": "response=\"Sure! Here's one for you:\\n\\nWhy don't scientists trust atoms?\\n\\nBecause they make up everything!\" prompt='Tell me a joke.'",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "87e23382-6f23-5121-b6a9-aa51c18702f1",
+      "source_text": "NOTE",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "ad96a0f4-ccd8-54bc-b4c0-617ea4be80df",
+      "source_text": "Async methods need to be run within an async event loop.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "异步方法需要在异步事件循环中运行。"
+      ]
+    },
+    {
+      "sentence_id": "a19ef6fa-e711-57db-8cd5-aac4111ef69f",
+      "source_text": "The asyncio.run() method creates a new event loop and runs the provided Coroutine.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "asyncio.run() 方法会创建一个新的事件循环并运行提供的协程。"
+      ]
+    },
+    {
+      "sentence_id": "f203eed1-9177-5ec5-99a4-778b65f46bd0",
+      "source_text": "When using Jupyter notebooks, there is already a running event loop, which means async methods can be awaited directly without using asyncio.run().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在使用 Jupyter 笔记本时，已经存在一个运行中的事件循环，这意味着可以直接等待异步方法，而无需使用 asyncio.run()。"
+      ]
+    },
+    {
+      "sentence_id": "d0ffce40-599e-584b-8b43-08265618b55e",
+      "source_text": "With the complete() method implemented, rather than implementing chat() next, let’s implement structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在实现了complete()方法后，我们接下来不是实现chat()，而是实现structured_output()。"
+      ]
+    },
+    {
+      "sentence_id": "fc36148b-79b7-5f1b-af6c-4338612847c3",
+      "source_text": "The reason for this is that we’ll use the same “tell me a joke” example that we just covered, but using our Joke model from earlier as our desired structured output format.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这样做的原因是，我们将使用刚才讨论过的“讲个笑话”这个例子，但使用我们之前定义的Joke模型作为期望的结构化输出格式。"
+      ]
+    },
+    {
+      "sentence_id": "24696b25-dfc2-5aba-89c0-5413e1625d67",
+      "source_text": "To implement structured_output(), we’ll need to use Ollama’s structured output interface, much like how our implementation of complete() relied on Ollama’s completion interface, generate().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了实现structured_output()，我们需要使用Ollama的结构化输出接口，这类似于我们实现complete()时依赖Ollama的生成接口generate()的方式。"
+      ]
+    },
+    {
+      "sentence_id": "153a7c39-2d26-55ed-91ef-06ef7dc43bf6",
+      "source_text": "As it turns out, Ollama’s structured output interface is facilitated by their chat interface.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "事实证明，Ollama的结构化输出接口是通过其聊天接口实现的。"
+      ]
+    },
+    {
+      "sentence_id": "9700c673-0232-50c7-9d86-418df99be087",
+      "source_text": "To not confuse Ollama’s chat interface with that of our framework, I’ll refer to Ollama’s as ollama.chat().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了避免将Ollama的聊天接口与我们框架中的接口混淆，我将把Ollama的接口称为ollama.chat()。"
+      ]
+    },
+    {
+      "sentence_id": "2087dc04-cb5a-5577-9093-ba62a2940191",
+      "source_text": "The ollama.chat() method allows for the optional specification of a format parameter, where users can supply their desired structured output as a JSON Schema.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ollama.chat()方法允许可选地指定format参数，用户可以在其中提供他们期望的结构化输出作为JSON Schema。"
+      ]
+    },
+    {
+      "sentence_id": "125bec2d-79c2-5d94-a2b0-545de718b3a3",
+      "source_text": "You learned about JSON Schemas in the previous chapter, and you may recall they can be produced for pydantic.BaseModel subclasses through the model_json_schema() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在前一章中，您学习了JSON Schema，您可能还记得，可以通过model_json_schema()方法为pydantic.BaseModel的子类生成它们。"
+      ]
+    },
+    {
+      "sentence_id": "d2c8d8c9-eb4d-5e2d-be11-2ba4fc7c9a26",
+      "source_text": "We’ll rely on this as well in our implementation of structured_output() since the parameter mdl is a type that is bound to pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在我们的structured_output()实现中，我们也将依赖这一点，因为参数mdl是一个绑定到pydantic.BaseModel的类型。"
+      ]
+    },
+    {
+      "sentence_id": "a3246393-8edc-5382-90ee-f13ed87076db",
+      "source_text": "Before we show the code that implements structured_output(), we need to discuss an important activity that typically takes place when building integrations with LLM frameworks like Ollama.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在展示实现structured_output()的代码之前，我们需要讨论构建与Ollama等LLM框架集成时通常会发生的一项重要活动。"
+      ]
+    },
+    {
+      "sentence_id": "65d6f71e-73b4-5b39-b02f-54a67ab671a4",
+      "source_text": "That is, developing these integrations often requires converting between the data types of our framework and those of the library we want to support, and vice versa.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "也就是说，开发这些集成通常需要在我们的框架数据类型与要支持的库的数据类型之间进行转换，反之亦然。"
+      ]
+    },
+    {
+      "sentence_id": "37bcec45-e1c2-5380-bba4-3bd4d878cfb9",
+      "source_text": "We saw a bit of this in our previous implementation of complete(), when we had to extract the response attribute from the returned Ollama data type to create our CompleteResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在之前实现complete()方法时已经看到过一点这种情况，当时我们需要从返回的Ollama数据类型中提取response属性来创建我们的CompleteResult。"
+      ]
+    },
+    {
+      "sentence_id": "d6a389f7-5469-515f-a9b5-ee1e8ee9b1f5",
+      "source_text": "For our Ollama integration, we’ll use three utility functions that explicitly convert the data structures of our framework to the corresponding Ollama data type equivalents, and vice versa for the message data type.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于我们的Ollama集成，我们将使用三个实用函数，它们明确地将我们框架的数据结构转换为相应的Ollama数据类型等效项，反之亦然（针对消息数据类型）。"
+      ]
+    },
+    {
+      "sentence_id": "1fd8de3e-ed5f-5eaf-b40f-3e1742291455",
+      "source_text": "The three utility methods are listed below and shown in figure 3.13:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这三种实用方法如下所列，并在图3.13中展示："
+      ]
+    },
+    {
+      "sentence_id": "d9b3fe83-e839-5d60-b415-2559702465bb",
+      "source_text": "chat_message_to_ollama_message()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "chat_message_to_ollama_message()"
+      ]
+    },
+    {
+      "sentence_id": "0b48147e-edef-583c-b703-43bb23a79d84",
+      "source_text": "ollama_message_to_chat_message()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ollama_message_to_chat_message()"
+      ]
+    },
+    {
+      "sentence_id": "33c2c9b0-0af5-5a8f-b744-715cb87fce17",
+      "source_text": "tool_to_ollama_tool()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "tool_to_ollama_tool()"
+      ]
+    },
+    {
+      "sentence_id": "d3f20a38-487c-54a8-9eb8-3915ebca4d28",
+      "source_text": "Figure 3.13 Three utility functions for converting between llm-agents-from-scratch data types and corresponding Ollama equivalent data types.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.13 展示了三个实用函数，用于在llm-agents-from-scratch数据类型与对应的Ollama等效数据类型之间进行转换。"
+      ]
+    },
+    {
+      "sentence_id": "4b8bf5ff-77f1-56e0-9f64-8b86d007d85c",
+      "source_text": "For brevity, and since the implementations of these utility functions are not core to understanding how we’ll build OllamaLLM, I’ve not included them here.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为简洁起见，且由于这些实用函数的实现并非理解我们如何构建OllamaLLM的核心，我在此未包含它们。"
+      ]
+    },
+    {
+      "sentence_id": "4bcf8f03-5e9c-528a-990a-2cb5384175d4",
+      "source_text": "Interested readers can view their complete implementations at: https://github.com/nerdai/llm-agents-from-scratch/blob/main/src/llm_agents_from_scratch/llms/ollama/utils.py.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "感兴趣的读者可以在以下链接查看其完整实现：https://github.com/nerdai/llm-agents-from-scratch/blob/main/src/llm_agents_from_scratch/llms/ollama/utils.py。"
+      ]
+    },
+    {
+      "sentence_id": "429bc337-0e83-5cc7-8e9f-9b5bf6bb7c6c",
+      "source_text": "We now have all the pieces to implement structured_output() for OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，我们已经具备了为OllamaLLM实现structured_output()所需的所有组件。"
+      ]
+    },
+    {
+      "sentence_id": "93cf45bd-7287-57db-ba06-9b22fffa902b",
+      "source_text": "First, we’ll prepare the Ollama message data object that contains our instruction prompt by invoking our utility chat_message_to_ollama_message().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先，我们将通过调用实用函数chat_message_to_ollama_message()来准备包含指令提示的Ollama消息数据对象。"
+      ]
+    },
+    {
+      "sentence_id": "7909f380-fc25-54da-8da4-c2fbc857434f",
+      "source_text": "Next, we invoke the ollama.chat() method, passing the Ollama message data object, as well as the JSON Schema associated with mdl to specify our desired output structure.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接着，我们调用ollama.chat()方法，传入Ollama消息数据对象以及关联mdl的JSON Schema，以指定所需的输出结构。"
+      ]
+    },
+    {
+      "sentence_id": "642404a5-edd9-54ab-8439-0946b9360641",
+      "source_text": "The output of ollama.chat() is another Ollama data type, from which we must extract the JSON data needed to build the instance of mdl that we return as the final output of structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ollama.chat()的输出是另一种Ollama数据类型，我们必须从中提取构建mdl实例所需的JSON数据，该实例将作为structured_output()的最终输出返回。"
+      ]
+    },
+    {
+      "sentence_id": "d17d2891-ec5f-5ffc-ae9d-51f82af02e5b",
+      "source_text": "Figure 3.14 illustrates this entire process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.14展示了这一完整流程。"
+      ]
+    },
+    {
+      "sentence_id": "5f229257-dbee-5117-aa7a-bf33bf5a3168",
+      "source_text": "Figure 3.14 Integrating with Ollama’s structured output interface, which is facilitated by their chat interface. A structured_output() invocation of OllamaLLM invokes the ollama.chat() but not before creating the Ollama message data object. The returned result is an ollama.ChatResponse from which we extract the JSON payload corresponding to mdl that we then use to validate and create the final structured output object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.14展示了与Ollama结构化输出接口的集成，该集成通过其聊天界面实现。调用OllamaLLM的structured_output()方法会触发ollama.chat()，但在此之前会先创建Ollama消息数据对象。返回的结果是一个ollama.ChatResponse，我们从中提取与mdl对应的JSON有效载荷，然后用于验证并创建最终的结构化输出对象。"
+      ]
+    },
+    {
+      "sentence_id": "d1f23484-4282-5c5d-b76a-b13623e22c47",
+      "source_text": "The implementation of structured_output() for OllamaLLM is provided in the following listing.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "OllamaLLM的structured_output()实现如下列清单所示。"
+      ]
+    },
+    {
+      "sentence_id": "41e93eeb-ab61-50af-95a1-9bec0d084673",
+      "source_text": "Listing 3.8 Implementing OllamaLLM: structured_output()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.8 实现OllamaLLM：structured_output()"
+      ]
+    },
+    {
+      "sentence_id": "4fa532fc-ca1a-5ba0-937f-a645a1351547",
+      "source_text": "# llm_agents_from_scratch/llms/ollama/llm.py from typing import Any from llm_agents_from_scratch.base.llm import ( BaseLLM, StructuredOutputType, ) from llm_agents_from_scratch.llms.utils import ( chat_message_to_ollama_message, ) from llm_agents_from_scratch.data_structures import ( ChatMessage, ) class OllamaLLM(BaseLLM): \"\"\"Ollama LLM class.\"\"\" … #A async def structured_output( self, prompt: str, mdl: type[StructuredOutputType], **kwargs: Any, ) -> StructuredOutputType: \"\"\"Structured output interface implementation for Ollama LLM. … #B \"\"\" o_messages = [ chat_message_to_ollama_message( ChatMessage(role=\"user\", content=prompt), ), ] result = await self._client.chat( #C model=self.model, messages=o_messages, format=mdl.model_json_schema(), #D ) return mdl.model_validate_json(result.message.content) #E",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "414888ba-9f31-5a1d-af03-c59bd584393d",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "a69eb040-26c3-549f-b9a5-0bdf8e995832",
+      "source_text": "For structured_output(), we could have also built the Ollama message data type directly rather than using our utility method chat_message_to_ollama_message().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于structured_output()，我们本可以直接构建Ollama消息数据类型，而不是使用我们的工具方法chat_message_to_ollama_message()。"
+      ]
+    },
+    {
+      "sentence_id": "54f1395a-7e8c-5d64-a3bf-952bf8fb65bf",
+      "source_text": "I’ve elected to use it here to gradually introduce this concept, which we’ll use again when implementing chat() and continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我选择在此处使用它来逐步引入这个概念，我们将在实现chat()和continue_chat_with_tool_results()时再次用到。"
+      ]
+    },
+    {
+      "sentence_id": "e631129f-3134-54aa-bfa5-364a2cd76ffb",
+      "source_text": "To demonstrate the usage of structured_output(), we’ll again prompt the qwen2.5:3b LLM to tell us a joke.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了演示structured_output()的用法，我们将再次提示qwen2.5:3b大语言模型给我们讲一个笑话。"
+      ]
+    },
+    {
+      "sentence_id": "941a0ffb-f7eb-58e5-b159-4f4e6a606c3c",
+      "source_text": "This time, however, we’ll have it output the joke in the format of the Joke class we defined earlier, which I show again here for convenience.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "不过这一次，我们将让它以我们之前定义的Joke类格式输出笑话，为了方便起见，我在此再次展示该类。"
+      ]
+    },
+    {
+      "sentence_id": "543f5a11-108a-543f-ae0f-999c481d06da",
+      "source_text": "# Included in examples/ch03.ipynb #A import asyncio from pydantic import BaseModel from typing import Literal from llm_agents_from_scratch.llms.ollama import OllamaLLM class Joke(BaseModel): \"\"\"A structured output model for Jokes.\"\"\" subject: Literal[\"math\", \"physics\", \"biology\"] joke: str async def main(): llm = OllamaLLM(model=\"qwen2.5:3b\") prompt = (\"Tell me a joke.\") joke = await llm.structured_output(prompt=prompt, mdl=Joke) #B print(joke.__class__.__name__) print(joke) asyncio.run(main())",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "2efeff53-2c9c-5773-a793-fc796abb75e9",
+      "source_text": "The first print statement outputs the class name of the returned joke, while the second print statement outputs the string representation of the returned Joke object.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个print语句输出返回笑话的类名，而第二个print语句输出返回的Joke对象的字符串表示。"
+      ]
+    },
+    {
+      "sentence_id": "6c8790d6-96bc-58aa-85f2-0eadb305c4bd",
+      "source_text": "The following code snippet shows what the output of these two print statements should resemble.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码片段展示了这两个print语句的输出应大致呈现的样子。"
+      ]
+    },
+    {
+      "sentence_id": "4791441f-8502-5bb8-b935-ba8c5a1bd1c5",
+      "source_text": "Joke subject='math', joke='Why did the math book look so sad? Because it had lots of problems.'",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "5db86d14-eac5-56db-8bcd-bcbb3e0bc3b3",
+      "source_text": "Great!",
+      "sentence_status": "translated",
+      "target_texts": [
+        "很好！"
+      ]
+    },
+    {
+      "sentence_id": "cf78b441-c4ee-5109-87c5-ecbe39155f5f",
+      "source_text": "We have implemented two of the four interaction modes for OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们已经为OllamaLLM实现了四种交互模式中的两种。"
+      ]
+    },
+    {
+      "sentence_id": "444922a2-5658-5594-8b24-b2f3d2e4832e",
+      "source_text": "Let’s wrap up this section with our implementations of chat() and its convenient extension continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们用chat()及其便捷扩展continue_chat_with_tool_results()的实现来结束本节。"
+      ]
+    },
+    {
+      "sentence_id": "363d71f7-7c22-5747-8535-0a5dd10460be",
+      "source_text": "We’ve already encountered Ollama’s chat interface, ollama.chat(), through our previous implementation of structured_output().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们已经在之前实现structured_output()时接触过Ollama的聊天接口ollama.chat()。"
+      ]
+    },
+    {
+      "sentence_id": "b4b8f078-3a73-597e-8ce9-695c372d1dd7",
+      "source_text": "Naturally, we’ll use ollama.chat() again to integrate with the chat interfaces of our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自然地，我们将再次使用ollama.chat()来集成我们框架的聊天接口。"
+      ]
+    },
+    {
+      "sentence_id": "6cdffcbe-7d33-54b5-9fb8-e10e21333845",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注"
+      ]
+    },
+    {
+      "sentence_id": "34526372-01ee-5a21-9a93-e16c5e3edef6",
+      "source_text": "We'll hold off on demonstrations of chat() and continue_chat_with_tool_results() until the next section, where we'll see them working together in a complete end-to-end demonstration of a tool-calling process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将暂不演示chat()和continue_chat_with_tool_results()方法，留待下一节，届时我们将在一个完整的端到端工具调用流程演示中看到它们协同工作。"
+      ]
+    },
+    {
+      "sentence_id": "a341f3c3-25a4-5eb5-8759-559c69b55314",
+      "source_text": "To build out this Ollama chat integration, we’ll need to delve deeper into the inner workings of ollama.chat().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了构建这个Ollama聊天集成，我们需要更深入地了解ollama.chat()的内部工作原理。"
+      ]
+    },
+    {
+      "sentence_id": "1fa79c48-203a-5253-b80c-23556b956afa",
+      "source_text": "Specifically, ollama.chat() takes in an input list of Ollama message objects as well as an optional list of Ollama tool objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具体来说，ollama.chat()接收一个Ollama消息对象列表作为输入，以及一个可选的Ollama工具对象列表。"
+      ]
+    },
+    {
+      "sentence_id": "0d2c0db3-3fe6-53c2-a847-0f48e3e07765",
+      "source_text": "After querying the LLM service, ollama.chat() returns an ollama.ChatResponse object from which we can extract the LLM’s response message.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "查询LLM服务后，ollama.chat()会返回一个ollama.ChatResponse对象，我们可以从中提取LLM的响应消息。"
+      ]
+    },
+    {
+      "sentence_id": "4d662007-0d19-57ab-91d5-e33d01a9df8f",
+      "source_text": "As mentioned earlier, building an integration with other LLM frameworks involves converting between the data types of the two frameworks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如前所述，构建与其他LLM框架的集成涉及在两个框架的数据类型之间进行转换。"
+      ]
+    },
+    {
+      "sentence_id": "da9a5383-dd17-5267-8f40-44554a75dfb8",
+      "source_text": "For this, we’ll use our utility conversion functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为此，我们将使用我们的实用程序转换函数。"
+      ]
+    },
+    {
+      "sentence_id": "df512fa7-1afe-5ade-b9b3-2fbf38435c6d",
+      "source_text": "We saw from figures 3.5 and 3.7 that chat() takes in three parameters: input, chat_history, and tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从图3.5和图3.7中我们看到，chat() 函数接收三个参数：input、chat_history 和 tools。"
+      ]
+    },
+    {
+      "sentence_id": "9ce0c9d1-f583-57f4-a90f-3262cae20824",
+      "source_text": "We’ll need to apply chat_message_to_ollama_message() to derive Ollama message objects from input and chat_history, and tool_to_ollama_tool() to derive Ollama tool objects from tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们需要应用 chat_message_to_ollama_message() 从 input 和 chat_history 中推导出 Ollama 消息对象，并应用 tool_to_ollama_tool() 从 tools 中推导出 Ollama 工具对象。"
+      ]
+    },
+    {
+      "sentence_id": "17def333-ef71-564f-955a-90fb3f077b8d",
+      "source_text": "With our Ollama messages and tools prepared, we can invoke ollama.chat() and extract the LLM’s response message from the invocation result.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "准备好Ollama消息和工具后，我们可以调用ollama.chat()并从调用结果中提取LLM的响应消息。"
+      ]
+    },
+    {
+      "sentence_id": "3b9cf50c-ea2e-543f-8ef1-64f30c98b9eb",
+      "source_text": "Since this message is an Ollama message data type, we’ll need to apply the ollama_message_to_chat_message() to convert the LLM’s response to a ChatMessage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于此消息是Ollama消息数据类型，我们需要应用ollama_message_to_chat_message()将LLM的响应转换为ChatMessage。"
+      ]
+    },
+    {
+      "sentence_id": "5f661865-c9dd-56cf-ad87-0496b5dfc531",
+      "source_text": "We return this ChatMessage object along with another one that represents the user’s input as the final output to the chat() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将此ChatMessage对象与代表用户输入的另一个ChatMessage对象一起作为chat()方法的最终输出返回。"
+      ]
+    },
+    {
+      "sentence_id": "bc5da623-fbaa-5529-90bd-70dc9280a020",
+      "source_text": "Figure 3.15 shows this entire process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.15展示了整个过程。"
+      ]
+    },
+    {
+      "sentence_id": "339df293-4016-5593-9353-959df868f284",
+      "source_text": "Figure 3.15 Integrating with Ollama’s chat interface to implement chat(). The user’s input and chat history are converted to Ollama messages, and tools are converted to Ollama tools. Next, ollama.chat() is invoked and its response is then converted back to a ChatMessage. This ChatMessage is returned along with another one derived from the user’s input.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.15展示了如何与Ollama的聊天界面集成以实现chat()功能。用户的输入和聊天历史被转换为Ollama消息，工具则转换为Ollama工具。接着，调用ollama.chat()，并将其响应转换回ChatMessage。该ChatMessage与另一个由用户输入派生的ChatMessage一同返回。"
+      ]
+    },
+    {
+      "sentence_id": "58be3dc9-b151-574b-b9b7-cf9a29d76679",
+      "source_text": "The following code provides the implementation of chat().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码提供了chat()方法的实现。"
+      ]
+    },
+    {
+      "sentence_id": "7e556777-322e-5c21-8bfb-46fb0c83564e",
+      "source_text": "Listing 3.9 Implementing OllamaLLM: chat()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单3.9 实现OllamaLLM：chat()"
+      ]
+    },
+    {
+      "sentence_id": "66cb65e9-a499-5c08-97d3-9cba2d321b23",
+      "source_text": "# llm_agents_from_scratch/llms/ollama/llm.py … #A from llm_agents_from_scratch.llms.utils import ( #B chat_message_to_ollama_message, ollama_message_to_chat_message, tool_to_ollama_tool, ) class OllamaLLM(BaseLLM): \"\"\"Ollama LLM class.\"\"\" … #C async def chat( self, input: str, chat_history: list[ChatMessage] | None = None, tools: list[BaseTool | AsyncBaseTool] | None = None, **kwargs: Any, ) -> tuple[ChatMessage, ChatMessage]: … #D # prepare messages #E o_messages = ( [chat_message_to_ollama_message(cm) for cm in chat_history] if chat_history else [] ) user_message = ChatMessage(role=\"user\", content=input) o_messages.append( chat_message_to_ollama_message( user_message, ), ) # prepare tools #F o_tools = ( [tool_to_ollama_tool(t) for t in tools] if tools else None ) result = await self._client.chat( #G model=self.model, messages=o_messages, tools=o_tools, ) return ( user_message, ollama_message_to_chat_message(result.message) #H )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "eeaf58cb-2156-5756-8ed2-179b9b2bdad1",
+      "source_text": "Let’s now implement the final abstract method, continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在，让我们实现最后一个抽象方法continue_chat_with_tool_results()。"
+      ]
+    },
+    {
+      "sentence_id": "ef4e2a89-6f4b-5eff-a64c-06ace42fbc3a",
+      "source_text": "As with the implementation for chat(), much of the work we need to do here involves converting ChatMessage objects from our framework to the Ollama message data type equivalents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与chat()方法的实现类似，我们在此需要完成的大部分工作涉及将框架中的ChatMessage对象转换为Ollama消息数据类型的等效形式。"
+      ]
+    },
+    {
+      "sentence_id": "89ba3d89-2cfe-5c51-a61d-4cbc14924d18",
+      "source_text": "The main convenience this method offers, however, is that users can pass in ToolCallResult objects directly—they do not have to deal with converting these to ChatMessage objects at all.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，该方法提供的主要便利在于，用户可以直接传入ToolCallResult对象——他们完全无需处理将这些对象转换为ChatMessage对象的问题。"
+      ]
+    },
+    {
+      "sentence_id": "566d711f-9d7d-5107-b9ac-59e2be823d5b",
+      "source_text": "To convert a ToolCallResult object to a ChatMessage object, we can use the constructor method, from_tool_call_result(), which we provided back in listing 3.2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要将ToolCallResult对象转换为ChatMessage对象，我们可以使用构造函数方法from_tool_call_result()，该方法已在清单3.2中提供。"
+      ]
+    },
+    {
+      "sentence_id": "3fdcfc5b-7a00-5bca-ad56-cdf34afd539b",
+      "source_text": "From here, the process is similar to that of the previously implemented chat() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从这一步开始，流程与之前实现的chat()方法类似。"
+      ]
+    },
+    {
+      "sentence_id": "161e5855-af9f-54e7-8690-e88618c5ff45",
+      "source_text": "We apply chat_message_to_ollama_message() and tool_to_ollama_tool() to obtain Ollama messages and tools.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们应用chat_message_to_ollama_message()和tool_to_ollama_tool()来获取Ollama消息和工具。"
+      ]
+    },
+    {
+      "sentence_id": "080d07ea-2bda-5ab0-addd-5d243b9df6b7",
+      "source_text": "Next, we invoke ollama.chat() to have the LLM synthesize the tool results and generate a response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接下来，我们调用ollama.chat()，让LLM综合工具结果并生成响应。"
+      ]
+    },
+    {
+      "sentence_id": "ce6932d2-a77f-5314-aa9d-fde9e80b15f8",
+      "source_text": "The result of ollama.chat() is converted back to a ChatMessage with ollama_message_to_chat_message().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ollama.chat()的结果通过ollama_message_to_chat_message()转换回ChatMessage。"
+      ]
+    },
+    {
+      "sentence_id": "551a1c90-54d4-5b90-b732-73ef099dabef",
+      "source_text": "We return this along with the list of ChatMessage objects constructed from the supplied ToolCallResult objects.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将其与由提供的ToolCallResult对象构建的ChatMessage对象列表一同返回。"
+      ]
+    },
+    {
+      "sentence_id": "fface047-b430-525b-b9e2-b8939f5a0ae6",
+      "source_text": "Figure 3.16 illustrates this integration.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.16展示了这一集成过程。"
+      ]
+    },
+    {
+      "sentence_id": "36e3f7fd-fe58-5f0c-9188-a5a43de583de",
+      "source_text": "Figure 3.16 Integrating with Ollama’s chat interface to implement continue_chat_with_tool_results(). The tool-call results and chat history are converted to Ollama messages, and tools are converted to Ollama tools. Next, ollama.chat() is invoked and its response is then converted back to a ChatMessage. This ChatMessage is returned along with the list of ChatMessage objects derived from the tool-call results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图3.16展示了如何集成Ollama的聊天界面来实现continue_chat_with_tool_results()。工具调用结果和聊天历史被转换为Ollama消息，工具则转换为Ollama工具。接着，调用ollama.chat()，并将其响应转换回ChatMessage。该ChatMessage与从工具调用结果派生出的ChatMessage对象列表一同返回。"
+      ]
+    },
+    {
+      "sentence_id": "843898f3-2a24-5103-8cad-f21c1de50512",
+      "source_text": "The following code implements continue_chat_with_tool_results().",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以下代码实现了continue_chat_with_tool_results()。"
+      ]
+    },
+    {
+      "sentence_id": "02ff9954-dc8f-5183-8339-48233997f95c",
+      "source_text": "Listing 3.10 Implementing OllamaLLM: continue_chat_with_tool_results()",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单 3.10 实现 OllamaLLM：continue_chat_with_tool_results()"
+      ]
+    },
+    {
+      "sentence_id": "6bfde87d-3d20-5575-88e8-9424e1b6396e",
+      "source_text": "# llm_agents_from_scratch/llms/ollama/llm.py … #A class OllamaLLM(BaseLLM): \"\"\"Ollama LLM class.\"\"\" … #B async def continue_chat_with_tool_results( self, tool_call_results: Sequence[ToolCallResult], chat_history: Sequence[ChatMessage], tools: Sequence[Tool] | None = None, **kwargs: Any, ) -> tuple[list[ChatMessage], ChatMessage]: … #C # augment chat messages and convert to Ollama messages tool_messages = [ ChatMessage.from_tool_call_result(tc) #D for tc in tool_call_results ] o_messages = [ #E chat_message_to_ollama_message(cm) for cm in chat_history ] + [ chat_message_to_ollama_message(tm) for tm in tool_messages ] # prepare tools o_tools = ( [tool_to_ollama_tool(t) for t in tools] if tools else None ) # send chat request o_result = await self._client.chat( #F model=self.model, messages=o_messages, ) return ( tool_messages, #G ollama_message_to_chat_message(o_result.message) #H )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "92b6704d-96a2-512b-9fa1-0d70e12c7911",
+      "source_text": "Phew.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "呼。"
+      ]
+    },
+    {
+      "sentence_id": "2c715900-6889-5de2-867d-02dd9135a924",
+      "source_text": "It was really no small feat to implement all four required methods for OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为OllamaLLM实现所有四个必需的方法绝非易事。"
+      ]
+    },
+    {
+      "sentence_id": "38b16f8d-fbb7-5974-bfde-7331808cd0f8",
+      "source_text": "The payoff for all this work, though, is quite significant.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，所有这些工作的回报是相当显著的。"
+      ]
+    },
+    {
+      "sentence_id": "8f56b79f-6d04-5cf8-9c46-29d117611783",
+      "source_text": "We can now use any of the open-source LLMs available through Ollama in our framework!",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们现在可以在我们的框架中使用通过Ollama提供的任何开源大语言模型了！"
+      ]
+    },
+    {
+      "sentence_id": "2569ad46-8072-5b2f-85db-43ecc1515981",
+      "source_text": "To wrap up this chapter, we’ll revisit our Hailstone tool from the previous chapter to demonstrate how our OllamaLLM can perform a tool call with it.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为本章的总结，我们将回顾上一章中的Hailstone工具，以演示我们的OllamaLLM如何通过它执行工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "99d5fb41-bfd3-5667-9bde-b12de9005c2d",
+      "source_text": "Exercise 3.1 Structured outputs with an OllamaLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "练习3.1 使用OllamaLLM实现结构化输出"
+      ]
+    },
+    {
+      "sentence_id": "51c894dc-5e0e-5316-b5e7-31ac1ce8d421",
+      "source_text": "Create a structured data model for a poem that also includes the poem text and its type (e.g., sonnet, haiku, etc.).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "创建一个结构化的诗歌数据模型，其中包含诗歌文本及其类型（例如，十四行诗、俳句等）。"
+      ]
+    },
+    {
+      "sentence_id": "9d9deb8c-75e6-5a0a-9dcd-e36dcd32d401",
+      "source_text": "Use an OllamaLLM instance to generate a structured poem using your poem data model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用OllamaLLM实例，基于你的诗歌数据模型生成一首结构化的诗歌。"
+      ]
+    },
+    {
+      "sentence_id": "a2cb3db2-efc2-5bfa-8aae-adade7dc8957",
+      "source_text": "3.2.2 Hailstone tool call with OllamaLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.2.2 使用OllamaLLM进行Hailstone工具调用"
+      ]
+    },
+    {
+      "sentence_id": "e3c71777-2c20-5a69-8f87-41ab6aa00965",
+      "source_text": "Let’s quickly revisit the Hailstone tool that we created in the previous chapter and demonstrate how we can use it to perform an entire tool-calling process with our new OllamaLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们快速回顾上一章创建的Hailstone工具，并演示如何利用新的OllamaLLM完成整个工具调用流程。"
+      ]
+    },
+    {
+      "sentence_id": "26cf1c8f-2f28-55ec-b168-f830752ea45e",
+      "source_text": "To do so, we’ll make use of the chat() and continue_chat_with_tool_results() methods.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为此，我们将利用chat()和continue_chat_with_tool_results()方法。"
+      ]
+    },
+    {
+      "sentence_id": "b0b2dcc8-e086-56be-af34-51f97da36d91",
+      "source_text": "We’ll use the same qwen2.5:3b model for our OllamaLLM and will supply it with the hailstone_tool that we created in the previous chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将使用相同的qwen2.5:3b模型作为我们的OllamaLLM，并为其提供我们在前一章创建的hailstone_tool。"
+      ]
+    },
+    {
+      "sentence_id": "53f068cb-e9ba-5692-ad5e-c4b00452f7bb",
+      "source_text": "note",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意"
+      ]
+    },
+    {
+      "sentence_id": "24ecb831-62dc-53d2-bfe9-f26dd13fff11",
+      "source_text": "If you are coding these examples for yourself and not using the provided Jupyter notebook, then be sure to bring the hailstone_step_func() defined in the previous chapter into the necessary scope e.g. in your .py file if coding with Python scripts.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果您正在自行编写这些示例，而非使用提供的Jupyter笔记本，请务必将前一章节中定义的hailstone_step_func()引入必要的作用域，例如在您的.py文件中（如果使用Python脚本编写）。"
+      ]
+    },
+    {
+      "sentence_id": "e899c9fb-afc0-5c7e-8e81-8db30b967ca7",
+      "source_text": "To initiate a tool-calling process, we invoke chat() by supplying an input string that will elicit a Hailstone tool-call request, as shown in the following code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "要启动工具调用过程，我们通过提供一个将引发Hailstone工具调用请求的输入字符串来调用chat()，如下方代码所示。"
+      ]
+    },
+    {
+      "sentence_id": "906491fb-0765-522e-a956-e292609cce35",
+      "source_text": "# Included in examples/ch03.ipynb #A import asyncio from llm_agents_from_scratch.llms.ollama import OllamaLLM from llm_agents_from_scratch.data_structures.llm import ChatMessage from llm_agents_from_scratch.tools import SimpleFunctionTool llm = OllamaLLM(model=\"qwen2.5:3b\") #B hailstone_tool = SimpleFunctionTool(hailstone_step_func) #C async def main(): user_input = ( \"What is the result of taking the next step of the \" #D \"Hailstone sequence on the number 3?\\n\\n\" \"Be very succinct in your response.\" ) return await llm.chat( #E user_input, tools=[hailstone_tool], #F ) user_msg, response_msg = asyncio.run(main()) print(response_msg.tool_calls)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "14ef77d4-83ea-53ab-a67b-d30468a4e891",
+      "source_text": "The print statement should return a single tool call of Hailstone, as shown below.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "打印语句应返回一个Hailstone工具调用，如下所示。"
+      ]
+    },
+    {
+      "sentence_id": "13664481-bd3c-5e2a-82dc-96bfadcff118",
+      "source_text": "If it does, then congratulations, your OllamaLLM has successfully requested a tool call for our Hailstone tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果是这样，那么恭喜你，你的OllamaLLM已成功为我们的Hailstone工具请求了一次工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "f91fdfaa-fac4-58dc-b86c-be8a1a367d7d",
+      "source_text": "[ToolCall(id_='6f6d02ca-56db-4872-8c8f-3814e2ceeb19', tool_name='hailstone', arguments={'x': 3})]",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "ee9c87ed-d96b-5aae-bfd2-b29acdf81217",
+      "source_text": "As we know from before, however, making the LLM elicit a tool call request is only the first step in performing tool calls with LLMs. We next need to run the tool with the arguments and then pass the ToolCallResult back to the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，正如我们之前所知，让大语言模型生成工具调用请求只是使用大语言模型执行工具调用的第一步。接下来，我们需要使用参数运行该工具，然后将ToolCallResult传回给大语言模型。"
+      ]
+    },
+    {
+      "sentence_id": "daad30a6-8708-5d6a-8110-bf49c9e7be29",
+      "source_text": "# Included in examples/ch03.ipynb #A tool_call = response_msg.tool_calls[0] tool_call_result = hailstone_tool(tool_call) #B print(tool_call_result)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "afaa7ffd-adb4-52b8-8a6b-c57ce41dbc7b",
+      "source_text": "As we saw in the last chapter, performing a tool call with a BaseTool returns a ToolCallResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如我们在上一章所见，使用 BaseTool 执行工具调用会返回一个 ToolCallResult。"
+      ]
+    },
+    {
+      "sentence_id": "8fa25ba6-cdc5-51ff-8a23-52bcd9cc410c",
+      "source_text": "Thus printing the tool_call_result variable in the above snippet should resemble something like the following:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，在上述代码片段中打印 tool_call_result 变量，其输出应类似于以下内容："
+      ]
+    },
+    {
+      "sentence_id": "45a18ac5-058f-59d2-92f0-4d398bb9f41a",
+      "source_text": "tool_call_id='6f6d02ca-56db-4872-8c8f-3814e2ceeb19', content='10', error=False",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "209a55a5-2174-5537-8c1d-93f281fad31d",
+      "source_text": "With our ToolCallResult in hand, we can now finally submit this back to our LLM for synthesis and response using the continue_chat_with_tool_results() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "有了ToolCallResult在手，我们现在终于可以将其提交回我们的LLM，使用continue_chat_with_tool_results()方法进行综合和响应。"
+      ]
+    },
+    {
+      "sentence_id": "dbdb77dc-0ae4-55d2-8b1a-7115b431f351",
+      "source_text": "As you know, this method returns ChatMessage objects created from the tool results and the LLM's response.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如您所知，该方法会返回从工具结果和LLM响应创建的ChatMessage对象。"
+      ]
+    },
+    {
+      "sentence_id": "00338eb0-cf1a-52ad-a832-9a7dfe3034f2",
+      "source_text": "# Included in examples/ch03.ipynb async def main(): return await llm.continue_chat_with_tool_results( tool_call_results=[tool_call_result], chat_history=[user_msg, response_msg], ) tools_msg, final_response = asyncio.run(main()) print(final_response)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "f73580e0-676a-5ea3-9973-617bacfd3ea7",
+      "source_text": "The print statement should output the string representation of a ChatMessage object that looks something like the following:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "打印语句应输出一个ChatMessage对象的字符串表示，其内容大致如下所示："
+      ]
+    },
+    {
+      "sentence_id": "1558d301-ca43-56f2-b7cc-98be7a1b6012",
+      "source_text": "role=<ChatRole.ASSISTANT: 'assistant'> content='The result of taking the next step in the Hailstone sequence on the number 3 is 10.' tool_calls=None",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "001b71ba-0603-5dee-906d-626934109e22",
+      "source_text": "We’ve done it!",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们做到了！"
+      ]
+    },
+    {
+      "sentence_id": "a2612575-72a5-5169-97ca-448226afaf0d",
+      "source_text": "It took some time, but we have finally performed a complete tool-calling process using our Hailstone tool and our newly implemented OllamaLLM class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然花了一些时间，但我们终于使用Hailstone工具和新实现的OllamaLLM类完成了一个完整的工具调用流程。"
+      ]
+    },
+    {
+      "sentence_id": "a273721b-8703-5391-b3d8-9a08e3f45a0b",
+      "source_text": "We’ve truly reached a significant milestone in our journey.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们确实在旅程中达到了一个重要的里程碑。"
+      ]
+    },
+    {
+      "sentence_id": "230384e2-1dc0-5c86-8fd5-30aafdd5d1de",
+      "source_text": "In fact, we’re now in the position to develop our first LLM agent from scratch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "事实上，我们现在已经具备了从头开始开发第一个LLM代理的能力。"
+      ]
+    },
+    {
+      "sentence_id": "7e1b4fe2-c5e2-5415-b2b3-9dcf3b84c9da",
+      "source_text": "In the next chapter, we’ll do just that by implementing the LLMAgent class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在下一章中，我们将通过实现LLMAgent类来做到这一点。"
+      ]
+    },
+    {
+      "sentence_id": "f24baa69-d15a-5240-85c7-990c7878966c",
+      "source_text": "Exercise 3.2 Performing an asynchronous tool call with OllamaLLM",
+      "sentence_status": "translated",
+      "target_texts": [
+        "练习 3.2 使用 OllamaLLM 执行异步工具调用"
+      ]
+    },
+    {
+      "sentence_id": "540607ca-71af-55ea-822b-1bd5f99f5b75",
+      "source_text": "Create an instance of OllamaLLM and perform a tool call using the asynchronous version of the Hailstone tool that you developed in Exercise 2.2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "创建一个OllamaLLM实例，并使用你在练习2.2中开发的Hailstone工具的异步版本执行工具调用。"
+      ]
+    },
+    {
+      "sentence_id": "d7c91a44-0e56-5dd0-821d-eeb56ecf9063",
+      "source_text": "3.3 Summary",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.3 总结"
+      ]
+    },
+    {
+      "sentence_id": "5a94bcf5-f8e8-5a92-a68d-567f8f698ef2",
+      "source_text": "APIs provided by LLM providers typically support two modes of interaction with LLMs: one for text completion and another for conversational dialogue.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM提供商提供的API通常支持两种与LLM交互的模式：一种用于文本补全，另一种用于对话交流。"
+      ]
+    },
+    {
+      "sentence_id": "5d24eff4-e2db-55da-ba65-8939123d1931",
+      "source_text": "Our BaseLLM class supports text completion via the complete() method, and the conversational mode of interaction through our chat() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们的BaseLLM类通过complete()方法支持文本补全，并通过chat()方法支持对话式交互模式。"
+      ]
+    },
+    {
+      "sentence_id": "afd7df0d-9247-5a96-87d0-1a2058d4cf82",
+      "source_text": "One important use case for LLMs is structured output, where we instruct an LLM to produce an output that conforms to a specified data format, often described in JSON.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LLM的一个重要应用场景是结构化输出，即指示LLM生成符合指定数据格式的输出，通常以JSON格式描述。"
+      ]
+    },
+    {
+      "sentence_id": "2990d118-ee1b-5954-a60c-4bf21b64e408",
+      "source_text": "Structured outputs with our BaseLLM class, can be performed via the structured_output() method.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过我们的BaseLLM类实现结构化输出，可以通过structured_output()方法来完成。"
+      ]
+    },
+    {
+      "sentence_id": "6ef1c521-a016-548b-9017-7cd1334c7345",
+      "source_text": "Integrations into LLM providers and their companion Python SDKs can be added to our framework by subclassing BaseLLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过子类化BaseLLM，可以将LLM提供商及其配套Python SDK的集成添加到我们的框架中。"
+      ]
+    },
+    {
+      "sentence_id": "7fdd00f2-af85-5744-b2d0-66316d8b0eec",
+      "source_text": "The OllamaLLM integration implemented in this chapter allows for the use of any open-source LLMs supported by Ollama in our framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "本章实现的OllamaLLM集成，允许在我们的框架中使用Ollama支持的任何开源大语言模型。"
+      ]
+    }
+  ],
+  "issues": []
+}

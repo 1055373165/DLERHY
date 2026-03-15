@@ -1,0 +1,978 @@
+{
+  "chapter_id": "236e93aa-c755-5ec8-af82-cc547798dd90",
+  "chapter_title": "Appendix_C._Implementing_The_PydanticFunctionTool",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": null,
+  "pdf_preserve_evidence": null,
+  "pdf_page_debug_evidence": null,
+  "version_evidence": {
+    "document": {
+      "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "236e93aa-c755-5ec8-af82-cc547798dd90",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f748b02f-fb49-5d47-8080-9b15f68732dc",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "674e1387-f182-5b39-866d-d15e6224fb1e",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "236e93aa-c755-5ec8-af82-cc547798dd90",
+        "version": 1
+      },
+      {
+        "snapshot_id": "69e58790-506d-55c7-b49a-9ce5e4d887f1",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "688ce8cb-9543-5a7a-8718-8b650f522d8a",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "01829477-42f9-5134-ae45-12ae6c4be287",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "07b8c29b-3f9b-5b4d-888e-2f4f271aab14",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "09139ac6-6d7e-5225-a40e-b73226f666e1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0f1382d1-ce6d-5a8b-a6ad-b903f828f2e0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "21cb9935-a76a-5155-9ece-0a827e6891ba",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3a69a4c5-5de7-5b3c-aa1e-01fde292f0d4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3ca1e054-329f-54f3-8423-f5305ddaa22b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "474d2473-f4db-5b58-9272-8223a7090828",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4b27c1ba-96f5-5dce-a2c1-ab5a52da3104",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5b70de2e-9489-5930-8df0-8c3d8ea88ab2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "60467837-c378-5753-96de-2cdf01e10bdb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6c621931-503f-5c01-a048-ee6870b7c2b1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7149a35b-8646-5c4e-b758-b6ec3ca7b3c1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "72c13b10-67af-50bd-9786-91104cc7b419",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "72ec5b7b-fc60-5b18-894b-9fbdce18e17c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "77463ad5-ba69-5b2e-a833-7dab6dddc3f4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81586e22-2e4b-54ee-898c-46b81c2e8006",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "81d1570b-03cb-50df-ba57-3c055928c1a7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "830c8558-75bf-54a1-94a6-4970b0104ef3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "859c886c-9871-5e77-81d0-1085b21ceb3c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "868cd5d1-3ff2-5ee7-97a5-9c9eaffd1ce2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "98c42689-d5ec-5317-a209-84d3976a4435",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a473fdcd-ec55-5698-9072-724f07b312d7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a9604c06-7efd-52e4-ac4f-ce3e6fadce74",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c0d90149-7908-5467-9b22-7cb63a99beb4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d85c7a79-0790-525e-aec1-df6d888a0648",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "daa9a57a-bb1d-5a59-81bf-d894d06e820b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "df066937-9dbf-5e5e-9aac-ffcf794fc7bc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e90d0836-c190-5a6d-b4b1-ff827f5036c3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ea8b927f-a44c-5a96-b173-499c23098f78",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "eb856b1d-a13d-55b9-8e40-bdd03a1937d9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "eede52c2-8f86-5e14-a922-6631f679b12e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fe5802f2-3431-560a-8662-252f5a236999",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "d3ef86b2-fa04-5c49-8d69-8eb790743174",
+      "source_text": "Appendix C. Implementing The PydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "附录C：实现PydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "4e8bb333-66b0-5816-b549-1edbfb8b0ea8",
+      "source_text": "In Chapter 2, we introduced the PydanticFunctionTool and its usage pattern with our framework, as an alternative to our from-scratch SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在第二章中，我们介绍了PydanticFunctionTool及其在我们框架中的使用模式，作为我们从头构建的SimpleFunctionTool的替代方案。"
+      ]
+    },
+    {
+      "sentence_id": "bb2cce10-ab65-5530-95a6-cca0c9f85200",
+      "source_text": "The main benefits of the PydanticFunctionTool are more robust JSON Schema generation for the associated function’s parameters, as well as more powerful validation through the pydantic library.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PydanticFunctionTool的主要优势在于为关联函数的参数生成更健壮的JSON Schema，以及通过pydantic库实现更强大的验证功能。"
+      ]
+    },
+    {
+      "sentence_id": "e80823af-6c09-5ba7-8cb7-56e921fc015e",
+      "source_text": "In this appendix, we provide a walkthrough on the full implementation of the PydanticFunctionTool as well as its asynchronous version, AsyncPydanticFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在本附录中，我们将详细介绍PydanticFunctionTool的完整实现，以及其异步版本AsyncPydanticFunctionTool的实现过程。"
+      ]
+    },
+    {
+      "sentence_id": "8602f8a8-1493-51b5-b53a-0d9598dcfd1b",
+      "source_text": "C.1 Implementing PydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "C.1 实现PydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "a15e7f62-0176-5668-b220-865ef5ce1d3a",
+      "source_text": "We now will build the PydanticFunctionTool wrapper class that will enable the usage pattern that we just showed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "现在我们将构建PydanticFunctionTool包装器类，以实现我们刚刚展示的使用模式。"
+      ]
+    },
+    {
+      "sentence_id": "65bff863-3bd8-5f6d-b069-643bb10df71f",
+      "source_text": "As we saw then, we wrap a function which takes in a single parameter params that is pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如我们当时所见，我们包装了一个函数，该函数接收一个单一参数params，该参数是pydantic.BaseModel。"
+      ]
+    },
+    {
+      "sentence_id": "62996c4f-5c2f-5726-acf9-3781f3c472ca",
+      "source_text": "For convenience and to conform to our typing practices that we’ve begun to establish in our framework, let’s create a designated type for these kinds of functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了方便并遵循我们已在框架中开始建立的类型化实践，让我们为这类函数创建一个指定的类型。"
+      ]
+    },
+    {
+      "sentence_id": "f9059b16-3b7b-5e6c-ad51-98f1fb6d5089",
+      "source_text": "We’ll call such function types PydanticFunction since they package their parameters in a pydantic.BaseModel type as we saw in HailstoneParams.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将这类函数类型称为PydanticFunction，因为它们将参数打包在pydantic.BaseModel类型中，正如我们在HailstoneParams中所见。"
+      ]
+    },
+    {
+      "sentence_id": "f4860aec-c5db-5d37-a347-28b413f37137",
+      "source_text": "The next listing provides its definition.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "下一份清单提供了其定义。"
+      ]
+    },
+    {
+      "sentence_id": "3d04bea3-f73c-59ec-87a8-56a7a3ee5025",
+      "source_text": "Listing C.1 Implementing the PydanticFunction Protocol",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单C.1 实现PydanticFunction协议"
+      ]
+    },
+    {
+      "sentence_id": "dfa7d718-9f81-511d-bc88-9d804140b3ed",
+      "source_text": "# llm_agents_from_scratch/tools/pydantic_function.py from typing import Any, Protocol from pydantic import BaseModel class PydanticFunction(Protocol): \"\"\"PydanticFunction Protocol.\"\"\" __name__: str __doc__: str | None def __call__( self, params: BaseModel, *args: Any, **kwargs: Any ) -> Any: \"\"\"Callable interface. Args: params (BaseModel): The function's params as a ~pydantic.BaseModel. *args (Any): Additional positional arguments. **kwargs (Any): Additional keyword arguments. Returns: Any: The result of the function call. \"\"\" ... #A",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "16155f1b-adc1-5ae4-953c-00102e9fe2c9",
+      "source_text": "The listing above shows that we have chosen to implement the PydanticFunction as a subclass of typing.Protocol, which are meant for defining interfaces that can be typed-checked at runtime.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "上面的列表显示，我们选择将PydanticFunction实现为typing.Protocol的子类，这类协议用于定义可在运行时进行类型检查的接口。"
+      ]
+    },
+    {
+      "sentence_id": "b2dbd0d5-fe53-5fc3-b583-e2c56d94b147",
+      "source_text": "The lone method that we requires with this interface is the special __call__ method, which importantly takes in a parameter, params, that is of type pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此接口要求的唯一方法是特殊的__call__方法，重要的是它接收一个类型为pydantic.BaseModel的参数params。"
+      ]
+    },
+    {
+      "sentence_id": "96d27227-7414-51cf-8f7a-86b8c1eabc13",
+      "source_text": "As an interface method, we need only supply elipsis (i.e., …), which in this context indicates that the actual function provides the implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为接口方法，我们只需提供省略号（即…），在此上下文中表示实际函数提供具体实现。"
+      ]
+    },
+    {
+      "sentence_id": "3ff32fb8-067c-56d3-86b0-4ed95841fe07",
+      "source_text": "The other attributes we require in this interface are special Python attributes __name__ and __doc__, which are defined by default for Python functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在此接口中我们需要的其他属性是特殊的Python属性__name__和__doc__，这些属性默认已在Python函数中定义。"
+      ]
+    },
+    {
+      "sentence_id": "d80dfc40-60e5-5558-81a0-3fc7a6f6c2c9",
+      "source_text": "In other words, any function that has a signature involving a single variable named params of type pydantic.BaseModel, satisfies the PydanticFunction protocol—this is precisely what we need.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "换句话说，任何函数只要其签名包含一个名为params、类型为pydantic.BaseModel的单一变量，就满足PydanticFunction协议——这正是我们所需要的。"
+      ]
+    },
+    {
+      "sentence_id": "15e7595d-ecfe-5852-a762-11b4be4664e6",
+      "source_text": "Another added benefit of defining our PydanticFunction as a typing.Protocol is that modern Integrated Development Environments (IDEs), such as VSCode, support typing and provide helpful type hints.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "将PydanticFunction定义为typing.Protocol的另一个额外好处是，现代集成开发环境（IDE），如VSCode，支持类型提示并提供有用的类型提示。"
+      ]
+    },
+    {
+      "sentence_id": "7b8e08bf-54ad-57e0-bbcc-636eee929165",
+      "source_text": "Now that we have defined a special type for our functions to be wrapped by PydanticFunctionTool, let’s move onto the next order of business.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "既然我们已经为要用PydanticFunctionTool包装的函数定义了一个特殊类型，接下来就让我们继续处理下一项任务。"
+      ]
+    },
+    {
+      "sentence_id": "c9b6da99-e61f-52f0-a88b-9fcdd7b6e8c4",
+      "source_text": "To make our implementation more robust, we should ensure that any function that we wish to wrap with this class is indeed a PydanticFunction.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了使我们的实现更加健壮，我们应该确保任何希望用这个类包装的函数确实是一个PydanticFunction。"
+      ]
+    },
+    {
+      "sentence_id": "d9d7af40-7b2c-572e-a24f-1171a3f51d12",
+      "source_text": "We will handle this by implementing specific validation logic next.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接下来，我们将通过实现特定的验证逻辑来处理这个问题。"
+      ]
+    },
+    {
+      "sentence_id": "99dfb92a-5fa7-51a0-a7a6-3af8186536d7",
+      "source_text": "Listing C.2 Validating functions by signature inspection",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单C.2 通过签名检查验证函数"
+      ]
+    },
+    {
+      "sentence_id": "80b1e5a1-20a9-5754-a6c0-1c3b9d3e25d0",
+      "source_text": "# llm_agents_from_scratch/tools/pydantic_function.py import inspect from typing import Any, Awaitable, Callable, Protocol, get_type_hints from pydantic import BaseModel def _validate_pydantic_function(func: Callable) -> type[BaseModel]: \"\"\"Validates func as a proper `PydanticFunction`. Args: func (Callable): The function to validate as `PydanticFunction`. Raises: RuntimeError: If validation of `func` fails. \"\"\" sig = inspect.signature(func) type_hints = get_type_hints(func) if \"params\" not in sig.parameters: #A raise RuntimeError( \"Validation of `func` failed: Missing `params` argument.\", ) if annotation := type_hints.get(\"params\"): if not issubclass(annotation, BaseModel): #B msg = ( f\"Validation of `func` failed: {annotation} is not\" \" a subclass of `~pydantic.BaseModel`.\" ) raise RuntimeError(msg) else: msg = ( \"Validation of `func` failed: `params` argument must have \" \"type annotation.\" ) raise RuntimeError(msg) return annotation #C",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "9cb782db-e6bc-52bc-bd8b-bb472c4040c3",
+      "source_text": "Let’s walkthrough our validation logic step-by-step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们一步步走查验证逻辑。"
+      ]
+    },
+    {
+      "sentence_id": "a9648e0a-17b2-5fa6-a1ef-a49667f9e587",
+      "source_text": "The first bit of code should hopefully look familiar, as we’re again needing to perform introspection on the function signature, as we did when we built logic to transform function signatures to JSON Schemas from scratch for SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一段代码应该看起来熟悉，因为我们再次需要对函数签名进行内省，就像我们为SimpleFunctionTool从头构建将函数签名转换为JSON Schema的逻辑时那样。"
+      ]
+    },
+    {
+      "sentence_id": "fe2fc082-1e22-59a2-bfb5-5328e679c047",
+      "source_text": "As we did then, we rely on the combination of inspect.signature and typing.get_type_hints here to extract the parameters and their annotated types from the supplied function’s signature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "和那时一样，我们在这里依赖inspect.signature和typing.get_type_hints的组合，从提供的函数签名中提取参数及其注解类型。"
+      ]
+    },
+    {
+      "sentence_id": "480d1fed-22ac-501d-b200-3d5947e8ef02",
+      "source_text": "We then check if a parameter with the specific name “params” exists in the extracted parameters.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接着，我们检查提取出的参数中是否存在名为“params”的参数。"
+      ]
+    },
+    {
+      "sentence_id": "6b1b96b2-39e8-51ee-b40f-c5159a2249d1",
+      "source_text": "If it does, then we next check that its annotated type is a pydantic.BaseModel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果存在，我们进一步检查其标注类型是否为pydantic.BaseModel。"
+      ]
+    },
+    {
+      "sentence_id": "406961d6-b194-5e01-a2cf-32d26d86b23a",
+      "source_text": "If either of these checks fail, then we raise a RunTimeError with a message indicating as to why the validation failed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果其中任一检查失败，我们会抛出一个RuntimeError，并附带说明验证失败原因的信息。"
+      ]
+    },
+    {
+      "sentence_id": "3267c834-47d9-5868-bb8b-b3272922b67a",
+      "source_text": "If both checks pass, then we have a valid PydanticFunction, and we return the type or subclass of pydantic.BaseModel with which params is annotated.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果两项检查都通过，那么我们就得到了一个有效的PydanticFunction，并返回params所标注的pydantic.BaseModel类型或其子类。"
+      ]
+    },
+    {
+      "sentence_id": "6fd7a5a6-c21d-53fc-8a89-9fc41ce37d63",
+      "source_text": "Let’s quickly demonstrate this validation with our hailstone_pydantic_fn.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们用hailstone_pydantic_fn快速演示一下这个验证过程。"
+      ]
+    },
+    {
+      "sentence_id": "212f9e9b-3a43-59c3-ba04-787fa33ec910",
+      "source_text": "from llm_agents_from_scratch.tools.pydantic_function import ( _validate_pydantic_function, ) print(_validate_pydantic_function(hailstone_pydantic_fn))",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "b07ad330-2084-5ad5-9788-78e80169204b",
+      "source_text": "The above print statement should return an output similar to the following.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "上述打印语句应返回与以下内容相似的输出。"
+      ]
+    },
+    {
+      "sentence_id": "bd54518f-10c0-5018-8d01-4c528f14eb96",
+      "source_text": "__main__.HailstoneParams",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "2537584d-49c7-5602-9b0f-c379c023df72",
+      "source_text": "We are now in a position to start implementing our PydanticFunctionTool, which, like SimpleFunctionTool, inherits our BaseTool class.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们现在可以开始实现PydanticFunctionTool了，它像SimpleFunctionTool一样继承自我们的BaseTool类。"
+      ]
+    },
+    {
+      "sentence_id": "719c8593-8819-546c-8866-a3b53db5f830",
+      "source_text": "As we have already seen how to create a subclass of BaseTool, we’ll present the entire implementation in the listing below and then discuss it, rather than implementing methods incrementally as we did before.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于我们已经了解了如何创建BaseTool的子类，我们将直接在下方的代码清单中展示完整实现，然后进行讨论，而不是像之前那样逐步实现各个方法。"
+      ]
+    },
+    {
+      "sentence_id": "9f05d3ce-2b85-5c40-8ed5-972644e65f96",
+      "source_text": "Listing C.3 Implementing PydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单C.3 实现PydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "7114bffe-da9c-5a78-84ba-c7c6885b32a8",
+      "source_text": "#llm_agents_from_scratch/tools/pydantic_function.py import inspect from typing import Any, Awaitable, Callable, Protocol, get_type_hints from pydantic import BaseModel from llm_agents_from_scratch.base.tool import BaseTool from llm_agents_from_scratch.data_structures import ( ToolCall, ToolCallResult, ) … #A class PydanticFunctionTool(BaseTool): \"\"\"Pydantic function calling tool. Turn a Python function that takes in a ~pydantic.BaseModel params Object into a tool for an LLM. Attributes: func: PydanticFunction to represent as a tool. params_mdl: The params BaseModel. desc: Description of the PydanticFunction. \"\"\" def __init__( self, func: PydanticFunction, desc: str | None = None, ): \"\"\"Initialize a PydanticFunctionTool. Args: func (PydanticFunction): The Pydantic function to expose as a tool to the LLM. desc (str | None, optional): Description of the function. Defaults to None. \"\"\" self.func = func self.desc = desc or func.__doc__ or f\"Tool for {func.__name__}\" self.params_mdl = _validate_pydantic_function(func) #B @property def name(self) -> str: \"\"\"Name of function tool.\"\"\" return self.func.__name__ @property def description(self) -> str: \"\"\"Description of what this function tool does.\"\"\" return self.desc @property def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON schema for tool parameters.\"\"\" return self.params_mdl.model_json_schema() #C def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: \"\"\"Execute the function tool with a ToolCall. Args: tool_call (ToolCall): The ToolCall to execute. *args (Any): Additional positional arguments. **kwargs (Any): Additional keyword arguments. Returns: ToolCallResult: The result of the tool call execution. \"\"\" try: params = self.params_mdl.model_validate(tool_call.arguments) #D # execute the function res = self.func(params) #E content = str(res) error = False except Exception as e: content = f\"Failed to execute function call: {e}\" error = True return ToolCallResult( tool_call=tool_call, content=content, error=error, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "212a3113-eb59-5c2f-ba87-5f98dd91b154",
+      "source_text": "Beginning with the __init__ method, we can see that it has the exact same logic as SimpleFunctionTool.__init__, however, with the added statement for validation and automatic extraction of the params model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从__init__方法开始，我们可以看到其逻辑与SimpleFunctionTool.__init__完全相同，但增加了用于验证和自动提取参数模型的语句。"
+      ]
+    },
+    {
+      "sentence_id": "387f953e-2690-50e8-b38a-3e3441a77b51",
+      "source_text": "As we discussed, _validate_pydantic_function returns the type (or class) of the function’s params argument.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "正如我们所讨论的，_validate_pydantic_function返回函数参数的类型（或类）。"
+      ]
+    },
+    {
+      "sentence_id": "ab2ae118-894c-5d9c-a1e3-6689331376bf",
+      "source_text": "This can be seen as a bit of added convenience, as we don’t require the user to supply this information, but rather extract it from the supplied PydanticFunction automatically.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这可以视为一种额外的便利，因为我们不需要用户提供此信息，而是从提供的PydanticFunction中自动提取。"
+      ]
+    },
+    {
+      "sentence_id": "504eb89d-b10b-57a2-94e5-4643335c91fa",
+      "source_text": "Next, the implementations for the property attributes name and desc are the same as those for SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "接下来，属性name和desc的实现方式与SimpleFunctionTool相同。"
+      ]
+    },
+    {
+      "sentence_id": "6bda5ef5-1c8b-531e-a98a-81eae929aec1",
+      "source_text": "Our current implementation of parameters_json_schema, however, is different from that of SimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，我们当前对parameters_json_schema的实现与SimpleFunctionTool有所不同。"
+      ]
+    },
+    {
+      "sentence_id": "b5022023-a901-5c66-8f61-9ae17be2cac1",
+      "source_text": "Here, we simply call the method params_mdl.model_json_schema, which is a class method that returns the JSON Schema representation of params_mdl (a type of pydantic.BaseModel).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这里，我们只需调用方法params_mdl.model_json_schema，这是一个类方法，返回params_mdl（一种pydantic.BaseModel类型）的JSON Schema表示。"
+      ]
+    },
+    {
+      "sentence_id": "7ac24abd-2d7d-516c-a638-90868405ec15",
+      "source_text": "Unlike SimpleFunctionTool, where we relied on our from-scratch code to convert function signatures to their JSON Schema representations, we now utilize the pydantic library to build this JSON Schema from the params_mdl for us.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与SimpleFunctionTool不同，在SimpleFunctionTool中我们依赖从头编写的代码将函数签名转换为JSON Schema表示，而现在我们利用pydantic库从params_mdl为我们构建这个JSON Schema。"
+      ]
+    },
+    {
+      "sentence_id": "f198dfd8-d959-54d1-bd9d-77cbb66ccc3c",
+      "source_text": "Finally, our implementation of __call__ also involves a delegation to the wrapped function func.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最后，__call__方法的实现还涉及对包装函数func的委托调用。"
+      ]
+    },
+    {
+      "sentence_id": "e71ca5a5-ac57-5641-a665-58b73ab0dc0d",
+      "source_text": "However, since func is PydanticFunction, we need to pass it an instance of the params_mdl type, which we must build using the arguments supplied by the LLM in its tool call request.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，由于func是PydanticFunction，我们需要向其传递一个params_mdl类型的实例，该实例必须使用LLM在其工具调用请求中提供的参数来构建。"
+      ]
+    },
+    {
+      "sentence_id": "a58bd8a4-4550-5d28-9530-9495abdeca62",
+      "source_text": "Again, here we leverage the pydantic library but this time for its powerful JSON validation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "同样，这里我们利用了pydantic库，但这次是为了其强大的JSON验证功能。"
+      ]
+    },
+    {
+      "sentence_id": "638125ac-3e33-5417-b5f8-ba01dea2f044",
+      "source_text": "Specifically, we call the factory method params_mdl.model_validate, which takes in a Python dictionary of JSON data that is first validated against JSON Schema for params_mdl.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具体来说，我们调用工厂方法params_mdl.model_validate，该方法接收一个Python字典形式的JSON数据，该数据首先会针对params_mdl的JSON Schema进行验证。"
+      ]
+    },
+    {
+      "sentence_id": "6584fc72-6706-5d9f-abcf-3867542c9346",
+      "source_text": "If validation is successful, then the input data gets used to initialize an instance of params_mdl, which we store in the params variable and pass as input to func.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如果验证成功，输入数据将用于初始化params_mdl的一个实例，我们将其存储在params变量中，并作为输入传递给func。"
+      ]
+    },
+    {
+      "sentence_id": "1d283c54-6ea7-5099-b81f-c084a2da3797",
+      "source_text": "The rest of our implementation for __call__ is similar to that of SimpleFunctionTool, including our approach for handling any errors that may be encountered during the validation of tool parameters or the delegation to the wrapped function.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "__call__方法的其余实现与SimpleFunctionTool类似，包括我们在验证工具参数或委托给包装函数时处理可能遇到的任何错误的方法。"
+      ]
+    },
+    {
+      "sentence_id": "412ec36e-dcfc-5082-89ac-cb04bfeedef7",
+      "source_text": "The hailstone_pydantic_fn_tool that we defined at the start of this section should work as intended with what we just developed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在本节开头定义的hailstone_pydantic_fn_tool应该能够与我们刚刚开发的内容按预期工作。"
+      ]
+    },
+    {
+      "sentence_id": "47da3c92-6f30-595a-942d-bc699f610e7f",
+      "source_text": "print(hailstone_pydantic_fn_tool.description) print(hailstone_pydantic_fn_tool.name) print(hailstone_pydantic_fn_tool.parameters_json_schema)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "b8416f12-f9ee-5643-96b3-d3557674977d",
+      "source_text": "These statements should print the following results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些语句应打印出以下结果。"
+      ]
+    },
+    {
+      "sentence_id": "4d9250fb-3e2b-500b-9b31-dcf610a78887",
+      "source_text": "hailstone_pydantic_fn Perform a single step of the Hailstone sequence. {'properties': {'x': {'title': 'X', 'type': 'integer'}}, 'required': ['x'], 'title': 'HailstoneParams', 'type': 'object'}",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "3ea98992-ae2c-5c32-a3a4-3459b7ad85a3",
+      "source_text": "We can also use hailstone_pydantic_fn_tool with the same tool call request that we had for our quick demonstration of hailstone_tool (a SimpleFunctionTool) in the previous section.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们同样可以使用hailstone_pydantic_fn_tool，配合之前章节中为hailstone_tool（一个SimpleFunctionTool）快速演示时所用的相同工具调用请求。"
+      ]
+    },
+    {
+      "sentence_id": "bba6e034-331e-5a6b-9e57-496244017101",
+      "source_text": "from llm_agents_from_scratch.data_structures import ToolCall tool_call = ToolCall( tool_name=\"hailstone_pydantic_fn_tool\", arguments={\"x\": 3} ) res = hailstone_pydantic_fn_tool(tool_call) print(res)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "6127d531-67e9-5a8b-a907-186123c40ae1",
+      "source_text": "The print statement should print output as follows.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "打印语句的输出应如下所示。"
+      ]
+    },
+    {
+      "sentence_id": "04cae302-f738-5c11-863f-7d4e9ecf6b37",
+      "source_text": "tool_call=ToolCall(tool_name='hailstone_pydantic_fn', arguments={'x': 3}) content='10' error=False",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "262773f4-92ac-50d5-9f25-35a52a8368b0",
+      "source_text": "This wraps up our implementation of PydanticFunctionTool, an alternative approach to building tools from Python functions using our LLM agent framework.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "至此，我们完成了PydanticFunctionTool的实现，这是一种使用我们的LLM智能体框架从Python函数构建工具的替代方法。"
+      ]
+    },
+    {
+      "sentence_id": "451ce0a0-b79e-5b7a-8f6a-b44082e274f6",
+      "source_text": "Like SimpleFunctionTool, however, this wrapper class only works with synchronous functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，与SimpleFunctionTool类似，此包装器类仅适用于同步函数。"
+      ]
+    },
+    {
+      "sentence_id": "52044546-ed4f-5c66-82d7-23f0dae1140f",
+      "source_text": "And, as we did then, we’ll now need to quickly add an async version of this wrapper class to work with asynchronous functions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，正如我们之前所做的那样，现在需要快速添加此包装器类的异步版本以支持异步函数。"
+      ]
+    },
+    {
+      "sentence_id": "019366d8-cfd7-5bc9-8d43-1343cf36bf68",
+      "source_text": "C.2 The AsyncPydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "C.2 AsyncPydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "a41e4eab-bafb-5a76-aa1b-48165a39b3e8",
+      "source_text": "Let’s quickly add an async version of PydanticFunctionTool that works with asynchronous functions much like AsyncSimpleFunctionTool does.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "让我们快速添加一个适用于异步函数的PydanticFunctionTool异步版本，其工作方式类似于AsyncSimpleFunctionTool。"
+      ]
+    },
+    {
+      "sentence_id": "f382d6ff-f3b1-5006-9833-8135a1ef99fe",
+      "source_text": "We will move rather quickly here since the implementation is very similar to the async version, with only minor differences that are similar to the differences observed between SimpleFunctionTool and AsyncSimpleFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将在这里快速推进，因为其实现与异步版本非常相似，只有细微差别，这些差别类似于SimpleFunctionTool与AsyncSimpleFunctionTool之间的差异。"
+      ]
+    },
+    {
+      "sentence_id": "ecc082cb-8a10-5e07-9672-d49c3c376beb",
+      "source_text": "First, we’ll require an async version of our PydanticFunction protocol.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "首先，我们需要一个异步版本的PydanticFunction协议。"
+      ]
+    },
+    {
+      "sentence_id": "145231cc-3669-567f-a078-a32b0cb764a1",
+      "source_text": "We’ll call this function protocol AsyncPydanticFunction and present its implementation in the next listing.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将此函数协议称为AsyncPydanticFunction，并在下一节中展示其实现。"
+      ]
+    },
+    {
+      "sentence_id": "2a67bce0-b362-58b5-ba7e-0c315668d447",
+      "source_text": "Listing C.4 Implementing the AsyncPydanticFunction Protocol",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单C.4 实现AsyncPydanticFunction协议"
+      ]
+    },
+    {
+      "sentence_id": "2cc4c5ec-a775-522c-bc27-7b464f40cfa7",
+      "source_text": "# llm_agents_from_scratch/tools/pydantic_function.py from typing import Any, Protocol from pydantic import BaseModel class AsyncPydanticFunction(Protocol): \"\"\"Asynchronous PydanticFunction Protocol.\"\"\" __name__: str __doc__: str | None async def __call__( #A self, params: BaseModel, *args: Any, **kwargs: Any, ) -> Awaitable[Any]: #B \"\"\"Asynchronous callable interface. Args: params (BaseModel): The function's params as a ~pydantic.BaseModel. *args (Any): Additional positional arguments. **kwargs (Any): Additional keyword arguments. Returns: Awaitable[Any]: The result of the function call. \"\"\" ...",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "ba86f75c-ca67-5bfe-b268-265a21b28430",
+      "source_text": "The only difference between this AsyncPydanticFunction and PydanticFunction from before is that the async protocol stipulates that the function’s __call__ method be an async function that returns an ~typing.Awaitable type.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此AsyncPydanticFunction与之前的PydanticFunction的唯一区别在于，异步协议要求该函数的__call__方法是一个返回~typing.Awaitable类型的异步函数。"
+      ]
+    },
+    {
+      "sentence_id": "993bf329-a64a-58c5-a789-fda473858b70",
+      "source_text": "With this async function type defined, we can now present the complete implementation of AsyncPydanticFunctionTool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "定义了这种异步函数类型后，我们现在可以展示AsyncPydanticFunctionTool的完整实现。"
+      ]
+    },
+    {
+      "sentence_id": "c3995797-1984-5c0c-9cf8-835a51b7c038",
+      "source_text": "Listing C.5 Implementing AsyncPydanticFunctionTool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "清单C.5 实现AsyncPydanticFunctionTool"
+      ]
+    },
+    {
+      "sentence_id": "fdc226bc-13d8-5e50-8a7b-9dfe002cf5ab",
+      "source_text": "# llm_agents_from_scratch/tools/pydantic_function.py import inspect from typing import Any, Awaitable, Callable, Protocol, get_type_hints from pydantic import BaseModel from llm_agents_from_scratch.base.tool import AsyncBaseTool, BaseTool from llm_agents_from_scratch.data_structures import ( ToolCall, ToolCallResult, ) class AsyncPydanticFunctionTool(AsyncBaseTool): \"\"\"Async Pydantic function calling tool. Turn an async Python function that takes in a ~pydantic.BaseModel Params object into a tool for an LLM. Attributes: func: AsyncPydanticFunction to represent as a tool. params_mdl: The params BaseModel. desc: Description of the PydanticFunction. \"\"\" def __init__( self, func: AsyncPydanticFunction, desc: str | None = None, ): \"\"\"Initialize an AsyncPydanticFunctionTool. Args: func (AsyncPydanticFunction): The async Pydantic function to expose as a tool to the LLM. desc (str | None, optional): Description of the function. Defaults to None. \"\"\" self.func = func self.desc = desc or func.__doc__ or f\"Tool for {func.__name__}\" self.params_mdl = _validate_pydantic_function(func) @property def name(self) -> str: \"\"\"Name of function tool.\"\"\" return self.func.__name__ @property def description(self) -> str: \"\"\"Description of what this function tool does.\"\"\" return self.desc @property def parameters_json_schema(self) -> dict[str, Any]: \"\"\"JSON schema for tool parameters.\"\"\" return self.params_mdl.model_json_schema() async def __call__( self, tool_call: ToolCall, *args: Any, **kwargs: Any, ) -> ToolCallResult: \"\"\"Execute the function tool with a ToolCall. Args: tool_call (ToolCall): The ToolCall to execute. *args (Any): Additional positional arguments. **kwargs (Any): Additional keyword arguments. Returns: ToolCallResult: The result of the tool call execution. \"\"\" try: params = self.params_mdl.model_validate(tool_call.arguments) # execute the function res = await self.func(params) content = str(res) error = False except Exception as e: content = f\"Failed to execute function call: {e}\" error = True return ToolCallResult( tool_call=tool_call, content=content, error=error, )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "b03d13d4-75e6-502a-b562-3b5c86e179e3",
+      "source_text": "The implementation of AsyncPydanticFunctionTool is very similar to that of PydanticFunctionTool, with the only differences being that here we inherit from AsyncBaseTool and that the __call__ method is now async.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "AsyncPydanticFunctionTool 的实现与 PydanticFunctionTool 非常相似，唯一的区别在于这里我们继承自 AsyncBaseTool，并且 __call__ 方法现在是异步的。"
+      ]
+    }
+  ],
+  "issues": []
+}

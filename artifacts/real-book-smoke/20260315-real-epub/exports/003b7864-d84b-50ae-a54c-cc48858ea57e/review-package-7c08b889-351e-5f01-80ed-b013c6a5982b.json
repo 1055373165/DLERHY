@@ -1,0 +1,85 @@
+{
+  "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+  "chapter_title": null,
+  "quality_summary": {
+    "issue_count": 1,
+    "action_count": 1,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 1,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+      "status": "review_required",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "e83cb5e8-032c-57b0-b1a8-fbc548491087",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "528bfb7e-54c8-5293-a201-79d454abe73b",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "7c08b889-351e-5f01-80ed-b013c6a5982b",
+        "version": 1
+      },
+      {
+        "snapshot_id": "dc87fe8c-3394-5f05-be6a-65f77300f858",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "e8a322ab-e34e-55be-8f2e-0b15fdf7e451",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": []
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [],
+  "issues": [
+    {
+      "issue_id": "b5164955-67f7-5943-943f-3fa5c30680a2",
+      "issue_type": "CONTEXT_FAILURE",
+      "severity": "high",
+      "blocking": true,
+      "sentence_id": null,
+      "evidence": {
+        "open_questions": "missing_chapter_title",
+        "chapter_brief_version": "1"
+      }
+    }
+  ]
+}

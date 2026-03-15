@@ -1,0 +1,4261 @@
+{
+  "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+  "chapter_title": "7 Planning and reflection for complex tasks",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "003b7864-d84b-50ae-a54c-cc48858ea57e",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "e83cb5e8-032c-57b0-b1a8-fbc548491087",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "c4382405-f3bd-5e09-9fda-a7e5f2c4c97b",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "4be7455e-2a3a-59a6-a206-859ef7498734",
+        "version": 1
+      },
+      {
+        "snapshot_id": "dc87fe8c-3394-5f05-be6a-65f77300f858",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "e8a322ab-e34e-55be-8f2e-0b15fdf7e451",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "0261c237-a00d-5768-9235-421851613283",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "040fbe25-fe6e-5419-bf08-c02550698026",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "04927b17-2f7b-529a-98cb-09e675bec917",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "05a1d0d7-a860-58f4-a16a-9fb833484c88",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0fe22119-0fec-591e-9730-044def37d76c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "128bb82c-1744-564b-ad01-47ae927cb549",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1795392d-c519-5e27-bd40-58d1cf6a620c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "180d13fb-d1f6-5a6c-b430-1179aa67fa0f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "182ca46f-99b7-510c-9f4f-08a8c95d9d6d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "197f3daf-0e71-53bf-b460-ab39297d5b06",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2002be54-8909-59db-a610-8975c0433d85",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2805398b-271b-599b-a882-44ffd6082e50",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "29eb6081-149f-53be-a330-1c6634a24d3d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2ca2e45e-a645-5f53-8c07-a50a2981c3a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2d3965e4-d6a0-5e13-8bf6-0322f360fcf5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2d842fd8-10ed-5c86-89fe-48f5ccfe6c74",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2e5fc2f2-71d2-55f9-9300-719908760b88",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2ecd3387-7ca0-5964-8d67-dc42f906132c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "31884544-a80c-5d6c-b92f-07548dc62bf5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "331b49cd-735d-5e0a-a46b-4e8d68a9b71c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "33c0a5bf-bf42-59ff-b807-e24a28190ba0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "35b63c69-422b-56cb-89b5-8289a87a0465",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "35f343d8-548f-5dc7-955b-48e74c076721",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "36d06ab9-c05d-523f-86a9-de442feb0afa",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "37ad3bef-34bc-5bf5-bbd4-30b3b663bbb4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "37bfa381-ce55-5f77-9ca6-7657a8d10d85",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3a88a3bb-8f7a-5465-9154-78169906b5f9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3b0f1601-b646-5c32-b78b-7373980d8526",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3b1b1064-6d6b-56d9-a008-12ba6af3a87b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3c2547b3-dcda-584d-98cb-41d8a133b048",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3dcf1665-f743-5777-b04e-b41f7adead06",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e856838-0e58-524a-a60a-733b654f65e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "420d8c39-99d0-5c7d-8236-59e79c4e6022",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "424ba233-6f92-501f-b4da-e7ea1d9fbe76",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "437b1aa2-600c-5fd0-b82f-0d4810a749a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "450e2790-1717-507d-b382-1533508c2b11",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "45a4d417-e329-54ff-9e73-d7b02b5b3a32",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4702056a-2677-5baa-8366-131a9d5efda8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4723480c-b2a8-5de6-84d0-1c68d44efe50",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "489c94db-9905-5ca7-9cf1-1c51fabd74f6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4a72cfe1-2062-503c-b9e7-4ebad28216e6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53777b6d-65ff-58f1-bb7e-2fdf3d7752ed",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "56c15c2a-6569-5a40-a214-904b57cc9b82",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "572d9c73-ba72-5203-a482-6260d779c7b1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5c14e5cf-fd85-530e-8ecb-9d402e98423a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "60ce5bf1-572a-58ce-a6b4-d47fc0b4c1c1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6256f854-4faa-565d-916a-8137cedca026",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "62f9ac8a-69e5-5275-9272-d96281b5941a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6330c1a5-8641-51ad-be76-f0cfcd271967",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6342219b-3e97-5971-a595-67611f8b4620",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "647be245-f38f-5c11-af6c-165e7913a16c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6522b9e8-ca21-57d9-92e5-bc30f4947e97",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "698a5683-f520-5337-b54e-73e1af36938a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "699cf30b-5afa-5a05-891b-6bfa12097d1d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6a977b03-ee13-511a-b45c-32d33ff90c54",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6ac9c9ee-597c-5e06-89ae-24399ba6c322",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6c05e974-273d-5890-bc1c-69e3e3a519f9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6d37c2b6-01f7-5da3-b159-9bc19850e672",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "6e20e24d-cca3-501a-87cf-8216b0d9e03a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "70a0cd3e-4d19-516e-a69e-e43bf19b98a8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "745466fe-2ed9-57ee-8f1d-188d32d3d77d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7992431e-20f7-5b92-841a-3b249fda8a07",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7ab7e905-b4c3-5cc8-973a-7d0031c1b2fb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7d4f9848-660b-502b-b71e-369c0fc93f2e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7ecd3a81-648f-5d22-a0ad-cbabd7d83393",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "803da534-aaeb-56d4-b2db-bee86bca1b7c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "80b50091-b693-5e01-9921-5102421fad91",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "82a3be8b-7eb0-5f6a-b284-82bbdb82ed21",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "838f715d-ae09-553f-882e-2c82ae15ee9e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "877c5447-be76-5161-99bf-ca75bf9fe842",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "878fb1ed-f48b-5605-8fe2-f7722fd490dc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "87dc70b1-0cb4-5e61-ba25-d8ae78235832",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "88b83cea-7bf2-561f-bd83-e9d935590e92",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8c5e334d-5e9d-5cfd-a507-985e5ed15b02",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8f4f80cc-dd7e-5326-b4c9-d876950015e4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "923dcac0-6fe9-5f89-8385-28e600d49ae0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "929bf10f-fe5c-5a30-ba6b-a5fc02c03b28",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "936d79f1-6451-53e4-8db6-178685e3045a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "93d0e7d3-ca7d-5d19-aa6d-ec3653a660e2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "94db1864-7f10-5502-99f5-22b69c5bedfb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "96804515-3c2f-5cf7-9192-34b456e793da",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "96c84010-fe1a-5dce-8ae5-74612168d9b4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "994f892f-2696-50e1-8ab7-30f2d7dcf72c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9a3e90d5-2e5e-5fe8-bce0-a89a1be569e4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9b986f43-58a6-5929-ac57-ddc100f74d14",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9d74b339-1921-5045-ac9c-99ed6802b7a7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9dfff32a-8fc5-5f74-a6cf-dbc8614b2899",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9f28c883-9c27-573d-9ee6-38e81a30979e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9f8ba53a-c453-53d2-bc03-6e21f2ae8d48",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a35751c8-d156-5c15-924d-ddf7adfe94d3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a3f634c3-3a89-5d67-b810-3383b859e9eb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a401a8e9-94cc-53f7-a91a-2f1c5b0ea239",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a642d17c-a569-5517-888f-df5b11b031ca",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a8a33792-eb26-5f1f-aa6c-aab93fe518bc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a993a4b1-047f-5afd-bb7c-7492235363af",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a9bde93f-0e4a-50e6-b978-4a89aa70c420",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aa68025c-a28d-5fa5-8f6c-32a15609b6ba",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ab593fd1-d973-58d3-aded-15ec1c477bd3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad107e81-62bf-5362-8305-aea97e48c5a9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ad255a1f-6884-594c-a369-e124a848353d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ae061ae0-79a8-5b73-aff7-e92769d3877d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ae7b26cf-7e45-5071-bad5-6981604ff384",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "aefb5514-8799-5c3c-a8d4-d0c5f9aaef65",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "afdfe673-5b72-5ea0-bcbc-a30bce8c4ffd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b08b9fa1-30ac-51d5-b8c3-90306617492a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b2685bb4-a44c-5ff5-b813-bb96375a8b03",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b4f30629-d66f-5aa5-9f14-ede38cb4b693",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b547a5ba-0211-5563-89a5-16ffe1873935",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b6761b06-ddd5-53bf-89bd-a6402481162e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b81f9c47-5911-58c6-b3e3-a1487f983ff6",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ba01c889-9fed-5be1-b295-902fd55824d7",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bdbf0415-9374-5add-8e8d-c7a9e3fb61dd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "beaa3222-1165-5050-a166-efe77fde3734",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "becdd840-eb50-5e78-8338-5b4d6d708914",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bef00e40-6038-58f9-a695-f3aa103069da",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c0a36c41-b087-59a5-8c00-5c18679678e2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c197a41c-107a-584b-be7c-01793c514ba4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c1f11c72-5e42-50cb-9ead-bd572fedcb42",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c2568861-f5b5-5f8b-a274-0e0763ed4594",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c2fb44a0-86c5-5a70-9d60-4d3cdc83d5f4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c324fff2-89bf-534d-9ae7-211b8af4ff75",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c38e8a5f-fa6a-5ef1-ae9e-0123590f24e8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c402fba7-2f0c-5813-bc23-e684e479ea31",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c907286b-0d42-54fd-9eec-1bfc4c253fb1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "c9ca1ba5-2544-57c3-9bca-f5a5c5931f01",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ca531ca4-539d-574b-a305-04da928f4886",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ca9eda7a-f2ac-518a-af92-d2ee8905241f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "caa9bbc5-fdd2-511b-b1df-aa416ec76591",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cbad475b-b601-5461-b89a-a2877a0ddd8a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "cf0a89d6-6cc1-5c25-93f6-d860a85aa62d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d0d9be11-1840-5902-ac60-5861c3db8485",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d18eb501-1201-5eef-a3c6-36fc8b28c5db",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d1f965aa-fe41-55fb-8a3c-5a5b83df84bb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d24998d7-0dcb-594a-9e28-ccadf7ead686",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d2e0a7ae-7291-56c4-84c9-8516d00f8015",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d455c0f8-482e-5eb8-80d5-1b9b4774063b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d5969fef-87fc-59b5-ad72-70bb00737b00",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d6389e15-5387-536a-8f56-6009282949ec",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ddbbd316-0caa-50ce-868f-55641308c9e5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e22848dc-caed-5a75-98cf-0391d2b6f685",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e3d545f7-9289-55f3-9fe1-eadd64c00205",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e7a9d48b-1f3d-5a1f-a65a-aed45a5890ea",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e7ec5a6e-7d2c-55fe-8fd1-19ca94088979",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e83eec04-4c30-5e4b-8a01-0907729031a9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e85709ee-0fef-53a5-864d-c47f863188ae",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ea069e2d-0b27-55d8-8d99-86e6aae192c5",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ea2f7cd2-01b8-5d1e-9f1a-1c5ed0123f4a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "eb4a0dae-5bfb-5c1c-847a-10253d523fcc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ec90783a-3c5d-5735-8306-b03a64e6bd36",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ed132434-f0b9-5808-a0bf-b52cd61388a2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ef59ed3b-84e6-596c-bcd1-30502d89e8e1",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f23c285d-3e86-5c10-838c-a554e18e8206",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f49a3407-6524-5b9c-97f5-ca8932687bb8",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f4bfa6ec-a114-5e64-a1e0-21efa6f84446",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f4d71f37-a607-514f-a382-ba04213c74dd",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f8e42094-d048-57f8-9a1b-86046c881d8e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "fe1d1c73-6037-5f42-9d3c-93459560ee42",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ff58d9f3-f735-52ae-b20f-7a885ee721c2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "800e895a-a288-5e6b-9703-e2cbc66ddee4",
+      "source_text": "7 Planning and reflection for complex tasks",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7 Planning and reflection for complex tasks"
+      ]
+    },
+    {
+      "sentence_id": "f70f4981-93d2-5767-96d0-18b392029c6f",
+      "source_text": "This chapter covers",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This chapter covers"
+      ]
+    },
+    {
+      "sentence_id": "f839bd53-21cb-539d-8483-c5a4d24a76d2",
+      "source_text": "The limitations of reactive agents on complex tasks",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The limitations of reactive agents on complex tasks"
+      ]
+    },
+    {
+      "sentence_id": "c5dfd495-18e1-554c-8fde-95a2fbf7fb35",
+      "source_text": "Planning tools that decompose problems into task lists",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning tools that decompose problems into task lists"
+      ]
+    },
+    {
+      "sentence_id": "bbb96889-8c35-5a2e-b4ff-47297345fdac",
+      "source_text": "Reflection tools that enable progress checking and failure recovery",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection tools that enable progress checking and failure recovery"
+      ]
+    },
+    {
+      "sentence_id": "df596fa5-6ba5-5dbc-88f2-73a11025099e",
+      "source_text": "The complementary cycle of planning and reflection",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The complementary cycle of planning and reflection"
+      ]
+    },
+    {
+      "sentence_id": "8fdae647-3992-5afc-9068-99adcbe92e79",
+      "source_text": "We’ve built an agent that observes the current situation, decides which tool to call, and repeats this cycle.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We’ve built an agent that observes the current situation, decides which tool to call, and repeats this cycle."
+      ]
+    },
+    {
+      "sentence_id": "f15ae878-445a-5517-b24c-45783b715eeb",
+      "source_text": "This reactive approach works well for simple tasks but struggles with complex problems requiring multiple steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This reactive approach works well for simple tasks but struggles with complex problems requiring multiple steps."
+      ]
+    },
+    {
+      "sentence_id": "1d3ad79b-c50a-5b4a-87a0-5c4eb051c24f",
+      "source_text": "The agent loses direction, forgets what it has done, or fails to recover from errors.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The agent loses direction, forgets what it has done, or fails to recover from errors."
+      ]
+    },
+    {
+      "sentence_id": "f8e99648-05c4-530d-8906-ae88a0f80ebf",
+      "source_text": "Planning and reflection address these limitations by giving agents \"time to think.\" Planning decomposes complex problems into manageable tasks before execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection address these limitations by giving agents \"time to think.\" Planning decomposes complex problems into manageable tasks before execution."
+      ]
+    },
+    {
+      "sentence_id": "6fd088e3-2314-544b-9eaf-397a242d7abb",
+      "source_text": "Reflection pauses to check progress and adjust direction when things go wrong.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection pauses to check progress and adjust direction when things go wrong."
+      ]
+    },
+    {
+      "sentence_id": "3b683768-ab68-5421-944b-767262f4e9c1",
+      "source_text": "Figure 7.1 The roles of planning and reflection in AI agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Figure 7.1 The roles of planning and reflection in AI agents."
+      ]
+    },
+    {
+      "sentence_id": "67257212-89af-5287-b0e0-167097e481a4",
+      "source_text": "We’ll examine why reactive agents fail and how human experts approach complex tasks differently.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We’ll examine why reactive agents fail and how human experts approach complex tasks differently."
+      ]
+    },
+    {
+      "sentence_id": "5de6df6b-2a4d-5888-99a2-e55481b8f3ff",
+      "source_text": "We’ll then implement a simple Planning tool that records task lists in the context, followed by a reflection tool that enables progress checking and failure recovery.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We’ll then implement a simple Planning tool that records task lists in the context, followed by a reflection tool that enables progress checking and failure recovery."
+      ]
+    },
+    {
+      "sentence_id": "5667f159-f347-5939-a764-77cf87efeb5d",
+      "source_text": "Finally, we combine both strategies into a complementary cycle and see how they resolve the failure modes of reactive agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Finally, we combine both strategies into a complementary cycle and see how they resolve the failure modes of reactive agents."
+      ]
+    },
+    {
+      "sentence_id": "9065cb1f-821a-54a4-9d4a-026305a4041e",
+      "source_text": "7.1 Giving agents time to think",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.1 Giving agents time to think"
+      ]
+    },
+    {
+      "sentence_id": "3477873d-8fed-5339-aa2b-c56b7190de6e",
+      "source_text": "Planning and reflection are two core strategies that give agents time to think.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection are two core strategies that give agents time to think."
+      ]
+    },
+    {
+      "sentence_id": "0d59deb7-8509-524e-808b-b81b952d7325",
+      "source_text": "We'll first examine the limitations of the ReAct approach, then find solutions in how human experts work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We'll first examine the limitations of the ReAct approach, then find solutions in how human experts work."
+      ]
+    },
+    {
+      "sentence_id": "a232bfe0-3fdb-5e32-b12c-e0a1d617fa33",
+      "source_text": "We'll also explore how the \"time to think\" principle, validated in LLM research, applies to agents, and understand what roles planning and reflection play from a Context Engineering perspective.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We'll also explore how the \"time to think\" principle, validated in LLM research, applies to agents, and understand what roles planning and reflection play from a Context Engineering perspective."
+      ]
+    },
+    {
+      "sentence_id": "369a80ea-8ddb-590e-97ac-6c99782085fd",
+      "source_text": "7.1.1 The limitations of ReAct",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.1.1 The limitations of ReAct"
+      ]
+    },
+    {
+      "sentence_id": "6f661a1a-ae4b-5939-a786-e17a138a665f",
+      "source_text": "The agent we've implemented operates using the ReAct approach.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The agent we've implemented operates using the ReAct approach."
+      ]
+    },
+    {
+      "sentence_id": "73dcb391-029a-5272-979f-d296e16e2c68",
+      "source_text": "It observes the current situation, decides which tool to call, observes the result again, and decides on the next action.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It observes the current situation, decides which tool to call, observes the result again, and decides on the next action."
+      ]
+    },
+    {
+      "sentence_id": "7fe46e75-6ea0-5491-ab55-1d4f4c54eba7",
+      "source_text": "This approach excels at adaptability.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This approach excels at adaptability."
+      ]
+    },
+    {
+      "sentence_id": "ddc6d4c8-47b7-54e2-ba4b-6cfde25a9d80",
+      "source_text": "If search results differ from expectations, it tries different search terms; if a tool fails, it looks for alternatives.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If search results differ from expectations, it tries different search terms; if a tool fails, it looks for alternatives."
+      ]
+    },
+    {
+      "sentence_id": "63fbe83a-a221-527a-b2d9-bb6b65d6d595",
+      "source_text": "This is because it selects whatever action seems most appropriate at each moment.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is because it selects whatever action seems most appropriate at each moment."
+      ]
+    },
+    {
+      "sentence_id": "78e19dff-d9a7-5bfc-935a-7dcea7330418",
+      "source_text": "However, this approach is similar to driving without GPS.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::However, this approach is similar to driving without GPS."
+      ]
+    },
+    {
+      "sentence_id": "9cba12a2-ec0e-5ed2-9bf1-f35731a8e951",
+      "source_text": "At every intersection, you go in \"whichever direction looks best from what you can see right now.\" This works fine when the destination is close, but when you need to find a complex route, you easily get lost.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::At every intersection, you go in \"whichever direction looks best from what you can see right now.\" This works fine when the destination is close, but when you need to find a complex route, you easily get lost."
+      ]
+    },
+    {
+      "sentence_id": "7054246b-f044-57d0-8a07-f503dc41a944",
+      "source_text": "In complex problems, ReAct agents exhibit several typical failure modes.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In complex problems, ReAct agents exhibit several typical failure modes."
+      ]
+    },
+    {
+      "sentence_id": "9154cbcb-7ee2-5f18-84e1-316e9f3a461a",
+      "source_text": "They lose direction by trying to do too much at once.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They lose direction by trying to do too much at once."
+      ]
+    },
+    {
+      "sentence_id": "c046bf5d-435b-5eb5-b6a9-d168caa273c6",
+      "source_text": "They execute multiple web searches to quickly retrieve information needed for a task, then fail to properly utilize the results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They execute multiple web searches to quickly retrieve information needed for a task, then fail to properly utilize the results."
+      ]
+    },
+    {
+      "sentence_id": "62102cff-79a4-5033-bad4-494115b15740",
+      "source_text": "ReAct agents forget what they did in the middle, failing to use information found previously, resulting in repeated searches.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::ReAct agents forget what they did in the middle, failing to use information found previously, resulting in repeated searches."
+      ]
+    },
+    {
+      "sentence_id": "da643f1a-0cee-562c-9c06-07e1f538f9ce",
+      "source_text": "They hastily declare, \"I found the answer,” but attempt to answer with only partial information.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They hastily declare, \"I found the answer,” but attempt to answer with only partial information."
+      ]
+    },
+    {
+      "sentence_id": "ed211efe-0525-5aae-b323-674fea596739",
+      "source_text": "They fail to recover from failures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They fail to recover from failures."
+      ]
+    },
+    {
+      "sentence_id": "2a928e2e-63e6-5cdc-887d-28adaedd2c1a",
+      "source_text": "When tool calls fail or go in the wrong direction, instead of analyzing the cause and finding alternatives, they repeat the same attempts until reaching max_steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When tool calls fail or go in the wrong direction, instead of analyzing the cause and finding alternatives, they repeat the same attempts until reaching max_steps."
+      ]
+    },
+    {
+      "sentence_id": "fd2473af-d66b-545c-a7de-3f8a45a12167",
+      "source_text": "What do these problems have in common?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What do these problems have in common?"
+      ]
+    },
+    {
+      "sentence_id": "f28e4c10-29b9-5534-86e1-c06c4688561a",
+      "source_text": "The agent only thinks about \"what to do right now\" and doesn't consider \"how to approach this overall\" or \"whether things are progressing well so far.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The agent only thinks about \"what to do right now\" and doesn't consider \"how to approach this overall\" or \"whether things are progressing well so far.\""
+      ]
+    },
+    {
+      "sentence_id": "b011e2d2-3589-536e-8d7a-7a059cc23662",
+      "source_text": "7.1.2 How human experts work",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.1.2 How human experts work"
+      ]
+    },
+    {
+      "sentence_id": "7bbc6882-55b8-5af7-b436-41c7368da568",
+      "source_text": "Consider how a skilled researcher handles a complex question.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Consider how a skilled researcher handles a complex question."
+      ]
+    },
+    {
+      "sentence_id": "942bf292-a166-5b57-9857-b776e4902c06",
+      "source_text": "When asked, \"How many hours would it take to reach the Moon at Kipchoge's marathon pace?\" they don't start searching immediately.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When asked, \"How many hours would it take to reach the Moon at Kipchoge's marathon pace?\" they don't start searching immediately."
+      ]
+    },
+    {
+      "sentence_id": "646268b3-7d8a-53cb-ad50-34857afe429a",
+      "source_text": "First, they decompose the question: \"What's Kipchoge's marathon record?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::First, they decompose the question: \"What's Kipchoge's marathon record?"
+      ]
+    },
+    {
+      "sentence_id": "4b84acf3-090e-568a-81f4-06f4633dc798",
+      "source_text": "I can calculate the pace from that.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::I can calculate the pace from that."
+      ]
+    },
+    {
+      "sentence_id": "50211243-c274-578c-ab10-7dfad5158b17",
+      "source_text": "What's the distance to the Moon?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What's the distance to the Moon?"
+      ]
+    },
+    {
+      "sentence_id": "4e12fb83-0ebb-5d57-8b6a-4ee381d921f1",
+      "source_text": "I should use the closest approach distance.\" Then they investigate one thing at a time, organizing along the way: \"Found the marathon record, converting to kilometers per hour gives about 21km/h.\" When unexpected results appear, they adjust their approach: \"The Moon distance varies across sources.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::I should use the closest approach distance.\" Then they investigate one thing at a time, organizing along the way: \"Found the marathon record, converting to kilometers per hour gives about 21km/h.\" When unexpected results appear, they adjust their approach: \"The Moon distance varies across sources."
+      ]
+    },
+    {
+      "sentence_id": "df2c8469-a2a7-551c-a226-4a7bf2a49cd6",
+      "source_text": "Should I use the average distance or the perigee?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Should I use the average distance or the perigee?"
+      ]
+    },
+    {
+      "sentence_id": "e12d040c-a055-5fe2-b61c-70afd3212edc",
+      "source_text": "The question asked about 'closest approach,' so I'll use the perigee.\" Before the final answer, they check for anything missing: \"Marathon record, pace calculation, Moon distance, time calculation... all done.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The question asked about 'closest approach,' so I'll use the perigee.\" Before the final answer, they check for anything missing: \"Marathon record, pace calculation, Moon distance, time calculation... all done.\""
+      ]
+    },
+    {
+      "sentence_id": "adab85dd-4d9b-5d8e-a4ae-153442bfb491",
+      "source_text": "The same pattern appears in software development.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The same pattern appears in software development."
+      ]
+    },
+    {
+      "sentence_id": "ec3ac99b-8c64-5b08-9057-feb483ba009b",
+      "source_text": "Experienced developers don't start writing code immediately.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Experienced developers don't start writing code immediately."
+      ]
+    },
+    {
+      "sentence_id": "94dae6b4-f43a-5c8f-bec9-76f5d494d966",
+      "source_text": "They first write a PRD (Product Requirements Document) or spec document, then proceed with implementation and testing while referencing that document.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They first write a PRD (Product Requirements Document) or spec document, then proceed with implementation and testing while referencing that document."
+      ]
+    },
+    {
+      "sentence_id": "544c1af5-4373-5f2c-8c31-3483c06a7868",
+      "source_text": "When problems arise during implementation, they revisit the spec and adjust their approach.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When problems arise during implementation, they revisit the spec and adjust their approach."
+      ]
+    },
+    {
+      "sentence_id": "b2ab8366-eb40-57cd-b180-f05b597beda6",
+      "source_text": "Coding agents like Claude Code and Cursor follow this method too.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Coding agents like Claude Code and Cursor follow this method too."
+      ]
+    },
+    {
+      "sentence_id": "ed833ea4-73e1-5205-a999-58ba29726f27",
+      "source_text": "When implementing complex features, they first create an implementation plan, then check progress against the plan at each stage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When implementing complex features, they first create an implementation plan, then check progress against the plan at each stage."
+      ]
+    },
+    {
+      "sentence_id": "3a5e93e5-f1ed-5293-b0e0-41c36dfd9680",
+      "source_text": "This is exactly planning (writing specs) and reflection (checking against specs).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is exactly planning (writing specs) and reflection (checking against specs)."
+      ]
+    },
+    {
+      "sentence_id": "61b6d95d-e238-5e13-bd76-429c38d4f14e",
+      "source_text": "Anthropic's agent development guide emphasizes this point:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Anthropic's agent development guide emphasizes this point:"
+      ]
+    },
+    {
+      "sentence_id": "f876d6f3-b3a0-5bcc-aaec-b80f94e30603",
+      "source_text": "\"Inspiration for these practices came from knowing what effective software engineers do every day.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::\"Inspiration for these practices came from knowing what effective software engineers do every day.\""
+      ]
+    },
+    {
+      "sentence_id": "49cb3ab4-8f38-562d-88dd-2dfd4653abb6",
+      "source_text": "— Anthropic, \"Building effective agents.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::— Anthropic, \"Building effective agents.\""
+      ]
+    },
+    {
+      "sentence_id": "fdfea390-b986-5ac8-891c-d59ce62c361f",
+      "source_text": "The message is to design agents inspired by how human experts work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The message is to design agents inspired by how human experts work."
+      ]
+    },
+    {
+      "sentence_id": "a2cd26f7-0e94-5d27-a0ff-dfdc1cf1ca04",
+      "source_text": "7.1.3 Why time to think matters",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.1.3 Why time to think matters"
+      ]
+    },
+    {
+      "sentence_id": "29fb0922-c3d3-50cf-b0f6-a5d5fe85d50e",
+      "source_text": "A pattern repeatedly confirmed in LLM research is that giving time to think improves performance compared to requiring immediate answers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::A pattern repeatedly confirmed in LLM research is that giving time to think improves performance compared to requiring immediate answers."
+      ]
+    },
+    {
+      "sentence_id": "6355070c-62db-568a-8285-66f99537bd7b",
+      "source_text": "Chain-of-Thought prompting significantly improves math problem accuracy just by adding the phrase \"Let's think step by step.\" This works because it makes the model explicitly generate intermediate reasoning steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Chain-of-Thought prompting significantly improves math problem accuracy just by adding the phrase \"Let's think step by step.\" This works because it makes the model explicitly generate intermediate reasoning steps."
+      ]
+    },
+    {
+      "sentence_id": "0768cd7a-1545-5475-8832-571b2252ad5b",
+      "source_text": "Reasoning Models took this principle further, generating thinking tokens before answers, greatly enhancing complex problem-solving capabilities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reasoning Models took this principle further, generating thinking tokens before answers, greatly enhancing complex problem-solving capabilities."
+      ]
+    },
+    {
+      "sentence_id": "b0cd1ed1-c2f8-5120-ad41-2ff595833020",
+      "source_text": "Planning and reflection apply this principle to agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection apply this principle to agents."
+      ]
+    },
+    {
+      "sentence_id": "e3ca5aa4-1a84-5466-abb3-fdf54060163a",
+      "source_text": "Planning is time to think before acting: \"What should I do?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning is time to think before acting: \"What should I do?"
+      ]
+    },
+    {
+      "sentence_id": "a6b939ce-5082-5fb0-95cf-660e92158e2f",
+      "source_text": "In what order should I proceed?\" Reflection is time to look back after acting: \"What have I learned so far?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In what order should I proceed?\" Reflection is time to look back after acting: \"What have I learned so far?"
+      ]
+    },
+    {
+      "sentence_id": "640bcb81-55f9-582e-949e-9773f7be10e3",
+      "source_text": "Am I on the right track?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Am I on the right track?"
+      ]
+    },
+    {
+      "sentence_id": "41b1f1d3-0814-50f9-9de8-1a63c204aee7",
+      "source_text": "Should I change direction?\" This grants agents a form of metacognition: the ability to examine their own thinking process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Should I change direction?\" This grants agents a form of metacognition: the ability to examine their own thinking process."
+      ]
+    },
+    {
+      "sentence_id": "eb3c48b8-fb0a-5162-be82-8b174d265059",
+      "source_text": "From a context engineering perspective, planning and reflection share an interesting commonality.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::From a context engineering perspective, planning and reflection share an interesting commonality."
+      ]
+    },
+    {
+      "sentence_id": "8b48699b-9aa6-528c-b5a9-d3b76556046c",
+      "source_text": "Neither directly performs tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Neither directly performs tasks."
+      ]
+    },
+    {
+      "sentence_id": "c4e7e869-5791-51da-b0f2-3f11c8fee47b",
+      "source_text": "They don't search the web, perform calculations, or read files.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They don't search the web, perform calculations, or read files."
+      ]
+    },
+    {
+      "sentence_id": "6c2c7b92-3833-5847-ada9-28f23aa22399",
+      "source_text": "Instead, they generate text signals that control the flow of work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead, they generate text signals that control the flow of work."
+      ]
+    },
+    {
+      "sentence_id": "6fa479bd-cd68-55df-80cb-0a3f1ec2c279",
+      "source_text": "Planning adds \"what to do next\" to the context.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning adds \"what to do next\" to the context."
+      ]
+    },
+    {
+      "sentence_id": "4618d6b4-78f1-5fc0-99c6-8e6929511119",
+      "source_text": "When text like \"1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When text like \"1."
+      ]
+    },
+    {
+      "sentence_id": "878e7b87-2984-58a9-bb60-6c2793885db8",
+      "source_text": "Research Kipchoge's record, 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Kipchoge's record, 2."
+      ]
+    },
+    {
+      "sentence_id": "bcae8225-55f2-5687-b6b1-20fd7500b97e",
+      "source_text": "Research Moon distance, 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Moon distance, 3."
+      ]
+    },
+    {
+      "sentence_id": "72b26d16-fd55-5f7f-8f60-1f8254b4ddf6",
+      "source_text": "Calculate time\" enters the context, the LLM references this plan in subsequent steps to maintain direction.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Calculate time\" enters the context, the LLM references this plan in subsequent steps to maintain direction."
+      ]
+    },
+    {
+      "sentence_id": "865c96fd-820a-5e6e-9187-22ebc1db276f",
+      "source_text": "Reflection adds \"evaluation and direction so far\" to the context.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection adds \"evaluation and direction so far\" to the context."
+      ]
+    },
+    {
+      "sentence_id": "4fc091b3-4ab4-5b6e-871c-99880107f5a1",
+      "source_text": "Text like \"Marathon record acquired.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Text like \"Marathon record acquired."
+      ]
+    },
+    {
+      "sentence_id": "55a7e145-c36d-512e-b342-ad7f599d966c",
+      "source_text": "Moon distance research: Wikipedia failed, need to switch to web search\" influences the LLM's next decision.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Moon distance research: Wikipedia failed, need to switch to web search\" influences the LLM's next decision."
+      ]
+    },
+    {
+      "sentence_id": "77e685ea-ccf4-56d0-a997-d19098341dd3",
+      "source_text": "Among the five context engineering strategies introduced in chapter 1, Planning and Reflection belong to the generation strategy.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Among the five context engineering strategies introduced in chapter 1, Planning and Reflection belong to the generation strategy."
+      ]
+    },
+    {
+      "sentence_id": "030cb15f-acea-55cf-a4b8-14b392cab8d5",
+      "source_text": "Unlike retrieval, which brings information from external sources, or write, which stores information externally, this approach has the LLM generate text within the context itself to control the workflow.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Unlike retrieval, which brings information from external sources, or write, which stores information externally, this approach has the LLM generate text within the context itself to control the workflow."
+      ]
+    },
+    {
+      "sentence_id": "1a95d579-2332-5db6-9867-2a8efb47a32b",
+      "source_text": "Now let's examine how to implement these two strategies.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Now let's examine how to implement these two strategies."
+      ]
+    },
+    {
+      "sentence_id": "af000003-4929-55f7-9e55-b1b58642fa23",
+      "source_text": "7.2 Planning: Setting direction",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.2 Planning: Setting direction"
+      ]
+    },
+    {
+      "sentence_id": "3e23ba30-b6ea-5dea-aaaa-a72824e0fca6",
+      "source_text": "The core of planning is decomposing complex problems into manageable units.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The core of planning is decomposing complex problems into manageable units."
+      ]
+    },
+    {
+      "sentence_id": "5d01e4ae-3ce6-5c01-8324-2c5491cf9ede",
+      "source_text": "Even the to-do lists we use in daily life are a small form of decomposition.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Even the to-do lists we use in daily life are a small form of decomposition."
+      ]
+    },
+    {
+      "sentence_id": "52afef9a-2216-592f-8209-1faa8720b39e",
+      "source_text": "Breaking down a large task like \"write a report\" into \"gather materials → write draft → review and revise\" makes it much easier to handle.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Breaking down a large task like \"write a report\" into \"gather materials → write draft → review and revise\" makes it much easier to handle."
+      ]
+    },
+    {
+      "sentence_id": "ec34c6ab-1968-554c-b897-e1544f02c595",
+      "source_text": "Let's use the Kipchoge problem as an example.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Let's use the Kipchoge problem as an example."
+      ]
+    },
+    {
+      "sentence_id": "49a236a2-1514-59b6-b6f4-30e74098d85b",
+      "source_text": "Original question: \"How many thousand hours would it take to reach the Moon at Kipchoge's marathon pace?\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Original question: \"How many thousand hours would it take to reach the Moon at Kipchoge's marathon pace?\""
+      ]
+    },
+    {
+      "sentence_id": "f62232b1-e717-5f10-bfe6-638c88887911",
+      "source_text": "What happens if an agent receiving this question starts searching immediately?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What happens if an agent receiving this question starts searching immediately?"
+      ]
+    },
+    {
+      "sentence_id": "fcc03846-0c82-51dc-b324-bc442e231f6a",
+      "source_text": "It searches \"Kipchoge moon hours,\" and when the desired results don't appear, it tries different search terms and easily loses direction in the process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It searches \"Kipchoge moon hours,\" and when the desired results don't appear, it tries different search terms and easily loses direction in the process."
+      ]
+    },
+    {
+      "sentence_id": "4defbd00-d05c-5c55-a051-cabeeb6fd83e",
+      "source_text": "Instead, decomposing the question yields:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead, decomposing the question yields:"
+      ]
+    },
+    {
+      "sentence_id": "c5996e0b-088e-5e31-becc-caa39cd758f6",
+      "source_text": "Decomposed tasks:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Decomposed tasks:"
+      ]
+    },
+    {
+      "sentence_id": "6826f052-b3b4-5317-b126-720790d57e99",
+      "source_text": "Research Kipchoge's marathon record → Calculate pace",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Kipchoge's marathon record → Calculate pace"
+      ]
+    },
+    {
+      "sentence_id": "5bb23ff6-4956-5b28-9067-e571e3c0384d",
+      "source_text": "Research the distance to the Moon (perigee)",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research the distance to the Moon (perigee)"
+      ]
+    },
+    {
+      "sentence_id": "97e8f594-ffad-5028-924e-b8e49ae273ef",
+      "source_text": "Calculate time = distance ÷ speed",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Calculate time = distance ÷ speed"
+      ]
+    },
+    {
+      "sentence_id": "fdc66b20-70dc-53ca-9c7c-33d814ee5144",
+      "source_text": "Round to thousands of hours",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Round to thousands of hours"
+      ]
+    },
+    {
+      "sentence_id": "4151da04-eb09-5c8b-900a-5c20e64aefec",
+      "source_text": "With this decomposition, each step becomes clear, and the completion criteria become obvious.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::With this decomposition, each step becomes clear, and the completion criteria become obvious."
+      ]
+    },
+    {
+      "sentence_id": "25b60b52-a578-5457-8f81-6e6407815477",
+      "source_text": "You can easily judge the success of each step with questions like \"Did I find the marathon record?\" or \"Did I confirm the Moon distance?\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::You can easily judge the success of each step with questions like \"Did I find the marathon record?\" or \"Did I confirm the Moon distance?\""
+      ]
+    },
+    {
+      "sentence_id": "2b9da04e-f263-5870-a55e-c4d6abd31f64",
+      "source_text": "7.2.1 When is planning necessary?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.2.1 When is planning necessary?"
+      ]
+    },
+    {
+      "sentence_id": "c34a2c6c-f986-51a8-bf8c-0f9387f7b750",
+      "source_text": "Not every problem requires planning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Not every problem requires planning."
+      ]
+    },
+    {
+      "sentence_id": "c479ec62-0e92-5f35-be66-c9a7c9bfa29f",
+      "source_text": "Since planning requires LLM calls, using it in unnecessary situations becomes overhead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Since planning requires LLM calls, using it in unnecessary situations becomes overhead."
+      ]
+    },
+    {
+      "sentence_id": "a3ce0ca5-4ef2-5cb6-bf58-d61d69f638c0",
+      "source_text": "When planning is necessary:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When planning is necessary:"
+      ]
+    },
+    {
+      "sentence_id": "dcf6ee00-37aa-5fc4-a133-e9b4b21a7e7c",
+      "source_text": "Problems requiring multiple steps of research (e.g., the Kipchoge problem).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Problems requiring multiple steps of research (e.g., the Kipchoge problem)."
+      ]
+    },
+    {
+      "sentence_id": "eacc58d3-177a-5e46-9f83-7aaa9cbde51c",
+      "source_text": "Problems requiring combining multiple pieces of information (e.g., comparing stock prices of two companies).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Problems requiring combining multiple pieces of information (e.g., comparing stock prices of two companies)."
+      ]
+    },
+    {
+      "sentence_id": "7a0a6079-f9f0-55d5-acd0-e60a927bd517",
+      "source_text": "When planning is unnecessary:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When planning is unnecessary:"
+      ]
+    },
+    {
+      "sentence_id": "3c133836-4f4a-589f-a704-d91501a7d75a",
+      "source_text": "Simple questions solvable with a single search (e.g., \"What's the weather in Seoul today?\").",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Simple questions solvable with a single search (e.g., \"What's the weather in Seoul today?\")."
+      ]
+    },
+    {
+      "sentence_id": "87f311c3-049f-50b1-8028-8701384bb059",
+      "source_text": "Tasks with already clear procedures (e.g., \"Translate this text for me\").",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Tasks with already clear procedures (e.g., \"Translate this text for me\")."
+      ]
+    },
+    {
+      "sentence_id": "b00c389c-f83f-58e1-a330-ec6a2d50729d",
+      "source_text": "Creating a plan for \"What's the weather today?\" is wasteful.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Creating a plan for \"What's the weather today?\" is wasteful."
+      ]
+    },
+    {
+      "sentence_id": "1d0aac4a-2b84-53c4-a5f8-a3d414a9c0eb",
+      "source_text": "For a problem that can be solved with one search, creating a plan like \"1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::For a problem that can be solved with one search, creating a plan like \"1."
+      ]
+    },
+    {
+      "sentence_id": "0d34179f-4b86-5843-b633-d6b1ec6bc582",
+      "source_text": "Confirm location, 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Confirm location, 2."
+      ]
+    },
+    {
+      "sentence_id": "768b27e1-1444-541b-9dc4-c912c9978285",
+      "source_text": "Search weather, 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Search weather, 3."
+      ]
+    },
+    {
+      "sentence_id": "88c7f69b-4524-5cc4-a3ea-e1c11633fc5b",
+      "source_text": "Organize results\" wastes unnecessary tokens and time.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Organize results\" wastes unnecessary tokens and time."
+      ]
+    },
+    {
+      "sentence_id": "e1f0f631-a48d-56f1-9cb9-9ed131a9c30d",
+      "source_text": "To have agents make this distinction themselves, the planning tool's description must clearly state \"when to use and when not to use it,\" as we'll see in our implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::To have agents make this distinction themselves, the planning tool's description must clearly state \"when to use and when not to use it,\" as we'll see in our implementation."
+      ]
+    },
+    {
+      "sentence_id": "81db5a09-2876-5a4c-9d5b-40170c2db4d5",
+      "source_text": "7.2.2 Implementing the planning tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.2.2 Implementing the planning tool"
+      ]
+    },
+    {
+      "sentence_id": "9b478756-de3d-5983-b3ec-a6e1dec2a749",
+      "source_text": "Let's create the simplest form of a planning tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Let's create the simplest form of a planning tool."
+      ]
+    },
+    {
+      "sentence_id": "8c7effd8-a519-5fb3-a0cb-ed4758be18bc",
+      "source_text": "Before implementing, we need to make a few design decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Before implementing, we need to make a few design decisions."
+      ]
+    },
+    {
+      "sentence_id": "cad6f181-9e36-5ca8-be25-24d694605231",
+      "source_text": "Should we manage only a single plan or multiple plans simultaneously?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Should we manage only a single plan or multiple plans simultaneously?"
+      ]
+    },
+    {
+      "sentence_id": "c233e752-25a3-5dcb-895c-e298a0d50165",
+      "source_text": "In complex systems, you might need to separate main plans from sub-plans or track multiple goals simultaneously.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In complex systems, you might need to separate main plans from sub-plans or track multiple goals simultaneously."
+      ]
+    },
+    {
+      "sentence_id": "672f507a-5dda-5589-84e9-262f73bcbc05",
+      "source_text": "But in most cases, one plan per question is sufficient.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::But in most cases, one plan per question is sufficient."
+      ]
+    },
+    {
+      "sentence_id": "a3cff8fb-bca5-542b-8266-d82abfcd320f",
+      "source_text": "Managing multiple plans requires additional logic to decide \"which plan to reference.\" Let's start simple.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Managing multiple plans requires additional logic to decide \"which plan to reference.\" Let's start simple."
+      ]
+    },
+    {
+      "sentence_id": "977d9819-f242-5a23-a0c2-1c18dcecd00d",
+      "source_text": "When modifying a plan, should we update only the changed parts or regenerate the entire thing?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When modifying a plan, should we update only the changed parts or regenerate the entire thing?"
+      ]
+    },
+    {
+      "sentence_id": "7f01c242-3450-5804-aeaf-bbbbfdc5c5df",
+      "source_text": "Supporting partial modifications like \"change task 3's status to completed\" can save tokens.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Supporting partial modifications like \"change task 3's status to completed\" can save tokens."
+      ]
+    },
+    {
+      "sentence_id": "6601361b-2747-51ef-8ce4-5fd848987492",
+      "source_text": "But this approach requires logic to accurately track the current plan state, and bugs from referencing wrong indices or losing synchronization are common.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::But this approach requires logic to accurately track the current plan state, and bugs from referencing wrong indices or losing synchronization are common."
+      ]
+    },
+    {
+      "sentence_id": "e10abc9c-7908-580e-b30d-49acfc360b4a",
+      "source_text": "Instead, regenerating the entire plan each time simplifies implementation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead, regenerating the entire plan each time simplifies implementation."
+      ]
+    },
+    {
+      "sentence_id": "506bd993-ef7e-582a-95b3-877641171a22",
+      "source_text": "The LLM just rewrites the entire plan, saying \"the current state is this.\" For plans with 5-10 tasks, the additional token cost is minimal.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The LLM just rewrites the entire plan, saying \"the current state is this.\" For plans with 5-10 tasks, the additional token cost is minimal."
+      ]
+    },
+    {
+      "sentence_id": "5ba62734-7f34-5c64-9295-3d32f9145bd5",
+      "source_text": "How should we represent each task's progress status?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::How should we represent each task's progress status?"
+      ]
+    },
+    {
+      "sentence_id": "b1a62f07-ff75-53ba-95e8-a2c82de33711",
+      "source_text": "Distinguishing whether a task hasn't started yet (pending), is in progress (in_progress), or is completed (completed) makes it easy for the LLM to determine \"what to do next.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Distinguishing whether a task hasn't started yet (pending), is in progress (in_progress), or is completed (completed) makes it easy for the LLM to determine \"what to do next.\""
+      ]
+    },
+    {
+      "sentence_id": "a1a358da-2a51-5376-a7e4-b2311d64db99",
+      "source_text": "Task data structure",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Task data structure"
+      ]
+    },
+    {
+      "sentence_id": "d29e3c02-66da-5fe8-8bfb-b8a2c0496760",
+      "source_text": "The Task class is a simple data structure that stores task content and status.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The Task class is a simple data structure that stores task content and status."
+      ]
+    },
+    {
+      "sentence_id": "c7eaee3a-abe2-5252-9e73-a26f18a4074f",
+      "source_text": "The __str__ method applies different checkbox formats for each status, allowing the LLM to quickly grasp progress.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The __str__ method applies different checkbox formats for each status, allowing the LLM to quickly grasp progress."
+      ]
+    },
+    {
+      "sentence_id": "e32ddae9-f63a-584d-840d-be38ceca29a7",
+      "source_text": "Listing 7.1 Task data structure definition",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.1 Task data structure definition"
+      ]
+    },
+    {
+      "sentence_id": "263c465d-b427-5cfc-bd18-4f320150c630",
+      "source_text": "from typing import Literal, List from pydantic import BaseModel class Task(BaseModel): content: str status: Literal[\"pending\", \"in_progress\", \"completed\"] def __str__(self): if self.status == \"pending\": return f\"[ ] {self.content}\" elif self.status == \"in_progress\": return f\"[>] **{self.content}**\" elif self.status == \"completed\": return f\"[x] ~~{self.content}~~\" return self.content",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "8052ee93-7c47-57dc-9b83-845ffcf81c86",
+      "source_text": "Pending tasks display as empty checkboxes [ ], in_progress tasks as progress indicators [>] with bold text, and completed tasks as completion marks [x] with strikethrough.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Pending tasks display as empty checkboxes [ ], in_progress tasks as progress indicators [>] with bold text, and completed tasks as completion marks [x] with strikethrough."
+      ]
+    },
+    {
+      "sentence_id": "d3e08164-0c17-5354-b852-79e7cbcc3f41",
+      "source_text": "This format is a common pattern in to-do lists, so the LLM understands it easily.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This format is a common pattern in to-do lists, so the LLM understands it easily."
+      ]
+    },
+    {
+      "sentence_id": "82637125-fdf1-5b7c-b85a-1cc4e19dc59c",
+      "source_text": "The create_tasks tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The create_tasks tool"
+      ]
+    },
+    {
+      "sentence_id": "967370e4-0c3b-5f44-8b75-0630d55f0cf7",
+      "source_text": "Now, let's implement the planning tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Now, let's implement the planning tool."
+      ]
+    },
+    {
+      "sentence_id": "6352cb5e-1080-5304-9115-7814f1ea65ed",
+      "source_text": "We can create it simply using the @tool decorator we learned in chapter 4.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::We can create it simply using the @tool decorator we learned in chapter 4."
+      ]
+    },
+    {
+      "sentence_id": "593c2227-1d29-5567-b84d-ba253e2c59f5",
+      "source_text": "The tool receives a task list and returns it as a string, and this result is recorded in the context as a ToolResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool receives a task list and returns it as a string, and this result is recorded in the context as a ToolResult."
+      ]
+    },
+    {
+      "sentence_id": "3961ddf3-1b8f-52ba-a14c-52b88a6d172c",
+      "source_text": "The tool's description is the key information the LLM uses to judge \"when to use this tool.\" The description clearly states:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool's description is the key information the LLM uses to judge \"when to use this tool.\" The description clearly states:"
+      ]
+    },
+    {
+      "sentence_id": "4e5827c8-4f59-550a-8bd0-9651cdca0634",
+      "source_text": "When to use: Complex questions requiring multiple steps of research or combining information from different sources.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When to use: Complex questions requiring multiple steps of research or combining information from different sources."
+      ]
+    },
+    {
+      "sentence_id": "f2bd5ce7-8188-5947-8a54-23497dd02a01",
+      "source_text": "When not to use: Simple questions solvable with a single search, tasks with obvious procedures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When not to use: Simple questions solvable with a single search, tasks with obvious procedures."
+      ]
+    },
+    {
+      "sentence_id": "f59d9ec9-3654-5896-a529-70e1a0c6d021",
+      "source_text": "How to use: Mark completed tasks as completed, set the next task to in_progress.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::How to use: Mark completed tasks as completed, set the next task to in_progress."
+      ]
+    },
+    {
+      "sentence_id": "d1855b60-a961-5ef0-a6f2-08a6a04a48db",
+      "source_text": "Writing the description in detail prevents the LLM from calling the planning tool in unnecessary situations.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Writing the description in detail prevents the LLM from calling the planning tool in unnecessary situations."
+      ]
+    },
+    {
+      "sentence_id": "769064e3-b8d4-5157-a4ee-36e83f4c2620",
+      "source_text": "Listing 7.2 Planning tool implementation",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.2 Planning tool implementation"
+      ]
+    },
+    {
+      "sentence_id": "def1beb2-536a-54e8-8542-aff6560d08bf",
+      "source_text": "from typing import List from scratch_agents.tools import tool @tool def create_tasks(tasks: List[Task]) -> str: \"\"\"Create or update a task plan. WHEN TO USE: - Complex queries requiring multiple steps of research - Questions that need to combine information from different sources WHEN NOT TO USE: - Simple questions answerable with a single search - Tasks with obvious, straightforward procedures HOW TO USE: - Regenerate the entire task list with updated statuses - Mark completed tasks as 'completed' - Mark the next task to work on as 'in_progress' - Keep future tasks as 'pending' \"\"\" result = [] for task in tasks: result.append(str(task)) return \"\\n\".join(result)",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "98797d2c-70b8-5d9c-b2b9-5a2df7205bd8",
+      "source_text": "The tool implementation itself is very simple.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool implementation itself is very simple."
+      ]
+    },
+    {
+      "sentence_id": "cd03c005-f0a7-5367-b961-c9a8e047c095",
+      "source_text": "It receives a task list and converts it to a string to return.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It receives a task list and converts it to a string to return."
+      ]
+    },
+    {
+      "sentence_id": "b5d7dadf-410c-51ee-8b91-1826d2bc7071",
+      "source_text": "The returned string is recorded in the context as a ToolResult, allowing the LLM to reference the plan in subsequent steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The returned string is recorded in the context as a ToolResult, allowing the LLM to reference the plan in subsequent steps."
+      ]
+    },
+    {
+      "sentence_id": "5afe1346-c83b-5834-afc5-6bd3ce6e7a90",
+      "source_text": "Why implement it so simply?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Why implement it so simply?"
+      ]
+    },
+    {
+      "sentence_id": "ccbe752f-ccc4-5df2-878a-7d9e804c2022",
+      "source_text": "LLMs already have powerful language understanding and generation capabilities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::LLMs already have powerful language understanding and generation capabilities."
+      ]
+    },
+    {
+      "sentence_id": "72da0555-aeab-54c5-a78d-4e01bb22036d",
+      "source_text": "Instead of implementing complex logic in code, leveraging the LLM's capabilities is more effective.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead of implementing complex logic in code, leveraging the LLM's capabilities is more effective."
+      ]
+    },
+    {
+      "sentence_id": "d50bafd1-5dab-56d4-91e3-4f8cc59b2f40",
+      "source_text": "The tool simply records the plan in the context, while the actual planning and state management are handled by the LLM.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool simply records the plan in the context, while the actual planning and state management are handled by the LLM."
+      ]
+    },
+    {
+      "sentence_id": "400099ab-bd91-5a09-95c1-3215afbf7b69",
+      "source_text": "7.2.3 Planning tool usage example",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.2.3 Planning tool usage example"
+      ]
+    },
+    {
+      "sentence_id": "8bb8074e-57d6-5f6b-b715-44a9c3e89820",
+      "source_text": "Now, let's add the planning tool to an agent and see how it actually works.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Now, let's add the planning tool to an agent and see how it actually works."
+      ]
+    },
+    {
+      "sentence_id": "16b93f5e-242b-5b27-af9f-c82bc94d178a",
+      "source_text": "Listing 7.3 Running an agent with the Planning tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.3 Running an agent with the Planning tool"
+      ]
+    },
+    {
+      "sentence_id": "35ab370b-e852-53e0-80f6-9936921300e9",
+      "source_text": "from scratch_agents import Agent, LlmClient from scratch_agents.tools import search_web agent = Agent( model=LlmClient(model=\"gpt-5-mini\"), tools=[create_tasks, search_web], instructions=\"You are a helpful assistant that plans before acting on complex queries.\", max_steps=10, ) result = await agent.run( \"If Eliud Kipchoge could maintain his marathon pace indefinitely, \" \"How many thousand hours would it take him to reach the Moon?\" )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "71a2fd7e-9329-5507-90e0-8d80a0aa8305",
+      "source_text": "When the agent receives this question, it first calls create_tasks to make a plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When the agent receives this question, it first calls create_tasks to make a plan."
+      ]
+    },
+    {
+      "sentence_id": "2db200e7-9736-5614-8572-f10e212d9d55",
+      "source_text": "The tool's return value is recorded in the context as a ToolResult.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool's return value is recorded in the context as a ToolResult."
+      ]
+    },
+    {
+      "sentence_id": "7b5151b1-f20b-589d-8c3f-ddadb66bad2d",
+      "source_text": "Step 1: create_tasks call Result: [ ] Find Kipchoge marathon world record time [ ] Calculate pace in km/h [ ] Find Earth-Moon distance at perigee [ ] Calculate time and convert to thousands of hours",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "fbd81204-ef63-5bd3-8e68-79c54c74268e",
+      "source_text": "Then it updates the status as it progresses through each step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Then it updates the status as it progresses through each step."
+      ]
+    },
+    {
+      "sentence_id": "098c7a58-8651-5377-a4c8-81455fbc0521",
+      "source_text": "When the first task is completed, it marks it as completed and sets the next task to in_progress.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When the first task is completed, it marks it as completed and sets the next task to in_progress."
+      ]
+    },
+    {
+      "sentence_id": "ce32431d-f1f0-5588-aa2a-c338f90474b3",
+      "source_text": "Step 2: search_web(\"Kipchoge marathon world record\") call Step 3: create_tasks call (state update) Result: [x] ~~Find Kipchoge marathon world record time~~ [>] **Calculate pace in km/h** [ ] Find Earth-Moon distance at perigee [ ] Calculate time and convert to thousands of hours",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "d7b62c5e-15ef-5f54-8564-f665176a99b0",
+      "source_text": "When the plan is recorded in the context, the LLM references this plan in subsequent steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When the plan is recorded in the context, the LLM references this plan in subsequent steps."
+      ]
+    },
+    {
+      "sentence_id": "7b946565-5d38-5fee-8665-fed5502fae63",
+      "source_text": "It's just like a person looking at a to-do list to decide what to do next.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It's just like a person looking at a to-do list to decide what to do next."
+      ]
+    },
+    {
+      "sentence_id": "c3f50d49-9924-55c0-891d-22a718f89d5c",
+      "source_text": "Thanks to the checkbox format, you can see at a glance which tasks are completed, which task is currently in progress, and which tasks remain.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Thanks to the checkbox format, you can see at a glance which tasks are completed, which task is currently in progress, and which tasks remain."
+      ]
+    },
+    {
+      "sentence_id": "236f90ff-f28a-54c7-867c-804f0764c0ac",
+      "source_text": "Planning granularity trade-off",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning granularity trade-off"
+      ]
+    },
+    {
+      "sentence_id": "c2f49074-7f54-5dd9-b6fc-08ce8e8f2153",
+      "source_text": "If tasks are too granular, create_tasks calls for status updates become excessive, increasing execution time.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If tasks are too granular, create_tasks calls for status updates become excessive, increasing execution time."
+      ]
+    },
+    {
+      "sentence_id": "edff5753-6b26-54e1-babf-d29e5c734aa7",
+      "source_text": "Rather than separating every simple action, it's more efficient to group tasks into meaningful units.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Rather than separating every simple action, it's more efficient to group tasks into meaningful units."
+      ]
+    },
+    {
+      "sentence_id": "81a8319e-2f77-5b43-ac2c-408446ada850",
+      "source_text": "There's always a tradeoff between the granularity of planning and system response latency.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::There's always a tradeoff between the granularity of planning and system response latency."
+      ]
+    },
+    {
+      "sentence_id": "653f7db9-01c9-5c09-9831-5b0641e63dfa",
+      "source_text": "7.2.4 Extension directions",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.2.4 Extension directions"
+      ]
+    },
+    {
+      "sentence_id": "b3fba955-a9f9-53fb-a3cf-06d5d472e56a",
+      "source_text": "The planning tool we've implemented so far is intentionally simple.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The planning tool we've implemented so far is intentionally simple."
+      ]
+    },
+    {
+      "sentence_id": "8488e62d-e65b-5e9a-a7c6-8531cf8865bd",
+      "source_text": "This is sufficient for most cases, but if you need to handle more complex tasks, you can extend in the following directions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is sufficient for most cases, but if you need to handle more complex tasks, you can extend in the following directions."
+      ]
+    },
+    {
+      "sentence_id": "22c4d4a5-33c0-57fa-95f1-29f347b191df",
+      "source_text": "Adding completion criteria: Explicitly define when each task is complete.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Adding completion criteria: Explicitly define when each task is complete."
+      ]
+    },
+    {
+      "sentence_id": "f52676c1-0054-5e8d-bc02-9d917e84674a",
+      "source_text": "Instead of \"Research Kipchoge's record,\" including specific completion conditions like \"Confirm Kipchoge's marathon record time and distance\" allows the LLM to more accurately judge whether a task is complete.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead of \"Research Kipchoge's record,\" including specific completion conditions like \"Confirm Kipchoge's marathon record time and distance\" allows the LLM to more accurately judge whether a task is complete."
+      ]
+    },
+    {
+      "sentence_id": "73cce9a5-4ad3-5ef5-bf15-c83afe67dfa1",
+      "source_text": "Hierarchical structure (Task/Action): Decompose large tasks (Tasks) into smaller actions (Actions).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Hierarchical structure (Task/Action): Decompose large tasks (Tasks) into smaller actions (Actions)."
+      ]
+    },
+    {
+      "sentence_id": "39c87084-6650-5fbd-9ded-3c6356483075",
+      "source_text": "For example, under a \"Market research\" Task, you might have \"Search competitor A,\" \"Search competitor B,\" and \"Compare results\" Actions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::For example, under a \"Market research\" Task, you might have \"Search competitor A,\" \"Search competitor B,\" and \"Compare results\" Actions."
+      ]
+    },
+    {
+      "sentence_id": "f94c1aeb-ab8c-5640-9756-ef7a1a763d10",
+      "source_text": "Dependency management (deps): Express order relationships between tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Dependency management (deps): Express order relationships between tasks."
+      ]
+    },
+    {
+      "sentence_id": "d87220d2-669b-53c5-bc3b-caade91e94ef",
+      "source_text": "\"Research Kipchoge's record\" and \"Research Moon distance\" are independent of each other and can proceed simultaneously, but \"Calculate time\" is only possible after both tasks are completed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::\"Research Kipchoge's record\" and \"Research Moon distance\" are independent of each other and can proceed simultaneously, but \"Calculate time\" is only possible after both tasks are completed."
+      ]
+    },
+    {
+      "sentence_id": "e6bba63e-0896-54f2-be4a-67ee53193e11",
+      "source_text": "Making such dependencies explicit enables parallel execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Making such dependencies explicit enables parallel execution."
+      ]
+    },
+    {
+      "sentence_id": "ccaf1780-add4-51a3-8493-7de982295e64",
+      "source_text": "However, these extensions significantly increase complexity.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::However, these extensions significantly increase complexity."
+      ]
+    },
+    {
+      "sentence_id": "71c28b0f-244d-5550-b40f-c54d2c29c0e9",
+      "source_text": "Code is needed to manage dependency graphs, track hierarchical structures, and coordinate parallel execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Code is needed to manage dependency graphs, track hierarchical structures, and coordinate parallel execution."
+      ]
+    },
+    {
+      "sentence_id": "6f875103-e4cf-52d6-91c4-036d65526249",
+      "source_text": "It's best to add these incrementally only when simple planning tools don't solve the problem.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It's best to add these incrementally only when simple planning tools don't solve the problem."
+      ]
+    },
+    {
+      "sentence_id": "d3bf4bf8-4410-5f9e-a1ab-190a7edd88bd",
+      "source_text": "The key is questions, not structure.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The key is questions, not structure."
+      ]
+    },
+    {
+      "sentence_id": "b098e0d8-6427-5abc-8e89-5ce441ec5f5c",
+      "source_text": "More important than complex dependency graphs is guiding the LLM to ask itself the right questions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::More important than complex dependency graphs is guiding the LLM to ask itself the right questions."
+      ]
+    },
+    {
+      "sentence_id": "3cce4428-fb49-5280-a05a-dc8c1707f9c1",
+      "source_text": "Including questions like the following in the tool's description is effective:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Including questions like the following in the tool's description is effective:"
+      ]
+    },
+    {
+      "sentence_id": "1390ad9c-4bb3-5cc9-8456-c4842f90da7e",
+      "source_text": "What do I need to know to solve this problem?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What do I need to know to solve this problem?"
+      ]
+    },
+    {
+      "sentence_id": "961c194c-4e19-59ab-861d-6393534d5eb7",
+      "source_text": "What order would be efficient to proceed in?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What order would be efficient to proceed in?"
+      ]
+    },
+    {
+      "sentence_id": "9e72e105-6575-5aa2-9a4a-ad601756a08d",
+      "source_text": "How will I know when each step is complete?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::How will I know when each step is complete?"
+      ]
+    },
+    {
+      "sentence_id": "4587aba6-ba0b-5bf4-9779-db144c1ef28e",
+      "source_text": "7.3 Reflection: Checking and correcting",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.3 Reflection: Checking and correcting"
+      ]
+    },
+    {
+      "sentence_id": "4ccccf6b-9637-5941-81d0-5328e2fccb31",
+      "source_text": "If planning is \"making a plan before acting,\" reflection is \"stopping in the middle to check.\" A skilled researcher naturally pauses when search results differ from expectations, when synthesizing multiple sources, or checking for anything missing before the final answer.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If planning is \"making a plan before acting,\" reflection is \"stopping in the middle to check.\" A skilled researcher naturally pauses when search results differ from expectations, when synthesizing multiple sources, or checking for anything missing before the final answer."
+      ]
+    },
+    {
+      "sentence_id": "32b94723-6e1b-584c-8e5f-5677e176b67a",
+      "source_text": "They don't just search; they immediately search again and promptly answer.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They don't just search; they immediately search again and promptly answer."
+      ]
+    },
+    {
+      "sentence_id": "08561230-1259-50d9-bf3f-d53696f78352",
+      "source_text": "They ask themselves along the way, \"What have I found so far?\" and \"Am I on the right track?\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::They ask themselves along the way, \"What have I found so far?\" and \"Am I on the right track?\""
+      ]
+    },
+    {
+      "sentence_id": "67f3ad30-58b9-5e9a-9161-3739326421f6",
+      "source_text": "ReAct agents lack this checking habit.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::ReAct agents lack this checking habit."
+      ]
+    },
+    {
+      "sentence_id": "3ce28aff-d8bc-5ddb-bb45-0cf51d848aee",
+      "source_text": "At each moment, they only think about \"what to do next\" and don't ask \"is this going well so far?\" Even when search results are strange, they move on to the next step; even when information conflicts, they just proceed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::At each moment, they only think about \"what to do next\" and don't ask \"is this going well so far?\" Even when search results are strange, they move on to the next step; even when information conflicts, they just proceed."
+      ]
+    },
+    {
+      "sentence_id": "f6262a3f-8f75-55c4-87c0-a61d75002b33",
+      "source_text": "Reflection makes agents ask themselves these questions:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection makes agents ask themselves these questions:"
+      ]
+    },
+    {
+      "sentence_id": "8edda3ac-65d3-52fb-989f-b319f76e5195",
+      "source_text": "What have I learned so far?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::What have I learned so far?"
+      ]
+    },
+    {
+      "sentence_id": "bdcb5415-c054-5ad5-a4f9-45b50c55d992",
+      "source_text": "How close am I to the original goal?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::How close am I to the original goal?"
+      ]
+    },
+    {
+      "sentence_id": "3f4625f0-b328-5f82-ad78-0b78974c4a52",
+      "source_text": "Is the current approach effective?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Is the current approach effective?"
+      ]
+    },
+    {
+      "sentence_id": "2d25713e-53b0-5120-9fa0-3a3afbfa29bf",
+      "source_text": "Is there anything that needs to change?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Is there anything that needs to change?"
+      ]
+    },
+    {
+      "sentence_id": "5d7e6441-1010-584f-a9db-798772033e10",
+      "source_text": "When the answers to these questions are recorded in the context, the LLM references this information in subsequent decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When the answers to these questions are recorded in the context, the LLM references this information in subsequent decisions."
+      ]
+    },
+    {
+      "sentence_id": "25620e46-2406-56ed-87b4-61d10a4544be",
+      "source_text": "If planning adds \"what to do next\" to the context, reflection adds \"evaluation and direction so far\" to the context.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If planning adds \"what to do next\" to the context, reflection adds \"evaluation and direction so far\" to the context."
+      ]
+    },
+    {
+      "sentence_id": "3146e0a1-3530-5b7f-8283-f69868b444a4",
+      "source_text": "7.3.1 When is reflection necessary?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.3.1 When is reflection necessary?"
+      ]
+    },
+    {
+      "sentence_id": "17b4b371-2cf7-583b-8fe2-950a56e99805",
+      "source_text": "Think about the moments when people naturally pause during work.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Think about the moments when people naturally pause during work."
+      ]
+    },
+    {
+      "sentence_id": "ec3c732d-8f4d-55b5-818b-4a50a2c4d65f",
+      "source_text": "These moments are exactly when agents need reflection, too.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::These moments are exactly when agents need reflection, too."
+      ]
+    },
+    {
+      "sentence_id": "a9385ecb-adcc-52c6-9ed9-a2471a12f15a",
+      "source_text": "When a meaningful step has been completed",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When a meaningful step has been completed"
+      ]
+    },
+    {
+      "sentence_id": "a5e7b33e-a9de-51f9-8d5c-90f8ec576048",
+      "source_text": "People naturally pause when a step ends.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::People naturally pause when a step ends."
+      ]
+    },
+    {
+      "sentence_id": "96044b35-89b4-585c-a17e-c2db0b99597f",
+      "source_text": "\"First step done.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::\"First step done."
+      ]
+    },
+    {
+      "sentence_id": "eea443a5-55fd-5a3a-b181-b8ea9dbc1d67",
+      "source_text": "Let me organize before moving on.\" Agents can also check progress and prepare for the next step when completing a stage of the plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Let me organize before moving on.\" Agents can also check progress and prepare for the next step when completing a stage of the plan."
+      ]
+    },
+    {
+      "sentence_id": "baa1a3a5-d808-55e7-9177-d86b206bd55d",
+      "source_text": "This is the most predictable checkpoint.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is the most predictable checkpoint."
+      ]
+    },
+    {
+      "sentence_id": "9b50e763-bbc9-5d48-8e73-a122f6108a74",
+      "source_text": "When an error occurs in a tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When an error occurs in a tool"
+      ]
+    },
+    {
+      "sentence_id": "6821e314-aa37-5efb-87f6-7c735b651dd7",
+      "source_text": "When a search fails, or an API doesn't respond, people think, \"Why isn't this working?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When a search fails, or an API doesn't respond, people think, \"Why isn't this working?"
+      ]
+    },
+    {
+      "sentence_id": "a6fc92dc-35db-5971-942a-a94d76868a4e",
+      "source_text": "I should find another way.\" Without reflection, agents easily repeat the same failures until reaching max_steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::I should find another way.\" Without reflection, agents easily repeat the same failures until reaching max_steps."
+      ]
+    },
+    {
+      "sentence_id": "9b4ad174-025b-5a29-a622-d433d1a408bb",
+      "source_text": "Errors are clear signals, making this a particularly important moment for checking.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Errors are clear signals, making this a particularly important moment for checking."
+      ]
+    },
+    {
+      "sentence_id": "05b19862-053d-5ccb-8e2a-8de254e8049b",
+      "source_text": "When synthesizing multiple pieces of information",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When synthesizing multiple pieces of information"
+      ]
+    },
+    {
+      "sentence_id": "bf1e823b-c628-55f9-ad5f-647126d27756",
+      "source_text": "When a lot of materials have been gathered, people pause, saying, \"Wait, let me organize this first.\" Checking is especially important when there's contradictory information.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When a lot of materials have been gathered, people pause, saying, \"Wait, let me organize this first.\" Checking is especially important when there's contradictory information."
+      ]
+    },
+    {
+      "sentence_id": "2a82154b-20af-5d3e-892a-d9f2fb442d40",
+      "source_text": "When searching for the Moon distance in the Kipchoge problem, you might get different numbers like \"average distance 384,400km\" and \"perigee 356,500km, apogee 406,700km.\" To judge which value to use, you need to stop and think.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When searching for the Moon distance in the Kipchoge problem, you might get different numbers like \"average distance 384,400km\" and \"perigee 356,500km, apogee 406,700km.\" To judge which value to use, you need to stop and think."
+      ]
+    },
+    {
+      "sentence_id": "a5496a63-e0cf-5b13-ac53-11fe834980d7",
+      "source_text": "\"The problem asked about 'closest approach,' so I should use the perigee.\"",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::\"The problem asked about 'closest approach,' so I should use the perigee.\""
+      ]
+    },
+    {
+      "sentence_id": "f88756c9-ac3c-57e4-a1c7-b092fc9be6ba",
+      "source_text": "When a review is needed before the final answer",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When a review is needed before the final answer"
+      ]
+    },
+    {
+      "sentence_id": "ee6b2ec3-32b3-52f2-a74f-7a08680c59dc",
+      "source_text": "Just before answering, people check \"Let me make sure nothing is missing.\" To prevent agents from hastily declaring \"I found the answer,\" a self-verification step is needed before completion.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Just before answering, people check \"Let me make sure nothing is missing.\" To prevent agents from hastily declaring \"I found the answer,\" a self-verification step is needed before completion."
+      ]
+    },
+    {
+      "sentence_id": "c0098fe9-b04b-5e64-9b01-b7cb50400e63",
+      "source_text": "This is the most important but easily overlooked checkpoint.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is the most important but easily overlooked checkpoint."
+      ]
+    },
+    {
+      "sentence_id": "3e676289-2d0b-53d4-83ef-75fee4247056",
+      "source_text": "When reflection is unnecessary",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When reflection is unnecessary"
+      ]
+    },
+    {
+      "sentence_id": "5bcc1f79-c0bc-565a-8ee3-61ebc41da792",
+      "source_text": "Not every moment requires checking.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Not every moment requires checking."
+      ]
+    },
+    {
+      "sentence_id": "c2ba6f2b-4451-5b9d-8931-af26cff12536",
+      "source_text": "Doing reflection after every tool call only increases overhead.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Doing reflection after every tool call only increases overhead."
+      ]
+    },
+    {
+      "sentence_id": "6e878164-e4f2-576c-b6e8-73253490bf39",
+      "source_text": "During simple, straightforward operations, it becomes an unnecessary delay.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::During simple, straightforward operations, it becomes an unnecessary delay."
+      ]
+    },
+    {
+      "sentence_id": "40a4ab0b-9d2f-55cd-89a3-45f7b57bcb68",
+      "source_text": "If everything is proceeding as expected, continuing is more efficient.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If everything is proceeding as expected, continuing is more efficient."
+      ]
+    },
+    {
+      "sentence_id": "d1e4f744-dbef-5447-9745-b137e917ec17",
+      "source_text": "Difference from summarization",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Difference from summarization"
+      ]
+    },
+    {
+      "sentence_id": "931f5e11-c419-59b0-9e68-2e1e1891551b",
+      "source_text": "Summarization (covered in chapter 6) is different from reflection.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Summarization (covered in chapter 6) is different from reflection."
+      ]
+    },
+    {
+      "sentence_id": "5a76ed97-4818-5272-b933-2bb2d6d9edef",
+      "source_text": "Summarization is compression that triggers automatically when context length exceeds a threshold.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Summarization is compression that triggers automatically when context length exceeds a threshold."
+      ]
+    },
+    {
+      "sentence_id": "cb92ce6c-be16-5438-9d9c-600d25cfc0ad",
+      "source_text": "Its purpose is to reduce the token count.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Its purpose is to reduce the token count."
+      ]
+    },
+    {
+      "sentence_id": "b6b2a077-849b-5d0c-b169-4bb1d88505de",
+      "source_text": "In contrast, reflection is selectively executed by the LLM based on the judgment that \"checking is needed.\" Its purpose is to check direction and make corrections if necessary.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In contrast, reflection is selectively executed by the LLM based on the judgment that \"checking is needed.\" Its purpose is to check direction and make corrections if necessary."
+      ]
+    },
+    {
+      "sentence_id": "42b7ee14-e9ad-5a49-a5eb-baf301067767",
+      "source_text": "7.3.2 Implementing the reflection tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.3.2 Implementing the reflection tool"
+      ]
+    },
+    {
+      "sentence_id": "2289b40a-4f1a-522d-b1e7-600cb8d42650",
+      "source_text": "Like the planning tool, we implement the reflection tool simply.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Like the planning tool, we implement the reflection tool simply."
+      ]
+    },
+    {
+      "sentence_id": "4a1da95e-031d-54a7-9d89-1d3097e5177c",
+      "source_text": "Instead of creating complex logic in code, we leverage the LLM's judgment capabilities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Instead of creating complex logic in code, we leverage the LLM's judgment capabilities."
+      ]
+    },
+    {
+      "sentence_id": "12895dc9-8b17-51e6-a594-b4bbb9b60ead",
+      "source_text": "Design decisions",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Design decisions"
+      ]
+    },
+    {
+      "sentence_id": "d510749e-a590-534e-af08-c6d152fc84c6",
+      "source_text": "The reflection parameter is free-form text.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The reflection parameter is free-form text."
+      ]
+    },
+    {
+      "sentence_id": "33824c54-03be-5ca5-bb17-035996f3c9ba",
+      "source_text": "Since different content is needed depending on the situation (error analysis, information synthesis, progress checking, etc.), forcing structure would reduce flexibility.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Since different content is needed depending on the situation (error analysis, information synthesis, progress checking, etc.), forcing structure would reduce flexibility."
+      ]
+    },
+    {
+      "sentence_id": "8145149f-374f-5302-8cc6-3e20017195f6",
+      "source_text": "The need_replan flag is a coordination signal with the planning tool.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The need_replan flag is a coordination signal with the planning tool."
+      ]
+    },
+    {
+      "sentence_id": "34e87bf4-300a-554f-926e-f2c2e6bfc455",
+      "source_text": "When it's judged that \"the current plan is no longer valid,\" setting this flag to True encourages modifying the plan in the next step.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When it's judged that \"the current plan is no longer valid,\" setting this flag to True encourages modifying the plan in the next step."
+      ]
+    },
+    {
+      "sentence_id": "f1ac1ad7-2c47-576b-a0c3-24882b353683",
+      "source_text": "The reflection tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The reflection tool"
+      ]
+    },
+    {
+      "sentence_id": "7028c858-dd72-598d-ab16-bd81904b72b7",
+      "source_text": "The tool's description specifies four usage situations: PROGRESS REVIEW (when completing a step), ERROR ANALYSIS (when a tool fails), RESULT SYNTHESIS (when synthesizing information), and SELF CHECK (before the final answer).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool's description specifies four usage situations: PROGRESS REVIEW (when completing a step), ERROR ANALYSIS (when a tool fails), RESULT SYNTHESIS (when synthesizing information), and SELF CHECK (before the final answer)."
+      ]
+    },
+    {
+      "sentence_id": "e7b47a7f-4e30-5593-99a8-a7d483ffaada",
+      "source_text": "Including specific examples for each situation guides the LLM to call the tool at appropriate times.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Including specific examples for each situation guides the LLM to call the tool at appropriate times."
+      ]
+    },
+    {
+      "sentence_id": "79f87bff-be85-5a36-bec2-3b0c6e98de9b",
+      "source_text": "Listing 7.4 Reflection tool implementation",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.4 Reflection tool implementation"
+      ]
+    },
+    {
+      "sentence_id": "0d7dd279-9c0d-52f7-b6ae-a851c237f009",
+      "source_text": "from scratch_agents.tools import tool @tool def reflection(analysis: str, need_replan: bool = False) -> str: \"\"\"Pause and analyze progress before continuing. WHEN TO USE: 1. PROGRESS REVIEW - After completing a meaningful step \"Kipchoge's record found: 2:01:09. Moving to moon distance research.\" 2. ERROR ANALYSIS - When a tool fails or returns unexpected results \"Wikipedia tool failed. Cause: service unavailable. Alternative: use web search.\" 3. RESULT SYNTHESIS - When combining information from multiple sources \"Two different moon distances found. Problem asks for closest approach, so using perigee: 356,500km.\" 4. SELF CHECK - Before providing final answer \"Have all required data: marathon pace 20.81km/h, moon distance 356,500km. Ready to calculate.\" WHEN NOT TO USE: - After every single tool call (excessive overhead) - During simple, straightforward operations - When everything is proceeding as expected Args: analysis: Your assessment of current situation and next direction need_replan: Set True if the current plan needs modification \"\"\" if need_replan: return f\"Reflection recorded (REPLAN NEEDED): {analysis}\" return f\"Reflection recorded: {analysis}\"",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "5231f17f-e487-55ba-9a48-6928f7bc79e7",
+      "source_text": "The tool implementation itself is very simple.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The tool implementation itself is very simple."
+      ]
+    },
+    {
+      "sentence_id": "29d59b6f-4511-5e96-90d8-a9e2cb211bc1",
+      "source_text": "It receives the analysis content and returns it as a string.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It receives the analysis content and returns it as a string."
+      ]
+    },
+    {
+      "sentence_id": "06ce116b-8de0-5bfc-9483-a9dda89392b6",
+      "source_text": "This result is recorded in the context as a ToolResult, which the LLM references in subsequent decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This result is recorded in the context as a ToolResult, which the LLM references in subsequent decisions."
+      ]
+    },
+    {
+      "sentence_id": "eb1c505c-9eb5-5364-bba1-8097f93b5b2a",
+      "source_text": "If the planning tool recorded \"what to do next\" in the context, the reflection tool records \"evaluation so far\" in the context.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If the planning tool recorded \"what to do next\" in the context, the reflection tool records \"evaluation so far\" in the context."
+      ]
+    },
+    {
+      "sentence_id": "f93ac542-708d-5685-aa42-6ba75eecb096",
+      "source_text": "Both are generation strategies that add LLM-generated text to the context to influence subsequent decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Both are generation strategies that add LLM-generated text to the context to influence subsequent decisions."
+      ]
+    },
+    {
+      "sentence_id": "33f803bc-0790-5f6a-928d-84859fc33037",
+      "source_text": "7.3.3 The real value of reflection: Failure recovery",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.3.3 The real value of reflection: Failure recovery"
+      ]
+    },
+    {
+      "sentence_id": "af83ca1b-c149-5009-ae26-0d2325279b34",
+      "source_text": "Reflection's value becomes apparent not when everything is going smoothly, but when problems arise.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection's value becomes apparent not when everything is going smoothly, but when problems arise."
+      ]
+    },
+    {
+      "sentence_id": "1b70b62b-d856-5235-b534-2f31306e8f14",
+      "source_text": "Let's intentionally create a failure situation to see the reflection's effect.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Let's intentionally create a failure situation to see the reflection's effect."
+      ]
+    },
+    {
+      "sentence_id": "0a357457-37d6-5938-8ec5-cc891d05850a",
+      "source_text": "Creating a failing tool",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Creating a failing tool"
+      ]
+    },
+    {
+      "sentence_id": "20be1aa7-c27f-5c8f-bb81-262dbdf0b6b9",
+      "source_text": "Create a Wikipedia tool that always fails.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Create a Wikipedia tool that always fails."
+      ]
+    },
+    {
+      "sentence_id": "6c3cf8a3-270d-502b-824a-ebbfbd10e0f3",
+      "source_text": "In reality, external APIs can fail for various reasons: server overload, network issues, API changes, etc.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In reality, external APIs can fail for various reasons: server overload, network issues, API changes, etc."
+      ]
+    },
+    {
+      "sentence_id": "16f0a43b-ad7f-5877-b36a-641552539e52",
+      "source_text": "Listing 7.5 A Wikipedia tool that always fails",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.5 A Wikipedia tool that always fails"
+      ]
+    },
+    {
+      "sentence_id": "2db92ad2-0b74-57b2-b603-7295551a4b9c",
+      "source_text": "@tool def get_wikipedia_page(title: str) -> str: \"\"\"Get a Wikipedia page by title.\"\"\" raise RuntimeError(\"Wikipedia service is temporarily unavailable\")",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "2a398358-2637-5fb5-b6b8-5928673874f4",
+      "source_text": "Running with reflection",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Running with reflection"
+      ]
+    },
+    {
+      "sentence_id": "67829ad5-5287-5c9e-99b7-5e9315a9c561",
+      "source_text": "Add the reflection and Wikipedia tools to an agent and run them.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Add the reflection and Wikipedia tools to an agent and run them."
+      ]
+    },
+    {
+      "sentence_id": "82a5df0e-1549-58c3-b976-49dd2f0e2e21",
+      "source_text": "Listing 7.6 Running an agent with reflection for error recovery",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.6 Running an agent with reflection for error recovery"
+      ]
+    },
+    {
+      "sentence_id": "09ef862b-1772-5dfb-973f-098215ee396d",
+      "source_text": "agent = Agent( model=LlmClient(model=\"gpt-5-mini\"), tools=[get_wikipedia_page, search_web, reflection], instructions=\"Always try Wikipedia first when researching topics.\", max_steps=5, ) result = await agent.run( \"What is the distance from Earth to Moon at perigee?\" )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "236db0ac-f180-5008-b5e4-54d06818e7f0",
+      "source_text": "With reflection, the agent analyzes the failure and finds alternatives.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::With reflection, the agent analyzes the failure and finds alternatives."
+      ]
+    },
+    {
+      "sentence_id": "90e7c3e7-38e1-547e-91b5-1a216f794a9b",
+      "source_text": "7.3.4 Running an agent that uses reflection for research synthesis",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.3.4 Running an agent that uses reflection for research synthesis"
+      ]
+    },
+    {
+      "sentence_id": "b331ebd8-0ba7-53fe-9420-4f89d188c75a",
+      "source_text": "Reflection is useful not only for failure recovery but also when synthesizing multiple pieces of information.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection is useful not only for failure recovery but also when synthesizing multiple pieces of information."
+      ]
+    },
+    {
+      "sentence_id": "290d13cb-ad3a-5682-b5b8-549ed1599a71",
+      "source_text": "Here's an example of organizing search results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Here's an example of organizing search results."
+      ]
+    },
+    {
+      "sentence_id": "44742c7d-2b39-5d03-aaf8-e0f69ed2f11a",
+      "source_text": "Listing 7.7 Task data structure definition",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Listing 7.7 Task data structure definition"
+      ]
+    },
+    {
+      "sentence_id": "0134d12c-7507-5b21-9a7c-43d1c845dc13",
+      "source_text": "agent = Agent( model=LlmClient(model=\"gpt-5-mini\"), tools=[search_web, reflection], instructions=\"You are a research assistant.\", ) result = await agent.run( \"Research recent developments in quantum computing.\" )",
+      "sentence_status": "protected",
+      "target_texts": []
+    },
+    {
+      "sentence_id": "3c271a0f-feb9-5521-b27f-d32c2b655c6b",
+      "source_text": "After the agent performs multiple searches, it synthesizes the results with reflection.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::After the agent performs multiple searches, it synthesizes the results with reflection."
+      ]
+    },
+    {
+      "sentence_id": "12ccae15-31fe-5341-be05-a1424c2bfe5a",
+      "source_text": "Without reflection, the agent might have kept adding searches or answered without properly organizing the collected information.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Without reflection, the agent might have kept adding searches or answered without properly organizing the collected information."
+      ]
+    },
+    {
+      "sentence_id": "dd8725aa-2a04-508f-961f-064882f0793b",
+      "source_text": "Through reflection, the judgment \"I've gathered enough information\" is explicitly recorded in the context, and this guides the next step toward generating an answer.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Through reflection, the judgment \"I've gathered enough information\" is explicitly recorded in the context, and this guides the next step toward generating an answer."
+      ]
+    },
+    {
+      "sentence_id": "01e4f77f-3439-5863-8ab7-a45990501a4a",
+      "source_text": "7.4 Integrating planning and reflection",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.4 Integrating planning and reflection"
+      ]
+    },
+    {
+      "sentence_id": "180e3a1f-a3ee-51f3-890e-92b807666dcc",
+      "source_text": "Planning and reflection don't operate separately, but form a single cycle, as shown in figure 7.2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection don't operate separately, but form a single cycle, as shown in figure 7.2."
+      ]
+    },
+    {
+      "sentence_id": "ebc4ff4e-bd2a-5c86-9c82-a1e63b4f231d",
+      "source_text": "Let’s see how these two strategies connect and summarize how the limitations of ReAct are resolved.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Let’s see how these two strategies connect and summarize how the limitations of ReAct are resolved."
+      ]
+    },
+    {
+      "sentence_id": "8159f93b-d42d-5dea-84cb-ea8a8ee5b6e9",
+      "source_text": "Figure 7.2 The Planning-Reflection cycle in agent execution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Figure 7.2 The Planning-Reflection cycle in agent execution."
+      ]
+    },
+    {
+      "sentence_id": "8f699713-ca93-566e-8693-44d2ff8b6106",
+      "source_text": "The agent first decomposes tasks and establishes order through planning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The agent first decomposes tasks and establishes order through planning."
+      ]
+    },
+    {
+      "sentence_id": "b463560b-fc65-51a6-ac52-3aa11903d435",
+      "source_text": "Then it executes work by calling tools according to the plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Then it executes work by calling tools according to the plan."
+      ]
+    },
+    {
+      "sentence_id": "fbb1e3cd-0f87-5165-85b8-f0dfecfbe27d",
+      "source_text": "After execution, it checks progress through reflection.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::After execution, it checks progress through reflection."
+      ]
+    },
+    {
+      "sentence_id": "970b2f12-d466-5443-9a44-325caab53db7",
+      "source_text": "If the check shows things are going well, it moves to the next task; if a problem has occurred, it modifies the plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::If the check shows things are going well, it moves to the next task; if a problem has occurred, it modifies the plan."
+      ]
+    },
+    {
+      "sentence_id": "0c2721c9-7768-516d-90f2-05a3185e6498",
+      "source_text": "The need_replan parameter of the reflection tool implemented serves as this connecting link.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The need_replan parameter of the reflection tool implemented serves as this connecting link."
+      ]
+    },
+    {
+      "sentence_id": "fcd88473-b201-5916-8290-940b450b31ad",
+      "source_text": "When reflection determines that \"the current plan is no longer valid,\" it sets need_replan=True.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When reflection determines that \"the current plan is no longer valid,\" it sets need_replan=True."
+      ]
+    },
+    {
+      "sentence_id": "1fda1d61-a260-5153-8462-70f4e2689bf5",
+      "source_text": "When this signal is recorded in the context, the LLM calls create_tasks again in the next step to modify the plan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When this signal is recorded in the context, the LLM calls create_tasks again in the next step to modify the plan."
+      ]
+    },
+    {
+      "sentence_id": "700e9f62-ddc9-5012-958d-2718ab94f83c",
+      "source_text": "For example, consider when the Wikipedia tool fails in the Kipchoge problem.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::For example, consider when the Wikipedia tool fails in the Kipchoge problem."
+      ]
+    },
+    {
+      "sentence_id": "befd2372-c0fc-5930-a16d-faddf51b3edd",
+      "source_text": "In reflection, you might analyze \"Wikipedia service unavailable, need to switch to web search,\" but set need_replan=False.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In reflection, you might analyze \"Wikipedia service unavailable, need to switch to web search,\" but set need_replan=False."
+      ]
+    },
+    {
+      "sentence_id": "5ddbd788-7d06-5b0a-aa5e-5cf5cf3bace9",
+      "source_text": "This is because the plan itself (research Moon distance) is still valid; only the method needs to change.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is because the plan itself (research Moon distance) is still valid; only the method needs to change."
+      ]
+    },
+    {
+      "sentence_id": "3f79a5b7-12c6-5807-928b-e3a32aedc201",
+      "source_text": "On the other hand, if search results revealed \"Kipchoge holds the half-marathon record, not the marathon record,\" you should set need_replan=True.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::On the other hand, if search results revealed \"Kipchoge holds the half-marathon record, not the marathon record,\" you should set need_replan=True."
+      ]
+    },
+    {
+      "sentence_id": "bbd7217e-e1ed-5d97-9b11-7ee2c43fb7d5",
+      "source_text": "Since the premise of the question itself has changed, the entire plan needs to be reconsidered.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Since the premise of the question itself has changed, the entire plan needs to be reconsidered."
+      ]
+    },
+    {
+      "sentence_id": "ae799bf4-f552-5a39-ba70-8b315261386c",
+      "source_text": "In this way, planning and reflection are not independent features but form a complementary cycle.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In this way, planning and reflection are not independent features but form a complementary cycle."
+      ]
+    },
+    {
+      "sentence_id": "61974361-b261-5a0b-84bc-be769c6e8b22",
+      "source_text": "Planning provides direction, reflection checks the direction, and when necessary, it returns to planning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning provides direction, reflection checks the direction, and when necessary, it returns to planning."
+      ]
+    },
+    {
+      "sentence_id": "f723eef6-217f-5987-8cee-f1df22fe9804",
+      "source_text": "7.4.1 Failure modes and solutions",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.4.1 Failure modes and solutions"
+      ]
+    },
+    {
+      "sentence_id": "c4bfdb9f-fd85-5396-8446-31e9a2e824ce",
+      "source_text": "The first failure mode was \"losing direction by trying to do too much at once.\" This happens when agents execute multiple searches simultaneously and fail to properly utilize the results.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The first failure mode was \"losing direction by trying to do too much at once.\" This happens when agents execute multiple searches simultaneously and fail to properly utilize the results."
+      ]
+    },
+    {
+      "sentence_id": "79012589-51ad-5690-968f-b64eb91aba9d",
+      "source_text": "Planning solves this problem.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning solves this problem."
+      ]
+    },
+    {
+      "sentence_id": "babf9627-3d64-5f37-8608-69b3439d15b8",
+      "source_text": "It decomposes tasks into clear units and provides structure to proceed one at a time.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::It decomposes tasks into clear units and provides structure to proceed one at a time."
+      ]
+    },
+    {
+      "sentence_id": "272280e5-bfb1-50c1-81ed-55177243b791",
+      "source_text": "When decomposed like \"1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When decomposed like \"1."
+      ]
+    },
+    {
+      "sentence_id": "10d92d6a-1986-5ca2-a318-49f1f6c81db1",
+      "source_text": "Research Kipchoge's record, 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Kipchoge's record, 2."
+      ]
+    },
+    {
+      "sentence_id": "cf185c25-7c74-521e-a8bb-eed77bddfb86",
+      "source_text": "Research Moon distance, 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Moon distance, 3."
+      ]
+    },
+    {
+      "sentence_id": "d4ccea1e-18c3-557a-b4c8-d56f29cad5a0",
+      "source_text": "Calculate,\" the agent only moves to the second task after completing the first.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Calculate,\" the agent only moves to the second task after completing the first."
+      ]
+    },
+    {
+      "sentence_id": "24ad3fb3-53ec-5eb8-ac32-21e0f753bd21",
+      "source_text": "The second failure mode is \"hastily declaring that an answer has been found.\" The agent attempts to answer with only partial information before gathering all the necessary details.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The second failure mode is \"hastily declaring that an answer has been found.\" The agent attempts to answer with only partial information before gathering all the necessary details."
+      ]
+    },
+    {
+      "sentence_id": "89565dff-a619-5608-8d38-b937dd8e9029",
+      "source_text": "Planning solves this by specifying completion criteria, and the SELF CHECK step of reflection verifies \"Have I secured all the information?\" The \"Before providing final answer\" usage timing, as included in the reflection tool's description, serves exactly this role.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning solves this by specifying completion criteria, and the SELF CHECK step of reflection verifies \"Have I secured all the information?\" The \"Before providing final answer\" usage timing, as included in the reflection tool's description, serves exactly this role."
+      ]
+    },
+    {
+      "sentence_id": "7af18f87-4cb8-5740-9dcb-9f04a17bebed",
+      "source_text": "The third failure mode is \"forgetting what was done in the middle,” when the agent fails to leverage previously found information and repeats the same searches while going through multiple steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The third failure mode is \"forgetting what was done in the middle,” when the agent fails to leverage previously found information and repeats the same searches while going through multiple steps."
+      ]
+    },
+    {
+      "sentence_id": "e4316381-f842-5ed7-8f07-0ea61ecfa0d9",
+      "source_text": "Planning mitigates this by recording the status of each task in the plan to track \"how far we've gotten.\" Reflection explicitly records \"what we've learned so far\" in the context through PROGRESS REVIEW.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning mitigates this by recording the status of each task in the plan to track \"how far we've gotten.\" Reflection explicitly records \"what we've learned so far\" in the context through PROGRESS REVIEW."
+      ]
+    },
+    {
+      "sentence_id": "230aa315-31d5-5a58-b52d-da6650bc2016",
+      "source_text": "When these texts remain in the context, the LLM references this information in subsequent decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When these texts remain in the context, the LLM references this information in subsequent decisions."
+      ]
+    },
+    {
+      "sentence_id": "609958ea-0f26-5d8b-a4b1-e329106bc514",
+      "source_text": "The fourth failure mode is \"failing to recover from failures.\" The agent repeats the same attempts until reaching max_steps instead of analyzing causes and finding alternatives when tool calls fail or go in the wrong direction.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The fourth failure mode is \"failing to recover from failures.\" The agent repeats the same attempts until reaching max_steps instead of analyzing causes and finding alternatives when tool calls fail or go in the wrong direction."
+      ]
+    },
+    {
+      "sentence_id": "530698e9-2267-57bc-8c08-15c3eb09ce6c",
+      "source_text": "This is Reflection's core value.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This is Reflection's core value."
+      ]
+    },
+    {
+      "sentence_id": "c5419922-752b-55a6-8d61-7df4cdb9c866",
+      "source_text": "ERROR ANALYSIS analyzes failure causes and suggests alternatives.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::ERROR ANALYSIS analyzes failure causes and suggests alternatives."
+      ]
+    },
+    {
+      "sentence_id": "1ba8d8c4-6b63-5b17-90fe-3fc6ffefa969",
+      "source_text": "When an analysis like \"Wikipedia service unavailable.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When an analysis like \"Wikipedia service unavailable."
+      ]
+    },
+    {
+      "sentence_id": "9540dd74-1823-516d-ac77-94bd68810bd4",
+      "source_text": "Cause: server overload.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Cause: server overload."
+      ]
+    },
+    {
+      "sentence_id": "ba6d96f8-76c8-5884-9eae-053f63766f1a",
+      "source_text": "Alternative: use web search\" is recorded in the context, the LLM tries alternatives instead of repeating the same failure.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Alternative: use web search\" is recorded in the context, the LLM tries alternatives instead of repeating the same failure."
+      ]
+    },
+    {
+      "sentence_id": "457bef2e-b3cd-5d0f-b426-37c7f4c987c9",
+      "source_text": "The following table summarizes this content:",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The following table summarizes this content:"
+      ]
+    },
+    {
+      "sentence_id": "8f5e143d-cd92-50df-8598-6af8ba4d89bf",
+      "source_text": "Table 7.1 ReAct failure modes and solutions",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Table 7.1 ReAct failure modes and solutions"
+      ]
+    },
+    {
+      "sentence_id": "92e5002d-c5cb-5e06-9a81-af8d6dbff19c",
+      "source_text": "Planning mainly solves \"looking ahead\" problems, while Reflection solves \"looking back\" problems.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning mainly solves \"looking ahead\" problems, while Reflection solves \"looking back\" problems."
+      ]
+    },
+    {
+      "sentence_id": "18e19263-8170-5c64-92c2-cea82377dc9b",
+      "source_text": "Some problems are solved through their collaboration.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Some problems are solved through their collaboration."
+      ]
+    },
+    {
+      "sentence_id": "4c218b75-9864-5e7b-a020-1ac9d3d02627",
+      "source_text": "A skilled researcher doesn't search immediately but first decomposes the question (planning), investigates one thing at a time while organizing along the way (reflection), and adjusts their approach when unexpected results appear (re-planning).",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::A skilled researcher doesn't search immediately but first decomposes the question (planning), investigates one thing at a time while organizing along the way (reflection), and adjusts their approach when unexpected results appear (re-planning)."
+      ]
+    },
+    {
+      "sentence_id": "5ea1ce97-5816-5ee3-9d0a-b2a7d15dccc9",
+      "source_text": "The integration of planning and reflection implements this natural working style in agents.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The integration of planning and reflection implements this natural working style in agents."
+      ]
+    },
+    {
+      "sentence_id": "ae190f80-3381-5655-8bcc-56f841942fb1",
+      "source_text": "In the next chapter, we will explore how to give agents code execution capabilities through a sandbox environment.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::In the next chapter, we will explore how to give agents code execution capabilities through a sandbox environment."
+      ]
+    },
+    {
+      "sentence_id": "bec3c703-ae0e-5129-8f6f-98b21400a04b",
+      "source_text": "Code is the expression of procedures for performing tasks in a programming language, which inherently shares similar characteristics with the planning we covered in this chapter.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Code is the expression of procedures for performing tasks in a programming language, which inherently shares similar characteristics with the planning we covered in this chapter."
+      ]
+    },
+    {
+      "sentence_id": "41714f40-8757-55b6-8af0-8bae549eb9ea",
+      "source_text": "The sandbox becomes a new workspace for the agent, much like how humans work through computers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::The sandbox becomes a new workspace for the agent, much like how humans work through computers."
+      ]
+    },
+    {
+      "sentence_id": "7e8dbe87-68ad-5f04-af9c-a8f5ed204520",
+      "source_text": "7.5 Summary",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::7.5 Summary"
+      ]
+    },
+    {
+      "sentence_id": "3a9c973c-6db2-5852-a893-ad71a45350cf",
+      "source_text": "Planning and reflection give agents \"time to think.\" Instead of reacting moment by moment, agents plan before acting and check after acting.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection give agents \"time to think.\" Instead of reacting moment by moment, agents plan before acting and check after acting."
+      ]
+    },
+    {
+      "sentence_id": "380f7438-f4ba-5033-9942-e68f521af740",
+      "source_text": "This grants metacognition: the ability to examine their own process.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::This grants metacognition: the ability to examine their own process."
+      ]
+    },
+    {
+      "sentence_id": "6497952e-8b33-58fe-ab67-f83a1ba79bf9",
+      "source_text": "Planning decomposes complex problems into clear, manageable units.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning decomposes complex problems into clear, manageable units."
+      ]
+    },
+    {
+      "sentence_id": "c86f45e2-5f1b-5545-8c62-f9c04f636c46",
+      "source_text": "When \"1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When \"1."
+      ]
+    },
+    {
+      "sentence_id": "4f22932a-042c-5983-9988-c746e10b2bf2",
+      "source_text": "Research Kipchoge's record, 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Kipchoge's record, 2."
+      ]
+    },
+    {
+      "sentence_id": "6d29eb18-3e19-54c8-abc8-74b46d678d12",
+      "source_text": "Research Moon distance, 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Research Moon distance, 3."
+      ]
+    },
+    {
+      "sentence_id": "5b64beb8-5dbf-5607-bd81-e790f1584f2d",
+      "source_text": "Calculate time\" is recorded in the context, the LLM references this plan to maintain direction across multiple steps.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Calculate time\" is recorded in the context, the LLM references this plan to maintain direction across multiple steps."
+      ]
+    },
+    {
+      "sentence_id": "cb57e329-8288-55ec-b926-c5588f72a1f2",
+      "source_text": "Reflection is valuable when problems arise, not when everything goes smoothly.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Reflection is valuable when problems arise, not when everything goes smoothly."
+      ]
+    },
+    {
+      "sentence_id": "408aa235-34da-545d-ae40-50e249f98841",
+      "source_text": "When tools fail or results are unexpected, Reflection enables cause analysis and alternative strategies instead of repeating the same failures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::When tools fail or results are unexpected, Reflection enables cause analysis and alternative strategies instead of repeating the same failures."
+      ]
+    },
+    {
+      "sentence_id": "5e68c44d-e012-5b6e-854f-ddc1dbd698f0",
+      "source_text": "Planning and reflection form a complementary cycle.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning and reflection form a complementary cycle."
+      ]
+    },
+    {
+      "sentence_id": "320edcdd-909c-5e86-997a-401f8ea3ef4b",
+      "source_text": "Planning provides direction, reflection checks the direction, and when necessary, it triggers re-planning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning provides direction, reflection checks the direction, and when necessary, it triggers re-planning."
+      ]
+    },
+    {
+      "sentence_id": "84179fcf-5861-50bb-829b-753053d50019",
+      "source_text": "Neither works in isolation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Neither works in isolation."
+      ]
+    },
+    {
+      "sentence_id": "0df5bf9d-7698-5a46-a567-3f0bd6442e45",
+      "source_text": "From a context engineering perspective, both are generation strategies.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::From a context engineering perspective, both are generation strategies."
+      ]
+    },
+    {
+      "sentence_id": "3b96ac6d-ee55-550b-90b8-7156df1e51d9",
+      "source_text": "Planning adds \"what to do next\" to the context, while reflection adds \"evaluation and direction so far.\" These texts influence the LLM's subsequent decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "ZH::Planning adds \"what to do next\" to the context, while reflection adds \"evaluation and direction so far.\" These texts influence the LLM's subsequent decisions."
+      ]
+    }
+  ],
+  "issues": []
+}
