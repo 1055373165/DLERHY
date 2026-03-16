@@ -15,6 +15,47 @@ from book_agent.workers.contracts import (
 )
 
 
+def _format_section(title: str, lines: list[str]) -> list[str]:
+    return [title, *lines]
+
+
+def _sorted_term_lines(packet: ContextPacket) -> list[str]:
+    if not packet.relevant_terms:
+        return ["- none"]
+    ordered = sorted(
+        packet.relevant_terms,
+        key=lambda term: (
+            {"locked": 0, "preferred": 1, "suggested": 2}.get(term.lock_level, 99),
+            term.source_term.lower(),
+            term.target_term.lower(),
+        ),
+    )
+    return [f"- {term.source_term} => {term.target_term} ({term.lock_level})" for term in ordered]
+
+
+def _sorted_entity_lines(packet: ContextPacket) -> list[str]:
+    if not packet.relevant_entities:
+        return ["- none"]
+    ordered = sorted(
+        packet.relevant_entities,
+        key=lambda entity: (entity.entity_type.lower(), entity.name.lower()),
+    )
+    return [
+        f"- {entity.name} [{entity.entity_type}] => {entity.canonical_zh or '(unset)'}"
+        for entity in ordered
+    ]
+
+
+def _packet_block_lines(blocks: list[PacketBlock]) -> list[str]:
+    if not blocks:
+        return ["- none"]
+    lines: list[str] = []
+    for index, block in enumerate(blocks, start=1):
+        excerpt = " ".join((block.text or "").split())
+        lines.append(f"- B{index} [{block.block_type}] {excerpt}")
+    return lines
+
+
 @dataclass(frozen=True, slots=True)
 class TranslationWorkerMetadata:
     worker_name: str
@@ -61,13 +102,8 @@ def build_translation_prompt_request(
 ) -> TranslationPromptRequest:
     packet = task.context_packet
     heading_path = " > ".join(packet.heading_path) if packet.heading_path else "(root)"
-    term_lines = [
-        f"- {term.source_term} => {term.target_term} ({term.lock_level})" for term in packet.relevant_terms
-    ] or ["- none"]
-    entity_lines = [
-        f"- {entity.name} [{entity.entity_type}] => {entity.canonical_zh or '(unset)'}"
-        for entity in packet.relevant_entities
-    ] or ["- none"]
+    term_lines = _sorted_term_lines(packet)
+    entity_lines = _sorted_entity_lines(packet)
     sentence_alias_map = {
         f"S{index}": sentence.id for index, sentence in enumerate(task.current_sentences, start=1)
     }
@@ -78,19 +114,38 @@ def build_translation_prompt_request(
             start=1,
         )
     ]
+    previous_translation_lines = [
+        f"- {item.source_excerpt} => {item.target_excerpt}"
+        for item in packet.prev_translated_blocks
+    ] or ["- none"]
+    prev_block_lines = _packet_block_lines(packet.prev_blocks)
+    next_block_lines = _packet_block_lines(packet.next_blocks)
     user_prompt = "\n".join(
         [
-            f"Packet ID: {packet.packet_id}",
-            f"Heading Path: {heading_path}",
-            f"Chapter Brief: {packet.chapter_brief or '(none)'}",
-            "Relevant Terms:",
-            *term_lines,
-            "Relevant Entities:",
-            *entity_lines,
-            "Current Sentences:",
-            *sentence_lines,
-            "Use only the sentence aliases shown above (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
-            "Return JSON that matches the provided response schema.",
+            *_format_section(
+                "Core Translation Contract:",
+                [
+                    "- Translate every translatable sentence into natural Chinese.",
+                    "- Reuse the canonical Chinese rendering of any locked or previously established concept.",
+                    "- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.",
+                    "- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.",
+                    "- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
+                    "- Return JSON that matches the provided response schema.",
+                ],
+            ),
+            *_format_section(
+                "Book and Chapter Context:",
+                [
+                    f"- Heading Path: {heading_path}",
+                    f"- Chapter Brief: {packet.chapter_brief or '(none)'}",
+                ],
+            ),
+            *_format_section("Locked and Relevant Terms:", term_lines),
+            *_format_section("Relevant Entities:", entity_lines),
+            *_format_section("Previous Accepted Translations (same local context):", previous_translation_lines),
+            *_format_section("Previous Source Context:", prev_block_lines),
+            *_format_section("Upcoming Source Context:", next_block_lines),
+            *_format_section("Current Sentences:", sentence_lines),
         ]
     )
     system_prompt = (

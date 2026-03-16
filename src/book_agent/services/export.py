@@ -47,6 +47,26 @@ def _excerpt_text(text: str, *, limit: int = 220) -> str:
     return normalized[: max(0, limit - 3)].rstrip() + "..."
 
 
+def _normalize_signature_text(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip().casefold()
+
+
+def _looks_like_metadata_filename(value: str) -> bool:
+    candidate = re.sub(r"\s+", " ", (value or "")).strip().casefold()
+    if not candidate:
+        return False
+    if "/" in candidate or "\\" in candidate:
+        return True
+    return candidate.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx"))
+
+
+def _display_author_value(author: str | None) -> str | None:
+    normalized = re.sub(r"\s+", " ", (author or "")).strip()
+    if not normalized or _looks_like_metadata_filename(normalized):
+        return None
+    return normalized
+
+
 @dataclass(slots=True)
 class ExportArtifacts:
     export_record: Export
@@ -284,13 +304,14 @@ class ExportService:
     ) -> Export:
         now = _utcnow()
         chapter_issue_count = sum(len(chapter.review_issues) for chapter in bundle.chapters)
+        visible_chapters = self._visible_merged_chapters(bundle)
         return Export(
             id=stable_id("export", bundle.document.id, export_type.value),
             document_id=bundle.document.id,
             export_type=export_type,
             input_version_bundle_json={
                 "chapter_id": None,
-                "chapter_count": len(bundle.chapters),
+                "chapter_count": len(visible_chapters),
                 "issue_count": chapter_issue_count,
                 "document_parser_version": bundle.document.parser_version,
                 "document_segmentation_version": bundle.document.segmentation_version,
@@ -309,7 +330,7 @@ class ExportService:
                 ),
                 "issue_status_summary": self._document_issue_status_summary(bundle),
                 "sidecar_manifest_path": str(manifest_path) if manifest_path is not None else None,
-                "merged_render_summary": self._merged_render_summary(bundle),
+                "merged_render_summary": self._merged_render_summary(visible_chapters),
             },
             file_path=str(file_path),
             status=ExportStatus.SUCCEEDED,
@@ -1362,15 +1383,18 @@ class ExportService:
         bundle: DocumentExportBundle,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
-        render_summary = self._merged_render_summary(bundle)
+        visible_chapters = self._visible_merged_chapters(bundle)
+        render_summary = self._merged_render_summary(visible_chapters)
         usage_summary = self._translation_usage_summary_from_runs([run for chapter in bundle.chapters for run in chapter.translation_runs])
-        toc_items = self._build_merged_toc(bundle)
+        toc_items = self._build_merged_toc(visible_chapters)
         chapters_html = "".join(
-            self._render_chapter_for_merged_html(chapter_bundle, asset_path_by_block_id)
-            for chapter_bundle in bundle.chapters
+            self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
+            for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
         )
         title = html.escape(bundle.document.title or bundle.document.id)
-        author = html.escape(bundle.document.author or "")
+        author_value = _display_author_value(bundle.document.author)
+        author = html.escape(author_value) if author_value is not None else ""
+        author_html = f"<div class='meta'>{author}</div>" if author else ""
         chapter_count = render_summary["chapter_count"]
         protected_count = render_summary["expected_source_only_block_count"]
         total_cost = usage_summary.get("total_cost_usd")
@@ -1444,7 +1468,7 @@ class ExportService:
             "<header class='hero' id='top'>"
             "<div class='hero-kicker'>Merged Reading Edition</div>"
             f"<h1>{title}</h1>"
-            f"<div class='meta'>{author}</div>"
+            f"{author_html}"
             "<div class='hero-summary'>"
             "这是一份面向长时阅读的合并导出稿。正文以中文为主，必要时可展开原文；代码、公式、表格与引用性工件会按可读且可复制的方式保留。"
             "</div>"
@@ -1458,11 +1482,11 @@ class ExportService:
 
     def _build_merged_document_manifest(self, bundle: DocumentExportBundle, html_path: Path) -> dict:
         runs = [run for chapter in bundle.chapters for run in chapter.translation_runs]
+        visible_chapters = self._visible_merged_chapters(bundle)
         chapter_summaries = []
         render_mode_counts: dict[str, int] = {}
         expected_source_only_count = 0
-        for chapter_bundle in bundle.chapters:
-            render_blocks = self._render_blocks_for_chapter(chapter_bundle)
+        for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
             for block in render_blocks:
                 render_mode_counts[block.render_mode] = render_mode_counts.get(block.render_mode, 0) + 1
                 if block.is_expected_source_only:
@@ -1470,8 +1494,9 @@ class ExportService:
             chapter_summaries.append(
                 {
                     "chapter_id": chapter_bundle.chapter.id,
-                    "ordinal": chapter_bundle.chapter.ordinal,
-                    "title_src": chapter_bundle.chapter.title_src,
+                    "ordinal": visible_ordinal,
+                    "source_ordinal": chapter_bundle.chapter.ordinal,
+                    "title_src": title_text or chapter_bundle.chapter.title_src,
                     "status": chapter_bundle.chapter.status.value,
                     "block_count": len(chapter_bundle.blocks),
                     "sentence_count": len(chapter_bundle.sentences),
@@ -1482,10 +1507,10 @@ class ExportService:
         return {
             "document_id": bundle.document.id,
             "title": bundle.document.title,
-            "author": bundle.document.author,
+            "author": _display_author_value(bundle.document.author),
             "export_type": ExportType.MERGED_HTML.value,
             "html_path": str(html_path),
-            "chapter_count": len(bundle.chapters),
+            "chapter_count": len(visible_chapters),
             "translation_usage_summary": self._translation_usage_summary_from_runs(runs),
             "translation_usage_breakdown": self._translation_usage_breakdown_from_runs(runs),
             "translation_usage_timeline": self._translation_usage_timeline_from_runs(runs),
@@ -1498,16 +1523,19 @@ class ExportService:
             "chapters": chapter_summaries,
         }
 
-    def _merged_render_summary(self, bundle: DocumentExportBundle) -> dict[str, object]:
+    def _merged_render_summary(
+        self,
+        visible_chapters: list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]],
+    ) -> dict[str, object]:
         render_mode_counts: dict[str, int] = {}
         expected_source_only_count = 0
-        for chapter_bundle in bundle.chapters:
-            for block in self._render_blocks_for_chapter(chapter_bundle):
+        for _visible_ordinal, _chapter_bundle, render_blocks, _title_text in visible_chapters:
+            for block in render_blocks:
                 render_mode_counts[block.render_mode] = render_mode_counts.get(block.render_mode, 0) + 1
                 if block.is_expected_source_only:
                     expected_source_only_count += 1
         return {
-            "chapter_count": len(bundle.chapters),
+            "chapter_count": len(visible_chapters),
             "render_mode_counts": render_mode_counts,
             "expected_source_only_block_count": expected_source_only_count,
         }
@@ -1515,29 +1543,26 @@ class ExportService:
     def _render_chapter_for_merged_html(
         self,
         bundle: ChapterExportBundle,
+        visible_ordinal: int,
+        render_blocks: list[MergedRenderBlock],
+        title_text: str | None,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
-        render_blocks = self._render_blocks_for_chapter(bundle)
-        chapter_title_target = next(
-            (block.target_text for block in render_blocks if block.block_type == BlockType.HEADING.value and block.target_text),
-            None,
-        )
         blocks_html = "".join(
             self._render_block_html(block, asset_path_by_block_id)
             for block in render_blocks
         )
-        title_text = chapter_title_target or bundle.chapter.title_src
         if not title_text and not blocks_html:
             return ""
         title = html.escape(title_text) if title_text else ""
         source_title = (
             f"<div class='source-title'>{html.escape(bundle.chapter.title_src)}</div>"
-            if chapter_title_target and bundle.chapter.title_src
+            if title_text and bundle.chapter.title_src and title_text != bundle.chapter.title_src
             else ""
         )
         chapter_head = (
             "<div class='chapter-head'>"
-            f"<div class='chapter-kicker'>Chapter {bundle.chapter.ordinal}</div>"
+            f"<div class='chapter-kicker'>Chapter {visible_ordinal}</div>"
             f"<h2>{title}</h2>"
             f"{source_title}"
             "</div>"
@@ -1552,26 +1577,60 @@ class ExportService:
             "</section>"
         )
 
-    def _build_merged_toc(self, bundle: DocumentExportBundle) -> str:
+    def _build_merged_toc(
+        self,
+        visible_chapters: list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]],
+    ) -> str:
         items: list[str] = []
-        for chapter_bundle in bundle.chapters:
-            render_blocks = self._render_blocks_for_chapter(chapter_bundle)
-            chapter_title_target = next(
-                (block.target_text for block in render_blocks if block.block_type == BlockType.HEADING.value and block.target_text),
-                None,
-            )
-            title_text = chapter_title_target or chapter_bundle.chapter.title_src
+        for visible_ordinal, chapter_bundle, _render_blocks, title_text in visible_chapters:
             if not title_text:
                 continue
             items.append(
                 "<li class='toc-item'>"
                 f"<a href='#chapter-{html.escape(chapter_bundle.chapter.id)}'>"
-                f"<span class='toc-ordinal'>Chapter {chapter_bundle.chapter.ordinal}</span>"
+                f"<span class='toc-ordinal'>Chapter {visible_ordinal}</span>"
                 f"{html.escape(title_text)}"
                 "</a>"
                 "</li>"
             )
         return f"<ol class='toc-list'>{''.join(items)}</ol>" if items else ""
+
+    def _visible_merged_chapters(
+        self,
+        bundle: DocumentExportBundle,
+    ) -> list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]]:
+        visible: list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]] = []
+        seen_epub_hrefs: set[str] = set()
+        seen_exact_signatures: set[str] = set()
+        for chapter_bundle in bundle.chapters:
+            render_blocks = self._render_blocks_for_chapter(chapter_bundle)
+            title_text = next(
+                (block.target_text for block in render_blocks if block.block_type == BlockType.HEADING.value and block.target_text),
+                None,
+            ) or chapter_bundle.chapter.title_src
+            if not title_text and not render_blocks:
+                continue
+
+            href = str((chapter_bundle.chapter.metadata_json or {}).get("href") or "").strip()
+            normalized_href = href.casefold()
+            if normalized_href and normalized_href in seen_epub_hrefs:
+                continue
+
+            source_signature = "\n".join(
+                _normalize_signature_text(block.source_text)
+                for block in render_blocks
+                if _normalize_signature_text(block.source_text)
+            )
+            exact_signature = f"{_normalize_signature_text(chapter_bundle.chapter.title_src or '')}::{source_signature}"
+            if source_signature and exact_signature in seen_exact_signatures:
+                continue
+
+            if normalized_href:
+                seen_epub_hrefs.add(normalized_href)
+            if source_signature:
+                seen_exact_signatures.add(exact_signature)
+            visible.append((len(visible) + 1, chapter_bundle, render_blocks, title_text))
+        return visible
 
     def _render_blocks_for_chapter(self, bundle: ChapterExportBundle) -> list[MergedRenderBlock]:
         target_map = self._target_map(bundle)

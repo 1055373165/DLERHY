@@ -1286,6 +1286,11 @@
     "sentence_count": 990,
     "packet_count": 471,
     "open_issue_count": 0,
+    "merged_export_ready": true,
+    "latest_merged_export_at": "2026-03-16T01:43:15.739383",
+    "chapter_bilingual_export_count": 8,
+    "latest_run_id": "704b3f07-34c1-4744-8264-39430016da81",
+    "latest_run_status": "succeeded",
     "chapters": [
       {
         "chapter_id": "f5a1b3cd-a96f-571e-a1f7-a90369f70efa",
@@ -1298,6 +1303,8 @@
         "sentence_count": 0,
         "packet_count": 0,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.649900",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1322,6 +1329,8 @@
         "sentence_count": 6,
         "packet_count": 6,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.652576",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1346,6 +1355,8 @@
         "sentence_count": 20,
         "packet_count": 11,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.655805",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1370,6 +1381,8 @@
         "sentence_count": 151,
         "packet_count": 72,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.673884",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1394,6 +1407,8 @@
         "sentence_count": 343,
         "packet_count": 164,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.719489",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1418,6 +1433,8 @@
         "sentence_count": 376,
         "packet_count": 174,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.755474",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1442,6 +1459,8 @@
         "sentence_count": 74,
         "packet_count": 33,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.763588",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1466,6 +1485,8 @@
         "sentence_count": 20,
         "packet_count": 11,
         "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-15T16:42:41.766881",
         "quality_summary": {
           "issue_count": 0,
           "action_count": 0,
@@ -1580,5 +1601,18 @@
     }
   ],
   "finished_at": "2026-03-15T16:42:41.818169+00:00",
-  "duration_seconds": 1630.364
+  "duration_seconds": 1630.364,
+  "merged_export": {
+    "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+    "export_type": "merged_html",
+    "document_status": "exported",
+    "chapter_results": [],
+    "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-multi-agent-system-v1/exports/2b19f78d-329e-5483-8810-69f20c0a3a95/merged-document.html",
+    "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-multi-agent-system-v1/exports/2b19f78d-329e-5483-8810-69f20c0a3a95/merged-document.manifest.json",
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  }
 }

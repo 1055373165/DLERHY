@@ -3,13 +3,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Any
 
-from sqlalchemy import case, distinct, func, select
+from sqlalchemy import case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from book_agent.core.ids import stable_id
-from book_agent.domain.enums import ActorType, ExportStatus, ExportType, IssueStatus, PacketStatus
+from book_agent.domain.enums import (
+    ActorType,
+    DocumentRunStatus,
+    DocumentStatus,
+    ExportStatus,
+    ExportType,
+    IssueStatus,
+    PacketStatus,
+    SourceType,
+)
 from book_agent.domain.models import Chapter, ChapterWorklistAssignment, Document, Sentence
 from book_agent.domain.models.ops import AuditEvent, DocumentRun
 from book_agent.domain.models.review import (
@@ -130,6 +140,18 @@ class DocumentTranslationResult:
     skipped_packet_ids: list[str]
     translation_run_ids: list[str]
     review_required_sentence_ids: list[str]
+
+
+def _display_author_value(author: str | None) -> str | None:
+    normalized = re.sub(r"\s+", " ", (author or "")).strip()
+    if not normalized:
+        return None
+    lowered = normalized.casefold()
+    if "/" in lowered or "\\" in lowered:
+        return None
+    if lowered.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx")):
+        return None
+    return normalized
 
 
 @dataclass(slots=True)
@@ -706,7 +728,7 @@ class DocumentWorkflowService:
             source_type=bundle.document.source_type.value,
             status=bundle.document.status.value,
             title=bundle.document.title,
-            author=bundle.document.author,
+            author=_display_author_value(bundle.document.author),
             pdf_profile=bundle.document.metadata_json.get("pdf_profile"),
             pdf_page_evidence=bundle.document.metadata_json.get("pdf_page_evidence"),
             chapter_count=len(bundle.chapters),
@@ -727,13 +749,28 @@ class DocumentWorkflowService:
         *,
         limit: int | None = None,
         offset: int = 0,
+        query: str | None = None,
+        source_type: SourceType | None = None,
+        status: DocumentStatus | None = None,
+        latest_run_status: DocumentRunStatus | None = None,
+        merged_export_ready: bool | None = None,
     ) -> DocumentHistoryPage:
-        total_count = int(self.session.scalar(select(func.count(Document.id))) or 0)
         statement = select(Document).order_by(Document.updated_at.desc(), Document.id.desc())
-        if offset:
-            statement = statement.offset(offset)
-        if limit is not None:
-            statement = statement.limit(limit)
+        normalized_query = (query or "").strip()
+        if source_type is not None:
+            statement = statement.where(Document.source_type == source_type)
+        if status is not None:
+            statement = statement.where(Document.status == status)
+        if normalized_query:
+            like_pattern = f"%{normalized_query}%"
+            statement = statement.where(
+                or_(
+                    Document.id.ilike(like_pattern),
+                    Document.title.ilike(like_pattern),
+                    Document.author.ilike(like_pattern),
+                    Document.source_path.ilike(like_pattern),
+                )
+            )
         documents = list(self.session.scalars(statement).all())
         document_ids = [document.id for document in documents]
 
@@ -749,7 +786,7 @@ class DocumentWorkflowService:
                 source_type=document.source_type.value,
                 status=document.status.value,
                 title=document.title,
-                author=document.author,
+                author=_display_author_value(document.author),
                 source_path=document.source_path,
                 created_at=document.created_at.isoformat(),
                 updated_at=document.updated_at.isoformat(),
@@ -768,6 +805,20 @@ class DocumentWorkflowService:
             )
             for document in documents
         ]
+        if latest_run_status is not None:
+            entries = [
+                entry for entry in entries if entry.latest_run_status == latest_run_status.value
+            ]
+        if merged_export_ready is not None:
+            entries = [
+                entry for entry in entries if entry.merged_export_ready is merged_export_ready
+            ]
+
+        total_count = len(entries)
+        if offset:
+            entries = entries[offset:]
+        if limit is not None:
+            entries = entries[:limit]
         record_count = len(entries)
         return DocumentHistoryPage(
             total_count=total_count,
@@ -853,7 +904,7 @@ class DocumentWorkflowService:
         runs = self.session.scalars(
             select(DocumentRun)
             .where(DocumentRun.document_id.in_(document_ids))
-            .order_by(DocumentRun.created_at.desc(), DocumentRun.id.desc())
+            .order_by(DocumentRun.updated_at.desc(), DocumentRun.created_at.desc(), DocumentRun.id.desc())
         ).all()
         latest_runs: dict[str, DocumentRun] = {}
         for run in runs:

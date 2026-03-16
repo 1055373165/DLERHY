@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
@@ -55,6 +55,9 @@ class RunControlRepository:
         budget: RunBudget | None = None,
         audit_event: RunAuditEvent | None = None,
     ) -> DocumentRun:
+        now = _utcnow()
+        run.created_at = run.created_at or now
+        run.updated_at = run.updated_at or now
         self.session.add(run)
         self.session.flush()
         if budget is not None:
@@ -67,6 +70,7 @@ class RunControlRepository:
         return run
 
     def save_run(self, run: DocumentRun, audit_event: RunAuditEvent | None = None) -> DocumentRun:
+        run.updated_at = _utcnow()
         self.session.merge(run)
         if audit_event is not None:
             self.session.add(audit_event)
@@ -408,3 +412,7 @@ class RunControlRepository:
             )
             .order_by(WorkerLease.lease_expires_at.asc(), WorkerLease.id.asc())
         ).all()
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import mimetypes
 import os
 import shutil
@@ -14,7 +15,8 @@ from starlette.background import BackgroundTask
 
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
-from book_agent.domain.enums import ExportStatus, ExportType
+from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, SourceType
+from book_agent.infra.db.legacy_backfill import backfill_legacy_history
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
@@ -24,7 +26,9 @@ from book_agent.schemas.workflow import (
     ChapterWorklistAssignmentResponse,
     DocumentChapterWorklistResponse,
     DocumentChapterWorklistDetailResponse,
+    DocumentHistoryBackfillResponse,
     DocumentExportDashboardResponse,
+    DocumentHistoryPageResponse,
     ExportDetailResponse,
     DocumentSummaryResponse,
     ExportDocumentRequest,
@@ -38,6 +42,7 @@ from book_agent.services.workflows import (
     DocumentChapterWorklist,
     DocumentChapterWorklistDetail,
     DocumentExportDashboard,
+    DocumentHistoryPage,
     ExportDetail,
     DocumentExportResult,
     DocumentReviewResult,
@@ -51,6 +56,12 @@ router = APIRouter()
 _ALLOWED_UPLOAD_SUFFIXES = {".epub", ".pdf"}
 
 
+@dataclass(frozen=True, slots=True)
+class ArchiveInput:
+    path: Path
+    archive_name: str | None = None
+
+
 def _upload_root(request: Request) -> Path:
     configured = getattr(request.app.state, "upload_root", get_settings().upload_root)
     return Path(configured).resolve()
@@ -59,6 +70,14 @@ def _upload_root(request: Request) -> Path:
 def _export_root(request: Request) -> Path:
     configured = getattr(request.app.state, "export_root", get_settings().export_root)
     return Path(configured).resolve()
+
+
+def _artifact_roots(request: Request) -> tuple[Path, ...]:
+    export_root = _export_root(request)
+    artifact_root = export_root.parent.resolve()
+    if artifact_root == export_root:
+        return (export_root,)
+    return (export_root, artifact_root)
 
 
 def _safe_upload_filename(filename: str | None) -> str:
@@ -84,28 +103,60 @@ def _cleanup_path(path: Path) -> None:
             pass
 
 
-def _resolve_artifact_path(candidate: str | Path, *, root: Path) -> Path:
-    resolved = Path(candidate).resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Export artifact is no longer available.",
-        ) from exc
-    if not resolved.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Export artifact not found: {resolved.name}",
+def _artifact_fallback_candidates(path: Path) -> list[Path]:
+    if path.exists():
+        return [path]
+    candidates: list[Path] = []
+    if path.suffix.lower() == ".html" and path.stem == "merged-document":
+        candidates.extend(
+            sorted(
+                path.parent.glob("merged-document*.html"),
+                key=lambda candidate: (len(candidate.name), candidate.name),
+            )
         )
-    return resolved
+    return [candidate.resolve() for candidate in candidates if candidate.exists()]
+
+
+def _is_within_any_root(path: Path, roots: tuple[Path, ...]) -> bool:
+    for root in roots:
+        try:
+            path.relative_to(root)
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+def _resolve_artifact_path(candidate: str | Path, *, roots: tuple[Path, ...]) -> Path:
+    resolved = Path(candidate).resolve()
+    fallback_candidates = [resolved, *_artifact_fallback_candidates(resolved)]
+    for fallback_path in fallback_candidates:
+        if _is_within_any_root(fallback_path, roots) and fallback_path.exists():
+            return fallback_path
+    allowed_root_label = ", ".join(str(root) for root in roots)
+    if any(_is_within_any_root(fallback_path, roots) for fallback_path in fallback_candidates):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Export artifact not found under allowed roots: {allowed_root_label}",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Export artifact is no longer available.",
+    )
 
 
 def _artifact_media_type(path: Path) -> str:
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
-def _build_export_bundle_filename(document_id: str, export_type: ExportType) -> str:
+def _build_export_bundle_filename(
+    document_id: str,
+    export_type: ExportType,
+    *,
+    include_related_exports: bool = False,
+) -> str:
+    if include_related_exports and export_type == ExportType.MERGED_HTML:
+        return f"{document_id}-analysis-bundle.zip"
     return f"{document_id}-{export_type.value}.zip"
 
 
@@ -118,7 +169,13 @@ def _export_sidecar_paths(file_path: Path) -> list[Path]:
     return sorted(path for path in assets_dir.rglob("*") if path.is_file())
 
 
-def _build_export_archive(document_id: str, export_type: ExportType, files: list[Path]) -> Path:
+def _build_export_archive(
+    document_id: str,
+    export_type: ExportType,
+    files: list[ArchiveInput],
+    *,
+    include_related_exports: bool = False,
+) -> Path:
     temp_file = tempfile.NamedTemporaryFile(
         prefix=f"book-agent-{document_id}-{export_type.value}-",
         suffix=".zip",
@@ -126,20 +183,55 @@ def _build_export_archive(document_id: str, export_type: ExportType, files: list
     )
     archive_path = Path(temp_file.name)
     temp_file.close()
-    folder_name = f"{document_id}-{export_type.value}"
-    common_root = Path(os.path.commonpath([str(file_path) for file_path in files]))
+    folder_name = _build_export_bundle_filename(
+        document_id,
+        export_type,
+        include_related_exports=include_related_exports,
+    ).removesuffix(".zip")
+    common_root = Path(os.path.commonpath([str(file.path) for file in files]))
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         seen_names: set[str] = set()
-        for index, file_path in enumerate(files, start=1):
-            try:
-                archive_name = file_path.relative_to(common_root).as_posix()
-            except ValueError:
-                archive_name = file_path.name
+        for index, file in enumerate(files, start=1):
+            file_path = file.path
+            if file.archive_name:
+                archive_name = file.archive_name
+            else:
+                try:
+                    archive_name = file_path.relative_to(common_root).as_posix()
+                except ValueError:
+                    archive_name = file_path.name
             if archive_name in seen_names:
                 archive_name = f"{file_path.stem}-{index}{file_path.suffix}"
             seen_names.add(archive_name)
             archive.write(file_path, arcname=f"{folder_name}/{archive_name}")
     return archive_path
+
+
+def _preferred_archive_name(original_path: str | Path, resolved_path: Path) -> str | None:
+    original_name = Path(original_path).name
+    if not original_name or original_name == resolved_path.name:
+        return None
+    return original_name
+
+
+def _append_archive_input(
+    archive_inputs: list[ArchiveInput],
+    seen_paths: set[str],
+    file_path: Path,
+    *,
+    preferred_archive_name: str | None = None,
+) -> None:
+    for index, candidate in enumerate([file_path, *_export_sidecar_paths(file_path)]):
+        resolved = str(candidate.resolve())
+        if resolved in seen_paths:
+            continue
+        seen_paths.add(resolved)
+        archive_inputs.append(
+            ArchiveInput(
+                path=candidate,
+                archive_name=(preferred_archive_name if index == 0 else None),
+            )
+        )
 
 
 def _serialize_translation_usage_summary(summary) -> dict | None:
@@ -459,6 +551,11 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
         sentence_count=summary.sentence_count,
         packet_count=summary.packet_count,
         open_issue_count=summary.open_issue_count,
+        merged_export_ready=summary.merged_export_ready,
+        latest_merged_export_at=summary.latest_merged_export_at,
+        chapter_bilingual_export_count=summary.chapter_bilingual_export_count,
+        latest_run_id=summary.latest_run_id,
+        latest_run_status=summary.latest_run_status,
         chapters=[
             {
                 "chapter_id": chapter.chapter_id,
@@ -471,6 +568,8 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
                 "sentence_count": chapter.sentence_count,
                 "packet_count": chapter.packet_count,
                 "open_issue_count": chapter.open_issue_count,
+                "bilingual_export_ready": chapter.bilingual_export_ready,
+                "latest_bilingual_export_at": chapter.latest_bilingual_export_at,
                 "quality_summary": (
                     {
                         "issue_count": chapter.quality_summary.issue_count,
@@ -489,6 +588,37 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
                 ),
             }
             for chapter in summary.chapters
+        ],
+    )
+
+
+def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHistoryPageResponse:
+    return DocumentHistoryPageResponse(
+        total_count=page.total_count,
+        record_count=page.record_count,
+        offset=page.offset,
+        limit=page.limit,
+        has_more=page.has_more,
+        entries=[
+            {
+                "document_id": entry.document_id,
+                "source_type": entry.source_type,
+                "status": entry.status,
+                "title": entry.title,
+                "author": entry.author,
+                "source_path": entry.source_path,
+                "created_at": entry.created_at,
+                "updated_at": entry.updated_at,
+                "chapter_count": entry.chapter_count,
+                "sentence_count": entry.sentence_count,
+                "packet_count": entry.packet_count,
+                "merged_export_ready": entry.merged_export_ready,
+                "latest_merged_export_at": entry.latest_merged_export_at,
+                "chapter_bilingual_export_count": entry.chapter_bilingual_export_count,
+                "latest_run_id": entry.latest_run_id,
+                "latest_run_status": entry.latest_run_status,
+            }
+            for entry in page.entries
         ],
     )
 
@@ -992,6 +1122,42 @@ def bootstrap_uploaded_document(
     return _to_document_summary_response(summary)
 
 
+@router.get("/history", response_model=DocumentHistoryPageResponse)
+def list_document_history(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    query: str | None = Query(default=None, min_length=1, max_length=200),
+    source_type: SourceType | None = Query(default=None),
+    status: DocumentStatus | None = Query(default=None),
+    latest_run_status: DocumentRunStatus | None = Query(default=None),
+    merged_export_ready: bool | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> DocumentHistoryPageResponse:
+    page = _workflow_service(request, session).list_document_history(
+        limit=limit,
+        offset=offset,
+        query=query,
+        source_type=source_type,
+        status=status,
+        latest_run_status=latest_run_status,
+        merged_export_ready=merged_export_ready,
+    )
+    return _to_document_history_page_response(page)
+
+
+@router.post("/history/backfill", response_model=DocumentHistoryBackfillResponse)
+def backfill_document_history(
+    session: Session = Depends(get_db_session),
+) -> DocumentHistoryBackfillResponse:
+    bind = session.get_bind()
+    database_url = str(bind.url) if bind is not None else get_settings().database_url
+    session.close()
+    return DocumentHistoryBackfillResponse(
+        imported_document_count=backfill_legacy_history(database_url),
+    )
+
+
 @router.get("/{document_id}", response_model=DocumentSummaryResponse)
 def get_document(
     document_id: str,
@@ -1133,11 +1299,12 @@ def clear_document_chapter_worklist_assignment(
     )
 
 
-@router.get("/{document_id}/exports/download")
-def download_document_export(
+@router.get("/{document_id}/chapters/{chapter_id}/exports/download")
+def download_document_chapter_export(
     document_id: str,
+    chapter_id: str,
     request: Request,
-    export_type: ExportType = Query(...),
+    export_type: ExportType = Query(default=ExportType.BILINGUAL_HTML),
     session: Session = Depends(get_db_session),
 ) -> FileResponse:
     workflow = _workflow_service(request, session)
@@ -1150,27 +1317,27 @@ def download_document_export(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    artifact_root = _export_root(request)
-    files = [
-        _resolve_artifact_path(record.file_path, root=artifact_root)
-        for record in records
-    ]
-    archive_inputs: list[Path] = []
-    seen_paths: set[str] = set()
-    for file_path in files:
-        for candidate in [file_path, *_export_sidecar_paths(file_path)]:
-            resolved = str(candidate.resolve())
-            if resolved in seen_paths:
-                continue
-            seen_paths.add(resolved)
-            archive_inputs.append(candidate)
-    if not files:
+    chapter_record = next(
+        (
+            record
+            for record in records
+            if str((record.input_version_bundle_json or {}).get("chapter_id") or "") == chapter_id
+        ),
+        None,
+    )
+    if chapter_record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No successful {export_type.value} exports are available for download.",
+            detail=f"No successful {export_type.value} export is available for chapter {chapter_id}.",
         )
-    if len(files) == 1 and len(archive_inputs) == 1:
-        file_path = files[0]
+
+    artifact_roots = _artifact_roots(request)
+    file_path = _resolve_artifact_path(chapter_record.file_path, roots=artifact_roots)
+    archive_inputs = [
+        ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
+        *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(file_path)],
+    ]
+    if len(archive_inputs) == 1:
         return FileResponse(
             path=file_path,
             media_type=_artifact_media_type(file_path),
@@ -1181,7 +1348,79 @@ def download_document_export(
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=_build_export_bundle_filename(document_id, export_type),
+        filename=f"{chapter_id}-{export_type.value}.zip",
+        background=BackgroundTask(_cleanup_path, archive_path),
+    )
+
+
+@router.get("/{document_id}/exports/download")
+def download_document_export(
+    document_id: str,
+    request: Request,
+    export_type: ExportType = Query(...),
+    session: Session = Depends(get_db_session),
+) -> FileResponse:
+    workflow = _workflow_service(request, session)
+    try:
+        primary_records = workflow.export_repository.list_document_exports_filtered(
+            document_id,
+            export_type=export_type,
+            status=ExportStatus.SUCCEEDED,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if not primary_records:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No successful {export_type.value} exports are available for download.",
+        )
+
+    related_records = []
+    include_related_exports = export_type == ExportType.MERGED_HTML
+    if include_related_exports:
+        related_records = workflow.export_repository.list_document_exports_filtered(
+            document_id,
+            export_type=ExportType.BILINGUAL_HTML,
+            status=ExportStatus.SUCCEEDED,
+        )
+
+    artifact_roots = _artifact_roots(request)
+    files = [
+        _resolve_artifact_path(record.file_path, roots=artifact_roots)
+        for record in [*primary_records, *related_records]
+    ]
+    archive_inputs: list[ArchiveInput] = []
+    seen_paths: set[str] = set()
+    for record, file_path in zip([*primary_records, *related_records], files, strict=False):
+        _append_archive_input(
+            archive_inputs,
+            seen_paths,
+            file_path,
+            preferred_archive_name=_preferred_archive_name(record.file_path, file_path),
+        )
+    if len(files) == 1 and len(archive_inputs) == 1 and not include_related_exports:
+        file_path = files[0]
+        return FileResponse(
+            path=file_path,
+            media_type=_artifact_media_type(file_path),
+            filename=file_path.name,
+        )
+
+    archive_path = _build_export_archive(
+        document_id,
+        export_type,
+        archive_inputs,
+        include_related_exports=include_related_exports,
+    )
+    return FileResponse(
+        path=archive_path,
+        media_type="application/zip",
+        filename=_build_export_bundle_filename(
+            document_id,
+            export_type,
+            include_related_exports=include_related_exports,
+        ),
         background=BackgroundTask(_cleanup_path, archive_path),
     )
 

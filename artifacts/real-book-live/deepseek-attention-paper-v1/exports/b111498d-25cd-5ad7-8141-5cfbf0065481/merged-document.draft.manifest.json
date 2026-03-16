@@ -1,0 +1,145 @@
+{
+  "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+  "title": "Attention is All you Need",
+  "author": null,
+  "export_type": "merged_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.draft.html",
+  "chapter_count": 2,
+  "translation_usage_summary": {
+    "run_count": 29,
+    "succeeded_run_count": 29,
+    "total_token_in": 83025,
+    "total_token_out": 30768,
+    "total_cost_usd": 0.033074,
+    "total_latency_ms": 1044714,
+    "avg_latency_ms": 36024.621,
+    "latest_run_at": "2026-03-16T01:56:19.531938"
+  },
+  "translation_usage_breakdown": [
+    {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 29,
+      "succeeded_run_count": 29,
+      "total_token_in": 83025,
+      "total_token_out": 30768,
+      "total_cost_usd": 0.033074,
+      "total_latency_ms": 1044714,
+      "avg_latency_ms": 36024.621,
+      "latest_run_at": "2026-03-16T01:56:19.531938"
+    }
+  ],
+  "translation_usage_timeline": [
+    {
+      "bucket_start": "2026-03-16",
+      "bucket_granularity": "day",
+      "run_count": 29,
+      "succeeded_run_count": 29,
+      "total_token_in": 83025,
+      "total_token_out": 30768,
+      "total_cost_usd": 0.033074,
+      "total_latency_ms": 1044714,
+      "avg_latency_ms": 36024.621
+    }
+  ],
+  "translation_usage_highlights": {
+    "top_cost_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 29,
+      "succeeded_run_count": 29,
+      "total_token_in": 83025,
+      "total_token_out": 30768,
+      "total_cost_usd": 0.033074,
+      "total_latency_ms": 1044714,
+      "avg_latency_ms": 36024.621,
+      "latest_run_at": "2026-03-16T01:56:19.531938"
+    },
+    "top_latency_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 29,
+      "succeeded_run_count": 29,
+      "total_token_in": 83025,
+      "total_token_out": 30768,
+      "total_cost_usd": 0.033074,
+      "total_latency_ms": 1044714,
+      "avg_latency_ms": 36024.621,
+      "latest_run_at": "2026-03-16T01:56:19.531938"
+    },
+    "top_volume_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 29,
+      "succeeded_run_count": 29,
+      "total_token_in": 83025,
+      "total_token_out": 30768,
+      "total_cost_usd": 0.033074,
+      "total_latency_ms": 1044714,
+      "avg_latency_ms": 36024.621,
+      "latest_run_at": "2026-03-16T01:56:19.531938"
+    }
+  },
+  "issue_status_summary": {
+    "issue_count": 2,
+    "open_issue_count": 2,
+    "resolved_issue_count": 0,
+    "blocking_issue_count": 2
+  },
+  "render_summary": {
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 29
+    },
+    "expected_source_only_block_count": 0
+  },
+  "chapters": [
+    {
+      "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+      "ordinal": 1,
+      "source_ordinal": 1,
+      "title_src": "注意力就是一切",
+      "status": "review_required",
+      "block_count": 27,
+      "sentence_count": 190,
+      "render_block_count": 27,
+      "quality_summary": {
+        "issue_count": 1,
+        "action_count": 1,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 1,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+      "ordinal": 2,
+      "source_ordinal": 2,
+      "title_src": "References",
+      "status": "review_required",
+      "block_count": 2,
+      "sentence_count": 63,
+      "render_block_count": 2,
+      "quality_summary": {
+        "issue_count": 1,
+        "action_count": 1,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 1,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    }
+  ]
+}

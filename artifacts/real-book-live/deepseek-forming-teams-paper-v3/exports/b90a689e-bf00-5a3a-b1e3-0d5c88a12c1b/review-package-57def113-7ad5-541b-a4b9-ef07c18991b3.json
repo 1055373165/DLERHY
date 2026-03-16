@@ -1,0 +1,1049 @@
+{
+  "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+  "chapter_title": "References",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": {
+    "schema_version": 1,
+    "document_page_count": 7,
+    "page_count": 1,
+    "page_range": {
+      "start": 7,
+      "end": 7
+    },
+    "pdf_pages": [
+      {
+        "page_number": 7,
+        "raw_block_count": 1,
+        "recovered_block_count": 2,
+        "page_family": "references",
+        "page_family_source": "inline_heading",
+        "page_family_heading": "References",
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  },
+  "pdf_preserve_evidence": {
+    "schema_version": 1,
+    "chapter_section_family": "references",
+    "page_range": {
+      "start": 7,
+      "end": 7
+    },
+    "special_section_page_count": 1,
+    "special_section_page_family_counts": {
+      "references": 1
+    },
+    "preserved_block_count": 0,
+    "source_only_block_count": 0,
+    "preserved_sentence_count": 0,
+    "page_contracts": [
+      {
+        "page_number": 7,
+        "page_family": "references",
+        "content_family": "references",
+        "family_source": "inline_heading",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "block_count": 2,
+        "preserved_block_count": 0,
+        "source_only_block_count": 0,
+        "render_mode_counts": {
+          "zh_primary_with_optional_source": 2
+        },
+        "notices": [],
+        "block_ids": [
+          "1e543c36-4b85-54b5-a4e8-360737705544",
+          "4caae973-8ae5-5263-a8d7-0a1679a128ed"
+        ],
+        "source_sentence_ids": [
+          "8ad15986-a82a-541f-aef1-ce84edb81f28",
+          "bb974dff-07ea-5518-b6ed-e2d664cdb360",
+          "15c646d7-2316-54f0-8c4c-217fe58b6cdb",
+          "c3d14ddc-b87e-57b0-aefd-3b6c3e049421",
+          "a70edad3-eb2a-5f8f-ab3d-b0a0760e309a",
+          "4e882227-b46a-5e4c-a351-0b0713fa5d78",
+          "a60e6560-d02a-5ed0-a94f-7ef62be6182a",
+          "fa5bb340-9b8c-5b88-84fb-1c36aaa27d60",
+          "603634c2-c38d-5902-872d-0917f7f1b4fd",
+          "8d099125-97ed-5a02-a906-f05d41d76ae3",
+          "5667d9a1-9557-5e79-b860-6a588085c11f",
+          "26fc2522-1742-5585-a7ee-ce4d435144af",
+          "3d15fe53-ea6e-5f1e-93e4-0fc74877b870",
+          "56c794e2-a979-55e5-8998-fa8c321ebaed",
+          "f411049a-c992-595c-a99c-f50aa400a0f5",
+          "588552c3-da2d-5a2f-8c23-060f7310dae8",
+          "039c38a7-e181-5bd4-af4f-7fef08591cfd",
+          "f0a3819e-4727-59e0-afcb-6a6f9cd805e8",
+          "5bd20709-f466-5fbf-8cfe-2afbe54cd3d9",
+          "48bb0798-bba1-51ef-8298-58eab2298d78",
+          "60be03ec-002d-5c08-ab14-6b72c51a474e",
+          "c41cd6f6-18c0-5c1d-b986-aad78504c0f8",
+          "a188fa86-8806-5747-b8d1-31ac81752396",
+          "af90ae84-80a2-53a6-b6e6-080d2c488c3f",
+          "1850c94b-671e-5b33-9439-e36007b7c9a3",
+          "71f5abb1-37b1-5195-8f07-e1ef1554ca79",
+          "d45800fe-2e77-57d5-84e6-928506928b53",
+          "b08f53f2-5209-53d6-bbe9-b741f28b28e9",
+          "6f8dc3f0-4e5f-5a42-ab07-4a80028ba690",
+          "66340fdb-598b-59ad-b700-036eb7305e38",
+          "31b6c0a7-b0e6-5b4b-895b-6c84f04b3e62",
+          "952d9864-6bfe-5055-9538-786c76e7d076",
+          "1107d5f1-79a8-581e-9059-ee4dd25c543e",
+          "0c9ef005-01d3-5143-a6b6-a8f9b7b54450",
+          "71d3bbd4-e9a6-52d5-958a-c36d0abcf77d",
+          "994d2a6e-ffcf-516e-bb2e-e1169447d81d",
+          "2724dd1e-a198-510d-864d-a8e2209d500f",
+          "821bb39e-6fa4-5f87-952e-75877e89b2e8",
+          "82fa7dfc-7ee9-56db-9d92-319428a3a0fb",
+          "260bcdcd-93ab-5dab-b1c6-f24376b0702e",
+          "d42dbbf9-6399-59d7-8d14-19b6b911e552",
+          "ae611bfa-1406-5c8f-8aa5-0a9c5f812220",
+          "a9f89c1c-4770-594d-949d-78ae8793e424",
+          "67723176-1dd9-5447-a7b1-20c7176e80e8",
+          "1c37c12a-7d9f-5c88-b409-f2328787ac4e",
+          "0be94f7b-c41c-5a21-8753-91a5153f3a7a",
+          "5f38fedb-4b85-54ab-aa4a-ba60bac5d46f",
+          "3a03ff09-e7b0-5285-8e1a-445cc77a312c",
+          "fadc4363-2a1a-5bf5-9833-3d54678f6f5e",
+          "214300fc-d453-5d41-b5d1-48fd4f3ff035",
+          "c94b12ef-21b9-5d51-8015-600b2853a7c9",
+          "0d7fe060-b36e-5191-859f-c6d192447d7d",
+          "11c9e447-8677-54ab-8fc6-4b754db0b604",
+          "b4d533d0-d3ec-5b8a-b520-e7479e74e39b",
+          "345fd78f-ce98-5701-afd2-0ce463aa2e42",
+          "8bbc8854-c5e8-5297-bc5f-3d181f2e5b7e",
+          "b62966d6-d74e-5fee-87a7-73a3a68b919e",
+          "d88a3fba-7e76-5305-8bfb-0fdc3f8df74e",
+          "cfedf862-8f2b-5d43-8686-581ec06b3081",
+          "bb3d805f-6d7c-5f5e-b029-deb7e95cce3d",
+          "c1cca626-9dad-56a6-948f-9168413253d5",
+          "1b595476-4f30-5797-9c66-267fa807a8a7",
+          "1bf75176-9d57-5e59-a84a-131a1f624fcb",
+          "efd4cdcc-6ff7-5832-91b7-c61a6ec62a6d",
+          "0b34b4ce-286e-5b59-b95f-15c5381baa5d",
+          "4c156c1b-72c8-5c81-b572-9bb60432df7d",
+          "c1a066a5-1129-55f2-a99c-6fc0ded6ad38",
+          "bb8b5353-4157-5b40-99ab-907a8b83a2b1",
+          "09ffb1b2-222f-5190-a445-82a49d9a35e1",
+          "ca2be4a7-d446-5aff-8f3c-fc6ab058c80f",
+          "94ee7a2d-36be-589b-8264-54cf0f896914",
+          "e8e65ea2-7127-58ab-9b7e-3634e2d78941",
+          "54ab24c7-4867-5509-af8d-38552efb1c7f",
+          "b5a244e2-69b3-56d2-9d83-49fa1e31cc7b",
+          "ae5f5900-b9b6-5d6e-a4bc-d16a27d269ea",
+          "0af95c41-4b8e-5a25-9eab-e5b33f3b2771",
+          "1ae88c2c-ce53-5c6d-a74b-77174996541d",
+          "29e00390-1bcd-5fcc-88f8-abcb6b9bd2f9",
+          "5aa8085d-945f-5339-9abe-a3b69128280a",
+          "000e80d7-2f99-5715-bec4-856d1ced9c20"
+        ],
+        "preserve_policy": "family_only"
+      }
+    ]
+  },
+  "pdf_page_debug_evidence": {
+    "schema_version": 1,
+    "page_range": {
+      "start": 7,
+      "end": 7
+    },
+    "page_count": 1,
+    "pages": [
+      {
+        "page_number": 7,
+        "page_family": "references",
+        "content_family": null,
+        "family_source": "inline_heading",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "preserve_policy": "family_only",
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0,
+        "appendix_nested_subheadings": [],
+        "debug_reasons": [
+          "special_section",
+          "preserve_contract"
+        ],
+        "blocks": [
+          {
+            "block_id": "1e543c36-4b85-54b5-a4e8-360737705544",
+            "ordinal": 1,
+            "block_type": "heading",
+            "pdf_block_role": "heading",
+            "anchor": "p7-b33-s1",
+            "reading_order_index": 14,
+            "page_span": {
+              "start": 7,
+              "end": 7
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 1,
+            "translatable_sentence_count": 1,
+            "target_segment_count": 1,
+            "source_excerpt": "References",
+            "target_excerpt": "参考文献",
+            "recovery_flags": [
+              "page_family_references",
+              "page_family_source_inline_heading",
+              "embedded_references_heading_recovered"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 7,
+                  "bbox": [
+                    23.791,
+                    782.037,
+                    612.0,
+                    792.0
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "block_id": "4caae973-8ae5-5263-a8d7-0a1679a128ed",
+            "ordinal": 2,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p7-b33-s2",
+            "reading_order_index": 15,
+            "page_span": {
+              "start": 7,
+              "end": 7
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 79,
+            "translatable_sentence_count": 79,
+            "target_segment_count": 86,
+            "source_excerpt": "[ Bansal etal. , 2021 ] Gag an Bansal, Besmira Nushi, Ece Ka-mar , Eric Horvitz, and Daniel S. Weld. Is the most accu- rate ai the best teammate? optimizing ai for teamw ork. In AAAI , 2021. [ Chouldechov a etal. , 20...",
+            "target_excerpt": "[班萨尔等人，2021年]加甘·班萨尔、贝斯米拉·努希、埃切·卡马尔、埃里克·霍维茨和丹尼尔·S。 韦尔德。 最准确的人工智能是最佳队友吗？优化人工智能以促进团队合作。 于AAAI，2021年。[乔尔德乔娃等人，2018年]亚历山德拉·乔尔德乔娃、戴安娜·贝纳维德斯·普拉多、奥列克桑德尔·菲亚尔科和雷马·瓦伊蒂亚纳坦。 儿童虐待热线筛查决策中算法辅助决策的案例研究。 于FAT，2018年。[戴维森等人，2017年]托马斯·戴维森、...",
+            "recovery_flags": [
+              "page_family_references",
+              "page_family_source_inline_heading",
+              "embedded_references_heading_recovered"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 7,
+                  "bbox": [
+                    23.791,
+                    782.037,
+                    612.0,
+                    792.0
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "2ccbacc9-bc4b-5dba-bb7f-583404d2db1c",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "a62bbe04-1ebd-5d4e-b5a7-b6d4dbce8b42",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "version": 1
+      },
+      {
+        "snapshot_id": "c1123596-bf6b-596a-9d50-e4ed0a613148",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "7cca6d60-d2d5-5e9b-ba2d-66057e55de99",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "4b1b6ade-3a71-555c-b806-170cd40fb847",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5e1c5a4a-7036-5058-8b47-65ff8735a437",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "73b60b6b-bb21-53d1-881e-02e8860519d2",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "83dbd546-843a-5d96-8e56-74ad0ea0516c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "988127e2-d313-5e31-98e8-a506af1bd599",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "8ad15986-a82a-541f-aef1-ce84edb81f28",
+      "source_text": "References",
+      "sentence_status": "translated",
+      "target_texts": [
+        "参考文献"
+      ]
+    },
+    {
+      "sentence_id": "bb974dff-07ea-5518-b6ed-e2d664cdb360",
+      "source_text": "[ Bansal etal. , 2021 ] Gag an Bansal, Besmira Nushi, Ece Ka-mar , Eric Horvitz, and Daniel S.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "[班萨尔等人，2021年]加甘·班萨尔、贝斯米拉·努希、埃切·卡马尔、埃里克·霍维茨和丹尼尔·S。"
+      ]
+    },
+    {
+      "sentence_id": "15c646d7-2316-54f0-8c4c-217fe58b6cdb",
+      "source_text": "Weld.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "韦尔德。"
+      ]
+    },
+    {
+      "sentence_id": "c3d14ddc-b87e-57b0-aefd-3b6c3e049421",
+      "source_text": "Is the most accu- rate ai the best teammate? optimizing ai for teamw ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "最准确的人工智能是最佳队友吗？优化人工智能以促进团队合作。"
+      ]
+    },
+    {
+      "sentence_id": "a70edad3-eb2a-5f8f-ab3d-b0a0760e309a",
+      "source_text": "In AAAI , 2021. [ Chouldechov a etal. , 2018 ] Ale xandra Chouldechov a, Di-ana Bena vides Prado, Oleksandr Fialko, and Rhema Vaithianathan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于AAAI，2021年。[乔尔德乔娃等人，2018年]亚历山德拉·乔尔德乔娃、戴安娜·贝纳维德斯·普拉多、奥列克桑德尔·菲亚尔科和雷马·瓦伊蒂亚纳坦。"
+      ]
+    },
+    {
+      "sentence_id": "4e882227-b46a-5e4c-a351-0b0713fa5d78",
+      "source_text": "Acase study of algorithm-assisted decision making in child maltreatment hotline screening decisions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "儿童虐待热线筛查决策中算法辅助决策的案例研究。"
+      ]
+    },
+    {
+      "sentence_id": "a60e6560-d02a-5ed0-a94f-7ef62be6182a",
+      "source_text": "In FAT , 2018. [ Davidson etal. , 2017 ] Thomas Davidson, Dana Warmsley , Michael W .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于FAT，2018年。[戴维森等人，2017年]托马斯·戴维森、达纳·沃姆斯利、迈克尔·W。"
+      ]
+    },
+    {
+      "sentence_id": "fa5bb340-9b8c-5b88-84fb-1c36aaa27d60",
+      "source_text": "Macy , and Ingmar Weber .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "梅西，以及英格玛·韦伯。"
+      ]
+    },
+    {
+      "sentence_id": "603634c2-c38d-5902-872d-0917f7f1b4fd",
+      "source_text": "Automated hate speech detection and the problem of of fensiv elanguage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自动化仇恨言论检测与冒犯性语言问题。"
+      ]
+    },
+    {
+      "sentence_id": "8d099125-97ed-5a02-a906-f05d41d76ae3",
+      "source_text": "In ICWSM , 2017. [ Deet al. , 2021 ] Abir De, Nastaran Okati, Ali Zarezade, and Manuel Gomez-Rodriguez.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于ICWSM，2017年。[德等人，2021年]阿比尔·德、纳斯塔兰·奥卡蒂、阿里·扎雷扎德和曼努埃尔·戈麦斯-罗德里格斯。"
+      ]
+    },
+    {
+      "sentence_id": "5667d9a1-9557-5e79-b860-6a588085c11f",
+      "source_text": "Classi cation under human assistance.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "人类辅助下的分类。"
+      ]
+    },
+    {
+      "sentence_id": "26fc2522-1742-5585-a7ee-ce4d435144af",
+      "source_text": "In AAAI , 2021. [ Estev a etal. , 2017 ] Andre Estev a, Brett Kuprel, Roberto A.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于AAAI，2021年。[埃斯特瓦等人，2017年]安德烈·埃斯特瓦、布雷特·库普雷尔、罗伯托·A。"
+      ]
+    },
+    {
+      "sentence_id": "3d15fe53-ea6e-5f1e-93e4-0fc74877b870",
+      "source_text": "Nov oa, Justin M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "诺沃亚，贾斯汀·M。"
+      ]
+    },
+    {
+      "sentence_id": "56c794e2-a979-55e5-8998-fa8c321ebaed",
+      "source_text": "K o, Susan M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "科，苏珊·M。"
+      ]
+    },
+    {
+      "sentence_id": "f411049a-c992-595c-a99c-f50aa400a0f5",
+      "source_text": "Swetter , Helen M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "斯韦特，海伦·M。"
+      ]
+    },
+    {
+      "sentence_id": "588552c3-da2d-5a2f-8c23-060f7310dae8",
+      "source_text": "Blau, and Sebastian Thrun.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "布劳，以及塞巴斯蒂安·特伦。"
+      ]
+    },
+    {
+      "sentence_id": "039c38a7-e181-5bd4-af4f-7fef08591cfd",
+      "source_text": "Dermatologist-lev elclassi cation of skin cancer with deep neural netw orks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用深度神经网络进行皮肤癌的皮肤科医生级别分类。"
+      ]
+    },
+    {
+      "sentence_id": "f0a3819e-4727-59e0-afcb-6a6f9cd805e8",
+      "source_text": "Nature , 2017. [ Gao etal. , 2021 ] Ruijiang Gao, Maytal Saar -Tsechansky , Maria De-Arteag a, Ligong Han, Min Kyung Lee, and Matthew Lease.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《自然》，2017年。[高等人，2021年]高瑞江、马伊塔尔·萨尔-采昌斯基、玛丽亚·德阿特亚加、李公汉、闵京李和马修·利斯。"
+      ]
+    },
+    {
+      "sentence_id": "5bd20709-f466-5fbf-8cfe-2afbe54cd3d9",
+      "source_text": "Human-ai collaboration with bandit feed- back.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "基于老虎机反馈的人机协作。"
+      ]
+    },
+    {
+      "sentence_id": "48bb0798-bba1-51ef-8298-58eab2298d78",
+      "source_text": "In IJCAI , 2021. [ Grnsund and Aanestad, 2020 ] Tor Grnsund and Mar gunn Aanestad.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于IJCAI，2021年。[格伦松德和阿内斯塔德，2020年]托尔·格伦松德和玛尔贡·阿内斯塔德。"
+      ]
+    },
+    {
+      "sentence_id": "60be03ec-002d-5c08-ab14-6b72c51a474e",
+      "source_text": "Augmenting the algorithm: emer ging human- in-the-loopw ork con gurations.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "增强算法：新兴的人机协同工作配置。"
+      ]
+    },
+    {
+      "sentence_id": "c41cd6f6-18c0-5c1d-b986-aad78504c0f8",
+      "source_text": "The Journal of Str ate gic Information Systems , 2020. [ Gulshan etal. , 2019 ] Varun Gulshan, Renu P .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《战略信息系统杂志》，2020年。[古尔山等人，2019年]瓦伦·古尔山、雷努·P。"
+      ]
+    },
+    {
+      "sentence_id": "a188fa86-8806-5747-b8d1-31ac81752396",
+      "source_text": "Rajan, Ka-sumi Widner , Derek J.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "拉詹，卡苏米·威德纳，德里克·J。"
+      ]
+    },
+    {
+      "sentence_id": "af90ae84-80a2-53a6-b6e6-080d2c488c3f",
+      "source_text": "W u, Peter Wubbels, Tyler Rhodes, Kira Whitehouse, Marc Coram, Greg S Corrado, Kim Ra-masamy , Rajiv Raman, Lily H.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "吴，彼得·沃布尔斯，泰勒·罗兹，基拉·怀特豪斯，马克·科拉姆，格雷格·S·科拉多，金·拉马萨米，拉吉夫·拉曼，莉莉·H。"
+      ]
+    },
+    {
+      "sentence_id": "1850c94b-671e-5b33-9439-e36007b7c9a3",
+      "source_text": "Peng, and Dale R.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "彭，以及戴尔·R。"
+      ]
+    },
+    {
+      "sentence_id": "71f5abb1-37b1-5195-8f07-e1ef1554ca79",
+      "source_text": "Web- ster .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Webster。"
+      ]
+    },
+    {
+      "sentence_id": "d45800fe-2e77-57d5-84e6-928506928b53",
+      "source_text": "Performance of a deep-learning algorithm vsmanual grading for detecting diabetic retinopathy in in di a.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "深度学习算法与人工分级在检测印度糖尿病视网膜病变中的表现。"
+      ]
+    },
+    {
+      "sentence_id": "b08f53f2-5209-53d6-bbe9-b741f28b28e9",
+      "source_text": "J AMA Ophthalmolo gy , 2019. [ Heet al. , 2016 ] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "JAMA Ophthalmology，2019年。[He等人，2016年] Kaiming He、Xiangyu Zhang、Shaoqing Ren和Jian Sun。"
+      ]
+    },
+    {
+      "sentence_id": "6f8dc3f0-4e5f-5a42-ab07-4a80028ba690",
+      "source_text": "Deep residual learning for image recog- nition.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "用于图像识别的深度残差学习。"
+      ]
+    },
+    {
+      "sentence_id": "66340fdb-598b-59ad-b700-036eb7305e38",
+      "source_text": "In CVPR , 2016. [ Hemmer etal. , 2021 ] Patrick Hemmer , Max Schemmer , Michael Vossing, and Niklas Kuhl.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在CVPR，2016年。[Hemmer等人，2021年] Patrick Hemmer、Max Schemmer、Michael Vossing和Niklas Kuhl。"
+      ]
+    },
+    {
+      "sentence_id": "31b6c0a7-b0e6-5b4b-895b-6c84f04b3e62",
+      "source_text": "Human-ai comple- mentarity in hybrid intelligence systems: a structured lit- erature review .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "混合智能系统中的人机互补性：结构化文献综述。"
+      ]
+    },
+    {
+      "sentence_id": "952d9864-6bfe-5055-9538-786c76e7d076",
+      "source_text": "In P A CIS , 2021. [ Irvin etal. , 2019 ] Jeremy Irvin, Pranav Rajpurkar , Michael K o, Yif an Y u, Silviana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad Haghgoo, Robyn Ball, etal.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在PACIS，2021年。[Irvin等人，2019年] Jeremy Irvin、Pranav Rajpurkar、Michael Ko、Yifan Yu、Silviana Ciurea-Ilcus、Chris Chute、Henrik Marklund、Behzad Haghgoo、Robyn Ball等人。"
+      ]
+    },
+    {
+      "sentence_id": "1107d5f1-79a8-581e-9059-ee4dd25c543e",
+      "source_text": "Che xpert: a large chest radiograph dataset with uncertainty labels and expert comparison.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Chexpert：一个带有不确定性标签和专家比较的大型胸部X光片数据集。"
+      ]
+    },
+    {
+      "sentence_id": "0c9ef005-01d3-5143-a6b6-a8f9b7b54450",
+      "source_text": "In AAAI , 2019. [ Jacobs etal. , 1991 ] Robert A.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在AAAI，2019年。[Jacobs等人，1991年] Robert A."
+      ]
+    },
+    {
+      "sentence_id": "71d3bbd4-e9a6-52d5-958a-c36d0abcf77d",
+      "source_text": "Jacobs, Michael I.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Jacobs、Michael I."
+      ]
+    },
+    {
+      "sentence_id": "994d2a6e-ffcf-516e-bb2e-e1169447d81d",
+      "source_text": "Jordan, Stev en J .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Jordan、Steven J."
+      ]
+    },
+    {
+      "sentence_id": "2724dd1e-a198-510d-864d-a8e2209d500f",
+      "source_text": "Nowlan, and Geof frey E.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Nowlan和Geoffrey E."
+      ]
+    },
+    {
+      "sentence_id": "821bb39e-6fa4-5f87-952e-75877e89b2e8",
+      "source_text": "Hinton.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Hinton。"
+      ]
+    },
+    {
+      "sentence_id": "82fa7dfc-7ee9-56db-9d92-319428a3a0fb",
+      "source_text": "Adaptive mix- tures of locale xperts.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "局部专家的自适应混合。"
+      ]
+    },
+    {
+      "sentence_id": "260bcdcd-93ab-5dab-b1c6-f24376b0702e",
+      "source_text": "Neur al Computation , 1991. [ Kesw aniet al. , 2021 ] Vijay Kesw ani, Matthew Lease, and Krishnaram Kenthapadi.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Neural Computation，1991年。[Keswani等人，2021年] Vijay Keswani、Matthew Lease和Krishnaram Kenthapadi。"
+      ]
+    },
+    {
+      "sentence_id": "d42dbbf9-6399-59d7-8d14-19b6b911e552",
+      "source_text": "Tow ards unbiased and accurate deferral to multiplee xperts.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "迈向对多位专家的无偏且准确的委托。"
+      ]
+    },
+    {
+      "sentence_id": "ae611bfa-1406-5c8f-8aa5-0a9c5f812220",
+      "source_text": "In AIES , 2021. [ Krizhe vsky , 2009 ] Alex Krizhe vsky .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在AIES，2021年。[Krizhevsky，2009年] Alex Krizhevsky。"
+      ]
+    },
+    {
+      "sentence_id": "a9f89c1c-4770-594d-949d-78ae8793e424",
+      "source_text": "Learning multiple lay- ers of features from tiny images.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "从小图像中学习多层特征。"
+      ]
+    },
+    {
+      "sentence_id": "67723176-1dd9-5447-a7b1-20c7176e80e8",
+      "source_text": "Technical report, Univ er - sity of Toronto, 2009. [ Lampert etal. , 2016 ] Thomas A Lampert, Andre Stumpf, and Pierre Ganc arski.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "技术报告，多伦多大学，2009年。[Lampert等人，2016年] Thomas A. Lampert、Andre Stumpf和Pierre Gancarski。"
+      ]
+    },
+    {
+      "sentence_id": "1c37c12a-7d9f-5c88-b409-f2328787ac4e",
+      "source_text": "An empirical study into annotator agreement, ground truth estimation, and algorithme valua- tion.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "关于标注者一致性、真实值估计和算法评估的实证研究。"
+      ]
+    },
+    {
+      "sentence_id": "0be94f7b-c41c-5a21-8753-91a5153f3a7a",
+      "source_text": "IEEE T ransactions on Image Processing , 2016. [ Lintott etal. , 2008 ] Chris J.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "IEEE Transactions on Image Processing，2016年。[Lintott等人，2008年] Chris J."
+      ]
+    },
+    {
+      "sentence_id": "5f38fedb-4b85-54ab-aa4a-ba60bac5d46f",
+      "source_text": "Lintott, K e vin Scha winski, An ze Slosar , Kate R.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Lintott、Kevin Schawinski、Anze Slosar、Kate R."
+      ]
+    },
+    {
+      "sentence_id": "3a03ff09-e7b0-5285-8e1a-445cc77a312c",
+      "source_text": "Land, Stev en Bamford, Daniel I.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Land、Steven Bamford、Daniel I."
+      ]
+    },
+    {
+      "sentence_id": "fadc4363-2a1a-5bf5-9833-3d54678f6f5e",
+      "source_text": "Thomas, M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Thomas、M."
+      ]
+    },
+    {
+      "sentence_id": "214300fc-d453-5d41-b5d1-48fd4f3ff035",
+      "source_text": "Jordan Raddick, Robert Nichol, Ale xander S.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Jordan Raddick、Robert Nichol、Alexander S."
+      ]
+    },
+    {
+      "sentence_id": "c94b12ef-21b9-5d51-8015-600b2853a7c9",
+      "source_text": "Szalay , Daniel Andreescu, P .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Szalay、Daniel Andreescu、P."
+      ]
+    },
+    {
+      "sentence_id": "0d7fe060-b36e-5191-859f-c6d192447d7d",
+      "source_text": "G.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "G."
+      ]
+    },
+    {
+      "sentence_id": "11c9e447-8677-54ab-8fc6-4b754db0b604",
+      "source_text": "Murray , and Janv an den Berg.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Murray与Jan van den Berg。"
+      ]
+    },
+    {
+      "sentence_id": "b4d533d0-d3ec-5b8a-b520-e7479e74e39b",
+      "source_text": "Galaxy zoo: morphologies deriv ed from visual inspection of galaxies from the sloan digital sky survey .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "星系动物园：基于斯隆数字巡天星系视觉检查的形态学推导。"
+      ]
+    },
+    {
+      "sentence_id": "345fd78f-ce98-5701-afd2-0ce463aa2e42",
+      "source_text": "Monthly Notices of the Royal Astr onomical Society , 2008. [ Madras etal. , 2018 ] David Madras, Toniann Pitassi, and Richard S.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《皇家天文学会月报》，2008年。",
+        "Madras等人，2018年：David Madras、Toniann Pitassi与Richard S."
+      ]
+    },
+    {
+      "sentence_id": "8bbc8854-c5e8-5297-bc5f-3d181f2e5b7e",
+      "source_text": "Zemel.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Zemel。"
+      ]
+    },
+    {
+      "sentence_id": "b62966d6-d74e-5fee-87a7-73a3a68b919e",
+      "source_text": "Predict responsibly: impro vingf airness and accuracy by learning to defer .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "负责任预测：通过学习推迟以提升公平性与准确性。"
+      ]
+    },
+    {
+      "sentence_id": "d88a3fba-7e76-5305-8bfb-0fdc3f8df74e",
+      "source_text": "In NeurIPS , 2018. [ Majko wska etal. , 2020 ] Anna Majko wska, Sid Mittal, David F Steiner , Joshua J Reicher , Scott Mayer McK- inney , Gavin E Dugg an, Krish Esw aran, Po-Hsuan Cameron Chen, Yun Liu, Kalidindi, etal.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于2018年NeurIPS会议发表。",
+        "Majkowska等人，2020年：Anna Majkowska、Sid Mittal、David F. Steiner、Joshua J. Reicher、Scott Mayer McKinney、Gavin E. Duggan、Krish Eswaran、Po-Hsuan Cameron Chen、Yun Liu、Kalidindi等。"
+      ]
+    },
+    {
+      "sentence_id": "cfedf862-8f2b-5d43-8686-581ec06b3081",
+      "source_text": "Chest radio- graph interpretation with deep learning models: assess- ment with radiologist-adjudicat edreference standards and population-adjustede valuation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "基于深度学习模型的胸片解读：采用放射科医师裁定参考标准与人群调整评估。"
+      ]
+    },
+    {
+      "sentence_id": "bb3d805f-6d7c-5f5e-b029-deb7e95cce3d",
+      "source_text": "Radiolo gy , 2020. [ McInnes etal. , 2018 ] Leland McInnes, John Healy , and James Melville.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《放射学》，2020年。",
+        "McInnes等人，2018年：Leland McInnes、John Healy与James Melville。"
+      ]
+    },
+    {
+      "sentence_id": "c1cca626-9dad-56a6-948f-9168413253d5",
+      "source_text": "Umap: uniform manifold approximation and projection for dimension reduction. arXiv preprint arXiv:1802.03426 , 2018. [ Mozannar and Sontag, 2020 ] Hussein Mozannar and David A.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "UMAP：用于降维的均匀流形逼近与投影。arXiv预印本arXiv:1802.03426，2018年。",
+        "Mozannar与Sontag，2020年：Hussein Mozannar与David A."
+      ]
+    },
+    {
+      "sentence_id": "1b595476-4f30-5797-9c66-267fa807a8a7",
+      "source_text": "Sontag.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Sontag。"
+      ]
+    },
+    {
+      "sentence_id": "1bf75176-9d57-5e59-a84a-131a1f624fcb",
+      "source_text": "Consistent estimators for learning to defer to an expert.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "向专家推迟学习的相合估计器。"
+      ]
+    },
+    {
+      "sentence_id": "efd4cdcc-6ff7-5832-91b7-c61a6ec62a6d",
+      "source_text": "In ICML , 2020. [ Okati etal. , 2021 ] Nastaran Okati, Abir De, and Manuel Rodriguez.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于2020年ICML会议发表。",
+        "Okati等人，2021年：Nastaran Okati、Abir De与Manuel Rodriguez。"
+      ]
+    },
+    {
+      "sentence_id": "0b34b4ce-286e-5b59-b95f-15c5381baa5d",
+      "source_text": "Dif ferentiable lear ning under triage.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "可分拣下的可微分学习。"
+      ]
+    },
+    {
+      "sentence_id": "4c156c1b-72c8-5c81-b572-9bb60432df7d",
+      "source_text": "In NeurIPS , 2021. [ Pennington etal. , 2014 ] Jef frey Pennington, Richard Socher , and Christopher D.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于2021年NeurIPS会议发表。",
+        "Pennington等人，2014年：Jeffrey Pennington、Richard Socher与Christopher D."
+      ]
+    },
+    {
+      "sentence_id": "c1a066a5-1129-55f2-a99c-6fc0ded6ad38",
+      "source_text": "Manning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Manning。"
+      ]
+    },
+    {
+      "sentence_id": "bb8b5353-4157-5b40-99ab-907a8b83a2b1",
+      "source_text": "Glov e:global vectors for w ord representation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Glove：词表示的全局向量。"
+      ]
+    },
+    {
+      "sentence_id": "09ffb1b2-222f-5190-a445-82a49d9a35e1",
+      "source_text": "In EMNLP , 2014. [ Peterson etal. , 2019 ] Joshua C.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "于2014年EMNLP会议发表。",
+        "Peterson等人，2019年：Joshua C."
+      ]
+    },
+    {
+      "sentence_id": "ca2be4a7-d446-5aff-8f3c-fc6ab058c80f",
+      "source_text": "Peterson, Ruairidh M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Peterson、Ruairidh M."
+      ]
+    },
+    {
+      "sentence_id": "94ee7a2d-36be-589b-8264-54cf0f896914",
+      "source_text": "Bat- tleday , Thomas L.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Battleday、Thomas L."
+      ]
+    },
+    {
+      "sentence_id": "e8e65ea2-7127-58ab-9b7e-3634e2d78941",
+      "source_text": "Grif ths, and Olg a Russako vsky .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Griffiths与Olga Russakovsky。"
+      ]
+    },
+    {
+      "sentence_id": "54ab24c7-4867-5509-af8d-38552efb1c7f",
+      "source_text": "Hu-man uncertainty makes classi cation more rob ust.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "人类不确定性使分类更具鲁棒性。"
+      ]
+    },
+    {
+      "sentence_id": "b5a244e2-69b3-56d2-9d83-49fa1e31cc7b",
+      "source_text": "In ICCV , 2019. [ Raghu etal. , 2019 ] Maithra Raghu, Katy Blumer , Greg Corrado, Jon Kleinberg, Ziad Oberme yer , and Send- hil Mullainathan.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在ICCV，2019年。[Raghu等人，2019] Maithra Raghu、Katy Blumer、Greg Corrado、Jon Kleinberg、Ziad Obermeyer和Sendhil Mullainathan。"
+      ]
+    },
+    {
+      "sentence_id": "ae5f5900-b9b6-5d6e-a4bc-d16a27d269ea",
+      "source_text": "The algorithmic automation problem: prediction, triage, and human effort. arXiv preprint arXiv:1903.12220 , 2019. [ Wang etal. , 2017 ] Xiaosong Wang, Yif an Peng, Le Lu, Zhiyong Lu, Mohammadhadi Bagheri, and Ronald M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "算法自动化问题：预测、分流与人力投入。arXiv预印本arXiv:1903.12220，2019年。[Wang等人，2017] Xiaosong Wang、Yifan Peng、Le Lu、Zhiyong Lu、Mohammadhadi Bagheri和Ronald M。"
+      ]
+    },
+    {
+      "sentence_id": "0af95c41-4b8e-5a25-9eab-e5b33f3b2771",
+      "source_text": "Summers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Summers。"
+      ]
+    },
+    {
+      "sentence_id": "1ae88c2c-ce53-5c6d-a74b-77174996541d",
+      "source_text": "Chestx-ray8: hospital-scale chest x-ray database and benchmarks on weakl y-supervised classi ca-tion and localization of common thorax diseases.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Chestx-ray8：医院规模胸部X光数据库及基于弱监督分类与定位的常见胸部疾病基准。"
+      ]
+    },
+    {
+      "sentence_id": "29e00390-1bcd-5fcc-88f8-abcb6b9bd2f9",
+      "source_text": "In CVPR , 2017. [ Wilder etal. , 2020 ] Bryan Wilder , Eric Horvitz, and Ece Kamar .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在CVPR，2017年。[Wilder等人，2020] Bryan Wilder、Eric Horvitz和Ece Kamar。"
+      ]
+    },
+    {
+      "sentence_id": "5aa8085d-945f-5339-9abe-a3b69128280a",
+      "source_text": "Learning to complement humans.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "学习辅助人类。"
+      ]
+    },
+    {
+      "sentence_id": "000e80d7-2f99-5715-bec4-856d1ced9c20",
+      "source_text": "In IJCAI , 2020",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在IJCAI，2020年"
+      ]
+    }
+  ],
+  "issues": []
+}

@@ -21,6 +21,7 @@ services:
       context: .
     container_name: book-agent-app
     environment:
+      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/book_agent
       BOOK_AGENT_EXPORT_ROOT: /app/artifacts/exports
       BOOK_AGENT_TRANSLATION_BACKEND: echo
     ports:

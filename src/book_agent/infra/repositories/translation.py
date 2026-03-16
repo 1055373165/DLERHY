@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import ChapterStatus
+from book_agent.domain.enums import ChapterStatus, PacketSentenceRole, TargetSegmentStatus
 from book_agent.domain.models import Chapter, Sentence
 from book_agent.domain.models.translation import (
     AlignmentEdge,
@@ -14,7 +14,7 @@ from book_agent.domain.models.translation import (
     TranslationPacket,
     TranslationRun,
 )
-from book_agent.workers.contracts import ContextPacket
+from book_agent.workers.contracts import ContextPacket, TranslatedContextBlock
 
 
 @dataclass(slots=True)
@@ -46,14 +46,89 @@ class TranslationRepository:
         current_sentences = [
             sentence_map[mapping.sentence_id]
             for mapping in mappings
-            if mapping.role.value == "current" and mapping.sentence_id in sentence_map
+            if mapping.role == PacketSentenceRole.CURRENT and mapping.sentence_id in sentence_map
         ]
+        prev_context_sentence_ids = [
+            mapping.sentence_id
+            for mapping in mappings
+            if mapping.role == PacketSentenceRole.PREV_CONTEXT and mapping.sentence_id in sentence_map
+        ]
+        context_packet = ContextPacket.model_validate(packet.packet_json)
+        prev_translated_blocks = self._build_prev_translated_blocks(prev_context_sentence_ids, sentence_map)
         return TranslationPacketBundle(
             packet=packet,
-            context_packet=ContextPacket.model_validate(packet.packet_json),
+            context_packet=context_packet.model_copy(
+                update={"prev_translated_blocks": prev_translated_blocks}
+            ),
             current_sentences=current_sentences,
             all_packet_sentences=[sentence_map[mapping.sentence_id] for mapping in mappings if mapping.sentence_id in sentence_map],
         )
+
+    def _build_prev_translated_blocks(
+        self,
+        sentence_ids: list[str],
+        sentence_map: dict[str, Sentence],
+    ) -> list[TranslatedContextBlock]:
+        if not sentence_ids:
+            return []
+
+        rows = self.session.execute(
+            select(
+                AlignmentEdge.sentence_id,
+                TargetSegment.text_zh,
+                TargetSegment.ordinal,
+            )
+            .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
+            .where(
+                AlignmentEdge.sentence_id.in_(sentence_ids),
+                TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
+            )
+            .order_by(TargetSegment.ordinal.asc())
+        ).all()
+
+        translated_by_sentence: dict[str, list[str]] = {}
+        for sentence_id, text_zh, _ordinal in rows:
+            if not text_zh:
+                continue
+            translated_by_sentence.setdefault(sentence_id, []).append(str(text_zh))
+
+        blocks: dict[str, dict[str, object]] = {}
+        for sentence_id in sentence_ids:
+            sentence = sentence_map.get(sentence_id)
+            if sentence is None:
+                continue
+            target_chunks = translated_by_sentence.get(sentence_id, [])
+            if not target_chunks:
+                continue
+            block_bucket = blocks.setdefault(
+                sentence.block_id,
+                {
+                    "source_excerpt_parts": [],
+                    "target_excerpt_parts": [],
+                    "source_sentence_ids": [],
+                },
+            )
+            source_excerpt = (sentence.normalized_text or sentence.source_text or "").strip()
+            if source_excerpt:
+                block_bucket["source_excerpt_parts"].append(source_excerpt)
+            block_bucket["target_excerpt_parts"].append(" ".join(target_chunks).strip())
+            block_bucket["source_sentence_ids"].append(sentence.id)
+
+        translated_blocks: list[TranslatedContextBlock] = []
+        for block_id, bucket in blocks.items():
+            source_excerpt = " ".join(bucket["source_excerpt_parts"]).strip()
+            target_excerpt = " ".join(bucket["target_excerpt_parts"]).strip()
+            if not source_excerpt or not target_excerpt:
+                continue
+            translated_blocks.append(
+                TranslatedContextBlock(
+                    block_id=block_id,
+                    source_excerpt=source_excerpt,
+                    target_excerpt=target_excerpt,
+                    source_sentence_ids=list(bucket["source_sentence_ids"]),
+                )
+            )
+        return translated_blocks
 
     def next_attempt(self, packet_id: str) -> int:
         attempts = self.session.scalar(

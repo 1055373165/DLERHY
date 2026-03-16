@@ -1,0 +1,1408 @@
+{
+  "started_at": "2026-03-16T05:37:21.745035+00:00",
+  "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+  "database_url": "sqlite+pysqlite:////Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/full.sqlite",
+  "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports",
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "translate_batch_size": 20,
+  "parallel_workers": 4,
+  "bootstrap": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+    "author": null,
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 7,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "low",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 6007.429,
+      "average_span_count": 1274.303,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 0,
+      "suspicious_page_numbers": [],
+      "recovery_lane": null,
+      "trailing_reference_page_count": 1,
+      "academic_paper_candidate": false
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 7,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_document_title_recovered"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 9,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 7,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 4,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 8,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 2,
+          "page_family": "references",
+          "page_family_source": "inline_heading",
+          "page_family_heading": "References",
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_references_heading_recovered",
+            "page_family_references",
+            "page_family_source_inline_heading"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 15,
+    "sentence_count": 247,
+    "packet_count": 19,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "ordinal": 1,
+        "title_src": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "sentence_count": 167,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "page_family_references",
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "sentence_count": 80,
+        "packet_count": 5,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "document_summary_after_bootstrap": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+    "author": null,
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 7,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "low",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 6007.429,
+      "average_span_count": 1274.303,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 0,
+      "suspicious_page_numbers": [],
+      "recovery_lane": null,
+      "trailing_reference_page_count": 1,
+      "academic_paper_candidate": false
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 7,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_document_title_recovered"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 9,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 7,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 4,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 8,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 2,
+          "page_family": "references",
+          "page_family_source": "inline_heading",
+          "page_family_heading": "References",
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_references_heading_recovered",
+            "page_family_references",
+            "page_family_source_inline_heading"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 15,
+    "sentence_count": 247,
+    "packet_count": 19,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "ordinal": 1,
+        "title_src": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "sentence_count": 167,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "page_family_references",
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "sentence_count": 80,
+        "packet_count": 5,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "run_seed": {
+    "run_id": "91a15740-2ce1-4db5-ab09-975e71f3ff16",
+    "seeded_work_item_count": 19,
+    "pending_packet_count_initial": 19
+  },
+  "run": {
+    "run_id": "91a15740-2ce1-4db5-ab09-975e71f3ff16",
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "run_type": "translate_full",
+    "status": "succeeded",
+    "backend": "openai_compatible",
+    "model_name": "deepseek-chat",
+    "requested_by": "codex.autodrive",
+    "priority": 100,
+    "resume_from_run_id": null,
+    "stop_reason": null,
+    "status_detail_json": {
+      "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "report_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/report.json",
+      "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports",
+      "usage_summary": {
+        "token_in": 76859,
+        "token_out": 31358,
+        "cost_usd": 0.02478827,
+        "latency_ms": 1230981
+      },
+      "control_counters": {
+        "seeded_work_item_count": 19,
+        "completed_work_item_count": 19,
+        "retryable_failure_count": 0,
+        "terminal_failure_count": 0,
+        "expired_lease_reclaim_count": 0,
+        "consecutive_failures": 0
+      },
+      "last_control": {
+        "action": "run.succeeded",
+        "actor_id": "system.run-control",
+        "note": null,
+        "detail_json": {
+          "completed_work_item_count": 19
+        },
+        "at": "2026-03-16T05:43:12.850721+00:00"
+      },
+      "last_progress": {
+        "packet_id": "87e4e7f9-ca80-5cf5-b7dc-ba795906b2c0",
+        "translation_run_id": "7cd4b9d2-04cc-5f6f-b639-6df105f70445",
+        "completed_at": "2026-03-16T05:43:12.847240+00:00"
+      }
+    },
+    "created_at": "2026-03-15T21:37:23.010228+00:00",
+    "updated_at": "2026-03-15T21:43:12.850750+00:00",
+    "started_at": "2026-03-15T21:37:23.014149+00:00",
+    "finished_at": "2026-03-15T21:43:12.850721+00:00",
+    "budget": {
+      "max_wall_clock_seconds": 3600,
+      "max_total_cost_usd": 0.25,
+      "max_total_token_in": null,
+      "max_total_token_out": null,
+      "max_retry_count_per_work_item": 2,
+      "max_consecutive_failures": 20,
+      "max_parallel_workers": 4,
+      "max_parallel_requests_per_provider": 4,
+      "max_auto_followup_attempts": 2
+    },
+    "work_items": {
+      "total_count": 19,
+      "status_counts": {
+        "pending": 0,
+        "leased": 0,
+        "running": 0,
+        "succeeded": 19,
+        "retryable_failed": 0,
+        "terminal_failed": 0,
+        "cancelled": 0
+      },
+      "stage_counts": {
+        "bootstrap": 0,
+        "translate": 19,
+        "review": 0,
+        "repair": 0,
+        "export": 0
+      }
+    },
+    "worker_leases": {
+      "total_count": 19,
+      "status_counts": {
+        "active": 0,
+        "released": 19,
+        "expired": 0
+      },
+      "latest_heartbeat_at": "2026-03-15T21:43:12.847240+00:00"
+    },
+    "events": {
+      "event_count": 61,
+      "latest_event_at": "2026-03-15T21:43:12.850721+00:00"
+    }
+  },
+  "translate": {
+    "run_id": "91a15740-2ce1-4db5-ab09-975e71f3ff16",
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "run_status": "succeeded",
+    "stop_reason": null,
+    "total_packet_count": 19,
+    "translated_packet_count": 19,
+    "pending_packet_count": 0,
+    "retryable_failed_packet_count": 0,
+    "terminal_failed_packet_count": 0,
+    "inflight_packet_count": 0,
+    "remaining_packet_count": 0,
+    "usage_summary": {
+      "token_in": 76859,
+      "token_out": 31358,
+      "cost_usd": 0.02478827,
+      "latency_ms": 1230981
+    },
+    "control_counters": {
+      "seeded_work_item_count": 19,
+      "completed_work_item_count": 19,
+      "retryable_failure_count": 0,
+      "terminal_failure_count": 0,
+      "expired_lease_reclaim_count": 0,
+      "consecutive_failures": 0
+    },
+    "last_progress": {
+      "packet_id": "87e4e7f9-ca80-5cf5-b7dc-ba795906b2c0",
+      "translation_run_id": "7cd4b9d2-04cc-5f6f-b639-6df105f70445",
+      "completed_at": "2026-03-16T05:43:12.847240+00:00"
+    },
+    "last_failure": {},
+    "elapsed_seconds": 29149.842,
+    "avg_packet_seconds": 1534.202,
+    "estimated_remaining_seconds": 0.0,
+    "estimated_finish_at": "2026-03-16T05:43:12.856161+00:00"
+  },
+  "translate_recent_results": [
+    {
+      "work_item_id": "3bcd04c3-bebc-4a36-bf0e-af7b99b0443c",
+      "packet_id": "e3e16004-0f6e-512a-ba98-ab15ffac6eef",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "75cafce2-994f-5e89-a90e-d22c81fadff1",
+      "review_required_sentence_ids": [],
+      "token_in": 4312,
+      "token_out": 171,
+      "cost_usd": 0.0001986,
+      "latency_ms": 7683
+    },
+    {
+      "work_item_id": "0442f5d8-c002-4eec-8c76-7adba935a69c",
+      "packet_id": "3f3680fd-fe3e-51ec-9d39-5bd73ecdcd1c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "3df901a4-992e-5e65-b694-a3686e64c285",
+      "review_required_sentence_ids": [],
+      "token_in": 3557,
+      "token_out": 175,
+      "cost_usd": 0.00018242,
+      "latency_ms": 10229
+    },
+    {
+      "work_item_id": "6f420618-a4b6-4e0f-9b8e-db74a0e01a12",
+      "packet_id": "83dbd546-843a-5d96-8e56-74ad0ea0516c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "c8c383fd-2d42-5f11-9c24-953ecd77423c",
+      "review_required_sentence_ids": [],
+      "token_in": 2637,
+      "token_out": 158,
+      "cost_usd": 0.00014347,
+      "latency_ms": 7786
+    },
+    {
+      "work_item_id": "7cbf86e9-7071-4c9b-818f-74512b722386",
+      "packet_id": "bce38578-2528-56f4-b396-484b91e023c3",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "858941fd-9e85-5bf1-b10a-795c8dca40d8",
+      "review_required_sentence_ids": [],
+      "token_in": 4266,
+      "token_out": 193,
+      "cost_usd": 0.00021109,
+      "latency_ms": 8434
+    },
+    {
+      "work_item_id": "08b23250-6d73-4765-aadd-98a1bb1e7f5b",
+      "packet_id": "988127e2-d313-5e31-98e8-a506af1bd599",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "4a3122d4-750e-55e4-bb76-841e348af876",
+      "review_required_sentence_ids": [],
+      "token_in": 1187,
+      "token_out": 847,
+      "cost_usd": 0.00062359,
+      "latency_ms": 34144
+    },
+    {
+      "work_item_id": "8ff9af71-34f1-497d-9b80-cf9871613ef7",
+      "packet_id": "3e512908-ab8d-50f9-9e09-5275d00333b0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "159b3722-3635-5874-b735-82475e25f9c3",
+      "review_required_sentence_ids": [],
+      "token_in": 6157,
+      "token_out": 1249,
+      "cost_usd": 0.00070025,
+      "latency_ms": 49495
+    },
+    {
+      "work_item_id": "799f5182-b056-4312-94ea-f13cb2277b61",
+      "packet_id": "f2b4599c-29f4-5607-87c6-c3db07116c9d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "cf28ebc9-5c0f-5975-a6c5-73a67efd913f",
+      "review_required_sentence_ids": [],
+      "token_in": 3225,
+      "token_out": 1986,
+      "cost_usd": 0.00093072,
+      "latency_ms": 78469
+    },
+    {
+      "work_item_id": "033a8093-d420-4760-aba9-0a8c002b8d39",
+      "packet_id": "3021b453-e12b-5b11-a7b1-99b5d258747f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "71173b90-700d-571c-816a-1fafc138203f",
+      "review_required_sentence_ids": [],
+      "token_in": 6786,
+      "token_out": 2430,
+      "cost_usd": 0.00121111,
+      "latency_ms": 94649
+    },
+    {
+      "work_item_id": "be8abf88-9b56-4d2f-b56a-8ddb8f285afd",
+      "packet_id": "723cde21-f2be-5d1d-a970-c9cf10f439be",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "fc3e3b95-d81f-5665-a020-4a7a92588a3b",
+      "review_required_sentence_ids": [],
+      "token_in": 4430,
+      "token_out": 827,
+      "cost_usd": 0.00073296,
+      "latency_ms": 33650
+    },
+    {
+      "work_item_id": "ca57d57e-2eba-4e82-9dab-e9cca09ce04b",
+      "packet_id": "3ec47bd2-3f9b-5d63-93a0-d31fe261922f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "02cb034c-fbbb-58e1-905d-97d4f336c93b",
+      "review_required_sentence_ids": [],
+      "token_in": 4970,
+      "token_out": 169,
+      "cost_usd": 0.00134968,
+      "latency_ms": 8286
+    },
+    {
+      "work_item_id": "829a7c42-909f-404c-ae45-4041127704bd",
+      "packet_id": "7c0b69da-f52a-50a4-8971-449f20a18aea",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "21dbacef-2ff8-5408-a5c9-2804e7d87b9d",
+      "review_required_sentence_ids": [],
+      "token_in": 5837,
+      "token_out": 3763,
+      "cost_usd": 0.00310192,
+      "latency_ms": 146762
+    },
+    {
+      "work_item_id": "93105d39-df6e-493f-9b21-a43f4997860f",
+      "packet_id": "d78a2406-cf90-5909-a95f-75f9b519a222",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "d56f7d4f-7592-534b-9bed-02281b5b421d",
+      "review_required_sentence_ids": [],
+      "token_in": 5546,
+      "token_out": 2979,
+      "cost_usd": 0.00269116,
+      "latency_ms": 116228
+    },
+    {
+      "work_item_id": "bf506df3-3bfc-40ab-bb53-ae3d83b68273",
+      "packet_id": "73b60b6b-bb21-53d1-881e-02e8860519d2",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "db2acfa2-9000-5254-aeba-ea40310d10bd",
+      "review_required_sentence_ids": [],
+      "token_in": 1620,
+      "token_out": 2702,
+      "cost_usd": 0.00152393,
+      "latency_ms": 106141
+    },
+    {
+      "work_item_id": "dad9ce3a-b154-4147-80d5-2ea6d99020fb",
+      "packet_id": "2094b83f-5a0a-5e37-8492-76dbe836f80f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "5dd1d55f-a7a0-5f36-9bcb-fab00ba7863f",
+      "review_required_sentence_ids": [],
+      "token_in": 3761,
+      "token_out": 205,
+      "cost_usd": 0.00102628,
+      "latency_ms": 9806
+    },
+    {
+      "work_item_id": "cfd6d9a3-b30a-47b6-85fe-5feec3803a1a",
+      "packet_id": "4b1b6ade-3a71-555c-b806-170cd40fb847",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "904b3ba3-9693-5b32-8e2b-b28018040988",
+      "review_required_sentence_ids": [],
+      "token_in": 1563,
+      "token_out": 2938,
+      "cost_usd": 0.00160709,
+      "latency_ms": 113441
+    },
+    {
+      "work_item_id": "d3453b3f-5fab-4aa4-814a-348938e607de",
+      "packet_id": "1aa34753-280b-5934-977f-057b5730e512",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "82391c76-e7cc-5a21-ab2f-7905b428891a",
+      "review_required_sentence_ids": [],
+      "token_in": 5039,
+      "token_out": 2677,
+      "cost_usd": 0.00243849,
+      "latency_ms": 104161
+    },
+    {
+      "work_item_id": "d4c9f954-26d5-4cd0-89bb-41b3023b1e25",
+      "packet_id": "f612c03f-6215-5348-920a-e0879b1e4964",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "38be7610-9bd5-5433-8e2a-746a1a0e0140",
+      "review_required_sentence_ids": [],
+      "token_in": 3397,
+      "token_out": 2571,
+      "cost_usd": 0.00191808,
+      "latency_ms": 98606
+    },
+    {
+      "work_item_id": "e82fdd7b-6c71-48e9-aad7-334ca3412b4c",
+      "packet_id": "5e1c5a4a-7036-5058-8b47-65ff8735a437",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "74194fc1-e3e7-5bf3-9c8a-62be0728ce6a",
+      "review_required_sentence_ids": [],
+      "token_in": 1592,
+      "token_out": 2568,
+      "cost_usd": 0.00145981,
+      "latency_ms": 97443
+    },
+    {
+      "work_item_id": "edad60d4-f650-4604-b1a1-e3b8be0e56e5",
+      "packet_id": "87e4e7f9-ca80-5cf5-b7dc-ba795906b2c0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "7cd4b9d2-04cc-5f6f-b639-6df105f70445",
+      "review_required_sentence_ids": [],
+      "token_in": 6977,
+      "token_out": 2750,
+      "cost_usd": 0.00273762,
+      "latency_ms": 105568
+    }
+  ],
+  "run_housekeeping": {
+    "expired_lease_count": 0,
+    "reclaimed_work_item_ids": [],
+    "budget_exceeded": false,
+    "budget_stop_reason": null
+  },
+  "review": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "total_issue_count": 0,
+    "total_action_count": 0,
+    "chapter_results": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "status": "qa_checked",
+        "issue_count": 0,
+        "action_count": 0,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "status": "qa_checked",
+        "issue_count": 0,
+        "action_count": 0,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      }
+    ]
+  },
+  "review_package_export": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "export_type": "review_package",
+    "document_status": "active",
+    "chapter_results": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "export_id": "253769ad-18fa-5362-900e-3ee70cb10ef6",
+        "export_type": "review_package",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/review-package-8cc49e94-dea6-5aa6-af19-5dd212b6f89f.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "export_id": "fb79f316-1ad6-5533-b025-8359e5b5d034",
+        "export_type": "review_package",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/review-package-57def113-7ad5-541b-a4b9-ef07c18991b3.json",
+        "manifest_path": null
+      }
+    ],
+    "file_path": null,
+    "manifest_path": null,
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "bilingual_export": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "export_type": "bilingual_html",
+    "document_status": "exported",
+    "chapter_results": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "export_id": "95ecf133-67b6-5166-a8bc-12d257cb5aa0",
+        "export_type": "bilingual_html",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/bilingual-8cc49e94-dea6-5aa6-af19-5dd212b6f89f.html",
+        "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/bilingual-8cc49e94-dea6-5aa6-af19-5dd212b6f89f.manifest.json"
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "export_id": "1571bf63-dbb3-5847-af2b-aa3163a663ec",
+        "export_type": "bilingual_html",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/bilingual-57def113-7ad5-541b-a4b9-ef07c18991b3.html",
+        "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/bilingual-57def113-7ad5-541b-a4b9-ef07c18991b3.manifest.json"
+      }
+    ],
+    "file_path": null,
+    "manifest_path": null,
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "merged_export": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "export_type": "merged_html",
+    "document_status": "exported",
+    "chapter_results": [],
+    "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.html",
+    "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.manifest.json",
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "document_summary_final": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "source_type": "pdf_text",
+    "status": "exported",
+    "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+    "author": null,
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 7,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "low",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 6007.429,
+      "average_span_count": 1274.303,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 0,
+      "suspicious_page_numbers": [],
+      "recovery_lane": null,
+      "trailing_reference_page_count": 1,
+      "academic_paper_candidate": false
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 7,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_document_title_recovered"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 9,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 7,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 4,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 8,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 2,
+          "page_family": "references",
+          "page_family_source": "inline_heading",
+          "page_family_heading": "References",
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_references_heading_recovered",
+            "page_family_references",
+            "page_family_source_inline_heading"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 15,
+    "sentence_count": 247,
+    "packet_count": 19,
+    "open_issue_count": 0,
+    "merged_export_ready": true,
+    "latest_merged_export_at": "2026-03-16T05:43:12.989814",
+    "chapter_bilingual_export_count": 2,
+    "latest_run_id": "91a15740-2ce1-4db5-ab09-975e71f3ff16",
+    "latest_run_status": "succeeded",
+    "chapters": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "ordinal": 1,
+        "title_src": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        "status": "exported",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "sentence_count": 167,
+        "packet_count": 14,
+        "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-16T05:43:12.944014",
+        "quality_summary": {
+          "issue_count": 0,
+          "action_count": 0,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 0,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "exported",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "page_family_references",
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "sentence_count": 80,
+        "packet_count": 5,
+        "open_issue_count": 0,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-16T05:43:12.950041",
+        "quality_summary": {
+          "issue_count": 0,
+          "action_count": 0,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 0,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      }
+    ]
+  },
+  "translation_samples": [
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "target_text": "构建有效的人机协作团队：开发能够补充多位专家能力的机器学习模型",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:37:30.728794"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "\\050a\\051 Accurac y of human e xperts \\050b\\051 Accurac y of classi\\002er \\050c\\051 Instance allocation",
+      "target_text": "（a）人类专家的准确率 （b）分类器的准确率 （c）实例分配",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:37:33.265068"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Figure 2: T eam accurac y of our approach and the baselines with increasing human e xpert di v ersity \\050number of non-o v erlapping classes\\051 on CIF AR-100. Shaded re gions display standard errors.",
+      "target_text": "图2：在CIFAR-100数据集上，随着人类专家多样性（非重叠类别数量）的增加，我们的方法与各基线的团队准确率。阴影区域显示标准误差。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:37:47.001506"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Figure 1: T eam accurac y of our approach and the baselines with increasing team size on the T witter dataset. Shaded re gions display standard errors. the o v erall performance with gro wing team size. This aligns with our e xpectation as with increasing team size more ac- curate human e x pe rts might enter the team and the co v ered feature space in which at least one team member is lik ely to perform an accurate prediction potentially increases. When taking a closer look, we \\002nd that our approach \\050 Classi\\002er & Expert T eam \\051 outperforms all baselines. The a v erage im- pro v ement across all team sizes is 3.66% o v er the JSF base- line, 6.76% o v er the One Classi\\002er baseline, 7.92% o v er the Best Expert baseline, 28.38% o v er the Random Expert base- line, and 7.44% o v er the Classi\\002er T eam . F rom the 6.96% performance impro v ement of our approach o v er the Expert T eam , it becomes e vident that the classi\\002er in our approach learns to accurately predict the areas of the feature space that are not co v ered by human e xperts' competencies. 5.2 CIF AR-100 Dataset The analysis in this section is threefold and uses the CIF AR- 100 dataset [ Krizhe vsk y , 2009 ] . First, we pro vide further e xperimental e vidence on the performance of our approach with v arying team sizes. Second, we in v estig ate the in\\003u- ence of the di v ersity of human e xperts' capabilities on our approach. Third, we visualize ho w our approach distrib utes instances among classi\\002er and human e xperts relati v e to each team member' s respecti v e competencies. Dataset and Expert Generation. The dataset consists of 60,000 images dra wn from 100 subclasses which are grouped into 20 superclasses of equal size. Using the 20 superclasses for the classi\\002cation task and the 100 subclasses for synthetic human e xpert generation allo ws us to model their competen- cies with more granularity compared to the T witter dataset. F or the \\002rst analysis, we simulate human e xperts in the fol- lo wing w ay . By design, for each of m human e xperts in the team, we dra w k j \\030 N \\05070 ; 5\\051 8 j 2 f 1 ; : : : ; m g from a nor - mal distrib ution with b k j c denoting the number of subclasses that ea ch human e xpert predicts perfectly . F or each of m hu- man e xperts, the set of perfectly predicted subclasses is sam- pled uniformly at random without replacement from all 100 subclasses and mapped to the respecti v e superclasses. F or the remaining subclasses, each e xpert predicts uniformly at random across all superclasses. F or the second analysis, we",
+      "target_text": "图1：在Twitter数据集上，我们的方法与各基线方法随着团队规模增大时的团队准确率。阴影区域显示标准误差。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:38:51.749052"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "T eam Accurac y \\050%\\051 Indi vidual Accurac y \\050%\\051",
+      "target_text": "团队准确率（%） 个体准确率（%）",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:39:33.742141"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Figure 3: V isualization of the team members' performance\\227human e xperts' accurac y in \\050a\\051 and classi\\002er accurac y in \\050b\\051\\227and instance assignment by the allocation system in \\050c\\051 on a subset of the CIF AR-100 input space. select m = 2 human e xperts o v er i 2 N runs. T o isolate the in\\003uence of di v ersity , we v ary the capabilities of the second human e xpert per run while k eeping the ones of the \\002rst \\002x ed. F or i = 1 , we select the \\002rst 90 subclasses f 1 ; : : : ; 90 g in alphabetical order for which both human e xperts predict the corresponding superclass perfectly . F or the remaining sub- classes, both e xperts predict uniformly at random across all superclasses. W e then v ary the competencies of the second human e xpert such that for run i the perfectly predicted sub- classes are f i; : : : ; 89 + i g . By increasing i per run by 1, the number of subclasses in which only one of both human e x- perts predicts perfectly increases by 2 subclasses resulting in a di v ersity increase. F or the third analysis, we resort to one of these di v ersity scenarios. Model. W e use a ResNet-18 model [ He et al. , 2016 ] pre- trained on ImageNet as a \\002x ed feature e xtractor with 512 out- put units. These features are used to train our approach and the algorithmic baselines. The classi\\002er and allocation sys- tem are modeled by a neural netw ork consisting of a single hidden layer with 100 units follo wed by a ReLU acti v ation. Experimental Setup. F or the \\002rst analysis, we assess the performance of teams with 2 to 10 human e xperts with a nor - mally distrib uted number of perfectly predicted subclasses as pre viously described. F or the second analysis, we v ary i from 1 to 11 for the second human e xpert to gradually increase the number of non-o v erlapping subclasses. As a result, di v ersity is 0 for run i = 1 and 20 for run i = 11 . F or the third anal- ysis, we select one of the di v ersity scenarios\\227namely where the \\002rst human e xpert is de\\002ned as f 1 ; : : : ; 90 g and the sec- ond one as f 6 ; : : : ; 95 g \\227to visualize ho w instances are dis- trib uted among classi\\002er and human e xperts relati v e to each team member' s respecti v e competencies. W e di vide the 50,000 training images into a training and v alidation split of 80% and 20% and use the 10,000 test im- ages as the test split. W e train the models for 100 epochs us- ing Adam optimizer with a learning rate of 5 \\001 10 \\000 3 , a cosine annealing learning rate scheduler , wei ght decay of 5 \\001 10 \\000 4 , and a batch size of 512. W e apply early stopping on the v ali- dation split and report the results on the test split. W e repeat the e xperiments 5 times with dif ferent seeds. Results. First, consistent with the results from Section 5.1, we \\002nd that our approach bene\\002ts fr o m an increasing num- ber of human e xperts. This is in line with our e xpectations as the probability that at least one e xpert has strengths in distinct subclasses or on all subclasses of a superclass is higher with an increasing number of human e xperts. In both cases, the classi\\002er can focus on an e v en smaller area of the input space. On a v erage, our approach \\050 Classi\\002er & Expert T eam \\051 outper - forms the JSF baseline by 19.77%, the Best Expert baseline by 19.73%, the One Classi\\002er baseline by 25.86%, the Ran- dom Expert baseline by 30.75%, and the Classi\\002er T eam by 24.88%. Ev en though the contrib ution from the classi\\002er in our approach diminishes the more human e xperts become part of the team, it le v erages each indi vidual team member' s capa- bilities best. This can be observ ed from a performance g ain of 0.98% compared to the Expert T eam . W e refer to Figure A1 in Appendix A for an additional visualization. Second, we \\002nd that for the Classi\\002er & Expert T eam , a higher di v ersity of human team members' capabili ties con- trib utes to higher team performance as displayed in Figure 2. Ev en though the contrib ution of the classi\\002er diminishes in the presence of increasingly di v erse human e xperts, it adds an a v erage performance g ain of 2.40% across all runs com- pared to the Expert T eam . Contrary , the JSF baseline does not bene\\002t from a di v ersity increase b ut instead assigns the instances to the best human e xpert. Note that we aggre g ate the Best Expert and Random Expert baseline in Figure 2 as both human e xperts ha v e the same accurac y by design. Finally , we illustrate the capabilities of our approach in Figure 3: \\0501\\051 the classi\\002er' s compensation for human e x- perts' weaknesses and \\0502\\051 the allocat ion system' s assignment of instances rel ati v e to each team member' s competencies. F or the visualization, we reduce the hidden layer' s features to 2 dimensi on s using the UMAP algorithm [ McInnes et al. , 2018 ] and aggre g ate a set of images in each he xagon. Fig- ure 3a and Figure 3b sho w the accurac y of 2 hu m an e xperts and the classi\\002er , respecti v ely . In combination, the illustra- tions re v eal that the classi\\002er primarily learns to optimize its performance on those images \\050green he xagons in Figure 3b\\051 where human e xperts tend to be less accurate \\050yello w and red he xagons in Figure 3a\\051. Figure 3c displays that the allocation system assigns those instances to the classi\\002er where the hu- man e xperts are less accurate. Here, dark areas indicate the assignment of the images to the classi\\002er and brighter areas denote the allocation to one of the human e xperts. 5.3 NIH Dataset Lastly , we e v aluate our approach on a real-w orld chest X-ray dataset collected by the NIH Clinical Center [ Majk o wska et al. , 2020; W ang et al. , 2017 ] . In the pre vious e xperiments, we induced a synthetic connection between certain features",
+      "target_text": "图3：在CIFAR-100输入空间的一个子集上，可视化团队成员的表现——（a）人类专家的准确率和（b）分类器的准确率——以及分配系统在（c）中的实例分配。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:40:53.698942"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "P articularly , in high-stak es decision-making \\050e.g., medicine\\051, the performance impro v ements can contrib ute to further re- ducing potentially se v ere consequences of misdiagnoses.",
+      "target_text": "特别是在高风险决策（如医疗领域）中，性能提升有助于进一步减少误诊可能导致的严重后果。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:42:21.617905"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Second, we in v estig ate the in\\003uence of human e xperts' di v ersity with re g ard to their capabilities on the team performance using CIF AR-100 and visually illus- trate the inner w orkings of our approach.",
+      "target_text": "其次，我们使用CIFAR-100数据集，研究人类专家在能力方面的多样性对团队性能的影响，并可视化展示我们方法的内在运作机制。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:38:46.715403"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "W e use a ResNet-18 model pretrained on the CheX- pert dataset\\227a dif ferent X-ray dataset for chest radiograph interpretation [ Irvin et al. , 2019 ] \\227which serv es as a \\002x ed feature e xtractor with 512 output units.",
+      "target_text": "我们使用在CheXpert数据集上预训练的ResNet-18模型——这是一个用于胸部X光片解读的不同X射线数据集[Irvin等人，2019]——作为具有512个输出单元的固定特征提取器。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:41:57.973203"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Thus, from a team perspective, the potential to im-prove the overall performance remains unused.",
+      "target_text": "因此，从团队角度来看，提升整体性能的潜力仍未得到利用。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:40:42.977360"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "Here b y , it can be of par - ticular interest in resource-scarce domains to consult e xactly the right e xpert to a v oid potentially costly mistak es.",
+      "target_text": "因此，在资源稀缺的领域中，咨询恰好合适的专家以避免潜在代价高昂的错误可能具有特殊意义。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:40:13.780693"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+      "source_text": "The tweets are additionally annotated with a second label indicating their di- alect \\050i.e., African-American English \\050AAE\\051 or non-African- American English \\050non-AAE\\051\\051.",
+      "target_text": "这些推文还额外标注了第二个标签，指示其方言（即非裔美国人英语（AAE）或非非裔美国人英语（non-AAE））。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T05:43:12.807507"
+    }
+  ],
+  "finished_at": "2026-03-16T05:43:13.005714+00:00",
+  "duration_seconds": 351.261
+}

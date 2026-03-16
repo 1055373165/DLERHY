@@ -6,9 +6,11 @@ import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import sys
+import time
 
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
@@ -37,7 +39,7 @@ from book_agent.domain.enums import (
     TermStatus,
     TermType,
 )
-from book_agent.domain.models import Chapter, IssueAction, MemorySnapshot, Sentence, TermEntry
+from book_agent.domain.models import Chapter, Document, IssueAction, MemorySnapshot, Sentence, TermEntry
 from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
@@ -395,8 +397,13 @@ class ApiWorkflowTests(unittest.TestCase):
         *,
         extra_files: dict[str, str | bytes] | None = None,
     ) -> Path:
-        epub_path = Path(self.tempdir.name) / "multi-chapter.epub"
         toc_entries = [(title, href) for title, href, _content in chapters]
+        fingerprint_input = "|".join(
+            f"{title}:{href}:{sha256(content.encode('utf-8')).hexdigest()}"
+            for title, href, content in chapters
+        )
+        epub_name = f"multi-chapter-{sha256(fingerprint_input.encode('utf-8')).hexdigest()[:12]}.epub"
+        epub_path = Path(self.tempdir.name) / epub_name
         with zipfile.ZipFile(epub_path, "w") as archive:
             archive.writestr("mimetype", "application/epub+zip")
             archive.writestr("META-INF/container.xml", CONTAINER_XML)
@@ -407,6 +414,17 @@ class ApiWorkflowTests(unittest.TestCase):
             for asset_path, content in (extra_files or {}).items():
                 archive.writestr(asset_path, content)
         return epub_path
+
+    def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 10.0) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            response = self.client.get(f"/v1/runs/{run_id}")
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            if payload["status"] in {"succeeded", "failed", "paused", "cancelled"}:
+                return payload
+            time.sleep(0.2)
+        self.fail(f"Run {run_id} did not reach terminal state within {timeout_seconds} seconds.")
 
     def test_document_api_happy_path(self) -> None:
         epub_path = self._write_epub()
@@ -465,6 +483,220 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(payload["title"], "Business Strategy Handbook")
         uploaded_files = list(Path(self.app.state.upload_root).rglob("uploaded-book.epub"))
         self.assertEqual(len(uploaded_files), 1)
+
+    def test_translate_full_run_executes_review_and_exports_in_background(self) -> None:
+        epub_path = self._write_epub()
+
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "api-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        resumed = self.client.post(
+            f"/v1/runs/{run_id}/resume",
+            json={"actor_id": "api-test", "note": "start run"},
+        )
+        self.assertEqual(resumed.status_code, 200)
+
+        terminal = self._wait_for_run_terminal(run_id)
+        self.assertEqual(terminal["status"], "succeeded")
+
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
+        summary_payload = summary.json()
+        self.assertTrue(summary_payload["merged_export_ready"])
+        self.assertEqual(summary_payload["chapter_bilingual_export_count"], 1)
+        chapter_id = summary_payload["chapters"][0]["chapter_id"]
+        self.assertTrue(summary_payload["chapters"][0]["bilingual_export_ready"])
+
+        merged_download = self.client.get(
+            f"/v1/documents/{document_id}/exports/download",
+            params={"export_type": "merged_html"},
+        )
+        self.assertEqual(merged_download.status_code, 200)
+        self.assertIn("application/zip", merged_download.headers["content-type"])
+        with zipfile.ZipFile(BytesIO(merged_download.content)) as archive:
+            names = archive.namelist()
+        self.assertIn(f"{document_id}-analysis-bundle/merged-document.html", names)
+        self.assertIn(f"{document_id}-analysis-bundle/bilingual-{chapter_id}.html", names)
+
+        chapter_download = self.client.get(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/exports/download",
+            params={"export_type": "bilingual_html"},
+        )
+        self.assertEqual(chapter_download.status_code, 200)
+        self.assertIn("text/html", chapter_download.headers["content-type"])
+
+        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        history_payload = history.json()
+        self.assertEqual(history_payload["record_count"], 1)
+        self.assertEqual(history_payload["entries"][0]["document_id"], document_id)
+        self.assertTrue(history_payload["entries"][0]["merged_export_ready"])
+        self.assertEqual(history_payload["entries"][0]["chapter_bilingual_export_count"], 1)
+
+    def test_document_history_supports_search_and_filters(self) -> None:
+        first_epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ]
+        )
+        first_bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(first_epub_path)})
+        self.assertEqual(first_bootstrap.status_code, 201)
+        first_document_id = first_bootstrap.json()["document_id"]
+
+        second_epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter Two", "chapter2.xhtml", CHAPTER_XHTML.replace("Chapter One", "Chapter Two")),
+            ]
+        )
+        second_bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(second_epub_path)})
+        self.assertEqual(second_bootstrap.status_code, 201)
+        second_document_id = second_bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": first_document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "history-filter-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        resumed = self.client.post(
+            f"/v1/runs/{run_id}/resume",
+            json={"actor_id": "api-test", "note": "start run"},
+        )
+        self.assertEqual(resumed.status_code, 200)
+        terminal = self._wait_for_run_terminal(run_id)
+        self.assertEqual(terminal["status"], "succeeded")
+
+        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        history_payload = history.json()
+        self.assertEqual(history_payload["total_count"], 2)
+        self.assertEqual(history_payload["record_count"], 2)
+
+        query_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "query": first_document_id[:8]},
+        )
+        self.assertEqual(query_history.status_code, 200)
+        query_payload = query_history.json()
+        self.assertEqual(query_payload["total_count"], 1)
+        self.assertEqual(query_payload["entries"][0]["document_id"], first_document_id)
+
+        exported_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "status": "exported"},
+        )
+        self.assertEqual(exported_history.status_code, 200)
+        exported_payload = exported_history.json()
+        self.assertEqual(exported_payload["total_count"], 1)
+        self.assertEqual(exported_payload["entries"][0]["document_id"], first_document_id)
+
+        active_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "status": "active"},
+        )
+        self.assertEqual(active_history.status_code, 200)
+        active_payload = active_history.json()
+        self.assertEqual(active_payload["total_count"], 1)
+        self.assertEqual(active_payload["entries"][0]["document_id"], second_document_id)
+
+        run_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "latest_run_status": "succeeded"},
+        )
+        self.assertEqual(run_history.status_code, 200)
+        run_payload = run_history.json()
+        self.assertEqual(run_payload["total_count"], 1)
+        self.assertEqual(run_payload["entries"][0]["document_id"], first_document_id)
+
+        merged_ready_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "merged_export_ready": "true"},
+        )
+        self.assertEqual(merged_ready_history.status_code, 200)
+        merged_ready_payload = merged_ready_history.json()
+        self.assertEqual(merged_ready_payload["total_count"], 1)
+        self.assertEqual(merged_ready_payload["entries"][0]["document_id"], first_document_id)
+
+        merged_pending_history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "merged_export_ready": "false"},
+        )
+        self.assertEqual(merged_pending_history.status_code, 200)
+        merged_pending_payload = merged_pending_history.json()
+        self.assertEqual(merged_pending_payload["total_count"], 1)
+        self.assertEqual(merged_pending_payload["entries"][0]["document_id"], second_document_id)
+
+    def test_retry_run_restarts_pipeline_with_previous_lineage(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "retry-test"},
+                "budget": {"max_parallel_workers": 2},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        original_run_id = created.json()["run_id"]
+
+        cancelled = self.client.post(
+            f"/v1/runs/{original_run_id}/cancel",
+            json={"actor_id": "api-test", "note": "cancel before start"},
+        )
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(cancelled.json()["status"], "cancelled")
+
+        retried = self.client.post(
+            f"/v1/runs/{original_run_id}/retry",
+            json={"actor_id": "api-retry", "note": "retry cancelled run"},
+        )
+        self.assertEqual(retried.status_code, 200)
+        retry_payload = retried.json()
+        self.assertNotEqual(retry_payload["run_id"], original_run_id)
+        self.assertEqual(retry_payload["document_id"], document_id)
+        self.assertEqual(retry_payload["status"], "running")
+        self.assertEqual(retry_payload["resume_from_run_id"], original_run_id)
+        self.assertEqual(retry_payload["requested_by"], "api-retry")
+        self.assertEqual(retry_payload["budget"]["max_parallel_workers"], 2)
+
+        terminal = self._wait_for_run_terminal(retry_payload["run_id"])
+        self.assertEqual(terminal["status"], "succeeded")
+        self.assertEqual(terminal["resume_from_run_id"], original_run_id)
+
+        history = self.client.get(
+            "/v1/documents/history",
+            params={"limit": 10, "offset": 0, "latest_run_status": "succeeded"},
+        )
+        self.assertEqual(history.status_code, 200)
+        history_payload = history.json()
+        self.assertEqual(history_payload["total_count"], 1)
+        self.assertEqual(history_payload["entries"][0]["document_id"], document_id)
+        self.assertEqual(history_payload["entries"][0]["latest_run_id"], retry_payload["run_id"])
 
     def test_export_download_bundles_multi_chapter_exports_as_zip(self) -> None:
         epub_path = self._write_epub_with_chapters(
@@ -807,6 +1039,12 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(chapter_result["issue_count"], 1)
         self.assertEqual(chapter_result["blocking_issue_count"], 0)
 
+        bilingual_export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "bilingual_html"},
+        )
+        self.assertEqual(bilingual_export.status_code, 200)
+
     def test_format_pollution_is_reported_in_review_summary(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
@@ -916,6 +1154,82 @@ class ApiWorkflowTests(unittest.TestCase):
         merged_html = Path(export.json()["file_path"]).read_text(encoding="utf-8")
         self.assertNotIn(frontmatter["chapter_id"], merged_html)
         self.assertIn("Chapter One", merged_html)
+        self.assertIn("Chapter 1</div><h2>ZH::Chapter One</h2>", merged_html)
+        self.assertNotIn("Chapter 2</div><h2>ZH::Chapter One</h2>", merged_html)
+
+    def test_merged_html_export_deduplicates_exact_duplicate_epub_chapters(self) -> None:
+        duplicate_welcome = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="welcome">Welcome</h1>
+    <p>Thank you for reading.</p>
+  </body>
+</html>
+"""
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Welcome", "welcome-a.xhtml", duplicate_welcome),
+                ("Welcome", "welcome-b.xhtml", duplicate_welcome),
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ]
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+
+        export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "merged_html"},
+        )
+        self.assertEqual(export.status_code, 200)
+        export_data = export.json()
+        merged_html = Path(export_data["file_path"]).read_text(encoding="utf-8")
+        manifest = json.loads(Path(export_data["manifest_path"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(merged_html.count(">ZH::Welcome</h2>"), 1)
+        self.assertEqual(merged_html.count("class='source-title'>Welcome</div>"), 1)
+        self.assertEqual(manifest["chapter_count"], 2)
+        self.assertEqual(manifest["chapters"][0]["ordinal"], 1)
+        self.assertEqual(manifest["chapters"][1]["ordinal"], 2)
+
+    def test_merged_html_export_hides_filename_like_author_metadata(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ]
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        with self.session_factory() as session:
+            document = session.get(Document, document_id)
+            assert document is not None
+            document.author = "welcome.html"
+            session.merge(document)
+            session.commit()
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+
+        export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "merged_html"},
+        )
+        self.assertEqual(export.status_code, 200)
+        export_data = export.json()
+        merged_html = Path(export_data["file_path"]).read_text(encoding="utf-8")
+        manifest = json.loads(Path(export_data["manifest_path"]).read_text(encoding="utf-8"))
+
+        self.assertNotIn("welcome.html", merged_html)
+        self.assertIsNone(manifest["author"])
 
     def test_merged_html_export_renders_structured_artifacts_with_special_modes(self) -> None:
         epub_path = self._write_epub_with_chapters(
@@ -969,6 +1283,8 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(translate.status_code, 200)
         review = self.client.post(f"/v1/documents/{document_id}/review")
         self.assertEqual(review.status_code, 200)
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
         export = self.client.post(
             f"/v1/documents/{document_id}/export",
             json={"export_type": "merged_html"},
@@ -985,8 +1301,8 @@ class ApiWorkflowTests(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             names = archive.namelist()
 
-        self.assertIn(f"{document_id}-merged_html/merged-document.html", names)
-        self.assertIn(f"{document_id}-merged_html/assets/OEBPS/images/agent-loop.png", names)
+        self.assertIn(f"{document_id}-analysis-bundle/merged-document.html", names)
+        self.assertIn(f"{document_id}-analysis-bundle/assets/OEBPS/images/agent-loop.png", names)
 
     def test_execute_action_with_followup_realigns_missing_edges(self) -> None:
         epub_path = self._write_epub()

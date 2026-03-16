@@ -69,7 +69,8 @@ CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
-    <p>Pricing power matters. Strategy compounds.</p>
+    <p>The solution to this problem is context engineering.</p>
+    <p>Context engineering is a discipline.</p>
     <blockquote>A quoted paragraph.</blockquote>
   </body>
 </html>
@@ -162,7 +163,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         Base.metadata.create_all(self.engine)
         self.session_factory = build_session_factory(engine=self.engine)
 
-    def _bootstrap_to_db(self) -> tuple[str, str]:
+    def _bootstrap_to_db(self) -> tuple[str, list[str]]:
         with tempfile.TemporaryDirectory() as tmpdir:
             epub_path = Path(tmpdir) / "sample.epub"
             with zipfile.ZipFile(epub_path, "w") as archive:
@@ -177,10 +178,11 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         with self.session_factory() as session:
             BootstrapRepository(session).save(artifacts)
             session.commit()
-        return artifacts.document.id, artifacts.translation_packets[0].id
+        packet_ids = [packet.id for packet in artifacts.translation_packets]
+        return artifacts.document.id, packet_ids
 
     def test_llm_worker_metadata_and_prompt_are_wired(self) -> None:
-        _, packet_id = self._bootstrap_to_db()
+        _, packet_ids = self._bootstrap_to_db()
         fake_client = FakeTranslationClient()
         worker = LLMTranslationWorker(
             fake_client,
@@ -190,11 +192,17 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         )
 
         with self.session_factory() as session:
-            bundle = TranslationRepository(session).load_packet_bundle(packet_id)
+            repository = TranslationRepository(session)
+            heading_packet_id, first_paragraph_packet_id, second_paragraph_packet_id = packet_ids[:3]
+            TranslationService(repository).execute_packet(heading_packet_id)
+            TranslationService(repository).execute_packet(first_paragraph_packet_id)
+            session.flush()
+
+            bundle = repository.load_packet_bundle(second_paragraph_packet_id)
             first_sentence_id = bundle.current_sentences[0].id
             fake_client.source_sentence_ids = ["S1"]
-            service = TranslationService(TranslationRepository(session), worker=worker)
-            artifacts = service.execute_packet(packet_id)
+            service = TranslationService(repository, worker=worker)
+            artifacts = service.execute_packet(second_paragraph_packet_id)
             session.commit()
 
             self.assertEqual(artifacts.translation_run.model_name, "mock-llm")
@@ -203,14 +211,17 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             self.assertEqual(artifacts.alignment_edges[0].sentence_id, first_sentence_id)
 
         self.assertEqual(len(fake_client.requests), 1)
-        self.assertIn("Pricing power matters.", fake_client.requests[0].user_prompt)
+        self.assertIn("Context engineering is a discipline.", fake_client.requests[0].user_prompt)
+        self.assertIn("The solution to this problem is context engineering. => ZH::The solution to this problem is context engineering.", fake_client.requests[0].user_prompt)
         self.assertIn("[S1]", fake_client.requests[0].user_prompt)
         self.assertNotIn(first_sentence_id, fake_client.requests[0].user_prompt)
+        self.assertNotIn("Packet ID:", fake_client.requests[0].user_prompt)
         self.assertEqual(fake_client.requests[0].sentence_alias_map["S1"], first_sentence_id)
         self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
 
     def test_llm_worker_drops_invalid_sentence_ids_before_persistence(self) -> None:
-        _, packet_id = self._bootstrap_to_db()
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[0]
         fake_client = FakeTranslationClient()
         fake_client.source_sentence_ids = ["broken-id"]
         worker = LLMTranslationWorker(
@@ -335,6 +346,87 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn('"packet_id"', call["payload"]["messages"][1]["content"])
         self.assertEqual(call["payload"]["response_format"]["type"], "json_object")
 
+    def test_openai_compatible_client_salvages_fenced_chat_completion_json(self) -> None:
+        transport = FakeJSONTransport(
+            {
+                "id": "chatcmpl_456",
+                "usage": {"prompt_tokens": 55, "completion_tokens": 33, "total_tokens": 88},
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "Here is the requested payload.\n"
+                                "```json\n"
+                                '{"packet_id":"pkt_1","target_segments":[{"temp_id":"t1","text_zh":"译文","segment_type":"sentence","source_sentence_ids":["s1"],"confidence":0.91}],"alignment_suggestions":[{"source_sentence_ids":["s1"],"target_temp_ids":["t1"],"relation_type":"1:1","confidence":0.93}],"low_confidence_flags":[],"notes":[]}\n'
+                                "```"
+                            )
+                        }
+                    }
+                ],
+            }
+        )
+        client = OpenAICompatibleTranslationClient(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            transport=transport,
+        )
+
+        output = client.generate_translation(
+            TranslationPromptRequest(
+                packet_id="pkt_1",
+                model_name="deepseek-chat",
+                prompt_version="p0.llm.v1",
+                system_prompt="system",
+                user_prompt="user",
+                response_schema=TranslationWorkerOutput.model_json_schema(),
+            )
+        )
+
+        self.assertEqual(output.packet_id, "pkt_1")
+        self.assertEqual(output.target_segments[0].text_zh, "译文")
+
+    def test_openai_compatible_client_salvages_wrapped_json_object_from_text(self) -> None:
+        transport = FakeJSONTransport(
+            {
+                "id": "resp_456",
+                "usage": {"input_tokens": 66, "output_tokens": 44, "total_tokens": 110},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": (
+                                    "Sure. The structured payload is below:\n"
+                                    '{"translation":{"packet_id":"pkt_1","target_segments":[{"temp_id":"t1","text_zh":"译文","segment_type":"sentence","source_sentence_ids":["s1"],"confidence":0.91}],"alignment_suggestions":[{"source_sentence_ids":["s1"],"target_temp_ids":["t1"],"relation_type":"1:1","confidence":0.93}],"low_confidence_flags":[],"notes":[]}}\n'
+                                    "Use it as-is."
+                                ),
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        client = OpenAICompatibleTranslationClient(
+            api_key="test-key",
+            base_url="https://provider.example/v1/responses",
+            transport=transport,
+        )
+
+        output = client.generate_translation(
+            TranslationPromptRequest(
+                packet_id="pkt_1",
+                model_name="gpt-test",
+                prompt_version="p0.llm.v1",
+                system_prompt="system",
+                user_prompt="user",
+                response_schema=TranslationWorkerOutput.model_json_schema(),
+            )
+        )
+
+        self.assertEqual(output.packet_id, "pkt_1")
+        self.assertEqual(output.target_segments[0].text_zh, "译文")
+
     def test_factory_builds_openai_compatible_worker_when_credentials_exist(self) -> None:
         settings = Settings(
             translation_backend="openai_compatible",
@@ -396,7 +488,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                 build_translation_worker(settings)
 
     def test_translation_service_normalizes_common_llm_output_labels(self) -> None:
-        _, packet_id = self._bootstrap_to_db()
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[0]
 
         with self.session_factory() as session:
             bundle = TranslationRepository(session).load_packet_bundle(packet_id)
@@ -412,7 +505,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             self.assertEqual(artifacts.alignment_edges[0].relation_type.value, "1:1")
 
     def test_translation_service_persists_usage_metadata_from_worker_result(self) -> None:
-        _, packet_id = self._bootstrap_to_db()
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[0]
 
         class UsageAwareClient:
             def __init__(self, source_sentence_ids: list[str]) -> None:

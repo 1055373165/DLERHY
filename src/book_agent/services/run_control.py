@@ -283,6 +283,60 @@ class RunControlService:
             detail_json=detail_json,
         )
 
+    def retry_run(
+        self,
+        run_id: str,
+        *,
+        actor_id: str,
+        note: str | None = None,
+        detail_json: dict[str, Any] | None = None,
+    ) -> DocumentRunSummary:
+        previous_run = self.repository.get_run(run_id)
+        if previous_run.status not in {
+            DocumentRunStatus.FAILED,
+            DocumentRunStatus.CANCELLED,
+            DocumentRunStatus.PAUSED,
+        }:
+            raise RunControlTransitionError(
+                "Only failed, cancelled, or paused runs can be retried from history."
+            )
+
+        previous_budget = self.repository.get_budget_for_run(run_id)
+        retry_summary = self.create_run(
+            document_id=previous_run.document_id,
+            run_type=previous_run.run_type,
+            requested_by=actor_id,
+            backend=previous_run.backend,
+            model_name=previous_run.model_name,
+            priority=previous_run.priority,
+            resume_from_run_id=run_id,
+            status_detail_json=self._retry_status_detail(previous_run.status_detail_json or {}, run_id),
+            budget=self._to_budget_summary(previous_budget),
+        )
+        previous_event = RunAuditEvent(
+            run_id=previous_run.id,
+            work_item_id=None,
+            event_type="run.retry_requested",
+            actor_type=ActorType.HUMAN,
+            actor_id=actor_id,
+            created_at=_utcnow(),
+            payload_json={
+                "retry_run_id": retry_summary.run_id,
+                "note": note,
+                "detail_json": detail_json or {},
+            },
+        )
+        self.repository.save_run(previous_run, audit_event=previous_event)
+        return self.resume_run(
+            retry_summary.run_id,
+            actor_id=actor_id,
+            note=note or f"Retry run from {run_id}",
+            detail_json={
+                **(detail_json or {}),
+                "retry_of_run_id": run_id,
+            },
+        )
+
     def drain_run(
         self,
         run_id: str,
@@ -505,6 +559,40 @@ class RunControlService:
                 "consecutive_failures": 0,
             },
         )
+        return merged
+
+    def _retry_status_detail(self, current: dict[str, Any], previous_run_id: str) -> dict[str, Any]:
+        merged = dict(current)
+        merged.pop("last_control", None)
+        merged["retry_of_run_id"] = previous_run_id
+        merged["usage_summary"] = {
+            "token_in": 0,
+            "token_out": 0,
+            "cost_usd": 0.0,
+            "latency_ms": 0,
+        }
+        merged["control_counters"] = {
+            "seeded_work_item_count": 0,
+            "completed_work_item_count": 0,
+            "retryable_failure_count": 0,
+            "terminal_failure_count": 0,
+            "expired_lease_reclaim_count": 0,
+            "consecutive_failures": 0,
+        }
+        pipeline = merged.get("pipeline")
+        if isinstance(pipeline, dict):
+            pipeline_copy = dict(pipeline)
+            pipeline_copy["current_stage"] = "translate"
+            stages = pipeline_copy.get("stages")
+            if isinstance(stages, dict):
+                pipeline_copy["stages"] = {
+                    stage_name: {
+                        **(stage_value if isinstance(stage_value, dict) else {}),
+                        "status": "pending",
+                    }
+                    for stage_name, stage_value in stages.items()
+                }
+            merged["pipeline"] = pipeline_copy
         return merged
 
     def _to_budget_model(self, budget: RunBudgetSummary | None) -> RunBudget | None:

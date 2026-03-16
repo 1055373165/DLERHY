@@ -131,7 +131,7 @@
       },
       {
         "ordinal": 12,
-        "title_src": "Deploying an LLM on a Raspberry Pi: How low canyougo?",
+        "title_src": "Deploying an LLM on a Raspberry Pi: How low can yougo?",
         "risk_level": "low",
         "source_page_start": 377,
         "source_page_end": 400,
@@ -140,7 +140,7 @@
       },
       {
         "ordinal": 13,
-        "title_src": "Production, an ever-changing landscape: Things arejust getting started",
+        "title_src": "Production, an ever-changing landscape: Things are just getting started",
         "risk_level": "low",
         "source_page_start": 401,
         "source_page_end": 429,
@@ -233,8 +233,8 @@
       "Large language model applications: Building an interactive experience",
       "Creating an LLM project:",
       "Creating a coding copilot project:",
-      "Deploying an LLM on a Raspberry Pi: How low canyougo?",
-      "Production, an ever-changing landscape: Things arejust getting started",
+      "Deploying an LLM on a Raspberry Pi: How low can yougo?",
+      "Production, an ever-changing landscape: Things are just getting started",
       "Appendix A",
       "Appendix B Reinforcement learning",
       "Appendix C",

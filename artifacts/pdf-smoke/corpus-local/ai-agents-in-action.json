@@ -36,7 +36,8 @@
         "source_page_end": 22,
         "pdf_section_family": "frontmatter",
         "structure_flags": [
-          "page_family_frontmatter"
+          "page_family_frontmatter",
+          "embedded_document_title_recovered"
         ]
       },
       {
@@ -122,7 +123,7 @@
       },
       {
         "ordinal": 11,
-        "title_src": "Agent reasoning and evaluation",
+        "title_src": "Agent reasoning and evaluation Nowth at we veexamined",
         "risk_level": "low",
         "source_page_start": 266,
         "source_page_end": 293,
@@ -210,7 +211,7 @@
       "Assembling and using an agent platform",
       "Understanding agent memory and knowledge",
       "Mastering agent prompts with prompt flow",
-      "Agent reasoning and evaluation",
+      "Agent reasoning and evaluation Nowth at we veexamined",
       "Agent planning and feedback",
       "Appendix A Accessing OpenAI",
       "Appendix B Python development",
@@ -950,9 +951,11 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 1
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "embedded_document_title_recovered"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,

@@ -1,0 +1,946 @@
+{
+  "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+  "chapter_title": "References",
+  "quality_summary": {
+    "issue_count": 1,
+    "action_count": 1,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": {
+    "schema_version": 1,
+    "document_page_count": 11,
+    "page_count": 2,
+    "page_range": {
+      "start": 10,
+      "end": 11
+    },
+    "pdf_pages": [
+      {
+        "page_number": 10,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 11,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "references",
+        "page_family_source": "content_signature",
+        "page_family_heading": null,
+        "content_family": "references",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  },
+  "pdf_preserve_evidence": {
+    "schema_version": 1,
+    "chapter_section_family": "references",
+    "page_range": {
+      "start": 10,
+      "end": 11
+    },
+    "special_section_page_count": 2,
+    "special_section_page_family_counts": {
+      "references": 2
+    },
+    "preserved_block_count": 0,
+    "source_only_block_count": 0,
+    "preserved_sentence_count": 0,
+    "page_contracts": [
+      {
+        "page_number": 10,
+        "page_family": "references",
+        "content_family": "references",
+        "family_source": "content_signature",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "block_count": 1,
+        "preserved_block_count": 0,
+        "source_only_block_count": 0,
+        "render_mode_counts": {
+          "zh_primary_with_optional_source": 1
+        },
+        "notices": [],
+        "block_ids": [
+          "1d78cc0e-11c8-5f21-87e9-2ad0f35d485a"
+        ],
+        "source_sentence_ids": [
+          "aade7f31-29e5-5540-af26-383923938454",
+          "2f9cb939-fba8-55dc-bc7b-1bceedd6c34c",
+          "2dddc3d5-a47b-5bed-8410-e0f716e57ae6",
+          "e5c8db6b-144c-5098-b82f-35461bc9064c",
+          "891cfcbb-224d-5026-8cc1-4c506f9dd1aa",
+          "4c06e5c8-c579-547b-959e-ea05fb9b344a",
+          "686298b3-e4e3-58cd-b7ee-350c29961c0d",
+          "adbb494f-f63b-5edd-a959-46f857a5fdcd",
+          "3b5b956c-00a7-5c01-a897-a41f3d35faca",
+          "4ece1b70-b339-5028-a4e2-297c6085e2c8",
+          "106847f1-8e22-5247-abf6-9b41ea74696b",
+          "2c39c2b6-6a4a-5798-bf13-f61f5e823a01",
+          "745e227a-1f0d-59ea-8f49-9dd9ff4d78f7",
+          "feac66a2-11b7-54f0-84fc-51e177d129c1",
+          "7db9537a-1b57-5ded-8b21-c4abaa6e95ce",
+          "94d29f74-edd8-5a6b-b348-372e6ca9f438",
+          "c7b3f2a4-ee43-5aba-9999-bb67bc25acaf",
+          "14690c86-d757-5044-92ec-2af1d1ba2b82",
+          "be65159b-37a8-55c0-9bea-3419cd5fdaeb",
+          "e37ebed7-9cb9-59de-a6b9-f2c7ee508a64",
+          "313806f7-01f5-5de9-bf55-91598a3cdf70",
+          "72e631aa-cca5-526a-aa28-a8b4b815ad27",
+          "714f84f7-a7ba-5582-8500-1a2a112348b1",
+          "530e5349-d5f7-5552-b1a8-fd3011bfa63a",
+          "efa545f5-fa15-543c-acc2-e1939e950d97",
+          "d0721a51-a0a8-5950-a286-62603bd2b6ed",
+          "5d863bce-767a-5863-acc1-4c34ac030c77",
+          "4ad92514-84bf-5ee5-9b94-6a7b964ae9e9",
+          "512c0524-2053-5f41-8fc2-b7af0d791b7a",
+          "0f35e626-2773-597b-bd38-67a7764236ad",
+          "9c411df2-0269-5f7c-8aa9-f8facf5710ee",
+          "7d322166-32df-529e-8598-0b5e93ff2f40",
+          "cbb0a0c3-bdf0-504b-9c4d-c9b0a7479459",
+          "8c1c3969-fcd9-55c6-a18d-e1489a4ee023",
+          "d8b8fb75-148d-5fde-8793-2fb25cc198b8"
+        ],
+        "preserve_policy": "family_only"
+      },
+      {
+        "page_number": 11,
+        "page_family": "references",
+        "content_family": "references",
+        "family_source": "content_signature",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "block_count": 1,
+        "preserved_block_count": 0,
+        "source_only_block_count": 0,
+        "render_mode_counts": {
+          "zh_primary_with_optional_source": 1
+        },
+        "notices": [],
+        "block_ids": [
+          "aa11eb64-0034-5955-b6ac-f872a639a129"
+        ],
+        "source_sentence_ids": [
+          "91113db2-4deb-5432-9ddc-65f3a3ee7357",
+          "e49f5567-4d4a-5792-81c7-b697f2769706",
+          "5b2d40ac-b6dc-5e26-b705-d1d4e14369dd",
+          "f031df31-ced1-57b4-9904-1eec9c237b32",
+          "ff50b11b-2f77-5e97-af61-5761ce0f04e8",
+          "4fde73ce-8b02-5597-b06f-e0be41cd7e81",
+          "83b7acc8-f0cc-51d8-bb44-2a6c48f1d15a",
+          "eee4de2a-fc33-5c2a-848d-c29253cc7b8b",
+          "a4c4cc93-35cc-5681-ad68-1254f4265432",
+          "f0d327e8-8b10-5189-a684-c3bf6d270ea9",
+          "fc49775e-3a63-5e18-9194-c7f8621f4842",
+          "b37646cf-b61d-5363-a3e9-daf92594d211",
+          "6ebded37-f764-5fe4-a36d-913f6bafea4d",
+          "aaf8de2c-6ef9-5442-b2c3-b234294266df",
+          "c1dae5e0-1fde-5c20-a31c-65c3b85b5b4b",
+          "b24a35b3-43d6-5cd0-9e4b-5ab5faa106b4",
+          "c0cca1c8-473e-5ee1-a660-9770353efbad",
+          "8101a309-0f17-558c-83c8-55f8a4a2aad0",
+          "b8d65122-69e1-5818-af67-bfc193f53a98",
+          "ebc09a06-b99e-5fe4-89ff-88984bb655c5",
+          "e81d834c-ab75-5eb2-8150-adf0fb3ea24b",
+          "7841c36a-d9d3-501f-b50b-9f55677d89ae",
+          "8378b5d4-449c-52bc-8a28-1fd0fbf6ad74",
+          "b4f463bc-7491-5068-ad71-25832b5db533",
+          "39f2fb03-bcf3-5445-b994-42965e44cae7",
+          "cd06d13f-d81c-53f4-9837-357dafe07e8f",
+          "225b6dc0-640b-509a-8291-98ace5580259",
+          "28f40d9d-3216-59a2-9bd8-2df70366ef63"
+        ],
+        "preserve_policy": "family_only"
+      }
+    ]
+  },
+  "pdf_page_debug_evidence": {
+    "schema_version": 1,
+    "page_range": {
+      "start": 10,
+      "end": 11
+    },
+    "page_count": 2,
+    "pages": [
+      {
+        "page_number": 10,
+        "page_family": "references",
+        "content_family": "references",
+        "family_source": "content_signature",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "preserve_policy": "family_only",
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0,
+        "appendix_nested_subheadings": [],
+        "debug_reasons": [
+          "special_section",
+          "preserve_contract"
+        ],
+        "blocks": [
+          {
+            "block_id": "1d78cc0e-11c8-5f21-87e9-2ad0f35d485a",
+            "ordinal": 1,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p10-b85",
+            "reading_order_index": 40,
+            "page_span": {
+              "start": 10,
+              "end": 10
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 35,
+            "translatable_sentence_count": 35,
+            "target_segment_count": 35,
+            "source_excerpt": "Refer ences [1] Jimmy Lei B a, Jamie Ryan Kiros, and Geof fre y E Hi nton. Layer normalization. arXiv pr eprint arXiv:1607.06450 , 2016. [2] Dzmitry Bahdanau, K yungh yun Cho, and Y oshua Bengio. Neural machine transl...",
+            "target_excerpt": "参考文献 [1] Jimmy Lei Ba, Jamie Ryan Kiros和Geoffrey E Hinton。 层归一化。arXiv预印本arXiv:1607.06450，2016年。[2] Dzmitry Bahdanau, Kyunghyun Cho和Yoshua Bengio。 通过联合学习对齐与翻译的神经机器翻译。 CoRR，abs/1409.0473，2014年。[3] Denny Britz, Anna Gold...",
+            "recovery_flags": [
+              "page_family_references",
+              "page_family_source_content_signature"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 10,
+                  "bbox": [
+                    129.41,
+                    710.037,
+                    612.0,
+                    721.993
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "page_number": 11,
+        "page_family": "references",
+        "content_family": "references",
+        "family_source": "content_signature",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": false,
+        "layout_signals": [],
+        "preserve_policy": "family_only",
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0,
+        "appendix_nested_subheadings": [],
+        "debug_reasons": [
+          "special_section",
+          "preserve_contract"
+        ],
+        "blocks": [
+          {
+            "block_id": "aa11eb64-0034-5955-b6ac-f872a639a129",
+            "ordinal": 2,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p11-b86",
+            "reading_order_index": 41,
+            "page_span": {
+              "start": 11,
+              "end": 11
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 28,
+            "translatable_sentence_count": 28,
+            "target_segment_count": 28,
+            "source_excerpt": "[21] Minh-Thang Luong, Hieu Pham, and Christopher D Manning. Ef f ecti v e approaches to attention- based neural machine translation. arXiv pr eprint arXiv:1508.04025 , 2015. [22] Ankur P arikh, Oscar T\\344ckstr\\366m,...",
+            "target_excerpt": "[21] Minh-Thang Luong, Hieu Pham, and Christopher D Manning。 基于注意力的神经机器翻译的有效方法。arXiv预印本arXiv:1508.04025，2015。[22] Ankur Parikh, Oscar Täckström, Dipanjan Das, and Jakob Uszkoreit。 一种可分解的注意力模型。 《自然语言处理实证方法》，2016。[23] R...",
+            "recovery_flags": [
+              "page_family_references",
+              "page_family_source_content_signature"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 11,
+                  "bbox": [
+                    129.579,
+                    476.034,
+                    612.0,
+                    487.99
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f3d5ed50-885a-527d-bb3f-93d0105f26ec",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "1acd61da-b3d3-5365-82ee-bac26b6e3306",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "version": 1
+      },
+      {
+        "snapshot_id": "825d349e-c2bd-5ad2-ab9c-6896273f92e3",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "cf473230-e1ea-5f1e-960c-f4e38235a627",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "0fb07618-e96f-5eb2-b6ac-02218801b538",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "edc72dfc-1fa4-5934-acec-e3b59c73cc40",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "aade7f31-29e5-5540-af26-383923938454",
+      "source_text": "Refer ences [1] Jimmy Lei B a, Jamie Ryan Kiros, and Geof fre y E Hi nton.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "参考文献 [1] Jimmy Lei Ba, Jamie Ryan Kiros和Geoffrey E Hinton。"
+      ]
+    },
+    {
+      "sentence_id": "2f9cb939-fba8-55dc-bc7b-1bceedd6c34c",
+      "source_text": "Layer normalization. arXiv pr eprint arXiv:1607.06450 , 2016. [2] Dzmitry Bahdanau, K yungh yun Cho, and Y oshua Bengio.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "层归一化。arXiv预印本arXiv:1607.06450，2016年。[2] Dzmitry Bahdanau, Kyunghyun Cho和Yoshua Bengio。"
+      ]
+    },
+    {
+      "sentence_id": "2dddc3d5-a47b-5bed-8410-e0f716e57ae6",
+      "source_text": "Neural machine translation by jointly learning to align and translate.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过联合学习对齐与翻译的神经机器翻译。"
+      ]
+    },
+    {
+      "sentence_id": "e5c8db6b-144c-5098-b82f-35461bc9064c",
+      "source_text": "CoRR , abs/1409.0473, 2014. [3] Denn y Britz, Anna Goldie, Minh-Thang Luong, and Quoc V .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1409.0473，2014年。[3] Denny Britz, Anna Goldie, Minh-Thang Luong和Quoc V。"
+      ]
+    },
+    {
+      "sentence_id": "891cfcbb-224d-5026-8cc1-4c506f9dd1aa",
+      "source_text": "Le.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Le。"
+      ]
+    },
+    {
+      "sentence_id": "4c06e5c8-c579-547b-959e-ea05fb9b344a",
+      "source_text": "Massi v e e xploration of neural machine translation architectures.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "神经机器翻译架构的大规模探索。"
+      ]
+    },
+    {
+      "sentence_id": "686298b3-e4e3-58cd-b7ee-350c29961c0d",
+      "source_text": "CoRR , abs/1703.03906, 2017. [4] Jianpeng Cheng, Li Dong, and Mirella Lapata.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1703.03906，2017年。[4] Jianpeng Cheng, Li Dong和Mirella Lapata。"
+      ]
+    },
+    {
+      "sentence_id": "adbb494f-f63b-5edd-a959-46f857a5fdcd",
+      "source_text": "Long short-term memory-netw orks for machine reading. arXiv pr eprint arXiv:1601.06733 , 2016. [5] K yungh yun Cho, Bart v an Merrienboer , Caglar Gulcehre, Fethi Boug ares, Holger Schwenk, and Y oshua Bengio.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "用于机器阅读的长短期记忆网络。arXiv预印本arXiv:1601.06733，2016年。[5] Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk和Yoshua Bengio。"
+      ]
+    },
+    {
+      "sentence_id": "3b5b956c-00a7-5c01-a897-a41f3d35faca",
+      "source_text": "Learning phrase representations using rnn encoder -decoder for statistical machine translation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用RNN编码器-解码器学习短语表示以用于统计机器翻译。"
+      ]
+    },
+    {
+      "sentence_id": "4ece1b70-b339-5028-a4e2-297c6085e2c8",
+      "source_text": "CoRR , abs/1406.1078, 2014. [6] Francois Chollet.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1406.1078，2014年。[6] Francois Chollet。"
+      ]
+    },
+    {
+      "sentence_id": "106847f1-8e22-5247-abf6-9b41ea74696b",
+      "source_text": "Xception: Deep learning with depthwise separable con v olutions. arXiv pr eprint arXiv:1610.02357 , 2016. [7] Jun young Chung, \\307a g l ar G\\374l\\347ehre, K yungh yun Cho, and Y oshua Bengio.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Xception：采用深度可分离卷积的深度学习。arXiv预印本arXiv:1610.02357，2016年。[7] Junyoung Chung, Çağlar Gülçehre, Kyunghyun Cho和Yoshua Bengio。"
+      ]
+    },
+    {
+      "sentence_id": "2c39c2b6-6a4a-5798-bf13-f61f5e823a01",
+      "source_text": "Empirical e v aluation of g ated recurrent neural netw orks on sequence modeling.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "门控循环神经网络在序列建模上的实证评估。"
+      ]
+    },
+    {
+      "sentence_id": "745e227a-1f0d-59ea-8f49-9dd9ff4d78f7",
+      "source_text": "CoRR , abs/1412.3555, 2014. [8] Jonas Gehring, Michael Auli, Da vid Grangier , Denis Y arats, and Y ann N.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1412.3555，2014年。[8] Jonas Gehring, Michael Auli, David Grangier, Denis Yarats和Yann N。"
+      ]
+    },
+    {
+      "sentence_id": "feac66a2-11b7-54f0-84fc-51e177d129c1",
+      "source_text": "Dauphin.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Dauphin。"
+      ]
+    },
+    {
+      "sentence_id": "7db9537a-1b57-5ded-8b21-c4abaa6e95ce",
+      "source_text": "Con v olu- tional sequence to sequence learning. arXiv pr eprint arXiv:1705.03122v2 , 2017. [9] Ale x Gra v es.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "卷积序列到序列学习。arXiv预印本arXiv:1705.03122v2，2017年。[9] Alex Graves。"
+      ]
+    },
+    {
+      "sentence_id": "94d29f74-edd8-5a6b-b348-372e6ca9f438",
+      "source_text": "Generating sequences wi th recurrent neural netw orks. arXiv pr eprint arXiv:1308.0850 , 2013. [10] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用循环神经网络生成序列。arXiv预印本arXiv:1308.0850，2013年。[10] Kaiming He, Xiangyu Zhang, Shaoqing Ren和Jian Sun。"
+      ]
+    },
+    {
+      "sentence_id": "c7b3f2a4-ee43-5aba-9999-bb67bc25acaf",
+      "source_text": "Deep residual learning for im- age recognition.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "用于图像识别的深度残差学习。"
+      ]
+    },
+    {
+      "sentence_id": "14690c86-d757-5044-92ec-2af1d1ba2b82",
+      "source_text": "In Pr oceedings of the IEEE Confer ence on Computer V ision and P attern Reco gnition , pages 770\\226778, 2016. [11] Sepp Hochreiter , Y oshua Bengio, P aolo Frasconi, and J\\374r gen Schmidhuber .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于IEEE计算机视觉与模式识别会议论文集，第770-778页，2016年。[11] Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi和Jürgen Schmidhuber。"
+      ]
+    },
+    {
+      "sentence_id": "be65159b-37a8-55c0-9bea-3419cd5fdaeb",
+      "source_text": "Gradient \\003o w in recurrent nets: the dif \\002culty of learning long-term dependencies, 2001. [12] Sepp Hochreiter a nd J\\374r gen Schmidhuber .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "循环网络中的梯度流：学习长期依赖的困难，2001年。[12] Sepp Hochreiter和Jürgen Schmidhuber。"
+      ]
+    },
+    {
+      "sentence_id": "e37ebed7-9cb9-59de-a6b9-f2c7ee508a64",
+      "source_text": "Long short-term memory .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "长短期记忆。"
+      ]
+    },
+    {
+      "sentence_id": "313806f7-01f5-5de9-bf55-91598a3cdf70",
+      "source_text": "Neur al computation , 9\\0508\\051:1735\\2261780, 1997. [13] Raf al Jozefo wicz, Oriol V in yals, Mik e Schuster , Noam Shazeer , and Y onghui W u.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于Neural Computation，第9卷第8期，第1735-1780页，1997年。[13] Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer和Yonghui Wu。"
+      ]
+    },
+    {
+      "sentence_id": "72e631aa-cca5-526a-aa28-a8b4b815ad27",
+      "source_text": "Exploring the limits of language modeling. arXiv pr eprint arXiv:1602.02410 , 2016. [14] \\006ukasz Kaiser and Ilya Sutsk e v er .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "探索语言建模的极限。arXiv预印本arXiv:1602.02410，2016年。[14] Łukasz Kaiser和Ilya Sutskever。"
+      ]
+    },
+    {
+      "sentence_id": "714f84f7-a7ba-5582-8500-1a2a112348b1",
+      "source_text": "Neural GPUs learn algori thms.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "神经GPU学习算法。"
+      ]
+    },
+    {
+      "sentence_id": "530e5349-d5f7-5552-b1a8-fd3011bfa63a",
+      "source_text": "In International Confer ence on Learning Repr esentations \\050ICLR\\051 , 2016. [15] Nal Kalchbrenner , Lasse Espeholt, Karen Simon yan, Aaron v an den Oord, Ale x Gra v es, and K o- ray Ka vukcuoglu.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于国际学习表示会议（ICLR），2016年。[15] Nal Kalchbrenner, Lasse Espeholt, Karen Simonyan, Aaron van den Oord, Alex Graves和Koray Kavukcuoglu。"
+      ]
+    },
+    {
+      "sentence_id": "efa545f5-fa15-543c-acc2-e1939e950d97",
+      "source_text": "Neural machine translation in linear time. arXiv pr eprint arXiv:1610.10099v2 , 2017. [16] Y oon Kim, Carl Denton, Luong Hoang, and Ale xander M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "线性时间的神经机器翻译。arXiv预印本arXiv:1610.10099v2，2017年。[16] Yoon Kim, Carl Denton, Luong Hoang和Alexander M。"
+      ]
+    },
+    {
+      "sentence_id": "d0721a51-a0a8-5950-a286-62603bd2b6ed",
+      "source_text": "Rush.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Rush。"
+      ]
+    },
+    {
+      "sentence_id": "5d863bce-767a-5863-acc1-4c34ac030c77",
+      "source_text": "Structured attention netw orks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "结构化注意力网络。"
+      ]
+    },
+    {
+      "sentence_id": "4ad92514-84bf-5ee5-9b94-6a7b964ae9e9",
+      "source_text": "In International Confer ence on Learning Repr esentations , 2017. [17] Diederik Kingma and Jimmy Ba.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于国际学习表示会议，2017年。[17] Diederik Kingma和Jimmy Ba。"
+      ]
+    },
+    {
+      "sentence_id": "512c0524-2053-5f41-8fc2-b7af0d791b7a",
+      "source_text": "Adam: A method for stochastic optimization.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Adam：一种随机优化方法。"
+      ]
+    },
+    {
+      "sentence_id": "0f35e626-2773-597b-bd38-67a7764236ad",
+      "source_text": "In ICLR , 2015. [18] Oleksii K uchaie v and Boris Ginsb ur g.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于ICLR，2015年。[18] Oleksii Kuchaiev和Boris Ginsburg。"
+      ]
+    },
+    {
+      "sentence_id": "9c411df2-0269-5f7c-8aa9-f8facf5710ee",
+      "source_text": "F actorization tricks for LSTM netw orks. arXiv pr eprint arXiv:1703.10722 , 2017. [19] Zhouhan Lin, Minwei Feng, Cicero Nogueira dos Santos, Mo Y u, Bing Xiang, Bo wen Zhou, and Y oshua Bengi o.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "LSTM网络的因子化技巧。arXiv预印本arXiv:1703.10722，2017年。[19] Zhouhan Lin, Minwei Feng, Cicero Nogueira dos Santos, Mo Yu, Bing Xiang, Bowen Zhou和Yoshua Bengio。"
+      ]
+    },
+    {
+      "sentence_id": "7d322166-32df-529e-8598-0b5e93ff2f40",
+      "source_text": "A structured self-attenti v e sentence embedding. arXiv pr eprint arXiv:1703.03130 , 2017. [20] Samy Bengio \\006ukasz Kaiser .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一种结构化的自注意力句子嵌入。arXiv预印本arXiv:1703.03130，2017年。[20] Samy Bengio, Łukasz Kaiser。"
+      ]
+    },
+    {
+      "sentence_id": "cbb0a0c3-bdf0-504b-9c4d-c9b0a7479459",
+      "source_text": "Can acti v e memory replace attention?",
+      "sentence_status": "translated",
+      "target_texts": [
+        "主动记忆能否替代注意力？"
+      ]
+    },
+    {
+      "sentence_id": "8c1c3969-fcd9-55c6-a18d-e1489a4ee023",
+      "source_text": "In Advances in Neur al Information Pr ocessing Systems, \\050NIPS\\051 , 2016.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "发表于神经信息处理系统进展（NIPS），2016年。"
+      ]
+    },
+    {
+      "sentence_id": "d8b8fb75-148d-5fde-8793-2fb25cc198b8",
+      "source_text": "10",
+      "sentence_status": "translated",
+      "target_texts": [
+        "10"
+      ]
+    },
+    {
+      "sentence_id": "91113db2-4deb-5432-9ddc-65f3a3ee7357",
+      "source_text": "[21] Minh-Thang Luong, Hieu Pham, and Christopher D Manning.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "[21] Minh-Thang Luong, Hieu Pham, and Christopher D Manning。"
+      ]
+    },
+    {
+      "sentence_id": "e49f5567-4d4a-5792-81c7-b697f2769706",
+      "source_text": "Ef f ecti v e approaches to attention- based neural machine translation. arXiv pr eprint arXiv:1508.04025 , 2015. [22] Ankur P arikh, Oscar T\\344ckstr\\366m, Dipanjan Das, and Jak ob Uszk oreit.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "基于注意力的神经机器翻译的有效方法。arXiv预印本arXiv:1508.04025，2015。[22] Ankur Parikh, Oscar Täckström, Dipanjan Das, and Jakob Uszkoreit。"
+      ]
+    },
+    {
+      "sentence_id": "5b2d40ac-b6dc-5e26-b705-d1d4e14369dd",
+      "source_text": "A decomposable attention model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一种可分解的注意力模型。"
+      ]
+    },
+    {
+      "sentence_id": "f031df31-ced1-57b4-9904-1eec9c237b32",
+      "source_text": "In Empirical Methods in Natur al Langua g e Pr ocessing , 2016. [23] Romain P aulus, Caiming Xiong, and Richard Socher .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《自然语言处理实证方法》，2016。[23] Romain Paulus, Caiming Xiong, and Richard Socher。"
+      ]
+    },
+    {
+      "sentence_id": "ff50b11b-2f77-5e97-af61-5761ce0f04e8",
+      "source_text": "A deep reinforced model for abstracti v e summarization. arXiv pr eprint arXiv:1705.04304 , 2017. [24] O\\002r Press and Lior W olf.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一种用于抽象摘要的深度强化模型。arXiv预印本arXiv:1705.04304，2017。[24] O'Press and Lior Wolf。"
+      ]
+    },
+    {
+      "sentence_id": "4fde73ce-8b02-5597-b06f-e0be41cd7e81",
+      "source_text": "Using the output embedding to impro v e language models. arXiv pr eprint arXiv:1608.05859 , 2016. [25] Rico Sennrich, Barry Haddo w , and Ale xandra Birch.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用输出嵌入改进语言模型。arXiv预印本arXiv:1608.05859，2016。[25] Rico Sennrich, Barry Haddow, and Alexandra Birch。"
+      ]
+    },
+    {
+      "sentence_id": "83b7acc8-f0cc-51d8-bb44-2a6c48f1d15a",
+      "source_text": "Neural machine translation of rare w ords with subw ord units. arXiv pr eprint arXiv:1508.07909 , 2015. [26] Noam Shazeer , Azalia Mirhoseini, Krzysztof Maziarz, Andy Da vis, Quoc Le, Geof fre y Hinton, and Jef f Dean.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用子词单元进行稀有词的神经机器翻译。arXiv预印本arXiv:1508.07909，2015。[26] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean。"
+      ]
+    },
+    {
+      "sentence_id": "eee4de2a-fc33-5c2a-848d-c29253cc7b8b",
+      "source_text": "Outrageously lar ge neural netw orks: The sparsely-g ated mixture-of-e xperts layer . arXiv pr eprint arXiv:1701.06538 , 2017. [27] Nitish Sri v asta v a, Geof fre y E Hinton, Ale x Krizhe vsk y , Ilya Sutsk e v er , and Ruslan Salakhutdi- no v .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "超大规模神经网络：稀疏门控的专家混合层。arXiv预印本arXiv:1701.06538，2017。[27] Nitish Srivastava, Geoffrey E Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhutdinov。"
+      ]
+    },
+    {
+      "sentence_id": "a4c4cc93-35cc-5681-ad68-1254f4265432",
+      "source_text": "Dropout: a simple w ay to pre v ent neural netw orks from o v er\\002tting.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Dropout：一种防止神经网络过拟合的简单方法。"
+      ]
+    },
+    {
+      "sentence_id": "f0d327e8-8b10-5189-a684-c3bf6d270ea9",
+      "source_text": "J ournal of Mac hine Learning Resear c h , 15\\0501\\051:1929\\2261958, 2014. [28] Sainbayar Sukhbaatar , arthur szlam, Jason W eston, and Rob Fer gus.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《机器学习研究期刊》，15(1):1929-1958，2014。[28] Sainbayar Sukhbaatar, arthur szlam, Jason Weston, and Rob Fergus。"
+      ]
+    },
+    {
+      "sentence_id": "fc49775e-3a63-5e18-9194-c7f8621f4842",
+      "source_text": "End-to-end memory netw orks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "端到端记忆网络。"
+      ]
+    },
+    {
+      "sentence_id": "b37646cf-b61d-5363-a3e9-daf92594d211",
+      "source_text": "In C.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在C."
+      ]
+    },
+    {
+      "sentence_id": "6ebded37-f764-5fe4-a36d-913f6bafea4d",
+      "source_text": "Cortes, N.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Cortes, N."
+      ]
+    },
+    {
+      "sentence_id": "aaf8de2c-6ef9-5442-b2c3-b234294266df",
+      "source_text": "D.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "D."
+      ]
+    },
+    {
+      "sentence_id": "c1dae5e0-1fde-5c20-a31c-65c3b85b5b4b",
+      "source_text": "La wrence, D.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Lawrence, D."
+      ]
+    },
+    {
+      "sentence_id": "b24a35b3-43d6-5cd0-9e4b-5ab5faa106b4",
+      "source_text": "D.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "D."
+      ]
+    },
+    {
+      "sentence_id": "c0cca1c8-473e-5ee1-a660-9770353efbad",
+      "source_text": "Lee, M.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Lee, M."
+      ]
+    },
+    {
+      "sentence_id": "8101a309-0f17-558c-83c8-55f8a4a2aad0",
+      "source_text": "Sugiyama, and R.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Sugiyama, and R."
+      ]
+    },
+    {
+      "sentence_id": "b8d65122-69e1-5818-af67-bfc193f53a98",
+      "source_text": "Garnett, editors, Advances in Neur al Information Pr ocessing Systems 28 , pages 2440\\2262448.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Garnett, editors, 《神经信息处理系统进展28》，第2440-2448页。"
+      ]
+    },
+    {
+      "sentence_id": "ebc09a06-b99e-5fe4-89ff-88984bb655c5",
+      "source_text": "Curran Associates, Inc., 2015. [29] Ilya Sutsk e v er , Oriol V in yals , and Quoc VV Le.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Curran Associates, Inc., 2015。[29] Ilya Sutskever, Oriol Vinyals, and Quoc VV Le。"
+      ]
+    },
+    {
+      "sentence_id": "e81d834c-ab75-5eb2-8150-adf0fb3ea24b",
+      "source_text": "Sequence to sequence learning with neural netw orks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "使用神经网络的序列到序列学习。"
+      ]
+    },
+    {
+      "sentence_id": "7841c36a-d9d3-501f-b50b-9f55677d89ae",
+      "source_text": "In Advances in Neur al Information Pr ocessing Systems , pages 3104\\2263112, 2014. [30] Christian Sze gedy , V incent V anhouck e, Ser ge y Iof f e, Jonathon Shlens, and Zbignie w W ojna.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "《神经信息处理系统进展》，第3104-3112页，2014。[30] Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jonathon Shlens, and Zbigniew Wojna。"
+      ]
+    },
+    {
+      "sentence_id": "8378b5d4-449c-52bc-8a28-1fd0fbf6ad74",
+      "source_text": "Rethinking the inception architecture for computer vision.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "重新思考计算机视觉的初始架构。"
+      ]
+    },
+    {
+      "sentence_id": "b4f463bc-7491-5068-ad71-25832b5db533",
+      "source_text": "CoRR , abs/1512.00567, 2015. [31] Y onghui W u, Mik e Schuster , Zhifeng Chen, Quoc V Le, Mohammad Norouzi, W olfg ang Machere y , Maxim Krikun, Y uan Cao, Qin Gao, Klaus Machere y , et al.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1512.00567，2015。[31] Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V Le, Mohammad Norouzi, Wolfgang Macherey, Maxim Krikun, Yuan Cao, Qin Gao, Klaus Macherey, et al。"
+      ]
+    },
+    {
+      "sentence_id": "39f2fb03-bcf3-5445-b994-42965e44cae7",
+      "source_text": "Google' s neural machine translation system: Bridging the g ap between human and machine translation. arXiv pr eprint arXiv:1609.08144 , 2016. [32] Jie Zhou, Y ing Cao, Xuguang W ang, Peng Li, and W ei Xu.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "谷歌的神经机器翻译系统：弥合人类与机器翻译之间的鸿沟。arXiv预印本arXiv:1609.08144，2016。[32] Jie Zhou, Ying Cao, Xuguang Wang, Peng Li, and Wei Xu。"
+      ]
+    },
+    {
+      "sentence_id": "cd06d13f-d81c-53f4-9837-357dafe07e8f",
+      "source_text": "Deep recurrent models with f ast-forw ard connections for neural machine translation.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "具有快速前向连接的深度循环模型用于神经机器翻译。"
+      ]
+    },
+    {
+      "sentence_id": "225b6dc0-640b-509a-8291-98ace5580259",
+      "source_text": "CoRR , abs/1606.04199, 2016.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "CoRR，abs/1606.04199，2016。"
+      ]
+    },
+    {
+      "sentence_id": "28f40d9d-3216-59a2-9bd8-2df70366ef63",
+      "source_text": "11",
+      "sentence_status": "translated",
+      "target_texts": [
+        "11"
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "issue_id": "acfd583a-9782-5a9c-925a-b6d20c12917c",
+      "issue_type": "MISORDERING",
+      "severity": "medium",
+      "blocking": false,
+      "sentence_id": "aade7f31-29e5-5540-af26-383923938454",
+      "evidence": {
+        "layout_risk": "medium",
+        "parse_confidence": 0.82,
+        "suspicious_page_numbers": [],
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "recovery_lane": "academic_paper",
+        "review_policy": "academic_paper_medium_layout_advisory"
+      }
+    }
+  ]
+}

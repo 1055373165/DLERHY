@@ -1,0 +1,763 @@
+{
+  "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+  "chapter_title": "Attention Is All Y ou Need",
+  "export_type": "bilingual_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/bilingual-bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8.html",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 1,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": {
+    "schema_version": 1,
+    "document_page_count": 11,
+    "page_count": 9,
+    "page_range": {
+      "start": 1,
+      "end": 9
+    },
+    "pdf_pages": [
+      {
+        "page_number": 1,
+        "raw_block_count": 3,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": true,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2,
+          "heading": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 2,
+        "raw_block_count": 1,
+        "recovered_block_count": 5,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 3,
+          "heading": 2
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 3,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "caption": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 4,
+        "raw_block_count": 11,
+        "recovered_block_count": 10,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 8,
+          "caption": 1,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 5,
+        "raw_block_count": 2,
+        "recovered_block_count": 4,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 6,
+        "raw_block_count": 4,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 7,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 8,
+        "raw_block_count": 8,
+        "recovered_block_count": 6,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 9,
+        "raw_block_count": 53,
+        "recovered_block_count": 6,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  },
+  "pdf_preserve_evidence": {
+    "schema_version": 1,
+    "chapter_section_family": "body",
+    "page_range": {
+      "start": 1,
+      "end": 9
+    },
+    "special_section_page_count": 0,
+    "special_section_page_family_counts": {},
+    "preserved_block_count": 0,
+    "source_only_block_count": 0,
+    "preserved_sentence_count": 0,
+    "page_contracts": []
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f3d5ed50-885a-527d-bb3f-93d0105f26ec",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "628c9c86-695c-5433-bf99-580c6b9f92d5",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "version": 1
+      },
+      {
+        "snapshot_id": "825d349e-c2bd-5ad2-ab9c-6896273f92e3",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "cf473230-e1ea-5f1e-960c-f4e38235a627",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "003d362d-7d18-5f9f-8c7b-55b7c327dffb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0da07b96-12f8-5079-aa72-ad0ad8e46ccc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1bc2fabd-19f4-5327-b7b8-dd3af8bf3317",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1c900c13-40d5-5c37-9b39-197ea8ad7e8d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2052a067-b5f5-50cf-9604-05f087631d0c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "23176b57-f11b-557d-b03d-ff34782417a0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2dcd8caf-c585-5275-985d-96e8f110d943",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2ea95277-c54d-51a3-aedd-e53717b8ff76",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2f2662e2-696a-5ff5-9f93-9745320a0177",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "312ecc8b-10d6-5704-a6b2-a0e6570b1038",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "32be938a-a77d-52a6-90b0-90634faf77ee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "32cfb019-00c2-58e6-9c3c-c35370d646b3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3624cf8c-eb32-531b-a4b8-9cc1d4f74129",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "483d9957-26ac-53c6-9c45-d1c9e97579a3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4c5da9a2-fb6a-55a7-a62f-3df0fc250a5d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4e39b708-4304-5c15-8d9f-aa41cd0ec494",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5210e4ed-852e-5fad-ad0e-4453f5f4277c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53c40e0e-4b3b-50bb-b0a1-a9010e6c359b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "555f605b-f160-5ac6-9bf5-9e2af6b01fb9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5dab9f77-c1f9-5976-8613-35c77f061289",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "60b594bb-810e-5bf9-ac8c-9fe31688def4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "75fe463e-dc3c-500b-8e70-a55b494ccada",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "767c7582-3a48-5c8f-af9a-4ae8cb15e788",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "86c4f138-3058-5189-ad13-280eb90f220b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8aab78b5-b881-5d29-8e83-97c79da75134",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8ab9f293-dd2b-501a-ac9a-33e67f293d21",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9d858242-da6a-5898-b21d-a81910485d94",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a0a43bd2-339e-55d6-8da6-32c38464699a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ac12f2d7-08a7-539d-b8eb-54a275f02152",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b8f1b174-fdac-53db-a657-0895146e7772",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bf9c7db0-9051-5855-b68e-af41e34beb07",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d4dc6aa3-d847-52af-aa6c-122e6309cab3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e5c46c1a-9bbf-5555-91d9-9eefa91587b0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e683c389-9a07-5830-b0f9-fbe3ef12aa5e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0537f22-db6e-57bb-8aaf-68c9c18ea80e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f3cf53cb-5f12-5ca4-b019-57d8467ca54d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f4c3cdef-6149-58bd-bf0e-b1bd2b60d057",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f5d32f2b-77e8-5c01-bcad-0695156eee14",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ffc02ad7-f836-564b-a137-ef5420a64e88",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "row_summary": {
+    "sentence_row_count": 196,
+    "aligned_sentence_count": 196,
+    "target_segment_count": 214,
+    "orphan_target_segment_count": 0,
+    "alignment_edge_count": 214,
+    "inactive_alignment_target_count": 0
+  },
+  "issue_summary": {
+    "total_issue_count": 1,
+    "open_issue_count": 0,
+    "issue_type_counts": {
+      "MISORDERING": 1
+    }
+  },
+  "render_summary": {
+    "render_block_count": 39,
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 39
+    },
+    "expected_source_only_block_count": 0
+  }
+}

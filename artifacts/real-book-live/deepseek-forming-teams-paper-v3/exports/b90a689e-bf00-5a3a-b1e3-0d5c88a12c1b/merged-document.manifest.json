@@ -1,0 +1,145 @@
+{
+  "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+  "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+  "author": null,
+  "export_type": "merged_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.html",
+  "chapter_count": 2,
+  "translation_usage_summary": {
+    "run_count": 19,
+    "succeeded_run_count": 19,
+    "total_token_in": 76859,
+    "total_token_out": 31358,
+    "total_cost_usd": 0.024788,
+    "total_latency_ms": 1230981,
+    "avg_latency_ms": 64788.474,
+    "latest_run_at": "2026-03-16T05:43:12.807507"
+  },
+  "translation_usage_breakdown": [
+    {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 19,
+      "succeeded_run_count": 19,
+      "total_token_in": 76859,
+      "total_token_out": 31358,
+      "total_cost_usd": 0.024788,
+      "total_latency_ms": 1230981,
+      "avg_latency_ms": 64788.474,
+      "latest_run_at": "2026-03-16T05:43:12.807507"
+    }
+  ],
+  "translation_usage_timeline": [
+    {
+      "bucket_start": "2026-03-16",
+      "bucket_granularity": "day",
+      "run_count": 19,
+      "succeeded_run_count": 19,
+      "total_token_in": 76859,
+      "total_token_out": 31358,
+      "total_cost_usd": 0.024788,
+      "total_latency_ms": 1230981,
+      "avg_latency_ms": 64788.474
+    }
+  ],
+  "translation_usage_highlights": {
+    "top_cost_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 19,
+      "succeeded_run_count": 19,
+      "total_token_in": 76859,
+      "total_token_out": 31358,
+      "total_cost_usd": 0.024788,
+      "total_latency_ms": 1230981,
+      "avg_latency_ms": 64788.474,
+      "latest_run_at": "2026-03-16T05:43:12.807507"
+    },
+    "top_latency_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 19,
+      "succeeded_run_count": 19,
+      "total_token_in": 76859,
+      "total_token_out": 31358,
+      "total_cost_usd": 0.024788,
+      "total_latency_ms": 1230981,
+      "avg_latency_ms": 64788.474,
+      "latest_run_at": "2026-03-16T05:43:12.807507"
+    },
+    "top_volume_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 19,
+      "succeeded_run_count": 19,
+      "total_token_in": 76859,
+      "total_token_out": 31358,
+      "total_cost_usd": 0.024788,
+      "total_latency_ms": 1230981,
+      "avg_latency_ms": 64788.474,
+      "latest_run_at": "2026-03-16T05:43:12.807507"
+    }
+  },
+  "issue_status_summary": {
+    "issue_count": 0,
+    "open_issue_count": 0,
+    "resolved_issue_count": 0,
+    "blocking_issue_count": 0
+  },
+  "render_summary": {
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 15
+    },
+    "expected_source_only_block_count": 0
+  },
+  "chapters": [
+    {
+      "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+      "ordinal": 1,
+      "source_ordinal": 1,
+      "title_src": "构建有效的人机协作团队：开发能够补充多位专家能力的机器学习模型",
+      "status": "exported",
+      "block_count": 13,
+      "sentence_count": 167,
+      "render_block_count": 13,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+      "ordinal": 2,
+      "source_ordinal": 2,
+      "title_src": "参考文献",
+      "status": "exported",
+      "block_count": 2,
+      "sentence_count": 80,
+      "render_block_count": 2,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    }
+  ]
+}

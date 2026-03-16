@@ -1,0 +1,1352 @@
+{
+  "root_count": 1,
+  "scanned_file_count": 42,
+  "candidate_count": 42,
+  "candidate_kind_counts": {
+    "pass_path": 4,
+    "reject_path": 2,
+    "ocr_path": 36
+  },
+  "recommended_case_count": 4,
+  "recommended_cases": [
+    {
+      "name": "forming-effective-human-ai-teams-building-machine-learning-models-that-complement-the-capabilities-of-multiple-experts",
+      "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    },
+    {
+      "name": "react",
+      "source_path": "/Users/smy/Downloads/REACT.pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    },
+    {
+      "name": "llms-in-production-from-language-models-to-successful-products-christopher-brousseau-matthew-sharp-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    },
+    {
+      "name": "ai-agents-in-action-micheal-lanham-z-library-sk-1lib-sk-z-lib-sk",
+      "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "optional": true,
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        }
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 100,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Page count is short enough for fast smoke debugging."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 7,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 6007.429,
+        "average_span_count": 1274.303,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 1,
+        "academic_paper_candidate": false
+      },
+      "suggested_manifest_case": {
+        "name": "forming-effective-human-ai-teams-building-machine-learning-models-that-complement-the-capabilities-of-multiple-experts",
+        "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/REACT.pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 100,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Page count is short enough for fast smoke debugging."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 33,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 3282.121,
+        "average_span_count": 492.318,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 1,
+        "academic_paper_candidate": false
+      },
+      "suggested_manifest_case": {
+        "name": "react",
+        "source_path": "/Users/smy/Downloads/REACT.pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 88,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Long document will be more expensive to use as a recurring smoke sample."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 456,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 2822.48,
+        "average_span_count": 961.203,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 1,
+        "academic_paper_candidate": false
+      },
+      "suggested_manifest_case": {
+        "name": "llms-in-production-from-language-models-to-successful-products-christopher-brousseau-matthew-sharp-z-library-sk-1lib-sk-z-lib-sk",
+        "source_path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMs in Production From language models to successful products (Christopher Brousseau, Matthew Sharp) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "pass_path",
+      "candidate_score": 88,
+      "recommendation_reasons": [
+        "Low-risk text PDF can validate the bootstrap pass path.",
+        "Long document will be more expensive to use as a recurring smoke sample."
+      ],
+      "recommended_for_manifest": true,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 346,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "low",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 2076.763,
+        "average_span_count": 355.723,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 1,
+        "academic_paper_candidate": false
+      },
+      "suggested_manifest_case": {
+        "name": "ai-agents-in-action-micheal-lanham-z-library-sk-1lib-sk-z-lib-sk",
+        "source_path": "/Users/smy/Downloads/zlibrary/AI Agents in Action (Micheal Lanham) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+        "optional": true,
+        "include_parse_summary": true,
+        "expectations": [
+          {
+            "path": "profile.pdf_kind",
+            "equals": "text_pdf"
+          },
+          {
+            "path": "profile.layout_risk",
+            "equals": "low"
+          },
+          {
+            "path": "bootstrap.status",
+            "equals": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+      "candidate_kind": "reject_path",
+      "candidate_score": 48,
+      "recommendation_reasons": [
+        "Text PDF with elevated layout risk can exercise the guarded recovery path.",
+        "Page count is short enough for fast smoke debugging.",
+        "Profiler already flagged 2 suspicious page(s)."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 11,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "medium",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 3176.364,
+        "average_span_count": 406.279,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 2,
+        "suspicious_page_numbers": [
+          2,
+          3
+        ],
+        "recovery_lane": "academic_paper",
+        "trailing_reference_page_count": 2,
+        "academic_paper_candidate": true
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Building AI Coding Agents for the Terminal Scaffolding, Harness, Context Engineering, and Lessons Learned (Nghi D. Q. Bui) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "reject_path",
+      "candidate_score": 36,
+      "recommendation_reasons": [
+        "Text PDF with elevated layout risk can exercise the guarded recovery path.",
+        "Profiler already flagged 25 suspicious page(s)."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "text_pdf",
+        "page_count": 81,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "medium",
+        "ocr_required": false,
+        "extractor_kind": "basic",
+        "average_text_density": 3494.185,
+        "average_span_count": 1169.541,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 25,
+        "suspicious_page_numbers": [
+          2,
+          6,
+          7,
+          8,
+          10,
+          14,
+          17,
+          19,
+          20,
+          21,
+          23,
+          24,
+          26,
+          29,
+          30,
+          31,
+          33,
+          35,
+          38,
+          39,
+          40,
+          48,
+          49,
+          50,
+          52
+        ],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 7,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Principles of Building AI Agents (Sam Bhagwat) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 18,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "mixed_pdf",
+        "page_count": 149,
+        "has_extractable_text": true,
+        "outline_present": false,
+        "layout_risk": "medium",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 1917.933,
+        "average_span_count": 744.198,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/notebooklm/Data_Systems_Fundamentals.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 6,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Page count is short enough for fast smoke debugging.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 15,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/字节跳动核心业务深度研究报告.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 6,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Page count is short enough for fast smoke debugging.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 37,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/第四道/生命的真相 葛吉夫的第四道=THE REALITY OF BEING THEFOURTH WAY OF GURDJIEFF (（瑞士）珍妮·迪·萨尔斯曼著；孙霖译) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 4,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 292,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/A_Wandering_Mind_Is_an_Unhappy_Mind.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/book图片/平常心是道 (黄君主主编；于建华著, 虞wei毅, 葉鵬飛, 梁少膺, 于明詮, 尹旭) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 156,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic AI For Dummies® (Pam Baker) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic AI in Enterprise Harnessing Agentic AI for Business Transformation (Sumit Ranjan, Divya Chembachere etc.) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gullí) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/LLMOps Managing Large Language Models in Production (Abi Aryan) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Mastering AI Agents A comprehensive guide for evaluating AI agents (Pratik Bhavsar) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/AI Agent/Visualizing Generative AI How AI Paints, Writes, and Assists (Priyanka Vergadia, Valliappa Lakshmanan) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gullí) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/Building Applications with AI Agents Designing and Implementing Multiagent Systems (Michael Albada) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/第四道/beelzebub’s tales to his grandson魔鬼讲给孙子的故事中译文第一版 (葛吉夫George Gurdjieff) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/zlibrary/诗歌/诗里特别有禅 (骆玉明) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/孙梦宇 Go 开发简历.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/孙梦宇.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/孙梦宇最新简历.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/孙梦宇最新简历（Go后端）.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/个人相关/简历与求职/孙梦宇最新简历（Go）.pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/刻意练习：如何从新手到大师 (安德斯 · 艾利克森 (Anders Ericsson) etc.) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 651,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/埃隆·马斯克传 (沃尔特·艾萨克森) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/学会提问(原书第11版)  a guide to critical thinking = Asking the right questions (尼尔•布朗（Neil Browne）,斯图尔特•基利（Stuart M. Keeley） etc.) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/弗洛伊德心理学套装（全4册：刻意回避+与自己对话的3个维度+杜拉的梦+文明及其缺憾） ([奥] 西格蒙德·弗洛伊德 [[奥] 西格蒙德·弗洛伊德]) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/模型思维（24种让人终身受益的思维模型，精准解决学习工作生活的所有难题，像芒格一样智慧地思考） (斯科特·佩奇) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 454,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/爱因斯坦传（全2册）（超级畅销书《史蒂夫·乔布斯传》作者艾萨克森力作，科学巨匠爱因斯坦值得珍藏的权威传记，电子书首发） (沃尔特·艾萨克森) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 721,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/甘地自传：我体验真理的故事 ([印度]甘地) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/经济学原理：微观经济学分册 ([美]曼昆 N. Gregory Mankiw 梁小民(译) 梁砾(译)) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/绝非天赋：智商、刻意练习与创造力的真相 ([美] 斯科特·考夫曼 著 林文韵  杨田田 译) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 393,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/西蒙学习法：如何在短时间内快速学会新知识 (友荣方略) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/金字塔原理大全集 (芭芭拉·明托) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/高效能人士的七个习惯（30周年纪念版） (史蒂芬·柯维) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Outline/bookmarks are present and can validate chapter recovery.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 501,
+        "has_extractable_text": false,
+        "outline_present": true,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/黄仁勋：英伟达之芯 (【美】斯蒂芬·威特) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/传记/黑客与画家·十万册纪念版 (Paul Graham) (Z-Library).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 0,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    },
+    {
+      "path": "/Users/smy/Downloads/洞悉市場的人：量化交易之父吉姆 · 西蒙斯與文藝復興公司的故事 = The Man Who Solved the Market How Jim Simons Launched the Quant Revolution (古格里 · 祖克曼 (Gregor... (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "candidate_kind": "ocr_path",
+      "candidate_score": 0,
+      "recommendation_reasons": [
+        "OCR-required PDF is useful for fail-safe rejection coverage.",
+        "Long document will be more expensive to use as a recurring smoke sample.",
+        "Extractable text is missing, so this stays outside the text-PDF pass path."
+      ],
+      "recommended_for_manifest": false,
+      "profile": {
+        "pdf_kind": "scanned_pdf",
+        "page_count": 476,
+        "has_extractable_text": false,
+        "outline_present": false,
+        "layout_risk": "high",
+        "ocr_required": true,
+        "extractor_kind": "basic",
+        "average_text_density": 0.0,
+        "average_span_count": 0.0,
+        "multi_column_page_count": 0,
+        "fragment_page_count": 0,
+        "suspicious_page_numbers": [],
+        "recovery_lane": null,
+        "trailing_reference_page_count": 0,
+        "academic_paper_candidate": false
+      }
+    }
+  ]
+}

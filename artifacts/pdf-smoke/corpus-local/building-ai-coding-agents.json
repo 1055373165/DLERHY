@@ -43,7 +43,7 @@
       52
     ],
     "recovery_lane": null,
-    "trailing_reference_page_count": 8,
+    "trailing_reference_page_count": 7,
     "academic_paper_candidate": false
   },
   "bootstrap": {
@@ -52,25 +52,26 @@
     "source_type": "pdf_text",
     "chapter_count": 6,
     "block_count": 208,
-    "sentence_count": 1826,
+    "sentence_count": 1817,
     "chapters": [
       {
         "ordinal": 1,
-        "title_src": "Chapter 1",
+        "title_src": "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned",
         "risk_level": "high",
         "source_page_start": 1,
-        "source_page_end": 51,
+        "source_page_end": 52,
         "pdf_section_family": "body",
         "structure_flags": [
           "layout_risk_medium",
-          "cross_page_repaired"
+          "cross_page_repaired",
+          "embedded_document_title_recovered"
         ]
       },
       {
         "ordinal": 2,
         "title_src": "References",
         "risk_level": "high",
-        "source_page_start": 52,
+        "source_page_start": 53,
         "source_page_end": 59,
         "pdf_section_family": "references",
         "structure_flags": [
@@ -145,7 +146,7 @@
     "title": "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned",
     "chapter_count": 6,
     "chapter_titles": [
-      "Chapter 1",
+      "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned",
       "References",
       "Appendix A Complete Tool Catalog",
       "Appendix K Full System Prompt Templates",
@@ -214,7 +215,7 @@
       "49": "body",
       "50": "body",
       "51": "body",
-      "52": "references",
+      "52": "body",
       "53": "references",
       "54": "references",
       "55": "references",
@@ -421,9 +422,12 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 2
+          "body": 1,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "embedded_document_title_recovered"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -1746,10 +1750,10 @@
         "page_number": 52,
         "raw_block_count": 1,
         "recovered_block_count": 1,
-        "page_family": "references",
-        "page_family_source": "content_signature",
+        "page_family": "body",
+        "page_family_source": "body",
         "page_family_heading": null,
-        "content_family": "references",
+        "content_family": null,
         "backmatter_cue": null,
         "backmatter_cue_source": null,
         "is_toc_page": false,
@@ -1761,10 +1765,7 @@
         "role_counts": {
           "body": 1
         },
-        "recovery_flags": [
-          "page_family_references",
-          "page_family_source_content_signature"
-        ],
+        "recovery_flags": [],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,

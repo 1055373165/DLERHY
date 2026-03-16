@@ -1,0 +1,415 @@
+{
+  "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+  "chapter_title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+  "export_type": "bilingual_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/bilingual-8cc49e94-dea6-5aa6-af19-5dd212b6f89f.html",
+  "quality_summary": {
+    "issue_count": 0,
+    "action_count": 0,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": {
+    "schema_version": 1,
+    "document_page_count": 7,
+    "page_count": 6,
+    "page_range": {
+      "start": 1,
+      "end": 6
+    },
+    "pdf_pages": [
+      {
+        "page_number": 1,
+        "raw_block_count": 3,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 2,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 3,
+        "raw_block_count": 9,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 4,
+        "raw_block_count": 7,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1,
+          "caption": 2
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 5,
+        "raw_block_count": 4,
+        "recovered_block_count": 2,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1,
+          "caption": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 6,
+        "raw_block_count": 8,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  },
+  "pdf_preserve_evidence": {
+    "schema_version": 1,
+    "chapter_section_family": "body",
+    "page_range": {
+      "start": 1,
+      "end": 6
+    },
+    "special_section_page_count": 0,
+    "special_section_page_family_counts": {},
+    "preserved_block_count": 0,
+    "source_only_block_count": 0,
+    "preserved_sentence_count": 0,
+    "page_contracts": []
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "2ccbacc9-bc4b-5dba-bb7f-583404d2db1c",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "e1491bd4-e77f-5a35-a64f-d77422c49780",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "version": 1
+      },
+      {
+        "snapshot_id": "c1123596-bf6b-596a-9d50-e4ed0a613148",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "7cca6d60-d2d5-5e9b-ba2d-66057e55de99",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "1aa34753-280b-5934-977f-057b5730e512",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2094b83f-5a0a-5e37-8492-76dbe836f80f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3021b453-e12b-5b11-a7b1-99b5d258747f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3e512908-ab8d-50f9-9e09-5275d00333b0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3ec47bd2-3f9b-5d63-93a0-d31fe261922f",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3f3680fd-fe3e-51ec-9d39-5bd73ecdcd1c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "723cde21-f2be-5d1d-a970-c9cf10f439be",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "7c0b69da-f52a-50a4-8971-449f20a18aea",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "87e4e7f9-ca80-5cf5-b7dc-ba795906b2c0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bce38578-2528-56f4-b396-484b91e023c3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d78a2406-cf90-5909-a95f-75f9b519a222",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e3e16004-0f6e-512a-ba98-ab15ffac6eef",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f2b4599c-29f4-5607-87c6-c3db07116c9d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f612c03f-6215-5348-920a-e0879b1e4964",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "row_summary": {
+    "sentence_row_count": 167,
+    "aligned_sentence_count": 167,
+    "target_segment_count": 181,
+    "orphan_target_segment_count": 0,
+    "alignment_edge_count": 184,
+    "inactive_alignment_target_count": 0
+  },
+  "issue_summary": {
+    "total_issue_count": 0,
+    "open_issue_count": 0,
+    "issue_type_counts": {}
+  },
+  "render_summary": {
+    "render_block_count": 13,
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 13
+    },
+    "expected_source_only_block_count": 0
+  }
+}

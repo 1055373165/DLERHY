@@ -1,0 +1,2291 @@
+{
+  "started_at": "2026-03-16T01:47:19.465289+00:00",
+  "source_path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+  "database_url": "sqlite+pysqlite:////Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/full.sqlite",
+  "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports",
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "translate_batch_size": 12,
+  "parallel_workers": 2,
+  "bootstrap": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Attention is All you Need",
+    "author": "Ashish Vaswani\\054 Noam Shazeer\\054 Niki Parmar\\054 Jakob Uszkoreit\\054 Llion Jones\\054 Aidan N\\056 Gomez\\054 \\225ukasz Kaiser\\054 Illia Polosukhin",
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 11,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "medium",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 3176.364,
+      "average_span_count": 406.279,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 2,
+      "suspicious_page_numbers": [
+        2,
+        3
+      ],
+      "recovery_lane": "academic_paper",
+      "trailing_reference_page_count": 3,
+      "academic_paper_candidate": true
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 11,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": true,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2,
+            "heading": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 11,
+          "recovered_block_count": 8,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 7,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 2,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 4,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 8,
+          "raw_block_count": 8,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 9,
+          "raw_block_count": 53,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 10,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 11,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 29,
+    "sentence_count": 253,
+    "packet_count": 29,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "ordinal": 1,
+        "title_src": "Attention Is All Y ou Need",
+        "status": "packet_built",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium"
+        ],
+        "sentence_count": 190,
+        "packet_count": 27,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "sentence_count": 63,
+        "packet_count": 2,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "document_summary_after_bootstrap": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Attention is All you Need",
+    "author": "Ashish Vaswani\\054 Noam Shazeer\\054 Niki Parmar\\054 Jakob Uszkoreit\\054 Llion Jones\\054 Aidan N\\056 Gomez\\054 \\225ukasz Kaiser\\054 Illia Polosukhin",
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 11,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "medium",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 3176.364,
+      "average_span_count": 406.279,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 2,
+      "suspicious_page_numbers": [
+        2,
+        3
+      ],
+      "recovery_lane": "academic_paper",
+      "trailing_reference_page_count": 3,
+      "academic_paper_candidate": true
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 11,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": true,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2,
+            "heading": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 11,
+          "recovered_block_count": 8,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 7,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 2,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 4,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 8,
+          "raw_block_count": 8,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 9,
+          "raw_block_count": 53,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 10,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 11,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 29,
+    "sentence_count": 253,
+    "packet_count": 29,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "ordinal": 1,
+        "title_src": "Attention Is All Y ou Need",
+        "status": "packet_built",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium"
+        ],
+        "sentence_count": 190,
+        "packet_count": 27,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "sentence_count": 63,
+        "packet_count": 2,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "run_seed": {
+    "run_id": "148c5476-4a80-4970-9ed6-679cb7e2a268",
+    "seeded_work_item_count": 29,
+    "pending_packet_count_initial": 29
+  },
+  "run": {
+    "run_id": "148c5476-4a80-4970-9ed6-679cb7e2a268",
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "run_type": "translate_full",
+    "status": "succeeded",
+    "backend": "openai_compatible",
+    "model_name": "deepseek-chat",
+    "requested_by": "codex.pdf.paper",
+    "priority": 100,
+    "resume_from_run_id": null,
+    "stop_reason": null,
+    "status_detail_json": {
+      "source_path": "/Users/smy/Downloads/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+      "report_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/report.json",
+      "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports",
+      "usage_summary": {
+        "token_in": 83025,
+        "token_out": 30768,
+        "cost_usd": 0.03307294,
+        "latency_ms": 1044714
+      },
+      "control_counters": {
+        "seeded_work_item_count": 29,
+        "completed_work_item_count": 29,
+        "retryable_failure_count": 0,
+        "terminal_failure_count": 0,
+        "expired_lease_reclaim_count": 0,
+        "consecutive_failures": 0
+      },
+      "last_control": {
+        "action": "run.succeeded",
+        "actor_id": "system.run-control",
+        "note": null,
+        "detail_json": {
+          "completed_work_item_count": 29
+        },
+        "at": "2026-03-16T01:56:19.554370+00:00"
+      },
+      "last_progress": {
+        "packet_id": "f3cf53cb-5f12-5ca4-b019-57d8467ca54d",
+        "translation_run_id": "9670f774-f64b-5568-beb6-b20635a2fb4d",
+        "completed_at": "2026-03-16T01:56:19.549616+00:00"
+      }
+    },
+    "created_at": "2026-03-15T17:47:20+00:00",
+    "updated_at": "2026-03-15T17:56:19+00:00",
+    "started_at": "2026-03-15T17:47:20.297401+00:00",
+    "finished_at": "2026-03-15T17:56:19.554370+00:00",
+    "budget": {
+      "max_wall_clock_seconds": null,
+      "max_total_cost_usd": null,
+      "max_total_token_in": null,
+      "max_total_token_out": null,
+      "max_retry_count_per_work_item": 2,
+      "max_consecutive_failures": 20,
+      "max_parallel_workers": 2,
+      "max_parallel_requests_per_provider": 2,
+      "max_auto_followup_attempts": 2
+    },
+    "work_items": {
+      "total_count": 29,
+      "status_counts": {
+        "pending": 0,
+        "leased": 0,
+        "running": 0,
+        "succeeded": 29,
+        "retryable_failed": 0,
+        "terminal_failed": 0,
+        "cancelled": 0
+      },
+      "stage_counts": {
+        "bootstrap": 0,
+        "translate": 29,
+        "review": 0,
+        "repair": 0,
+        "export": 0
+      }
+    },
+    "worker_leases": {
+      "total_count": 29,
+      "status_counts": {
+        "active": 0,
+        "released": 29,
+        "expired": 0
+      },
+      "latest_heartbeat_at": "2026-03-15T17:56:19.549616+00:00"
+    },
+    "events": {
+      "event_count": 91,
+      "latest_event_at": "2026-03-15T17:56:19.554370+00:00"
+    }
+  },
+  "translate": {
+    "run_id": "148c5476-4a80-4970-9ed6-679cb7e2a268",
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "run_status": "succeeded",
+    "stop_reason": null,
+    "total_packet_count": 29,
+    "translated_packet_count": 29,
+    "pending_packet_count": 0,
+    "retryable_failed_packet_count": 0,
+    "terminal_failed_packet_count": 0,
+    "inflight_packet_count": 0,
+    "remaining_packet_count": 0,
+    "usage_summary": {
+      "token_in": 83025,
+      "token_out": 30768,
+      "cost_usd": 0.03307294,
+      "latency_ms": 1044714
+    },
+    "control_counters": {
+      "seeded_work_item_count": 29,
+      "completed_work_item_count": 29,
+      "retryable_failure_count": 0,
+      "terminal_failure_count": 0,
+      "expired_lease_reclaim_count": 0,
+      "consecutive_failures": 0
+    },
+    "last_progress": {
+      "packet_id": "f3cf53cb-5f12-5ca4-b019-57d8467ca54d",
+      "translation_run_id": "9670f774-f64b-5568-beb6-b20635a2fb4d",
+      "completed_at": "2026-03-16T01:56:19.549616+00:00"
+    },
+    "last_failure": {},
+    "elapsed_seconds": 29339.261,
+    "avg_packet_seconds": 1011.699,
+    "estimated_remaining_seconds": 0.0,
+    "estimated_finish_at": "2026-03-16T01:56:19.558345+00:00"
+  },
+  "translate_recent_results": [
+    {
+      "work_item_id": "1227ff7c-d932-4799-9c93-87b31cd24c8c",
+      "packet_id": "5f490fbd-7df2-5198-95ce-a2bf773a7f6c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "ca4ba0e4-2e2e-595c-a35b-48505e9cdfba",
+      "review_required_sentence_ids": [],
+      "token_in": 1717,
+      "token_out": 179,
+      "cost_usd": 0.00053981,
+      "latency_ms": 7291
+    },
+    {
+      "work_item_id": "1394cdc4-3078-4a42-97e5-977407b9c8b0",
+      "packet_id": "5b2c2fe5-d07b-5d62-8c2e-2a97030d60d1",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "46a3524a-ed0d-5b85-a24d-b4e9a21dc3b0",
+      "review_required_sentence_ids": [],
+      "token_in": 1654,
+      "token_out": 731,
+      "cost_usd": 0.00067337,
+      "latency_ms": 24984
+    },
+    {
+      "work_item_id": "094a4efd-bc1b-43f0-9bfb-fe2c3ec7bb90",
+      "packet_id": "edc72dfc-1fa4-5934-acec-e3b59c73cc40",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "ce4cbb41-4d94-515e-9642-35f009db39f4",
+      "review_required_sentence_ids": [],
+      "token_in": 3037,
+      "token_out": 3169,
+      "cost_usd": 0.00216521,
+      "latency_ms": 102220
+    },
+    {
+      "work_item_id": "152303a1-eebc-42d7-873e-45813507ce74",
+      "packet_id": "bf3bd546-b55d-5a5c-9c44-ee720af9fb0d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "df9ca3d4-5d6e-5cd0-ac7b-30417e21bbc8",
+      "review_required_sentence_ids": [],
+      "token_in": 3330,
+      "token_out": 2308,
+      "cost_usd": 0.00180499,
+      "latency_ms": 74695
+    },
+    {
+      "work_item_id": "253a64c5-6998-44bf-ba08-0ed2cc75ae46",
+      "packet_id": "2d4e7a69-9b1a-541f-9c97-bde10ca31f51",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "d8190955-c288-5002-b6d9-6fe551bb8017",
+      "review_required_sentence_ids": [],
+      "token_in": 2748,
+      "token_out": 216,
+      "cost_usd": 0.00076339,
+      "latency_ms": 8358
+    },
+    {
+      "work_item_id": "2f1d39cc-d528-46c5-b8da-c6d33fd479ab",
+      "packet_id": "6d2a8b10-472d-564e-81a8-fe70f4754f9d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "66f84587-9a7f-567a-8994-15a170af99b9",
+      "review_required_sentence_ids": [],
+      "token_in": 3050,
+      "token_out": 442,
+      "cost_usd": 0.00094287,
+      "latency_ms": 15605
+    },
+    {
+      "work_item_id": "49bd6c27-1567-4dc8-a9c9-6ba8e2bb36c6",
+      "packet_id": "e903704b-408c-5354-8fb8-34bf986a506d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "580918be-d83b-5e26-bdf3-f4c0138495d5",
+      "review_required_sentence_ids": [],
+      "token_in": 3526,
+      "token_out": 165,
+      "cost_usd": 0.00095981,
+      "latency_ms": 6946
+    },
+    {
+      "work_item_id": "4acbc21d-7d26-498b-89e6-aa0f7a2f4496",
+      "packet_id": "fb280b3e-6d59-5937-82cf-e95c442c5597",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9687a33b-2eb9-508e-8f07-fdb6bb24039d",
+      "review_required_sentence_ids": [],
+      "token_in": 1574,
+      "token_out": 159,
+      "cost_usd": 0.00041073,
+      "latency_ms": 6222
+    },
+    {
+      "work_item_id": "52fcf9d7-cf02-4970-8110-e6226cc802bb",
+      "packet_id": "b530064c-3b7f-5393-bfe5-bc3121d23b05",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "5eb315c8-5f4f-56ef-9447-f3322935b0d8",
+      "review_required_sentence_ids": [],
+      "token_in": 2923,
+      "token_out": 402,
+      "cost_usd": 0.00089051,
+      "latency_ms": 14048
+    },
+    {
+      "work_item_id": "55416727-ed6d-4414-b2f9-ae91cf3d0176",
+      "packet_id": "c662dd33-61cd-5807-8b2c-f0e56eafbb69",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b341edd3-c128-590d-82d1-98e0add1fade",
+      "review_required_sentence_ids": [],
+      "token_in": 1904,
+      "token_out": 196,
+      "cost_usd": 0.00051867,
+      "latency_ms": 7526
+    },
+    {
+      "work_item_id": "48e240f4-464c-4134-a24f-7e88b566f975",
+      "packet_id": "6cdd2f50-ca69-5e92-9cf5-997096f6ce15",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "6fa19c51-cd52-5224-8ef8-a87415f6d7fd",
+      "review_required_sentence_ids": [],
+      "token_in": 2442,
+      "token_out": 2534,
+      "cost_usd": 0.00165127,
+      "latency_ms": 83669
+    },
+    {
+      "work_item_id": "5d4139e9-0dc9-4268-90f3-85d8289c653b",
+      "packet_id": "0a1c709b-e569-5c15-9c43-901b8db34313",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "019b833b-eb60-545c-8046-8aa6a0184fe1",
+      "review_required_sentence_ids": [],
+      "token_in": 4105,
+      "token_out": 2894,
+      "cost_usd": 0.0022036,
+      "latency_ms": 95716
+    },
+    {
+      "work_item_id": "5fa50225-a974-4345-bccd-066ae1792ad0",
+      "packet_id": "41359dd6-2484-528b-9505-028ea41a3ad3",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b2dd7efa-d3b1-58bf-bc7a-1812f7c6241f",
+      "review_required_sentence_ids": [],
+      "token_in": 1443,
+      "token_out": 473,
+      "cost_usd": 0.00050593,
+      "latency_ms": 16640
+    },
+    {
+      "work_item_id": "74fa6ee7-d8ed-4f41-827e-d417286c904a",
+      "packet_id": "2885cf4a-fa29-5261-8e51-a12ffe0775ab",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "3b12946e-f002-519e-873a-fcc35f331ccc",
+      "review_required_sentence_ids": [],
+      "token_in": 2396,
+      "token_out": 471,
+      "cost_usd": 0.00077193,
+      "latency_ms": 16106
+    },
+    {
+      "work_item_id": "76269673-989f-4465-90dd-706fdeed2b0c",
+      "packet_id": "012f726c-89e3-5dc8-b57a-a17757d19d04",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "089fd88f-d886-5037-a81d-4830e4e1fa30",
+      "review_required_sentence_ids": [],
+      "token_in": 4567,
+      "token_out": 204,
+      "cost_usd": 0.00126767,
+      "latency_ms": 7898
+    },
+    {
+      "work_item_id": "84b81e7f-5b6c-4731-8cbb-29e081c67e61",
+      "packet_id": "003d362d-7d18-5f9f-8c7b-55b7c327dffb",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "3f8e0a90-cf46-551a-8fd0-453cd68c0716",
+      "review_required_sentence_ids": [],
+      "token_in": 1859,
+      "token_out": 162,
+      "cost_usd": 0.00049179,
+      "latency_ms": 6936
+    },
+    {
+      "work_item_id": "5f1b284d-fa12-471b-8c67-e120ffa6ef6e",
+      "packet_id": "0fb07618-e96f-5eb2-b6ac-02218801b538",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "f79c4905-922c-5a3f-a38f-42b4f258b6a1",
+      "review_required_sentence_ids": [],
+      "token_in": 3077,
+      "token_out": 3989,
+      "cost_usd": 0.00247243,
+      "latency_ms": 130704
+    },
+    {
+      "work_item_id": "885dc111-b0a9-43ed-8dd4-cd5766d87209",
+      "packet_id": "1529267c-d47d-5c85-a584-b6481a8d8a0c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "813a11ce-9de6-51b0-bb2a-e7ff893a3277",
+      "review_required_sentence_ids": [],
+      "token_in": 2757,
+      "token_out": 709,
+      "cost_usd": 0.00097297,
+      "latency_ms": 24726
+    },
+    {
+      "work_item_id": "95a75ee3-bdcd-4abc-b002-8c5ee854d182",
+      "packet_id": "8f17eeea-850d-5560-8730-943979eeb7c3",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "457735bd-c79f-5da7-9391-ee9fe53f02dd",
+      "review_required_sentence_ids": [],
+      "token_in": 2916,
+      "token_out": 163,
+      "cost_usd": 0.00078817,
+      "latency_ms": 6848
+    },
+    {
+      "work_item_id": "9cdb6964-e40b-4c52-9653-8f35f9a8815b",
+      "packet_id": "97c1703f-f4a4-5608-a672-071f9fe67b33",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "7bfbd185-40c8-5a5d-aed3-57570a67b007",
+      "review_required_sentence_ids": [],
+      "token_in": 2202,
+      "token_out": 468,
+      "cost_usd": 0.00071635,
+      "latency_ms": 16588
+    },
+    {
+      "work_item_id": "958de71b-efbf-4f52-9e96-4b9169900a25",
+      "packet_id": "4e39b708-4304-5c15-8d9f-aa41cd0ec494",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9d617b08-fa03-50c3-b601-1e3c576d1f9a",
+      "review_required_sentence_ids": [],
+      "token_in": 3404,
+      "token_out": 1043,
+      "cost_usd": 0.00129441,
+      "latency_ms": 36188
+    },
+    {
+      "work_item_id": "a300c06d-f453-4fa7-a3fd-a611b7bf0951",
+      "packet_id": "c813756a-02e7-5b16-ac58-6cb77b9c3a65",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "ce927f5a-192e-5883-ad8e-f13c8497a93b",
+      "review_required_sentence_ids": [],
+      "token_in": 3628,
+      "token_out": 509,
+      "cost_usd": 0.00113285,
+      "latency_ms": 18849
+    },
+    {
+      "work_item_id": "ac455a6e-113b-4dd1-a1b3-aea56c38af13",
+      "packet_id": "4e566689-462c-5ad9-b027-126ceacba148",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "e8a462c1-a268-5bde-8665-ecdbb6f34758",
+      "review_required_sentence_ids": [],
+      "token_in": 3514,
+      "token_out": 2389,
+      "cost_usd": 0.00189053,
+      "latency_ms": 81119
+    },
+    {
+      "work_item_id": "b3d44959-0624-482c-846e-06ba09c2c640",
+      "packet_id": "04c7b2af-c0ab-5601-a0eb-3c3a45b5324c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "bcf1a325-f329-5d13-b801-42c657b6aec6",
+      "review_required_sentence_ids": [],
+      "token_in": 3971,
+      "token_out": 3037,
+      "cost_usd": 0.00229065,
+      "latency_ms": 102069
+    },
+    {
+      "work_item_id": "cd39d806-4696-4104-9ab2-b50c049eb974",
+      "packet_id": "ea235a35-016b-57f9-aa2b-3955a7bed946",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b421811b-83bb-556e-96d0-17b2e4d88239",
+      "review_required_sentence_ids": [],
+      "token_in": 3074,
+      "token_out": 389,
+      "cost_usd": 0.00084669,
+      "latency_ms": 14930
+    },
+    {
+      "work_item_id": "d2b5cc20-aa17-46ca-9d90-b21c7928694b",
+      "packet_id": "6c5fe10a-93e0-5796-bbc6-09c922b58785",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "b701deda-a76c-5491-91d2-cd12e5866d52",
+      "review_required_sentence_ids": [],
+      "token_in": 4595,
+      "token_out": 279,
+      "cost_usd": 0.00100058,
+      "latency_ms": 11445
+    },
+    {
+      "work_item_id": "c650c66d-dc62-41fd-a605-178844bb6fa7",
+      "packet_id": "e148d3c0-8ba1-5671-aad6-ceab3bab6554",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "a8a6792d-84a0-524a-b9e4-3941d2975569",
+      "review_required_sentence_ids": [],
+      "token_in": 2858,
+      "token_out": 1590,
+      "cost_usd": 0.00133902,
+      "latency_ms": 54895
+    },
+    {
+      "work_item_id": "e010597c-1646-45f9-b1a1-46aa88c02b01",
+      "packet_id": "a73532e9-3def-5dbc-81ec-98262f25002c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "06c5274b-16bb-5ef3-97cc-5cb9d99b3100",
+      "review_required_sentence_ids": [],
+      "token_in": 1807,
+      "token_out": 267,
+      "cost_usd": 0.00052133,
+      "latency_ms": 9725
+    },
+    {
+      "work_item_id": "ffc0c180-7e80-482f-a82d-f441c20d8d45",
+      "packet_id": "f3cf53cb-5f12-5ca4-b019-57d8467ca54d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "9670f774-f64b-5568-beb6-b20635a2fb4d",
+      "review_required_sentence_ids": [],
+      "token_in": 2947,
+      "token_out": 1231,
+      "cost_usd": 0.00124541,
+      "latency_ms": 41768
+    }
+  ],
+  "run_housekeeping": {
+    "expired_lease_count": 0,
+    "reclaimed_work_item_ids": [],
+    "budget_exceeded": false,
+    "budget_stop_reason": null
+  },
+  "review": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "total_issue_count": 2,
+    "total_action_count": 2,
+    "chapter_results": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "status": "review_required",
+        "issue_count": 1,
+        "action_count": 1,
+        "blocking_issue_count": 1,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "status": "review_required",
+        "issue_count": 1,
+        "action_count": 1,
+        "blocking_issue_count": 1,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      }
+    ]
+  },
+  "review_package_export": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "export_type": "review_package",
+    "document_status": "active",
+    "chapter_results": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "export_id": "3325cb48-6d3c-5892-b6a1-bdf58a07fdef",
+        "export_type": "review_package",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/review-package-bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8.json",
+        "manifest_path": null
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "export_id": "a09cc600-7d8d-576f-8632-c5bc00863b22",
+        "export_type": "review_package",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/review-package-09edce59-b513-5926-9838-a5c6ad3d50fb.json",
+        "manifest_path": null
+      }
+    ],
+    "file_path": null,
+    "manifest_path": null,
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "bilingual_export_error": {
+    "message": "Chapter bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8 must pass review before final export; current status is review_required.",
+    "detail": {
+      "message": "Chapter bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8 must pass review before final export; current status is review_required.",
+      "chapter_id": null,
+      "issue_ids": [],
+      "action_ids": [],
+      "auto_followup_requested": false,
+      "auto_followup_attempt_count": 0,
+      "auto_followup_attempt_limit": null,
+      "auto_followup_stop_reason": null,
+      "auto_followup_executions": [],
+      "followup_actions": []
+    }
+  },
+  "document_summary_final": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Attention is All you Need",
+    "author": "Ashish Vaswani\\054 Noam Shazeer\\054 Niki Parmar\\054 Jakob Uszkoreit\\054 Llion Jones\\054 Aidan N\\056 Gomez\\054 \\225ukasz Kaiser\\054 Illia Polosukhin",
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 11,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "medium",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 3176.364,
+      "average_span_count": 406.279,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 2,
+      "suspicious_page_numbers": [
+        2,
+        3
+      ],
+      "recovery_lane": "academic_paper",
+      "trailing_reference_page_count": 3,
+      "academic_paper_candidate": true
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 11,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": true,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2,
+            "heading": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 11,
+          "recovered_block_count": 8,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 7,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 2,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 4,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 8,
+          "raw_block_count": 8,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 9,
+          "raw_block_count": 53,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 10,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 11,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 29,
+    "sentence_count": 253,
+    "packet_count": 29,
+    "open_issue_count": 2,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": "148c5476-4a80-4970-9ed6-679cb7e2a268",
+    "latest_run_status": "succeeded",
+    "chapters": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "ordinal": 1,
+        "title_src": "Attention Is All Y ou Need",
+        "status": "review_required",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium"
+        ],
+        "sentence_count": 190,
+        "packet_count": 27,
+        "open_issue_count": 1,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": {
+          "issue_count": 1,
+          "action_count": 1,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 1,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "review_required",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "sentence_count": 63,
+        "packet_count": 2,
+        "open_issue_count": 1,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": {
+          "issue_count": 1,
+          "action_count": 1,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 1,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      }
+    ]
+  },
+  "translation_samples": [
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "Figure 2: \\050left\\051 Scaled Dot-Product Attention. \\050right\\051 Multi-Head At tention consists of se v eral attention layers running in parallel. query with all k e ys, di vide each by p",
+      "target_text": "图2：（左）缩放点积注意力。（右）多头注意力由多个并行运行的注意力层组成。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:47:27.631522"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "p d k .",
+      "target_text": "p d k。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:47:52.633697"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "Scaled Dot-Product Attention Multi-Head Attention",
+      "target_text": "缩放点积注意力",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:49:10.952909"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "Self-Attention O \\050 n 2 \\001 d \\051 O \\0501\\051 O \\0501\\051 Recurrent O \\050 n \\001 d 2 \\051 O \\050 n \\051 O \\050 n \\051 Con v olutional O \\050 k \\001 n \\001 d 2 \\051 O \\0501\\051 O \\050 l og k \\050 n \\051\\051 Self-Attention \\050restricted\\051 O \\050 r \\001 n \\001 d \\051 O \\0501\\051 O \\050 n=r \\051 Layer T ype Comple xity per Layer Sequential Maximum P ath Length Operations",
+      "target_text": "自注意力 O(n²·d) O(1) O(1)",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:49:23.026685"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "EN-DE EN-FR EN-DE EN-FR",
+      "target_text": "英德 英法 英德 英法",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:49:30.013313"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "p",
+      "target_text": "√d_k",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:49:36.266006"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "N d model d f f h d k d v P dr op \\017 l s train \\050de v\\051 \\050de v\\051 \\002 10 6 4.33 26.4 213",
+      "target_text": "N d 模型 d f f h d k d v P 丢弃率 l s 训练 (开发) (开发) 10 6 4.33 26.4 213",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:49:57.909121"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "T able 1: Maximum path lengths, per -layer comple xity and minimum number of sequential operat ions for dif ferent layer types. n is the sequence length, d is the representation dimension, k is the k ernel size of con v olutions and r the size of the neighborhood in restricted self-attention.",
+      "target_text": "表1：不同层类型的最大路径长度、每层计算复杂度以及所需的最小顺序操作数。n为序列长度，d为表示维度，k为卷积的核大小，r为受限自注意力中的邻域大小。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:52:14.432399"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "Attention Is All Y ou Need",
+      "target_text": "注意力就是一切",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:52:21.396810"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "d k .",
+      "target_text": "dk。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:52:46.154206"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "Figure 1: The T ransformer - model architecture. wise fully connected feed-forw ard netw ork. W e emplo y a residual connection [ 10 ] around each of the tw o sub-layers, follo wed by layer normalization [ 1 ]. That is, the output of each sub-layer is La y erNorm\\050 x + Subla y er\\050 x \\051\\051 , where Subla y er\\050 x \\051 is the function implemented by the sub-layer itself. T o f acilitate these residual connections, all s u b- layers in the model, as well as the embedding layers, produce outputs of dimension d model = 512 . Decoder: The decoder is also composed of a stack of N = 6 identical layers. In addition to the tw o sub-layers in each encoder layer , the decoder inserts a third sub-layer , which performs multi-head attention o v er the output of the encoder stack. Similar to the encoder , we emplo y residual connections around each of the sub-layers, follo wed by layer normalization. W e also modify the self-attention sub-layer in the decoder stack to pre v ent positions from attending to subsequent positions. This masking, combined with f act that the output embeddings are of fset by one position, ensures that the predictions for position i can depend only on the kno wn outputs at positions less than i . 3.2 Attention An attention function can be described as mapping a query and a set of k e y-v alue pairs to a n output, where the query , k e ys, v alues, and output are all v ectors. The output is computed as a weighted sum of the v alues, where the weight assigned to each v alue is computed by a compatibility function of t he query with the corresponding k e y . 3.2.1 Scaled Dot-Pr oduct Attention W e call our particular attention \"Scaled Dot-Product Attention\" \\050Figure 2\\051. The input consists of queries and k e ys of dimension d k , and v alues of dimension d v . W e compute the dot products of the 3",
+      "target_text": "图1：Transformer模型架构。",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:52:53.029068"
+    },
+    {
+      "chapter_ordinal": 1,
+      "chapter_title": "Attention Is All Y ou Need",
+      "source_text": "PPL BLEU params steps base 6 512 2048 8 64 64 0.1 0.1 100K 4.92 25.8 65 1 512 512 5.29 24.9 4 128 128 5.00 25.5 \\050A\\051 16 32 32 4.91 25.8 32 16 16 5.01 25.4 16 5.16 25.1 58 \\050B\\051 32 5.01 25.4 60 2 6.11 23.7 36 4 5.19 25.3 50 8 4.88 25.5 80 \\050C\\051 256 32 32 5.75 24.5 28 1024 128 128 4.66 26.0 168 1024 5.12 25.4 53 4096 4.75 26.2 90 0.0 5.77 24.6 0.2 4.95 25.5 \\050D\\051 0.0 4.67 25.3 0.2 5.47 25.7 \\050E\\051 positional embedding instead of sinusoids 4.92 25.7 big 6 1024 4096 16 0.3 300K",
+      "target_text": "PPL BLEU params steps base 6 512 2048 8 64 64 0.1 0.1 100K 4.92 25.8 65 1 512 512 5.29 24.9 4 128 128 5.00 25.5 (A) 16 32 32 4.91 25.8 32 16 16 5.01 25.4 16 5.16 25.1 58 (B) 32 5.01 25.4 60 2 6.11 23.7 36 4 5.19 25.3 50 8 4.88 25.5 80 (C) 256 32 32 5.75 24.5 28 1024 128 128 4.66 26.0 168 1024 5.12 25.4 53 4096 4.75 26.2 90 0.0 5.77 24.6 0.2 4.95 25.5 (D) 0.0 4.67 25.3 0.2 5.47 25.7 (E) 使用位置嵌入代替正弦函数 4.92 25.7 big 6 1024 4096 16 0.3 300K",
+      "model_name": "deepseek-chat",
+      "translated_at": "2026-03-16T01:53:09.646088"
+    }
+  ],
+  "finished_at": "2026-03-16T01:56:19.682117+00:00",
+  "duration_seconds": 540.217,
+  "draft_merged_export": {
+    "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.draft.html",
+    "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.draft.manifest.json",
+    "reason": "final export gate blocked by review_required chapters with non-blocking low-confidence issues"
+  },
+  "review_after_academic_policy": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "total_issue_count": 2,
+    "total_action_count": 2,
+    "chapter_results": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "status": "qa_checked",
+        "issue_count": 1,
+        "action_count": 1,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "status": "qa_checked",
+        "issue_count": 1,
+        "action_count": 1,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0,
+        "resolved_issue_count": 0
+      }
+    ]
+  },
+  "bilingual_export_after_academic_policy": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "export_type": "bilingual_html",
+    "document_status": "exported",
+    "chapter_results": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "export_id": "4800b1f8-bd64-5b2e-a3f2-4d1d52a443df",
+        "export_type": "bilingual_html",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/bilingual-bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8.html",
+        "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/bilingual-bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8.manifest.json"
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "export_id": "158ddc44-f7a1-5e59-8a1f-cc026cc373f7",
+        "export_type": "bilingual_html",
+        "status": "succeeded",
+        "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/bilingual-09edce59-b513-5926-9838-a5c6ad3d50fb.html",
+        "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/bilingual-09edce59-b513-5926-9838-a5c6ad3d50fb.manifest.json"
+      }
+    ],
+    "file_path": null,
+    "manifest_path": null,
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "merged_export_after_academic_policy": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "export_type": "merged_html",
+    "document_status": "exported",
+    "chapter_results": [],
+    "file_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.html",
+    "manifest_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v1/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.manifest.json",
+    "auto_followup_requested": false,
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": []
+  },
+  "document_summary_after_academic_policy": {
+    "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+    "source_type": "pdf_text",
+    "status": "exported",
+    "title": "Attention is All you Need",
+    "author": "Ashish Vaswani\\054 Noam Shazeer\\054 Niki Parmar\\054 Jakob Uszkoreit\\054 Llion Jones\\054 Aidan N\\056 Gomez\\054 \\225ukasz Kaiser\\054 Illia Polosukhin",
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 11,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "medium",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 3176.364,
+      "average_span_count": 406.279,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 2,
+      "suspicious_page_numbers": [
+        2,
+        3
+      ],
+      "recovery_lane": "academic_paper",
+      "trailing_reference_page_count": 3,
+      "academic_paper_candidate": true
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 11,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": true,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2,
+            "heading": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [
+            "column_fragment"
+          ],
+          "layout_suspect": true,
+          "role_counts": {
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 11,
+          "recovered_block_count": 8,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 7,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 2,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 4,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 8,
+          "raw_block_count": 8,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 9,
+          "raw_block_count": 53,
+          "recovered_block_count": 4,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 4
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 10,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 11,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "references",
+          "page_family_source": "content_signature",
+          "page_family_heading": null,
+          "content_family": "references",
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [
+            "page_family_references",
+            "page_family_source_content_signature"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 29,
+    "sentence_count": 253,
+    "packet_count": 29,
+    "open_issue_count": 2,
+    "merged_export_ready": true,
+    "latest_merged_export_at": "2026-03-16T02:07:46.598201",
+    "chapter_bilingual_export_count": 2,
+    "latest_run_id": "148c5476-4a80-4970-9ed6-679cb7e2a268",
+    "latest_run_status": "succeeded",
+    "chapters": [
+      {
+        "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "ordinal": 1,
+        "title_src": "Attention Is All Y ou Need",
+        "status": "exported",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium"
+        ],
+        "sentence_count": 190,
+        "packet_count": 27,
+        "open_issue_count": 1,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-16T02:07:46.553114",
+        "quality_summary": {
+          "issue_count": 1,
+          "action_count": 1,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 0,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      },
+      {
+        "chapter_id": "09edce59-b513-5926-9838-a5c6ad3d50fb",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "exported",
+        "risk_level": "high",
+        "parse_confidence": 0.82,
+        "structure_flags": [
+          "layout_risk_medium",
+          "page_family_references",
+          "page_family_references",
+          "page_family_source_content_signature"
+        ],
+        "sentence_count": 63,
+        "packet_count": 2,
+        "open_issue_count": 1,
+        "bilingual_export_ready": true,
+        "latest_bilingual_export_at": "2026-03-16T02:07:46.559955",
+        "quality_summary": {
+          "issue_count": 1,
+          "action_count": 1,
+          "resolved_issue_count": 0,
+          "coverage_ok": true,
+          "alignment_ok": true,
+          "term_ok": true,
+          "format_ok": true,
+          "blocking_issue_count": 0,
+          "low_confidence_count": 0,
+          "format_pollution_count": 0
+        }
+      }
+    ]
+  }
+}

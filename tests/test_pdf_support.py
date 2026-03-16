@@ -18,7 +18,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.app.main import create_app
-from book_agent.domain.enums import ActionType, BlockType, JobScopeType, SourceType
+from book_agent.domain.enums import ActionType, BlockType, ChapterStatus, JobScopeType, SourceType
 from book_agent.domain.structure.pdf import (
     BasicPdfTextExtractor,
     PDFParser,
@@ -38,6 +38,7 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.services.review import ReviewService
+from book_agent.services.workflows import DocumentWorkflowService
 
 
 PAGE_WIDTH = 595
@@ -51,6 +52,18 @@ def _pdf_escape(text: str) -> str:
 def _text_command(x: int, y: int, font_size: int, text: str) -> str:
     escaped = _pdf_escape(text)
     return f"BT /F1 {font_size} Tf 1 0 0 1 {x} {y} Tm ({escaped}) Tj ET"
+
+
+def _positioned_text_segment(entries: list[tuple[int, int, int, str]]) -> str:
+    commands = ["BT"]
+    current_font_size: int | None = None
+    for x, y, font_size, text in entries:
+        if current_font_size != font_size:
+            commands.append(f"/F1 {font_size} Tf")
+            current_font_size = font_size
+        commands.append(f"1 0 0 1 {x} {y} Tm ({_pdf_escape(text)}) Tj")
+    commands.append("ET")
+    return " ".join(commands)
 
 
 def _write_pdf(
@@ -245,6 +258,283 @@ def _write_academic_paper_pdf(path: Path) -> None:
         ],
     ]
     _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_academic_paper_with_inline_sections_pdf(path: Path) -> None:
+    section_one = (
+        "1 Introduction We study attention-based sequence models in compact academic PDFs. "
+        "The parser must preserve section boundaries even when extractors merge blocks. "
+        "2 Model Architecture Our model uses multi-head attention and residual pathways. "
+        "The encoder and decoder stacks share a stable hidden dimensionality."
+    )
+    section_two = (
+        "3 Training We optimize the model with Adam and scheduled learning rates. "
+        "The training loop tracks convergence across translation benchmarks. "
+        "4 Results We compare the recovered structure against a source-side baseline and report qualitative gains."
+    )
+    filler = " attention" * 90
+    reference_one = (
+        "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL."
+    )
+    reference_two = (
+        "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP."
+    )
+    pages = [
+        [
+            _text_command(178, 760, 20, "Transformer Attention in Practice"),
+            _text_command(214, 730, 12, "A. Researcher and B. Scientist"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how section-aware recovery improves translation-oriented parsing for academic PDFs.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(304, 736, 10, f"{section_one}{filler}."),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(304, 736, 10, f"{section_two}{filler}."),
+            _text_command(298, 36, 10, "3"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(72, 700, 10, f"{reference_one} {reference_two}"),
+            _text_command(298, 36, 10, "4"),
+        ],
+        [
+            _text_command(72, 720, 10, f"{reference_two} {reference_one}"),
+            _text_command(298, 36, 10, "5"),
+        ],
+    ]
+    _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_academic_paper_with_noisy_inline_sections_pdf(path: Path) -> None:
+    section_one = (
+        "3 Model Ar chitectur e Most competitive neural sequence transduction models rely on encoder-decoder stacks. "
+        "3.1 Encoder and Decoder Stacks Encoder: The encoder is composed of stacked self-attention and feed-forward layers. "
+        "3.4 Embeddings and Softmax Similarly to other sequence transduction models, we use learned embeddings and a shared softmax projection."
+    )
+    section_two = (
+        "6 Results We report translation quality and training-cost tradeoffs for attention-only models. "
+        "7 Conclusion We conclude that attention-only models remain translation-friendly and structurally recoverable."
+    )
+    table_like_block = "Model BLEU Training Cost Transformer 27.5 1.0x10^19"
+    filler = " attention" * 90
+    reference_one = (
+        "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL."
+    )
+    reference_two = (
+        "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP."
+    )
+    pages = [
+        [
+            _text_command(178, 760, 20, "Transformer Attention in Practice"),
+            _text_command(214, 730, 12, "A. Researcher and B. Scientist"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how noisy inline academic headings should be cleaned before export.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(304, 736, 10, f"{section_one}{filler}."),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(304, 736, 10, f"{section_two}{filler}."),
+            _text_command(298, 36, 10, "3"),
+        ],
+        [
+            _text_command(304, 736, 10, table_like_block),
+            _text_command(298, 36, 10, "4"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(72, 700, 10, f"{reference_one} {reference_two}"),
+            _text_command(298, 36, 10, "5"),
+        ],
+        [
+            _text_command(72, 720, 10, f"{reference_two} {reference_one}"),
+            _text_command(298, 36, 10, "6"),
+        ],
+    ]
+    _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_academic_paper_with_broken_heading_tail_pdf(path: Path) -> None:
+    section_one = (
+        "3.2.1 Scaled Dot-Pr oduct Attention We call our particular attention scaled dot-product attention "
+        "and use it throughout the model. "
+        "3.2.2 Multi-Head Attention Multiple heads let the model attend to different subspaces in parallel."
+    )
+    filler = " attention" * 90
+    reference_one = (
+        "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL."
+    )
+    reference_two = (
+        "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP."
+    )
+    pages = [
+        [
+            _text_command(178, 760, 20, "Transformer Attention in Practice"),
+            _text_command(214, 730, 12, "A. Researcher and B. Scientist"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how broken numbered heading tails should be repaired near figure-heavy layouts.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(304, 736, 10, f"{section_one}{filler}."),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(304, 736, 10, filler),
+            _text_command(298, 36, 10, "3"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(72, 700, 10, f"{reference_one} {reference_two}"),
+            _text_command(298, 36, 10, "4"),
+        ],
+        [
+            _text_command(72, 720, 10, f"{reference_two} {reference_one}"),
+            _text_command(298, 36, 10, "5"),
+        ],
+    ]
+    _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_positioned_multi_column_academic_paper_pdf(path: Path) -> None:
+    left_top = "1 Introduction Left column should stay ahead of the right column in the recovered reading order."
+    left_mid = "Left column continues with more detail about attention recovery and translator friendly structure."
+    left_low = "Left column ends with a final sentence before the reader should move to the right side."
+    right_top = "2 Related Work Right column should appear only after the left column has been fully consumed."
+    right_mid = "Right column then discusses related work and parsing baselines for academic papers."
+    right_low = "Right column closes the page with additional evidence about dual column extraction."
+    reference_one = (
+        "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL."
+    )
+    reference_two = (
+        "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP."
+    )
+    pages = [
+        [
+            _text_command(178, 760, 20, "Transformer Attention in Practice"),
+            _text_command(214, 730, 12, "A. Researcher and B. Scientist"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how positioned text extraction improves reading order for dual-column academic PDFs.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _positioned_text_segment(
+                [
+                    (72, 722, 11, left_top),
+                    (330, 722, 11, right_top),
+                    (72, 684, 11, left_mid),
+                    (330, 684, 11, right_mid),
+                    (72, 646, 11, left_low),
+                    (330, 646, 11, right_low),
+                ]
+            ),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _positioned_text_segment(
+                [
+                    (72, 722, 11, left_top),
+                    (330, 722, 11, right_top),
+                    (72, 684, 11, left_mid),
+                    (330, 684, 11, right_mid),
+                    (72, 646, 11, left_low),
+                    (330, 646, 11, right_low),
+                ]
+            ),
+            _text_command(298, 36, 10, "3"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(72, 700, 10, f"{reference_one} {reference_two}"),
+            _text_command(298, 36, 10, "4"),
+        ],
+        [
+            _text_command(72, 720, 10, f"{reference_two} {reference_one}"),
+            _text_command(298, 36, 10, "5"),
+        ],
+    ]
+    _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_single_column_research_paper_pdf(path: Path) -> None:
+    title_and_abstract = (
+        "Forming Effective Human-AI Teams: Building Machine Lear ning Models that Complement the Capabilities "
+        "of Multiple Experts Patrick Hemmer 1 , Sebastian Schellhammer 1 ; 2 , Michael Vossing 1 , "
+        "Johannes Jakubik 1 and Gerhard Satzger 1 1 Karlsruhe Institute of Technology 2 GESIS - Leibniz "
+        "Institute for the Social Sciences patrick.hemmer@kit.edu Abstract Machine learning models are "
+        "increasingly used in application domains that involve working together with multiple experts."
+    )
+    body_text = (
+        "We study how machine learning systems can complement experts with different capabilities and "
+        "coordinate deferrals across a shared decision process."
+    )
+    references_text = (
+        "Refer ences [ Bansal et al. , 2021 ] Gagan Bansal, Besmira Nushi, Ece Kamar, Eric Horvitz, "
+        "and Daniel Weld. Is the most accurate ai the best teammate? optimizing ai for teamwork. In AAAI, 2021."
+    )
+    pages = [
+        [
+            _text_command(36, 742, 12, title_and_abstract),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(36, 742, 12, body_text),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(36, 742, 12, references_text),
+            _text_command(298, 36, 10, "3"),
+        ],
+    ]
+    _write_pdf(path, pages, title="", author="")
+
+
+def _write_broken_title_heading_paper_pdf(path: Path) -> None:
+    pages = [
+        [
+            _text_command(180, 760, 20, "Attention Is All Y ou Need"),
+            _text_command(214, 730, 12, "A. Researcher and B. Scientist"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how broken title headings should be normalized before export.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(
+                72,
+                700,
+                10,
+                "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL.",
+            ),
+            _text_command(298, 36, 10, "2"),
+        ],
+    ]
+    _write_pdf(path, pages, title="Attention is All you Need", author="Test Author")
 
 
 def _write_toc_driven_pdf(path: Path) -> None:
@@ -1000,6 +1290,165 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         self.assertEqual([chapter.metadata_json["pdf_section_family"] for chapter in result.chapters], ["body", "references"])
         self.assertEqual(result.chapters[0].risk_level.value, "high")
         self.assertEqual(result.chapters[1].metadata_json["pdf_section_family"], "references")
+
+    def test_bootstrap_pipeline_recovers_inline_academic_section_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-inline-sections.pdf"
+            _write_academic_paper_with_inline_sections_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        self.assertIn("Abstract", heading_texts)
+        self.assertIn("1 Introduction", heading_texts)
+        self.assertIn("2 Model Architecture", heading_texts)
+        self.assertIn("3 Training", heading_texts)
+        self.assertIn("4 Results", heading_texts)
+
+        recovered_heading = next(
+            block
+            for block in result.blocks
+            if block.block_type == BlockType.HEADING and block.source_text == "2 Model Architecture"
+        )
+        self.assertIn("academic_section_heading_recovered", recovered_heading.source_span_json["recovery_flags"])
+        self.assertEqual(recovered_heading.source_span_json["pdf_academic_heading_kind"], "numbered")
+        self.assertEqual(recovered_heading.source_span_json["pdf_academic_section_level"], 1)
+
+    def test_bootstrap_pipeline_cleans_noisy_inline_academic_section_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-noisy-inline-sections.pdf"
+            _write_academic_paper_with_noisy_inline_sections_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        self.assertIn("3 Model Architecture", heading_texts)
+        self.assertIn("3.1 Encoder and Decoder Stacks", heading_texts)
+        self.assertIn("3.4 Embeddings and Softmax", heading_texts)
+        self.assertIn("7 Conclusion", heading_texts)
+        self.assertNotIn("3 Model Ar", heading_texts)
+        self.assertNotIn("3.1 Encoder and Decoder Stacks Encoder:", heading_texts)
+        self.assertNotIn("3.4 Embeddings and Softmax Similarly", heading_texts)
+        self.assertNotIn("Model", heading_texts)
+
+    def test_bootstrap_pipeline_repairs_broken_academic_heading_tail_before_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-broken-heading-tail.pdf"
+            _write_academic_paper_with_broken_heading_tail_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        self.assertIn("3.2.1 Scaled Dot-Product Attention", heading_texts)
+        self.assertIn("3.2.2 Multi-Head Attention", heading_texts)
+        self.assertNotIn("3.2.1 Scaled Dot-Pr", heading_texts)
+        broken_heading = next(
+            block
+            for block in result.blocks
+            if block.block_type == BlockType.HEADING and block.source_text == "3.2.1 Scaled Dot-Product Attention"
+        )
+        self.assertIn("academic_section_heading_recovered", broken_heading.source_span_json["recovery_flags"])
+
+    def test_profiler_keeps_positioned_multi_column_academic_paper_in_medium_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-positioned-columns.pdf"
+            _write_positioned_multi_column_academic_paper_pdf(pdf_path)
+
+            extractor = BasicPdfTextExtractor()
+            profile = PdfFileProfiler(extractor).profile(pdf_path)
+
+        self.assertEqual(profile.layout_risk, "medium")
+        self.assertEqual(profile.recovery_lane, "academic_paper")
+        self.assertTrue(profile.academic_paper_candidate)
+        self.assertGreaterEqual(profile.multi_column_page_count, 2)
+
+    def test_bootstrap_pipeline_orders_positioned_multi_column_academic_paper_left_then_right(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-positioned-columns.pdf"
+            _write_positioned_multi_column_academic_paper_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        body_texts = [
+            block.source_text
+            for block in result.blocks
+            if block.source_span_json.get("pdf_page_family") == "body"
+            and block.block_type in {BlockType.HEADING, BlockType.PARAGRAPH}
+        ]
+        combined_body_text = " ".join(
+            block_text
+            for block_text in body_texts
+            if block_text
+        )
+        self.assertLess(
+            combined_body_text.index("Left column continues with more detail"),
+            combined_body_text.index("2 Related Work Right"),
+        )
+        self.assertLess(
+            combined_body_text.index("Left column ends with a final sentence"),
+            combined_body_text.index("Right column then discusses related work"),
+        )
+        profile = result.document.metadata_json["pdf_profile"]
+        self.assertEqual(profile["layout_risk"], "medium")
+        self.assertEqual(profile["recovery_lane"], "academic_paper")
+        self.assertGreaterEqual(profile["multi_column_page_count"], 2)
+
+    def test_parser_recovers_title_and_references_for_single_column_research_paper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "single-column-research-paper.pdf"
+            _write_single_column_research_paper_pdf(pdf_path)
+
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
+
+        self.assertEqual(
+            parsed.title,
+            "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        )
+        self.assertEqual([chapter.title for chapter in parsed.chapters], [parsed.title, "References"])
+        self.assertEqual(
+            [chapter.metadata["pdf_section_family"] for chapter in parsed.chapters],
+            ["body", "references"],
+        )
+        self.assertEqual(
+            parsed.metadata["pdf_page_evidence"]["pdf_pages"][2]["page_family"],
+            "references",
+        )
+        heading_texts = [
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
+        self.assertIn(parsed.title, heading_texts)
+        self.assertIn("References", heading_texts)
+        first_body_text = next(
+            block.text
+            for block in parsed.chapters[0].blocks
+            if block.block_type == BlockType.PARAGRAPH.value
+        )
+        self.assertIn("Abstract Machine learning models are increasingly used", first_body_text)
+
+    def test_parser_normalizes_broken_first_page_title_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "broken-title-heading-paper.pdf"
+            _write_broken_title_heading_paper_pdf(pdf_path)
+
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
+
+        self.assertEqual(parsed.title, "Attention is All you Need")
+        self.assertEqual(parsed.chapters[0].title, "Attention is All you Need")
+        heading_texts = [
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
+        self.assertIn("Attention Is All You Need", heading_texts)
+        self.assertNotIn("Attention Is All Y ou Need", heading_texts)
 
     def test_bootstrap_pipeline_uses_toc_entries_to_recover_chapters(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2326,6 +2775,81 @@ class PdfReviewTests(unittest.TestCase):
 
             refreshed_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
             self.assertEqual(refreshed_bundle.chapter.risk_level.value, "high")
+
+    def test_academic_paper_medium_risk_creates_advisory_structure_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-paper.pdf"
+            _write_academic_paper_pdf(pdf_path)
+            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            DocumentWorkflowService(session).translate_document(artifacts.document.id)
+            session.commit()
+
+        chapter_id = artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+
+            misordering_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "MISORDERING"
+            )
+            misordering_action = next(
+                action for action in review_artifacts.actions if action.issue_id == misordering_issue.id
+            )
+
+            self.assertEqual(misordering_issue.root_cause_layer.value, "structure")
+            self.assertEqual(misordering_issue.severity.value, "medium")
+            self.assertFalse(misordering_issue.blocking)
+            self.assertEqual(misordering_issue.evidence_json["layout_risk"], "medium")
+            self.assertEqual(misordering_issue.evidence_json["recovery_lane"], "academic_paper")
+            self.assertEqual(
+                misordering_issue.evidence_json["review_policy"],
+                "academic_paper_medium_layout_advisory",
+            )
+            self.assertEqual(misordering_action.action_type, ActionType.REPARSE_CHAPTER)
+            self.assertEqual(misordering_action.scope_type, JobScopeType.CHAPTER)
+
+            refreshed_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
+            self.assertEqual(refreshed_bundle.chapter.status, ChapterStatus.QA_CHECKED)
+            self.assertEqual(refreshed_bundle.chapter.risk_level.value, "high")
+
+    def test_academic_paper_references_chapter_skips_misordering_without_local_suspicious_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-paper.pdf"
+            _write_academic_paper_pdf(pdf_path)
+            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            DocumentWorkflowService(session).translate_document(artifacts.document.id)
+            session.commit()
+
+        chapter_id = artifacts.chapters[1].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertFalse(any(issue.issue_type == "MISORDERING" for issue in review_artifacts.issues))
+
+    def test_academic_paper_skips_misordering_when_suspicious_pages_are_structurally_anchored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-inline-sections.pdf"
+            _write_academic_paper_with_inline_sections_pdf(pdf_path)
+            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            DocumentWorkflowService(session).translate_document(artifacts.document.id)
+            session.commit()
+
+        chapter_id = artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertFalse(any(issue.issue_type == "MISORDERING" for issue in review_artifacts.issues))
+            refreshed_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
+            self.assertEqual(refreshed_bundle.chapter.status, ChapterStatus.QA_CHECKED)
 
     def test_orphaned_pdf_footnotes_create_structure_review_issue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

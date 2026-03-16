@@ -16,7 +16,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
     <title>{app_name}</title>
     <meta
       name="description"
-      content="Long-document translation control room for EPUB book translation, QA, rerun, export, and run control."
+      content="Operator-facing cockpit for EPUB ingest, translation, QA, reruns, export, and run control."
     />
     <style>
       :root {{
@@ -29,7 +29,16 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         --gold: #cb8f2f;
         --mist: rgba(255, 255, 255, 0.72);
         --line: rgba(22, 35, 43, 0.12);
-        --shadow: 0 24px 80px rgba(13, 33, 35, 0.12);
+        --shadow-frame: 0 24px 80px rgba(13, 33, 35, 0.12);
+        --shadow-surface: 0 10px 24px rgba(22, 35, 43, 0.04);
+        --shadow-surface-hover: 0 14px 30px rgba(22, 35, 43, 0.08);
+        --shadow-emphasis: 0 12px 28px rgba(15, 107, 98, 0.2);
+        --shadow-emphasis-strong: 0 14px 30px rgba(15, 107, 98, 0.26);
+        --shadow-gold: 0 12px 28px rgba(201, 143, 47, 0.2);
+        --shadow-selected: 0 12px 28px rgba(15, 107, 98, 0.12);
+        --focus-ring: 0 0 0 4px rgba(15, 107, 98, 0.12);
+        --motion-fast: 160ms ease;
+        --motion-medium: 200ms cubic-bezier(0.22, 1, 0.36, 1);
         --radius-xl: 28px;
         --radius-lg: 22px;
         --radius-md: 16px;
@@ -62,9 +71,16 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         text-decoration: none;
       }}
 
+      a:focus-visible,
+      button:focus-visible,
+      .table-button:focus-visible {{
+        outline: 2px solid rgba(15, 107, 98, 0.32);
+        outline-offset: 2px;
+      }}
+
       .page-shell {{
         min-height: 100vh;
-        padding: 28px;
+        padding: 20px;
       }}
 
       .frame {{
@@ -75,7 +91,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.38));
         border: 1px solid rgba(255, 255, 255, 0.7);
         border-radius: 36px;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-frame);
         backdrop-filter: blur(20px);
       }}
 
@@ -96,8 +112,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 24px;
-        padding: 20px 36px;
+        gap: 18px;
+        padding: 16px 28px;
         background: linear-gradient(180deg, rgba(251, 248, 241, 0.95), rgba(251, 248, 241, 0.82));
         backdrop-filter: blur(18px);
         border-bottom: 1px solid rgba(22, 35, 43, 0.06);
@@ -105,20 +121,20 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .brand {{
         display: grid;
-        gap: 2px;
+        gap: 1px;
       }}
 
       .brand-kicker {{
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.16em;
         color: var(--teal);
         font-weight: 700;
       }}
 
       .brand-name {{
         font-family: var(--serif);
-        font-size: 30px;
+        font-size: 26px;
         line-height: 1;
         letter-spacing: -0.02em;
         font-weight: 600;
@@ -126,23 +142,23 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .brand-note {{
         color: var(--ink-soft);
-        font-size: 14px;
+        font-size: 13px;
       }}
 
       .nav-links {{
         display: flex;
-        gap: 10px;
+        gap: 8px;
         flex-wrap: wrap;
         align-items: center;
         justify-content: flex-end;
       }}
 
       .nav-pill {{
-        padding: 10px 14px;
+        padding: 8px 12px;
         border: 1px solid var(--line);
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.58);
-        font-size: 14px;
+        font-size: 13px;
         color: var(--ink-soft);
       }}
 
@@ -150,14 +166,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         background: var(--teal);
         border-color: var(--teal);
         color: white;
-        box-shadow: 0 14px 30px rgba(15, 107, 98, 0.25);
+        box-shadow: var(--shadow-emphasis);
       }}
 
       .hero {{
         display: grid;
-        grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.95fr);
-        gap: 32px;
-        padding: 48px 36px 20px;
+        grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
+        gap: 22px;
+        padding: 30px 28px 14px;
       }}
 
       .hero-panel,
@@ -172,12 +188,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border: 1px solid rgba(255, 255, 255, 0.72);
         border-radius: var(--radius-xl);
         backdrop-filter: blur(14px);
+        box-shadow: var(--shadow-surface);
       }}
 
       .hero-panel {{
-        padding: 40px 36px;
+        padding: 28px;
         display: grid;
-        gap: 24px;
+        gap: 18px;
         position: relative;
         overflow: hidden;
       }}
@@ -187,7 +204,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         align-items: center;
         gap: 10px;
         width: fit-content;
-        padding: 8px 16px;
+        padding: 6px 12px;
         border-radius: 999px;
         background: rgba(15, 107, 98, 0.07);
         border: 1px solid rgba(15, 107, 98, 0.12);
@@ -195,29 +212,35 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        font-size: 11px;
+        font-size: 10px;
       }}
 
       .hero-title {{
         margin: 0;
         font-family: var(--serif);
-        font-size: clamp(34px, 3.8vw, 54px);
-        line-height: 1.12;
+        font-size: clamp(30px, 3.2vw, 44px);
+        line-height: 1.06;
         letter-spacing: -0.025em;
         font-weight: 600;
       }}
 
       .hero-copy {{
-        max-width: 56ch;
+        max-width: 52ch;
         color: var(--ink-soft);
-        font-size: 17px;
-        line-height: 1.78;
+        font-size: 15px;
+        line-height: 1.62;
       }}
 
       .hero-actions {{
         display: flex;
-        gap: 12px;
+        gap: 8px;
         flex-wrap: wrap;
+        width: fit-content;
+        padding: 8px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.42);
+        border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
       }}
 
       .cta {{
@@ -225,12 +248,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         align-items: center;
         justify-content: center;
         gap: 10px;
-        padding: 14px 18px;
+        min-height: 44px;
+        padding: 10px 14px;
         border-radius: 999px;
-        font-size: 15px;
+        font-size: 13px;
         font-weight: 700;
         border: 1px solid var(--line);
-        transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
       }}
 
       .cta:hover {{
@@ -241,7 +265,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         background: linear-gradient(135deg, var(--teal) 0%, #0d5956 100%);
         color: white;
         border-color: transparent;
-        box-shadow: 0 18px 32px rgba(15, 107, 98, 0.28);
+        box-shadow: var(--shadow-emphasis);
       }}
 
       .cta-secondary {{
@@ -249,16 +273,24 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         color: var(--ink);
       }}
 
+      .cta-primary:hover {{
+        box-shadow: var(--shadow-emphasis-strong);
+      }}
+
+      .cta-secondary:hover {{
+        box-shadow: var(--shadow-surface);
+      }}
+
       .hero-stats {{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
+        gap: 10px;
       }}
 
       .stat-card {{
-        padding: 20px;
+        padding: 14px;
         display: grid;
-        gap: 8px;
+        gap: 6px;
         border-left: 3px solid transparent;
         border-image: linear-gradient(180deg, var(--teal), rgba(15, 107, 98, 0.15)) 1;
       }}
@@ -272,21 +304,21 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .stat-value {{
         font-family: var(--serif);
-        font-size: 30px;
+        font-size: 26px;
         line-height: 1;
         font-weight: 600;
       }}
 
       .stat-note {{
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: 12px;
+        line-height: 1.45;
         color: var(--ink-soft);
       }}
 
       .hero-aside {{
-        padding: 28px 24px;
+        padding: 16px;
         display: grid;
-        gap: 18px;
+        gap: 12px;
         align-content: start;
         background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 230, 211, 0.55));
@@ -295,23 +327,23 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .aside-header {{
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
       }}
 
       .aside-title {{
         margin: 0;
-        font-size: 14px;
+        font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: var(--ink-soft);
       }}
 
       .aside-kpi {{
-        margin: 6px 0 0;
+        margin: 4px 0 0;
         font-family: var(--serif);
-        font-size: 32px;
+        font-size: 24px;
         line-height: 1;
       }}
 
@@ -319,11 +351,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 8px 10px;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.8);
         border: 1px solid var(--line);
-        font-size: 13px;
+        font-size: 12px;
         color: var(--ink-soft);
       }}
 
@@ -342,13 +374,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .signal-stack {{
         display: grid;
-        gap: 12px;
+        gap: 8px;
       }}
 
       .signal-card {{
-        padding: 14px 16px;
+        padding: 10px 12px;
         display: grid;
-        gap: 6px;
+        gap: 4px;
       }}
 
       .signal-label {{
@@ -359,41 +391,59 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .signal-value {{
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 700;
       }}
 
       .signal-note {{
-        font-size: 13px;
-        line-height: 1.6;
+        font-size: 12px;
+        line-height: 1.45;
         color: var(--ink-soft);
+      }}
+
+      .signal-pill-row {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }}
+
+      .signal-pill {{
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(22, 35, 43, 0.08);
+        color: var(--ink-soft);
+        font-size: 11px;
+        font-weight: 700;
       }}
 
       .main-grid {{
         display: grid;
         grid-template-columns: 1.15fr 0.85fr;
-        gap: 28px;
-        padding: 28px 36px 36px;
+        gap: 22px;
+        padding: 22px 28px 30px;
       }}
 
       .stack {{
         display: grid;
-        gap: 24px;
+        gap: 18px;
       }}
 
       .section-card {{
-        padding: 32px;
+        padding: 24px;
       }}
 
       .section-title {{
-        margin: 0 0 12px;
+        margin: 0 0 10px;
         font-family: var(--serif);
-        font-size: 32px;
+        font-size: 28px;
         line-height: 1.1;
         letter-spacing: -0.03em;
         font-weight: 600;
         position: relative;
-        padding-bottom: 16px;
+        padding-bottom: 12px;
       }}
 
       .section-title::after {{
@@ -408,52 +458,147 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .section-copy {{
-        margin: 8px 0 0;
+        margin: 6px 0 0;
         color: var(--ink-soft);
-        font-size: 15px;
-        line-height: 1.78;
+        font-size: 14px;
+        line-height: 1.62;
+      }}
+
+      .briefing-section {{
+        padding: 0;
+        overflow: hidden;
+      }}
+
+      .briefing-summary {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 20px;
+        cursor: pointer;
+        list-style: none;
+      }}
+
+      .briefing-summary::-webkit-details-marker {{
+        display: none;
+      }}
+
+      .briefing-summary:focus-visible {{
+        outline: 2px solid rgba(15, 107, 98, 0.32);
+        outline-offset: -2px;
+      }}
+
+      .briefing-summary-copy {{
+        min-width: 0;
+        display: grid;
+        gap: 5px;
+      }}
+
+      .briefing-summary .section-title {{
+        margin: 0;
+        padding: 0;
+        font-size: 22px;
+      }}
+
+      .briefing-summary .section-title::after {{
+        display: none;
+      }}
+
+      .briefing-meta {{
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.45;
+      }}
+
+      .briefing-toggle {{
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.68);
+        border: 1px solid rgba(22, 35, 43, 0.08);
+      }}
+
+      .briefing-toggle::before {{
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--ink-soft);
+        border-bottom: 2px solid var(--ink-soft);
+        transform: rotate(45deg);
+        margin-top: -3px;
+        transition: transform var(--motion-fast), margin-top var(--motion-fast);
+      }}
+
+      .briefing-section[open] .briefing-summary {{
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(22, 35, 43, 0.08);
+      }}
+
+      .briefing-section[open] .briefing-toggle::before {{
+        transform: rotate(225deg);
+        margin-top: 3px;
+      }}
+
+      .briefing-body {{
+        padding: 0 20px 20px;
+      }}
+
+      .briefing-section.compact-section .briefing-summary {{
+        padding: 14px 18px;
+      }}
+
+      .briefing-section.compact-section .briefing-body {{
+        padding: 0 18px 18px;
+      }}
+
+      .briefing-section.compact-section .briefing-summary .section-title {{
+        font-size: 20px;
       }}
 
       .workflow {{
-        margin-top: 22px;
+        margin-top: 16px;
         display: grid;
-        gap: 14px;
+        gap: 10px;
       }}
 
       .workflow-step {{
         display: grid;
-        grid-template-columns: 56px minmax(0, 1fr);
-        gap: 14px;
+        grid-template-columns: 48px minmax(0, 1fr);
+        gap: 12px;
         align-items: start;
-        padding: 16px;
+        padding: 14px;
         border-radius: var(--radius-md);
         background: rgba(255, 255, 255, 0.54);
         border: 1px solid rgba(22, 35, 43, 0.08);
       }}
 
       .workflow-index {{
-        width: 56px;
-        height: 56px;
-        border-radius: 16px;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
         display: grid;
         place-items: center;
         background: linear-gradient(135deg, rgba(15, 107, 98, 0.12), rgba(203, 143, 47, 0.14));
         color: var(--teal-strong);
         font-family: var(--serif);
-        font-size: 24px;
+        font-size: 22px;
         flex-shrink: 0;
       }}
 
       .workflow-label {{
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
       }}
 
       .workflow-body {{
         margin-top: 4px;
         color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.7;
+        font-size: 13px;
+        line-height: 1.55;
       }}
 
       .cap-grid,
@@ -464,10 +609,37 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin-top: 20px;
       }}
 
+      .section-card.compact-section {{
+        padding: 20px;
+      }}
+
+      .compact-section .section-title {{
+        margin-bottom: 8px;
+        font-size: 25px;
+        padding-bottom: 10px;
+      }}
+
+      .compact-section .section-copy {{
+        font-size: 13px;
+        line-height: 1.52;
+      }}
+
+      .surface-grid.compact-grid,
+      .cap-grid.compact-grid {{
+        gap: 10px;
+        margin-top: 14px;
+      }}
+
       .cap-card,
       .surface-card {{
         padding: 18px;
         min-height: 170px;
+      }}
+
+      .compact-grid .cap-card,
+      .compact-grid .surface-card {{
+        padding: 14px;
+        min-height: 0;
       }}
 
       .cap-kicker,
@@ -487,11 +659,24 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         font-weight: 700;
       }}
 
+      .compact-grid .cap-title,
+      .compact-grid .surface-title {{
+        margin: 8px 0 6px;
+        font-size: 16px;
+        line-height: 1.2;
+      }}
+
       .cap-body,
       .surface-body {{
         color: var(--ink-soft);
         font-size: 14px;
         line-height: 1.7;
+      }}
+
+      .compact-grid .cap-body,
+      .compact-grid .surface-body {{
+        font-size: 13px;
+        line-height: 1.5;
       }}
 
       .signal-matrix {{
@@ -500,12 +685,21 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin-top: 20px;
       }}
 
+      .signal-matrix.compact-matrix {{
+        gap: 10px;
+        margin-top: 14px;
+      }}
+
       .mini-list {{
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
         gap: 10px;
+      }}
+
+      .mini-list.compact-list {{
+        gap: 8px;
       }}
 
       .mini-list li {{
@@ -517,14 +711,28 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border: 1px solid rgba(22, 35, 43, 0.08);
       }}
 
+      .compact-list li {{
+        gap: 3px;
+        padding: 10px 12px;
+      }}
+
       .mini-list strong {{
         font-size: 14px;
+      }}
+
+      .compact-list strong {{
+        font-size: 13px;
       }}
 
       .mini-list span {{
         font-size: 13px;
         line-height: 1.6;
         color: var(--ink-soft);
+      }}
+
+      .compact-list span {{
+        font-size: 12px;
+        line-height: 1.45;
       }}
 
       .api-shell {{
@@ -535,6 +743,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         color: #ebf1ee;
       }}
 
+      .api-shell.compact-shell {{
+        margin-top: 14px;
+        padding: 14px;
+      }}
+
       .api-row {{
         display: flex;
         align-items: center;
@@ -542,6 +755,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         gap: 16px;
         padding: 10px 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }}
+
+      .compact-shell .api-row {{
+        gap: 10px;
+        padding: 8px 0;
       }}
 
       .api-row:last-child {{
@@ -562,6 +780,12 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         text-transform: uppercase;
       }}
 
+      .compact-shell .api-method {{
+        min-width: 54px;
+        padding: 5px 8px;
+        font-size: 11px;
+      }}
+
       .api-path {{
         flex: 1;
         font-family: var(--mono);
@@ -569,22 +793,41 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         color: #d8e4de;
       }}
 
+      .compact-shell .api-path {{
+        font-size: 12px;
+      }}
+
       .api-copy {{
         color: #97aea4;
         font-size: 13px;
       }}
 
+      .compact-shell .api-copy {{
+        font-size: 12px;
+        line-height: 1.4;
+      }}
+
       .footer {{
         display: flex;
         flex-wrap: wrap;
-        justify-content: space-between;
+        justify-content: flex-start;
         align-items: center;
-        gap: 12px 20px;
-        padding: 16px 36px 32px;
+        gap: 10px;
+        padding: 12px 28px 22px;
         color: var(--ink-soft);
-        font-size: 13px;
+        font-size: 12px;
         border-top: 1px solid var(--line);
-        margin: 0 36px;
+        margin: 0 28px;
+      }}
+
+      .footer-pill {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.58);
+        border: 1px solid rgba(22, 35, 43, 0.08);
       }}
 
       .footer code {{
@@ -599,17 +842,18 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       .refresh-strip {{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
+        gap: 14px;
+        margin-bottom: 18px;
       }}
 
       .refresh-card {{
-        padding: 18px 20px;
-        border-radius: var(--radius-lg);
+        padding: 14px 16px;
+        border-radius: 18px;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 242, 232, 0.62));
         border: 1px solid rgba(255, 255, 255, 0.78);
         display: grid;
-        gap: 10px;
+        gap: 8px;
+        box-shadow: var(--shadow-surface);
       }}
 
       .refresh-head {{
@@ -631,7 +875,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
       }}
 
@@ -672,24 +916,25 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .refresh-meta {{
         color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.6;
+        font-size: 12px;
+        line-height: 1.45;
       }}
 
       .workspace-shell {{
         display: grid;
-        grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 24px;
       }}
 
       .workspace-card {{
         position: relative;
         overflow: hidden;
-        padding: 24px;
+        padding: 20px;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 242, 230, 0.6));
         border: 1px solid rgba(255, 255, 255, 0.78);
         border-radius: var(--radius-xl);
         backdrop-filter: blur(16px);
+        box-shadow: var(--shadow-surface);
       }}
 
       .workspace-card.full-width {{
@@ -697,11 +942,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .workspace-header {{
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 14px 18px;
+        margin-bottom: 14px;
       }}
 
       .workspace-header-text {{
@@ -709,7 +954,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .workspace-kicker {{
-        margin: 0 0 8px;
+        margin: 0 0 6px;
         color: var(--teal);
         font-size: 11px;
         font-weight: 700;
@@ -720,30 +965,42 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       .workspace-title {{
         margin: 0;
         font-family: var(--serif);
-        font-size: 30px;
-        line-height: 1.1;
+        font-size: 26px;
+        line-height: 1.08;
         letter-spacing: -0.03em;
         font-weight: 600;
       }}
 
       .workspace-copy {{
-        margin: 10px 0 0;
+        margin: 8px 0 0;
         color: var(--ink-soft);
-        font-size: 15px;
-        line-height: 1.72;
+        font-size: 14px;
+        line-height: 1.6;
       }}
 
       .control-chip {{
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 8px 11px;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.8);
         border: 1px solid var(--line);
         color: var(--ink-soft);
-        font-size: 13px;
+        font-size: 12px;
         white-space: nowrap;
+      }}
+
+      .workspace-card.run-console .panel:first-of-type .field-grid {{
+        align-items: end;
+      }}
+
+      .workspace-card.run-console .panel:first-of-type .button-row {{
+        margin-top: 8px;
+      }}
+
+      .workspace-card.run-console .result-shell {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }}
 
       .workspace-grid {{
@@ -754,10 +1011,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .panel {{
         grid-column: span 12;
-        padding: 18px;
+        padding: 16px;
         border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.52);
         border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
       }}
 
       .panel.half {{
@@ -770,21 +1028,26 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
       .panel-title {{
         margin: 0;
-        font-size: 18px;
+        font-size: 17px;
         line-height: 1.2;
       }}
 
       .panel-copy {{
         margin: 8px 0 0;
         color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.66;
+        font-size: 13px;
+        line-height: 1.55;
       }}
 
       .form-grid {{
         display: grid;
         gap: 12px;
-        margin-top: 16px;
+        margin-top: 14px;
+      }}
+
+      .form-grid.dense-form {{
+        gap: 10px;
+        margin-top: 12px;
       }}
 
       .field-grid {{
@@ -793,9 +1056,18 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         gap: 12px;
       }}
 
+      .field-grid.dense-grid {{
+        gap: 10px;
+      }}
+
       .field {{
         display: grid;
         gap: 8px;
+      }}
+
+      .dense-form .field,
+      .filter-toolbar.compact .field {{
+        gap: 6px;
       }}
 
       .visually-hidden {{
@@ -826,12 +1098,22 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         grid-column: span 4;
       }}
 
+      .field.span-3 {{
+        grid-column: span 3;
+      }}
+
       .field label {{
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--ink-soft);
+      }}
+
+      .dense-form .field label,
+      .filter-toolbar.compact .field label {{
+        font-size: 11px;
+        letter-spacing: 0.06em;
       }}
 
       .field input,
@@ -845,7 +1127,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         padding: 12px 14px;
         font: inherit;
         outline: none;
-        transition: border-color 160ms ease, box-shadow 160ms ease;
+        transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
       }}
 
       .field textarea {{
@@ -853,17 +1135,37 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         resize: vertical;
       }}
 
+      .dense-form .field input,
+      .dense-form .field select,
+      .dense-form .field textarea,
+      .filter-toolbar.compact .field input,
+      .filter-toolbar.compact .field select,
+      .filter-toolbar.compact .field textarea {{
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }}
+
+      .dense-form .field textarea {{
+        min-height: 96px;
+      }}
+
       .field input:focus,
       .field select:focus,
       .field textarea:focus {{
         border-color: rgba(15, 107, 98, 0.36);
-        box-shadow: 0 0 0 4px rgba(15, 107, 98, 0.12);
+        box-shadow: var(--focus-ring);
       }}
 
       .field-hint {{
         color: var(--ink-soft);
         font-size: 12px;
         line-height: 1.6;
+      }}
+
+      .dense-form .field-hint {{
+        font-size: 11px;
+        line-height: 1.45;
       }}
 
       .file-picker {{
@@ -875,12 +1177,18 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border: 1px solid rgba(22, 35, 43, 0.14);
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.9);
-        transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        transition: border-color var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+      }}
+
+      .dense-form .file-picker {{
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 16px;
       }}
 
       .file-picker:focus-within {{
         border-color: rgba(15, 107, 98, 0.36);
-        box-shadow: 0 0 0 4px rgba(15, 107, 98, 0.12);
+        box-shadow: var(--focus-ring);
       }}
 
       .file-picker[data-has-file="true"] {{
@@ -899,6 +1207,10 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         font-weight: 700;
       }}
 
+      .dense-form .file-picker-title {{
+        font-size: 14px;
+      }}
+
       .file-picker-note {{
         color: var(--ink-soft);
         font-size: 13px;
@@ -908,10 +1220,31 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         white-space: nowrap;
       }}
 
+      .dense-form .file-picker-note {{
+        font-size: 12px;
+        line-height: 1.45;
+      }}
+
       .button-row {{
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+        margin-top: 10px;
+      }}
+
+      .action-toolbar {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.46);
+        border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
+      }}
+
+      .action-toolbar.primary-strip {{
         margin-top: 12px;
       }}
 
@@ -929,7 +1262,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         font-size: 14px;
         font-weight: 700;
         cursor: pointer;
-        transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+      }}
+
+      .button.dense {{
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 13px;
       }}
 
       .button:hover {{
@@ -940,14 +1279,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         background: linear-gradient(135deg, var(--teal) 0%, #0d5956 100%);
         color: white;
         border-color: transparent;
-        box-shadow: 0 12px 28px rgba(15, 107, 98, 0.2);
+        box-shadow: var(--shadow-emphasis);
       }}
 
       .button.gold {{
         background: linear-gradient(135deg, #c88d2f 0%, #a9721e 100%);
         color: white;
         border-color: transparent;
-        box-shadow: 0 12px 28px rgba(201, 143, 47, 0.22);
+        box-shadow: var(--shadow-gold);
       }}
 
       .button.ghost {{
@@ -962,14 +1301,29 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .status-banner {{
-        margin-top: 16px;
-        padding: 12px 14px;
+        margin-top: 14px;
+        padding: 10px 12px;
         border-radius: 14px;
         border: 1px solid rgba(22, 35, 43, 0.08);
         background: rgba(255, 255, 255, 0.68);
         color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.6;
+        font-size: 13px;
+        line-height: 1.5;
+      }}
+
+      .control-strip {{
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 12px;
+        align-items: center;
+      }}
+
+      .control-strip .status-banner {{
+        margin-top: 0;
+        padding: 9px 11px;
+        font-size: 12px;
+        line-height: 1.45;
       }}
 
       .status-banner.error {{
@@ -985,10 +1339,15 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .kpi-grid {{
-        margin-top: 16px;
+        margin-top: 14px;
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
+      }}
+
+      .kpi-grid.mini-kpis {{
+        margin-top: 10px;
+        gap: 8px;
       }}
 
       .kpi-card {{
@@ -996,6 +1355,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border-radius: 16px;
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid rgba(22, 35, 43, 0.08);
+      }}
+
+      .kpi-card.mini-kpi {{
+        padding: 10px 12px;
+        border-radius: 14px;
       }}
 
       .kpi-label {{
@@ -1013,6 +1377,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         line-height: 1;
       }}
 
+      .mini-kpi .kpi-value {{
+        margin-top: 4px;
+        font-size: 22px;
+      }}
+
       .kpi-note {{
         margin-top: 6px;
         color: var(--ink-soft);
@@ -1020,17 +1389,79 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         line-height: 1.55;
       }}
 
+      .mini-kpi .kpi-note {{
+        margin-top: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+      }}
+
       .result-shell {{
-        margin-top: 18px;
+        margin-top: 14px;
         display: grid;
         gap: 14px;
       }}
 
+      .result-shell.history-split {{
+        grid-template-columns: minmax(0, 1fr);
+        align-items: stretch;
+      }}
+
+      .result-shell.overview-split {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }}
+
+      .result-shell.workspace-overview-stack {{
+        grid-template-columns: minmax(0, 1fr);
+        align-items: stretch;
+      }}
+
+      .worklist-board-shell {{
+        display: grid;
+        grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.92fr);
+        gap: 14px;
+        margin-top: 14px;
+        align-items: start;
+      }}
+
+      .worklist-primary,
+      .worklist-sidebar {{
+        min-width: 0;
+        display: grid;
+        gap: 14px;
+      }}
+
+      .worklist-primary > .queue-grid {{
+        margin-top: 0;
+      }}
+
+      .owner-insights-grid {{
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }}
+
       .result-card {{
-        padding: 16px;
+        min-width: 0;
+        padding: 14px;
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.6);
         border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
+      }}
+
+      .result-card.compact-card {{
+        padding: 12px;
+      }}
+
+      .history-detail-card {{
+        position: static;
+        width: 100%;
+      }}
+
+      .chapter-detail-card {{
+        position: sticky;
+        top: 92px;
       }}
 
       .result-head {{
@@ -1050,6 +1481,28 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         color: var(--ink-soft);
         font-size: 13px;
         line-height: 1.6;
+        overflow-wrap: anywhere;
+      }}
+
+      .compact-card .result-head {{
+        margin-bottom: 8px;
+      }}
+
+      .compact-card .result-title {{
+        font-size: 16px;
+      }}
+
+      .compact-card .result-meta {{
+        font-size: 12px;
+        line-height: 1.5;
+      }}
+
+      .compact-card .kpi-grid {{
+        gap: 10px;
+      }}
+
+      .compact-card .kpi-card {{
+        padding: 12px;
       }}
 
       .pill-row {{
@@ -1097,6 +1550,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         text-align: left;
         vertical-align: top;
         font-size: 13px;
+        overflow-wrap: anywhere;
       }}
 
       .data-table th {{
@@ -1105,6 +1559,126 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         font-size: 11px;
         letter-spacing: 0.08em;
         text-transform: uppercase;
+      }}
+
+      .data-table.compact th,
+      .data-table.compact td {{
+        padding: 8px 6px;
+        font-size: 12px;
+      }}
+
+      .data-table.dense-table th,
+      .data-table.dense-table td {{
+        padding: 7px 6px;
+        font-size: 12px;
+        line-height: 1.4;
+      }}
+
+      .data-table.dense-table th {{
+        font-size: 10px;
+        letter-spacing: 0.06em;
+      }}
+
+      .table-scroll {{
+        margin-top: 10px;
+        max-height: 320px;
+        overflow: auto;
+      }}
+
+      .table-scroll.compact {{
+        max-height: 260px;
+      }}
+
+      .table-scroll.dense-scroll {{
+        max-height: 240px;
+      }}
+
+      .history-table-shell {{
+        margin-top: 10px;
+        max-height: none;
+        overflow-x: auto;
+        overflow-y: visible;
+      }}
+
+      .data-table.history-table,
+      .data-table.history-detail-table {{
+        table-layout: fixed;
+      }}
+
+      .data-table.history-table th:nth-child(1) {{
+        width: 28%;
+      }}
+
+      .data-table.history-table th:nth-child(2),
+      .data-table.history-table th:nth-child(3) {{
+        width: 7%;
+      }}
+
+      .data-table.history-table th:nth-child(4) {{
+        width: 11%;
+      }}
+
+      .data-table.history-table th:nth-child(5) {{
+        width: 14%;
+      }}
+
+      .data-table.history-table th:nth-child(6) {{
+        width: 33%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(1) {{
+        width: 8%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(2) {{
+        width: 32%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(3) {{
+        width: 12%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(4) {{
+        width: 10%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(5) {{
+        width: 16%;
+      }}
+
+      .data-table.history-detail-table th:nth-child(6) {{
+        width: 22%;
+      }}
+
+      .table-action-group {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: flex-start;
+        min-width: 0;
+      }}
+
+      .table-action-group.dense-actions {{
+        gap: 6px;
+      }}
+
+      .table-action-group .button {{
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.3;
+      }}
+
+      .table-action-group .button.dense {{
+        min-height: 40px;
+        padding: 9px 12px;
+      }}
+
+      .table-action-group.dense-actions .button.dense {{
+        padding: 8px 10px;
+        font-size: 12px;
       }}
 
       .queue-grid {{
@@ -1118,21 +1692,22 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.62);
         border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
       }}
 
       .queue-item.clickable {{
         cursor: pointer;
-        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast);
       }}
 
       .queue-item.clickable:hover {{
         transform: translateY(-1px);
-        box-shadow: 0 16px 32px rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface-hover);
       }}
 
       .queue-item.is-active {{
         border-color: rgba(15, 107, 98, 0.28);
-        box-shadow: 0 0 0 4px rgba(15, 107, 98, 0.1);
+        box-shadow: var(--focus-ring);
       }}
 
       .queue-head {{
@@ -1187,11 +1762,21 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin-top: 14px;
       }}
 
+      .detail-grid.summary-grid {{
+        gap: 10px;
+        margin-top: 12px;
+      }}
+
       .detail-block {{
         padding: 14px;
         border-radius: 16px;
         background: rgba(255, 255, 255, 0.56);
         border: 1px solid rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface);
+      }}
+
+      .detail-block.compact-block {{
+        padding: 12px;
       }}
 
       .detail-block.full {{
@@ -1212,6 +1797,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         line-height: 1.65;
       }}
 
+      .compact-block .detail-value {{
+        margin-top: 4px;
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }}
+
       .assignment-inline {{
         display: grid;
         gap: 12px;
@@ -1230,6 +1822,49 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         border: 1px solid rgba(22, 35, 43, 0.08);
         display: grid;
         gap: 14px;
+        box-shadow: var(--shadow-surface);
+      }}
+
+      .filter-toolbar.compact {{
+        margin-top: 12px;
+        padding: 12px;
+        gap: 8px;
+      }}
+
+      .filter-toolbar.compact .field-grid {{
+        gap: 10px;
+        align-items: end;
+      }}
+
+      .filter-toolbar.compact .button-row {{
+        margin-top: 2px;
+        gap: 8px;
+      }}
+
+      .panel.compact-panel {{
+        padding: 14px;
+      }}
+
+      .panel.compact-panel .filter-toolbar {{
+        margin-top: 12px;
+        padding: 12px;
+        gap: 8px;
+      }}
+
+      .panel.compact-panel .button-row:first-child {{
+        margin-top: 0;
+      }}
+
+      .panel.compact-panel .filter-summary {{
+        margin-top: 10px;
+        font-size: 12px;
+        line-height: 1.5;
+      }}
+
+      .compact-summary {{
+        margin-top: 10px;
+        font-size: 12px;
+        line-height: 1.5;
       }}
 
       .filter-summary {{
@@ -1260,6 +1895,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         background: rgba(255, 255, 255, 0.72);
         display: grid;
         gap: 8px;
+        box-shadow: var(--shadow-surface);
       }}
 
       .alert-card.warn {{
@@ -1298,17 +1934,18 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         display: grid;
         gap: 8px;
         cursor: pointer;
-        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        box-shadow: var(--shadow-surface);
+        transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast);
       }}
 
       .owner-card:hover {{
         transform: translateY(-1px);
-        box-shadow: 0 10px 24px rgba(22, 35, 43, 0.08);
+        box-shadow: var(--shadow-surface-hover);
       }}
 
       .owner-card.is-active {{
         border-color: rgba(15, 107, 98, 0.44);
-        box-shadow: 0 12px 28px rgba(15, 107, 98, 0.12);
+        box-shadow: var(--shadow-selected);
         background: rgba(237, 248, 246, 0.94);
       }}
 
@@ -1338,6 +1975,12 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin-top: 14px;
       }}
 
+      .toggle-row.compact-toggle {{
+        margin-top: 0;
+        gap: 8px;
+        justify-content: flex-end;
+      }}
+
       .toggle-button[data-active="true"] {{
         background: rgba(15, 107, 98, 0.12);
         border-color: rgba(15, 107, 98, 0.2);
@@ -1348,6 +1991,12 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         color: var(--ink-soft);
         font-size: 12px;
         line-height: 1.65;
+      }}
+
+      .compact-toggle .subtle-note {{
+        max-width: 34ch;
+        font-size: 11px;
+        line-height: 1.45;
       }}
 
       .log-shell {{
@@ -1370,13 +2019,20 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .placeholder {{
-        padding: 18px;
-        border-radius: 18px;
+        padding: 14px;
+        border-radius: 16px;
         border: 1px dashed rgba(22, 35, 43, 0.16);
         color: var(--ink-soft);
         background: rgba(255, 255, 255, 0.42);
-        font-size: 14px;
-        line-height: 1.7;
+        font-size: 13px;
+        line-height: 1.55;
+      }}
+
+      .placeholder.compact {{
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.45;
+        min-height: 72px;
       }}
 
       @media (max-width: 1120px) {{
@@ -1388,6 +2044,31 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
         .workspace-shell {{
           grid-template-columns: 1fr;
+        }}
+
+        .workspace-card.run-console .result-shell {{
+          grid-template-columns: 1fr;
+        }}
+
+        .result-shell.history-split {{
+          grid-template-columns: 1fr;
+        }}
+
+        .result-shell.overview-split {{
+          grid-template-columns: 1fr;
+        }}
+
+        .worklist-board-shell,
+        .owner-insights-grid {{
+          grid-template-columns: 1fr;
+        }}
+
+        .history-detail-card {{
+          position: static;
+        }}
+
+        .chapter-detail-card {{
+          position: static;
         }}
 
         .panel.half,
@@ -1414,7 +2095,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         }}
 
         .hero-title {{
-          font-size: clamp(38px, 15vw, 58px);
+          font-size: clamp(32px, 13vw, 46px);
         }}
 
         .hero-stats,
@@ -1438,9 +2119,30 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           padding-right: 18px;
         }}
 
+        .workspace-card {{
+          padding: 18px;
+        }}
+
+        .workspace-header {{
+          grid-template-columns: 1fr;
+        }}
+
+        .control-strip {{
+          grid-template-columns: 1fr;
+        }}
+
+        .toggle-row.compact-toggle {{
+          justify-content: flex-start;
+        }}
+
+        .compact-toggle .subtle-note {{
+          max-width: none;
+        }}
+
         .field.span-8,
         .field.span-6,
-        .field.span-4 {{
+        .field.span-4,
+        .field.span-3 {{
           grid-column: span 12;
         }}
 
@@ -1459,6 +2161,12 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
         .alert-grid {{
           grid-template-columns: 1fr;
+        }}
+
+        .data-table.history-table,
+        .data-table.history-detail-table {{
+          min-width: 720px;
+          table-layout: auto;
         }}
       }}
 
@@ -1528,47 +2236,47 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .workflow-step {{
-        transition: transform 200ms ease, box-shadow 200ms ease;
+        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
       }}
 
       .workflow-step:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(22, 35, 43, 0.08);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-surface-hover);
       }}
 
       .cap-card,
       .surface-card {{
-        transition: transform 200ms ease, box-shadow 200ms ease;
+        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
       }}
 
       .cap-card:hover,
       .surface-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(22, 35, 43, 0.08);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-surface-hover);
       }}
 
       .stat-card {{
-        transition: transform 200ms ease, box-shadow 200ms ease;
+        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
       }}
 
       .stat-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(22, 35, 43, 0.06);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-surface-hover);
       }}
 
       .nav-pill {{
-        transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+        transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
       }}
 
       .nav-pill:hover {{
         transform: translateY(-1px);
         background: rgba(255, 255, 255, 0.82);
-        box-shadow: 0 4px 12px rgba(22, 35, 43, 0.06);
+        box-shadow: var(--shadow-surface);
       }}
 
       .nav-pill.primary:hover {{
         background: var(--teal-strong);
-        box-shadow: 0 14px 30px rgba(15, 107, 98, 0.32);
+        box-shadow: var(--shadow-emphasis-strong);
       }}
 
       .workspace-title {{
@@ -1588,7 +2296,33 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
       }}
 
       .hero-copy {{
-        max-width: 56ch;
+        max-width: 52ch;
+      }}
+
+      @media (prefers-reduced-motion: reduce) {{
+        html {{
+          scroll-behavior: auto;
+        }}
+
+        *,
+        *::before,
+        *::after {{
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }}
+
+        .workflow-step:hover,
+        .cap-card:hover,
+        .surface-card:hover,
+        .stat-card:hover,
+        .button:hover,
+        .cta:hover,
+        .nav-pill:hover,
+        .queue-item.clickable:hover,
+        .owner-card:hover {{
+          transform: none;
+        }}
       }}
 
       @media print {{
@@ -1634,14 +2368,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           <div class="brand">
             <span class="brand-kicker">Book Translation Control Room</span>
             <span class="brand-name">{app_name}</span>
-            <span class="brand-note">Version {app_version} · EPUB-first · sentence-aligned · export-gated</span>
+            <span class="brand-note">Version {app_version} · EPUB-first · export-aware · run-visible</span>
           </div>
           <nav class="nav-links" aria-label="Primary">
             <a class="nav-pill" href="#workflow">Workflow</a>
             <a class="nav-pill" href="#workspace">Workspace</a>
             <a class="nav-pill" href="#surfaces">Surfaces</a>
             <a class="nav-pill" href="#api">API</a>
-            <a class="nav-pill primary" href="{docs_href}">Open API Docs</a>
+            <a class="nav-pill primary" href="{docs_href}">API Docs</a>
           </nav>
         </header>
 
@@ -1675,33 +2409,32 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               <path d="M178 220 Q200 208 222 220" stroke="currentColor" stroke-width="0.8" opacity="0.2" stroke-dasharray="4 4"/>
               <path d="M173 236 Q200 222 227 236" stroke="currentColor" stroke-width="0.8" opacity="0.15" stroke-dasharray="4 4"/>
             </svg>
-            <div class="hero-kicker">Long-document translation, built for control</div>
-            <h1 class="hero-title">A publishing-grade cockpit for traceable book translation.</h1>
+            <div class="hero-kicker">Long-document translation, with traceable control</div>
+            <h1 class="hero-title">A publishing-grade cockpit for book translation that stays inspectable.</h1>
             <p class="hero-copy">
-              book-agent is not a thin “upload and pray” wrapper around an LLM. It is an
-              execution surface for parsing, packetizing, translating, reviewing, rerunning,
-              and exporting long English books into reviewable Chinese drafts with auditable
-              evidence at every step.
+              book-agent turns ingest, packetized translation, review, reruns, and export
+              into one operator surface. Each stage leaves durable state, so you can inspect,
+              resume, and repair a book without losing provenance.
             </p>
             <div class="hero-actions">
-              <a class="cta cta-primary" href="{docs_href}">Inspect live API surface</a>
-              <a class="cta cta-secondary" href="#workspace">Open control workspace</a>
+              <a class="cta cta-primary" href="{docs_href}">API Docs</a>
+              <a class="cta cta-secondary" href="#workspace">Workspace</a>
             </div>
             <div class="hero-stats">
               <div class="stat-card">
                 <div class="stat-label">Core Contract</div>
                 <div class="stat-value">Sentence</div>
-                <div class="stat-note">Coverage, alignment, provenance, and rerun all resolve to the sentence ledger.</div>
+                <div class="stat-note">Coverage, alignment, provenance, and reruns resolve to the sentence ledger.</div>
               </div>
               <div class="stat-card">
                 <div class="stat-label">Execution Window</div>
                 <div class="stat-value">Packet</div>
-                <div class="stat-note">Paragraph-scoped translation packets preserve context without exploding prompt history.</div>
+                <div class="stat-note">Packetized translation keeps context without blowing up prompt history.</div>
               </div>
               <div class="stat-card">
                 <div class="stat-label">Control Surface</div>
                 <div class="stat-value">Run Plane</div>
-                <div class="stat-note">Pause, drain, budget guardrails, leases, recovery, and export telemetry are first-class.</div>
+                <div class="stat-note">Pause, drain, budgets, leases, recovery, and export telemetry stay first-class.</div>
               </div>
             </div>
           </article>
@@ -1720,215 +2453,253 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             <div class="signal-stack">
               <div class="signal-card">
                 <div class="signal-label">Primary Runway</div>
-                <div class="signal-value">EPUB ingest → packet translation → QA gate → merged export</div>
-                <div class="signal-note">The homepage is intentionally operator-facing: it mirrors the system’s execution contract instead of hiding it behind generic marketing chrome.</div>
+                <div class="signal-value">EPUB → packets → QA → merged HTML</div>
               </div>
               <div class="signal-card">
                 <div class="signal-label">Current Strength</div>
-                <div class="signal-value">Merged bilingual reading export</div>
-                <div class="signal-note">Structured rendering now preserves code, tables, formulas, references, and source-only artifacts instead of pretending every block should become prose.</div>
+                <div class="signal-value">Artifact-aware bilingual export</div>
               </div>
               <div class="signal-card">
                 <div class="signal-label">Operator Promise</div>
-                <div class="signal-value">No silent failures</div>
-                <div class="signal-note">Review issues, rerun actions, export-time anomaly evidence, and long-run control telemetry are exposed as queryable surfaces, not buried in logs.</div>
+                <div class="signal-value">Queryable state, no silent failures</div>
               </div>
+            </div>
+            <div class="signal-pill-row" aria-label="System traits">
+              <span class="signal-pill">Operator-first UI</span>
+              <span class="signal-pill">Artifact-aware rendering</span>
+              <span class="signal-pill">Review + run telemetry</span>
             </div>
           </aside>
         </section>
 
         <main class="main-grid">
           <div class="stack">
-            <section class="section-card" id="workflow">
-              <h2 class="section-title">Operational Workflow</h2>
-              <p class="section-copy">
-                The system is designed as a controlled long-document pipeline. Each phase
-                produces durable state so the next phase can be resumed, audited, or repaired
-                without replaying the whole book.
-              </p>
-              <div class="workflow">
-                <div class="workflow-step">
-                  <div class="workflow-index">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
-                  </div>
-                  <div>
-                    <div class="workflow-label">Ingest and structure recovery</div>
-                    <div class="workflow-body">EPUB chapters, blocks, headings, figures, tables, code, references, and frontmatter are normalized into stable block objects instead of being flattened into anonymous text.</div>
-                  </div>
+            <details class="section-card briefing-section" id="workflow">
+              <summary class="briefing-summary">
+                <div class="briefing-summary-copy">
+                  <h2 class="section-title">Operational Workflow</h2>
+                  <div class="briefing-meta">Staged pipeline, durable state, and traceable export surfaces.</div>
                 </div>
-                <div class="workflow-step">
-                  <div class="workflow-index">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                <span class="briefing-toggle" aria-hidden="true"></span>
+              </summary>
+              <div class="briefing-body">
+                <p class="section-copy">
+                  The pipeline is staged and durable by design, so each phase can be resumed,
+                  audited, or repaired without replaying the whole book.
+                </p>
+                <div class="workflow">
+                  <div class="workflow-step">
+                    <div class="workflow-index">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
+                    </div>
+                    <div>
+                      <div class="workflow-label">Ingest and structure recovery</div>
+                      <div class="workflow-body">EPUB chapters, blocks, headings, figures, tables, code, references, and frontmatter are normalized into stable block objects instead of being flattened into anonymous text.</div>
+                    </div>
                   </div>
-                  <div>
-                    <div class="workflow-label">Sentence ledger and context packetization</div>
-                    <div class="workflow-body">Every source sentence receives a durable identifier, while translation executes inside bounded packets enriched by book profile, chapter brief, and term/entity memory snapshots.</div>
+                  <div class="workflow-step">
+                    <div class="workflow-index">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    </div>
+                    <div>
+                      <div class="workflow-label">Sentence ledger and context packetization</div>
+                      <div class="workflow-body">Every source sentence receives a durable identifier, while translation executes inside bounded packets enriched by book profile, chapter brief, and term/entity memory snapshots.</div>
+                    </div>
                   </div>
-                </div>
-                <div class="workflow-step">
-                  <div class="workflow-index">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><circle cx="18" cy="18" r="3"/><path d="M22 22l-1.5-1.5"/><path d="m14 18 1-1"/></svg>
+                  <div class="workflow-step">
+                    <div class="workflow-index">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><circle cx="18" cy="18" r="3"/><path d="M22 22l-1.5-1.5"/><path d="m14 18 1-1"/></svg>
+                    </div>
+                    <div>
+                      <div class="workflow-label">Translation, provenance, and repair loops</div>
+                      <div class="workflow-body">Worker outputs become target segments, alignments, translation runs, and rerunnable evidence. Actions can rebuild packets, rebuild chapter briefs, realign, or target reruns without restarting the book.</div>
+                    </div>
                   </div>
-                  <div>
-                    <div class="workflow-label">Translation, provenance, and repair loops</div>
-                    <div class="workflow-body">Worker outputs become target segments, alignments, translation runs, and rerunnable evidence. Actions can rebuild packets, rebuild chapter briefs, realign, or target reruns without restarting the book.</div>
-                  </div>
-                </div>
-                <div class="workflow-step">
-                  <div class="workflow-index">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
-                  </div>
-                  <div>
-                    <div class="workflow-label">Export surfaces for readers and operators</div>
-                    <div class="workflow-body">Review packages, chapter-level bilingual exports, merged reading HTML, export manifests, worklists, and run dashboards all expose the same underlying traceable state.</div>
+                  <div class="workflow-step">
+                    <div class="workflow-index">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
+                    </div>
+                    <div>
+                      <div class="workflow-label">Export surfaces for readers and operators</div>
+                      <div class="workflow-body">Review packages, chapter-level bilingual exports, merged reading HTML, export manifests, worklists, and run dashboards all expose the same underlying traceable state.</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </section>
+            </details>
 
-            <section class="section-card" id="surfaces">
-              <h2 class="section-title">What The Frontend Surfaces</h2>
-              <p class="section-copy">
-                This first UI entry is intentionally product-grade but scoped: a control room
-                for operators, not yet a full review workstation. It gives the project a
-                credible front door while staying aligned with the existing FastAPI runtime.
-              </p>
-              <div class="surface-grid">
-                <article class="surface-card">
-                  <div class="surface-kicker">Document Plane</div>
-                  <h3 class="surface-title">Bootstrap, translate, review, export</h3>
-                  <p class="surface-body">Back-end APIs already support the full path. The homepage introduces the system with the same nouns the runtime uses, so later UI expansion can stay truthful.</p>
-                </article>
-                <article class="surface-card">
-                  <div class="surface-kicker">Run Plane</div>
-                  <h3 class="surface-title">Pause, resume, drain, budget control</h3>
-                  <p class="surface-body">Long-running DeepSeek or OpenAI-compatible book runs are now durable. The UI is ready to grow into a real run console without needing a parallel product vocabulary.</p>
-                </article>
-                <article class="surface-card">
-                  <div class="surface-kicker">Review Plane</div>
-                  <h3 class="surface-title">Issues, actions, chapter worklists</h3>
-                  <p class="surface-body">Issue hotspots, chapter pressure, owner queueing, assignment history, and export anomalies already exist as APIs; this page frames them as part of one coherent operator product.</p>
-                </article>
-                <article class="surface-card">
-                  <div class="surface-kicker">Reader Plane</div>
-                  <h3 class="surface-title">Merged reading export with preserved artifacts</h3>
-                  <p class="surface-body">Code, equations, tables, literal tags, and references are treated as intentional source-side artifacts rather than as failed translations, which is critical for technical books.</p>
-                </article>
+            <details class="section-card compact-section briefing-section" id="surfaces">
+              <summary class="briefing-summary">
+                <div class="briefing-summary-copy">
+                  <h2 class="section-title">What The Frontend Surfaces</h2>
+                  <div class="briefing-meta">Document, run, review, and reader planes in one operator vocabulary.</div>
+                </div>
+                <span class="briefing-toggle" aria-hidden="true"></span>
+              </summary>
+              <div class="briefing-body">
+                <p class="section-copy">
+                  This entry stays operator-facing on purpose: a credible control room that
+                  matches the existing FastAPI runtime without inventing a second vocabulary.
+                </p>
+                <div class="surface-grid compact-grid">
+                  <article class="surface-card">
+                    <div class="surface-kicker">Document Plane</div>
+                    <h3 class="surface-title">Bootstrap, translate, review, export</h3>
+                    <p class="surface-body">The homepage uses the same nouns as the runtime, so later UI growth can stay truthful to the backend contract.</p>
+                  </article>
+                  <article class="surface-card">
+                    <div class="surface-kicker">Run Plane</div>
+                    <h3 class="surface-title">Pause, resume, drain, budget control</h3>
+                    <p class="surface-body">Long-running book jobs are durable now, and the UI can expand into a fuller run console without a parallel product vocabulary.</p>
+                  </article>
+                  <article class="surface-card">
+                    <div class="surface-kicker">Review Plane</div>
+                    <h3 class="surface-title">Issues, actions, chapter worklists</h3>
+                    <p class="surface-body">Issue hotspots, queue pressure, owner routing, and export anomalies already exist as APIs; this page turns them into one operator surface.</p>
+                  </article>
+                  <article class="surface-card">
+                    <div class="surface-kicker">Reader Plane</div>
+                    <h3 class="surface-title">Merged reading export with preserved artifacts</h3>
+                    <p class="surface-body">Code, equations, tables, literal tags, and references stay preserved as source-side artifacts, which matters for technical books.</p>
+                  </article>
+                </div>
               </div>
-            </section>
+            </details>
           </div>
 
           <div class="stack">
-            <section class="section-card">
-              <h2 class="section-title">Capability Spine</h2>
-              <p class="section-copy">
-                The current UI is small on purpose. It should feel like the front door to a
-                serious internal product, not a decorative wrapper around backend endpoints.
-              </p>
-              <div class="cap-grid">
-                <article class="cap-card">
-                  <div class="cap-kicker">Parsing</div>
-                  <h3 class="cap-title">Structure-aware EPUB ingestion</h3>
-                  <p class="cap-body">Preserves headings, code, figures, tables, formulas, references, and frontmatter so downstream translation and export can make differentiated decisions.</p>
-                </article>
-                <article class="cap-card">
-                  <div class="cap-kicker">Translation</div>
-                  <h3 class="cap-title">LLM-driven packets with traceable alignment</h3>
-                  <p class="cap-body">Every packet run produces target segments, alignment suggestions, provenance, usage telemetry, and rerunnable repair evidence.</p>
-                </article>
-                <article class="cap-card">
-                  <div class="cap-kicker">Quality</div>
-                  <h3 class="cap-title">Gated review with targeted recovery</h3>
-                  <p class="cap-body">Coverage, duplication, context failure, alignment failure, format pollution, export anomalies, and chapter worklists all feed a controlled repair loop.</p>
-                </article>
-                <article class="cap-card">
-                  <div class="cap-kicker">Operations</div>
-                  <h3 class="cap-title">Long-run control and budget awareness</h3>
-                  <p class="cap-body">Durable runs, leases, audit trails, auto-followup export repair, owner assignments, and SLA-aware worklists make the system operable at book scale.</p>
-                </article>
+            <details class="section-card compact-section briefing-section">
+              <summary class="briefing-summary">
+                <div class="briefing-summary-copy">
+                  <h2 class="section-title">Capability Spine</h2>
+                  <div class="briefing-meta">Parsing, translation, quality gating, and long-run operations.</div>
+                </div>
+                <span class="briefing-toggle" aria-hidden="true"></span>
+              </summary>
+              <div class="briefing-body">
+                <p class="section-copy">
+                  The UI is intentionally small, but it should still feel like the front door
+                  to a serious internal product rather than a decorative wrapper.
+                </p>
+                <div class="cap-grid compact-grid">
+                  <article class="cap-card">
+                    <div class="cap-kicker">Parsing</div>
+                    <h3 class="cap-title">Structure-aware EPUB ingestion</h3>
+                    <p class="cap-body">Preserves headings, code, figures, tables, formulas, references, and frontmatter for differentiated downstream decisions.</p>
+                  </article>
+                  <article class="cap-card">
+                    <div class="cap-kicker">Translation</div>
+                    <h3 class="cap-title">LLM-driven packets with traceable alignment</h3>
+                    <p class="cap-body">Each packet run emits target segments, alignment suggestions, provenance, usage telemetry, and rerunnable repair evidence.</p>
+                  </article>
+                  <article class="cap-card">
+                    <div class="cap-kicker">Quality</div>
+                    <h3 class="cap-title">Gated review with targeted recovery</h3>
+                    <p class="cap-body">Coverage, duplication, alignment failure, format pollution, export anomalies, and chapter worklists all feed one repair loop.</p>
+                  </article>
+                  <article class="cap-card">
+                    <div class="cap-kicker">Operations</div>
+                    <h3 class="cap-title">Long-run control and budget awareness</h3>
+                    <p class="cap-body">Durable runs, leases, audit trails, export followup, owner assignment, and SLA-aware worklists keep the system operable at book scale.</p>
+                  </article>
+                </div>
               </div>
-            </section>
+            </details>
 
-            <section class="section-card">
-              <h2 class="section-title">Signals To Watch</h2>
-              <p class="section-copy">
-                These are the high-value state surfaces we expect future UI modules to grow
-                around. Even before adding a full SPA, the homepage already anchors the right
-                mental model for operators and reviewers.
-              </p>
-              <div class="signal-matrix">
-                <ul class="mini-list">
-                  <li>
-                    <strong>Run stability</strong>
-                    <span>Control-plane budgets, run status, and worker lease recovery are the key to multi-hour book translation without fragile shell sessions.</span>
-                  </li>
-                  <li>
-                    <strong>Chapter pressure</strong>
-                    <span>Issue hotspots, chapter queueing, owner assignment, and SLA signals tell you where human review or targeted repair should go next.</span>
-                  </li>
-                  <li>
-                    <strong>Export truthfulness</strong>
-                    <span>Merged export rendering must distinguish expected source-only artifacts from actual missing translation, especially for technical books.</span>
-                  </li>
-                </ul>
+            <details class="section-card compact-section briefing-section">
+              <summary class="briefing-summary">
+                <div class="briefing-summary-copy">
+                  <h2 class="section-title">Signals To Watch</h2>
+                  <div class="briefing-meta">Run stability, chapter pressure, and export truthfulness.</div>
+                </div>
+                <span class="briefing-toggle" aria-hidden="true"></span>
+              </summary>
+              <div class="briefing-body">
+                <p class="section-copy">
+                  These are the high-value state surfaces future UI modules should grow around,
+                  even before the project needs a full SPA shell.
+                </p>
+                <div class="signal-matrix compact-matrix">
+                  <ul class="mini-list compact-list">
+                    <li>
+                      <strong>Run stability</strong>
+                      <span>Budgets, run state, and worker lease recovery keep multi-hour translation away from fragile shell sessions.</span>
+                    </li>
+                    <li>
+                      <strong>Chapter pressure</strong>
+                      <span>Issue hotspots, queueing, owner assignment, and SLA signals show where review or targeted repair should go next.</span>
+                    </li>
+                    <li>
+                      <strong>Export truthfulness</strong>
+                      <span>Merged export rendering must separate expected source-only artifacts from actual missing translation, especially in technical books.</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </section>
+            </details>
 
-            <section class="section-card" id="api">
-              <h2 class="section-title">API Quick Access</h2>
-              <p class="section-copy">
-                The frontend entry intentionally stays close to the backend contract. These
-                surfaces are the ones most likely to matter while the system evolves from an
-                operator tool into a richer product.
-              </p>
-              <div class="api-shell">
-                <div class="api-row">
-                  <span class="api-method">GET</span>
-                  <span class="api-path">{health_href}</span>
-                  <span class="api-copy">Health and deployment sanity check</span>
+            <details class="section-card compact-section briefing-section" id="api">
+              <summary class="briefing-summary">
+                <div class="briefing-summary-copy">
+                  <h2 class="section-title">API Quick Access</h2>
+                  <div class="briefing-meta">Health, bootstrap, export, worklist, and durable run endpoints.</div>
                 </div>
-                <div class="api-row">
-                  <span class="api-method">POST</span>
-                  <span class="api-path">{api_prefix}/documents/bootstrap</span>
-                  <span class="api-copy">Create a document from a server-visible local path</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">POST</span>
-                  <span class="api-path">{api_prefix}/documents/bootstrap-upload</span>
-                  <span class="api-copy">Upload an EPUB or PDF directly from the browser</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">POST</span>
-                  <span class="api-path">{api_prefix}/documents/{{document_id}}/translate</span>
-                  <span class="api-copy">Run translation packets through the current backend</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">GET</span>
-                  <span class="api-path">{api_prefix}/documents/{{document_id}}/exports</span>
-                  <span class="api-copy">Usage, issue, and export dashboard surfaces</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">GET</span>
-                  <span class="api-path">{api_prefix}/documents/{{document_id}}/exports/download</span>
-                  <span class="api-copy">Download the latest export bundle with a save dialog</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">GET</span>
-                  <span class="api-path">{api_prefix}/documents/{{document_id}}/chapters/worklist</span>
-                  <span class="api-copy">Chapter queue, SLA state, and owner workload</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">POST</span>
-                  <span class="api-path">{api_prefix}/runs</span>
-                  <span class="api-copy">Create and control a durable long-running book job</span>
-                </div>
-                <div class="api-row">
-                  <span class="api-method">GET</span>
-                  <span class="api-path">{openapi_href}</span>
-                  <span class="api-copy">OpenAPI schema for tool or UI expansion</span>
+                <span class="briefing-toggle" aria-hidden="true"></span>
+              </summary>
+              <div class="briefing-body">
+                <p class="section-copy">
+                  The homepage stays close to the backend contract. These are the surfaces most
+                  likely to matter as the operator tool grows into a richer product.
+                </p>
+                <div class="api-shell compact-shell">
+                  <div class="api-row">
+                    <span class="api-method">GET</span>
+                    <span class="api-path">{health_href}</span>
+                    <span class="api-copy">Health and deploy sanity check</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">POST</span>
+                    <span class="api-path">{api_prefix}/documents/bootstrap</span>
+                    <span class="api-copy">Bootstrap from a server-visible local path</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">POST</span>
+                    <span class="api-path">{api_prefix}/documents/bootstrap-upload</span>
+                    <span class="api-copy">Upload EPUB or PDF directly from the browser</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">POST</span>
+                    <span class="api-path">{api_prefix}/documents/{{document_id}}/translate</span>
+                    <span class="api-copy">Run translation packets through the active backend</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">GET</span>
+                    <span class="api-path">{api_prefix}/documents/{{document_id}}/exports</span>
+                    <span class="api-copy">Usage, issue, and export dashboard data</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">GET</span>
+                    <span class="api-path">{api_prefix}/documents/{{document_id}}/exports/download</span>
+                    <span class="api-copy">Download the latest export bundle with save flow</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">GET</span>
+                    <span class="api-path">{api_prefix}/documents/{{document_id}}/chapters/worklist</span>
+                    <span class="api-copy">Chapter queue, SLA state, and owner workload</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">POST</span>
+                    <span class="api-path">{api_prefix}/runs</span>
+                    <span class="api-copy">Create and control a durable book job</span>
+                  </div>
+                  <div class="api-row">
+                    <span class="api-method">GET</span>
+                    <span class="api-path">{openapi_href}</span>
+                    <span class="api-copy">OpenAPI schema for tool or UI expansion</span>
+                  </div>
                 </div>
               </div>
-            </section>
+            </details>
           </div>
         </main>
 
@@ -1942,7 +2713,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   <span id="document-live-state">Idle</span>
                 </div>
               </div>
-              <div class="refresh-meta" id="document-live-meta">Load a document to start workspace refresh tracking.</div>
+              <div class="refresh-meta" id="document-live-meta">Load a document to start sync tracking.</div>
             </div>
             <div class="refresh-card">
               <div class="refresh-head">
@@ -1952,7 +2723,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   <span id="run-live-state">Idle</span>
                 </div>
               </div>
-              <div class="refresh-meta" id="run-live-meta">Create or load a run to start control-plane refresh tracking.</div>
+              <div class="refresh-meta" id="run-live-meta">Create or load a run to track control-plane freshness.</div>
             </div>
             <div class="refresh-card">
               <div class="refresh-head">
@@ -1962,7 +2733,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   <span id="worklist-live-state">Idle</span>
                 </div>
               </div>
-              <div class="refresh-meta" id="worklist-live-meta">The worklist inherits document polling and exposes stale queue state directly.</div>
+              <div class="refresh-meta" id="worklist-live-meta">Worklist freshness follows document polling.</div>
             </div>
           </div>
           <div class="workspace-shell">
@@ -1972,9 +2743,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   <p class="workspace-kicker">Document Workspace</p>
                   <h2 class="workspace-title">Bootstrap, inspect, translate, review, and export from one surface.</h2>
                   <p class="workspace-copy">
-                    This is the first operator workspace layer. It does not hide the backend:
-                    it gives you fast access to the exact document lifecycle the system already
-                    supports, with current state rendered in a way that is actually readable.
+                    This operator surface gives you the live document lifecycle without hiding
+                    the backend contract, but with a layout that stays readable under real use.
                   </p>
                 </div>
                 <div class="control-chip">EPUB + text PDF · packet-aware · export-gated</div>
@@ -1984,8 +2754,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                 <div class="panel half">
                   <h3 class="panel-title">Bootstrap a document</h3>
                   <p class="panel-copy">Choose a local EPUB or low-risk text PDF from your device and immediately lock the created document into the workspace.</p>
-                  <form class="form-grid" id="bootstrap-form">
-                    <div class="field-grid">
+                  <form class="form-grid dense-form" id="bootstrap-form">
+                    <div class="field-grid dense-grid">
                       <div class="field span-12">
                         <label for="source-file">Source file</label>
                         <input
@@ -2000,13 +2770,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                             <div class="file-picker-title">Choose an EPUB or PDF</div>
                             <div class="file-picker-note" id="source-file-name">No file selected yet.</div>
                           </div>
-                          <button class="button ghost" type="button" id="choose-source-file">Open file picker</button>
+                          <button class="button ghost dense" type="button" id="choose-source-file">Open file picker</button>
                         </div>
                         <div class="field-hint">Upload a local EPUB or text PDF directly from your device. P1-A still rejects OCR-required PDFs, but short academic papers can enter a medium-risk recovery lane instead of being hard-rejected.</div>
                       </div>
                     </div>
-                    <div class="button-row">
-                      <button class="button primary" type="submit">Bootstrap document</button>
+                    <div class="action-toolbar">
+                      <button class="button primary dense" type="submit">Bootstrap document</button>
                     </div>
                   </form>
                 </div>
@@ -2014,8 +2784,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                 <div class="panel half">
                   <h3 class="panel-title">Operate an existing document</h3>
                   <p class="panel-copy">Load a document, then run translate, review, or export without leaving the workspace. Export now opens a save flow instead of dumping server paths into the UI.</p>
-                  <form class="form-grid" id="document-form">
-                    <div class="field-grid">
+                  <form class="form-grid dense-form" id="document-form">
+                    <div class="field-grid dense-grid">
                       <div class="field span-12">
                         <label for="document-id">Document ID</label>
                         <input id="document-id" name="document_id" type="text" placeholder="Paste a document UUID" />
@@ -2036,78 +2806,161 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                         </select>
                       </div>
                     </div>
-                    <div class="button-row">
-                      <button class="button ghost" type="button" id="load-document">Load summary</button>
-                      <button class="button" type="button" id="translate-document">Translate</button>
-                      <button class="button" type="button" id="review-document">Review</button>
-                      <button class="button gold" type="button" id="export-document">Export & save</button>
+                    <div class="action-toolbar primary-strip">
+                      <button class="button ghost dense" type="button" id="load-document">Load summary</button>
+                      <button class="button dense" type="button" id="translate-document">Translate</button>
+                      <button class="button dense" type="button" id="review-document">Review</button>
+                      <button class="button gold dense" type="button" id="export-document">Export & save</button>
                     </div>
                   </form>
                 </div>
               </div>
 
-              <div class="status-banner" id="document-status-banner">No document loaded yet. Upload a new EPUB/PDF or paste an existing document id.</div>
-
-              <div class="toggle-row">
-                <button class="button ghost toggle-button" type="button" id="toggle-document-polling" data-active="true">Auto-refresh document: on</button>
-                <span class="subtle-note" id="document-polling-note">When enabled, the workspace refreshes document summary, export dashboard, and worklist for the currently loaded document.</span>
+              <div class="control-strip">
+                <div class="status-banner" id="document-status-banner">No document loaded yet. Upload a new EPUB/PDF or paste an existing document id.</div>
+                <div class="toggle-row compact-toggle">
+                  <button class="button ghost dense toggle-button" type="button" id="toggle-document-polling" data-active="true">Auto-refresh document: on</button>
+                  <span class="subtle-note" id="document-polling-note">Refreshes summary, exports, and worklist for the current document.</span>
+                </div>
               </div>
 
-              <div class="kpi-grid" id="document-kpis">
-                <div class="kpi-card">
+              <div class="kpi-grid mini-kpis" id="document-kpis">
+                <div class="kpi-card mini-kpi">
                   <div class="kpi-label">Document</div>
                   <div class="kpi-value">—</div>
                   <div class="kpi-note">Title and status will appear here after a load.</div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card mini-kpi">
                   <div class="kpi-label">Chapters</div>
                   <div class="kpi-value">—</div>
                   <div class="kpi-note">Recovered structural chapter count.</div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card mini-kpi">
                   <div class="kpi-label">Sentences</div>
                   <div class="kpi-value">—</div>
                   <div class="kpi-note">Sentence ledger count for coverage and alignment.</div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card mini-kpi">
                   <div class="kpi-label">Open Issues</div>
                   <div class="kpi-value">—</div>
                   <div class="kpi-note">Live open review pressure for the whole document.</div>
                 </div>
               </div>
 
-              <div class="result-shell">
-                <div class="result-card">
+              <div class="result-shell workspace-overview-stack">
+                <div class="result-card compact-card">
                   <div class="result-head">
                     <div>
                       <h3 class="result-title">Document summary</h3>
                       <div class="result-meta">Document contract, chapter counts, and current lifecycle status.</div>
                     </div>
                   </div>
-                  <div id="document-summary-shell" class="placeholder">Load a document to see title, author, chapter progression, and stored quality summaries.</div>
+                  <div id="document-summary-shell" class="placeholder compact">Load a document to see title, author, chapter progression, and stored quality summaries.</div>
                 </div>
 
-                <div class="result-card">
+                <div class="result-card compact-card">
                   <div class="result-head">
                     <div>
                       <h3 class="result-title">Export and usage dashboard</h3>
-                      <div class="result-meta">Snapshot of export history, usage totals, issue hotspots, and auto-followup evidence.</div>
+                      <div class="result-meta">Export history, usage totals, issue hotspots, and auto-followup evidence.</div>
                     </div>
                   </div>
-                  <div id="export-dashboard-shell" class="placeholder">Once a document is loaded, this panel will show export history, issue pressure, and translation usage signals.</div>
+                  <div id="export-dashboard-shell" class="placeholder compact">Once a document is loaded, this panel will show export history, issue pressure, and translation usage signals.</div>
+                </div>
+              </div>
+
+              <div class="result-shell history-split" style="margin-top:14px;">
+                <div class="result-card">
+                  <div class="result-head">
+                    <div>
+                      <h3 class="result-title">Analysis history</h3>
+                      <div class="result-meta">Local records with direct load, merged download, latest run access, and fast filtering.</div>
+                    </div>
+                  </div>
+                  <form class="filter-toolbar compact dense-toolbar" id="history-filter-form">
+                    <div class="field-grid dense-grid">
+                      <div class="field span-12">
+                        <label for="history-search">Search</label>
+                        <input
+                          id="history-search"
+                          type="text"
+                          placeholder="Search title, author, path, or document id"
+                        />
+                      </div>
+                      <div class="field span-3">
+                        <label for="history-source-type">Source type</label>
+                        <select id="history-source-type">
+                          <option value="">All source types</option>
+                          <option value="epub">EPUB</option>
+                          <option value="pdf_text">PDF text</option>
+                          <option value="pdf_scan">PDF scan</option>
+                        </select>
+                      </div>
+                      <div class="field span-3">
+                        <label for="history-status">Document status</label>
+                        <select id="history-status">
+                          <option value="">All document states</option>
+                          <option value="ingested">ingested</option>
+                          <option value="parsed">parsed</option>
+                          <option value="active">active</option>
+                          <option value="partially_exported">partially_exported</option>
+                          <option value="exported">exported</option>
+                          <option value="failed">failed</option>
+                        </select>
+                      </div>
+                      <div class="field span-3">
+                        <label for="history-run-status">Latest run</label>
+                        <select id="history-run-status">
+                          <option value="">All run states</option>
+                          <option value="queued">queued</option>
+                          <option value="running">running</option>
+                          <option value="paused">paused</option>
+                          <option value="draining">draining</option>
+                          <option value="succeeded">succeeded</option>
+                          <option value="failed">failed</option>
+                          <option value="cancelled">cancelled</option>
+                        </select>
+                      </div>
+                      <div class="field span-3">
+                        <label for="history-merged-ready">Merged export</label>
+                        <select id="history-merged-ready">
+                          <option value="">All</option>
+                          <option value="true">Ready</option>
+                          <option value="false">Not ready</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="button-row">
+                      <button class="button primary dense" type="submit" id="apply-history-filters">Apply history filters</button>
+                      <button class="button ghost dense" type="button" id="clear-history-filters">Clear</button>
+                      <button class="button ghost dense" type="button" id="backfill-history">Import legacy history</button>
+                    </div>
+                  </form>
+                  <div class="filter-summary compact-summary" id="history-filter-summary">
+                    Showing the latest analysis records with no extra filters.
+                  </div>
+                  <div id="document-history-shell" class="placeholder">Local history records will appear here after the workspace loads.</div>
+                </div>
+                <div class="result-card history-detail-card">
+                  <div class="result-head">
+                    <div>
+                      <h3 class="result-title">History detail</h3>
+                      <div class="result-meta">Inspect chapter exports, download chapter HTML with assets, or pull the full archive without re-running analysis.</div>
+                    </div>
+                  </div>
+                  <div id="document-history-detail-shell" class="placeholder">Select a history record to inspect archive and chapter downloads.</div>
                 </div>
               </div>
             </section>
 
-            <section class="workspace-card">
+            <section class="workspace-card run-console">
               <div class="workspace-header">
                 <div class="workspace-header-text">
                   <p class="workspace-kicker">Run Console</p>
                   <h2 class="workspace-title">Control long jobs without dropping to shell scripts.</h2>
                   <p class="workspace-copy">
-                    Runs are durable now. This pane lets you create a `translate_full` run,
-                    inspect the latest summary, review event flow, and apply pause or drain
-                    transitions through the same control plane your long jobs already use.
+                    Create a `translate_full` run, inspect the latest summary, and apply
+                    pause or drain through the same durable control plane your jobs already use.
                   </p>
                 </div>
                 <div class="control-chip">Durable runs · leases · budget guardrails</div>
@@ -2115,8 +2968,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
               <div class="panel">
                 <h3 class="panel-title">Create or attach a run</h3>
-                <form class="form-grid" id="run-form">
-                  <div class="field-grid">
+                <form class="form-grid dense-form" id="run-form">
+                  <div class="field-grid dense-grid">
                     <div class="field span-12">
                       <label for="run-document-id">Document ID for new run</label>
                       <input id="run-document-id" name="run_document_id" type="text" placeholder="Uses current document id when left empty" />
@@ -2134,71 +2987,71 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                       <input id="run-id" name="run_id" type="text" placeholder="Paste a run UUID to inspect or control it" />
                     </div>
                   </div>
-                  <div class="button-row">
-                    <button class="button primary" type="button" id="create-run">Create translate_full run</button>
-                    <button class="button ghost" type="button" id="load-run">Load run</button>
+                  <div class="action-toolbar primary-strip">
+                    <button class="button primary dense" type="button" id="create-run">Create full run</button>
+                    <button class="button ghost dense" type="button" id="load-run">Load run</button>
                   </div>
                 </form>
-                <div class="button-row">
-                  <button class="button" type="button" id="pause-run">Pause</button>
-                  <button class="button" type="button" id="resume-run">Resume</button>
-                  <button class="button" type="button" id="drain-run">Drain</button>
-                  <button class="button gold" type="button" id="cancel-run">Cancel</button>
+                <div class="action-toolbar">
+                  <button class="button dense" type="button" id="pause-run">Pause</button>
+                  <button class="button dense" type="button" id="resume-run">Resume</button>
+                  <button class="button dense" type="button" id="drain-run">Drain</button>
+                  <button class="button gold dense" type="button" id="cancel-run">Cancel</button>
                 </div>
               </div>
 
-              <div class="status-banner" id="run-status-banner">No run loaded yet. Create one from the current document or paste a run id.</div>
-
-              <div class="toggle-row">
-                <button class="button ghost toggle-button" type="button" id="toggle-run-polling" data-active="true">Auto-refresh run: on</button>
-                <span class="subtle-note" id="run-polling-note">When enabled, the console refreshes the loaded run summary and newest events every few seconds while the page stays open.</span>
+              <div class="control-strip">
+                <div class="status-banner" id="run-status-banner">No run loaded yet. Create one from the current document or paste a run id.</div>
+                <div class="toggle-row compact-toggle">
+                  <button class="button ghost dense toggle-button" type="button" id="toggle-run-polling" data-active="true">Auto-refresh run: on</button>
+                  <span class="subtle-note" id="run-polling-note">Refreshes summary and newest events while this page stays open.</span>
+                </div>
               </div>
 
-              <div class="result-shell">
-                <div class="result-card">
+              <div class="result-shell overview-split">
+                <div class="result-card compact-card">
                   <div class="result-head">
                     <div>
                       <h3 class="result-title">Run summary</h3>
-                      <div class="result-meta">Status, budgets, work item counts, worker leases, and latest control-plane signals.</div>
+                      <div class="result-meta">Status, budgets, work items, leases, and latest control-plane signals.</div>
                     </div>
                   </div>
-                  <div id="run-summary-shell" class="placeholder">Run summary will appear here after create or load.</div>
+                  <div id="run-summary-shell" class="placeholder compact">Run summary appears here after create or load.</div>
                 </div>
 
-                <div class="result-card">
+                <div class="result-card compact-card">
                   <div class="result-head">
                     <div>
                       <h3 class="result-title">Run events</h3>
-                      <div class="result-meta">Newest-first audit stream for pause, resume, guardrail stops, and execution lifecycle changes.</div>
+                      <div class="result-meta">Newest-first audit stream for pause, resume, guardrail stops, and execution changes.</div>
                     </div>
                   </div>
-                  <div id="run-events-shell" class="placeholder">Recent run audit events will appear here after a run is loaded.</div>
+                  <div id="run-events-shell" class="placeholder compact">Recent run events appear here after load.</div>
                 </div>
               </div>
             </section>
 
-            <section class="workspace-card full-width">
+            <section class="workspace-card full-width worklist-board">
               <div class="workspace-header">
                 <div class="workspace-header-text">
                   <p class="workspace-kicker">Chapter Worklist Board</p>
                   <h2 class="workspace-title">See which chapters actually need attention next.</h2>
                   <p class="workspace-copy">
-                    This board uses the live chapter worklist contract, not a fake kanban shell.
-                    It surfaces queue rank, issue family driver, SLA state, owner readiness, and
-                    assignment so triage decisions can happen without scanning raw JSON.
+                    This board uses the live chapter worklist contract, surfacing queue rank,
+                    issue driver, SLA state, owner readiness, and assignment in one triage view.
                   </p>
                 </div>
                 <div class="control-chip">Queue rank · SLA pressure · owner-ready</div>
               </div>
 
-              <div class="panel">
+              <div class="panel compact-panel">
                 <div class="button-row">
-                  <button class="button ghost" type="button" id="refresh-worklist">Refresh worklist</button>
-                  <button class="button ghost" type="button" id="open-current-exports">Refresh export dashboard</button>
+                  <button class="button ghost dense" type="button" id="refresh-worklist">Refresh worklist</button>
+                  <button class="button ghost dense" type="button" id="open-current-exports">Refresh export dashboard</button>
                 </div>
-                <form class="filter-toolbar" id="worklist-filter-form">
-                  <div class="field-grid">
-                    <div class="field span-4">
+                <form class="filter-toolbar compact dense-toolbar" id="worklist-filter-form">
+                  <div class="field-grid dense-grid">
+                    <div class="field span-3">
                       <label for="filter-queue-priority">Queue priority</label>
                       <select id="filter-queue-priority">
                         <option value="">All priorities</option>
@@ -2207,7 +3060,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                         <option value="medium">Medium</option>
                       </select>
                     </div>
-                    <div class="field span-4">
+                    <div class="field span-3">
                       <label for="filter-sla-status">SLA status</label>
                       <select id="filter-sla-status">
                         <option value="">All SLA states</option>
@@ -2217,7 +3070,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                         <option value="unknown">Unknown</option>
                       </select>
                     </div>
-                    <div class="field span-4">
+                    <div class="field span-3">
                       <label for="filter-owner-ready">Owner ready</label>
                       <select id="filter-owner-ready">
                         <option value="">All</option>
@@ -2225,7 +3078,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                         <option value="false">Not owner-ready</option>
                       </select>
                     </div>
-                    <div class="field span-4">
+                    <div class="field span-3">
                       <label for="filter-assigned">Assignment</label>
                       <select id="filter-assigned">
                         <option value="">All</option>
@@ -2239,61 +3092,65 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                     </div>
                   </div>
                   <div class="button-row">
-                    <button class="button primary" type="submit" id="apply-worklist-filters">Apply filters</button>
-                    <button class="button ghost" type="button" id="clear-worklist-filters">Clear filters</button>
+                    <button class="button primary dense" type="submit" id="apply-worklist-filters">Apply filters</button>
+                    <button class="button ghost dense" type="button" id="clear-worklist-filters">Clear filters</button>
                   </div>
                 </form>
-                <div class="filter-summary" id="worklist-filter-summary">
+                <div class="filter-summary compact-summary" id="worklist-filter-summary">
                   Showing the live actionable queue with no extra filters.
                 </div>
               </div>
 
-              <div class="status-banner" id="worklist-status-banner">Load a document to inspect chapter queue pressure and owner-ready chapters.</div>
-              <div id="worklist-shell" class="queue-grid">
-                <div class="placeholder">The chapter board will populate from <code>{api_prefix}/documents/&lt;document_id&gt;/chapters/worklist</code> after a document is loaded.</div>
-              </div>
+              <div class="worklist-board-shell">
+                <div class="worklist-primary">
+                  <div class="status-banner" id="worklist-status-banner">Load a document to inspect chapter queue pressure and owner-ready chapters.</div>
+                  <div id="worklist-shell" class="queue-grid">
+                    <div class="placeholder">Load a document to populate the chapter board from <code>{api_prefix}/documents/&lt;document_id&gt;/chapters/worklist</code>.</div>
+                  </div>
+                </div>
 
-              <div class="result-shell" style="margin-top:18px;">
-                <div class="result-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Owner workload lane</h3>
-                      <div class="result-meta">Current assigned workload by owner, derived from the same chapter queue contract instead of a separate reporting path.</div>
+                <div class="worklist-sidebar">
+                  <div class="owner-insights-grid">
+                    <div class="result-card">
+                      <div class="result-head">
+                        <div>
+                          <h3 class="result-title">Owner workload lane</h3>
+                          <div class="result-meta">Assigned workload derived from the same queue contract.</div>
+                        </div>
+                      </div>
+                      <div id="owner-workload-shell" class="placeholder">Owner workload appears here after the chapter worklist loads.</div>
+                    </div>
+                    <div class="result-card">
+                      <div class="result-head">
+                        <div>
+                          <h3 class="result-title">Owner alerts and routing cues</h3>
+                          <div class="result-meta">Turn current workload pressure into quick routing decisions.</div>
+                        </div>
+                      </div>
+                      <div id="owner-alert-shell" class="placeholder">Owner alerts appear here when assignment pressure shows up.</div>
                     </div>
                   </div>
-                  <div id="owner-workload-shell" class="placeholder">Owner workload summary will appear here once the chapter worklist is loaded.</div>
-                </div>
-                <div class="result-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Owner alerts and routing cues</h3>
-                      <div class="result-meta">Turn current workload pressure into quick routing decisions without scanning every chapter row.</div>
-                    </div>
-                  </div>
-                  <div id="owner-alert-shell" class="placeholder">Owner alerts will appear here once the worklist exposes assignment pressure.</div>
-                </div>
-                <div class="result-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Owner drill-down and balancing hints</h3>
-                      <div class="result-meta">Focus one owner, inspect the pressure profile, and get simple rebalance suggestions without leaving the current queue surface.</div>
-                    </div>
-                  </div>
-                  <div id="owner-detail-shell" class="placeholder">Select an owner card to focus the queue and inspect owner-level workload hints.</div>
-                </div>
-              </div>
 
-              <div class="result-shell" style="margin-top:18px;">
-                <div class="result-card">
+                  <div class="result-card">
+                    <div class="result-head">
+                      <div>
+                        <h3 class="result-title">Owner drill-down and balancing hints</h3>
+                        <div class="result-meta">Focus one owner and inspect simple rebalance suggestions.</div>
+                      </div>
+                    </div>
+                    <div id="owner-detail-shell" class="placeholder">Select an owner to focus queue and workload hints.</div>
+                  </div>
+
+                  <div class="result-card chapter-detail-card">
                   <div class="result-head">
                     <div>
                       <h3 class="result-title">Chapter detail drawer</h3>
                       <div class="result-meta">Click a chapter row or queue card to inspect issue families, recent actions, and assignment history.</div>
                     </div>
                   </div>
-                  <div id="chapter-detail-shell" class="placeholder">Select a chapter from the document summary or worklist board to open its operator detail.</div>
-                  <form class="assignment-inline" id="assignment-form" hidden>
-                    <div class="field-grid">
+                  <div id="chapter-detail-shell" class="placeholder">Select a chapter to open operator detail.</div>
+                  <form class="assignment-inline dense-form" id="assignment-form" hidden>
+                    <div class="field-grid dense-grid">
                       <div class="field span-6">
                         <label for="assignment-owner">Owner name</label>
                         <input id="assignment-owner" type="text" placeholder="ops-alice" />
@@ -2308,10 +3165,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                       </div>
                     </div>
                     <div class="button-row">
-                      <button class="button primary" type="submit" id="assign-owner">Assign owner</button>
-                      <button class="button ghost" type="button" id="clear-owner">Clear assignment</button>
+                      <button class="button primary dense" type="submit" id="assign-owner">Assign owner</button>
+                      <button class="button ghost dense" type="button" id="clear-owner">Clear assignment</button>
                     </div>
                   </form>
+                  </div>
                 </div>
               </div>
             </section>
@@ -2319,9 +3177,9 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         </section>
 
         <footer class="footer">
-          <span>Designed as a calm technical-book control room, not a generic upload form.</span>
-          <span>This surface now spans product entry, document workspace, run console, and chapter worklist board.</span>
-          <span><code>{health_href}</code></span>
+          <span class="footer-pill">Operator-facing technical-book control room</span>
+          <span class="footer-pill">Entry + workspace + run console + worklist</span>
+          <span class="footer-pill"><code>{health_href}</code></span>
         </footer>
       </div>
     </div>
@@ -2338,6 +3196,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           currentDocumentId: window.localStorage.getItem(storageKeys.documentId) || "",
           currentRunId: window.localStorage.getItem(storageKeys.runId) || "",
           selectedChapterId: "",
+          selectedHistoryDocumentId: "",
+          autoPipeline: {{
+            runId: "",
+            documentId: "",
+            autoDownloadOnSuccess: false,
+            completionHandled: false,
+          }},
           documentPollingEnabled: true,
           documentPollHandle: null,
           documentPollInFlight: false,
@@ -2349,6 +3214,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             document: null,
             run: null,
             worklist: null,
+          }},
+          historyFilters: {{
+            query: "",
+            sourceType: "",
+            status: "",
+            latestRunStatus: "",
+            mergedExportReady: "",
           }},
           worklistFilters: {{
             queuePriority: "",
@@ -2384,6 +3256,18 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           documentKpis: document.getElementById("document-kpis"),
           documentSummary: document.getElementById("document-summary-shell"),
           exportDashboard: document.getElementById("export-dashboard-shell"),
+          historyFilterForm: document.getElementById("history-filter-form"),
+          historySearch: document.getElementById("history-search"),
+          historySourceType: document.getElementById("history-source-type"),
+          historyStatus: document.getElementById("history-status"),
+          historyRunStatus: document.getElementById("history-run-status"),
+          historyMergedReady: document.getElementById("history-merged-ready"),
+          applyHistoryFilters: document.getElementById("apply-history-filters"),
+          clearHistoryFilters: document.getElementById("clear-history-filters"),
+          backfillHistory: document.getElementById("backfill-history"),
+          historyFilterSummary: document.getElementById("history-filter-summary"),
+          documentHistory: document.getElementById("document-history-shell"),
+          documentHistoryDetail: document.getElementById("document-history-detail-shell"),
           runDocumentId: document.getElementById("run-document-id"),
           runId: document.getElementById("run-id"),
           runMaxCost: document.getElementById("run-max-cost"),
@@ -2542,8 +3426,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               label: "Idle",
               meta:
                 scope === "run"
-                  ? "Create or load a run to start live monitoring."
-                  : "Load a document to start live monitoring.",
+                  ? "Create or load a run to start monitoring."
+                  : "Load a document to start monitoring.",
               dotClass: "status-dot",
             }};
           }}
@@ -2551,7 +3435,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           if (inFlight) {{
             return {{
               label: "Refreshing",
-              meta: "A fresh snapshot is loading right now.",
+              meta: "Loading a fresh snapshot now.",
               dotClass: "status-dot refreshing",
             }};
           }}
@@ -2559,7 +3443,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           if (!lastRefreshedAt) {{
             return {{
               label: "Waiting",
-              meta: "A first successful refresh has not completed yet.",
+              meta: "Waiting for the first successful refresh.",
               dotClass: "status-dot",
             }};
           }}
@@ -2662,8 +3546,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             ? "Auto-refresh run: on"
             : "Auto-refresh run: off";
           els.runPollingNote.textContent = state.runPollingEnabled
-            ? "When enabled, the console refreshes the loaded run summary and newest events every few seconds while the page stays open."
-            : "Auto-refresh is paused. Use Load run to fetch a fresh snapshot manually.";
+            ? "Refreshes the loaded run summary and newest events every few seconds."
+            : "Auto-refresh is paused. Use Load run for a fresh snapshot.";
         }}
 
         function syncDocumentPollingUi() {{
@@ -2672,8 +3556,68 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             ? "Auto-refresh document: on"
             : "Auto-refresh document: off";
           els.documentPollingNote.textContent = state.documentPollingEnabled
-            ? "When enabled, the workspace refreshes document summary, export dashboard, and worklist for the currently loaded document."
-            : "Document auto-refresh is paused. Use the explicit controls to refresh document state.";
+            ? "Refreshes document summary, exports, and worklist for the current document."
+            : "Document auto-refresh is paused. Use the refresh controls manually.";
+        }}
+
+        function syncHistoryFilterForm() {{
+          els.historySearch.value = state.historyFilters.query;
+          els.historySourceType.value = state.historyFilters.sourceType;
+          els.historyStatus.value = state.historyFilters.status;
+          els.historyRunStatus.value = state.historyFilters.latestRunStatus;
+          els.historyMergedReady.value = state.historyFilters.mergedExportReady;
+        }}
+
+        function buildHistoryQuery() {{
+          const params = new URLSearchParams();
+          params.set("limit", "12");
+          params.set("offset", "0");
+          if (state.historyFilters.query) {{
+            params.set("query", state.historyFilters.query);
+          }}
+          if (state.historyFilters.sourceType) {{
+            params.set("source_type", state.historyFilters.sourceType);
+          }}
+          if (state.historyFilters.status) {{
+            params.set("status", state.historyFilters.status);
+          }}
+          if (state.historyFilters.latestRunStatus) {{
+            params.set("latest_run_status", state.historyFilters.latestRunStatus);
+          }}
+          if (state.historyFilters.mergedExportReady) {{
+            params.set("merged_export_ready", state.historyFilters.mergedExportReady);
+          }}
+          return apiPrefix + "/documents/history?" + params.toString();
+        }}
+
+        function canRetryHistoryRun(status) {{
+          return status === "failed" || status === "cancelled";
+        }}
+
+        function renderHistoryFilterSummary(page) {{
+          const active = [];
+          if (state.historyFilters.query) {{
+            active.push('query="' + state.historyFilters.query + '"');
+          }}
+          if (state.historyFilters.sourceType) {{
+            active.push("source=" + state.historyFilters.sourceType);
+          }}
+          if (state.historyFilters.status) {{
+            active.push("status=" + state.historyFilters.status);
+          }}
+          if (state.historyFilters.latestRunStatus) {{
+            active.push("run=" + state.historyFilters.latestRunStatus);
+          }}
+          if (state.historyFilters.mergedExportReady) {{
+            active.push("merged=" + (state.historyFilters.mergedExportReady === "true" ? "ready" : "missing"));
+          }}
+          if (!active.length) {{
+            els.historyFilterSummary.textContent =
+              "Showing the latest analysis records with no extra filters.";
+            return;
+          }}
+          els.historyFilterSummary.textContent =
+            "Showing " + formatNumber(page.total_count) + " matching records with filters: " + active.join(" · ");
         }}
 
         function syncWorklistFilterForm() {{
@@ -2748,7 +3692,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           setSelectedChapterId("");
           els.assignmentForm.hidden = true;
           els.chapterDetail.innerHTML =
-            '<div class="placeholder">Select a chapter from the document summary or worklist board to open its operator detail.</div>';
+            '<div class="placeholder">Select a chapter to open operator detail.</div>';
         }}
 
         async function fetchJson(url, options) {{
@@ -2893,6 +3837,24 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           return saveBlob(download.blob, download.filename, download.contentType);
         }}
 
+        async function downloadChapterExport(documentId, chapterId, exportType = "bilingual_html") {{
+          const params = new URLSearchParams({{ export_type: exportType }});
+          const download = await fetchBlob(
+            apiPrefix
+              + "/documents/"
+              + encodeURIComponent(documentId)
+              + "/chapters/"
+              + encodeURIComponent(chapterId)
+              + "/exports/download?"
+              + params.toString()
+          );
+          return saveBlob(download.blob, download.filename, download.contentType);
+        }}
+
+        async function fetchDocumentSummary(documentId) {{
+          return fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId));
+        }}
+
         function renderDocumentKpis(summary) {{
           els.documentKpis.innerHTML = [
             {{
@@ -2916,7 +3878,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               note: "Current open review pressure across all chapters.",
             }},
           ].map((item) => `
-            <div class="kpi-card">
+            <div class="kpi-card mini-kpi">
               <div class="kpi-label">${{escapeHtml(item.label)}}</div>
               <div class="kpi-value">${{escapeHtml(item.value)}}</div>
               <div class="kpi-note">${{escapeHtml(item.note)}}</div>
@@ -2961,6 +3923,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               <td>${{formatNumber(chapter.sentence_count)}}</td>
               <td>${{formatNumber(chapter.packet_count)}}</td>
               <td>${{formatNumber(chapter.open_issue_count)}}</td>
+              <td>
+                ${{
+                  chapter.bilingual_export_ready
+                    ? `<button class="button ghost" type="button" data-chapter-download="${{escapeHtml(chapter.chapter_id)}}">Download chapter</button>`
+                    : '<span class="subtle-note">Not exported yet</span>'
+                }}
+              </td>
             </tr>
           `).join("");
 
@@ -2975,41 +3944,80 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                     escapeHtml(summary.source_type)
                   }} · ${{
                     escapeHtml(summary.status)
-                  }} · document_id=${{
-                    escapeHtml(summary.document_id)
+                  }}${{
+                    summary.latest_run_status ? " · latest run=" + escapeHtml(summary.latest_run_status) : ""
                   }}
                 </div>
               </div>
+            </div>
+            <div class="button-row" style="margin-bottom:10px;">
+              ${{
+                summary.merged_export_ready
+                  ? `<button class="button gold" type="button" data-document-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
+                  : `<span class="subtle-note">The analysis archive becomes downloadable automatically after the full pipeline succeeds.</span>`
+              }}
+              ${{
+                summary.latest_run_id
+                  ? `<button class="button ghost" type="button" data-load-run-id="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
+                  : ""
+              }}
             </div>
             <div class="pill-row">
               <span class="pill">chapters: ${{formatNumber(summary.chapter_count)}}</span>
               <span class="pill">blocks: ${{formatNumber(summary.block_count)}}</span>
               <span class="pill">sentences: ${{formatNumber(summary.sentence_count)}}</span>
+              <span class="pill soft">chapter exports: ${{formatNumber(summary.chapter_bilingual_export_count)}}</span>
               ${{
                 summary.pdf_profile
                   ? `<span class="pill soft">${{escapeHtml(summary.pdf_profile.pdf_kind || "pdf")}} · risk=${{escapeHtml(summary.pdf_profile.layout_risk || "unknown")}}</span>`
                   : ""
               }}
+              ${{
+                summary.latest_merged_export_at
+                  ? `<span class="pill soft">merged: ${{formatDate(summary.latest_merged_export_at)}}</span>`
+                  : ""
+              }}
               <span class="pill warn">open issues: ${{formatNumber(summary.open_issue_count)}}</span>
             </div>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Chapter</th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Risk</th>
-                  <th>Sentences</th>
-                  <th>Packets</th>
-                  <th>Open Issues</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${{
-                  chapters || `<tr><td colspan="6">No chapter records found.</td></tr>`
-                }}
-              </tbody>
-            </table>
+            <div class="detail-grid summary-grid">
+              <div class="detail-block compact-block">
+                <div class="detail-label">Document ID</div>
+                <div class="detail-value"><code>${{escapeHtml(summary.document_id)}}</code></div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Latest Run</div>
+                <div class="detail-value">${{summary.latest_run_id ? `<code>${{escapeHtml(summary.latest_run_id)}}</code>` : "No run recorded yet"}}</div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Merged Export</div>
+                <div class="detail-value">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">PDF Profile</div>
+                <div class="detail-value">${{summary.pdf_profile ? escapeHtml((summary.pdf_profile.pdf_kind || "pdf") + " · risk=" + (summary.pdf_profile.layout_risk || "unknown")) : "Not a PDF document"}}</div>
+              </div>
+            </div>
+            <div class="table-scroll compact dense-scroll">
+              <table class="data-table compact dense-table">
+                <thead>
+                  <tr>
+                    <th>Chapter</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                    <th>Sentences</th>
+                    <th>Packets</th>
+                    <th>Open Issues</th>
+                    <th>Download</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${{
+                    chapters || `<tr><td colspan="8">No chapter records found.</td></tr>`
+                  }}
+                </tbody>
+              </table>
+            </div>
           `;
         }}
 
@@ -3040,8 +4048,8 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               <span class="pill">token out: ${{formatNumber(dashboard.translation_usage_summary?.total_token_out)}}</span>
               <span class="pill soft">avg latency: ${{formatNumber(dashboard.translation_usage_summary?.avg_latency_ms)}} ms</span>
             </div>
-            <div class="result-shell">
-              <div class="result-card">
+            <div class="result-shell overview-split">
+              <div class="result-card compact-card">
                 <div class="result-head">
                   <div>
                     <h3 class="result-title">Issue hotspots</h3>
@@ -3054,30 +4062,187 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   }}
                 </div>
               </div>
-              <div class="result-card">
+              <div class="result-card compact-card">
                 <div class="result-head">
                   <div>
                     <h3 class="result-title">Recent exports</h3>
                     <div class="result-meta">Latest export records with usage and follow-up hints.</div>
                   </div>
                 </div>
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Updated</th>
-                      <th>Cost</th>
-                      <th>Auto-Followup</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${{
-                      recordMarkup || `<tr><td colspan="5">No export records yet.</td></tr>`
-                    }}
-                  </tbody>
-                </table>
+                <div class="table-scroll compact dense-scroll">
+                  <table class="data-table compact dense-table">
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Updated</th>
+                        <th>Cost</th>
+                        <th>Auto-Followup</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${{
+                        recordMarkup || `<tr><td colspan="5">No export records yet.</td></tr>`
+                      }}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            </div>
+          `;
+        }}
+
+        function renderDocumentHistory(page) {{
+          renderHistoryFilterSummary(page);
+          const rows = (page.entries || []).map((entry) => `
+            <tr>
+              <td>
+                <button class="table-button" type="button" data-history-select-doc="${{escapeHtml(entry.document_id)}}">
+                  ${{escapeHtml(entry.title || "Untitled document")}}
+                </button>
+                <div class="mini-meta">${{escapeHtml(entry.source_type)}} · ${{escapeHtml(entry.status)}}</div>
+              </td>
+              <td>${{formatNumber(entry.chapter_count)}}</td>
+              <td>${{formatNumber(entry.chapter_bilingual_export_count)}}</td>
+              <td>${{entry.latest_run_status ? escapeHtml(entry.latest_run_status) : "—"}}</td>
+              <td>${{formatDate(entry.updated_at)}}</td>
+              <td>
+                <div class="table-action-group dense-actions">
+                  <button class="button ghost dense" type="button" data-history-select-doc="${{escapeHtml(entry.document_id)}}">Inspect</button>
+                  <button class="button ghost dense" type="button" data-history-load-doc="${{escapeHtml(entry.document_id)}}">Load</button>
+                  ${{
+                    entry.latest_run_id
+                      ? `<button class="button ghost dense" type="button" data-history-load-run="${{escapeHtml(entry.latest_run_id)}}">Run</button>`
+                      : ""
+                  }}
+                  ${{
+                    entry.latest_run_id && canRetryHistoryRun(entry.latest_run_status)
+                      ? `<button class="button dense" type="button" data-history-retry-run="${{escapeHtml(entry.latest_run_id)}}" data-history-retry-document="${{escapeHtml(entry.document_id)}}">Retry run</button>`
+                      : ""
+                  }}
+                  ${{
+                    entry.merged_export_ready
+                      ? `<button class="button gold dense" type="button" data-history-download-merged="${{escapeHtml(entry.document_id)}}">Archive</button>`
+                      : ""
+                  }}
+                </div>
+              </td>
+            </tr>
+          `).join("");
+
+          els.documentHistory.innerHTML = `
+            <div class="pill-row">
+              <span class="pill">${{state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady ? "matching records" : "records"}}: ${{formatNumber(page.total_count)}}</span>
+              <span class="pill soft">showing: ${{formatNumber(page.record_count)}}</span>
+            </div>
+            <div class="table-scroll history-table-shell dense-scroll">
+              <table class="data-table history-table dense-table">
+                <thead>
+                  <tr>
+                    <th>Document</th>
+                    <th>Chapters</th>
+                    <th>Chapter Exports</th>
+                    <th>Latest Run</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${{
+                    rows || `<tr><td colspan="6">${{state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady ? "No analysis history matched the current filters." : "No analysis history yet. Bootstrap a document to create the first record."}}</td></tr>`
+                  }}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }}
+
+        function renderHistoryDetail(summary) {{
+          state.selectedHistoryDocumentId = summary.document_id;
+          const chapterRows = (summary.chapters || []).map((chapter) => `
+            <tr>
+              <td>#${{escapeHtml(chapter.ordinal)}}</td>
+              <td>${{escapeHtml(chapter.title_src || "Untitled chapter")}}</td>
+              <td>${{escapeHtml(chapter.status)}}</td>
+              <td>${{formatNumber(chapter.packet_count)}}</td>
+              <td>${{chapter.bilingual_export_ready ? formatDate(chapter.latest_bilingual_export_at) : "—"}}</td>
+              <td>
+                ${{
+                  chapter.bilingual_export_ready
+                    ? `<div class="table-action-group dense-actions"><button class="button ghost dense" type="button" data-history-chapter-download="${{escapeHtml(chapter.chapter_id)}}" data-history-document-id="${{escapeHtml(summary.document_id)}}">Download chapter</button></div>`
+                    : '<span class="subtle-note">Not exported yet</span>'
+                }}
+              </td>
+            </tr>
+          `).join("");
+
+          els.documentHistoryDetail.innerHTML = `
+            <div class="result-head">
+              <div>
+                <h3 class="result-title">${{escapeHtml(summary.title || "Untitled document")}}</h3>
+                <div class="result-meta">
+                  ${{
+                    escapeHtml(summary.author || "Unknown author")
+                  }} · ${{
+                    escapeHtml(summary.source_type)
+                  }} · ${{
+                    escapeHtml(summary.status)
+                  }} · document_id=${{
+                    escapeHtml(summary.document_id)
+                  }}
+                </div>
+              </div>
+            </div>
+            <div class="button-row" style="margin-bottom:12px;">
+              <button class="button ghost" type="button" data-history-load-doc="${{escapeHtml(summary.document_id)}}">Load into workspace</button>
+              ${{
+                summary.latest_run_id
+                  ? `<button class="button ghost" type="button" data-history-load-run="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
+                  : ""
+              }}
+              ${{
+                summary.latest_run_id && canRetryHistoryRun(summary.latest_run_status)
+                  ? `<button class="button" type="button" data-history-retry-run="${{escapeHtml(summary.latest_run_id)}}" data-history-retry-document="${{escapeHtml(summary.document_id)}}">Retry run</button>`
+                  : ""
+              }}
+              ${{
+                summary.merged_export_ready
+                  ? `<button class="button gold" type="button" data-history-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
+                  : '<span class="subtle-note">The analysis archive is not available for this record yet.</span>'
+              }}
+            </div>
+            <div class="pill-row">
+              <span class="pill">chapters: ${{formatNumber(summary.chapter_count)}}</span>
+              <span class="pill soft">chapter exports: ${{formatNumber(summary.chapter_bilingual_export_count)}}</span>
+              ${{
+                summary.latest_merged_export_at
+                  ? `<span class="pill soft">merged: ${{formatDate(summary.latest_merged_export_at)}}</span>`
+                  : ""
+              }}
+              ${{
+                summary.latest_run_status
+                  ? `<span class="pill soft">latest run: ${{escapeHtml(summary.latest_run_status)}}</span>`
+                  : ""
+              }}
+            </div>
+            <div class="table-scroll history-table-shell dense-scroll">
+              <table class="data-table history-detail-table dense-table">
+                <thead>
+                  <tr>
+                    <th>Chapter</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Packets</th>
+                    <th>Latest Export</th>
+                    <th>Download</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${{
+                    chapterRows || `<tr><td colspan="6">This record has no chapter rows.</td></tr>`
+                  }}
+                </tbody>
+              </table>
             </div>
           `;
         }}
@@ -3121,7 +4286,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             </div>
             <div class="owner-grid">
               ${{
-                cards || '<div class="placeholder" style="grid-column:1/-1;">No assigned owner workload yet. Chapters are either unassigned or currently quiet.</div>'
+                cards || '<div class="placeholder" style="grid-column:1/-1;">No assigned owner workload yet. Chapters are unassigned or currently quiet.</div>'
               }}
             </div>
           `;
@@ -3228,7 +4393,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
 
           if (!selectedOwner) {{
             els.ownerDetail.innerHTML =
-              '<div class="placeholder">No assigned owners yet. Once chapters are assigned, this panel will surface owner-specific load, focus state, and balancing hints.</div>';
+              '<div class="placeholder">No assigned owners yet. This panel fills once chapters are assigned.</div>';
             return;
           }}
 
@@ -3286,7 +4451,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           renderWorklistFilterSummary(worklist);
           const entries = worklist.entries || [];
           if (!entries.length) {{
-            els.worklist.innerHTML = '<div class="placeholder">No actionable chapter pressure right now. This usually means the document is either clean or still pre-review.</div>';
+            els.worklist.innerHTML = '<div class="placeholder">No actionable chapter pressure right now. The document is either clean or still pre-review.</div>';
           }} else {{
             els.worklist.innerHTML = entries.slice(0, 8).map((entry) => `
               <article
@@ -3396,7 +4561,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               </div>
               <div class="detail-block full">
                 <div class="detail-label">Issue family breakdown</div>
-                <table class="data-table">
+                <table class="data-table dense-table">
                   <thead>
                     <tr>
                       <th>Issue</th>
@@ -3444,59 +4609,89 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         }}
 
         function renderRunSummary(summary) {{
+          const pipeline = summary.status_detail_json?.pipeline || {{}};
+          const pipelineStages = Object.entries(pipeline.stages || {{}})
+            .filter(([stageKey]) => stageKey !== "pipeline")
+            .map(([stageKey, stageValue]) => `
+              <span class="pill soft">${{escapeHtml(stageKey)}}: ${{escapeHtml(stageValue?.status || "pending")}}</span>
+            `)
+            .join("");
           els.runSummary.innerHTML = `
             <div class="pill-row">
               <span class="pill">status: ${{escapeHtml(summary.status)}}</span>
               <span class="pill">type: ${{escapeHtml(summary.run_type)}}</span>
               <span class="pill soft">backend: ${{escapeHtml(summary.backend || "default")}}</span>
               <span class="pill soft">model: ${{escapeHtml(summary.model_name || "default")}}</span>
+              ${{
+                pipeline.current_stage
+                  ? `<span class="pill soft">current stage: ${{escapeHtml(pipeline.current_stage)}}</span>`
+                  : ""
+              }}
             </div>
-            <div class="kpi-grid" style="margin-top:14px;">
-              <div class="kpi-card">
+            <div class="pill-row" style="margin-top:12px;">
+              ${{
+                pipelineStages || '<span class="pill soft">Pipeline stages will appear once the run records stage progress.</span>'
+              }}
+            </div>
+            <div class="kpi-grid mini-kpis" style="margin-top:10px;">
+              <div class="kpi-card mini-kpi">
                 <div class="kpi-label">Work Items</div>
                 <div class="kpi-value">${{formatNumber(summary.work_items.total_count)}}</div>
                 <div class="kpi-note">Queued and processed items under this run.</div>
               </div>
-              <div class="kpi-card">
+              <div class="kpi-card mini-kpi">
                 <div class="kpi-label">Worker Leases</div>
                 <div class="kpi-value">${{formatNumber(summary.worker_leases.total_count)}}</div>
                 <div class="kpi-note">Latest heartbeat: ${{formatDate(summary.worker_leases.latest_heartbeat_at)}}</div>
               </div>
-              <div class="kpi-card">
+              <div class="kpi-card mini-kpi">
                 <div class="kpi-label">Events</div>
                 <div class="kpi-value">${{formatNumber(summary.events.event_count)}}</div>
                 <div class="kpi-note">Latest event: ${{formatDate(summary.events.latest_event_at)}}</div>
               </div>
-              <div class="kpi-card">
+              <div class="kpi-card mini-kpi">
                 <div class="kpi-label">Budget</div>
                 <div class="kpi-value">${{formatMoney(summary.budget?.max_total_cost_usd)}}</div>
                 <div class="kpi-note">Parallel workers: ${{formatNumber(summary.budget?.max_parallel_workers)}}</div>
               </div>
             </div>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>run_id</td><td><code>${{escapeHtml(summary.run_id)}}</code></td></tr>
-                <tr><td>document_id</td><td><code>${{escapeHtml(summary.document_id)}}</code></td></tr>
-                <tr><td>requested_by</td><td>${{escapeHtml(summary.requested_by || "—")}}</td></tr>
-                <tr><td>created_at</td><td>${{formatDate(summary.created_at)}}</td></tr>
-                <tr><td>started_at</td><td>${{formatDate(summary.started_at)}}</td></tr>
-                <tr><td>finished_at</td><td>${{formatDate(summary.finished_at)}}</td></tr>
-                <tr><td>stop_reason</td><td>${{escapeHtml(summary.stop_reason || "—")}}</td></tr>
-              </tbody>
-            </table>
+            <div class="detail-grid summary-grid">
+              <div class="detail-block compact-block">
+                <div class="detail-label">Run ID</div>
+                <div class="detail-value"><code>${{escapeHtml(summary.run_id)}}</code></div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Document ID</div>
+                <div class="detail-value"><code>${{escapeHtml(summary.document_id)}}</code></div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Requested By</div>
+                <div class="detail-value">${{escapeHtml(summary.requested_by || "—")}}</div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Created</div>
+                <div class="detail-value">${{formatDate(summary.created_at)}}</div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Started</div>
+                <div class="detail-value">${{formatDate(summary.started_at)}}</div>
+              </div>
+              <div class="detail-block compact-block">
+                <div class="detail-label">Finished</div>
+                <div class="detail-value">${{formatDate(summary.finished_at)}}</div>
+              </div>
+              <div class="detail-block compact-block full">
+                <div class="detail-label">Stop Reason</div>
+                <div class="detail-value">${{escapeHtml(summary.stop_reason || "—")}}</div>
+              </div>
+            </div>
           `;
         }}
 
         function renderRunEvents(page) {{
           const entries = page.entries || [];
           if (!entries.length) {{
-            els.runEvents.innerHTML = '<div class="placeholder">No run events recorded yet.</div>';
+            els.runEvents.innerHTML = '<div class="placeholder compact">No run events recorded yet.</div>';
             return;
           }}
           const rows = entries.map((entry) => `
@@ -3517,13 +4712,16 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           }}
           setRefreshInFlight("document", true);
           try {{
-            const summary = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(id));
+            const summary = await fetchDocumentSummary(id);
             setDocumentId(summary.document_id);
             if (!options.silent) {{
               setBanner(els.documentBanner, "Document loaded: " + (summary.title || summary.document_id), "success");
             }}
             renderDocumentKpis(summary);
             renderDocumentSummary(summary);
+            if (state.selectedHistoryDocumentId && state.selectedHistoryDocumentId === summary.document_id) {{
+              renderHistoryDetail(summary);
+            }}
             await Promise.all([
               refreshExportDashboard(summary.document_id, {{ silent: options.silent }}),
               refreshWorklist(summary.document_id, {{ silent: options.silent }}),
@@ -3544,6 +4742,41 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         async function refreshExportDashboard(documentId, _options = {{}}) {{
           const dashboard = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/exports?limit=5&offset=0");
           renderExportDashboard(dashboard);
+        }}
+
+        async function refreshDocumentHistory(options = {{}}) {{
+          const page = await fetchJson(buildHistoryQuery());
+          renderDocumentHistory(page);
+          if (state.selectedHistoryDocumentId) {{
+            const stillExists = (page.entries || []).some((entry) => entry.document_id === state.selectedHistoryDocumentId);
+            if (stillExists) {{
+              try {{
+                const summary = await fetchDocumentSummary(state.selectedHistoryDocumentId);
+                renderHistoryDetail(summary);
+              }} catch (_error) {{
+                els.documentHistoryDetail.innerHTML =
+                  '<div class="placeholder">Selected history record is no longer available.</div>';
+                state.selectedHistoryDocumentId = "";
+              }}
+            }} else {{
+              els.documentHistoryDetail.innerHTML =
+                (state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady)
+                  ? '<div class="placeholder">The selected history record is hidden by current filters. Clear or adjust them to inspect it again.</div>'
+                  : '<div class="placeholder">Select a history record to inspect merged export and chapter downloads.</div>';
+              state.selectedHistoryDocumentId = "";
+            }}
+          }}
+          if (!options.silent) {{
+            markRefreshed("document");
+          }}
+        }}
+
+        async function loadHistoryDetail(documentId, options = {{}}) {{
+          const summary = await fetchDocumentSummary(documentId);
+          renderHistoryDetail(summary);
+          if (!options.silent) {{
+            setBanner(els.documentBanner, "History detail loaded for " + (summary.title || summary.document_id) + ".", "success");
+          }}
         }}
 
         async function refreshWorklist(documentId, options = {{}}) {{
@@ -3676,6 +4909,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             }}
             renderRunSummary(summary);
             renderRunEvents(events);
+            await handleAutoPipelineSummary(summary);
             markRefreshed("run");
           }} finally {{
             setRefreshInFlight("run", false);
@@ -3786,6 +5020,46 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           await refreshWorklist(documentId);
         }}
 
+        async function applyHistoryFilters(event) {{
+          if (event) {{
+            event.preventDefault();
+          }}
+          state.historyFilters.query = els.historySearch.value.trim();
+          state.historyFilters.sourceType = els.historySourceType.value;
+          state.historyFilters.status = els.historyStatus.value;
+          state.historyFilters.latestRunStatus = els.historyRunStatus.value;
+          state.historyFilters.mergedExportReady = els.historyMergedReady.value;
+          syncHistoryFilterForm();
+          await refreshDocumentHistory();
+        }}
+
+        async function clearHistoryFilters() {{
+          state.historyFilters = {{
+            query: "",
+            sourceType: "",
+            status: "",
+            latestRunStatus: "",
+            mergedExportReady: "",
+          }};
+          syncHistoryFilterForm();
+          await refreshDocumentHistory();
+        }}
+
+        async function importLegacyHistory() {{
+          const result = await fetchJson(apiPrefix + "/documents/history/backfill", {{
+            method: "POST",
+          }});
+          await refreshDocumentHistory({{ silent: true }});
+          const importedCount = result?.imported_document_count || 0;
+          setBanner(
+            els.documentBanner,
+            importedCount
+              ? "Imported " + formatNumber(importedCount) + " legacy history record" + (importedCount === 1 ? "." : "s.")
+              : "No new legacy history records were found.",
+            importedCount ? "success" : "info",
+          );
+        }}
+
         async function applyWorklistPreset(preset) {{
           const documentId = (state.currentDocumentId || els.documentId.value).trim();
           if (!documentId) {{
@@ -3809,6 +5083,135 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           await refreshWorklist(documentId);
         }}
 
+        function trackAutoPipeline(runId, documentId, autoDownloadOnSuccess) {{
+          state.autoPipeline = {{
+            runId,
+            documentId,
+            autoDownloadOnSuccess,
+            completionHandled: false,
+          }};
+        }}
+
+        async function createRunForDocument(documentId, options = {{}}) {{
+          const budget = {{}};
+          if (els.runMaxCost.value) {{
+            budget.max_total_cost_usd = Number(els.runMaxCost.value);
+          }}
+          if (els.runMaxWorkers.value) {{
+            budget.max_parallel_workers = Number(els.runMaxWorkers.value);
+          }}
+          const payload = {{
+            document_id: documentId,
+            run_type: "translate_full",
+            requested_by: "ui-operator",
+            priority: 100,
+            status_detail_json: {{
+              source: options.source || "homepage-workspace",
+              pipeline: {{
+                current_stage: "translate",
+                stages: {{
+                  translate: {{
+                    status: "pending",
+                  }},
+                  review: {{
+                    status: "pending",
+                  }},
+                  bilingual_html: {{
+                    status: "pending",
+                  }},
+                  merged_html: {{
+                    status: "pending",
+                  }},
+                }},
+              }},
+            }},
+          }};
+          if (Object.keys(budget).length) {{
+            payload.budget = budget;
+          }}
+          const created = await fetchJson(apiPrefix + "/runs", {{
+            method: "POST",
+            body: payload,
+          }});
+          const started = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(created.run_id) + "/resume", {{
+            method: "POST",
+            body: {{
+              actor_id: "ui-operator",
+              note: options.note || "Start full translation pipeline from workspace",
+              detail_json: {{
+                source: options.source || "homepage-workspace",
+              }},
+            }},
+          }});
+          setRunId(started.run_id);
+          renderRunSummary(started);
+          renderRunEvents({{ entries: [], event_count: 0 }});
+          markRefreshed("run");
+          return started;
+        }}
+
+        async function retryRun(runId, options = {{}}) {{
+          if (!runId) {{
+            return;
+          }}
+          const retried = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(runId) + "/retry", {{
+            method: "POST",
+            body: {{
+              actor_id: "ui-operator",
+              note: options.note || "Retry full translation pipeline from history",
+              detail_json: {{
+                source: options.source || "homepage-history",
+              }},
+            }},
+          }});
+          setRunId(retried.run_id);
+          if (options.documentId) {{
+            els.runDocumentId.value = options.documentId;
+          }}
+          trackAutoPipeline(retried.run_id, retried.document_id, false);
+          renderRunSummary(retried);
+          renderRunEvents({{ entries: [], event_count: 0 }});
+          markRefreshed("run");
+          return retried;
+        }}
+
+        async function handleAutoPipelineSummary(summary) {{
+          if (!state.autoPipeline.runId || state.autoPipeline.runId !== summary.run_id || state.autoPipeline.completionHandled) {{
+            return;
+          }}
+          if (summary.status === "succeeded") {{
+            state.autoPipeline.completionHandled = true;
+            await Promise.all([
+              refreshDocument(summary.document_id, {{ silent: true }}),
+              refreshDocumentHistory({{ silent: true }}),
+            ]);
+            if (!state.autoPipeline.autoDownloadOnSuccess) {{
+              setBanner(els.runBanner, "Full pipeline completed for " + summary.document_id + ".", "success");
+              return;
+            }}
+            try {{
+              const savedName = await downloadCurrentExport(summary.document_id, "merged_html");
+              setBanner(els.documentBanner, "Full pipeline completed. Analysis archive saved as " + savedName + ".", "success");
+            }} catch (downloadError) {{
+              if (downloadError && downloadError.name === "AbortError") {{
+                setBanner(els.documentBanner, "Full pipeline completed, but merged HTML save was cancelled.", "success");
+              }} else {{
+                setBanner(els.documentBanner, "Run finished, but merged HTML download failed: " + downloadError.message, "error");
+              }}
+            }}
+            return;
+          }}
+          if (["failed", "paused", "cancelled"].includes(summary.status)) {{
+            state.autoPipeline.completionHandled = true;
+            await refreshDocumentHistory({{ silent: true }});
+            setBanner(
+              els.runBanner,
+              "Full pipeline stopped: " + summary.status + (summary.stop_reason ? " · " + summary.stop_reason : ""),
+              summary.status === "paused" ? "success" : "error",
+            );
+          }}
+        }}
+
         async function bootstrapDocument(event) {{
           event.preventDefault();
           const sourceFile = getSelectedSourceFile();
@@ -3825,9 +5228,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             setDocumentId(summary.document_id);
             els.runDocumentId.value = summary.document_id;
             clearSelectedSourceFile();
+            const runSummary = await createRunForDocument(summary.document_id, {{
+              source: "homepage-bootstrap-auto",
+              note: "Start after bootstrap upload",
+            }});
+            trackAutoPipeline(runSummary.run_id, summary.document_id, true);
             setBanner(
               els.documentBanner,
-              "Bootstrap completed for " + (summary.title || summary.document_id) + " from " + sourceFile.name + ".",
+              "Bootstrap completed for " + (summary.title || summary.document_id) + " and the full pipeline is now running from " + sourceFile.name + ".",
               "success"
             );
             renderDocumentKpis(summary);
@@ -3835,6 +5243,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
             await Promise.all([
               refreshExportDashboard(summary.document_id),
               refreshWorklist(summary.document_id),
+              refreshDocumentHistory({{ silent: true }}),
             ]);
           }} catch (error) {{
             setBanner(els.documentBanner, error.message, "error");
@@ -3915,31 +5324,13 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           }}
           setButtonLoading(els.createRun, true, "Creating…");
           try {{
-            const budget = {{}};
-            if (els.runMaxCost.value) {{
-              budget.max_total_cost_usd = Number(els.runMaxCost.value);
-            }}
-            if (els.runMaxWorkers.value) {{
-              budget.max_parallel_workers = Number(els.runMaxWorkers.value);
-            }}
-            const payload = {{
-              document_id: documentId,
-              run_type: "translate_full",
-              requested_by: "ui-operator",
-              priority: 100,
-              status_detail_json: {{
-                source: "homepage-workspace",
-              }},
-            }};
-            if (Object.keys(budget).length) {{
-              payload.budget = budget;
-            }}
-            const summary = await fetchJson(apiPrefix + "/runs", {{
-              method: "POST",
-              body: payload,
+            const summary = await createRunForDocument(documentId, {{
+              source: "homepage-run-console",
+              note: "Start full pipeline from run console",
             }});
             setRunId(summary.run_id);
-            setBanner(els.runBanner, "Run created: " + summary.run_id, "success");
+            trackAutoPipeline(summary.run_id, documentId, false);
+            setBanner(els.runBanner, "Run created and started: " + summary.run_id, "success");
             renderRunSummary(summary);
             renderRunEvents({{ entries: [], event_count: 0 }});
             markRefreshed("run");
@@ -4028,12 +5419,129 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         els.exportDocument.addEventListener("click", function() {{
           runDocumentAction("export");
         }});
+        els.historyFilterForm.addEventListener("submit", function(event) {{
+          applyHistoryFilters(event).catch((error) => setBanner(els.documentBanner, error.message, "error"));
+        }});
+        els.clearHistoryFilters.addEventListener("click", function() {{
+          clearHistoryFilters().catch((error) => setBanner(els.documentBanner, error.message, "error"));
+        }});
+        els.backfillHistory.addEventListener("click", function() {{
+          importLegacyHistory().catch((error) => setBanner(els.documentBanner, error.message, "error"));
+        }});
         els.documentSummary.addEventListener("click", function(event) {{
+          const mergedButton = event.target.closest("[data-document-download-merged]");
+          if (mergedButton) {{
+            downloadCurrentExport(mergedButton.dataset.documentDownloadMerged, "merged_html")
+              .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
+              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
+            return;
+          }}
+          const runButton = event.target.closest("[data-load-run-id]");
+          if (runButton) {{
+            setRunId(runButton.dataset.loadRunId || "");
+            refreshRun(runButton.dataset.loadRunId).catch((error) => setBanner(els.runBanner, error.message, "error"));
+            return;
+          }}
+          const chapterDownloadButton = event.target.closest("[data-chapter-download]");
+          if (chapterDownloadButton) {{
+            const documentId = (state.currentDocumentId || els.documentId.value).trim();
+            downloadChapterExport(documentId, chapterDownloadButton.dataset.chapterDownload)
+              .then((savedName) => setBanner(els.documentBanner, "Chapter export saved as " + savedName + ".", "success"))
+              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
+            return;
+          }}
           const button = event.target.closest("[data-chapter-id]");
           if (!button) {{
             return;
           }}
           loadChapterDetail(button.dataset.chapterId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
+        }});
+        els.documentHistory.addEventListener("click", function(event) {{
+          const inspectButton = event.target.closest("[data-history-select-doc]");
+          if (inspectButton) {{
+            loadHistoryDetail(inspectButton.dataset.historySelectDoc).catch((error) =>
+              setBanner(els.documentBanner, error.message, "error")
+            );
+            return;
+          }}
+          const loadDocButton = event.target.closest("[data-history-load-doc]");
+          if (loadDocButton) {{
+            setDocumentId(loadDocButton.dataset.historyLoadDoc || "");
+            refreshDocument(loadDocButton.dataset.historyLoadDoc).catch((error) => setBanner(els.documentBanner, error.message, "error"));
+            return;
+          }}
+          const loadRunButton = event.target.closest("[data-history-load-run]");
+          if (loadRunButton) {{
+            setRunId(loadRunButton.dataset.historyLoadRun || "");
+            refreshRun(loadRunButton.dataset.historyLoadRun).catch((error) => setBanner(els.runBanner, error.message, "error"));
+            return;
+          }}
+          const retryButton = event.target.closest("[data-history-retry-run]");
+          if (retryButton) {{
+            retryRun(retryButton.dataset.historyRetryRun, {{
+              documentId: retryButton.dataset.historyRetryDocument,
+              source: "homepage-history-list",
+              note: "Retry latest failed run from analysis history",
+            }})
+              .then((summary) => {{
+                setBanner(els.runBanner, "Retry run started: " + summary.run_id, "success");
+                refreshDocumentHistory({{ silent: true }}).catch(() => undefined);
+              }})
+              .catch((error) => setBanner(els.runBanner, error.message, "error"));
+            return;
+          }}
+          const mergedButton = event.target.closest("[data-history-download-merged]");
+          if (!mergedButton) {{
+            return;
+          }}
+          downloadCurrentExport(mergedButton.dataset.historyDownloadMerged, "merged_html")
+            .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
+            .catch((error) => setBanner(els.documentBanner, error.message, "error"));
+        }});
+        els.documentHistoryDetail.addEventListener("click", function(event) {{
+          const chapterButton = event.target.closest("[data-history-chapter-download]");
+          if (chapterButton) {{
+            downloadChapterExport(
+              chapterButton.dataset.historyDocumentId,
+              chapterButton.dataset.historyChapterDownload
+            )
+              .then((savedName) => setBanner(els.documentBanner, "Chapter export saved as " + savedName + ".", "success"))
+              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
+            return;
+          }}
+          const loadDocButton = event.target.closest("[data-history-load-doc]");
+          if (loadDocButton) {{
+            setDocumentId(loadDocButton.dataset.historyLoadDoc || "");
+            refreshDocument(loadDocButton.dataset.historyLoadDoc).catch((error) => setBanner(els.documentBanner, error.message, "error"));
+            return;
+          }}
+          const loadRunButton = event.target.closest("[data-history-load-run]");
+          if (loadRunButton) {{
+            setRunId(loadRunButton.dataset.historyLoadRun || "");
+            refreshRun(loadRunButton.dataset.historyLoadRun).catch((error) => setBanner(els.runBanner, error.message, "error"));
+            return;
+          }}
+          const retryButton = event.target.closest("[data-history-retry-run]");
+          if (retryButton) {{
+            retryRun(retryButton.dataset.historyRetryRun, {{
+              documentId: retryButton.dataset.historyRetryDocument,
+              source: "homepage-history-detail",
+              note: "Retry latest failed run from history detail",
+            }})
+              .then((summary) => {{
+                setBanner(els.runBanner, "Retry run started: " + summary.run_id, "success");
+                refreshDocumentHistory({{ silent: true }}).catch(() => undefined);
+              }})
+              .catch((error) => setBanner(els.runBanner, error.message, "error"));
+            return;
+          }}
+          const mergedButton = event.target.closest("[data-history-download-merged]");
+          if (!mergedButton) {{
+            return;
+          }}
+          downloadCurrentExport(mergedButton.dataset.historyDownloadMerged, "merged_html")
+            .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
+            .catch((error) => setBanner(els.documentBanner, error.message, "error"));
         }});
         els.createRun.addEventListener("click", createRun);
         els.loadRun.addEventListener("click", function() {{
@@ -4159,6 +5667,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         syncSelectedSourceFileUi();
         syncDocumentPollingUi();
         syncRunPollingUi();
+        syncHistoryFilterForm();
         syncWorklistFilterForm();
         updateLiveStatusUi();
         startDocumentPolling();
@@ -4166,6 +5675,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         window.setInterval(updateLiveStatusUi, 5000);
 
         checkHealth();
+        refreshDocumentHistory({{ silent: true }}).catch((error) => console.warn("History refresh failed", error));
         if (state.currentDocumentId) {{
           refreshDocument(state.currentDocumentId).catch((error) => setBanner(els.documentBanner, error.message, "error"));
         }}

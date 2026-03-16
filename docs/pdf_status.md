@@ -1,6 +1,6 @@
 # PDF Status
 
-Last Updated: 2026-03-15
+Last Updated: 2026-03-16
 
 ## Purpose
 
@@ -16,7 +16,7 @@ Last Updated: 2026-03-15
 
 - 内部阶段：`P1-A complete, P1-B partial`
 - 对外 contract：仍是 `p1_text_pdf_bootstrap`
-- 当前放行范围：`pdf_text`、低风险和一部分 medium-risk 文本 PDF；短篇 academic paper 现在可进入 `academic_paper` medium-risk lane，复杂版式高风险仍默认拒绝，扫描 / OCR 仍未支持
+- 当前放行范围：`pdf_text`、低风险和一部分 medium-risk 文本 PDF；短篇 academic paper 现在可进入 `academic_paper` medium-risk lane，并在 advisory 结构风险下完成正式导出；single-column research paper 的“首页大块标题 + 末页合并 References”也已进入低风险主链路；复杂版式高风险仍默认拒绝，扫描 / OCR 仍未支持
 
 一句话判断：
 
@@ -51,6 +51,22 @@ Last Updated: 2026-03-15
 - 已增加 `src/book_agent/tools/pdf_smoke.py` 与 `scripts/run_pdf_smoke_corpus.py`，支持 manifest-driven corpus smoke 与 expectation check
 - 已增强 `scripts/run_pdf_candidate_scan.py`，支持目录剪枝、候选评分、manifest-ready 推荐输出
 - 已完成 short academic paper intake 第一刀：`NIPS-2017-attention-is-all-you-need-Paper.pdf` 现在会被判为 `layout_risk=medium`、`recovery_lane=academic_paper`，并可成功 bootstrap 到 `body + references`
+- 已完成 academic paper formal export policy v1：`academic_paper + medium-risk` 在满足最小恢复条件时，`MISORDERING` 会降为 advisory，允许章节保持 `qa_checked/exported`
+- 已完成 academic paper section recovery v1 第一刀：正文内的 `Abstract / 1 Introduction / 2 Model Architecture ...` 一类 inline headings 现在会拆成真实 `heading` block，进入 page evidence / review / export 主链路
+- 已完成 academic paper heading cleanup v2：`3 Model Ar`、`3.1 ... Encoder:`、`3.4 Embeddings and Softmax Similarly`、表格前误切 `Model` 这类残缺/误切 heading 已在 parser 侧收敛
+- 已完成 academic paper reading-order hardening 第一刀：`MISORDERING` 改为章节本地 page evidence 驱动，`References` 这类无本地可疑页的章节不再继承误报；当 short paper 的可疑页已被 section headings / caption 锚定时，也不再继续保留 advisory
+- 已完成 academic paper reading-order hardening 第二刀：`basic` extractor 现在会在短篇论文的复杂定位段上做 positioned text splitting，并在清晰双栏页上按列优先排序；`Attention Is All You Need` 在 `multi_column_page_count=3` 的情况下仍保持 `layout_risk=medium / recovery_lane=academic_paper`
+- 已完成 academic paper reading-order hardening 第三刀：table / figure / equation 邻近的 broken heading 现在会继续在 parser 侧 cleanup，`Attention Is All You Need` 中的 `3.2.1 Scaled Dot-Pr` 已收敛到 `3.2.1 Scaled Dot-Product Attention`
+- 已完成 `Attention Is All You Need` 真实整篇 run：`29/29` packet 翻译成功，正式导出了 chapter bilingual HTML 和单文件 `merged-document.html`
+- 已完成 `Attention Is All You Need` v2 真实整篇 run：`41/41` packet 翻译成功，正式导出了 chapter bilingual HTML 和新版单文件 `merged-document.html`，section heading 已进入最终 HTML
+- 已完成 `Attention Is All You Need` v2 re-review：open issue 已从 `2` 压到 `0`，正式 `merged-document.html` 保持可导出
+- 已完成 single-column research paper recovery 第一刀：basic extractor 合并成首块的论文标题和末页 `Refer ences ...` 现在可在 parser 恢复层拆成真实 heading / references chapter
+- 已完成 first-page title-like heading cleanup 第一刀：`Attention Is All Y ou Need` 一类 broken title heading 现在会在第一页 heading 恢复层清洗，并与 document title 对齐
+- 已完成 first-page document-title overlap recovery：当 fallback extractor 把首页 title bbox 放歪时，parser 仍可通过整页 title overlap 恢复真实标题，不再退化成 `Chapter 1`
+- 已完成 `run_real_book_live.py` 导出链路补齐：真实 live run 现在会自动继续执行 `merged_html`，不再只停在 chapter bilingual HTML
+- 已完成 oversized packet splitting v1：references 章节的大块 citation block 现在会按更小 packet 切分，超大正文 block 也会保守拆包，避免 single-column paper live run 因单包过大而 terminal fail
+- 已完成 provider malformed-output salvage v1：当 provider 返回 fenced JSON、包装 JSON 或文本中的单个平衡 JSON object 时，translation client 现在会安全挽救，而不是直接把整包打成 terminal failure
+- 已完成第二篇真实英文论文 live run：`Forming Effective Human-AI Teams...` 现已在 `v3` 成功完成 `19/19` packet 翻译，并正式导出 chapter bilingual HTML、review package 和单文件 `merged-document.html`
 - 已完成真实样本 family heuristic hardening：同一样本 forced-parse 现只保留正文 + 真 `References`，不再误切假 `Index/References`
 - 已固化首个本机 smoke corpus manifest：`artifacts/pdf-smoke/corpus.local.json`
 - 已把本机 smoke corpus 扩到 2 个真实样本：1 个高风险文本论文 + 1 个扫描型中文书
@@ -96,9 +112,10 @@ Last Updated: 2026-03-15
 - footnote relocater v3 当前只覆盖“页底脚注区 + 续页页顶脚注区”的 markerless body 段落；交错双脚注、页中插入式注释和更复杂符号体系仍未覆盖
 - document metadata / API 里的 page-level evidence 仍只保留轻量 page summary；更细的 block-level debug 现在只在 review package 中提供，不回写主 metadata
 - nested appendix subheading 当前已进入 page/review evidence，但还只是观测信号，不是公共 section-tree contract
-- `NIPS-2017-attention-is-all-you-need-Paper.pdf` 已接入 medium-risk academic-paper lane，但当前仍主要恢复到 `body + references`；section-level heading tree 和更稳的双栏阅读顺序仍需继续 harden
-- 当前真实样本已消掉首批 `content_signature` 假阳性，但 academic-paper lane 仍需要第二篇真实英文论文确认不是只对单篇样本收敛
-- 当前 smoke corpus 已有 5 个真实样本，已覆盖 low-risk 长书放行、medium-risk 放行、high-risk 文本拒绝、OCR 拒绝四条路径
+- `NIPS-2017-attention-is-all-you-need-Paper.pdf` 已接入 medium-risk academic-paper lane，并已可正式导出；`3 Model Architecture / 3.1 Encoder and Decoder Stacks / 3.4 Embeddings and Softmax / 6 Results / 7 Conclusion` 已进入最终 HTML，当前 real review open issue 已为 `0`，但 section-level tree 仍不完整，真正的双栏阅读顺序恢复仍需继续 harden
+- `Attention Is All You Need` 的首章标题现在已从 `Attention Is All Y ou Need` 收敛到 `Attention is All you Need`，并且 `3.2.1 Scaled Dot-Pr` 也已收敛为 `3.2.1 Scaled Dot-Product Attention`；不过更复杂的 table/figure/equation-heavy 双栏页阅读顺序仍需继续 harden
+- 当前 smoke corpus 已有 6 个真实样本，已覆盖 low-risk 长书放行、low-risk single-column research paper、medium-risk 放行、high-risk 文本拒绝、OCR 拒绝五条路径
+- 第二篇真实英文论文 `Forming Effective Human-AI Teams...` 已验证通过：当前既可稳定恢复为“真实标题 + References”，也已在 live run 中成功导出 merged HTML
 - `AI Agents in Action` 现在已从“单一 Chapter 1”提升到 `Front Matter + 11 个真实章节 + Appendix A + Appendix B + Index + Back Matter`
 - `AI Agents in Action` 中 page `123` 现已保持 `body`，page `333-339` 已恢复成真实 `Index`，page `340-346` 已正式标成 `Back Matter`
 - `Back Matter` 目前只在已验证的 `index -> tail body` 路径上升级成正式 family + source-only；更广的 backmatter cue 还未推广
@@ -108,27 +125,28 @@ Last Updated: 2026-03-15
 - `LLMs in Production` 现在会被判为 `layout_risk=low` 并成功 bootstrap，结构已恢复到 `Front Matter + 12 body chapters + Appendix A/B/C + Index + Back Matter`
 - `LLMs in Production` 的 title cleanup 已明显改善，但仍残留 `Adeep / Dataislikegarbage / canyougo` 这类更深层的 extractor 断词噪声
 - 常用目录候选扫描已正式工具化；截至当前，本机可直接进入 pass-path 的真实长书仍只有 `AI Agents in Action` 和 `LLMs in Production`
-- 扫描 PDF、OCR、academic paper 的 robust 双栏阅读顺序、复杂图表/公式保护仍未开始
+- 扫描 PDF、OCR、academic paper 的 table/equation-aware 双栏阅读顺序、复杂图表/公式保护仍未开始
 
 ## Open Blockers
 
 - appendix / index / references 的复杂页面仍缺更强的模式识别，当前仍以保守 heuristics 为主
 - footnote relocater 已有 v3 第一刀，但复杂交错脚注、多锚点同页混排和非数字符号体系仍缺更强归位
 - 当前对外 contract 仍停留在 `p1_text_pdf_bootstrap`，尚未升级为更明确的 robust recovery 阶段
-- `academic_paper` lane 现已可 bootstrap，但标题断词、section heading recovery 和双栏真实阅读顺序仍只到第一刀
+- `academic_paper` lane 现已可正式导出，且已具备 section heading recovery、heading cleanup 和前三刀 reading-order hardening；但双栏真实阅读顺序仍未达到 robust support，table/figure/equation-heavy 页面仍会残留更深层排序问题
 - `AI Agents in Action` 的 `Appendix A / Appendix B` 已能拆开，但 appendix 内更细 section/title recovery 仍未完成
 - `Back Matter` 现在已覆盖 `index -> tail body` 与“带显式 cue 的 `appendix -> tail body`”两条路径，但尚未推广到更弱、更模糊的尾部资料页信号
 - medium-risk 真实样本已能切出首批 appendix 子章节与 continuation-page 顶层 subheading，但更细的 appendix 内 section tree 仍未完成，当前仍不覆盖 `K.2.5` 这类嵌套小节
 - 顶层 appendix continuation split 现在依赖较 dense 的 continuation 页；短步骤页或 block 很少的 appendix 小节仍会保守留在原 appendix 章节中
 - 目前长书 text-PDF 的主结构已在 2 个真实低风险样本上稳定，但仍需要第三本或更异质的真实长书，确认 chapter recovery / tail-section policy 不是双样本过拟合
+- 真实英文论文样本现已扩到 2 篇，但 single-column research paper 与 medium-risk academic paper 仍是两条不同恢复路径，后续还需要第三篇异质论文验证更深层泛化
 
 ## Next
 
-1. 决定 nested appendix evidence 何时升级成正式 section tree，而不是一直停留在观测态
+1. 扩第三篇真实英文论文或更异质样本，验证 paper-title / broken-references 恢复不是双样本过拟合
 2. 继续 harden chapter-intro title cleanup，专门处理 `Adeep / Dataislikegarbage / canyougo` 这类更深层断词噪声
-3. 评估 `Back Matter` 是否要接受更弱的 cue，还是继续停留在 explicit-cue policy
-4. 继续 harden footnote relocater，专门处理交错脚注与更复杂符号体系
-5. 若新增本地样本，再继续扩真实长书 smoke，确认当前 contract 不是双样本过拟合
+3. 决定 nested appendix evidence 何时升级成正式 section tree，而不是一直停留在观测态
+4. 评估 `Back Matter` 是否要接受更弱的 cue，还是继续停留在 explicit-cue policy
+5. academic paper 的 table/figure/equation-aware 双栏阅读顺序继续 harden，目标从“clean heading 残差”推进到更稳的 figure/equation around-order
 
 ## Verification Baseline
 

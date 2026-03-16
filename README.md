@@ -202,6 +202,10 @@ docker compose run --rm app alembic upgrade head
 docker compose up -d app
 ```
 
+The compose app container is pinned to the local PostgreSQL service via
+`BOOK_AGENT_DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/book_agent`,
+so migrations and API smoke tests run against the same database backend by default.
+
 Check health:
 
 ```bash

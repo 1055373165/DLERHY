@@ -207,7 +207,11 @@
           "equals": "Appendix K.4 Specialized Standalone Templates"
         },
         {
-          "path": "parse_summary.page_families.52",
+          "path": "parse_summary.page_families.53",
+          "equals": "references"
+        },
+        {
+          "path": "parse_summary.page_families.54",
           "equals": "references"
         },
         {
@@ -326,6 +330,59 @@
         {
           "path": "parse_summary.page_families.456",
           "equals": "backmatter"
+        }
+      ]
+    },
+    {
+      "name": "forming-effective-human-ai-teams",
+      "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "optional": true,
+      "skip_reason": "local_single_column_research_paper_sample_missing",
+      "include_parse_summary": true,
+      "expectations": [
+        {
+          "path": "profile.pdf_kind",
+          "equals": "text_pdf"
+        },
+        {
+          "path": "profile.layout_risk",
+          "equals": "low"
+        },
+        {
+          "path": "profile.extractor_kind",
+          "equals": "basic"
+        },
+        {
+          "path": "profile.trailing_reference_page_count",
+          "equals": 1
+        },
+        {
+          "path": "bootstrap.status",
+          "equals": "succeeded"
+        },
+        {
+          "path": "bootstrap.chapter_count",
+          "equals": 2
+        },
+        {
+          "path": "parse_summary.chapter_count",
+          "equals": 2
+        },
+        {
+          "path": "parse_summary.chapter_titles.0",
+          "equals": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts"
+        },
+        {
+          "path": "parse_summary.chapter_titles.1",
+          "equals": "References"
+        },
+        {
+          "path": "parse_summary.chapter_section_families.1",
+          "equals": "references"
+        },
+        {
+          "path": "parse_summary.page_families.7",
+          "equals": "references"
         }
       ]
     }

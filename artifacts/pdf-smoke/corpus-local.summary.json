@@ -1,6 +1,6 @@
 {
-  "case_count": 5,
-  "passed_case_count": 5,
+  "case_count": 6,
+  "passed_case_count": 6,
   "skipped_case_count": 0,
   "failed_case_count": 0,
   "cases": [
@@ -43,6 +43,14 @@
       "failure_count": 0,
       "failures": [],
       "report_path": "artifacts/pdf-smoke/corpus-local/llms-in-production.json"
+    },
+    {
+      "name": "forming-effective-human-ai-teams",
+      "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "status": "passed",
+      "failure_count": 0,
+      "failures": [],
+      "report_path": "artifacts/pdf-smoke/corpus-local/forming-effective-human-ai-teams.json"
     }
   ]
 }

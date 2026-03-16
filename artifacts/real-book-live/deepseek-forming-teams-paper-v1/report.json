@@ -1,0 +1,905 @@
+{
+  "started_at": "2026-03-16T05:15:29.131750+00:00",
+  "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+  "database_url": "sqlite+pysqlite:////Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v1/full.sqlite",
+  "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v1/exports",
+  "translation_backend": "openai_compatible",
+  "translation_model": "deepseek-chat",
+  "translate_batch_size": 20,
+  "parallel_workers": 4,
+  "bootstrap": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+    "author": null,
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 7,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "low",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 6007.429,
+      "average_span_count": 1274.303,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 0,
+      "suspicious_page_numbers": [],
+      "recovery_lane": null,
+      "trailing_reference_page_count": 1,
+      "academic_paper_candidate": false
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 7,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_document_title_recovered"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 9,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 7,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 4,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 8,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 2,
+          "page_family": "references",
+          "page_family_source": "inline_heading",
+          "page_family_heading": "References",
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_references_heading_recovered",
+            "page_family_references",
+            "page_family_source_inline_heading"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 15,
+    "sentence_count": 247,
+    "packet_count": 15,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "ordinal": 1,
+        "title_src": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "sentence_count": 167,
+        "packet_count": 13,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "page_family_references",
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "sentence_count": 80,
+        "packet_count": 2,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "document_summary_after_bootstrap": {
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "source_type": "pdf_text",
+    "status": "active",
+    "title": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+    "author": null,
+    "pdf_profile": {
+      "pdf_kind": "text_pdf",
+      "page_count": 7,
+      "has_extractable_text": true,
+      "outline_present": false,
+      "layout_risk": "low",
+      "ocr_required": false,
+      "extractor_kind": "basic",
+      "average_text_density": 6007.429,
+      "average_span_count": 1274.303,
+      "multi_column_page_count": 0,
+      "fragment_page_count": 0,
+      "suspicious_page_numbers": [],
+      "recovery_lane": null,
+      "trailing_reference_page_count": 1,
+      "academic_paper_candidate": false
+    },
+    "pdf_page_evidence": {
+      "schema_version": 1,
+      "extractor_kind": "basic",
+      "page_count": 7,
+      "pdf_pages": [
+        {
+          "page_number": 1,
+          "raw_block_count": 3,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_document_title_recovered"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 2,
+          "raw_block_count": 1,
+          "recovered_block_count": 1,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 3,
+          "raw_block_count": 9,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 4,
+          "raw_block_count": 7,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 2
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 5,
+          "raw_block_count": 4,
+          "recovered_block_count": 2,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "caption": 1
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 6,
+          "raw_block_count": 8,
+          "recovered_block_count": 3,
+          "page_family": "body",
+          "page_family_source": "body",
+          "page_family_heading": null,
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 3
+          },
+          "recovery_flags": [],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        },
+        {
+          "page_number": 7,
+          "raw_block_count": 1,
+          "recovered_block_count": 2,
+          "page_family": "references",
+          "page_family_source": "inline_heading",
+          "page_family_heading": "References",
+          "content_family": null,
+          "backmatter_cue": null,
+          "backmatter_cue_source": null,
+          "is_toc_page": false,
+          "has_strong_heading": false,
+          "layout_signals": [],
+          "layout_suspect": false,
+          "role_counts": {
+            "body": 1,
+            "heading": 1
+          },
+          "recovery_flags": [
+            "embedded_references_heading_recovered",
+            "page_family_references",
+            "page_family_source_inline_heading"
+          ],
+          "toc_entries": [],
+          "appendix_nested_subheadings": [],
+          "matched_footnote_count": 0,
+          "orphan_footnote_count": 0,
+          "relocated_footnote_count": 0,
+          "max_footnote_segment_count": 0
+        }
+      ],
+      "pdf_outline_entries": []
+    },
+    "chapter_count": 2,
+    "block_count": 15,
+    "sentence_count": 247,
+    "packet_count": 15,
+    "open_issue_count": 0,
+    "merged_export_ready": false,
+    "latest_merged_export_at": null,
+    "chapter_bilingual_export_count": 0,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "chapters": [
+      {
+        "chapter_id": "8cc49e94-dea6-5aa6-af19-5dd212b6f89f",
+        "ordinal": 1,
+        "title_src": "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "embedded_document_title_recovered"
+        ],
+        "sentence_count": 167,
+        "packet_count": 13,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      },
+      {
+        "chapter_id": "57def113-7ad5-541b-a4b9-ef07c18991b3",
+        "ordinal": 2,
+        "title_src": "References",
+        "status": "packet_built",
+        "risk_level": "low",
+        "parse_confidence": 0.96,
+        "structure_flags": [
+          "page_family_references",
+          "embedded_references_heading_recovered",
+          "page_family_references",
+          "page_family_source_inline_heading"
+        ],
+        "sentence_count": 80,
+        "packet_count": 2,
+        "open_issue_count": 0,
+        "bilingual_export_ready": false,
+        "latest_bilingual_export_at": null,
+        "quality_summary": null
+      }
+    ]
+  },
+  "run_seed": {
+    "run_id": "7b6ce846-0b05-4e81-a104-2b03fb16d4ef",
+    "seeded_work_item_count": 15,
+    "pending_packet_count_initial": 15
+  },
+  "run": {
+    "run_id": "7b6ce846-0b05-4e81-a104-2b03fb16d4ef",
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "run_type": "translate_full",
+    "status": "failed",
+    "backend": "openai_compatible",
+    "model_name": "deepseek-chat",
+    "requested_by": "codex.autodrive",
+    "priority": 100,
+    "resume_from_run_id": null,
+    "stop_reason": "run.terminal_failed_items_present",
+    "status_detail_json": {
+      "source_path": "/Users/smy/Downloads/Forming Effective Human-AI Teams- Building Machine Learning Models that Complement the Capabilities of Multiple Experts.pdf",
+      "report_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v1/report.json",
+      "export_root": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v1/exports",
+      "usage_summary": {
+        "token_in": 69989,
+        "token_out": 21549,
+        "cost_usd": 0.02705082,
+        "latency_ms": 854115
+      },
+      "control_counters": {
+        "seeded_work_item_count": 15,
+        "completed_work_item_count": 14,
+        "retryable_failure_count": 2,
+        "terminal_failure_count": 1,
+        "expired_lease_reclaim_count": 0,
+        "consecutive_failures": 1
+      },
+      "last_control": {
+        "action": "run.failed",
+        "actor_id": "system.run-control",
+        "note": "run.terminal_failed_items_present",
+        "detail_json": {
+          "terminal_failed_work_item_count": 1
+        },
+        "at": "2026-03-16T05:22:41.349034+00:00"
+      },
+      "last_progress": {
+        "packet_id": "a743eaee-4feb-58a5-bc4c-75de6b407f72",
+        "translation_run_id": "bff5d364-267a-5e10-8056-30d1cec6f3be",
+        "completed_at": "2026-03-16T05:20:49.636752+00:00"
+      },
+      "last_failure": {
+        "error_class": "RuntimeError",
+        "retryable": false,
+        "failed_at": "2026-03-16T05:22:41.333869+00:00"
+      }
+    },
+    "created_at": "2026-03-15T21:15:30.435400+00:00",
+    "updated_at": "2026-03-15T21:22:41.349138+00:00",
+    "started_at": "2026-03-15T21:15:30.439312+00:00",
+    "finished_at": "2026-03-15T21:22:41.349034+00:00",
+    "budget": {
+      "max_wall_clock_seconds": 3600,
+      "max_total_cost_usd": 0.25,
+      "max_total_token_in": null,
+      "max_total_token_out": null,
+      "max_retry_count_per_work_item": 2,
+      "max_consecutive_failures": 20,
+      "max_parallel_workers": 4,
+      "max_parallel_requests_per_provider": 4,
+      "max_auto_followup_attempts": 2
+    },
+    "work_items": {
+      "total_count": 15,
+      "status_counts": {
+        "pending": 0,
+        "leased": 0,
+        "running": 0,
+        "succeeded": 14,
+        "retryable_failed": 0,
+        "terminal_failed": 1,
+        "cancelled": 0
+      },
+      "stage_counts": {
+        "bootstrap": 0,
+        "translate": 15,
+        "review": 0,
+        "repair": 0,
+        "export": 0
+      }
+    },
+    "worker_leases": {
+      "total_count": 17,
+      "status_counts": {
+        "active": 0,
+        "released": 17,
+        "expired": 0
+      },
+      "latest_heartbeat_at": "2026-03-15T21:22:41.333869+00:00"
+    },
+    "events": {
+      "event_count": 55,
+      "latest_event_at": "2026-03-15T21:22:41.349034+00:00"
+    }
+  },
+  "translate": {
+    "run_id": "7b6ce846-0b05-4e81-a104-2b03fb16d4ef",
+    "document_id": "b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b",
+    "run_status": "failed",
+    "stop_reason": "run.terminal_failed_items_present",
+    "total_packet_count": 15,
+    "translated_packet_count": 14,
+    "pending_packet_count": 0,
+    "retryable_failed_packet_count": 0,
+    "terminal_failed_packet_count": 1,
+    "inflight_packet_count": 0,
+    "remaining_packet_count": 0,
+    "usage_summary": {
+      "token_in": 69989,
+      "token_out": 21549,
+      "cost_usd": 0.02705082,
+      "latency_ms": 854115
+    },
+    "control_counters": {
+      "seeded_work_item_count": 15,
+      "completed_work_item_count": 14,
+      "retryable_failure_count": 2,
+      "terminal_failure_count": 1,
+      "expired_lease_reclaim_count": 0,
+      "consecutive_failures": 1
+    },
+    "last_progress": {
+      "packet_id": "a743eaee-4feb-58a5-bc4c-75de6b407f72",
+      "translation_run_id": "bff5d364-267a-5e10-8056-30d1cec6f3be",
+      "completed_at": "2026-03-16T05:20:49.636752+00:00"
+    },
+    "last_failure": {
+      "error_class": "RuntimeError",
+      "retryable": false,
+      "failed_at": "2026-03-16T05:22:41.333869+00:00"
+    },
+    "elapsed_seconds": 29230.917,
+    "avg_packet_seconds": 2087.923,
+    "estimated_remaining_seconds": 0.0,
+    "estimated_finish_at": "2026-03-16T05:22:41.356683+00:00"
+  },
+  "translate_recent_results": [
+    {
+      "work_item_id": "0ea40cbe-d356-49b2-b83c-65a1042d846b",
+      "packet_id": "3021b453-e12b-5b11-a7b1-99b5d258747f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "71173b90-700d-571c-816a-1fafc138203f",
+      "review_required_sentence_ids": [],
+      "token_in": 6786,
+      "token_out": 2457,
+      "cost_usd": 0.00288364,
+      "latency_ms": 96725
+    },
+    {
+      "work_item_id": "0ef6f9f8-2c89-4d7f-ba67-fb1f57114b4a",
+      "packet_id": "f612c03f-6215-5348-920a-e0879b1e4964",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "38be7610-9bd5-5433-8e2a-746a1a0e0140",
+      "review_required_sentence_ids": [],
+      "token_in": 3362,
+      "token_out": 2494,
+      "cost_usd": 0.00194046,
+      "latency_ms": 97951
+    },
+    {
+      "work_item_id": "29de00bc-dee9-41da-8ddf-a5f2cf8e09b2",
+      "packet_id": "1aa34753-280b-5934-977f-057b5730e512",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "82391c76-e7cc-5a21-ab2f-7905b428891a",
+      "review_required_sentence_ids": [],
+      "token_in": 5004,
+      "token_out": 2670,
+      "cost_usd": 0.00247414,
+      "latency_ms": 104756
+    },
+    {
+      "work_item_id": "30b7f06c-639a-4565-9642-44435c90b909",
+      "packet_id": "3f3680fd-fe3e-51ec-9d39-5bd73ecdcd1c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "3df901a4-992e-5e65-b694-a3686e64c285",
+      "review_required_sentence_ids": [],
+      "token_in": 3557,
+      "token_out": 175,
+      "cost_usd": 0.00097269,
+      "latency_ms": 8209
+    },
+    {
+      "work_item_id": "397353c4-308c-4cc6-b778-ea2b6b40f862",
+      "packet_id": "e3e16004-0f6e-512a-ba98-ab15ffac6eef",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "75cafce2-994f-5e89-a90e-d22c81fadff1",
+      "review_required_sentence_ids": [],
+      "token_in": 4312,
+      "token_out": 170,
+      "cost_usd": 0.00118199,
+      "latency_ms": 7810
+    },
+    {
+      "work_item_id": "50d220aa-9cc4-4b24-bbc5-bc9196a86da1",
+      "packet_id": "bce38578-2528-56f4-b396-484b91e023c3",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "858941fd-9e85-5bf1-b10a-795c8dca40d8",
+      "review_required_sentence_ids": [],
+      "token_in": 4266,
+      "token_out": 192,
+      "cost_usd": 0.00117835,
+      "latency_ms": 9153
+    },
+    {
+      "work_item_id": "911ce242-80c0-4aca-b586-05172acbe42d",
+      "packet_id": "2094b83f-5a0a-5e37-8492-76dbe836f80f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "5dd1d55f-a7a0-5f36-9bcb-fab00ba7863f",
+      "review_required_sentence_ids": [],
+      "token_in": 3663,
+      "token_out": 203,
+      "cost_usd": 0.00101413,
+      "latency_ms": 9828
+    },
+    {
+      "work_item_id": "93533759-2dc7-4663-8853-cbe0ba474993",
+      "packet_id": "83dbd546-843a-5d96-8e56-74ad0ea0516c",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "c8c383fd-2d42-5f11-9c24-953ecd77423c",
+      "review_required_sentence_ids": [],
+      "token_in": 2637,
+      "token_out": 156,
+      "cost_usd": 0.0007555,
+      "latency_ms": 7159
+    },
+    {
+      "work_item_id": "a9211e01-fcb6-4dd0-9cd6-28d30a2958cd",
+      "packet_id": "3ec47bd2-3f9b-5d63-93a0-d31fe261922f",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "02cb034c-fbbb-58e1-905d-97d4f336c93b",
+      "review_required_sentence_ids": [],
+      "token_in": 6634,
+      "token_out": 169,
+      "cost_usd": 0.00183173,
+      "latency_ms": 7703
+    },
+    {
+      "work_item_id": "296043be-f786-4033-bf34-e016413f122c",
+      "packet_id": "a743eaee-4feb-58a5-bc4c-75de6b407f72",
+      "status": "retryable_failed",
+      "skipped": false,
+      "translation_run_id": null,
+      "review_required_sentence_ids": [],
+      "token_in": 0,
+      "token_out": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0,
+      "error_class": "RuntimeError",
+      "error_message": "Provider response did not include a structured JSON output payload."
+    },
+    {
+      "work_item_id": "4f1db6ea-cc55-4801-b0f9-eab8e3942dfa",
+      "packet_id": "f2b4599c-29f4-5607-87c6-c3db07116c9d",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "cf28ebc9-5c0f-5975-a6c5-73a67efd913f",
+      "review_required_sentence_ids": [],
+      "token_in": 3225,
+      "token_out": 1856,
+      "cost_usd": 0.00158575,
+      "latency_ms": 72823
+    },
+    {
+      "work_item_id": "ab802d19-ff3a-42a1-9bee-7e6b9e9b0c46",
+      "packet_id": "3e512908-ab8d-50f9-9e09-5275d00333b0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "159b3722-3635-5874-b735-82475e25f9c3",
+      "review_required_sentence_ids": [],
+      "token_in": 7795,
+      "token_out": 1251,
+      "cost_usd": 0.00261125,
+      "latency_ms": 51526
+    },
+    {
+      "work_item_id": "95800117-3d9b-48bb-ba15-fcdb74e4a257",
+      "packet_id": "0a8f37d8-5c73-5862-ba2e-765ae5dae6fa",
+      "status": "retryable_failed",
+      "skipped": false,
+      "translation_run_id": null,
+      "review_required_sentence_ids": [],
+      "token_in": 0,
+      "token_out": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0,
+      "error_class": "RuntimeError",
+      "error_message": "Provider response did not include a structured JSON output payload."
+    },
+    {
+      "work_item_id": "c20f9d61-a7fc-477a-ae2c-d7c3f7916b3c",
+      "packet_id": "87e4e7f9-ca80-5cf5-b7dc-ba795906b2c0",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "7cd4b9d2-04cc-5f6f-b639-6df105f70445",
+      "review_required_sentence_ids": [],
+      "token_in": 6993,
+      "token_out": 2669,
+      "cost_usd": 0.00256292,
+      "latency_ms": 103858
+    },
+    {
+      "work_item_id": "aec0058d-9f1e-405e-869b-3cd5282acc57",
+      "packet_id": "d78a2406-cf90-5909-a95f-75f9b519a222",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "d56f7d4f-7592-534b-9bed-02281b5b421d",
+      "review_required_sentence_ids": [],
+      "token_in": 5546,
+      "token_out": 2996,
+      "cost_usd": 0.0026983,
+      "latency_ms": 117010
+    },
+    {
+      "work_item_id": "296043be-f786-4033-bf34-e016413f122c",
+      "packet_id": "a743eaee-4feb-58a5-bc4c-75de6b407f72",
+      "status": "succeeded",
+      "skipped": false,
+      "translation_run_id": "bff5d364-267a-5e10-8056-30d1cec6f3be",
+      "review_required_sentence_ids": [],
+      "token_in": 6209,
+      "token_out": 4091,
+      "cost_usd": 0.00335997,
+      "latency_ms": 159604
+    },
+    {
+      "work_item_id": "95800117-3d9b-48bb-ba15-fcdb74e4a257",
+      "packet_id": "0a8f37d8-5c73-5862-ba2e-765ae5dae6fa",
+      "status": "terminal_failed",
+      "skipped": false,
+      "translation_run_id": null,
+      "review_required_sentence_ids": [],
+      "token_in": 0,
+      "token_out": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0,
+      "error_class": "RuntimeError",
+      "error_message": "Provider response did not include a structured JSON output payload."
+    }
+  ],
+  "run_housekeeping": {
+    "expired_lease_count": 0,
+    "reclaimed_work_item_ids": [],
+    "budget_exceeded": false,
+    "budget_stop_reason": null
+  },
+  "finished_at": "2026-03-16T05:22:41.357241+00:00",
+  "duration_seconds": 432.225
+}

@@ -251,12 +251,20 @@ P0 hardened on real EPUBs; ready to enter P1 text-PDF support
   - 新增封面区、目录侧栏、章节导航和 `Back to top`
   - typography 从“工程可读”提升为“长文阅读优先”，并增加移动端 / print 样式
   - 工件卡片（code/table/image/reference/equation）与正文有明确视觉层级，不再像 QA 表格视图
+- 已新增 [translation-consistency-and-cache-plan.md](/Users/smy/project/book-agent/docs/translation-consistency-and-cache-plan.md)，系统化定义术语一致性、局部翻译记忆和 DeepSeek 缓存命中优化路线
+- 翻译 prompt 已重排为“稳定前缀优先”的结构，不再把 `Packet ID` 放在前部
+- `prev_blocks / next_blocks` 现在会真正进入翻译 prompt
+- translation repository 现在会把同章局部前文的已接受译文注入 `Previous Accepted Translations`，用于降低概念漂移
+- packet term/entity 匹配现在会看 `prev/current/next` 合并上下文，而不只看当前 block
+- run-control API 回归已放宽为兼容后台 executor 补充的终态事件，避免附加 `run.failed` 事件造成假阴性
+- `docker compose` 下的 app 容器现在默认固定到 PostgreSQL，避免容器内迁移和集成脚本静默回落到 SQLite
 
 ## Current Source of Truth
 
 核心设计文档：
 
 - [translation-agent-system-design.md](/Users/smy/project/book-agent/docs/translation-agent-system-design.md)
+- [translation-consistency-and-cache-plan.md](/Users/smy/project/book-agent/docs/translation-consistency-and-cache-plan.md)
 - [pdf-support-implementation-plan.md](/Users/smy/project/book-agent/docs/pdf-support-implementation-plan.md)
 - [long-task-run-control.md](/Users/smy/project/book-agent/docs/long-task-run-control.md)
 - [error-taxonomy.md](/Users/smy/project/book-agent/docs/error-taxonomy.md)

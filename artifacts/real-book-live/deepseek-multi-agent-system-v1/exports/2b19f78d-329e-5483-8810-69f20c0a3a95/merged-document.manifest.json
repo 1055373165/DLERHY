@@ -1,0 +1,236 @@
+{
+  "document_id": "2b19f78d-329e-5483-8810-69f20c0a3a95",
+  "title": "Build a Multi-Agent System (from Scratch)",
+  "author": null,
+  "export_type": "merged_html",
+  "html_path": "/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-multi-agent-system-v1/exports/2b19f78d-329e-5483-8810-69f20c0a3a95/merged-document.html",
+  "chapter_count": 6,
+  "translation_usage_summary": {
+    "run_count": 471,
+    "succeeded_run_count": 471,
+    "total_token_in": 433060,
+    "total_token_out": 132666,
+    "total_cost_usd": 0.16919,
+    "total_latency_ms": 6315234,
+    "avg_latency_ms": 13408.14,
+    "latest_run_at": "2026-03-15T16:42:41.144089"
+  },
+  "translation_usage_breakdown": [
+    {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 471,
+      "succeeded_run_count": 471,
+      "total_token_in": 433060,
+      "total_token_out": 132666,
+      "total_cost_usd": 0.16919,
+      "total_latency_ms": 6315234,
+      "avg_latency_ms": 13408.14,
+      "latest_run_at": "2026-03-15T16:42:41.144089"
+    }
+  ],
+  "translation_usage_timeline": [
+    {
+      "bucket_start": "2026-03-15",
+      "bucket_granularity": "day",
+      "run_count": 471,
+      "succeeded_run_count": 471,
+      "total_token_in": 433060,
+      "total_token_out": 132666,
+      "total_cost_usd": 0.16919,
+      "total_latency_ms": 6315234,
+      "avg_latency_ms": 13408.14
+    }
+  ],
+  "translation_usage_highlights": {
+    "top_cost_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 471,
+      "succeeded_run_count": 471,
+      "total_token_in": 433060,
+      "total_token_out": 132666,
+      "total_cost_usd": 0.16919,
+      "total_latency_ms": 6315234,
+      "avg_latency_ms": 13408.14,
+      "latest_run_at": "2026-03-15T16:42:41.144089"
+    },
+    "top_latency_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 471,
+      "succeeded_run_count": 471,
+      "total_token_in": 433060,
+      "total_token_out": 132666,
+      "total_cost_usd": 0.16919,
+      "total_latency_ms": 6315234,
+      "avg_latency_ms": 13408.14,
+      "latest_run_at": "2026-03-15T16:42:41.144089"
+    },
+    "top_volume_entry": {
+      "model_name": "deepseek-chat",
+      "worker_name": "LLMTranslationWorker",
+      "provider": "openai_compatible",
+      "run_count": 471,
+      "succeeded_run_count": 471,
+      "total_token_in": 433060,
+      "total_token_out": 132666,
+      "total_cost_usd": 0.16919,
+      "total_latency_ms": 6315234,
+      "avg_latency_ms": 13408.14,
+      "latest_run_at": "2026-03-15T16:42:41.144089"
+    }
+  },
+  "issue_status_summary": {
+    "issue_count": 0,
+    "open_issue_count": 0,
+    "resolved_issue_count": 0,
+    "blocking_issue_count": 0
+  },
+  "render_summary": {
+    "render_mode_counts": {
+      "zh_primary_with_optional_source": 415,
+      "image_anchor_with_translated_caption": 37,
+      "source_artifact_full_width": 68,
+      "reference_preserve_with_translated_label": 8
+    },
+    "expected_source_only_block_count": 113
+  },
+  "chapters": [
+    {
+      "chapter_id": "b3919b27-7d62-5a76-b08d-b3acaae7aba7",
+      "ordinal": 1,
+      "source_ordinal": 2,
+      "title_src": "从零开始构建多智能体系统",
+      "status": "exported",
+      "block_count": 6,
+      "sentence_count": 6,
+      "render_block_count": 6,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "b8599afb-6508-5345-bd25-7bf41fa9e853",
+      "ordinal": 2,
+      "source_ordinal": 3,
+      "title_src": "欢迎",
+      "status": "exported",
+      "block_count": 11,
+      "sentence_count": 20,
+      "render_block_count": 11,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "60738b9a-4195-58bb-951c-5a5ebc750cec",
+      "ordinal": 3,
+      "source_ordinal": 4,
+      "title_src": "1 什么是LLM智能体与多智能体系统？",
+      "status": "exported",
+      "block_count": 74,
+      "sentence_count": 151,
+      "render_block_count": 74,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "720e88bc-f5ab-504e-9c8f-4774c990fdd8",
+      "ordinal": 4,
+      "source_ordinal": 5,
+      "title_src": "2 使用工具",
+      "status": "exported",
+      "block_count": 193,
+      "sentence_count": 343,
+      "render_block_count": 193,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "9e818ed5-7030-5dee-8cf8-3aac3c4d4a54",
+      "ordinal": 5,
+      "source_ordinal": 6,
+      "title_src": "3 使用大语言模型",
+      "status": "exported",
+      "block_count": 200,
+      "sentence_count": 376,
+      "render_block_count": 200,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    },
+    {
+      "chapter_id": "236e93aa-c755-5ec8-af82-cc547798dd90",
+      "ordinal": 6,
+      "source_ordinal": 7,
+      "title_src": "附录C：实现PydanticFunctionTool",
+      "status": "exported",
+      "block_count": 44,
+      "sentence_count": 74,
+      "render_block_count": 44,
+      "quality_summary": {
+        "issue_count": 0,
+        "action_count": 0,
+        "resolved_issue_count": 0,
+        "coverage_ok": true,
+        "alignment_ok": true,
+        "term_ok": true,
+        "format_ok": true,
+        "blocking_issue_count": 0,
+        "low_confidence_count": 0,
+        "format_pollution_count": 0
+      }
+    }
+  ]
+}

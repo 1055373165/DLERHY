@@ -1,6 +1,6 @@
 # PDF Decisions
 
-Last Updated: 2026-03-15
+Last Updated: 2026-03-16
 
 ## Purpose
 
@@ -632,6 +632,112 @@ Consequences:
 
 ---
 
+## PDF-D-029 `academic_paper + medium-risk` 先允许 advisory formal export，而不是永久卡在 review gate
+
+Status: Accepted
+
+Decision:
+
+- `ReviewService` 不再因为“存在任意 issue”就把章节打成 `review_required`，而是只看 `blocking_issue_count`
+- 对 `academic_paper + layout_risk=medium`，当 `parse_confidence >= 0.8` 且 `suspicious_page_numbers <= 2` 时，`MISORDERING` 从 blocking 降为 advisory
+- 这类章节仍保留 open issue 和 `REPARSE_CHAPTER` action，但允许进入正式 `bilingual_html / merged_html` 导出
+
+Why:
+
+- 真实样本 `Attention Is All You Need` 已证明论文当前可以完整翻译并保持 coverage / alignment 正常，真正挡住正式导出的是“medium-risk 一律 blocking”的 review policy，而不是实际翻译失败
+- 如果继续把所有 `academic_paper` medium-risk 文档永久卡在 review gate，产品层就会停留在“能翻但不能交付”的半状态
+- 现有质量模型已经区分了 `blocking_issue_count` 与普通 issue，总状态机和导出 gate 应该利用这个差异，而不是把 advisory issue 也等价成阻断
+
+Consequences:
+
+- 前提是假设 short academic paper 当前最现实的交付目标是“带结构风险提示的正式导出”，而不是一步到位的完美 section tree
+- 适用边界当前只覆盖 `recovery_lane=academic_paper` 且 `layout_risk=medium` 的文档；普通 medium-risk 文本 PDF 仍继续 blocking
+- 维护代价是 review policy 从单一规则变成 lane-aware policy，但换来了更符合产品目标的 formal export 语义
+- 仍然存在失效边界：双栏阅读顺序和 section heading tree 尚未真正解决，所以 open advisory issue 仍必须保留，不能误报成“完全通过”
+- 验证方式是 synthetic review-policy tests 加真实样本 rerun：`Attention Is All You Need` 现在必须 `29/29` packet 成功、保留 2 个 non-blocking `MISORDERING` issue，并正式导出 `merged-document.html`
+
+---
+
+## PDF-D-031 academic paper 先做 inline section heading recovery，再继续压双栏结构风险
+
+Status: Accepted
+
+Decision:
+
+- 在 `academic_paper` lane 中，对正文 paragraph block 追加 inline heading split
+- 当前第一刀覆盖两类信号：
+  - 起始的 standalone heading，如 `Abstract ...`
+  - 句内边界后的 numbered heading，如 `1 Introduction ... 2 Model Architecture ...`
+- split 后直接落成现有 `heading` block，带 `academic_section_heading_recovered` flag 和 `pdf_academic_section_level`
+
+Why:
+
+- 真实样本 `Attention Is All You Need` 在 formal export policy 放行后，最大缺口已经不是“能不能导出”，而是正文结构几乎全压成大段 paragraph，operator 很难判断 section tree 是否还在
+- 如果 section heading 仍停留在正文字符串里，后续不论是 review policy、reading-order hardening，还是 merged HTML 可读性，都缺少结构锚点
+- 与其继续先调 gate，不如先把 parser 里最有辨识度的论文 section signal 变成正式 IR
+
+Consequences:
+
+- 前提是假设 short academic paper 常见的 section heading 仍会在 text stream 中留下 `Abstract` 或 `1 / 1.1 / 3.2.2` 一类 heading cue，即使 extractor 把它们和正文合并了
+- 适用边界当前只覆盖 `academic_paper` lane，不会影响普通 text PDF 或 long-book chapter recovery
+- 第一刀仍有明确失效边界：heading cleanup 还不够稳，真实样本里仍可能出现 `3 Model Ar`、`Embeddings and Softmax Similarly` 这类残缺 heading；这一步先解决“有无结构锚点”，不是“一次性清洗到完美标题”
+- 验证方式是 synthetic inline-section fixture 加真实样本 bootstrap：synthetic paper 必须恢复 `Abstract / 1 Introduction / 2 Model Architecture / 3 Training / 4 Results`，真实 `Attention Is All You Need` 当前应恢复出多个 heading block，而不再只有 chapter title
+
+---
+
+## PDF-D-032 academic paper heading cleanup v2 先在 parser 侧消掉最明显的残缺/误切 heading
+
+Status: Accepted
+
+Decision:
+
+- 在 inline heading split 之后，对 `academic_paper` heading 追加 cleanup：
+  - 允许 `Ar + chitectur + e` 一类碎词标题在 heading/body 边界上继续补全
+  - 将 `Encoder:` 这类被错误吞进 section heading 的 trailing colon cue 回退到正文
+  - 将 `Similarly` 这类明显属于正文句首的词从 heading 尾部剥离
+  - 对 standalone heading 使用更严格的 prose-lead 检测，避免表格前的 `Model` 被误切成 heading
+- 标题碎词归一化改成收敛式多轮 merge，但显式排除 `we / that / up` 等功能词，避免把正常短词粘连成 `weexplore`
+
+Why:
+
+- section recovery v1 解决了“有没有结构锚点”，但真实样本 `Attention Is All You Need` 立刻暴露出新的可读性问题：`3 Model Ar`、`3.4 Embeddings and Softmax Similarly`、表格前的 `Model` 让最终 HTML 虽然有 heading，却还不够可交付
+- 这些问题本质上是 parser cleanup，不应继续靠 review/advisory 策略兜底；如果不先在 parser 侧压掉，后续 reading-order hardening 会一直混着标题噪声一起调
+- 与其直接做更激进的 section tree，不如先把最明显的 broken heading 收敛成稳定 contract
+
+Consequences:
+
+- 前提是假设当前 academic-paper 真实失败模式主要集中在少量可枚举的 heading/body 边界噪声，而不是 section cue 完全缺失
+- 适用边界当前仍只覆盖 `academic_paper` lane；普通 text-PDF 的 chapter-intro/title cleanup 不直接复用这套更激进的 split cleanup
+- 维护代价是标题归一化规则更复杂，必须持续防回归正常 title cleanup；因此这次额外锁定了 intro-title 回归，确保 `Why large` / `Setting up` / `Now we` 不会被误拼
+- 验证方式是 synthetic noisy-inline-section fixture + 全量 `tests/test_pdf_support.py` + 真实论文 rerun：`Attention Is All You Need` 的最终 HTML 中必须出现 `3 Model Architecture`、`3.1 Encoder and Decoder Stacks`、`3.4 Embeddings and Softmax`、`6 Results`、`7 Conclusion`
+
+---
+
+## PDF-D-033 academic paper 的 `MISORDERING` 先改成章节本地证据驱动，再继续做更深的双栏顺序恢复
+
+Status: Accepted
+
+Decision:
+
+- `ReviewService` 对 `layout_risk=medium` 的 `MISORDERING` 不再只看文档级 profile，而是先切章到 chapter-local `pdf_page_evidence`
+- 如果某个章节本地没有 `layout_suspect` 页，则不再继承文档级 `MISORDERING`
+- 对 `academic_paper`，当本地可疑页都已被 recovered section headings 或 caption-only 页面锚定，且章节内已有足够 heading anchors 时，也不再继续生成 advisory `MISORDERING`
+
+Why:
+
+- `Attention Is All You Need` v2 已证明 parser 侧的 heading cleanup 和 section recovery 足以让结构更清晰，但 review 仍然沿用文档级 `layout_risk=medium` 粗暴下发 issue，导致 `References` 这种本地完全无可疑页的章节也被误报
+- 如果不先把 review 收成章节本地证据驱动，就算 parser 已经把真实问题压下去，operator 侧仍会持续看到噪声 issue，难以判断哪些章节真的需要介入
+- 这一步比直接宣称“双栏阅读顺序已解决”更诚实：先用本地证据消噪，再继续做真正的正文顺序恢复
+
+Consequences:
+
+- 前提是假设 `pdf_page_evidence.layout_suspect / recovery_flags / role_counts` 已足够表达“这一章剩余的顺序风险还有没有落在 operator 需要介入的范围内”
+- 适用边界当前主要覆盖 `layout_risk=medium`，尤其是 `academic_paper` lane；高风险复杂版式和扫描/OCR 仍保持更保守的阻断策略
+- 失效边界也明确：这不是完整的双栏 reading-order solver，如果出现新的论文样本在本地 page evidence 上仍无法给出足够锚点，`MISORDERING` 仍会保留
+- 验证方式是 review 单测 + 真实论文 re-review：`Attention Is All You Need` 的正文与 references 章节在 v2 re-review 后应降到 `0` open issues，同时保持 `merged_export_ready=true`
+
+---
+
 ## PDF-D-024 medium-risk 文档中的 headingless appendix 先恢复 section family，再谈 appendix 内细分
 
 Status: Accepted
@@ -830,3 +936,109 @@ Consequences:
 
 - 真实扫描件 smoke 现在可以直接校验“unsupported and high-risk”这条 contract
 - 后续如果 P2 引入 OCR 主路径，再重新拆分 `ocr_required` 和 `layout_risk` 的语义边界
+
+---
+
+## PDF-D-018 single-column research paper 先在 parser 恢复层拆标题和 References，不单独新建 lane
+
+Status: Accepted
+
+Decision:
+
+- 对 low-risk、single-column、basic-extractor 的 research paper，不新增新的 `recovery_lane`
+- 先在 parser 恢复层增量补两类 embedded heading：
+  - 首页大块中的 document title
+  - 末页合并块中的 broken `References` heading
+
+Why:
+
+- 新样本 `Forming Effective Human-AI Teams...` 暴露的问题不是布局风险，而是 basic extractor 把“标题 + 作者 + 摘要”和“References + 引文条目”压进了单个大块
+- 这类问题更像 block recovery / heading recovery 缺口，而不是 intake 分流错误；如果为它单独造 lane，会把本来可复用的低风险文本 PDF 逻辑人为分叉
+
+Consequences:
+
+- `Refer ences ...` 一类 broken heading 现在由 parser 恢复层直接拆成真实 `heading + body`，并把 page 7 提升成 `page_family=references`
+- 第一章 title 可直接继承从首页大块恢复出的真实论文标题，不再退化成 `Chapter 1`
+- 前提是假设文档仍是单栏/低风险文本 PDF；适用边界是“作者/机构/摘要被合并进首页大块”的 single-column paper/report，不覆盖双栏 academic lane
+- 验证方式是 synthetic regression + 真实样本 smoke：`Forming Effective Human-AI Teams...` 必须稳定落成“真实标题 + References”，且 `Attention Is All You Need` 的 medium-risk academic lane 不回退
+
+---
+
+## PDF-D-037 first-page title-like heading 先做轻量清洗，并优先与 document title 对齐
+
+Status: Accepted
+
+Decision:
+
+- 当第一页 `body` 页面上出现 title-like `heading` block 时，允许在 block recovery 阶段做轻量标题清洗
+- 当前清洗只做两件事：
+  - 用 paper-title 归一化规则修复 `Y ou / Lear ning` 这类 broken words
+  - 如果首章标题与 document title 重叠，则首章标题优先对齐到 document title
+
+Why:
+
+- `Attention Is All You Need` 已经证明，parser 主结构可以恢复，但第一页 heading 仍可能保留 `Attention Is All Y ou Need` 这类肉眼可见的标题噪声，直接影响最终 merged HTML 的可读性
+- 这类问题发生在结构恢复之后，最适合在 title-like heading 的小范围内修，而不是把更激进的正文清洗扩散到所有 heading/body block
+
+Consequences:
+
+- 前提是假设第一页 title-like heading 和 document title 是最稳定的标题信号之一；适用边界当前只覆盖 `page_number == 1`、`page_family=body` 的 heading block
+- 不会把这套清洗推广到普通章节 heading、appendix subheading 或正文 block，避免误拼正常短词
+- 验证方式是 synthetic regression + 真实样本 parse/smoke：`Attention Is All Y ou Need` 现在必须收敛成 `Attention is All you Need` 章节标题，并在 heading block 中保留 `Attention Is All You Need`
+
+---
+
+## PDF-D-038 short academic paper 的 positioned parsing 只在短篇复杂定位页启用，并配 academic column-major ordering
+
+Status: Accepted
+
+Decision:
+
+- `basic` extractor 新增 positioned text splitting，但只在 `page_count <= 24` 且单个 `BT ... ET` 段同时满足“左右列起点都明显存在 + 多行定位 + 足够多 text draw ops”时启用
+- positioned mode 只改变短篇 academic paper 的 extractor 粒度；长书和普通 fallback 页面继续保留旧的单块提取 contract
+- 在 recovery 阶段，`academic_paper` 且页面已命中清晰 multi-column signature 时，阅读顺序从默认 `y,x` 排序切到有限的 column-major 排序
+- 当 fallback extractor 让首页 title bbox 漂移时，title-page signal 与标题恢复允许扫描整页 block，并用 document-title overlap 把真实标题补回主链路
+
+Why:
+
+- `Attention Is All You Need` 暴露的核心问题已经不只是 review policy，而是 `basic` extractor 把整页 `BT ... ET` 压成单块，导致双栏页没有可用的列级结构信号
+- 直接把 positioned parsing 全局打开会立刻破坏长书主链路；真实回归已经证明，长书和 medium-risk 长文 PDF 仍需要维持旧的 fallback geometry contract
+- 所以更稳的做法是：先把新能力收在“短篇 academic paper + 明显复杂定位段”这条边界里，再配一层 column-major ordering，专门提升英文论文
+
+Consequences:
+
+- 前提是假设当前最需要增强的是短篇英文论文，而不是全面重写所有 basic extractor 的几何恢复；适用边界是 `page_count <= 24`、text PDF、并且页面上确实存在左右列定位信号
+- 这条策略故意不把 positioned parsing 扩散到长书，否则会把 `AI Agents in Action / LLMs in Production` 这类已稳定样本重新打成高风险
+- 失效边界也明确：table / figure / equation-heavy 双栏页仍可能留下 `Scaled Dot-Pr` 一类 heading 残差，后续需要第三刀继续收敛
+- 验证方式是 synthetic dual-column fixture + 全量 `tests/test_pdf_support.py` + 真实样本 smoke/corpus：
+  - synthetic positioned academic paper 必须稳定 `medium + academic_paper`，并按左列优先恢复正文顺序
+  - `Attention Is All You Need` 必须保持 `layout_risk=medium`、`recovery_lane=academic_paper`，且首章标题不再退化成 `Chapter 1`
+  - `AI Agents in Action / LLMs in Production / Building AI Coding Agents / Forming Effective Human-AI Teams` 的原有主链路 contract 不得回退
+
+---
+
+## PDF-D-039 citation-heavy paper 与 oversized body block 先在 packet 层拆，不把稳定性问题推给 provider
+
+Status: Accepted
+
+Decision:
+
+- 对 single-column research paper / report，一旦单个 translatable block 的句子数明显过大，就先在 packet builder 层做保守拆包
+- 当前策略固定为：
+  - `references / bibliography / works cited` 一类章节：按更小 packet 切分
+  - 其他超大正文 block：只在句子数超过更高阈值时保守拆包
+- 这条策略不改变 parser IR，也不改变 chapter/block/sentence 结构，只改变 translation packet 粒度
+
+Why:
+
+- `Forming Effective Human-AI Teams...` 的真实 live run 已经证明，single-column paper 即使结构恢复正确，也可能因为一个 references 大包或超大正文包把 provider 推到最不稳定的区域，最后以 “structured JSON output payload missing” 结束
+- 这类问题更像 packet sizing 失衡，而不是 parser 错了；继续把问题留给 provider retry 或 review gate，只会让一键流程在最后一包失败
+
+Consequences:
+
+- 前提是假设当前最稳的优化点是“减小单包复杂度”，而不是进一步放宽 provider schema 或弱化 review/export contract
+- 适用边界是 citation-heavy references chapter 与明显 oversized 的正文 block；普通正文与已有稳定长书路径不应因为这条策略被大量切碎
+- 代价是 packet 数会增加，live run 的调度粒度更细；但这比在最后一包 terminal fail 更可控
+- 验证方式是：
+  - bootstrap 回归：references 大块与超大正文 block 都必须按阈值拆成多个 packet
+  - 真实 live run：`Forming Effective Human-AI Teams...` 必须从 `v1/v2` 的 terminal-fail 收敛到 `v3` 的 `19/19` packet succeeded，并正式导出 `merged-document.html`

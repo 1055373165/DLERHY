@@ -11,6 +11,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
+from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
     DocumentRunStatus,
     DocumentRunType,
@@ -25,7 +26,6 @@ from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
-from book_agent.services.export import ExportGateError
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
@@ -58,6 +58,20 @@ def _is_retryable_exception(exc: Exception) -> bool:
     if any(marker in message for marker in retryable_markers):
         return True
     return isinstance(exc, RuntimeError)
+
+
+def ensure_document_run_executor(app) -> "DocumentRunExecutor":
+    executor = getattr(app.state, "document_run_executor", None)
+    if executor is not None:
+        return executor
+    executor = DocumentRunExecutor(
+        session_factory=app.state.session_factory,
+        export_root=app.state.export_root,
+        translation_worker=app.state.translation_worker,
+    )
+    executor.start()
+    app.state.document_run_executor = executor
+    return executor
 
 
 class DocumentRunExecutor:
@@ -138,10 +152,15 @@ class DocumentRunExecutor:
 
     def _supervisor_loop(self) -> None:
         while not self._stop_event.is_set():
-            self._reap_finished_threads()
-            runnable_run_ids = self._list_runnable_run_ids()
-            for run_id in runnable_run_ids:
-                self._ensure_run_thread(run_id)
+            try:
+                self._reap_finished_threads()
+                runnable_run_ids = self._list_runnable_run_ids()
+                for run_id in runnable_run_ids:
+                    self._ensure_run_thread(run_id)
+            except Exception:
+                if self._stop_event.is_set():
+                    return
+                time.sleep(min(self.poll_interval_seconds, 1.0))
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
 
@@ -318,13 +337,14 @@ class DocumentRunExecutor:
 
             export_items = self._list_export_items(session, run_id, export_type)
             if not export_items:
+                export_scope_id = stable_id("document-run-export", run_id, export_type.value)
                 execution.seed_work_items(
                     run_id=run_id,
                     stage=WorkItemStage.EXPORT,
-                    scope_type=WorkItemScopeType.DOCUMENT,
-                    scope_ids=[run.document_id],
+                    scope_type=WorkItemScopeType.EXPORT,
+                    scope_ids=[export_scope_id],
                     input_version_bundle_by_scope_id={
-                        run.document_id: {
+                        export_scope_id: {
                             "document_id": run.document_id,
                             "export_type": export_type.value,
                         }
@@ -407,18 +427,20 @@ class DocumentRunExecutor:
         export_type: ExportType,
     ) -> None:
         pipeline_key = export_type.value
+        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+        document_id = str(input_bundle.get("document_id") or "")
 
         def _run_export() -> dict[str, Any]:
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
                 result = workflow.export_document(
-                    claimed.scope_id,
+                    document_id,
                     export_type,
                     auto_execute_followup_on_gate=True,
                     max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
                 )
             return {
-                "document_id": claimed.scope_id,
+                "document_id": document_id,
                 "export_type": export_type.value,
                 "file_path": result.file_path,
                 "manifest_path": result.manifest_path,
@@ -615,6 +637,12 @@ class DocumentRunExecutor:
             for item in items
             if (item.input_version_bundle_json or {}).get("export_type") == export_type.value
         ]
+
+    def _load_work_item_input_bundle(self, work_item_id: str) -> dict[str, Any]:
+        with session_scope(self.session_factory) as session:
+            repository = RunControlRepository(session)
+            work_item = repository.get_work_item(work_item_id)
+            return dict(work_item.input_version_bundle_json or {})
 
     def _max_auto_followup_attempts(self, session, run_id: str) -> int:
         budget = RunControlRepository(session).get_budget_for_run(run_id)

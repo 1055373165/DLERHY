@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -314,23 +315,87 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             return None
         if not isinstance(content, dict):
             if isinstance(content, str):
-                try:
-                    parsed = json.loads(content)
-                except json.JSONDecodeError:
-                    return None
-                return parsed if isinstance(parsed, dict) else None
+                return self._extract_payload_from_text(content)
             return None
 
         json_payload = content.get("json")
         if isinstance(json_payload, dict):
-            return json_payload
+            return self._unwrap_payload_candidate(json_payload)
 
         text = content.get("text")
         if isinstance(text, str):
-            try:
-                parsed = json.loads(text)
-            except json.JSONDecodeError:
-                return None
-            return parsed if isinstance(parsed, dict) else None
+            return self._extract_payload_from_text(text)
+
+        return None
+
+    def _extract_payload_from_text(self, text: str) -> dict[str, Any] | None:
+        parsed = self._parse_json_object_candidate(text)
+        if parsed is not None:
+            return parsed
+
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence_match is not None:
+            parsed = self._parse_json_object_candidate(fence_match.group(1))
+            if parsed is not None:
+                return parsed
+
+        return self._extract_balanced_json_object(text)
+
+    def _parse_json_object_candidate(self, text: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        return self._unwrap_payload_candidate(parsed)
+
+    def _unwrap_payload_candidate(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        if self._looks_like_translation_payload(payload):
+            return payload
+
+        for key in ("translation", "output", "result", "data", "response"):
+            nested = payload.get(key)
+            if isinstance(nested, dict) and self._looks_like_translation_payload(nested):
+                return nested
+        return None
+
+    def _looks_like_translation_payload(self, payload: dict[str, Any]) -> bool:
+        required_keys = {"packet_id", "target_segments", "alignment_suggestions"}
+        return required_keys.issubset(payload.keys())
+
+    def _extract_balanced_json_object(self, text: str) -> dict[str, Any] | None:
+        in_string = False
+        escape = False
+        depth = 0
+        start_index: int | None = None
+
+        for index, char in enumerate(text):
+            if escape:
+                escape = False
+                continue
+            if char == "\\" and in_string:
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == "{":
+                if depth == 0:
+                    start_index = index
+                depth += 1
+                continue
+            if char != "}" or depth == 0:
+                continue
+            depth -= 1
+            if depth != 0 or start_index is None:
+                continue
+            candidate = text[start_index : index + 1]
+            parsed = self._parse_json_object_candidate(candidate)
+            if parsed is not None:
+                return parsed
+            start_index = None
 
         return None

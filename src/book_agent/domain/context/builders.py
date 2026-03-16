@@ -36,6 +36,10 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+MAX_REFERENCE_PACKET_SENTENCES = 24
+MAX_GENERAL_PACKET_SENTENCES = 32
+
+
 def _group_by(items: Iterable, key):
     grouped: dict[str, list] = {}
     for item in items:
@@ -252,21 +256,48 @@ class ContextPacketBuilder:
             for index, block in enumerate(translatable_blocks):
                 prev_blocks = translatable_blocks[max(0, index - 2):index]
                 next_blocks = translatable_blocks[index + 1:index + 3]
-                packet, packet_maps = self._build_packet(
-                    document=document,
-                    chapter=chapter,
-                    block=block,
-                    prev_blocks=prev_blocks,
-                    next_blocks=next_blocks,
-                    sentences_by_block=sentences_by_block,
-                    book_profile=book_profile,
-                    chapter_brief=chapter_brief,
-                    termbase_snapshot=termbase_snapshot,
-                    entity_snapshot=entity_snapshot,
-                    now=now,
-                )
-                packets.append(packet)
-                maps.extend(packet_maps)
+                current_sentences = sentences_by_block.get(block.id, [])
+                for chunk_index, sentence_window in enumerate(
+                    self._packet_sentence_windows(chapter, current_sentences),
+                    start=1,
+                ):
+                    packet_id = None
+                    current_block_text = None
+                    if len(sentence_window) != len(current_sentences):
+                        packet_id = stable_id(
+                            "packet",
+                            document.id,
+                            chapter.id,
+                            block.id,
+                            sentence_window[0].id,
+                            sentence_window[-1].id,
+                            chapter_brief.version,
+                            termbase_snapshot.version,
+                            entity_snapshot.version,
+                            chunk_index,
+                        )
+                        current_block_text = " ".join(
+                            sentence.normalized_text or sentence.source_text
+                            for sentence in sentence_window
+                        )
+                    packet, packet_maps = self._build_packet(
+                        document=document,
+                        chapter=chapter,
+                        block=block,
+                        prev_blocks=prev_blocks,
+                        next_blocks=next_blocks,
+                        sentences_by_block=sentences_by_block,
+                        book_profile=book_profile,
+                        chapter_brief=chapter_brief,
+                        termbase_snapshot=termbase_snapshot,
+                        entity_snapshot=entity_snapshot,
+                        now=now,
+                        packet_id=packet_id,
+                        current_sentences=sentence_window,
+                        current_block_text=current_block_text,
+                    )
+                    packets.append(packet)
+                    maps.extend(packet_maps)
 
             jobs.append(
                 JobRun(
@@ -338,8 +369,11 @@ class ContextPacketBuilder:
         packet_id: str | None = None,
         packet_type: PacketType = PacketType.TRANSLATE,
         created_at: datetime | None = None,
+        current_sentences: list[Sentence] | None = None,
+        current_block_text: str | None = None,
     ) -> tuple[TranslationPacket, list[PacketSentenceMap]]:
-        current_sentences = sentences_by_block.get(block.id, [])
+        current_sentences = current_sentences or sentences_by_block.get(block.id, [])
+        current_block_text = current_block_text or block.source_text
         packet_id = packet_id or stable_id(
             "packet",
             document.id,
@@ -349,6 +383,16 @@ class ContextPacketBuilder:
             termbase_snapshot.version,
             entity_snapshot.version,
         )
+        context_text = " ".join(
+            filter(
+                None,
+                [
+                    *(item.source_text for item in prev_blocks),
+                    current_block_text,
+                    *(item.source_text for item in next_blocks),
+                ],
+            )
+        )
         context_packet = ContextPacket(
             packet_id=packet_id,
             document_id=document.id,
@@ -357,11 +401,11 @@ class ContextPacketBuilder:
             book_profile_version=book_profile.version,
             chapter_brief_version=chapter_brief.version,
             heading_path=chapter_brief.content_json.get("heading_path", []),
-            current_blocks=[self._to_packet_block(block, current_sentences)],
+            current_blocks=[self._to_packet_block(block, current_sentences, text_override=current_block_text)],
             prev_blocks=[self._to_packet_block(item, sentences_by_block.get(item.id, [])) for item in prev_blocks],
             next_blocks=[self._to_packet_block(item, sentences_by_block.get(item.id, [])) for item in next_blocks],
-            relevant_terms=self._match_terms(block.source_text, termbase_snapshot),
-            relevant_entities=self._match_entities(block.source_text, entity_snapshot),
+            relevant_terms=self._match_terms(context_text, termbase_snapshot),
+            relevant_entities=self._match_entities(context_text, entity_snapshot),
             protected_spans=[],
             chapter_brief=chapter_brief.content_json.get("summary"),
             style_constraints=book_profile.style_policy_json,
@@ -411,32 +455,64 @@ class ContextPacketBuilder:
                         sentence_id=source_sentence.id,
                         role=PacketSentenceRole.NEXT_CONTEXT,
                     )
-                )
+        )
         return packet, packet_maps
 
-    def _to_packet_block(self, block: Block, sentences: list[Sentence]) -> PacketBlock:
+    def _to_packet_block(
+        self,
+        block: Block,
+        sentences: list[Sentence],
+        *,
+        text_override: str | None = None,
+    ) -> PacketBlock:
         return PacketBlock(
             block_id=block.id,
             block_type=block.block_type.value,
             sentence_ids=[sentence.id for sentence in sentences],
-            text=block.normalized_text or block.source_text,
+            text=text_override or block.normalized_text or block.source_text,
         )
+
+    def _packet_sentence_windows(self, chapter: Chapter, sentences: list[Sentence]) -> list[list[Sentence]]:
+        max_sentences = self._max_packet_sentences(chapter, sentences)
+        if max_sentences is None:
+            return [sentences]
+        return [
+            sentences[index : index + max_sentences]
+            for index in range(0, len(sentences), max_sentences)
+        ]
+
+    def _max_packet_sentences(self, chapter: Chapter, sentences: list[Sentence]) -> int | None:
+        section_family = str(chapter.metadata_json.get("pdf_section_family") or "").strip().casefold()
+        if section_family == "references":
+            return MAX_REFERENCE_PACKET_SENTENCES if len(sentences) > MAX_REFERENCE_PACKET_SENTENCES else None
+
+        title = " ".join((chapter.title_src or "").split()).casefold()
+        if title in {"references", "bibliography", "works cited"}:
+            return MAX_REFERENCE_PACKET_SENTENCES if len(sentences) > MAX_REFERENCE_PACKET_SENTENCES else None
+
+        if len(sentences) > MAX_GENERAL_PACKET_SENTENCES:
+            return MAX_GENERAL_PACKET_SENTENCES
+        return None
 
     def _match_terms(self, text: str, termbase_snapshot: MemorySnapshot) -> list[dict[str, str]]:
         lowered = text.lower()
         matched = []
+        seen: set[str] = set()
         for term in termbase_snapshot.content_json.get("terms", []):
             source_term = term.get("source_term", "").lower()
-            if source_term and source_term in lowered:
+            if source_term and source_term in lowered and source_term not in seen:
                 matched.append(term)
+                seen.add(source_term)
         return matched
 
     def _match_entities(self, text: str, entity_snapshot: MemorySnapshot) -> list[dict[str, str]]:
         lowered = text.lower()
         matched = []
+        seen: set[str] = set()
         for entity in entity_snapshot.content_json.get("entities", []):
             name = entity.get("name", "").lower()
             aliases = [alias.lower() for alias in entity.get("aliases", [])]
-            if name and (name in lowered or any(alias in lowered for alias in aliases)):
+            if name and (name in lowered or any(alias in lowered for alias in aliases)) and name not in seen:
                 matched.append(entity)
+                seen.add(name)
         return matched

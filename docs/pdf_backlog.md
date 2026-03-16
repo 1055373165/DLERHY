@@ -1,6 +1,6 @@
 # PDF Backlog
 
-Last Updated: 2026-03-15
+Last Updated: 2026-03-16
 
 ## Purpose
 
@@ -37,13 +37,15 @@ Last Updated: 2026-03-15
 - [x] 扩充真实 text-PDF smoke corpus，而不只依赖合成 PDF fixture
 - [x] 增加一个真实低风险 text PDF 样本，补齐“可放行路径”验证
 - [x] 候选扫描工具化：自动遍历常用目录、排序候选、导出 manifest-ready 建议
-- [ ] 跑一轮真实技术书 text-PDF smoke，确认 coverage / rerun / export 无静默异常
+- [ ] 跑一轮更广的真实技术书 text-PDF smoke，确认 coverage / rerun / export 无静默异常
 - [ ] harden long-book chapter recovery：在更多真实长书上复现 `Front Matter + chapter tree`，而不是只对单一本书成立
 - [x] second long-book smoke：新增 `LLMs in Production`，把低风险长书 pass-path 从 1 本扩到 2 本
 - [x] chapter-intro title cleanup v1：压掉 `LLMs in Production` 中最明显的 PDF escape / spaced-word / sentence-tail 噪声
+- [x] first-page paper title cleanup v1：第一页 title-like heading 现在会清洗 broken words，并与 document title 对齐
 - [x] 清理 valid chapter 内的 isolated `content_signature` 假阳性，避免误打 `page_family_index/references`
 - [x] 为 `basic` extractor 暴露 provenance，并把 fragment-only 长文本 PDF 从 `high` 收敛到 `medium`
 - [x] short academic paper intake 第一刀：把 `Attention Is All You Need` 一类短篇英文论文从 `high/reject` 收敛到 `academic_paper` medium-risk lane
+- [x] academic paper formal export policy v1：`academic_paper + medium-risk` 在满足最小恢复条件时，允许以 advisory 结构风险完成正式导出，而不是永久卡在 review gate
 - [x] medium-risk 样本的 `references -> appendix` 边界恢复
 - [x] long-book 样本的 `appendix -> index -> back matter` 边界恢复
 - [x] long-book 样本的 `Appendix A / Appendix B` 多附录切分
@@ -83,7 +85,18 @@ Last Updated: 2026-03-15
 - [ ] nested appendix section-tree upgrade：决定 `K.2.5` 这类嵌套小节何时从 evidence 升级为正式 section tree
 - [ ] chapter-intro title cleanup v2：继续清理 `Adeep / Dataislikegarbage / canyougo` 这类更深层断词噪声
 - [ ] 更复杂的 paragraph reconstruction：quote / list / inset text 边界更稳
-- [ ] academic paper section recovery v1：让 short paper 不止恢复 `body + references`，而是补出更稳的 section heading tree
+- [x] academic paper section recovery v1：让 short paper 不止恢复 `body + references`，而是补出第一刀 inline section heading tree
+- [x] academic paper heading cleanup v2：清理 `3 Model Ar`、`Embeddings and Softmax Similarly`、`Encoder:` 尾巴和表格前误切 heading
+- [x] academic paper reading-order hardening 第一刀：按章节本地 page evidence 和结构锚点抑制 `MISORDERING` 误报
+- [x] academic paper reading-order hardening 第二刀：`basic` extractor 现在会在短篇论文的复杂定位段上做 positioned text splitting，并在清晰双栏页按列优先排序；`Attention` 在 `multi_column_page_count>0` 下仍保持 medium-risk 放行
+- [x] academic paper reading-order hardening 第三刀：table / figure / equation-heavy 双栏页的排序与 heading cleanup，不再把 `Scaled Dot-Pr` 一类残差留给 export/review
+- [x] 第二篇真实英文论文扩样：`Forming Effective Human-AI Teams...` 已进入 smoke 基线，并稳定恢复出“真实标题 + References”
+- [x] single-column research paper title / references recovery 第一刀：basic extractor 合并首块/末块的论文标题与 `Refer ences ...` 现在会在 parser 层拆成真实 heading / references chapter
+- [x] academic paper first-page title cleanup：`Attention Is All Y ou Need` 一类第一页 broken title heading 现在可在 parser 层清洗
+- [x] academic paper first-page title overlap recovery：当 fallback extractor 让 title bbox 漂移时，仍能通过 document-title overlap 恢复真实标题
+- [x] `run_real_book_live.py` 自动补齐 `merged_html`，让真实 PDF live run 与前端一键导出链路一致
+- [x] oversized packet splitting v1：references 大块 citation block 与超大正文 block 现在会保守拆包，避免 real live run 因单包过大 terminal fail
+- [x] 第二篇真实英文论文 live run：`Forming Effective Human-AI Teams...` 已在 `v3` 成功完成 `19/19` packet 翻译，并正式导出 merged HTML
 - [ ] medium-risk PDF 的更细粒度放行策略，而不是简单“可进但高风险”
 - [ ] frontmatter / appendix / index 的独立导出或独立 chapter policy
 - [ ] backmatter cue hardening v2：决定是否接受更弱的 marketing/back-cover cue，还是继续停留在 explicit-cue policy
@@ -99,16 +112,16 @@ Last Updated: 2026-03-15
 
 ## Suggested Order
 
-1. academic paper section recovery v1
+1. 第三篇真实英文论文或更异质 paper 扩样
 2. nested appendix section-tree upgrade
 3. chapter-intro title cleanup v2
 4. backmatter cue hardening v2
-5. footnote relocater v4
+5. medium-risk PDF 的更细粒度放行策略
 
 ## Current Working Set
 
 如果新一轮要继续推进，默认先做这 3 个：
 
-1. academic paper section recovery v1
+1. 第三篇真实英文论文或更异质 paper 扩样
 2. nested appendix section-tree upgrade
 3. chapter-intro title cleanup v2

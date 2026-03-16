@@ -84,7 +84,7 @@ class ReviewService:
         structure_severity = self._max_issue_severity(artifacts.issues, RootCauseLayer.STRUCTURE)
         if structure_severity is not None and _severity_rank(structure_severity) > _severity_rank(bundle.chapter.risk_level):
             bundle.chapter.risk_level = structure_severity
-        if artifacts.issues:
+        if artifacts.summary.blocking_issue_count > 0:
             bundle.chapter.status = ChapterStatus.REVIEW_REQUIRED
         else:
             bundle.chapter.status = ChapterStatus.QA_CHECKED
@@ -367,8 +367,24 @@ class ReviewService:
         parse_confidence = chapter_metadata.get("parse_confidence")
         suspicious_pages = list(chapter_metadata.get("suspicious_page_numbers") or [])
         structure_flags = list(chapter_metadata.get("structure_flags") or [])
+        chapter_page_evidence = self._chapter_pdf_page_evidence(bundle)
+        local_suspicious_pages = [
+            int(page["page_number"])
+            for page in chapter_page_evidence
+            if isinstance(page, dict)
+            and page.get("layout_suspect") is True
+            and isinstance(page.get("page_number"), int)
+        ]
+        review_policy = self._pdf_layout_review_policy(
+            bundle,
+            layout_risk,
+            parse_confidence,
+            suspicious_pages,
+            local_suspicious_pages,
+            chapter_page_evidence,
+        )
 
-        if layout_risk in {"medium", "high"}:
+        if layout_risk in {"medium", "high"} and bool(review_policy["emit_issue"]):
             issues.append(
                 self._make_issue(
                     now=now,
@@ -378,13 +394,15 @@ class ReviewService:
                     packet_id=None,
                     issue_type="MISORDERING",
                     root_cause_layer=RootCauseLayer.STRUCTURE,
-                    severity=Severity.HIGH if layout_risk == "medium" else Severity.CRITICAL,
-                    blocking=True,
+                    severity=review_policy["severity"],
+                    blocking=review_policy["blocking"],
                     evidence={
                         "layout_risk": layout_risk,
                         "parse_confidence": parse_confidence,
-                        "suspicious_page_numbers": suspicious_pages,
+                        "suspicious_page_numbers": local_suspicious_pages or suspicious_pages,
                         "structure_flags": structure_flags,
+                        "recovery_lane": review_policy["recovery_lane"],
+                        "review_policy": review_policy["reason"],
                     },
                     unique_key=f"layout-risk:{layout_risk}",
                 )
@@ -454,6 +472,147 @@ class ReviewService:
             )
 
         return issues
+
+    def _pdf_layout_review_policy(
+        self,
+        bundle: ChapterReviewBundle,
+        layout_risk: str,
+        parse_confidence: float | None,
+        suspicious_pages: list[int],
+        local_suspicious_pages: list[int],
+        chapter_page_evidence: list[dict[str, Any]],
+    ) -> dict[str, object]:
+        default = {
+            "severity": Severity.HIGH if layout_risk == "medium" else Severity.CRITICAL,
+            "blocking": True,
+            "emit_issue": True,
+            "recovery_lane": None,
+            "reason": "default_blocking_layout_risk",
+        }
+        if layout_risk != "medium":
+            return default
+
+        if not local_suspicious_pages:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": None,
+                "reason": "no_local_suspicious_pages",
+            }
+
+        pdf_profile = (bundle.document.metadata_json or {}).get("pdf_profile")
+        recovery_lane = None
+        if isinstance(pdf_profile, dict) and pdf_profile.get("recovery_lane"):
+            recovery_lane = str(pdf_profile["recovery_lane"])
+
+        if recovery_lane != "academic_paper":
+            return default | {"recovery_lane": recovery_lane}
+
+        if parse_confidence is None or float(parse_confidence) < 0.8:
+            return default | {
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_medium_confidence_too_low",
+            }
+
+        if len(suspicious_pages) > 2:
+            return default | {
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_medium_too_many_suspicious_pages",
+            }
+
+        if self._academic_paper_suspicious_pages_structurally_anchored(chapter_page_evidence):
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_medium_structurally_anchored",
+            }
+
+        return {
+            "severity": Severity.MEDIUM,
+            "blocking": False,
+            "emit_issue": True,
+            "recovery_lane": recovery_lane,
+            "reason": "academic_paper_medium_layout_advisory",
+        }
+
+    def _chapter_pdf_page_evidence(self, bundle: ChapterReviewBundle) -> list[dict[str, Any]]:
+        metadata = bundle.document.metadata_json or {}
+        page_evidence = metadata.get("pdf_page_evidence")
+        if not isinstance(page_evidence, dict):
+            return []
+        pages = page_evidence.get("pdf_pages")
+        if not isinstance(pages, list):
+            return []
+
+        chapter_metadata = bundle.chapter.metadata_json or {}
+        page_start = chapter_metadata.get("source_page_start")
+        page_end = chapter_metadata.get("source_page_end")
+        if not isinstance(page_start, int) or not isinstance(page_end, int):
+            return [page for page in pages if isinstance(page, dict)]
+
+        return [
+            page
+            for page in pages
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+            and page_start <= int(page["page_number"]) <= page_end
+        ]
+
+    def _academic_paper_suspicious_pages_structurally_anchored(
+        self,
+        chapter_page_evidence: list[dict[str, Any]],
+    ) -> bool:
+        suspicious_pages = [
+            page
+            for page in chapter_page_evidence
+            if isinstance(page, dict) and page.get("layout_suspect") is True
+        ]
+        if not suspicious_pages:
+            return False
+
+        recovered_heading_page_count = 0
+        for page in chapter_page_evidence:
+            if not isinstance(page, dict):
+                continue
+            recovery_flags = {
+                str(flag)
+                for flag in list(page.get("recovery_flags") or [])
+                if isinstance(flag, str)
+            }
+            role_counts = page.get("role_counts")
+            if "academic_section_heading_recovered" in recovery_flags:
+                recovered_heading_page_count += 1
+                continue
+            if isinstance(role_counts, dict) and int(role_counts.get("heading", 0) or 0) > 0:
+                recovered_heading_page_count += 1
+
+        if recovered_heading_page_count < 3:
+            return False
+
+        for page in suspicious_pages:
+            recovery_flags = {
+                str(flag)
+                for flag in list(page.get("recovery_flags") or [])
+                if isinstance(flag, str)
+            }
+            if "academic_section_heading_recovered" in recovery_flags:
+                continue
+
+            role_counts = page.get("role_counts")
+            if not isinstance(role_counts, dict):
+                return False
+            nonzero_roles = {
+                str(role)
+                for role, count in role_counts.items()
+                if isinstance(role, str) and int(count or 0) > 0
+            }
+            if nonzero_roles and nonzero_roles.issubset({"caption", "heading"}):
+                continue
+            return False
+        return True
 
     def _build_alignment_state(self, bundle: ChapterReviewBundle) -> ReviewAlignmentState:
         active_target_map = {

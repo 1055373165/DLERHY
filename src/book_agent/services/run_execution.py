@@ -138,7 +138,7 @@ class RunExecutionService:
         lease_seconds: int,
     ) -> ClaimedRunWorkItem | None:
         run = self.repository.get_run(run_id)
-        if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
+        if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING}:
             return None
         candidate_ids = self.repository.list_claimable_work_item_ids(
             run_id,

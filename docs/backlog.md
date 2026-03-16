@@ -159,6 +159,14 @@
 - [x] 针对 `v4` 真实书结果处理 chapter 1 frontmatter 的 `CONTEXT_FAILURE`：已自动豁免无正文且仅缺标题的 chapter brief blocker，并完成真实书复检
 - [x] 针对 `v4` 真实书结果处理 chapter 5 的 `FORMAT_POLLUTION`：已区分 provider 真污染与正文字面标签场景，并完成真实书复检
 - [ ] 基于真实书继续观察“源文原样标签豁免”是否还需要更细的 allowlist / 证据可视化
+- [x] 新增术语一致性与缓存优化实施文档：[translation-consistency-and-cache-plan.md](/Users/smy/project/book-agent/docs/translation-consistency-and-cache-plan.md)
+- [x] 将 prompt 重排为“稳定前缀优先”的结构，并让 `prev/next` 上下文真正进入模型输入
+- [x] 为翻译 packet 注入局部 `Previous Accepted Translations`，降低同章概念漂移
+- [ ] 为 `TranslationUsage` 增加显式 `prompt_cache_hit_tokens / prompt_cache_miss_tokens`
+- [ ] 为 dashboard / export snapshot 增加 cache hit ratio 观察面
+- [ ] 新增 term drift QA，而不只依赖 locked term conflict
+- [ ] 设计并实现 chapter-local concept memory / canonical glossary governance
+- [ ] 在 Docker/CI 路径上继续强化 PostgreSQL-only 集成约束，避免环境变量偏差把迁移/集成测试带回 SQLite
 - [x] 冻结整本 merged export 的渲染策略：protected block、结构化工件、混合 inline spans 不再被视为“空翻译”
 - [x] 按 merged export 渲染策略实现整本合并导出：已在真实书 `v4` 上验证 `merged_html` 成功导出，并支持 code/table/prompt/literal-tag 的正确渲染模式
 - [x] 继续扩展 merged export 的 block-level render mode：已支持 image/caption、equation、reference-preserve 的阅读态渲染，并通过 parser/API/PostgreSQL 回归

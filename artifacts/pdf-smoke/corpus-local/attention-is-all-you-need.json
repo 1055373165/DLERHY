@@ -11,16 +11,16 @@
     "layout_risk": "medium",
     "ocr_required": false,
     "extractor_kind": "basic",
-    "average_text_density": 3176.364,
-    "average_span_count": 406.279,
-    "multi_column_page_count": 0,
-    "fragment_page_count": 2,
+    "average_text_density": 3134.091,
+    "average_span_count": 62.568,
+    "multi_column_page_count": 2,
+    "fragment_page_count": 0,
     "suspicious_page_numbers": [
       2,
       3
     ],
     "recovery_lane": "academic_paper",
-    "trailing_reference_page_count": 3,
+    "trailing_reference_page_count": 2,
     "academic_paper_candidate": true
   },
   "bootstrap": {
@@ -28,18 +28,22 @@
     "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
     "source_type": "pdf_text",
     "chapter_count": 2,
-    "block_count": 29,
-    "sentence_count": 253,
+    "block_count": 170,
+    "sentence_count": 349,
     "chapters": [
       {
         "ordinal": 1,
-        "title_src": "Attention Is All Y ou Need",
+        "title_src": "Attention is All you Need",
         "risk_level": "high",
         "source_page_start": 1,
         "source_page_end": 9,
         "pdf_section_family": "body",
         "structure_flags": [
-          "layout_risk_medium"
+          "layout_risk_medium",
+          "academic_section_heading_recovered",
+          "academic_section_split",
+          "cross_page_repaired",
+          "dehyphenated"
         ]
       },
       {
@@ -52,6 +56,8 @@
         "structure_flags": [
           "layout_risk_medium",
           "page_family_references",
+          "dehyphenated",
+          "embedded_references_heading_recovered",
           "page_family_references",
           "page_family_source_content_signature"
         ]
@@ -62,7 +68,7 @@
     "title": "Attention is All you Need",
     "chapter_count": 2,
     "chapter_titles": [
-      "Attention Is All Y ou Need",
+      "Attention is All you Need",
       "References"
     ],
     "chapter_section_families": [
@@ -87,10 +93,10 @@
     "layout_signals": {
       "1": [],
       "2": [
-        "column_fragment"
+        "multi_column"
       ],
       "3": [
-        "column_fragment"
+        "multi_column"
       ],
       "4": [],
       "5": [],
@@ -108,8 +114,8 @@
     "pdf_pages": [
       {
         "page_number": 1,
-        "raw_block_count": 3,
-        "recovered_block_count": 3,
+        "raw_block_count": 47,
+        "recovered_block_count": 21,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -121,10 +127,13 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 2,
+          "body": 14,
+          "footer": 6,
           "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "dehyphenated"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -134,8 +143,8 @@
       },
       {
         "page_number": 2,
-        "raw_block_count": 1,
-        "recovered_block_count": 1,
+        "raw_block_count": 57,
+        "recovered_block_count": 21,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -145,13 +154,19 @@
         "is_toc_page": false,
         "has_strong_heading": false,
         "layout_signals": [
-          "column_fragment"
+          "multi_column"
         ],
         "layout_suspect": true,
         "role_counts": {
-          "body": 1
+          "body": 18,
+          "footer": 1,
+          "heading": 2
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split",
+          "dehyphenated"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -161,8 +176,8 @@
       },
       {
         "page_number": 3,
-        "raw_block_count": 1,
-        "recovered_block_count": 1,
+        "raw_block_count": 26,
+        "recovered_block_count": 7,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -172,13 +187,19 @@
         "is_toc_page": false,
         "has_strong_heading": false,
         "layout_signals": [
-          "column_fragment"
+          "multi_column"
         ],
         "layout_suspect": true,
         "role_counts": {
-          "caption": 1
+          "body": 4,
+          "caption": 1,
+          "footer": 1,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -188,8 +209,8 @@
       },
       {
         "page_number": 4,
-        "raw_block_count": 11,
-        "recovered_block_count": 8,
+        "raw_block_count": 48,
+        "recovered_block_count": 16,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -201,10 +222,15 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 7,
-          "caption": 1
+          "body": 9,
+          "caption": 1,
+          "footer": 5,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -214,8 +240,8 @@
       },
       {
         "page_number": 5,
-        "raw_block_count": 2,
-        "recovered_block_count": 2,
+        "raw_block_count": 46,
+        "recovered_block_count": 13,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -227,9 +253,14 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 2
+          "body": 12,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split",
+          "dehyphenated"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -239,8 +270,8 @@
       },
       {
         "page_number": 6,
-        "raw_block_count": 4,
-        "recovered_block_count": 3,
+        "raw_block_count": 53,
+        "recovered_block_count": 11,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -252,9 +283,13 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 3
+          "body": 10,
+          "footer": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "cross_page_repaired",
+          "dehyphenated"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -264,8 +299,8 @@
       },
       {
         "page_number": 7,
-        "raw_block_count": 1,
-        "recovered_block_count": 1,
+        "raw_block_count": 51,
+        "recovered_block_count": 11,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -277,9 +312,13 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 1
+          "body": 10,
+          "footer": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "cross_page_repaired",
+          "dehyphenated"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -289,8 +328,8 @@
       },
       {
         "page_number": 8,
-        "raw_block_count": 8,
-        "recovered_block_count": 4,
+        "raw_block_count": 46,
+        "recovered_block_count": 11,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -302,9 +341,13 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 4
+          "body": 10,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -314,8 +357,8 @@
       },
       {
         "page_number": 9,
-        "raw_block_count": 53,
-        "recovered_block_count": 4,
+        "raw_block_count": 78,
+        "recovered_block_count": 11,
         "page_family": "body",
         "page_family_source": "body",
         "page_family_heading": null,
@@ -327,9 +370,14 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 4
+          "body": 9,
+          "footer": 1,
+          "heading": 1
         },
-        "recovery_flags": [],
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
         "toc_entries": [],
         "appendix_nested_subheadings": [],
         "matched_footnote_count": 0,
@@ -339,8 +387,8 @@
       },
       {
         "page_number": 10,
-        "raw_block_count": 1,
-        "recovered_block_count": 1,
+        "raw_block_count": 59,
+        "recovered_block_count": 31,
         "page_family": "references",
         "page_family_source": "content_signature",
         "page_family_heading": null,
@@ -352,9 +400,13 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 1
+          "body": 28,
+          "footer": 2,
+          "heading": 1
         },
         "recovery_flags": [
+          "dehyphenated",
+          "embedded_references_heading_recovered",
           "page_family_references",
           "page_family_source_content_signature"
         ],
@@ -367,8 +419,8 @@
       },
       {
         "page_number": 11,
-        "raw_block_count": 1,
-        "recovered_block_count": 1,
+        "raw_block_count": 40,
+        "recovered_block_count": 18,
         "page_family": "references",
         "page_family_source": "content_signature",
         "page_family_heading": null,
@@ -380,9 +432,11 @@
         "layout_signals": [],
         "layout_suspect": false,
         "role_counts": {
-          "body": 1
+          "body": 16,
+          "footer": 2
         },
         "recovery_flags": [
+          "dehyphenated",
           "page_family_references",
           "page_family_source_content_signature"
         ],

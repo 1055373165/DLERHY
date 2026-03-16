@@ -87,6 +87,10 @@ class DocumentHistoryPageResponse(BaseSchema):
     entries: list[DocumentHistoryEntryResponse] = Field(default_factory=list)
 
 
+class DocumentHistoryBackfillResponse(BaseSchema):
+    imported_document_count: int
+
+
 class TranslateDocumentRequest(BaseSchema):
     packet_ids: list[str] = Field(default_factory=list)
 

@@ -15,7 +15,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from book_agent.core.config import get_settings
-from book_agent.domain.enums import DocumentRunStatus, DocumentRunType, ExportType, PacketStatus, TargetSegmentStatus
+from book_agent.domain.enums import DocumentRunType, ExportType, PacketStatus, TargetSegmentStatus
 from book_agent.domain.models import (
     AlignmentEdge,
     Chapter,
@@ -759,6 +759,22 @@ def main(argv: list[str] | None = None) -> int:
                 _write_report(report_path, report)
         except ExportGateError as exc:
             report["bilingual_export_error"] = {
+                "message": str(exc),
+                "detail": exc.to_http_detail(),
+            }
+            _write_report(report_path, report)
+
+        try:
+            with session_scope(session_factory) as session:
+                service = _new_service(session, export_root=str(export_root))
+                merged_export = service.export_document(
+                    document_id,
+                    ExportType.MERGED_HTML,
+                )
+                report["merged_export"] = asdict(merged_export)
+                _write_report(report_path, report)
+        except ExportGateError as exc:
+            report["merged_export_error"] = {
                 "message": str(exc),
                 "detail": exc.to_http_detail(),
             }

@@ -119,8 +119,18 @@ _TITLE_FRAGMENT_STOPWORDS = {
     "of",
     "on",
     "or",
+    "our",
     "the",
+    "that",
+    "their",
+    "these",
+    "this",
+    "those",
     "to",
+    "up",
+    "we",
+    "when",
+    "while",
     "with",
 }
 _BACKMATTER_WEB_CUE_PATTERN = re.compile(r"\b(?:www\.)?[A-Za-z0-9.-]+\.(?:com|org|io|ai|dev)\b", re.IGNORECASE)
@@ -128,6 +138,123 @@ _BACKMATTER_PRICE_CUE_PATTERN = re.compile(r"(?:[$\u00a3\u20ac]\s?\d|\b\d+\s+pag
 _BACKMATTER_ISBN_CUE_PATTERN = re.compile(r"\bisbn(?:-1[03])?\b", re.IGNORECASE)
 _BACKMATTER_PUBLISHER_CUE_PATTERN = re.compile(
     r"\b(?:manning|oreilly|o'reilly|packt|apress|pragmatic|wiley|leanpub)\b",
+    re.IGNORECASE,
+)
+_ACADEMIC_NUMBERED_SECTION_PATTERN = re.compile(r"\b\d+(?:\.\d+){0,2}\b")
+_ACADEMIC_INLINE_HEADING_BOUNDARY_PATTERN = re.compile(r"[.!?;:]\s+$")
+_ACADEMIC_BODY_STARTER_WORDS = {
+    "additionally",
+    "a",
+    "an",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "given",
+    "however",
+    "in",
+    "instead",
+    "it",
+    "its",
+    "on",
+    "most",
+    "multiple",
+    "our",
+    "since",
+    "similarly",
+    "that",
+    "the",
+    "their",
+    "these",
+    "they",
+    "this",
+    "those",
+    "to",
+    "we",
+    "when",
+    "while",
+    "with",
+}
+_ACADEMIC_HEADING_CONNECTOR_WORDS = {
+    "a",
+    "an",
+    "and",
+    "for",
+    "in",
+    "of",
+    "on",
+    "the",
+    "to",
+    "via",
+    "with",
+}
+_ACADEMIC_HEADING_TAIL_STOPWORDS = {
+    "additionally",
+    "however",
+    "instead",
+    "moreover",
+    "similarly",
+    "therefore",
+}
+_ACADEMIC_HEADING_TAIL_NOUNS = {
+    "attention",
+    "architecture",
+    "batching",
+    "conclusion",
+    "conclusions",
+    "data",
+    "evaluation",
+    "experiments",
+    "introduction",
+    "methods",
+    "model",
+    "models",
+    "results",
+    "stacks",
+    "training",
+}
+_ACADEMIC_SINGLE_TOKEN_HEADING_WORDS = {
+    "abstract",
+    "background",
+    "conclusion",
+    "conclusions",
+    "discussion",
+    "evaluation",
+    "experiments",
+    "introduction",
+    "motivation",
+    "overview",
+    "results",
+    "training",
+}
+_ACADEMIC_STANDALONE_HEADING_TITLES = {
+    "abstract",
+    "background",
+    "conclusion",
+    "conclusions",
+    "discussion",
+    "evaluation",
+    "future work",
+    "implementation details",
+    "introduction",
+    "method",
+    "methods",
+    "model",
+    "related work",
+    "results",
+    "training",
+}
+_PAPER_TITLE_INSTITUTION_CUE_PATTERN = re.compile(
+    r"\b(?:university|institute|department|school|college|laboratory|lab|centre|center)\b",
+    re.IGNORECASE,
+)
+_ARXIV_LEAD_PATTERN = re.compile(
+    r"^arxiv:\S+(?:\s+\[[^\]]+\])?(?:\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4})?\s+",
+    re.IGNORECASE,
+)
+_BROKEN_REFERENCES_HEADING_PATTERN = re.compile(
+    r"^(?:r\s*e\s*f\s*e\s*r\s*e\s*n\s*c\s*e\s*s|bibliography|works\s+cited|further\s+reading|notes)\b",
     re.IGNORECASE,
 )
 
@@ -214,33 +341,177 @@ def _normalize_intro_title_artifacts(text: str) -> str:
         normalized,
     )
     normalized = _collapse_spaced_title_artifacts(normalized)
-    tokens = normalized.split()
-    merged_tokens: list[str] = []
-    index = 0
-    while index < len(tokens):
-        if index + 1 < len(tokens):
-            left = tokens[index]
-            right = tokens[index + 1]
-            left_clean = re.sub(r"[^A-Za-z]", "", left)
-            right_clean = re.sub(r"[^A-Za-z]", "", right)
-            if (
-                left_clean
-                and right_clean
-                and left_clean.casefold() not in _TITLE_FRAGMENT_STOPWORDS
-                and right_clean.casefold() not in _TITLE_FRAGMENT_STOPWORDS
-                and (
-                    (1 <= len(left_clean) <= 3 and len(right_clean) >= 4)
-                    or (2 <= len(left_clean) <= 5 and 1 <= len(right_clean) <= 2)
+    previous = None
+    while previous != normalized:
+        previous = normalized
+        tokens = normalized.split()
+        merged_tokens: list[str] = []
+        index = 0
+        while index < len(tokens):
+            if index + 1 < len(tokens):
+                left = tokens[index]
+                right = tokens[index + 1]
+                left_clean = re.sub(r"[^A-Za-z]", "", left)
+                right_clean = re.sub(r"[^A-Za-z]", "", right)
+                left_title_fragment = bool(
+                    left_clean
+                    and left_clean[:1].isupper()
+                    and left_clean[1:].islower()
                 )
-                and left_clean[:1].islower()
-                and right_clean[:1].islower()
-            ):
-                merged_tokens.append(left + right)
-                index += 2
-                continue
-        merged_tokens.append(tokens[index])
-        index += 1
-    return _normalize_text(" ".join(merged_tokens))
+                if (
+                    left_clean
+                    and right_clean
+                    and left_clean.casefold() not in _TITLE_FRAGMENT_STOPWORDS
+                    and right_clean.casefold() not in _TITLE_FRAGMENT_STOPWORDS
+                    and (
+                        (
+                            (
+                                (1 <= len(left_clean) <= 2 and len(right_clean) >= 4)
+                                or (1 <= len(left_clean) <= 3 and 1 <= len(right_clean) <= 2)
+                                or (len(left_clean) >= 2 and len(right_clean) == 1)
+                            )
+                            and left_clean[:1].islower()
+                            and right_clean[:1].islower()
+                        )
+                        or (
+                            left_title_fragment
+                            and right_clean[:1].islower()
+                            and (len(left_clean) <= 2 or len(right_clean) == 1)
+                        )
+                    )
+                ):
+                    merged_tokens.append(left + right)
+                    index += 2
+                    continue
+            merged_tokens.append(tokens[index])
+            index += 1
+        normalized = _normalize_text(" ".join(merged_tokens))
+    return normalized
+
+
+def _normalize_pdf_signal_text(text: str) -> str:
+    return _normalize_text(re.sub(r"[\x00-\x1f]+", " ", text or ""))
+
+
+def _normalize_paper_title_candidate(text: str) -> str:
+    normalized = _normalize_intro_title_artifacts(_normalize_pdf_signal_text(text))
+    previous = None
+    while previous != normalized:
+        previous = normalized
+        tokens = normalized.split()
+        merged_tokens: list[str] = []
+        index = 0
+        while index < len(tokens):
+            if index + 1 < len(tokens):
+                left = tokens[index]
+                right = tokens[index + 1]
+                left_clean = re.sub(r"[^A-Za-z]", "", left)
+                right_clean = re.sub(r"[^A-Za-z]", "", right)
+                if (
+                    left_clean
+                    and right_clean
+                    and left_clean[:1].isupper()
+                    and left_clean[1:].islower()
+                    and right_clean[:1].islower()
+                    and right_clean.casefold() not in _TITLE_FRAGMENT_STOPWORDS
+                    and len(right_clean) <= 4
+                ):
+                    merged_tokens.append(left + right)
+                    index += 2
+                    continue
+            merged_tokens.append(tokens[index])
+            index += 1
+        normalized = _normalize_text(" ".join(merged_tokens))
+    return normalized
+
+
+def _looks_like_paper_title(text: str) -> bool:
+    normalized = _normalize_paper_title_candidate(text)
+    if not normalized or "@" in normalized:
+        return False
+    words = normalized.split()
+    if not 5 <= len(words) <= 24:
+        return False
+    if sum(1 for char in normalized if char.isdigit()) > 1:
+        return False
+    alpha_words = [re.sub(r"[^A-Za-z-]", "", word) for word in words]
+    alpha_words = [word for word in alpha_words if word]
+    if len(alpha_words) < 5:
+        return False
+    capitalized_count = sum(1 for word in alpha_words if word[:1].isupper())
+    lowercase_count = sum(1 for word in alpha_words if word[:1].islower())
+    return capitalized_count >= max(4, len(alpha_words) - 4) and lowercase_count <= max(4, len(alpha_words) // 2)
+
+
+def _is_name_like_token(token: str) -> bool:
+    cleaned = re.sub(r"[^A-Za-z.'`-]", "", token).strip(".-")
+    if not cleaned:
+        return False
+    return cleaned[:1].isupper() and (len(cleaned) == 1 or cleaned[1:].islower())
+
+
+def _looks_like_author_affiliation_start(tokens: list[str], index: int) -> bool:
+    if index + 2 >= len(tokens):
+        return False
+    if not _is_name_like_token(tokens[index]) or not _is_name_like_token(tokens[index + 1]):
+        return False
+    if not tokens[index + 2].isdigit():
+        return False
+    lookahead = tokens[index : index + 18]
+    digit_count = sum(1 for token in lookahead if token.isdigit())
+    lookahead_text = " ".join(lookahead)
+    return bool(
+        digit_count >= 2
+        or "@" in lookahead_text
+        or _PAPER_TITLE_INSTITUTION_CUE_PATTERN.search(lookahead_text)
+    )
+
+
+def _infer_first_page_paper_title_and_remainder(text: str) -> tuple[str, str] | None:
+    normalized = _normalize_intro_title_artifacts(_strip_leading_page_label(_normalize_pdf_signal_text(text)))
+    if not normalized:
+        return None
+    stripped_prefix = _ARXIV_LEAD_PATTERN.sub("", normalized, count=1)
+    prefix_token_count = max(0, len(normalized.split()) - len(stripped_prefix.split()))
+    full_tokens = stripped_prefix.split()
+    if len(full_tokens) < 12:
+        return None
+
+    author_boundary: int | None = None
+    for index in range(4, min(len(full_tokens) - 2, 40)):
+        if not _looks_like_author_affiliation_start(full_tokens, index):
+            continue
+        title_candidate = _normalize_paper_title_candidate(" ".join(full_tokens[:index]))
+        if _looks_like_paper_title(title_candidate):
+            author_boundary = index
+            break
+    if author_boundary is None:
+        return None
+
+    title = _normalize_paper_title_candidate(" ".join(full_tokens[:author_boundary])).strip(" -:;,.")
+    if not _looks_like_paper_title(title):
+        return None
+
+    original_tokens = normalized.split()
+    remainder = _normalize_text(" ".join(original_tokens[prefix_token_count + author_boundary :]))
+    if not remainder:
+        return None
+    return title, remainder
+
+
+def _leading_reference_heading_and_remainder(text: str) -> tuple[str, str] | None:
+    normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
+    if not normalized:
+        return None
+    match = _BROKEN_REFERENCES_HEADING_PATTERN.match(normalized)
+    if match is None:
+        return None
+    remainder = _normalize_intro_title_artifacts(normalized[match.end() :]).strip(" -:;,.")
+    if not remainder:
+        return _section_family_display_title("references"), ""
+    if remainder.startswith("[") or _looks_like_reference_entry(remainder):
+        return _section_family_display_title("references"), remainder
+    return None
 
 
 def _section_family_display_title(section_family: str) -> str:
@@ -273,7 +544,7 @@ def _page_family_for_heading(text: str, page_number: int) -> str | None:
 
 
 def _inline_page_family_heading(text: str, page_number: int) -> tuple[str, str | None] | None:
-    stripped = _strip_leading_page_label(text)
+    stripped = _normalize_intro_title_artifacts(_strip_leading_page_label(_normalize_pdf_signal_text(text)))
     if not stripped:
         return None
     heading_family = _page_family_for_heading(stripped, page_number)
@@ -283,6 +554,10 @@ def _inline_page_family_heading(text: str, page_number: int) -> tuple[str, str |
         if heading_family in {"references", "index", "frontmatter"}:
             return heading_family, _section_family_display_title(heading_family)
         return heading_family, stripped
+
+    reference_heading = _leading_reference_heading_and_remainder(stripped)
+    if reference_heading is not None:
+        return "references", reference_heading[0]
 
     lowered = stripped.casefold()
     for heading in sorted(_INDEX_HEADING_TITLES, key=len, reverse=True):
@@ -356,11 +631,19 @@ def _looks_like_reference_entry(text: str) -> bool:
         return False
     lowered = normalized.casefold()
     compacted = lowered.replace(" ", "")
-    if (
+    has_reference_locator = bool(
         "http://" in lowered
         or "https://" in lowered
         or "doi.org" in lowered
         or re.search(r"\bdoi\b", lowered)
+    )
+    if (
+        has_reference_locator
+        and (
+            compacted.startswith("references")
+            or normalized.lstrip().startswith("[")
+            or len(normalized) <= 480
+        )
     ):
         return True
     citation_marker_count = len(_REFERENCE_CITATION_PATTERN.findall(normalized))
@@ -393,6 +676,344 @@ def _looks_like_index_entry(text: str) -> bool:
     return max(len(word) for word in alpha_words) >= 3
 
 
+def _looks_like_academic_heading_token(token: str) -> bool:
+    stripped = token.strip("()[]{}.,;:").replace("\u2013", "-").replace("\u2014", "-")
+    if not stripped:
+        return False
+    alpha_only = re.sub(r"[^A-Za-z]", "", stripped)
+    if len(alpha_only) == 1:
+        return False
+    if stripped.isupper() and len(alpha_only) >= 2:
+        return True
+    if any(char.isdigit() for char in stripped):
+        return False
+    parts = [part for part in stripped.split("-") if part]
+    if not parts:
+        return False
+    return all(
+        part[:1].isupper() or (part.isupper() and len(part) >= 2)
+        for part in parts
+    )
+
+
+def _leading_academic_standalone_heading(text: str) -> tuple[str, str] | None:
+    normalized = _normalize_text(text)
+    lowered = normalized.casefold()
+    for heading in sorted(_ACADEMIC_STANDALONE_HEADING_TITLES, key=len, reverse=True):
+        if lowered == heading:
+            return heading.title(), ""
+        prefix = f"{heading} "
+        if not lowered.startswith(prefix):
+            continue
+        remainder = normalized[len(prefix):].strip()
+        if not remainder:
+            return heading.title(), ""
+        if _looks_like_academic_prose_lead(remainder):
+            return heading.title(), remainder
+    return None
+
+
+def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | None:
+    tokens = candidate_text.split()
+    if not tokens:
+        return None
+    title_tokens: list[str] = []
+    content_tokens = 0
+    for token in tokens:
+        stripped = token.strip("()[]{}.,;:")
+        lowered = stripped.casefold()
+        if (
+            title_tokens
+            and lowered in _ACADEMIC_BODY_STARTER_WORDS
+            and (
+                content_tokens >= 2
+                or (content_tokens == 1 and title_tokens[0].strip("()[]{}.,;:").casefold() in _ACADEMIC_SINGLE_TOKEN_HEADING_WORDS)
+            )
+        ):
+            break
+        if lowered in _ACADEMIC_HEADING_CONNECTOR_WORDS and title_tokens:
+            title_tokens.append(token)
+            continue
+        if _looks_like_academic_heading_token(stripped):
+            title_tokens.append(token)
+            content_tokens += 1
+            if content_tokens >= 6:
+                break
+            continue
+        if content_tokens >= 2:
+            break
+        if content_tokens == 1 and title_tokens[0].strip("()[]{}.,;:").casefold() in _ACADEMIC_SINGLE_TOKEN_HEADING_WORDS:
+            break
+        return None
+
+    if not title_tokens:
+        return None
+    heading_text = _normalize_intro_title_artifacts(" ".join(title_tokens))
+    if not heading_text or len(heading_text) > 96:
+        return None
+    remainder = candidate_text[len(" ".join(title_tokens)) :].strip()
+    return heading_text, remainder
+
+
+def _looks_like_academic_body_continuation(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    tokens = normalized.split()
+    if not tokens:
+        return False
+
+    first_token = tokens[0].strip("()[]{}.,;:")
+    first_lowered = first_token.casefold()
+    if first_lowered in _ACADEMIC_BODY_STARTER_WORDS:
+        return True
+
+    sample = tokens[:8]
+    lowercaseish = 0
+    uppercaseish = 0
+    numericish = 0
+    for token in sample:
+        stripped = token.strip("()[]{}.,;:")
+        if not stripped:
+            continue
+        alpha_only = re.sub(r"[^A-Za-z]", "", stripped)
+        if any(char.isdigit() for char in stripped):
+            numericish += 1
+            continue
+        if alpha_only and alpha_only.isupper() and len(alpha_only) >= 2:
+            uppercaseish += 1
+            continue
+        if alpha_only and alpha_only[0].islower():
+            lowercaseish += 1
+
+    if uppercaseish + numericish >= 3 and lowercaseish <= 1:
+        return False
+    return lowercaseish >= 2
+
+
+def _looks_like_academic_prose_lead(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    tokens = normalized.split()
+    if not tokens:
+        return False
+
+    first_token = tokens[0].strip("()[]{}.,;:")
+    first_lowered = first_token.casefold()
+    if first_lowered in _ACADEMIC_BODY_STARTER_WORDS:
+        return True
+
+    first_alpha = re.sub(r"[^A-Za-z]", "", first_token)
+    if first_alpha and first_alpha.isupper() and len(first_alpha) >= 2:
+        return False
+    if any(char.isdigit() for char in first_token):
+        return False
+
+    sample = tokens[:8]
+    long_lowercase = 0
+    uppercaseish = 0
+    numericish = 0
+    for token in sample:
+        stripped = token.strip("()[]{}.,;:")
+        if not stripped:
+            continue
+        alpha_only = re.sub(r"[^A-Za-z]", "", stripped)
+        if any(char.isdigit() for char in stripped):
+            numericish += 1
+            continue
+        if alpha_only and alpha_only.isupper() and len(alpha_only) >= 2:
+            uppercaseish += 1
+            continue
+        if alpha_only and alpha_only[:1].islower() and len(alpha_only) >= 3:
+            long_lowercase += 1
+
+    return uppercaseish + numericish <= 1 and long_lowercase >= 2
+
+
+def _extend_broken_academic_heading_fragment(
+    heading_text: str,
+    remainder: str,
+) -> tuple[str, str]:
+    if not remainder:
+        return heading_text, remainder
+    match = re.match(r"^(?P<label>\d+(?:\.\d+){0,2})\s+(?P<title>.+)$", heading_text)
+    if match is None:
+        return heading_text, remainder
+
+    title_tokens = match.group("title").split()
+    if not title_tokens:
+        return heading_text, remainder
+    last_token = title_tokens[-1].strip("()[]{}.,;:")
+    last_token_alpha_len = len(re.sub(r"[^A-Za-z]", "", last_token))
+    remainder_tokens = remainder.split()
+    if not remainder_tokens:
+        return heading_text, remainder
+    first_fragment = remainder_tokens[0].strip("()[]{}.,;:")
+    first_fragment_alpha = re.sub(r"[^A-Za-z]", "", first_fragment)
+    if (
+        not last_token
+        or not last_token[:1].isupper()
+        or (
+            last_token_alpha_len > 4
+            and len(first_fragment_alpha) > 2
+            and "-" not in last_token
+        )
+    ):
+        return heading_text, remainder
+
+    fragment_tokens: list[str] = []
+    short_tail_only = last_token_alpha_len > 4 and "-" not in last_token
+    long_fragment_consumed = False
+    for token in remainder_tokens[:3]:
+        stripped = token.strip("()[]{}.,;:")
+        alpha_only = re.sub(r"[^A-Za-z]", "", stripped)
+        if not alpha_only or not alpha_only[:1].islower():
+            break
+        if short_tail_only and len(alpha_only) > 2:
+            break
+        if long_fragment_consumed and len(alpha_only) > 2:
+            break
+        fragment_tokens.append(token)
+        if len(alpha_only) >= 4:
+            long_fragment_consumed = True
+    if not fragment_tokens:
+        return heading_text, remainder
+
+    heading_tokens = heading_text.split()
+    merged_fragment_tokens = [*fragment_tokens]
+    if merged_fragment_tokens:
+        heading_tokens[-1] = f"{heading_tokens[-1]}{merged_fragment_tokens[0]}"
+        merged_fragment_tokens = merged_fragment_tokens[1:]
+    consumed_prefix = " ".join(merged_fragment_tokens)
+    extended_heading = _normalize_intro_title_artifacts(" ".join([*heading_tokens, consumed_prefix]).strip())
+    if extended_heading == heading_text:
+        return heading_text, remainder
+    updated_remainder = " ".join(remainder_tokens[len(fragment_tokens) :]).strip()
+    return _extend_academic_heading_trailing_token(
+        extended_heading,
+        updated_remainder,
+        fragment_repaired=True,
+    )
+
+
+def _extend_academic_heading_trailing_token(
+    heading_text: str,
+    remainder: str,
+    *,
+    fragment_repaired: bool = False,
+) -> tuple[str, str]:
+    if not remainder or not fragment_repaired:
+        return heading_text, remainder
+    match = re.match(r"^(?P<label>\d+(?:\.\d+){0,2})\s+(?P<title>.+)$", heading_text)
+    if match is None:
+        return heading_text, remainder
+    remainder_tokens = remainder.split()
+    if not remainder_tokens:
+        return heading_text, remainder
+
+    next_token = remainder_tokens[0].strip("()[]{}.,;:")
+    next_alpha = re.sub(r"[^A-Za-z]", "", next_token)
+    if (
+        not next_alpha
+        or not next_alpha[:1].isupper()
+        or next_alpha.casefold() in _ACADEMIC_BODY_STARTER_WORDS
+        or next_alpha.casefold() in _ACADEMIC_HEADING_TAIL_STOPWORDS
+        or next_alpha.casefold() not in _ACADEMIC_HEADING_TAIL_NOUNS
+        or len(next_alpha) < 3
+    ):
+        return heading_text, remainder
+
+    updated_remainder = " ".join(remainder_tokens[1:]).strip()
+    if not updated_remainder or not _looks_like_academic_prose_lead(updated_remainder):
+        return heading_text, remainder
+
+    extended_heading = _normalize_intro_title_artifacts(f"{heading_text} {remainder_tokens[0]}")
+    if not extended_heading or extended_heading == heading_text:
+        return heading_text, remainder
+    return extended_heading, updated_remainder
+
+
+def _move_colon_heading_tail_into_body(
+    heading_text: str,
+    remainder: str,
+) -> tuple[str, str]:
+    words = heading_text.split()
+    if len(words) < 4 or not words[-1].endswith(":") or not remainder:
+        return heading_text, remainder
+
+    trailing = words[-1]
+    trailing_clean = trailing.rstrip(":").strip("()[]{}.,;:")
+    if not trailing_clean or len(trailing_clean) <= 2:
+        return heading_text, remainder
+
+    candidate_heading = _normalize_intro_title_artifacts(" ".join(words[:-1]))
+    candidate_body = _normalize_text(f"{trailing} {remainder}")
+    if not candidate_heading or not _looks_like_academic_body_continuation(candidate_body):
+        return heading_text, remainder
+    return candidate_heading, candidate_body
+
+
+def _clean_academic_heading_candidate(
+    heading_text: str,
+    remainder: str,
+    heading_kind: str | None,
+) -> tuple[str, str] | None:
+    cleaned_heading = _normalize_intro_title_artifacts(heading_text)
+    cleaned_remainder = _normalize_text(remainder)
+
+    if heading_kind == "standalone" and cleaned_remainder and not _looks_like_academic_prose_lead(cleaned_remainder):
+        return None
+
+    if heading_kind == "numbered":
+        cleaned_heading, cleaned_remainder = _extend_broken_academic_heading_fragment(
+            cleaned_heading,
+            cleaned_remainder,
+        )
+        cleaned_heading, cleaned_remainder = _move_colon_heading_tail_into_body(
+            cleaned_heading,
+            cleaned_remainder,
+        )
+
+    if not cleaned_heading or len(cleaned_heading) > 120:
+        return None
+    return cleaned_heading, cleaned_remainder
+
+
+def _next_academic_inline_heading(text: str) -> tuple[int, str, str, dict[str, Any]] | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+    leading = _leading_academic_standalone_heading(normalized)
+    if leading is not None:
+        heading_text, remainder = leading
+        cleaned = _clean_academic_heading_candidate(heading_text, remainder, "standalone")
+        if cleaned is not None:
+            cleaned_heading, cleaned_remainder = cleaned
+            return 0, cleaned_heading, cleaned_remainder, {"heading_kind": "standalone", "section_level": 1}
+
+    for match in _ACADEMIC_NUMBERED_SECTION_PATTERN.finditer(normalized):
+        start = match.start()
+        prefix = normalized[:start]
+        if prefix and not _ACADEMIC_INLINE_HEADING_BOUNDARY_PATTERN.search(prefix):
+            continue
+        label = match.group(0)
+        after_start = match.end()
+        if after_start >= len(normalized) or not normalized[after_start].isspace():
+            continue
+        candidate_tail = normalized[after_start:].lstrip()
+        consumed = _consume_academic_heading_title(candidate_tail)
+        if consumed is None:
+            continue
+        title_body, remainder = consumed
+        cleaned = _clean_academic_heading_candidate(f"{label} {title_body}", remainder, "numbered")
+        if cleaned is None:
+            continue
+        heading_text, cleaned_remainder = cleaned
+        return start, heading_text, cleaned_remainder, {"heading_kind": "numbered", "section_level": label.count(".") + 1}
+    return None
+
+
 def _page_has_centered_title_signal(page: "PdfPage") -> bool:
     ordered_blocks = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
     page_center = page.width / 2.0
@@ -414,10 +1035,30 @@ def _page_has_centered_title_signal(page: "PdfPage") -> bool:
     return False
 
 
+def _page_has_title_overlap_signal(page: "PdfPage", title: str | None) -> bool:
+    normalized_title = _normalize_intro_title_artifacts(_normalize_pdf_signal_text(title or ""))
+    if len(normalized_title) < 12:
+        return False
+    compact_title = re.sub(r"\s+", "", normalized_title).casefold()
+    ordered_blocks = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
+    for block in ordered_blocks:
+        text = _normalize_intro_title_artifacts(_normalize_pdf_signal_text(block.text))
+        if len(text) < 12:
+            continue
+        compact_text = re.sub(r"\s+", "", text).casefold()
+        if _titles_overlap(text, normalized_title) or compact_text == compact_title:
+            return True
+        if len(compact_text) >= 12 and (compact_text in compact_title or compact_title in compact_text):
+            return True
+    return False
+
+
 def _page_has_reference_signature(page: "PdfPage") -> bool:
     texts = [_normalize_text(block.text) for block in page.blocks if _normalize_text(block.text)]
     if not texts:
         return False
+    if any(_leading_reference_heading_and_remainder(text) is not None for text in texts[:3]):
+        return True
     if any(
         text.casefold().startswith(title)
         for text in texts[:3]
@@ -1031,6 +1672,7 @@ class BasicPdfTextExtractor:
 
     def _extract_pages(self, objects: dict[int, bytes], page_object_ids: list[int]) -> list[PdfPage]:
         pages: list[PdfPage] = []
+        enable_positioned_blocks = len(page_object_ids) <= 24
         for page_number, object_id in enumerate(page_object_ids, start=1):
             body = objects.get(object_id)
             if body is None:
@@ -1042,7 +1684,13 @@ class BasicPdfTextExtractor:
             blocks: list[PdfTextBlock] = []
             block_number = 0
             for stream in content_streams:
-                for block in self._parse_stream_blocks(stream, page_number, height, width):
+                for block in self._parse_stream_blocks(
+                    stream,
+                    page_number,
+                    height,
+                    width,
+                    enable_positioned_blocks=enable_positioned_blocks,
+                ):
                     block_number += 1
                     blocks.append(
                         PdfTextBlock(
@@ -1165,27 +1813,62 @@ class BasicPdfTextExtractor:
         page_number: int,
         page_height: float,
         page_width: float,
+        *,
+        enable_positioned_blocks: bool,
     ) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
         for segment in re.findall(rb"BT(.*?)ET", stream, re.S):
+            if enable_positioned_blocks and self._should_use_positioned_segment_parsing(segment, page_width):
+                positioned_blocks = self._parse_positioned_segment_blocks(
+                    segment,
+                    page_number=page_number,
+                    page_height=page_height,
+                    page_width=page_width,
+                )
+                if positioned_blocks:
+                    blocks.extend(positioned_blocks)
+                    continue
+
             font_size = self._extract_font_size(segment)
             x, y = self._extract_position(segment)
-            text = self._extract_segment_text(segment)
-            normalized_text = _normalize_text(text)
+            normalized_text = _normalize_text(self._extract_segment_text(segment))
             if not normalized_text:
                 continue
-            estimated_width = max(font_size * 0.5 * len(normalized_text), font_size * 2)
-            top = max(0.0, page_height - y - font_size)
-            bottom = min(page_height, top + font_size * 1.2)
             blocks.append(
                 {
                     "page_number": page_number,
                     "text": normalized_text,
                     "font_size": font_size,
-                    "bbox": (x, top, min(x + estimated_width, page_width), bottom),
+                    "bbox": self._estimated_bbox(
+                        normalized_text,
+                        font_size=font_size,
+                        x=x,
+                        y=y,
+                        page_height=page_height,
+                        page_width=page_width,
+                        width_scale=0.5,
+                    ),
                 }
             )
         return blocks
+
+    def _should_use_positioned_segment_parsing(self, segment: bytes, page_width: float) -> bool:
+        tm_positions = [
+            (float(x), float(y))
+            for x, y in re.findall(
+                rb"[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([-\d.]+)\s+([-\d.]+)\s+Tm",
+                segment,
+            )
+        ]
+        if len(tm_positions) < 6:
+            return False
+        if len(re.findall(rb"\[(.*?)\]\s*TJ", segment, re.S)) < 6 and len(re.findall(rb"\((.*?)(?<!\\)\)\s*Tj", segment, re.S)) < 6:
+            return False
+
+        left_count = sum(1 for x, _y in tm_positions if x <= page_width * 0.32)
+        right_count = sum(1 for x, _y in tm_positions if x >= page_width * 0.45)
+        distinct_rows = len({round(y, 1) for _x, y in tm_positions})
+        return left_count >= 3 and right_count >= 3 and distinct_rows >= 3
 
     def _extract_font_size(self, segment: bytes) -> float:
         match = re.findall(rb"/F\d+\s+([-\d.]+)\s+Tf", segment)
@@ -1203,6 +1886,195 @@ class BasicPdfTextExtractor:
             x, y = td_matches[-1]
             return float(x), float(y)
         return 0.0, 0.0
+
+    def _parse_positioned_segment_blocks(
+        self,
+        segment: bytes,
+        *,
+        page_number: int,
+        page_height: float,
+        page_width: float,
+    ) -> list[dict[str, Any]]:
+        token_pattern = re.compile(
+            rb"/F\d+\s+[-\d.]+\s+Tf"
+            rb"|(?:[-\d.]+\s+){5}[-\d.]+\s+Tm"
+            rb"|[-\d.]+\s+[-\d.]+\s+Td"
+            rb"|\[(?:.*?)\]\s*TJ"
+            rb"|\((?:.*?)(?<!\\)\)\s*Tj",
+            re.S,
+        )
+        operations = list(token_pattern.finditer(segment))
+        if not operations:
+            return []
+
+        blocks: list[dict[str, Any]] = []
+        current_font_size = self._extract_font_size(segment)
+        current_parts: list[str] = []
+        current_font_sizes: list[float] = []
+        current_origin: tuple[float, float] | None = None
+        current_cursor: tuple[float, float] | None = None
+
+        def flush_current() -> None:
+            nonlocal current_parts, current_font_sizes, current_origin
+            normalized_text = _normalize_text(" ".join(part for part in current_parts if part))
+            if not normalized_text or current_origin is None:
+                current_parts = []
+                current_font_sizes = []
+                current_origin = None
+                return
+            font_size = _safe_mean(current_font_sizes) if current_font_sizes else current_font_size
+            blocks.append(
+                {
+                    "page_number": page_number,
+                    "text": normalized_text,
+                    "font_size": font_size,
+                    "bbox": self._estimated_bbox(
+                        normalized_text,
+                        font_size=font_size,
+                        x=current_origin[0],
+                        y=current_origin[1],
+                        page_height=page_height,
+                        page_width=page_width,
+                        width_scale=0.32,
+                    ),
+                }
+            )
+            current_parts = []
+            current_font_sizes = []
+            current_origin = None
+
+        for match in operations:
+            token = match.group(0)
+            if token.endswith(b" Tf"):
+                font_size_match = re.search(rb"/F\d+\s+([-\d.]+)\s+Tf$", token)
+                if font_size_match:
+                    current_font_size = float(font_size_match.group(1))
+                continue
+
+            if token.endswith(b" Tm"):
+                position = self._tm_position(token)
+                if position is None:
+                    continue
+                if self._starts_new_positioned_block(
+                    current_origin,
+                    position,
+                    current_parts=current_parts,
+                    font_size=current_font_size,
+                    page_width=page_width,
+                ):
+                    flush_current()
+                current_cursor = position
+                if current_origin is None:
+                    current_origin = position
+                continue
+
+            if token.endswith(b" Td"):
+                if current_cursor is None:
+                    continue
+                position = self._td_position(token, current_cursor)
+                if position is None:
+                    continue
+                if self._starts_new_positioned_block(
+                    current_origin,
+                    position,
+                    current_parts=current_parts,
+                    font_size=current_font_size,
+                    page_width=page_width,
+                ):
+                    flush_current()
+                current_cursor = position
+                if current_origin is None:
+                    current_origin = position
+                continue
+
+            text = self._extract_text_token(token)
+            if not text:
+                continue
+            if current_cursor is None:
+                current_cursor = (0.0, 0.0)
+            if current_origin is None:
+                current_origin = current_cursor
+            current_parts.append(text)
+            current_font_sizes.append(current_font_size)
+
+        flush_current()
+        return blocks
+
+    def _tm_position(self, token: bytes) -> tuple[float, float] | None:
+        match = re.search(rb"([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+Tm$", token)
+        if not match:
+            return None
+        return float(match.group(5)), float(match.group(6))
+
+    def _td_position(
+        self,
+        token: bytes,
+        current_cursor: tuple[float, float],
+    ) -> tuple[float, float] | None:
+        match = re.search(rb"([-\d.]+)\s+([-\d.]+)\s+Td$", token)
+        if not match:
+            return None
+        return current_cursor[0] + float(match.group(1)), current_cursor[1] + float(match.group(2))
+
+    def _extract_text_token(self, token: bytes) -> str:
+        stripped = token.rstrip()
+        if stripped.endswith(b"Tj"):
+            match = re.search(rb"\((.*?)(?<!\\)\)\s*Tj$", token, re.S)
+            if not match:
+                return ""
+            return self._decode_pdf_string(match.group(1))
+        if stripped.endswith(b"TJ"):
+            parts = [
+                self._decode_pdf_string(match)
+                for match in re.findall(rb"\((.*?)(?<!\\)\)", token, re.S)
+            ]
+            return " ".join(part for part in parts if part)
+        return ""
+
+    def _starts_new_positioned_block(
+        self,
+        current_origin: tuple[float, float] | None,
+        next_position: tuple[float, float],
+        *,
+        current_parts: list[str],
+        font_size: float,
+        page_width: float,
+    ) -> bool:
+        if current_origin is None or not current_parts:
+            return False
+
+        vertical_delta = abs(next_position[1] - current_origin[1])
+        if vertical_delta >= max(6.0, font_size * 0.75):
+            return True
+
+        current_text = _normalize_text(" ".join(current_parts))
+        horizontal_delta = abs(next_position[0] - current_origin[0])
+        if (
+            len(current_text) >= 60
+            and horizontal_delta >= page_width * 0.3
+            and (
+                (current_origin[0] <= page_width * 0.32 and next_position[0] >= page_width * 0.45)
+                or (current_origin[0] >= page_width * 0.45 and next_position[0] <= page_width * 0.32)
+            )
+        ):
+            return True
+        return False
+
+    def _estimated_bbox(
+        self,
+        text: str,
+        *,
+        font_size: float,
+        x: float,
+        y: float,
+        page_height: float,
+        page_width: float,
+        width_scale: float,
+    ) -> tuple[float, float, float, float]:
+        estimated_width = max(font_size * width_scale * len(text), font_size * 2)
+        top = max(0.0, page_height - y - font_size)
+        bottom = min(page_height, top + font_size * 1.2)
+        return (x, top, min(x + estimated_width, page_width), bottom)
 
     def _extract_segment_text(self, segment: bytes) -> str:
         parts = [self._decode_pdf_string(match) for match in re.findall(rb"\((.*?)(?<!\\)\)\s*Tj", segment, re.S)]
@@ -1292,13 +2164,16 @@ class PdfFileProfiler:
 
         fragment_ratio = (len(fragment_pages) / page_count) if page_count else 0.0
         trailing_reference_page_count = _trailing_reference_page_count(extraction.pages)
+        first_page_title_signal = bool(
+            _page_has_centered_title_signal(extraction.pages[0])
+            or _page_has_title_overlap_signal(extraction.pages[0], extraction.title)
+        )
         academic_paper_candidate = bool(
             pdf_kind == "text_pdf"
             and extractor_kind == "basic"
             and page_count <= 24
-            and len(fragment_pages) >= 2
-            and not multi_column_pages
-            and _page_has_centered_title_signal(extraction.pages[0])
+            and len(suspicious_pages) >= 2
+            and first_page_title_signal
             and trailing_reference_page_count >= 1
         )
         basic_fragment_only_layout = bool(
@@ -1406,9 +2281,14 @@ class PdfStructureRecoveryService:
             profile,
         )
         self._link_footnotes(recovered_blocks)
+        recovered_blocks = self._recover_embedded_page_heading_blocks(recovered_blocks)
+        recovered_blocks = self._recover_document_title_heading_blocks(recovered_blocks, extraction.title)
+        recovered_blocks = self._recover_academic_section_blocks(recovered_blocks, profile)
         chapters = self._build_chapters(recovered_blocks, extraction.outline_entries, file_path)
 
         title = extraction.title or (chapters[0].title if chapters else None)
+        if title and chapters and chapters[0].title and _titles_overlap(chapters[0].title, title):
+            chapters[0] = replace(chapters[0], title=title)
         metadata = {
             **extraction.metadata,
             "pdf_profile": profile.to_dict(),
@@ -1458,7 +2338,7 @@ class PdfStructureRecoveryService:
         for page in pages:
             font_sizes = [block.font_size_avg for block in page.blocks if block.font_size_avg > 0]
             page_font_median = median(font_sizes) if font_sizes else 12.0
-            ordered_blocks = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
+            ordered_blocks = self._ordered_page_blocks(page, profile)
             page_context = page_contexts.get(page.page_number, _PageRecoveryContext(is_toc_page=False))
 
             for raw_block in ordered_blocks:
@@ -1475,7 +2355,12 @@ class PdfStructureRecoveryService:
                 recovered_block = _RecoveredBlock(
                     role=role,
                     block_type=self._block_type_for_role(role),
-                    text=_normalize_multiline_text(raw_block.text),
+                    text=self._normalized_block_text(
+                        raw_block.text,
+                        role=role,
+                        page_number=page.page_number,
+                        page_context=page_context,
+                    ),
                     page_start=page.page_number,
                     page_end=page.page_number,
                     bbox_regions=[
@@ -1500,6 +2385,74 @@ class PdfStructureRecoveryService:
                     recovered.append(recovered_block)
 
         return self._merge_footnote_continuations(recovered, pages)
+
+    def _ordered_page_blocks(
+        self,
+        page: PdfPage,
+        profile: PdfFileProfile,
+    ) -> list[PdfTextBlock]:
+        ordered_blocks = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
+        if profile.recovery_lane != "academic_paper":
+            return ordered_blocks
+        if not _page_has_multi_column_signature(page):
+            return ordered_blocks
+        column_major_blocks = self._academic_column_major_blocks(page, ordered_blocks)
+        return column_major_blocks or ordered_blocks
+
+    def _academic_column_major_blocks(
+        self,
+        page: PdfPage,
+        ordered_blocks: list[PdfTextBlock],
+    ) -> list[PdfTextBlock] | None:
+        substantive_blocks = [
+            block
+            for block in ordered_blocks
+            if len(_normalize_text(block.text)) >= 24 and self._page_zone(block.bbox, page.height) != "bottom"
+        ]
+        if len(substantive_blocks) < 6:
+            return None
+
+        narrow_blocks = [block for block in substantive_blocks if (block.bbox[2] - block.bbox[0]) <= page.width * 0.62]
+        left_blocks = [block for block in narrow_blocks if block.bbox[0] <= page.width * 0.3]
+        right_blocks = [block for block in narrow_blocks if block.bbox[0] >= page.width * 0.45]
+        if len(left_blocks) < 2 or len(right_blocks) < 2:
+            return None
+
+        left_min_y = min(block.bbox[1] for block in left_blocks)
+        right_min_y = min(block.bbox[1] for block in right_blocks)
+        left_max_y = max(block.bbox[1] for block in left_blocks)
+        right_max_y = max(block.bbox[1] for block in right_blocks)
+        min_column_y = min(left_min_y, right_min_y)
+        max_column_y = max(left_max_y, right_max_y)
+
+        group_by_id: dict[int, int] = {}
+        for block in left_blocks:
+            group_by_id[id(block)] = 1
+        for block in right_blocks:
+            group_by_id[id(block)] = 2
+
+        for block in ordered_blocks:
+            if id(block) in group_by_id:
+                continue
+            block_width = block.bbox[2] - block.bbox[0]
+            if block_width <= page.width * 0.62:
+                continue
+            if block.bbox[1] <= min_column_y + 2:
+                group_by_id[id(block)] = 0
+                continue
+            if block.bbox[1] >= max_column_y - 2:
+                group_by_id[id(block)] = 3
+                continue
+            return None
+
+        return sorted(
+            ordered_blocks,
+            key=lambda block: (
+                group_by_id.get(id(block), 0 if block.bbox[1] <= min_column_y + 2 else 3),
+                round(block.bbox[1], 2),
+                round(block.bbox[0], 2),
+            ),
+        )
 
     def _page_evidence(
         self,
@@ -1916,6 +2869,25 @@ class PdfStructureRecoveryService:
         flags.append("toc_page_detected")
         return metadata, flags
 
+    def _normalized_block_text(
+        self,
+        raw_text: str,
+        *,
+        role: str,
+        page_number: int,
+        page_context: _PageRecoveryContext,
+    ) -> str:
+        normalized_text = _normalize_multiline_text(raw_text)
+        if (
+            role == "heading"
+            and page_number == 1
+            and page_context.page_family == "body"
+        ):
+            cleaned_title = _normalize_paper_title_candidate(normalized_text)
+            if _looks_like_paper_title(cleaned_title):
+                return cleaned_title
+        return normalized_text
+
     def _parse_confidence_for_role(self, role: str, layout_risk: str) -> float:
         base = {"low": 0.96, "medium": 0.82, "high": 0.65}.get(layout_risk, 0.8)
         if role in {"header", "footer", "toc_entry"}:
@@ -2067,6 +3039,274 @@ class PdfStructureRecoveryService:
                 continue
             merged.append(current)
         return merged
+
+    def _recover_academic_section_blocks(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        profile: PdfFileProfile,
+    ) -> list[_RecoveredBlock]:
+        if profile.recovery_lane != "academic_paper":
+            return recovered_blocks
+
+        split_blocks: list[_RecoveredBlock] = []
+        reading_order_index = 0
+        for block in recovered_blocks:
+            segments = self._split_academic_section_segments(block)
+            for segment in segments:
+                reading_order_index += 1
+                segment.reading_order_index = reading_order_index
+                split_blocks.append(segment)
+        return split_blocks
+
+    def _recover_embedded_page_heading_blocks(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+    ) -> list[_RecoveredBlock]:
+        first_substantive_anchor_by_page: dict[int, str] = {}
+        has_heading_by_page: dict[int, bool] = defaultdict(bool)
+        for block in recovered_blocks:
+            if block.role == "heading":
+                has_heading_by_page[block.page_start] = True
+            if (
+                block.role not in {"header", "footer", "toc_entry", "footnote"}
+                and block.page_start not in first_substantive_anchor_by_page
+            ):
+                first_substantive_anchor_by_page[block.page_start] = block.anchor
+
+        split_blocks: list[_RecoveredBlock] = []
+        reading_order_index = 0
+        for block in recovered_blocks:
+            segments = self._split_embedded_page_heading_segments(
+                block,
+                is_first_substantive_page_block=(
+                    first_substantive_anchor_by_page.get(block.page_start) == block.anchor
+                ),
+                page_has_heading=has_heading_by_page.get(block.page_start, False),
+            )
+            for segment in segments:
+                reading_order_index += 1
+                segment.reading_order_index = reading_order_index
+                split_blocks.append(segment)
+        return split_blocks
+
+    def _recover_document_title_heading_blocks(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        document_title: str | None,
+    ) -> list[_RecoveredBlock]:
+        normalized_title = _normalize_intro_title_artifacts(_normalize_pdf_signal_text(document_title or ""))
+        if len(normalized_title) < 12:
+            return recovered_blocks
+
+        first_page_blocks = [
+            block
+            for block in recovered_blocks
+            if block.page_start == 1 and block.page_end == 1
+        ]
+        if any(
+            block.role == "heading" and _titles_overlap(block.text, normalized_title)
+            for block in first_page_blocks
+        ):
+            return recovered_blocks
+
+        compact_title = re.sub(r"\s+", "", normalized_title).casefold()
+        split_blocks: list[_RecoveredBlock] = []
+        reading_order_index = 0
+        title_recovered = False
+        for block in recovered_blocks:
+            segments = [replace(block)]
+            if (
+                not title_recovered
+                and block.page_start == 1
+                and block.page_end == 1
+                and block.role == "body"
+                and str(block.metadata.get("pdf_page_family") or "body") == "body"
+            ):
+                normalized_block = _normalize_intro_title_artifacts(_normalize_pdf_signal_text(block.text))
+                compact_block = re.sub(r"\s+", "", normalized_block).casefold()
+                if normalized_block and (
+                    _titles_overlap(normalized_block, normalized_title)
+                    or compact_block == compact_title
+                    or (len(compact_block) >= 12 and (compact_block in compact_title or compact_title in compact_block))
+                ):
+                    heading_metadata = dict(block.metadata)
+                    heading_metadata["pdf_heading_recovery_source"] = "document_title_overlap"
+                    shared_flags = list(dict.fromkeys([*block.flags, "embedded_document_title_recovered"]))
+                    segments = [
+                        _RecoveredBlock(
+                            role="heading",
+                            block_type=BlockType.HEADING,
+                            text=normalized_title,
+                            page_start=block.page_start,
+                            page_end=block.page_end,
+                            bbox_regions=list(block.bbox_regions),
+                            reading_order_index=block.reading_order_index,
+                            parse_confidence=block.parse_confidence,
+                            flags=shared_flags,
+                            metadata=heading_metadata,
+                            font_size_avg=block.font_size_avg,
+                            source_path=block.source_path,
+                            anchor=f"{block.anchor}-title",
+                        )
+                    ]
+                    title_recovered = True
+            for segment in segments:
+                reading_order_index += 1
+                segment.reading_order_index = reading_order_index
+                split_blocks.append(segment)
+        return split_blocks
+
+    def _split_embedded_page_heading_segments(
+        self,
+        block: _RecoveredBlock,
+        *,
+        is_first_substantive_page_block: bool,
+        page_has_heading: bool,
+    ) -> list[_RecoveredBlock]:
+        if (
+            block.role != "body"
+            or block.block_type != BlockType.PARAGRAPH
+        ):
+            return [replace(block)]
+
+        heading_text: str | None = None
+        remainder: str | None = None
+        recovery_flag: str | None = None
+        metadata = dict(block.metadata)
+        page_family = str(metadata.get("pdf_page_family") or "body")
+        if page_family == "references":
+            reference_heading = _leading_reference_heading_and_remainder(block.text)
+            if reference_heading is not None:
+                heading_text, remainder = reference_heading
+                recovery_flag = "embedded_references_heading_recovered"
+        elif (
+            block.page_start == 1
+            and block.page_end == 1
+            and page_family == "body"
+            and is_first_substantive_page_block
+            and not page_has_heading
+        ):
+            paper_title = _infer_first_page_paper_title_and_remainder(block.text)
+            if paper_title is not None:
+                heading_text, remainder = paper_title
+                recovery_flag = "embedded_document_title_recovered"
+
+        if heading_text is None or recovery_flag is None:
+            return [replace(block)]
+
+        shared_flags = list(dict.fromkeys([*block.flags, recovery_flag]))
+        heading_metadata = dict(metadata)
+        heading_metadata["pdf_heading_recovery_source"] = recovery_flag
+        segments = [
+            _RecoveredBlock(
+                role="heading",
+                block_type=BlockType.HEADING,
+                text=_normalize_multiline_text(heading_text),
+                page_start=block.page_start,
+                page_end=block.page_end,
+                bbox_regions=list(block.bbox_regions),
+                reading_order_index=block.reading_order_index,
+                parse_confidence=block.parse_confidence,
+                flags=shared_flags,
+                metadata=heading_metadata,
+                font_size_avg=block.font_size_avg,
+                source_path=block.source_path,
+                anchor=f"{block.anchor}-s1",
+            )
+        ]
+        normalized_remainder = _normalize_multiline_text(remainder or "")
+        if normalized_remainder:
+            body_metadata = dict(metadata)
+            body_metadata["pdf_heading_recovery_source"] = recovery_flag
+            segments.append(
+                _RecoveredBlock(
+                    role=block.role,
+                    block_type=block.block_type,
+                    text=normalized_remainder,
+                    page_start=block.page_start,
+                    page_end=block.page_end,
+                    bbox_regions=list(block.bbox_regions),
+                    reading_order_index=block.reading_order_index,
+                    parse_confidence=block.parse_confidence,
+                    flags=shared_flags,
+                    metadata=body_metadata,
+                    font_size_avg=block.font_size_avg,
+                    source_path=block.source_path,
+                    anchor=f"{block.anchor}-s2",
+                )
+            )
+        return segments
+
+    def _split_academic_section_segments(
+        self,
+        block: _RecoveredBlock,
+    ) -> list[_RecoveredBlock]:
+        if (
+            block.role != "body"
+            or block.block_type != BlockType.PARAGRAPH
+            or str(block.metadata.get("pdf_page_family") or "body") != "body"
+        ):
+            return [replace(block)]
+
+        remaining_text = _normalize_multiline_text(block.text)
+        if len(remaining_text) < 24:
+            return [replace(block, text=remaining_text)]
+
+        segments: list[tuple[str, str, dict[str, Any]]] = []
+        while remaining_text:
+            candidate = _next_academic_inline_heading(remaining_text)
+            if candidate is None:
+                segments.append(("body", remaining_text, {}))
+                break
+            start_index, heading_text, remainder, heading_meta = candidate
+            prefix = remaining_text[:start_index].strip()
+            if prefix:
+                segments.append(("body", prefix, {}))
+            segments.append(("heading", heading_text, heading_meta))
+            remaining_text = remainder
+            if not remaining_text:
+                break
+
+        if not any(kind == "heading" for kind, _text, _meta in segments):
+            return [replace(block, text=remaining_text or block.text)]
+
+        split_blocks: list[_RecoveredBlock] = []
+        segment_index = 0
+        for kind, text, heading_meta in segments:
+            normalized_text = _normalize_multiline_text(text)
+            if not normalized_text:
+                continue
+            segment_index += 1
+            flags = list(dict.fromkeys([*block.flags, "academic_section_split"]))
+            metadata = dict(block.metadata)
+            if kind == "heading":
+                flags.append("academic_section_heading_recovered")
+                metadata["pdf_academic_heading"] = True
+                metadata["pdf_academic_heading_kind"] = heading_meta.get("heading_kind")
+                metadata["pdf_academic_section_level"] = heading_meta.get("section_level")
+                role = "heading"
+                block_type = BlockType.HEADING
+            else:
+                role = block.role
+                block_type = block.block_type
+            split_blocks.append(
+                _RecoveredBlock(
+                    role=role,
+                    block_type=block_type,
+                    text=normalized_text,
+                    page_start=block.page_start,
+                    page_end=block.page_end,
+                    bbox_regions=list(block.bbox_regions),
+                    reading_order_index=block.reading_order_index,
+                    parse_confidence=block.parse_confidence,
+                    flags=flags,
+                    metadata=metadata,
+                    font_size_avg=block.font_size_avg,
+                    source_path=block.source_path,
+                    anchor=f"{block.anchor}-s{segment_index}",
+                )
+            )
+        return split_blocks or [replace(block, text=remaining_text or block.text)]
 
     def _footnote_continuation_target_index(
         self,

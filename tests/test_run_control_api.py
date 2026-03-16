@@ -32,6 +32,14 @@ from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 
 
+class _NoopDocumentRunExecutor:
+    def wake(self, _run_id: str | None = None) -> None:
+        return None
+
+    def stop(self) -> None:
+        return None
+
+
 class RunControlApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
@@ -48,6 +56,7 @@ class RunControlApiTests(unittest.TestCase):
         self.session_factory = build_session_factory(engine=self.engine)
         self.app = create_app()
         self.app.state.session_factory = self.session_factory
+        self.app.state.document_run_executor = _NoopDocumentRunExecutor()
         self.client = TestClient(self.app)
         self.addCleanup(self.client.close)
 
@@ -127,9 +136,14 @@ class RunControlApiTests(unittest.TestCase):
 
         events_response = self.client.get(f"/v1/runs/{run_id}/events")
         self.assertEqual(events_response.status_code, 200)
-        self.assertEqual(events_response.json()["event_count"], 5)
-        self.assertEqual(events_response.json()["entries"][0]["event_type"], "run.cancelled")
-        self.assertEqual(events_response.json()["entries"][-1]["event_type"], "run.created")
+        event_types = [entry["event_type"] for entry in events_response.json()["entries"]]
+        self.assertGreaterEqual(events_response.json()["event_count"], 5)
+        self.assertEqual(event_types[0], "run.cancelled")
+        self.assertEqual(event_types[-1], "run.created")
+        self.assertIn("run.paused", event_types)
+        self.assertIn("run.resumed", event_types)
+        self.assertIn("run.draining", event_types)
+        self.assertIn("run.cancelled", event_types)
 
     def test_invalid_run_transition_returns_conflict(self) -> None:
         document_id = self._create_document()

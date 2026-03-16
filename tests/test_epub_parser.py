@@ -109,6 +109,46 @@ print(run_agent())</pre>
 </html>
 """
 
+DEDUP_CONTENT_OPF = """<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Dedup Book</dc:title>
+    <dc:creator>welcome.html</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />
+    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml" />
+    <item id="welcome_a" href="welcome.xhtml" media-type="application/xhtml+xml" />
+    <item id="welcome_b" href="welcome.xhtml" media-type="application/xhtml+xml" />
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml" />
+  </manifest>
+  <spine>
+    <itemref idref="cover" linear="no" />
+    <itemref idref="welcome_a" />
+    <itemref idref="welcome_b" />
+    <itemref idref="chap1" />
+  </spine>
+</package>
+"""
+
+COVER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <img src="cover.png" alt="Cover" />
+  </body>
+</html>
+"""
+
+WELCOME_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="welcome">Welcome</h1>
+    <p>Thank you for reading.</p>
+  </body>
+</html>
+"""
+
 
 class EPUBParserTests(unittest.TestCase):
     def test_parse_minimal_epub(self) -> None:
@@ -200,6 +240,27 @@ class EPUBParserTests(unittest.TestCase):
             chapter.blocks[1].text,
             'def run_agent():\n    return "ok"\n\nprint(run_agent())',
         )
+
+    def test_parse_epub_skips_non_linear_and_duplicate_spine_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample-dedup.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", DEDUP_CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML.replace("chapter1.xhtml", "welcome.xhtml").replace("Chapter One", "Welcome"))
+                archive.writestr("OEBPS/cover.xhtml", COVER_XHTML)
+                archive.writestr("OEBPS/welcome.xhtml", WELCOME_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+
+            parsed = EPUBParser().parse(epub_path)
+
+        self.assertIsNone(parsed.author)
+        self.assertEqual(len(parsed.chapters), 2)
+        self.assertEqual(parsed.chapters[0].href, "OEBPS/welcome.xhtml")
+        self.assertEqual(parsed.chapters[0].title, "Welcome")
+        self.assertEqual(parsed.chapters[1].href, "OEBPS/chapter1.xhtml")
+        self.assertEqual(parsed.chapters[1].title, "Chapter One")
 
 
 if __name__ == "__main__":

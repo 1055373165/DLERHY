@@ -2041,3 +2041,56 @@ Consequences:
 - owner alerts 的口径必须随当前 queue filters 一起变化，它是 live routing 层，而不是全局快照层
 - alert 点击后必须复用现有 `assigned_owner_name / assigned / queue_priority / sla_status` filters
 - 如果后续要升级成真正的 alerting/notification 系统，应在当前 derived alerts 之上逐步外化，而不是推翻现有 UI contract
+
+---
+
+## D-085 Translation Consistency And Cache Optimization Should Share The Same Prompt Architecture
+
+Status: Accepted
+
+Decision:
+
+- 术语一致性和 DeepSeek prompt cache 优化不再分成两条独立路线
+- translation prompt 必须按“稳定前缀优先”的结构组织：
+  - 固定 translation contract
+  - 书级 / 章级稳定上下文
+  - locked and relevant terms
+  - local accepted translations
+  - local source context
+  - current sentences
+- `Packet ID` 不再出现在 prompt 前部
+- `prev_blocks / next_blocks` 必须真正进入模型输入
+- translation repository 需要在 packet 执行前注入局部 `Previous Accepted Translations`
+
+Why:
+
+- 真实书已经证明，仅靠 chapter brief 和轻量 term list，无法稳定避免“上下文工程 / 情境工程”这类概念漂移
+- 对 DeepSeek 这类依赖共享前缀的缓存机制来说，prompt 前部越稳定，cache hit 越有机会提升
+- 对长书翻译而言，“稳定前缀”与“稳定术语”本质上是同一个工程问题
+
+Consequences:
+
+- 后续 term memory、concept registry、cache hit ratio 观测，都必须沿用这套 prompt 分层
+- dashboard 后续应补 `prompt_cache_hit_tokens / prompt_cache_miss_tokens` 的显式观察面
+- 翻译质量问题不再只从 QA 末端处理，而要前移到 prompt / memory architecture
+
+---
+
+## D-086 Compose-Based App Runs Should Default To PostgreSQL
+
+Status: Accepted
+
+Decision:
+
+- `docker compose` 下的 app 容器默认使用 `postgresql+psycopg://postgres:postgres@postgres:5432/book_agent`
+- SQLite 继续保留为本地非 compose 的轻量开发 fallback，但 compose 路径视为 PostgreSQL 集成真值环境
+
+Why:
+
+- 当前仓库已经把 PostgreSQL 作为集成验证和运行控制的主要目标数据库
+- 如果 compose 容器仍继承 SQLite 默认值，容器内 `alembic upgrade head` 会按 SQLite 语义执行，既掩盖 PostgreSQL 问题，也会直接打断 `CREATE EXTENSION` 这类迁移
+
+Consequences:
+
+- compose 环境下的迁移、API smoke 和集成测试将与真实 PostgreSQL 行为保持一致
+- 后续 CI/CD 若复用 compose，也能天然站在正确的数据库后端上验证

@@ -1,11 +1,13 @@
 # ruff: noqa: E402
 
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi.testclient import TestClient
 
@@ -16,8 +18,14 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.app.api.routes.documents import ArchiveInput, _build_export_archive, _resolve_artifact_path
 from book_agent.app.main import create_app
 from book_agent.core.config import get_settings
+from book_agent.domain.enums import DocumentStatus, ExportStatus, ExportType, SourceType
+from book_agent.domain.models.document import Document
+from book_agent.domain.models.review import Export
+from book_agent.infra.db.base import Base
+from book_agent.infra.db.session import build_engine, build_session_factory
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -103,6 +111,64 @@ class AppRuntimeTests(unittest.TestCase):
             archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
         return epub_path
 
+    def _seed_legacy_database(
+        self,
+        db_path: Path,
+        *,
+        document_id: str,
+        title: str,
+        updated_at: str,
+        merged_export_count: int,
+        chapter_export_count: int,
+        author: str = "Legacy Runtime",
+    ) -> None:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        engine = build_engine(database_url=f"sqlite+pysqlite:///{db_path}")
+        Base.metadata.create_all(engine)
+        session_factory = build_session_factory(engine=engine)
+        with session_factory() as session:
+            document = Document(
+                id=document_id,
+                source_type=SourceType.EPUB,
+                file_fingerprint=f"fingerprint::{document_id}",
+                source_path=f"/legacy/{title}.epub",
+                title=title,
+                author=author,
+                status=DocumentStatus.EXPORTED,
+                metadata_json={},
+            )
+            session.add(document)
+            for index in range(merged_export_count):
+                session.add(
+                    Export(
+                        id=str(uuid5(NAMESPACE_URL, f"{document_id}::merged::{index}")),
+                        document_id=document_id,
+                        export_type=ExportType.MERGED_HTML,
+                        input_version_bundle_json={},
+                        file_path=str(db_path.parent / f"merged-document-{index}.html"),
+                        status=ExportStatus.SUCCEEDED,
+                    )
+                )
+            for index in range(chapter_export_count):
+                session.add(
+                    Export(
+                        id=str(uuid5(NAMESPACE_URL, f"{document_id}::chapter::{index}")),
+                        document_id=document_id,
+                        export_type=ExportType.BILINGUAL_HTML,
+                        input_version_bundle_json={"chapter_id": f"chapter-{index}"},
+                        file_path=str(db_path.parent / f"bilingual-{index}.html"),
+                        status=ExportStatus.SUCCEEDED,
+                    )
+                )
+            session.commit()
+
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "UPDATE documents SET updated_at = ?, created_at = ? WHERE id IN (?, ?)",
+                (updated_at, updated_at, document_id, document_id.replace("-", "")),
+            )
+            connection.commit()
+
     def test_create_app_bootstrap_upload_works_with_sqlite_default(self) -> None:
         db_path = Path(self.tempdir.name) / "runtime.sqlite"
         self._set_env("BOOK_AGENT_DATABASE_URL", f"sqlite+pysqlite:///{db_path}")
@@ -142,3 +208,123 @@ class AppRuntimeTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertIn("Database unavailable", response.json()["detail"])
+
+    def test_create_app_backfills_best_legacy_history_records_into_empty_sqlite_db(self) -> None:
+        db_path = Path(self.tempdir.name) / "runtime.sqlite"
+        legacy_root = Path(self.tempdir.name) / "real-book-live"
+        self._set_env("BOOK_AGENT_DATABASE_URL", f"sqlite+pysqlite:///{db_path}")
+
+        shared_document_id = "11111111-1111-1111-1111-111111111111"
+        self._seed_legacy_database(
+            legacy_root / "book-one-v1" / "full.sqlite",
+            document_id=shared_document_id,
+            title="Legacy Book One",
+            updated_at="2026-03-14 10:00:00",
+            merged_export_count=0,
+            chapter_export_count=0,
+        )
+        self._seed_legacy_database(
+            legacy_root / "book-one-v2" / "full.sqlite",
+            document_id=shared_document_id,
+            title="Legacy Book One",
+            updated_at="2026-03-15 10:00:00",
+            merged_export_count=1,
+            chapter_export_count=3,
+        )
+        self._seed_legacy_database(
+            legacy_root / "book-two" / "full.sqlite",
+            document_id="22222222-2222-2222-2222-222222222222",
+            title="Legacy Book Two",
+            updated_at="2026-03-16 08:00:00",
+            merged_export_count=1,
+            chapter_export_count=2,
+            author="welcome.html",
+        )
+
+        app = create_app()
+        client = TestClient(app)
+        self.addCleanup(client.close)
+
+        history = client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        payload = history.json()
+        self.assertEqual(payload["total_count"], 2)
+
+        first_entry = next(entry for entry in payload["entries"] if entry["document_id"] == shared_document_id)
+        self.assertTrue(first_entry["merged_export_ready"])
+        self.assertEqual(first_entry["chapter_bilingual_export_count"], 3)
+        second_entry = next(
+            entry for entry in payload["entries"] if entry["document_id"] == "22222222-2222-2222-2222-222222222222"
+        )
+        self.assertIsNone(second_entry["author"])
+
+    def test_history_backfill_endpoint_imports_legacy_records_without_restart(self) -> None:
+        db_path = Path(self.tempdir.name) / "runtime.sqlite"
+        legacy_root = Path(self.tempdir.name) / "real-book-live"
+        self._set_env("BOOK_AGENT_DATABASE_URL", f"sqlite+pysqlite:///{db_path}")
+        previous_cwd = Path.cwd()
+        os.chdir(self.tempdir.name)
+        self.addCleanup(os.chdir, previous_cwd)
+
+        app = create_app()
+        client = TestClient(app)
+        self.addCleanup(client.close)
+
+        initial_history = client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(initial_history.status_code, 200)
+        self.assertEqual(initial_history.json()["total_count"], 0)
+
+        self._seed_legacy_database(
+            legacy_root / "late-import" / "full.sqlite",
+            document_id="33333333-3333-3333-3333-333333333333",
+            title="Late Legacy Import",
+            updated_at="2026-03-16 11:00:00",
+            merged_export_count=1,
+            chapter_export_count=4,
+        )
+
+        imported = client.post("/v1/documents/history/backfill")
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(imported.json()["imported_document_count"], 1)
+
+        refreshed_history = client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(refreshed_history.status_code, 200)
+        payload = refreshed_history.json()
+        self.assertEqual(payload["total_count"], 1)
+        self.assertEqual(payload["entries"][0]["document_id"], "33333333-3333-3333-3333-333333333333")
+
+    def test_resolve_artifact_path_falls_back_to_legacy_merged_document_name(self) -> None:
+        artifact_root = Path(self.tempdir.name) / "artifacts"
+        legacy_dir = artifact_root / "real-book-live" / "legacy-book" / "exports" / "doc-1"
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        actual_path = legacy_dir / "merged-document-first-epub.html"
+        actual_path.write_text("<html>legacy</html>", encoding="utf-8")
+
+        resolved = _resolve_artifact_path(
+            legacy_dir / "merged-document.html",
+            roots=((artifact_root / "exports").resolve(), artifact_root.resolve()),
+        )
+
+        self.assertEqual(resolved, actual_path.resolve())
+
+    def test_build_export_archive_uses_canonical_name_for_legacy_merged_html(self) -> None:
+        export_dir = Path(self.tempdir.name) / "exports" / "doc-1"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        actual_path = export_dir / "merged-document-first-epub.html"
+        actual_path.write_text("<html>legacy merged</html>", encoding="utf-8")
+
+        archive_path = _build_export_archive(
+            "doc-1",
+            ExportType.MERGED_HTML,
+            [
+                ArchiveInput(path=actual_path, archive_name="merged-document.html"),
+            ],
+            include_related_exports=True,
+        )
+        self.addCleanup(archive_path.unlink, missing_ok=True)
+
+        with zipfile.ZipFile(archive_path) as archive:
+            names = archive.namelist()
+
+        self.assertIn("doc-1-analysis-bundle/merged-document.html", names)
+        self.assertNotIn("doc-1-analysis-bundle/merged-document-first-epub.html", names)

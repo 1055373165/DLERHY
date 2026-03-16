@@ -92,6 +92,15 @@ def _normalize_preformatted_text(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
 
 
+def _looks_like_metadata_filename(value: str) -> bool:
+    candidate = _normalize_text(value).casefold()
+    if not candidate:
+        return False
+    if "/" in candidate or "\\" in candidate:
+        return True
+    return candidate.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx"))
+
+
 def _class_tokens(value: str) -> set[str]:
     return {token.casefold() for token in re.split(r"\s+", value or "") if token}
 
@@ -345,7 +354,7 @@ class EPUBParser:
         language = opf_root.findtext(".//dc:language", default=None, namespaces=_OPF_NS)
         if title:
             metadata["title"] = _normalize_text(title)
-        if author:
+        if author and not _looks_like_metadata_filename(author):
             metadata["author"] = _normalize_text(author)
         if language:
             metadata["language"] = _normalize_text(language)
@@ -381,14 +390,23 @@ class EPUBParser:
         nav_map: dict[str, str],
     ) -> list[ParsedChapter]:
         chapters: list[ParsedChapter] = []
-        for idx, itemref in enumerate(opf_root.findall(".//opf:spine/opf:itemref", _OPF_NS), start=1):
+        seen_hrefs: set[str] = set()
+        for itemref in opf_root.findall(".//opf:spine/opf:itemref", _OPF_NS):
+            if itemref.attrib.get("linear", "").casefold() == "no":
+                continue
             item_id = itemref.attrib["idref"]
             manifest_item = manifest.get(item_id)
             if manifest_item is None:
                 continue
             if manifest_item["media_type"] not in {"application/xhtml+xml", "text/html"}:
                 continue
-            chapters.append(self._parse_chapter(archive, manifest_item["href"], nav_map, idx))
+            normalized_href = posixpath.normpath(manifest_item["href"])
+            if normalized_href in seen_hrefs:
+                continue
+            seen_hrefs.add(normalized_href)
+            chapters.append(
+                self._parse_chapter(archive, manifest_item["href"], nav_map, len(chapters) + 1)
+            )
         return chapters
 
     def _parse_chapter(

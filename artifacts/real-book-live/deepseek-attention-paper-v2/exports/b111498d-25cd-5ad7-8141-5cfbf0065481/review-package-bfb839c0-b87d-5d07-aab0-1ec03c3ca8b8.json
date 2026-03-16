@@ -1,0 +1,2643 @@
+{
+  "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+  "chapter_title": "Attention Is All Y ou Need",
+  "quality_summary": {
+    "issue_count": 1,
+    "action_count": 1,
+    "resolved_issue_count": 0,
+    "coverage_ok": true,
+    "alignment_ok": true,
+    "term_ok": true,
+    "format_ok": true,
+    "blocking_issue_count": 0,
+    "low_confidence_count": 0,
+    "format_pollution_count": 0
+  },
+  "pdf_page_evidence": {
+    "schema_version": 1,
+    "document_page_count": 11,
+    "page_count": 9,
+    "page_range": {
+      "start": 1,
+      "end": 9
+    },
+    "pdf_pages": [
+      {
+        "page_number": 1,
+        "raw_block_count": 3,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": true,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 2,
+          "heading": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 2,
+        "raw_block_count": 1,
+        "recovered_block_count": 5,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "body": 3,
+          "heading": 2
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 3,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "layout_suspect": true,
+        "role_counts": {
+          "caption": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 4,
+        "raw_block_count": 11,
+        "recovered_block_count": 10,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 8,
+          "caption": 1,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 5,
+        "raw_block_count": 2,
+        "recovered_block_count": 4,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 6,
+        "raw_block_count": 4,
+        "recovered_block_count": 3,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 3
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 7,
+        "raw_block_count": 1,
+        "recovered_block_count": 1,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 1
+        },
+        "recovery_flags": [],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 8,
+        "raw_block_count": 8,
+        "recovered_block_count": 6,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      },
+      {
+        "page_number": 9,
+        "raw_block_count": 53,
+        "recovered_block_count": 6,
+        "page_family": "body",
+        "page_family_source": "body",
+        "page_family_heading": null,
+        "content_family": null,
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "is_toc_page": false,
+        "has_strong_heading": false,
+        "layout_signals": [],
+        "layout_suspect": false,
+        "role_counts": {
+          "body": 5,
+          "heading": 1
+        },
+        "recovery_flags": [
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "toc_entries": [],
+        "appendix_nested_subheadings": [],
+        "matched_footnote_count": 0,
+        "orphan_footnote_count": 0,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0
+      }
+    ],
+    "pdf_outline_entries": []
+  },
+  "pdf_preserve_evidence": {
+    "schema_version": 1,
+    "chapter_section_family": "body",
+    "page_range": {
+      "start": 1,
+      "end": 9
+    },
+    "special_section_page_count": 0,
+    "special_section_page_family_counts": {},
+    "preserved_block_count": 0,
+    "source_only_block_count": 0,
+    "preserved_sentence_count": 0,
+    "page_contracts": []
+  },
+  "pdf_page_debug_evidence": {
+    "schema_version": 1,
+    "page_range": {
+      "start": 1,
+      "end": 9
+    },
+    "page_count": 2,
+    "pages": [
+      {
+        "page_number": 2,
+        "page_family": "body",
+        "content_family": null,
+        "family_source": "body",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": true,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "preserve_policy": null,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0,
+        "appendix_nested_subheadings": [],
+        "debug_reasons": [
+          "layout_suspect"
+        ],
+        "blocks": [
+          {
+            "block_id": "46f62580-34b2-52ac-807e-7707e9bb1730",
+            "ordinal": 4,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p2-b4-s1",
+            "reading_order_index": 4,
+            "page_span": {
+              "start": 2,
+              "end": 2
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 18,
+            "translatable_sentence_count": 18,
+            "target_segment_count": 18,
+            "source_excerpt": "Recurrent models typically f actor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, the y generate a sequence of hidden states h t , as a f...",
+            "target_excerpt": "循环模型通常沿着输入和输出序列的符号位置分解计算。 通过将位置与计算时间步骤对齐，它们以前一个隐藏状态h_{t-1}和位置t的输入为函数，生成一系列隐藏状态h_t。 这种固有的顺序性质阻碍了训练样本内的并行化，这在序列较长时变得至关重要，因为内存限制会制约跨样本的批处理。 近期工作通过因子化技巧[18]和条件计算[26]在计算效率方面取得了显著提升，同时后者还提高了模型性能。 然而，顺序计算的根本限制依然存在。 注意力机制已成为各...",
+            "recovery_flags": [
+              "academic_section_split"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 2,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "block_id": "e49cbdbf-208b-5b7a-aa6b-f6fe607e7b85",
+            "ordinal": 5,
+            "block_type": "heading",
+            "pdf_block_role": "heading",
+            "anchor": "p2-b4-s2",
+            "reading_order_index": 5,
+            "page_span": {
+              "start": 2,
+              "end": 2
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 1,
+            "translatable_sentence_count": 1,
+            "target_segment_count": 1,
+            "source_excerpt": "3 Model Architecture",
+            "target_excerpt": "3 模型架构",
+            "recovery_flags": [
+              "academic_section_split",
+              "academic_section_heading_recovered"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 2,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "block_id": "b1effd6b-c889-570f-affe-b8ef677d8ace",
+            "ordinal": 6,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p2-b4-s3",
+            "reading_order_index": 6,
+            "page_span": {
+              "start": 2,
+              "end": 2
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 5,
+            "translatable_sentence_count": 5,
+            "target_segment_count": 5,
+            "source_excerpt": "Most competiti v e neural sequence transduction models ha v e an encoder -decoder structure [ 5 , 2 , 29 ]. Here, the encoder maps an input sequence of symbol representations \\050 x 1 ; :::; x n \\051 to a sequence of...",
+            "target_excerpt": "大多数具有竞争力的神经序列转换模型都采用编码器-解码器结构[5, 2, 29]。 编码器将输入符号表示序列(x1, ..., xn)映射为连续表示序列z = (z1, ..., zn)。 给定z，解码器随后逐个元素地生成输出符号序列(y1, ..., ym)。 在每个步骤中，模型都是自回归的[9]，在生成下一个符号时，将先前生成的符号作为额外输入。 Transformer遵循这一整体架构，在编码器和解码器中都使用堆叠的自注意力机制...",
+            "recovery_flags": [
+              "academic_section_split"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 2,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "block_id": "eb88315b-b621-5131-821d-ed20b8c527a7",
+            "ordinal": 7,
+            "block_type": "heading",
+            "pdf_block_role": "heading",
+            "anchor": "p2-b4-s4",
+            "reading_order_index": 7,
+            "page_span": {
+              "start": 2,
+              "end": 2
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 1,
+            "translatable_sentence_count": 1,
+            "target_segment_count": 1,
+            "source_excerpt": "3.1 Encoder and Decoder Stacks",
+            "target_excerpt": "3.1 编码器与解码器堆栈",
+            "recovery_flags": [
+              "academic_section_split",
+              "academic_section_heading_recovered"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 2,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "block_id": "5a6e1f8d-2ca8-594c-8a75-2222d69a7911",
+            "ordinal": 8,
+            "block_type": "paragraph",
+            "pdf_block_role": "body",
+            "anchor": "p2-b4-s5",
+            "reading_order_index": 8,
+            "page_span": {
+              "start": 2,
+              "end": 2
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 3,
+            "translatable_sentence_count": 3,
+            "target_segment_count": 3,
+            "source_excerpt": "Encoder: The encoder is composed of a stack of N = 6 identical layers. Each layer has tw o sub-layers. The \\002rst is a multi-head self-attention mechanism, and the second is a simple, position- 2",
+            "target_excerpt": "编码器：编码器由N=6个相同的层堆叠而成。 每个层包含两个子层。 第一个子层是多头自注意力机制，第二个子层是简单的位置前馈网络。",
+            "recovery_flags": [
+              "academic_section_split"
+            ],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 2,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "page_number": 3,
+        "page_family": "body",
+        "content_family": null,
+        "family_source": "body",
+        "backmatter_cue": null,
+        "backmatter_cue_source": null,
+        "layout_suspect": true,
+        "layout_signals": [
+          "column_fragment"
+        ],
+        "preserve_policy": null,
+        "relocated_footnote_count": 0,
+        "max_footnote_segment_count": 0,
+        "appendix_nested_subheadings": [],
+        "debug_reasons": [
+          "layout_suspect"
+        ],
+        "blocks": [
+          {
+            "block_id": "987fa471-6335-56b0-a87d-3d0df65b4d15",
+            "ordinal": 9,
+            "block_type": "caption",
+            "pdf_block_role": "caption",
+            "anchor": "p3-b5",
+            "reading_order_index": 9,
+            "page_span": {
+              "start": 3,
+              "end": 3
+            },
+            "translatable": true,
+            "nontranslatable_reason": null,
+            "protected_policy": "translate",
+            "render_mode": "zh_primary_with_optional_source",
+            "artifact_kind": null,
+            "expected_source_only": false,
+            "notice": null,
+            "sentence_count": 1,
+            "translatable_sentence_count": 1,
+            "target_segment_count": 13,
+            "source_excerpt": "Figure 1: The T ransformer - model architecture. wise fully connected feed-forw ard netw ork. W e emplo y a residual connection [ 10 ] around each of the tw o sub-layers, follo wed by layer normalization [ 1 ]. That i...",
+            "target_excerpt": "图1：Transformer模型架构。 逐位置全连接前馈网络。我们在每个子层周围采用残差连接[10]，随后进行层归一化[1]。也就是说，每个子层的输出为LayerNorm(x + Sublayer(x))，其中Sublayer(x)是该子层实现的函数。 为了便于这些残差连接，模型中的所有子层以及嵌入层都产生维度d_model=512的输出。 解码器：解码器同样由N=6个相同的层堆叠而成。除了每个编码器层中的两个子层外，解码器还插入...",
+            "recovery_flags": [],
+            "source_bbox_json": {
+              "regions": [
+                {
+                  "page_number": 3,
+                  "bbox": [
+                    303.509,
+                    739.925,
+                    612.0,
+                    751.881
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "version_evidence": {
+    "document": {
+      "document_id": "b111498d-25cd-5ad7-8141-5cfbf0065481",
+      "parser_version": 1,
+      "segmentation_version": 1,
+      "active_book_profile_version": 1
+    },
+    "chapter": {
+      "chapter_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+      "status": "qa_checked",
+      "summary_version": null
+    },
+    "book_profile": {
+      "profile_id": "f3d5ed50-885a-527d-bb3f-93d0105f26ec",
+      "version": 1
+    },
+    "active_snapshots": [
+      {
+        "snapshot_id": "628c9c86-695c-5433-bf99-580c6b9f92d5",
+        "snapshot_type": "chapter_brief",
+        "scope_type": "chapter",
+        "scope_id": "bfb839c0-b87d-5d07-aab0-1ec03c3ca8b8",
+        "version": 1
+      },
+      {
+        "snapshot_id": "825d349e-c2bd-5ad2-ab9c-6896273f92e3",
+        "snapshot_type": "entity_registry",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      },
+      {
+        "snapshot_id": "cf473230-e1ea-5f1e-960c-f4e38235a627",
+        "snapshot_type": "termbase",
+        "scope_type": "global",
+        "scope_id": null,
+        "version": 1
+      }
+    ],
+    "packet_context_versions": [
+      {
+        "packet_id": "003d362d-7d18-5f9f-8c7b-55b7c327dffb",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "0da07b96-12f8-5079-aa72-ad0ad8e46ccc",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1bc2fabd-19f4-5327-b7b8-dd3af8bf3317",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "1c900c13-40d5-5c37-9b39-197ea8ad7e8d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2052a067-b5f5-50cf-9604-05f087631d0c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "23176b57-f11b-557d-b03d-ff34782417a0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2dcd8caf-c585-5275-985d-96e8f110d943",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2ea95277-c54d-51a3-aedd-e53717b8ff76",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "2f2662e2-696a-5ff5-9f93-9745320a0177",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "312ecc8b-10d6-5704-a6b2-a0e6570b1038",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "32be938a-a77d-52a6-90b0-90634faf77ee",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "32cfb019-00c2-58e6-9c3c-c35370d646b3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "3624cf8c-eb32-531b-a4b8-9cc1d4f74129",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "483d9957-26ac-53c6-9c45-d1c9e97579a3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4c5da9a2-fb6a-55a7-a62f-3df0fc250a5d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "4e39b708-4304-5c15-8d9f-aa41cd0ec494",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5210e4ed-852e-5fad-ad0e-4453f5f4277c",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "53c40e0e-4b3b-50bb-b0a1-a9010e6c359b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "555f605b-f160-5ac6-9bf5-9e2af6b01fb9",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "5dab9f77-c1f9-5976-8613-35c77f061289",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "60b594bb-810e-5bf9-ac8c-9fe31688def4",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "75fe463e-dc3c-500b-8e70-a55b494ccada",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "767c7582-3a48-5c8f-af9a-4ae8cb15e788",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "86c4f138-3058-5189-ad13-280eb90f220b",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8aab78b5-b881-5d29-8e83-97c79da75134",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "8ab9f293-dd2b-501a-ac9a-33e67f293d21",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "9d858242-da6a-5898-b21d-a81910485d94",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "a0a43bd2-339e-55d6-8da6-32c38464699a",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ac12f2d7-08a7-539d-b8eb-54a275f02152",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "b8f1b174-fdac-53db-a657-0895146e7772",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "bf9c7db0-9051-5855-b68e-af41e34beb07",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "d4dc6aa3-d847-52af-aa6c-122e6309cab3",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e5c46c1a-9bbf-5555-91d9-9eefa91587b0",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "e683c389-9a07-5830-b0f9-fbe3ef12aa5e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f0537f22-db6e-57bb-8aaf-68c9c18ea80e",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f3cf53cb-5f12-5ca4-b019-57d8467ca54d",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f4c3cdef-6149-58bd-bf0e-b1bd2b60d057",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "f5d32f2b-77e8-5c01-bcad-0695156eee14",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      },
+      {
+        "packet_id": "ffc02ad7-f836-564b-a137-ef5420a64e88",
+        "packet_type": "translate",
+        "status": "translated",
+        "book_profile_version": 1,
+        "chapter_brief_version": 1,
+        "termbase_version": 1,
+        "entity_snapshot_version": 1,
+        "style_snapshot_version": 1
+      }
+    ]
+  },
+  "recent_repair_events": [],
+  "export_auto_followup_evidence": {
+    "event_count": 0,
+    "executed_event_count": 0,
+    "stop_event_count": 0,
+    "events": []
+  },
+  "export_time_misalignment_evidence": {
+    "has_anomalies": false,
+    "missing_target_sentence_ids": [],
+    "sentence_ids_with_only_inactive_targets": [],
+    "orphan_target_segment_ids": [],
+    "inactive_target_segment_ids_with_edges": []
+  },
+  "sentences": [
+    {
+      "sentence_id": "afc4c931-8dda-5896-a455-6078f3db3eb8",
+      "source_text": "Attention Is All Y ou Need",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意力就是一切"
+      ]
+    },
+    {
+      "sentence_id": "b7b18a1c-4c2d-5965-a9c3-15189373797b",
+      "source_text": "Ashish V aswani \\003 Google Brain avaswani@google.com Noam Shazeer \\003 Google Brain noam@google.com Niki P armar \\003 Google Research nikip@google.com J ak ob Uszk or eit \\003 Google Research usz@google.com Llion J ones \\003 Google Research llion@google.com Aidan N.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Ashish Vaswani \\003 Google Brain avaswani@google.com Noam Shazeer \\003 Google Brain noam@google.com Niki Parmar \\003 Google Research nikip@google.com Jakob Uszkoreit \\003 Google Research usz@google.com Llion Jones \\003 Google Research llion@google.com Aidan N."
+      ]
+    },
+    {
+      "sentence_id": "3d36ae4f-27c3-583f-a706-8cab703d3662",
+      "source_text": "Gomez \\003 y Uni v ersity of T oronto aidan@cs.toronto.edu \\006ukasz Kaiser \\003 Google Brain lukaszkaiser@google .com Illia P olosukhin \\003 z illia.polosukhin@g mail.com Abstract The dominant sequence transduction models are based on comple x recurrent or con v olutional neural netw orks that incl ud e an encoder and a decoder .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Gomez \\003 多伦多大学 aidan@cs.toronto.edu \\006ukasz Kaiser \\003 Google Brain lukaszkaiser@google.com Illia Polosukhin \\003 z illia.polosukhin@gmail.com 摘要 主流的序列转换模型基于包含编码器和解码器的复杂循环或卷积神经网络。"
+      ]
+    },
+    {
+      "sentence_id": "82255d91-64d7-5360-8312-83192d4dbef8",
+      "source_text": "The best performing models also connect the encoder and decoder through an attention mechanism.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "性能最佳的模型还通过注意力机制连接编码器和解码器。"
+      ]
+    },
+    {
+      "sentence_id": "fc0ada92-7233-5a2c-b30e-e488885873ea",
+      "source_text": "W e propose a ne w simple netw ork architecture, the T ransformer , based solely on attention mechanisms, dispensing with recurrence and con v olutions entirely .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们提出一种新的简单网络架构——Transformer，它完全基于注意力机制，彻底摒弃了循环和卷积。"
+      ]
+    },
+    {
+      "sentence_id": "2b4c0826-1abf-5e64-9df6-1d590871f841",
+      "source_text": "Experiments on tw o machine translation tasks sho w these models to be superior in quality while being more parallelizable and requiring signi\\002cantly less time to train.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在两个机器翻译任务上的实验表明，这些模型在质量上更优，同时更具并行化能力，且训练所需时间显著减少。"
+      ]
+    },
+    {
+      "sentence_id": "ce3747c1-3882-5ea4-99f9-18eb91d69ecd",
+      "source_text": "Our model achie v es 28.4 BLEU on the WMT 2014 English- to-German translation task, impro ving o v er the e xisting best results , including ensembles, by o v er 2 BLEU.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们的模型在WMT 2014英德翻译任务上达到28.4 BLEU，比现有最佳结果（包括集成模型）提高了超过2 BLEU。"
+      ]
+    },
+    {
+      "sentence_id": "cc7d5278-3cae-536b-bb69-1ad4975c56b8",
+      "source_text": "On the WMT 2014 English-to-French translation task, our model establishes a ne w single-m odel state-of-the-art BLEU score of 41.0 after training for 3.5 days on ei ght GPUs, a small frac tion of the training costs of the best models from the literature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在WMT 2014英法翻译任务中，我们的模型在8个GPU上训练3.5天后，以41.0的BLEU分数确立了新的单模型最先进水平，这仅占文献中最佳模型训练成本的一小部分。"
+      ]
+    },
+    {
+      "sentence_id": "86046b9f-e02f-5e34-89eb-99b4566c01b2",
+      "source_text": "1 Intr oduction Recurrent neural netw orks, long short-term memory [ 12 ] and g ated recurrent [ 7 ] neural netw orks in particular , ha v e been \\002rmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translati on [ 29 , 2 , 5 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "1 引言 循环神经网络，特别是长短期记忆网络[12]和门控循环神经网络[7]，已在序列建模和转换问题（如语言建模和机器翻译[29, 2, 5]）中被牢固确立为最先进的方法。"
+      ]
+    },
+    {
+      "sentence_id": "26ee61c7-3d7b-580d-ab2a-8c5eb42ed772",
+      "source_text": "Numerous ef f orts ha v e since continued to push the boundaries of recurrent language models and encoder -decoder architectures [31, 21, 13].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此后，大量研究继续推动循环语言模型和编码器-解码器架构的发展边界[31, 21, 13]。"
+      ]
+    },
+    {
+      "sentence_id": "1de59f0b-a46b-5b31-a9bc-6dbc48e565c5",
+      "source_text": "\\003 Equal contrib ution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "贡献相同。"
+      ]
+    },
+    {
+      "sentence_id": "c32affa1-6d61-51ff-9aea-c27088b76e9d",
+      "source_text": "Listing order is random.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "列表顺序随机。"
+      ]
+    },
+    {
+      "sentence_id": "fd1622e9-7e02-5f41-ac9b-3f5a1788a56e",
+      "source_text": "Jak ob proposed replacing RNNs with self-attention and started the ef fort to e v aluate this idea.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Jakob提出用自注意力替代RNN，并开始评估这一想法的工作。"
+      ]
+    },
+    {
+      "sentence_id": "dbf5c069-9002-50f9-8d6c-a7cdfb115674",
+      "source_text": "Ashish, with Illia, designed and implemented the \\002rst T ransformer models and has been crucially in v olv ed in e v ery aspect of this w ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Ashish与Illia一起设计并实现了首个Transformer模型，并在本工作的各个方面都发挥了关键作用。"
+      ]
+    },
+    {
+      "sentence_id": "dc406d97-d93c-5146-b1a1-07a6ee90a592",
+      "source_text": "Noam proposed scaled dot-product attention, multi-head attention and the parameter -free position representation and became the other person in v olv ed in nearly e v ery detail.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Noam提出了缩放点积注意力、多头注意力和无参数位置表示，并成为几乎参与每个细节的另一人。"
+      ]
+    },
+    {
+      "sentence_id": "243cf159-fc71-5cae-bd64-65bebdd8d0a2",
+      "source_text": "Niki designed, implemented, tuned and e v aluated countless model v ariants in our original codebase and tensor2tensor .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Niki在我们最初的代码库和tensor2tensor中设计、实现、调优和评估了无数模型变体。"
+      ]
+    },
+    {
+      "sentence_id": "1d437afd-0564-56d0-93b2-c5a6eec694bf",
+      "source_text": "Llion also e xperimented with no v el model v ariants, w as responsible for our initial codebase, and ef \\002 cient inference and visualizations.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Llion还尝试了新颖的模型变体，负责我们的初始代码库，以及高效的推理和可视化。"
+      ]
+    },
+    {
+      "sentence_id": "295dbca6-ed16-5c80-986e-33ee1efe608e",
+      "source_text": "Lukasz and Aidan spent countless long days designing v arious parts of and implementing tensor2tensor , replacing our earlier codebase, greatly impro ving result s and massi v ely accelerating our research. y W ork performed while at Google Brain. z W ork performed while at Google Research.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Lukasz和Aidan花费了无数个漫长的日子设计并实现了tensor2tensor的各个部分，替换了我们早期的代码库，极大地改善了结果并大幅加速了我们的研究。y 在Google Brain工作期间完成。z 在Google Research工作期间完成。"
+      ]
+    },
+    {
+      "sentence_id": "c574980d-a770-5d55-9405-b3d98055dd70",
+      "source_text": "31st Conference on Neural Information Processing Systems \\050NIPS 2017\\051, Long Beach, CA, USA.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第31届神经信息处理系统会议（NIPS 2017），美国加州长滩。"
+      ]
+    },
+    {
+      "sentence_id": "60a1c665-371c-5abb-815d-e61ca6b5f3c1",
+      "source_text": "Recurrent models typically f actor computation along the symbol positions of the input and output sequences.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "循环模型通常沿着输入和输出序列的符号位置分解计算。"
+      ]
+    },
+    {
+      "sentence_id": "0daab89c-ff0b-58ac-9713-3a6ba52a2d67",
+      "source_text": "Aligning the positions to steps in computation time, the y generate a sequence of hidden states h t , as a function of the pre vious hidden state h t \\000 1 and the input for position t .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "通过将位置与计算时间步骤对齐，它们以前一个隐藏状态h_{t-1}和位置t的输入为函数，生成一系列隐藏状态h_t。"
+      ]
+    },
+    {
+      "sentence_id": "ec564b70-02a6-55c3-b02d-fb88354fb985",
+      "source_text": "This inherently sequential nature precludes parallelization within training e xamples, which becomes critical at longer sequence lengths, as memory constraints limit batching across e xam p l es.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这种固有的顺序性质阻碍了训练样本内的并行化，这在序列较长时变得至关重要，因为内存限制会制约跨样本的批处理。"
+      ]
+    },
+    {
+      "sentence_id": "493b259d-80b7-5317-932a-4ef63bfe4cfd",
+      "source_text": "Recent w ork has achie v ed signi\\002cant impro v ement s in computational ef \\002 cienc y through f actorization tricks [ 18 ] and conditional computation [ 26 ], whil e also impro ving model performance in case of the latter .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "近期工作通过因子化技巧[18]和条件计算[26]在计算效率方面取得了显著提升，同时后者还提高了模型性能。"
+      ]
+    },
+    {
+      "sentence_id": "578fb786-45d4-5b05-899e-60742fe31d4a",
+      "source_text": "The fundamental constraint of sequential computation, ho we v er , remains.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，顺序计算的根本限制依然存在。"
+      ]
+    },
+    {
+      "sentence_id": "991445b5-3726-5ca2-ac6e-1650e92eb735",
+      "source_text": "Attention mechanisms ha v e become an inte gral part of compelling sequence modeling and transduc- tion models in v arious tasks, allo wing modeling of dependencies without re g ard to their distance in the input or output sequences [ 2 , 16 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "注意力机制已成为各种任务中引人注目的序列建模和转换模型不可或缺的组成部分，允许对依赖关系进行建模而无需考虑它们在输入或输出序列中的距离[2, 16]。"
+      ]
+    },
+    {
+      "sentence_id": "21553a9e-c68f-53ed-96c6-d068b3f9d069",
+      "source_text": "In all b ut a fe w cases [ 22 ], ho we v er , such attention mechanisms are used in conjunction with a recurrent netw ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，在除少数情况外[22]，此类注意力机制通常与循环网络结合使用。"
+      ]
+    },
+    {
+      "sentence_id": "2fe16399-2350-551d-bf62-6bb356b8fe20",
+      "source_text": "In this w ork we propose the T ransformer , a model architecture esche wing recurrence and instead relying entirely on an attention mechanism to dra w global dependencies between input and output.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这项工作中，我们提出了Transformer，一种摒弃循环结构、完全依赖注意力机制来捕捉输入与输出之间全局依赖关系的模型架构。"
+      ]
+    },
+    {
+      "sentence_id": "31f6736f-8874-56a3-bbb3-7ab42d0e4fed",
+      "source_text": "The T ransformer allo ws for signi\\002cantly m ore parallelization and can reach a ne w state of the art in translation quality after being trained for as little as twelv e hours on eight P100 GPUs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Transformer允许显著提高并行化程度，在仅使用八个P100 GPU训练十二小时后，即可在翻译质量上达到新的最先进水平。"
+      ]
+    },
+    {
+      "sentence_id": "13f0a35e-1a51-5f7c-ae06-593b77f4410e",
+      "source_text": "2 Backgr ound The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU [ 20 ], ByteNet [ 15 ] and Con vS2S [ 8 ], all of which use con v olutional neural netw orks as basic b uilding block, computing hidden representations in parallel for all input and output positions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "2 背景 减少顺序计算的目标也构成了扩展神经GPU[20]、ByteNet[15]和ConvS2S[8]的基础，所有这些模型都使用卷积神经网络作为基本构建模块，为所有输入和输出位置并行计算隐藏表示。"
+      ]
+    },
+    {
+      "sentence_id": "5232cb68-1024-5cab-8aa5-949369e4617f",
+      "source_text": "In these models, the number of operations required to relate signals from tw o arbitrary input or output positions gro ws in the distance between positions, linearly for Con vS2S and log arithmically for ByteNet.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这些模型中，关联两个任意输入或输出位置信号所需的操作次数随位置间距离增加而增长：ConvS2S呈线性增长，ByteNet呈对数增长。"
+      ]
+    },
+    {
+      "sentence_id": "20f169e9-5b90-5309-8def-f90451440ba1",
+      "source_text": "This mak es it more dif \\002cult to learn dependencies between distant positions [ 11 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这使得学习远距离位置之间的依赖关系变得更加困难[11]。"
+      ]
+    },
+    {
+      "sentence_id": "86245c64-0235-5527-b2e4-aa0318540865",
+      "source_text": "In the T ransformer this is reduced to a constant number of operations, albeit at the cost of reduced ef f ecti v e resolution due to a v eraging attention-weighted positions, an ef fect we counteract with Multi-Head Attention as described in section 3.2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在Transformer中，这一操作次数被减少到常数级别，尽管代价是由于对注意力加权位置进行平均而降低了有效分辨率，这一效应我们通过多头注意力（如第3.2节所述）加以抵消。"
+      ]
+    },
+    {
+      "sentence_id": "1eb65041-ce3d-53d5-9684-a929853b3e14",
+      "source_text": "Self-attention, sometimes called intra-attention is an attention mechanism relating dif ferent positions of a single sequence in order to compute a representation of the sequence.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自注意力，有时称为内部注意力，是一种注意力机制，它关联单个序列的不同位置以计算序列的表示。"
+      ]
+    },
+    {
+      "sentence_id": "723a18a8-9bee-5ead-9398-9aaf94b2c146",
+      "source_text": "Self-attention has been used successfully in a v ari ety of tasks including reading comprehension, abstra cti v e summarization, te xtual entailment and learning task-independent sentence representations [4, 22, 23, 19].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自注意力已成功应用于多种任务，包括阅读理解、抽象摘要、文本蕴含以及学习任务无关的句子表示[4, 22, 23, 19]。"
+      ]
+    },
+    {
+      "sentence_id": "e3e768c6-8ff4-5594-8db3-19e6dc40e43d",
+      "source_text": "End-to-end memory netw orks are based on a recurrent attention mechanism instead of sequence- aligned recurrence and ha v e been sho wn to perform well on simple-language question answering and language modeling tasks [28].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "端到端记忆网络基于循环注意力机制而非序列对齐的循环结构，并已在简单语言问答和语言建模任务中表现出良好性能[28]。"
+      ]
+    },
+    {
+      "sentence_id": "99c9646d-7a7b-5276-95f4-1ca5edae9e89",
+      "source_text": "T o the best of our kno wledge, ho we v er , the T ransformer is the \\002rst transduction model relying entirely on self-attention to compute representations of its input and output without using sequence- aligned RNNs or con v olution.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "据我们所知，Transformer是第一个完全依赖自注意力来计算其输入和输出表示，而不使用序列对齐的RNN或卷积的转换模型。"
+      ]
+    },
+    {
+      "sentence_id": "c32f2c00-deee-5bf1-9229-1d0d601c4df8",
+      "source_text": "In the follo wing sections, we will describe the T ransformer , moti v ate self-attention and discuss its adv antages o v er models such as [14, 15] and [8].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在接下来的章节中，我们将描述Transformer，阐述自注意力的动机，并讨论其相对于[14, 15]和[8]等模型的优势。"
+      ]
+    },
+    {
+      "sentence_id": "77484743-e967-5449-b976-3af467a38206",
+      "source_text": "3 Model Architecture",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3 模型架构"
+      ]
+    },
+    {
+      "sentence_id": "47875be6-5491-5a84-812e-713f5650caa0",
+      "source_text": "Most competiti v e neural sequence transduction models ha v e an encoder -decoder structure [ 5 , 2 , 29 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "大多数具有竞争力的神经序列转换模型都采用编码器-解码器结构[5, 2, 29]。"
+      ]
+    },
+    {
+      "sentence_id": "8e6a1c44-7a38-5727-9e02-9da08eaf868f",
+      "source_text": "Here, the encoder maps an input sequence of symbol representations \\050 x 1 ; :::; x n \\051 to a sequence of continuous representations z = \\050 z 1 ; :::; z n \\051 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "编码器将输入符号表示序列(x1, ..., xn)映射为连续表示序列z = (z1, ..., zn)。"
+      ]
+    },
+    {
+      "sentence_id": "f5dde36f-d03e-5604-b660-7ceda5603785",
+      "source_text": "Gi v en z , the decoder then generates an output sequence \\050 y 1 ; :::; y m \\051 of symbols one element at a time.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "给定z，解码器随后逐个元素地生成输出符号序列(y1, ..., ym)。"
+      ]
+    },
+    {
+      "sentence_id": "14355ca0-bdc4-54f6-af8e-e320eed78c7f",
+      "source_text": "At each step the model is auto-re gressi v e [9], consuming the pre viously generated symbols as additional input when generating the ne xt.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在每个步骤中，模型都是自回归的[9]，在生成下一个符号时，将先前生成的符号作为额外输入。"
+      ]
+    },
+    {
+      "sentence_id": "5c30c3a6-6635-5eee-b425-20038b64712b",
+      "source_text": "The T ransformer follo ws this o v erall architecture using stack ed self-attention and point-wise, fully connected layers for both the encoder and decoder , sho wn in the left and right halv es of Figure 1, respecti v ely .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "Transformer遵循这一整体架构，在编码器和解码器中都使用堆叠的自注意力机制和逐点全连接层，分别如图1的左半部分和右半部分所示。"
+      ]
+    },
+    {
+      "sentence_id": "3ea65aff-2bed-532c-9f24-1236579342f5",
+      "source_text": "3.1 Encoder and Decoder Stacks",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.1 编码器与解码器堆栈"
+      ]
+    },
+    {
+      "sentence_id": "10cb2a20-c19a-5cec-b750-b5df1156ef63",
+      "source_text": "Encoder: The encoder is composed of a stack of N = 6 identical layers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "编码器：编码器由N=6个相同的层堆叠而成。"
+      ]
+    },
+    {
+      "sentence_id": "620d96bb-aa96-5d17-8515-5b940aa7dabc",
+      "source_text": "Each layer has tw o sub-layers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "每个层包含两个子层。"
+      ]
+    },
+    {
+      "sentence_id": "944bd332-0e56-5949-a103-bb5644e36234",
+      "source_text": "The \\002rst is a multi-head self-attention mechanism, and the second is a simple, position- 2",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第一个子层是多头自注意力机制，第二个子层是简单的位置前馈网络。"
+      ]
+    },
+    {
+      "sentence_id": "57f1f647-8217-50fb-8d0b-417e3992f78a",
+      "source_text": "Figure 1: The T ransformer - model architecture. wise fully connected feed-forw ard netw ork. W e emplo y a residual connection [ 10 ] around each of the tw o sub-layers, follo wed by layer normalization [ 1 ]. That is, the output of each sub-layer is La y erNorm\\050 x + Subla y er\\050 x \\051\\051 , where Subla y er\\050 x \\051 is the function implemented by the sub-layer itself. T o f acilitate these residual connections, all s u b- layers in the model, as well as the embedding layers, produce outputs of dimension d model = 512 . Decoder: The decoder is also composed of a stack of N = 6 identical layers. In addition to the tw o sub-layers in each encoder layer , the decoder inserts a third sub-layer , which performs multi-head attention o v er the output of the encoder stack. Similar to the encoder , we emplo y residual connections around each of the sub-layers, follo wed by layer normalization. W e also modify the self-attention sub-layer in the decoder stack to pre v ent positions from attending to subsequent positions. This masking, combined with f act that the output embeddings are of fset by one position, ensures that the predictions for position i can depend only on the kno wn outputs at positions less than i . 3.2 Attention An attention function can be described as mapping a query and a set of k e y-v alue pairs to a n output, where the query , k e ys, v alues, and output are all v ectors. The output is computed as a weighted sum of the v alues, where the weight assigned to each v alue is computed by a compatibility function of t he query with the corresponding k e y . 3.2.1 Scaled Dot-Pr oduct Attention W e call our particular attention \"Scaled Dot-Product Attention\" \\050Figure 2\\051. The input consists of queries and k e ys of dimension d k , and v alues of dimension d v . W e compute the dot products of the 3",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图1：Transformer模型架构。",
+        "逐位置全连接前馈网络。我们在每个子层周围采用残差连接[10]，随后进行层归一化[1]。也就是说，每个子层的输出为LayerNorm(x + Sublayer(x))，其中Sublayer(x)是该子层实现的函数。",
+        "为了便于这些残差连接，模型中的所有子层以及嵌入层都产生维度d_model=512的输出。",
+        "解码器：解码器同样由N=6个相同的层堆叠而成。除了每个编码器层中的两个子层外，解码器还插入第三个子层，该子层对编码器堆叠的输出执行多头注意力。",
+        "与编码器类似，我们在每个子层周围采用残差连接，随后进行层归一化。",
+        "我们还修改了解码器堆叠中的自注意力子层，以防止位置关注后续位置。",
+        "这种掩码机制，结合输出嵌入偏移一个位置的事实，确保位置i的预测只能依赖于位置小于i的已知输出。",
+        "3.2 注意力",
+        "注意力函数可以描述为将一个查询和一组键值对映射到一个输出，其中查询、键、值和输出都是向量。",
+        "输出计算为值的加权和，其中分配给每个值的权重通过查询与相应键的兼容性函数计算得出。",
+        "3.2.1 缩放点积注意力",
+        "我们将我们的特定注意力称为“缩放点积注意力”（图2）。输入包括维度为d_k的查询和键，以及维度为d_v的值。",
+        "我们计算查询与所有键的点积，每个除以√d_k，然后应用softmax函数以获得值的权重。"
+      ]
+    },
+    {
+      "sentence_id": "6b0f06c7-2134-586c-9451-7148f8fe10f9",
+      "source_text": "Scaled Dot-Product Attention Multi-Head Attention",
+      "sentence_status": "translated",
+      "target_texts": [
+        "缩放点积注意力 多头注意力"
+      ]
+    },
+    {
+      "sentence_id": "7a9b0739-b77e-5c6f-a18a-96aab30a11af",
+      "source_text": "Figure 2: \\050left\\051 Scaled Dot-Product Attention. \\050right\\051 Multi-Head At tention consists of se v eral attention layers running in parallel. query with all k e ys, di vide each by p",
+      "sentence_status": "translated",
+      "target_texts": [
+        "图2：（左）缩放点积注意力。（右）多头注意力由多个并行运行的注意力层组成。"
+      ]
+    },
+    {
+      "sentence_id": "c5414621-180e-5e28-b580-2725f0d60ec5",
+      "source_text": "d k , and apply a softmax function to obtain the weights on the v alues.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然后应用softmax函数得到值的权重。"
+      ]
+    },
+    {
+      "sentence_id": "012b5d0b-1712-5f45-ae8a-17cc9180e0c8",
+      "source_text": "In practice, we compute the attention function on a set of queries sim ultaneously , pack ed together into a matrix Q .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在实践中，我们同时计算一组查询的注意力函数，将它们打包成矩阵Q。"
+      ]
+    },
+    {
+      "sentence_id": "ee06e949-d213-53e8-be87-113e02f6fe58",
+      "source_text": "The k e ys and v alues are also pack ed together into matrice s K and V .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "键和值也被打包成矩阵K和V。"
+      ]
+    },
+    {
+      "sentence_id": "a62ce057-4e68-53af-9b5c-6df4814a35ac",
+      "source_text": "W e compute the matrix of outputs as: A tten tion\\050 Q; K ; V \\051 = s of tm ax\\050 QK T",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们将输出矩阵计算为：注意力(Q; K; V) = softmax(QK^T/√d_k)V"
+      ]
+    },
+    {
+      "sentence_id": "b3ebc0ce-2f62-5646-8660-e98676d241e6",
+      "source_text": "p",
+      "sentence_status": "translated",
+      "target_texts": [
+        "√"
+      ]
+    },
+    {
+      "sentence_id": "b7d656a6-eb85-50e2-871d-4d88734d70d9",
+      "source_text": "d k \\051 V \\0501\\051 The tw o most commonly used attention functions are additi v e attention [ 2 ], and dot-product \\050multi- plicati v e\\051 attention.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "两种最常用的注意力函数是加性注意力[2]和点积（乘法）注意力。"
+      ]
+    },
+    {
+      "sentence_id": "61c0c0c2-bb25-59a8-b92f-37b97ac4b9db",
+      "source_text": "Dot-product attention is identical t o our algorithm, e xcept for the scaling f actor of 1 p",
+      "sentence_status": "translated",
+      "target_texts": [
+        "点积注意力与我们的算法相同，除了缩放因子1/√d_k。"
+      ]
+    },
+    {
+      "sentence_id": "553a9216-9a4d-5181-8b57-d3a680d2b39f",
+      "source_text": "p d k .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "p d_k。"
+      ]
+    },
+    {
+      "sentence_id": "1f48e8e2-ea6b-585e-89c8-59db42270a5e",
+      "source_text": "Additi v e attention computes the compatibility function using a feed-forw ard netw ork with a single hidden layer .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "加性注意力使用具有单个隐藏层的前馈网络来计算兼容性函数。"
+      ]
+    },
+    {
+      "sentence_id": "5a383b8a-e1d0-5a71-ac48-e508a154002a",
+      "source_text": "While the tw o are similar in theoretical comple xity , dot-product attention is much f aster and more space-ef \\002 cient in practice, since it c an be im plemented using highly optimized matrix multiplication code.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然两者在理论复杂度上相似，但点积注意力在实践中要快得多且空间效率更高，因为它可以使用高度优化的矩阵乘法代码实现。"
+      ]
+    },
+    {
+      "sentence_id": "03f70595-3e6b-5c2d-9ebc-ec2276de3040",
+      "source_text": "While for small v alues of d k the tw o mechanisms perform similarly , additi v e attention outperforms dot product attention without scaling for lar ger v alues of d k [ 3 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然对于较小的d_k值，这两种机制的表現相似，但对于较大的d_k值，不加缩放的加性注意力优于点积注意力[3]。"
+      ]
+    },
+    {
+      "sentence_id": "dd641f87-344d-5964-abf6-93ea53e8c7fe",
+      "source_text": "W e suspect that for lar ge v alues of d k , the dot products gro w lar ge in magnit u de , pushing the softmax function into re gions where it has e xtremely small gradients 4 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们推测，对于较大的d_k值，点积的幅度会变得很大，将softmax函数推入梯度极小的区域4。"
+      ]
+    },
+    {
+      "sentence_id": "ee3e4b73-dca9-594c-958e-928f12b1a9b8",
+      "source_text": "T o counteract this ef fect, we scale the dot products by 1",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了抵消这种效应，我们将点积缩放1"
+      ]
+    },
+    {
+      "sentence_id": "d180638c-4f28-5b29-b1fc-fb416ffe81fe",
+      "source_text": "d k .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "d_k。"
+      ]
+    },
+    {
+      "sentence_id": "1a655189-668e-58a5-a908-1fb194a2721f",
+      "source_text": "3.2.2 Multi-Head Attention",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.2.2 多头注意力"
+      ]
+    },
+    {
+      "sentence_id": "5c1aaacf-6dbb-57ed-91b5-2b39fb9ce0cb",
+      "source_text": "Instead of performing a single att ention function with d model -dimensional k e ys, v alues and queries, we found it bene\\002cial to linearly project the queries, k e ys and v alues h times with dif ferent, learned linear projections to d k , d k and d v dimensions, respecti v ely .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们发现，与其使用d_model维度的键、值和查询执行单一的注意力函数，不如将查询、键和值分别通过不同的、可学习的线性投影h次线性投影到d_k、d_k和d_v维度更为有益。"
+      ]
+    },
+    {
+      "sentence_id": "c7b9cb2f-eecf-59f1-84e4-9a06ebad08f0",
+      "source_text": "On each of these projected v ersions of queries, k e ys and v alues we then perform the attention function in parallel, yielding d v -dimensional output v alues.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然后，我们在这些投影后的查询、键和值版本上并行执行注意力函数，产生d_v维度的输出值。"
+      ]
+    },
+    {
+      "sentence_id": "901d8fc0-b03a-5277-a39e-7fd3de262884",
+      "source_text": "These are concatenated and once ag ain projected, resulting in the \\002nal v alues, as depicted in Figure 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些结果被拼接起来并再次投影，最终得到如图2所示的最终值。"
+      ]
+    },
+    {
+      "sentence_id": "3cc9b5a8-ed3f-5d24-b007-c202ac152f30",
+      "source_text": "Multi-head attention allo ws the model to jointly attend to information from dif ferent representation subspaces at dif ferent positions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "多头注意力机制允许模型在不同位置上同时关注来自不同表示子空间的信息。"
+      ]
+    },
+    {
+      "sentence_id": "d89e9b1f-756f-5fa8-8e45-587c7f5d8af7",
+      "source_text": "W ith a single attention head, a v eraging inhibits this.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "若使用单一注意力头，平均化会抑制这一效果。"
+      ]
+    },
+    {
+      "sentence_id": "2e660b70-71f5-57e0-aac7-655e8a82d362",
+      "source_text": "4 T o illustrate wh y the dot products get lar ge, assume that the components of q and k are independent random v ariables with mean 0 and v ariance 1 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "4 为了说明点积为何会变得很大，假设q和k的分量是均值为0、方差为1的独立随机变量。"
+      ]
+    },
+    {
+      "sentence_id": "d5564cac-9f63-59d9-904e-95fc1e2136e0",
+      "source_text": "Then their dot product, q \\001 k = P d k i =1 q i k i , has mean 0 and v ariance d k .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "那么它们的点积q·k = Σ_{i=1}^{d_k} q_i k_i的均值为0，方差为d_k。"
+      ]
+    },
+    {
+      "sentence_id": "30908809-4fec-51f2-848d-fc995b64933c",
+      "source_text": "4",
+      "sentence_status": "translated",
+      "target_texts": [
+        "4"
+      ]
+    },
+    {
+      "sentence_id": "40985da3-2f62-5e90-99c1-22454384a27b",
+      "source_text": "MultiHead\\050 Q; K ; V \\051 = Concat\\050head 1 ; :::; head h \\051 W O where head i = A tten tion\\050 QW Q i ; K W K i ; V W V i \\051 Where the projections are parameter matrices W Q i 2 R d model \\002 d k , W K i 2 R d model \\002 d k , W V i 2 R d model \\002 d v and W O 2 R hd v \\002 d model .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "多头注意力（Q; K; V）= 拼接（头₁; ...; 头ₕ）W^O，其中头ᵢ = 注意力（QW^Qᵢ, KW^Kᵢ, VW^Vᵢ），其中投影是参数矩阵W^Qᵢ ∈ ℝ^{d_model×d_k}, W^Kᵢ ∈ ℝ^{d_model×d_k}, W^Vᵢ ∈ ℝ^{d_model×d_v} 和 W^O ∈ ℝ^{hd_v×d_model}。"
+      ]
+    },
+    {
+      "sentence_id": "fae1dcc9-c09c-5289-9c7c-b4406386fbf2",
+      "source_text": "In this w ork we emplo y h = 8 parallel attention layers, or heads.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这项工作中，我们采用h = 8个并行的注意力层，或称为头。"
+      ]
+    },
+    {
+      "sentence_id": "8f67471c-2fe6-51ce-87a5-714252c6bdfd",
+      "source_text": "F or each of these we use d k = d v = d model =h = 64 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于这些中的每一个，我们使用d_k = d_v = d_model/h = 64。"
+      ]
+    },
+    {
+      "sentence_id": "58fb0bac-3b0b-5c23-b74e-c233c7bee3d8",
+      "source_text": "Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "由于每个头的维度降低，总计算成本与具有完整维度的单头注意力相似。"
+      ]
+    },
+    {
+      "sentence_id": "bca295f4-0900-5135-8d2d-47046ecf73f7",
+      "source_text": "3.2.3 A pplications of Attention in our Model The T ransformer uses multi-head attention in three dif ferent w ays: \\017 In \"encoder -decoder attention\" layers, the queries come from the pre vious decoder layer , and the memory k e ys and v alues come from the output of the encoder .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.2.3 注意力在我们模型中的应用 Transformer在三种不同的方式中使用多头注意力：在“编码器-解码器注意力”层中，查询来自前一个解码器层，而记忆键和值来自编码器的输出。"
+      ]
+    },
+    {
+      "sentence_id": "8e831e81-cb64-5469-a5b2-f864963f2abe",
+      "source_text": "This allo ws e v ery position in the decoder to attend o v er all positions in the input sequence.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这使得解码器中的每个位置都能关注输入序列中的所有位置。"
+      ]
+    },
+    {
+      "sentence_id": "0802d6ad-9252-517e-aa63-946f5a41bcb1",
+      "source_text": "This mimi cs the typical encoder -decoder attention mechanisms in sequence-to-sequence models such as [31, 2, 8]. \\017 The encoder contains self-attention layers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这模仿了序列到序列模型中典型的编码器-解码器注意力机制，例如[31, 2, 8]。编码器包含自注意力层。"
+      ]
+    },
+    {
+      "sentence_id": "43d6129b-afa1-5870-807a-01fab54c799a",
+      "source_text": "In a self-attention layer all of the k e ys, v alues and queries come from the same place, in this case, the output of the pre vious layer in the encoder .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在自注意力层中，所有的键、值和查询都来自同一个地方，在这种情况下，是编码器中前一层的输出。"
+      ]
+    },
+    {
+      "sentence_id": "d5dccc5f-8bf4-5365-95e0-35cc1b27ed47",
+      "source_text": "Each position in the encoder can attend to all positions in the pre vious layer of the encoder . \\017 Similarly , self-attention layers in the decoder allo w each position in the decoder to attend to all positions in the decoder up to and including that position.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "编码器中的每个位置都可以关注编码器前一层的所有位置。类似地，解码器中的自注意力层允许解码器中的每个位置关注解码器中直到并包括该位置的所有位置。"
+      ]
+    },
+    {
+      "sentence_id": "b37d2ab4-604c-5c54-919f-a5f0d5f05ff8",
+      "source_text": "W e need to pre v ent leftw ard information \\003o w in the decoder to preserv e the auto-re gressi v e property .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们需要防止解码器中的向左信息流，以保持自回归特性。"
+      ]
+    },
+    {
+      "sentence_id": "14e78ad6-6faf-5872-a84b-8bd8f343c856",
+      "source_text": "W e implement this inside of scale d dot-product attention by masking out \\050setting to \\0001 \\051 all v alues in the input of the softmax which correspond to ille g al connections.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们通过在缩放点积注意力内部实现这一点，通过掩码（设置为-∞）softmax输入中所有对应非法连接的值。"
+      ]
+    },
+    {
+      "sentence_id": "22843240-4605-591d-b2d4-2adb741f1f79",
+      "source_text": "See Figure 2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "参见图2。"
+      ]
+    },
+    {
+      "sentence_id": "8272e4de-4cdf-51a0-b3cb-255c48162d3d",
+      "source_text": "3.3 P osition-wise F eed-F orward Netw orks In addition to attention sub-layers, each of the layers in our encoder and decoder contains a ful ly connected feed-forw ard netw ork, which is applied to each position separately and identically .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.3 逐位置前馈网络 除了注意力子层外，我们的编码器和解码器中的每一层都包含一个全连接的前馈网络，该网络分别且相同地应用于每个位置。"
+      ]
+    },
+    {
+      "sentence_id": "13d13d9e-6eb1-5fc7-9612-cbc7f7660033",
+      "source_text": "This consists of tw o linear transformations with a ReLU acti v ation in between.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "它由两个线性变换组成，中间有一个ReLU激活函数。"
+      ]
+    },
+    {
+      "sentence_id": "5e29acca-e148-5dde-b077-86f2e98b9d22",
+      "source_text": "FFN\\050 x \\051 = max\\0500 ; xW 1 + b 1 \\051 W 2 + b 2 \\0502\\051 While the linear transform ations are the same across dif ferent positions, the y use dif f erent parameters from layer to layer .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "FFN(x) = max(0, xW₁ + b₁)W₂ + b₂ (2)。虽然线性变换在不同位置上是相同的，但它们在不同层之间使用不同的参数。"
+      ]
+    },
+    {
+      "sentence_id": "908f1211-2db6-5e48-82db-796dab03a0db",
+      "source_text": "Anot her w ay of describing this is as tw o con v olutions with k ernel size 1.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "另一种描述方式是将其视为两个核大小为1的卷积。"
+      ]
+    },
+    {
+      "sentence_id": "67db7cda-c1c8-5d78-8d02-7d76f9f8593e",
+      "source_text": "The dimensionality of input and output is d model = 512 , and the inner -layer has dimensionality d f f = 2048 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "输入和输出的维度为d_model = 512，内层的维度为d_ff = 2048。"
+      ]
+    },
+    {
+      "sentence_id": "6deabe07-c410-51fd-9744-336418f739f8",
+      "source_text": "3.4 Embeddings and Softmax",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.4 嵌入与Softmax"
+      ]
+    },
+    {
+      "sentence_id": "d9eee10a-c671-5ece-a32b-8c201538db26",
+      "source_text": "Similarly to other sequence transduction models, we use learned embeddings to con v ert the input tok ens and output tok ens to v ectors of dimension d model .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "与其他序列转导模型类似，我们使用学习嵌入将输入词元和输出词元转换为维度为d_model的向量。"
+      ]
+    },
+    {
+      "sentence_id": "31f78767-be36-5fc3-8d4b-33253ccf1496",
+      "source_text": "W e also use the usual learned linear transfor - mation and softmax function to con v ert the decoder output to predicted ne xt-tok en probabilities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们还使用通常的学习线性变换和softmax函数，将解码器输出转换为预测的下一个词元概率。"
+      ]
+    },
+    {
+      "sentence_id": "2e091fb6-af28-5aad-812c-8f87be7f5dc5",
+      "source_text": "In our model, we share the same weight matrix between the tw o embedding layers and the pre-softmax linear transformation, similar to [ 24 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在我们的模型中，我们共享两个嵌入层与softmax前线性变换之间的相同权重矩阵，类似于[24]。"
+      ]
+    },
+    {
+      "sentence_id": "4de78315-d86a-50c8-bfde-4ece74d2cd06",
+      "source_text": "In the embedding layers, we m ultiply those weights by p",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在嵌入层中，我们将这些权重乘以√d_model。"
+      ]
+    },
+    {
+      "sentence_id": "f7ad46e5-2b19-5c03-bebf-7d879067a48c",
+      "source_text": "d model .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "位置编码的维度与嵌入相同，均为d_model，因此两者可以相加。"
+      ]
+    },
+    {
+      "sentence_id": "357f34f2-aacc-5862-9886-7087f51e1909",
+      "source_text": "3.5 P ositional Encoding Since our model contains no recurrence and no con v olution, in order for the model to mak e use of the order of the sequence, we must inject some information about the relati v e or absolute position of the tok ens in the sequence.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "3.5 位置编码",
+        "由于我们的模型不包含循环和卷积，为了让模型能够利用序列的顺序信息，我们必须向序列中的词元注入一些关于相对或绝对位置的信息。"
+      ]
+    },
+    {
+      "sentence_id": "46c4b0fe-9aa1-521a-813c-73c6f0b691cb",
+      "source_text": "T o this end, we add \"positional encodings\" to the input embeddings at the 5",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为此，我们在输入嵌入的底部添加“位置编码”。"
+      ]
+    },
+    {
+      "sentence_id": "2363d515-dedd-5d45-aa30-0756694b8377",
+      "source_text": "T able 1: Maximum path lengths, per -layer comple xity and minimum number of sequential operat ions for dif ferent layer types. n is the sequence length, d is the representation dimension, k is the k ernel size of con v olutions and r the size of the neighborhood in restricted self-attention.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "表1：不同层类型的最大路径长度、每层复杂度及所需最小顺序操作数。n为序列长度，d为表示维度，k为卷积核大小，r为受限自注意力中邻域的大小。"
+      ]
+    },
+    {
+      "sentence_id": "0fd2337d-25fc-5411-ab14-78181f32662d",
+      "source_text": "bottoms of the encoder and decoder stacks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "编码器和解码器堆栈的底部。"
+      ]
+    },
+    {
+      "sentence_id": "4c3e48f0-519b-5e0a-b68c-13bf78e964b2",
+      "source_text": "The positional encodings ha v e the same dimension d model as the embeddings, so that the tw o can be summed.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "位置编码与嵌入具有相同的维度d_model，因此两者可以相加。"
+      ]
+    },
+    {
+      "sentence_id": "3fe20c90-a240-5584-8ff9-8f69308c2734",
+      "source_text": "There are man y choices of positional encodings, learned and \\002x ed [8].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "位置编码有多种选择，包括可学习的和固定的[8]。"
+      ]
+    },
+    {
+      "sentence_id": "2dd625e0-8c10-503b-89a3-567491e25875",
+      "source_text": "In this w ork, we use sine and cosine functions of dif ferent frequencies: P E \\050 pos; 2 i \\051 = sin \\050 pos= 10000 2 i=d model \\051 P E \\050 pos; 2 i +1\\051 = cos \\050 pos= 10000 2 i=d model \\051 where pos is the position and i is the dimension.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这项工作中，我们使用不同频率的正弦和余弦函数：PE(pos, 2i) = sin(pos/10000^(2i/d_model))，PE(pos, 2i+1) = cos(pos/10000^(2i/d_model))，其中pos是位置，i是维度。"
+      ]
+    },
+    {
+      "sentence_id": "e474dfd2-f675-5672-bac6-443d103f9385",
+      "source_text": "That is, each dimension of the positional encoding corresponds to a sinusoid.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "也就是说，位置编码的每个维度对应一个正弦波。"
+      ]
+    },
+    {
+      "sentence_id": "9c19e213-f9d1-5b96-9c0b-8c365884aba1",
+      "source_text": "The w a v elengths form a geometric progression fr o m 2 \\031 to 10000 \\001 2 \\031 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "波长形成从2π到10000·2π的几何级数。"
+      ]
+    },
+    {
+      "sentence_id": "a1a8f289-693f-59e4-bc12-dcb285dd1633",
+      "source_text": "W e chose this function because we h ypothesized it w ould allo w the model to easily learn to att end by relati v e positions, since for an y \\002x ed of f set k , P E pos + k can be represented as a linear function of P E pos .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们选择这个函数是因为我们假设它允许模型通过相对位置轻松学习注意力，因为对于任何固定的偏移量k，PE_{pos+k}可以表示为PE_{pos}的线性函数。"
+      ]
+    },
+    {
+      "sentence_id": "ec2585db-16b5-5877-8528-93de3dd96fa6",
+      "source_text": "W e also e xperimented with using learned positional embeddings [ 8 ] instead, and found that the tw o v ersions produced nearl y identical results \\050see T able 3 ro w \\050E\\051\\051.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们还尝试使用可学习的位置嵌入[8]代替，发现两个版本产生了几乎相同的结果（见表3行(E)）。"
+      ]
+    },
+    {
+      "sentence_id": "89f8d3e1-45ea-5225-aa6c-828a0aad4fd7",
+      "source_text": "W e chose the sinusoidal v ersion because it may allo w the model to e xtrapolate to sequence lengths longer than the ones encountered during training.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们选择正弦版本是因为它可能允许模型外推到比训练期间遇到的更长的序列长度。"
+      ]
+    },
+    {
+      "sentence_id": "ca4baac7-9d61-5201-9d36-d7adf61d77db",
+      "source_text": "4 Wh y Self-Attention In this section we compare v arious aspects of self-attention layers to the recurrent and con v olu- tional layers commonly used for m apping one v ariabl e-length sequence of symbol representations \\050 x 1 ; :::; x n \\051 to another sequence of equal length \\050 z 1 ; :::; z n \\051 , with x i ; z i 2 R d , such as a hidden layer in a typical sequence transduction encoder or decoder .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "4 为什么使用自注意力 在本节中，我们将自注意力层的各个方面与常用于将一个可变长度的符号表示序列(x_1, ..., x_n)映射到另一个等长序列(z_1, ..., z_n)的循环层和卷积层进行比较，其中x_i, z_i ∈ R^d，例如典型序列转导编码器或解码器中的隐藏层。"
+      ]
+    },
+    {
+      "sentence_id": "0c1fa172-b8b3-5b75-aa40-c2c195019f75",
+      "source_text": "Moti v ating our use of self-attention we consider three desiderata.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们使用自注意力的动机基于三个期望。"
+      ]
+    },
+    {
+      "sentence_id": "e4662951-5b48-5f31-bdd0-f2d4fbf6fda4",
+      "source_text": "One is the total computational comple xity per layer .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "一个是每层的总计算复杂度。"
+      ]
+    },
+    {
+      "sentence_id": "9c657b2e-ed30-5b6a-b575-52c6a9da5713",
+      "source_text": "Another is the amount of computation that can be parallelized, as measured by the minimum number of sequential operations required.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "另一个是可并行化的计算量，以所需顺序操作的最小数量来衡量。"
+      ]
+    },
+    {
+      "sentence_id": "a08fd674-4a1d-591d-8d66-697394e0df9d",
+      "source_text": "The third is the path length between long-range dependencies in the netw ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "第三个是网络中长程依赖关系之间的路径长度。"
+      ]
+    },
+    {
+      "sentence_id": "571b1a95-5a03-52c8-b4df-f303fe6ac85d",
+      "source_text": "Learning long-range dependencies is a k e y challenge in man y sequence transduction tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "学习长程依赖关系是许多序列转导任务中的关键挑战。"
+      ]
+    },
+    {
+      "sentence_id": "1b4e54b3-0031-539b-87b1-e49856af843e",
+      "source_text": "One k e y f actor af fecting the ability to learn such dependencies is the length of the paths forw ard and backw ard signals ha v e to tra v ers e in the netw o r k.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "影响学习这种依赖关系能力的一个关键因素是前向和反向信号在网络中必须遍历的路径长度。"
+      ]
+    },
+    {
+      "sentence_id": "f37174d8-8583-5820-8b4b-c69416054b91",
+      "source_text": "The shorter these paths between an y combination of positions in the input and out pu t sequences, the easier it is to learn long-range dependencies [ 11 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "输入和输出序列中任意位置组合之间的这些路径越短，学习长程依赖关系就越容易[11]。"
+      ]
+    },
+    {
+      "sentence_id": "ae63e37f-686d-52d7-b2bf-ea3be43b627b",
+      "source_text": "Hence we also compare the maximum path length between an y tw o input and output positions in netw orks composed of the dif ferent layer types.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "因此，我们还比较了由不同层类型组成的网络中任意两个输入和输出位置之间的最大路径长度。"
+      ]
+    },
+    {
+      "sentence_id": "24a16482-fb6a-52a1-a238-412a7f973c4b",
+      "source_text": "As noted in T able 1, a self-attention layer connects all positions with a constant number of sequentially e x ecuted operations, whereas a recurrent layer requires O \\050 n \\051 sequential operations.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "如表1所示，自注意力层以恒定数量的顺序执行操作连接所有位置，而循环层需要O(n)个顺序操作。"
+      ]
+    },
+    {
+      "sentence_id": "00bcefd6-eccc-53a2-a368-f7539ccfe10a",
+      "source_text": "In terms of computational comple xity , self-attention layers are f aster than recurrent layers when the sequence length n is smaller than the representation dimensionality d , which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as w ord-piece [ 31 ] and byte-pair [ 25 ] representa tions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在计算复杂度方面，当序列长度n小于表示维度d时，自注意力层比循环层更快，这在机器翻译中最先进模型使用的句子表示（如词片[31]和字节对[25]表示）中最为常见。"
+      ]
+    },
+    {
+      "sentence_id": "b7cd4f99-a712-5699-92d0-fb8108e23d44",
+      "source_text": "T o impro v e computational performance for tasks in v olving v ery long sequences, self-attention could be restricted to considering only a neighborhood of size r in 6",
+      "sentence_status": "translated",
+      "target_texts": [
+        "为了提高涉及非常长序列的任务的计算性能，自注意力可以限制为仅考虑大小为r的邻域。"
+      ]
+    },
+    {
+      "sentence_id": "dfd77c65-8ae8-5d17-8856-a3653d304a17",
+      "source_text": "Self-Attention O \\050 n 2 \\001 d \\051 O \\0501\\051 O \\0501\\051 Recurrent O \\050 n \\001 d 2 \\051 O \\050 n \\051 O \\050 n \\051 Con v olutional O \\050 k \\001 n \\001 d 2 \\051 O \\0501\\051 O \\050 l og k \\050 n \\051\\051 Self-Attention \\050restricted\\051 O \\050 r \\001 n \\001 d \\051 O \\0501\\051 O \\050 n=r \\051 Layer T ype Comple xity per Layer Sequential Maximum P ath Length Operations",
+      "sentence_status": "translated",
+      "target_texts": [
+        "自注意力 O(n²·d) O(1) O(1)",
+        "循环层 O(n·d²) O(n) O(n)",
+        "卷积层 O(k·n·d²) O(1) O(logₖ(n))",
+        "受限自注意力 O(r·n·d) O(1) O(n/r)",
+        "层类型 每层复杂度 顺序操作数 最大路径长度"
+      ]
+    },
+    {
+      "sentence_id": "fddcf026-09d4-5a38-8e23-ac71a284fde7",
+      "source_text": "the input sequence centered around the respecti v e output position.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "以相应输出位置为中心的输入序列。"
+      ]
+    },
+    {
+      "sentence_id": "5282aafc-a9eb-54c6-b307-5602cfc5d02f",
+      "source_text": "This w ould increase the maximum path length to O \\050 n=r \\051 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这将使最大路径长度增至O(n/r)。"
+      ]
+    },
+    {
+      "sentence_id": "9a961972-173a-582a-8b88-fa3449958a00",
+      "source_text": "W e plan to in v estig ate this approach further in future w ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们计划在未来工作中进一步研究此方法。"
+      ]
+    },
+    {
+      "sentence_id": "efdb78c7-ccb8-5a49-a8b2-89c15aeabede",
+      "source_text": "A single con v olutional layer with k ernel width k < n does not connect all pairs of input and output positions.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "单个卷积层若核宽度k<n，则无法连接所有输入和输出位置对。"
+      ]
+    },
+    {
+      "sentence_id": "647f27f1-2bec-5d2c-807e-d6cd885d25da",
+      "source_text": "Doing so requires a stack of O \\050 n=k \\051 con v olutional layers in the case of contiguous k ernels, or O \\050 l og k \\050 n \\051\\051 in the case of dilated con v olutions [ 15 ], increasing the length of the longest paths between an y tw o positions in the netw ork.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这样做在连续卷积核的情况下需要堆叠O(n/k)个卷积层，或在扩张卷积[15]的情况下需要O(logₖ(n))层，从而增加了网络中任意两个位置间最长路径的长度。"
+      ]
+    },
+    {
+      "sentence_id": "7987aa66-8d0a-5bcf-b8b1-76a5bfa8de47",
+      "source_text": "Con v olutional layers are generally more e xpensi v e than recurrent layers, by a f actor of k .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "卷积层通常比循环层更昂贵，相差一个因子k。"
+      ]
+    },
+    {
+      "sentence_id": "01d60789-0664-537a-a37e-ab37ee726214",
+      "source_text": "Separable con v olutions [ 6 ], ho we v er , decrease the com ple xity considerably , to O \\050 k \\001 n \\001 d + n \\001 d 2 \\051 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，可分离卷积[6]显著降低了复杂度，降至O(k·n·d + n·d²)。"
+      ]
+    },
+    {
+      "sentence_id": "99697c7d-2909-5ee1-b4af-78aea9061ca4",
+      "source_text": "Ev en with k = n , ho we v er , the comple xity of a separable con v olution is equal to the combination of a self-attention layer and a point-wise feed-forw ard layer , the approach we tak e in our model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "然而，即使k=n，可分离卷积的复杂度也等同于一个自注意力层与一个逐点前馈层的组合，这正是我们模型中采用的方法。"
+      ]
+    },
+    {
+      "sentence_id": "aee4e7ed-61c6-5475-a788-7c6cd11bff4f",
+      "source_text": "As side bene\\002t, self-attention could yield more interpretable models.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "作为附带好处，自注意力可能产生更具可解释性的模型。"
+      ]
+    },
+    {
+      "sentence_id": "ed904193-24a0-52ff-b221-e00504c85a32",
+      "source_text": "W e inspect attention distrib utions from our models and present and dis cuss e xamples in the appendix.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们检查了模型的注意力分布，并在附录中展示和讨论了示例。"
+      ]
+    },
+    {
+      "sentence_id": "091ddad7-b1c7-5ea1-80ed-5cf9098f2610",
+      "source_text": "Not only do indi vidual attention heads cl early learn t o perform dif f erent tasks, man y appear to e xhibit beha vior related to the syntactic and semantic structure of the sentences.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "不仅单个注意力头明显学会执行不同的任务，许多还表现出与句子句法和语义结构相关的行为。"
+      ]
+    },
+    {
+      "sentence_id": "0ff0daf4-4982-594f-bd17-c2cd0505437a",
+      "source_text": "5 T raining This section describes the training re gime for our models.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5 训练 本节描述我们模型的训练方案。"
+      ]
+    },
+    {
+      "sentence_id": "91e09c5a-1e47-5e0f-800f-417cecdb0e28",
+      "source_text": "5.1 T raining Data and Batching W e trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5.1 训练数据与批处理 我们在标准WMT 2014英德数据集上训练，该数据集包含约450万句对。"
+      ]
+    },
+    {
+      "sentence_id": "34506b6e-790f-5631-a711-63415dff3005",
+      "source_text": "Sente nces were encoded using byte-pair encoding [ 3 ], which has a shared source- tar get v ocab ulary of about 37000 tok ens.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "句子使用字节对编码[3]进行编码，其共享的源-目标词汇表包含约37000个标记。"
+      ]
+    },
+    {
+      "sentence_id": "8a061f80-a281-5cc4-8ca7-46627a5b2f7f",
+      "source_text": "F or English-French, we used the signi\\002cantly lar ger WMT 2014 English-French dataset consisting of 36M sentences and split tok ens into a 32000 w ord-piece v ocab ulary [ 31 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于英法翻译，我们使用了规模大得多的WMT 2014英法数据集，包含3600万句，并将标记划分为32000个词片词汇表[31]。"
+      ]
+    },
+    {
+      "sentence_id": "83d7cba9-7e64-5b53-b811-36178f8f62f8",
+      "source_text": "Sentence pairs were batched together by approximate sequence length.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "句子对按近似序列长度分批。"
+      ]
+    },
+    {
+      "sentence_id": "7ebaa9dc-fdd7-554c-936b-f6264987d489",
+      "source_text": "Each training batch contained a set of sentence pairs containing approximately 25000 s ource tok ens and 25000 tar get tok ens.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "每个训练批次包含一组句子对，其中约含25000个源标记和25000个目标标记。"
+      ]
+    },
+    {
+      "sentence_id": "f7588e06-7576-5844-bfa3-8fb3dc563d63",
+      "source_text": "5.2 Hard war e and Schedule W e trained our models on one machine with 8 NVIDIA P100 GPUs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5.2 硬件与调度 我们在配备8个NVIDIA P100 GPU的单台机器上训练模型。"
+      ]
+    },
+    {
+      "sentence_id": "26bcdc42-afba-51a2-a908-5c692e00c045",
+      "source_text": "F or our base models using the h yperparameters described throughout the paper , each training step took about 0.4 seconds.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于使用本文所述超参数的基准模型，每个训练步耗时约0.4秒。"
+      ]
+    },
+    {
+      "sentence_id": "ac02a468-4858-5fa0-8183-93b83f44b880",
+      "source_text": "W e trained the base model s for a total of 100,000 steps or 12 hours.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们训练基准模型总计100,000步或12小时。"
+      ]
+    },
+    {
+      "sentence_id": "8f4b5419-8389-52e4-a67d-408437a9ea8c",
+      "source_text": "F or our big models,\\050described on the bottom line of table 3\\051, step time w as 1.0 seconds.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于我们的（表3底行描述的）大型模型，步时间为1.0秒。"
+      ]
+    },
+    {
+      "sentence_id": "748e7b17-71e2-5c07-8ccb-df8e10056bd3",
+      "source_text": "The big models were trained for 300,000 steps \\0503.5 days\\051.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "大型模型训练了300,000步（3.5天）。"
+      ]
+    },
+    {
+      "sentence_id": "17aade2e-711b-5c8b-8733-a6d803b59cb7",
+      "source_text": "5.3 Optimizer W e used the Adam optimizer [ 17 ] with \\014 1 = 0 : 9 , \\014 2 = 0 : 98 and \\017 = 10 \\000 9 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5.3 优化器 我们使用Adam优化器[17]，其中β₁=0.9，β₂=0.98，ε=10⁻⁹。"
+      ]
+    },
+    {
+      "sentence_id": "1b712856-db81-57cd-9928-dde2b6034d27",
+      "source_text": "W e v aried the learning rate o v er the course of training, according to the formula: l r ate = d \\000 0 : 5 model \\001 min\\050 step _ num \\000 0 : 5 ; step _ num \\001 w ar mup _ steps \\000 1 : 5 \\051 \\0503\\051 This corresponds to increasing the learning rate linearly for the \\002rst w ar mup _ steps training steps, and decreasing it thereafter proportionally to the in v erse square root of the step number .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在训练过程中根据以下公式调整学习率：学习率 = d_model⁻⁰·⁵ × min(步数⁻⁰·⁵, 步数 × 预热步数⁻¹·⁵) (3) 这对应于在前warmup_steps个训练步中线性增加学习率，之后按步数的平方根倒数比例递减。"
+      ]
+    },
+    {
+      "sentence_id": "feb800bc-909d-5c64-9d7a-e97bc5f0d88a",
+      "source_text": "W e used w ar mup _ steps = 4000 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们使用warmup_steps=4000。"
+      ]
+    },
+    {
+      "sentence_id": "97deb81e-243e-5fdf-9b18-b5093b1869e9",
+      "source_text": "5.4 Regularization W e emplo y three types of re gularization during training: Residual Dr opout W e apply dropout [ 27 ] t o the out put of ea ch sub-layer , before it is added to the sub-layer input and normalized.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "5.4 正则化 我们在训练期间采用三种正则化方法：残差丢弃 我们在每个子层的输出与子层输入相加并归一化之前，对其应用丢弃[27]。"
+      ]
+    },
+    {
+      "sentence_id": "a373467f-7010-57f8-9988-775c566ae9c2",
+      "source_text": "In addition, we apply dropout to the sums of the embeddings and the positional encodings in both the encoder and decoder stacks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "此外，我们在编码器和解码器堆栈中，对嵌入与位置编码的和应用丢弃。"
+      ]
+    },
+    {
+      "sentence_id": "d365f117-e842-5fed-8b84-01f42749230b",
+      "source_text": "F or the base model, we use a rate of P dr op = 0 : 1 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于基准模型，我们使用丢弃率P_drop=0.1。"
+      ]
+    },
+    {
+      "sentence_id": "8b038d5f-21f0-5704-9041-1bc9b9b9c4e0",
+      "source_text": "7",
+      "sentence_status": "translated",
+      "target_texts": [
+        "7"
+      ]
+    },
+    {
+      "sentence_id": "5bb5982f-8d22-551e-b46f-d918fe4f80c6",
+      "source_text": "EN-DE EN-FR EN-DE EN-FR",
+      "sentence_status": "translated",
+      "target_texts": [
+        "英德 英法 英德 英法"
+      ]
+    },
+    {
+      "sentence_id": "6253f752-341c-5fa0-9abe-c489d3bfdce5",
+      "source_text": "Label Smoothing During training, we emplo yed label smoothing of v alue \\017 l s = 0 : 1 [ 30 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "标签平滑在训练过程中，我们采用了值为ε_ls=0.1的标签平滑技术[30]。"
+      ]
+    },
+    {
+      "sentence_id": "0c829cf2-87b2-5230-b222-f05095afc05d",
+      "source_text": "This hurts perple xity , as the model learns to be more unsure, b ut impro v es accurac y and BLEU score.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这会损害困惑度，因为模型学会了更加不确定，但提高了准确率和BLEU分数。"
+      ]
+    },
+    {
+      "sentence_id": "8d68f615-2e77-5bb8-93d1-92d7f5f97077",
+      "source_text": "6 Results",
+      "sentence_status": "translated",
+      "target_texts": [
+        "6 结果"
+      ]
+    },
+    {
+      "sentence_id": "0f62a1ee-28c9-5e59-9fde-278361661553",
+      "source_text": "6.1 Machine T ranslation On the WMT 2014 English-to-Germ an translation task, the big transformer model \\050T ransformer \\050big\\051 in T able 2\\051 outperforms the best pre viously reported models \\050including ensembles\\051 by more than 2 : 0 BLEU, est ablishing a ne w state-of-the-art BLEU score of 28 : 4 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "6.1 机器翻译在WMT 2014英语到德语翻译任务中，大型Transformer模型（表2中的Transformer(big)）比之前报告的最佳模型（包括集成模型）高出超过2.0 BLEU，建立了新的最先进BLEU分数28.4。"
+      ]
+    },
+    {
+      "sentence_id": "7ca1f7af-6adc-54b7-8d95-4ce8320d8cdf",
+      "source_text": "The con\\002guration of this model is listed in the bottom line of T able 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "该模型的配置列于表3的最后一行。"
+      ]
+    },
+    {
+      "sentence_id": "e439beb1-7040-55d4-9483-c560c3828b22",
+      "source_text": "T raining took 3 : 5 days on 8 P100 GPUs.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "训练在8个P100 GPU上耗时3.5天。"
+      ]
+    },
+    {
+      "sentence_id": "d4dd5865-926b-5e50-8f00-bef23578512a",
+      "source_text": "Ev en our base model surpasses all pre viously published models and ensembles, at a fraction of the t raining cost of an y of the competiti v e models.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "即使我们的基础模型也超越了所有先前发布的模型和集成模型，且训练成本仅为任何竞争模型的一小部分。"
+      ]
+    },
+    {
+      "sentence_id": "d3a9bd75-5945-5aeb-96fa-9a53e23ba239",
+      "source_text": "On the WMT 2014 English-to-French translation task, our big model achie v es a BLEU score of 41 : 0 , outperforming all of the pre viously published single models, at less than 1 = 4 the training cost of the pre vious state-of-the-art model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在WMT 2014英语到法语翻译任务中，我们的大型模型取得了41.0的BLEU分数，优于所有先前发布的单一模型，且训练成本不到先前最先进模型的1/4。"
+      ]
+    },
+    {
+      "sentence_id": "80926d26-a54b-59e1-a90a-57dc78e17915",
+      "source_text": "The T ransfor mer \\050big\\051 model trained for English-to-French used dropout rate P dr op = 0 : 1 , instead of 0 : 3 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "用于英语到法语训练的Transformer(big)模型使用了丢弃率P_drop=0.1，而不是0.3。"
+      ]
+    },
+    {
+      "sentence_id": "7c9aaa52-7af9-57ba-a153-fc27de9d6135",
+      "source_text": "F or the base models, we used a single model obtained by a v eraging the last 5 checkpoints, which were written at 10-minute interv als.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于基础模型，我们使用了一个通过平均最后5个检查点获得的单一模型，这些检查点以10分钟为间隔保存。"
+      ]
+    },
+    {
+      "sentence_id": "046e19a7-af16-5d0f-a4cb-ba97daef91f6",
+      "source_text": "F or the big models, we a v eraged the last 20 checkpoints.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于大型模型，我们平均了最后20个检查点。"
+      ]
+    },
+    {
+      "sentence_id": "2ef331c8-0fb3-595e-8812-76dae32de8c4",
+      "source_text": "W e used beam search with a beam size of 4 and length penalty \\013 = 0 : 6 [ 31 ].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们使用了束搜索，束大小为4，长度惩罚α=0.6[31]。"
+      ]
+    },
+    {
+      "sentence_id": "9f0681f0-150d-5f47-889d-058ddffc714e",
+      "source_text": "These h yperparameters were chosen after e xperimentation on the de v e lopment set.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这些超参数是在开发集上实验后选择的。"
+      ]
+    },
+    {
+      "sentence_id": "296dba8f-4c84-5549-8b55-43a88c41f250",
+      "source_text": "W e set the maximum output length during inference to input length + 50 , b ut terminate early when possible [31].",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在推理时将最大输出长度设置为输入长度加50，但尽可能提前终止[31]。"
+      ]
+    },
+    {
+      "sentence_id": "46722ac3-b309-5bba-b4e5-41cdf7ea7246",
+      "source_text": "T able 2 summarizes our results and compares our translation quality and training costs to other m odel architectures from the literature.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "表2总结了我们的结果，并将我们的翻译质量和训练成本与文献中的其他模型架构进行了比较。"
+      ]
+    },
+    {
+      "sentence_id": "1c5eba9d-f955-5035-a9f7-fcd12c1589f9",
+      "source_text": "W e estimate the number of \\003oating point operations used to train a model by multiplying the training time, the number of GPUs used, and an estimate of the sustained single-precision \\003oating-point capacity of each GPU 5 .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们通过将训练时间、使用的GPU数量以及每个GPU的持续单精度浮点运算能力估计值相乘，来估计训练模型所使用的浮点运算次数5。"
+      ]
+    },
+    {
+      "sentence_id": "8daefaef-f841-54e0-a6f8-45663a8e4ca1",
+      "source_text": "6.2 Model V ariations T o e v aluate the importance of dif f erent components of the T ransformer , we v aried our base model in dif f erent w ays, measuring the change in performance on English-to-German translation on the de v elopment set, ne wstest2013.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "6.2 模型变体为了评估Transformer不同组件的重要性，我们以不同方式改变基础模型，测量在开发集newstest2013上英语到德语翻译性能的变化。"
+      ]
+    },
+    {
+      "sentence_id": "ea4e0aa1-da7b-5f7f-b904-a24edb6ba826",
+      "source_text": "W e used beam search as described in the pre vious section, b ut no checkpoint a v eraging.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们使用了前一节描述的束搜索，但没有进行检查点平均。"
+      ]
+    },
+    {
+      "sentence_id": "efc3216d-207b-5df9-8280-0922ee73b4c6",
+      "source_text": "W e present these results in T able 3.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们在表3中呈现这些结果。"
+      ]
+    },
+    {
+      "sentence_id": "0858d0fd-98f4-561e-8e8a-179f5e1224df",
+      "source_text": "In T able 3 ro ws \\050A\\051, we v ary the number of attention heads and t he attention k e y and v alue dimensions, k eeping the amount of computation constant, as described in Section 3.2.2.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在表3的行(A)中，我们改变注意力头的数量以及注意力键和值的维度，同时保持计算量恒定，如第3.2.2节所述。"
+      ]
+    },
+    {
+      "sentence_id": "e6b5938e-0552-5244-9fdf-e3df42f879a3",
+      "source_text": "While single-head attention is 0.9 BLEU w orse than the best setting, quality also drops of f with too man y heads.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "虽然单头注意力比最佳设置差0.9 BLEU，但头数过多时质量也会下降。"
+      ]
+    },
+    {
+      "sentence_id": "010c9e83-da81-5836-99f4-0de6d3b1a1e7",
+      "source_text": "Model BLEU T rai ning Cost \\050FLOPs\\051 ByteNet [15] 23.75 Deep-Att + PosUnk [32] 39.2 1 : 0 \\001 10 20 GNMT + RL [31] 24.6 39.92 2 : 3 \\001 10 19 1 : 4 \\001 10 20 Con vS2S [8] 25.16 40.46 9 : 6 \\001 10 18 1 : 5 \\001 10 20 MoE [26] 26.03 40.56 2 : 0 \\001 10 19 1 : 2 \\001 10 20 Deep-Att + PosUnk Ensemble [32] 40.4 8 : 0 \\001 10 20 GNMT + RL Ensemble [31] 26.30 41.16 1 : 8 \\001 10 20 1 : 1 \\001 10 21 Con vS2S Ensemble [8] 26.36 41.29 7 : 7 \\001 10 19 1 : 2 \\001 10 21 T ransformer \\050base model\\051 27.3 38.1 3 : 3 \\001 10 18 T ransformer \\050big\\051 28.4 41.0 2 : 3 \\001 10 19 T able 2: The T ransformer achie v es better BLEU scores than pre vious state-of-the-art models on the English-to-German and English-to-French ne wstest2014 tests at a fraction of the training cost.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "模型 BLEU 训练成本（浮点运算次数）\nByteNet [15] 23.75\nDeep-Att + PosUnk [32] 39.2 1.0×10^20\nGNMT + RL [31] 24.6 39.92 2.3×10^19 1.4×10^20\nConvS2S [8] 25.16 40.46 9.6×10^18 1.5×10^20\nMoE [26] 26.03 40.56 2.0×10^19 1.2×10^20\nDeep-Att + PosUnk 集成 [32] 40.4 8.0×10^20\nGNMT + RL 集成 [31] 26.30 41.16 1.8×10^20 1.1×10^21\nConvS2S 集成 [8] 26.36 41.29 7.7×10^19 1.2×10^21\nTransformer（基础模型） 27.3 38.1 3.3×10^18\nTransformer（大型） 28.4 41.0 2.3×10^19",
+        "表2：Transformer在英德和英法newstest2014测试中，以远低于以往最先进模型的训练成本，取得了更高的BLEU分数。"
+      ]
+    },
+    {
+      "sentence_id": "98a14f78-09e8-5f52-9b47-30ff1e376589",
+      "source_text": "5 W e used v alues of 2.8, 3.7, 6.0 and 9.5 TFLOPS for K80, K40, M40 and P100, respecti v ely .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们分别对K80、K40、M40和P100使用了2.8、3.7、6.0和9.5 TFLOPS的数值。"
+      ]
+    },
+    {
+      "sentence_id": "dac48a4b-12d2-52fd-a504-9d1b85645c0a",
+      "source_text": "8",
+      "sentence_status": "translated",
+      "target_texts": [
+        "8"
+      ]
+    },
+    {
+      "sentence_id": "41492e00-6129-56ee-83c1-1599c69315c2",
+      "source_text": "T able 3: V ariations on the T ransformer architecture.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "表3：Transformer架构的变体。"
+      ]
+    },
+    {
+      "sentence_id": "554b66da-f64c-5416-8277-a49485f7ef68",
+      "source_text": "Unlisted v alues are identical to those of the base model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "未列出的数值与基础模型相同。"
+      ]
+    },
+    {
+      "sentence_id": "87868b54-8799-5d61-a968-217e82f5f5a0",
+      "source_text": "All metrics are on the English-to-German translation de v elopment set, ne wstest2013.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "所有指标均基于英德翻译开发集newstest2013。"
+      ]
+    },
+    {
+      "sentence_id": "0225adb3-5a8a-5b0a-ba52-00f2a05bd858",
+      "source_text": "Listed perple xities are per -w ordpiece, according to our byte-pair encoding, and should not be compared to per -w ord perple xities.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "所列困惑度基于字节对编码，按词片计算，不应与按词计算的困惑度进行比较。"
+      ]
+    },
+    {
+      "sentence_id": "1ba0302a-b0b0-5475-aa2a-a66550352c10",
+      "source_text": "PPL BLEU params steps base 6 512 2048 8 64 64 0.1 0.1 100K 4.92 25.8 65 1 512 512 5.29 24.9 4 128 128 5.00 25.5 \\050A\\051 16 32 32 4.91 25.8 32 16 16 5.01 25.4 16 5.16 25.1 58 \\050B\\051 32 5.01 25.4 60 2 6.11 23.7 36 4 5.19 25.3 50 8 4.88 25.5 80 \\050C\\051 256 32 32 5.75 24.5 28 1024 128 128 4.66 26.0 168 1024 5.12 25.4 53 4096 4.75 26.2 90 0.0 5.77 24.6 0.2 4.95 25.5 \\050D\\051 0.0 4.67 25.3 0.2 5.47 25.7 \\050E\\051 positional embedding instead of sinusoids 4.92 25.7 big 6 1024 4096 16 0.3 300K",
+      "sentence_status": "translated",
+      "target_texts": [
+        "PPL BLEU 参数量 训练步数 基础模型 6 512 2048 8 64 64 0.1 0.1 100K 4.92 25.8 65 1 512 512 5.29 24.9 4 128 128 5.00 25.5 (A) 16 32 32 4.91 25.8 32 16 16 5.01 25.4 16 5.16 25.1 58 (B) 32 5.01 25.4 60 2 6.11 23.7 36 4 5.19 25.3 50 8 4.88 25.5 80 (C) 256 32 32 5.75 24.5 28 1024 128 128 4.66 26.0 168 1024 5.12 25.4 53 4096 4.75 26.2 90 0.0 5.77 24.6 0.2 4.95 25.5 (D) 0.0 4.67 25.3 0.2 5.47 25.7 (E) 使用位置嵌入而非正弦编码 4.92 25.7 大型模型 6 1024 4096 16 0.3 300K"
+      ]
+    },
+    {
+      "sentence_id": "aa736c74-864c-5d52-8237-f11e4a87d438",
+      "source_text": "In T able 3 ro ws \\050B\\051, we observ e that reducing the attention k e y size d k hurts model quality .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在表3的行(B)中，我们观察到减小注意力键尺寸dk会损害模型质量。"
+      ]
+    },
+    {
+      "sentence_id": "496bc3ed-f340-5bc5-9660-14fec9b1f0d8",
+      "source_text": "This suggests that determining compatibility is not easy and that a more sophisticated compatibili ty function than dot product m ay be bene\\002cial.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "这表明确定兼容性并非易事，且使用比点积更复杂的兼容性函数可能有益。"
+      ]
+    },
+    {
+      "sentence_id": "f1b16813-7381-590b-83d6-33631d34353e",
+      "source_text": "W e further observ e in ro ws \\050C\\051 and \\050D\\051 that, as e xpected, bigger models are better , and dropout is v ery helpful in a v oiding o v er -\\002tting.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们进一步在行(C)和(D)中观察到，正如预期的那样，更大的模型表现更好，且dropout在避免过拟合方面非常有帮助。"
+      ]
+    },
+    {
+      "sentence_id": "95dd8543-1900-5884-a3df-76dc25d2d3b5",
+      "source_text": "In ro w \\050E\\051 we replace our sinusoidal positional encoding with learned positional embeddings [ 8 ], and observ e nearly identical results to the base model.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在行(E)中，我们将正弦位置编码替换为学习得到的位置嵌入[8]，并观察到与基础模型几乎相同的结果。"
+      ]
+    },
+    {
+      "sentence_id": "a73b3c09-a5e1-52a0-8175-a3a737d10d2b",
+      "source_text": "7 Conclusion",
+      "sentence_status": "translated",
+      "target_texts": [
+        "7 结论"
+      ]
+    },
+    {
+      "sentence_id": "2b96b51d-aaca-5fa8-a32d-ddb7096ae30d",
+      "source_text": "In this w ork, we presented the T ransformer , the \\002rst sequence transduction model based entirely on attention, replacing the recurrent layers most commonly used in encoder -decoder architectures with multi-headed self-attention.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在这项工作中，我们提出了Transformer，这是首个完全基于注意力的序列转导模型，它用多头自注意力取代了编码器-解码器架构中最常用的循环层。"
+      ]
+    },
+    {
+      "sentence_id": "d9c77585-0cb8-5add-91e8-b863db2b10d7",
+      "source_text": "F or translation tasks, the T ransformer can be trained signi\\002cantly f aster than architectures based on recurrent or con v olutional layers.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "对于翻译任务，Transformer的训练速度显著快于基于循环层或卷积层的架构。"
+      ]
+    },
+    {
+      "sentence_id": "1d779479-18cf-5093-946f-c73383a4a64b",
+      "source_text": "On both WMT 2014 English-to-German and WMT 2014 English-to-French translation tasks, we achie v e a ne w state of the art.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在WMT 2014英德和WMT 2014英法翻译任务上，我们均取得了新的最先进水平。"
+      ]
+    },
+    {
+      "sentence_id": "01bae69f-44cf-5bd1-af75-7ae1f22ac305",
+      "source_text": "In the former task our best model outperforms e v en all pre viously reported ensembles.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "在前一项任务中，我们最佳模型的性能甚至超越了所有先前报道的集成模型。"
+      ]
+    },
+    {
+      "sentence_id": "6d5366ca-104b-5874-a7a6-659861a0992c",
+      "source_text": "W e are e xcited about the future of attention-based models and plan to apply them to other tasks.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们对基于注意力的模型的未来感到兴奋，并计划将其应用于其他任务。"
+      ]
+    },
+    {
+      "sentence_id": "1c739c1d-9d92-5fc9-9615-a341b9caa3f2",
+      "source_text": "W e plan to e xtend the T ransformer to problems in v olving input and output modalities other than te xt and to in v estig ate local, restricted attention mechanisms to ef \\002ciently handle lar ge input s and outputs such as images, audio and video.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们计划将Transformer扩展到涉及文本以外输入输出模态的问题，并研究局部受限的注意力机制，以高效处理图像、音频和视频等大型输入输出。"
+      ]
+    },
+    {
+      "sentence_id": "c69a0da1-8522-5a44-b7aa-2d410d0b6485",
+      "source_text": "Making generation less sequential is another research goals of ours.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "减少生成的序列性是我们的另一个研究目标。"
+      ]
+    },
+    {
+      "sentence_id": "06462bac-bd9c-55e0-b8f3-696e0480f70b",
+      "source_text": "The code we used to trai n and e v aluate our models is a v ailable at https://github.com/ tensorflow/tensor2te nsor .",
+      "sentence_status": "translated",
+      "target_texts": [
+        "我们用于训练和评估模型的代码可在 https://github.com/tensorflow/tensor2tensor 获取。"
+      ]
+    },
+    {
+      "sentence_id": "ade583fe-9cd3-52c8-a795-2729f45a44a1",
+      "source_text": "Ackno wledgements W e are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments, corrections and inspiration.",
+      "sentence_status": "translated",
+      "target_texts": [
+        "致谢：我们感谢Nal Kalchbrenner和Stephan Gouws富有成效的评论、修正和启发。"
+      ]
+    },
+    {
+      "sentence_id": "3f28e4f7-464f-5351-8c30-34c388a07850",
+      "source_text": "9",
+      "sentence_status": "translated",
+      "target_texts": [
+        "9"
+      ]
+    },
+    {
+      "sentence_id": "da87bb5c-3fa8-5842-9382-e8228d2efb17",
+      "source_text": "N d model d f f h d k d v P dr op \\017 l s train \\050de v\\051 \\050de v\\051 \\002 10 6 4.33 26.4 213",
+      "sentence_status": "translated",
+      "target_texts": [
+        "N d 模型 d f f h d k d v P dr op \\017 l s 训练 \\050de v\\051 \\050de v\\051 \\002 10 6 4.33 26.4 213"
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "issue_id": "dacd22a4-9043-5f02-9e0b-929c03c92a94",
+      "issue_type": "MISORDERING",
+      "severity": "medium",
+      "blocking": false,
+      "sentence_id": "afc4c931-8dda-5896-a455-6078f3db3eb8",
+      "evidence": {
+        "layout_risk": "medium",
+        "parse_confidence": 0.82,
+        "suspicious_page_numbers": [
+          2,
+          3
+        ],
+        "structure_flags": [
+          "layout_risk_medium",
+          "academic_section_heading_recovered",
+          "academic_section_split"
+        ],
+        "recovery_lane": "academic_paper",
+        "review_policy": "academic_paper_medium_layout_advisory"
+      }
+    }
+  ]
+}

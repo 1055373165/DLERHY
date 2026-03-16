@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from book_agent.app.api.deps import get_db_session
+from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.schemas.run_control import (
     CreateDocumentRunRequest,
@@ -21,9 +22,7 @@ router = APIRouter()
 
 
 def _wake_executor(request: Request, run_id: str) -> None:
-    executor = getattr(request.app.state, "document_run_executor", None)
-    if executor is not None:
-        executor.wake(run_id)
+    ensure_document_run_executor(request.app).wake(run_id)
 
 
 def _service(session: Session) -> RunControlService:
@@ -189,6 +188,28 @@ def resume_run(
 ) -> DocumentRunSummaryResponse:
     try:
         summary = _service(session).resume_run(
+            run_id,
+            actor_id=payload.actor_id,
+            note=payload.note,
+            detail_json=payload.detail_json,
+        )
+    except RunControlTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    _wake_executor(request, summary.run_id)
+    return _to_run_summary_response(summary)
+
+
+@router.post("/{run_id}/retry", response_model=DocumentRunSummaryResponse)
+def retry_run(
+    run_id: str,
+    request: Request,
+    payload: RunControlRequest,
+    session: Session = Depends(get_db_session),
+) -> DocumentRunSummaryResponse:
+    try:
+        summary = _service(session).retry_run(
             run_id,
             actor_id=payload.actor_id,
             note=payload.note,

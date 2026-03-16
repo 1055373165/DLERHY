@@ -6,13 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import IssueStatus, MemoryScopeType, MemoryStatus, SnapshotType, TermStatus
-from book_agent.domain.models import Block, Chapter, MemorySnapshot, Sentence
+from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
 from book_agent.domain.models.review import ChapterQualitySummary, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TermEntry, TranslationPacket, TranslationRun
 
 
 @dataclass(slots=True)
 class ChapterReviewBundle:
+    document: Document
     chapter: Chapter
     blocks: list[Block]
     sentences: list[Sentence]
@@ -33,6 +34,9 @@ class ReviewRepository:
         chapter = self.session.get(Chapter, chapter_id)
         if chapter is None:
             raise ValueError(f"Chapter not found: {chapter_id}")
+        document = self.session.get(Document, chapter.document_id)
+        if document is None:
+            raise ValueError(f"Document not found: {chapter.document_id}")
 
         sentences = self.session.scalars(
             select(Sentence).where(Sentence.chapter_id == chapter_id)
@@ -74,6 +78,7 @@ class ReviewRepository:
         ).all()
 
         return ChapterReviewBundle(
+            document=document,
             chapter=chapter,
             blocks=blocks,
             sentences=sentences,
