@@ -11,7 +11,8 @@
       "Bash(find:*)",
       "Bash(sqlite3:*)",
       "Bash(python:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "WebSearch"
     ]
   }
 }
