@@ -7,7 +7,9 @@
       "Bash(chmod +x /Users/smy/project/book-agent/start.sh /Users/smy/project/book-agent/stop.sh)",
       "Bash(bash -n start.sh && bash -n stop.sh && echo \"Syntax OK\")",
       "Bash(pgrep -af \"uvicorn book_agent\" 2>/dev/null || echo \"No uvicorn process found\")",
-      "Bash(pgrep -af \"uvicorn book_agent\" 2>/dev/null)"
+      "Bash(pgrep -af \"uvicorn book_agent\" 2>/dev/null)",
+      "Bash(find:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }
