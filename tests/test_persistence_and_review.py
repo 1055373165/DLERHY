@@ -26,6 +26,7 @@ from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.services.actions import IssueActionExecutor
+from book_agent.services.chapter_concept_lock import ChapterConceptLockService
 from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.review import ReviewService
 from book_agent.services.translation import TranslationService
@@ -120,6 +121,16 @@ STALE_BRIEF_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
     <p>Memory helps agents act consistently over time.</p>
     <p>Context engineering determines how context is created.</p>
     <p>Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
+AGENTIC_AI_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Agentic AI continuously improves by ingesting feedback.</p>
+    <p>Agentic AI also adapts over time.</p>
   </body>
 </html>
 """
@@ -278,6 +289,47 @@ class ParagraphFlowWorker:
         )
 
 
+class AgenticLiteralWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="AgenticLiteralWorker",
+            model_name="agentic-literal-test",
+            prompt_version="test.agentic-literal.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            temp_id = f"temp-{sentence.id}"
+            if "Agentic AI" in sentence.source_text:
+                text = "智能体AI通过吸收反馈持续改进。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
 class LiteralismWorker:
     def metadata(self) -> TranslationWorkerMetadata:
         return TranslationWorkerMetadata(
@@ -296,7 +348,7 @@ class LiteralismWorker:
                 )
             elif "weight of evidence" in sentence.source_text:
                 text = (
-                    "本质上，证据的分量表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且情境更准确的输出。"
+                    "本质上，证据权重表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且上下文更准确的输出。"
                 )
             else:
                 text = f"译文::{sentence.source_text}"
@@ -568,6 +620,50 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(concept_action.scope_id, chapter_id)
             self.assertIn("context engineering", concept_issue.evidence_json["source_term"].lower())
 
+    def test_review_skips_unlocked_key_concept_when_locked_term_entry_exists(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter = bundle.chapters[0].chapter
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session))
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.flush()
+            sentence_id = next(
+                sentence.id
+                for sentence in bundle.chapters[0].sentences
+                if "Context engineering" in sentence.source_text
+            )
+            session.add(
+                TermEntry(
+                    id=stable_id("term-entry", document_id, chapter.id, "context engineering", 1),
+                    document_id=document_id,
+                    scope_type=MemoryScopeType.CHAPTER,
+                    scope_id=chapter.id,
+                    source_term="context engineering",
+                    target_term="上下文工程",
+                    term_type=TermType.CONCEPT,
+                    lock_level=LockLevel.LOCKED,
+                    status=TermStatus.ACTIVE,
+                    evidence_sentence_id=sentence_id,
+                    version=1,
+                )
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            unlocked_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            ]
+            self.assertEqual(unlocked_issues, [])
+
     def test_review_reports_style_drift_literalism_as_non_blocking_advisory(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
             [("Chapter One", "chapter1.xhtml", LITERALISM_XHTML)]
@@ -587,7 +683,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             chapter_id = bundle.chapters[0].chapter.id
             review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
             style_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "STYLE_DRIFT"]
-            self.assertGreaterEqual(len(style_issues), 2)
+            self.assertGreaterEqual(len(style_issues), 3)
             self.assertTrue(all(issue.root_cause_layer.value == "packet" for issue in style_issues))
             self.assertTrue(all(not issue.blocking for issue in style_issues))
             style_actions = [
@@ -602,8 +698,47 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 any(issue.evidence_json.get("preferred_hint") == "上下文工程" for issue in style_issues)
             )
             self.assertTrue(
-                any("证据的分量" in str(issue.evidence_json.get("actual_target_text") or "") for issue in style_issues)
+                any("证据权重" in str(issue.evidence_json.get("actual_target_text") or "") for issue in style_issues)
             )
+            self.assertTrue(
+                any(issue.evidence_json.get("preferred_hint") == "更符合上下文的输出" for issue in style_issues)
+            )
+
+    def test_review_reports_term_conflict_for_locked_chapter_concept_entry(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", AGENTIC_AI_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=AgenticLiteralWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="agentic AI",
+                canonical_zh="智能体式AI",
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            term_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "TERM_CONFLICT"]
+            self.assertTrue(term_issues)
+            self.assertTrue(
+                any(issue.evidence_json.get("expected_target_term") == "智能体式AI" for issue in term_issues)
+            )
+            self.assertTrue(
+                any("智能体AI" in str(issue.evidence_json.get("actual_target_text") or "") for issue in term_issues)
+            )
+            unlocked_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            ]
+            self.assertEqual(unlocked_issues, [])
 
     def test_review_reports_stale_chapter_brief_when_late_concept_is_missing(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(

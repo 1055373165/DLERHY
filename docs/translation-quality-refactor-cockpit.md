@@ -289,13 +289,20 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - [x] 已完成 `agentic AI` 三候选首轮真实对照：`智能体AI / 智能体式AI / 代理式AI`
 - [x] 已在定义性更强的 `ba917844-c3b9-5689-91ad-f984703dea71` packet 上完成 `agentic AI` 三候选真实对照
 - [x] 已完成 `agentic AI -> 智能体式AI` 的零 token 锁定写回，并在后续 packet 上完成真实连锁验证
+- [x] 已将“锁定章节概念”桥接到主链路 `Locked and Relevant Terms`：锁定后的概念不再只停留在 `Chapter Concept Memory`
+- [x] `ChapterConceptLockService` 已同步 upsert 章节级 `TermEntry`，锁定结果开始具备主链路术语实体
+- [x] 已完成零 token 验证：post-lock packet 的 `compiled_relevant_term_count` 从 `0 -> 1`，prompt 中已出现 `Locked and Relevant Terms: Agentic AI => 智能体式AI`
+- [x] review 已尊重已锁定章节术语：同一概念若已有锁定 `TermEntry`，不再重复报 `UNLOCKED_KEY_CONCEPT`
+- [x] review 已能用章节级锁定术语反查旧译文：若历史译文仍使用过时术语，会自动报 `TERM_CONFLICT`
+- [x] 已完成 `context engineering -> 上下文工程` 的 live 锁定写回与单 packet 真正验证
+- [x] `STYLE_DRIFT` 第二阶段已接入：开始覆盖真实 packet 中暴露出的回退变体 `证据权重表明 / 上下文更准确的输出`
 
 ### Planned
 
-- [ ] 扩展 review 规则，把 `STYLE_DRIFT` 从高信号白名单扩到更泛化的直译腔检测
+- [ ] 继续扩展 review 规则，把 `STYLE_DRIFT` 从当前词组级模式推进到更泛化的直译腔检测
 - [ ] 基于这次 `denoised execute` 结果，决定是否继续收紧 `concept registry` 候选策略，尤其是 `智能体AI` 这类仍需人工裁决的术语
 - [ ] 基于 `context engineering` 实验结果，决定是否把“临时 override -> 锁定写回”升成正式术语裁决流程
-- [ ] 基于本次 live chapter memory 验证结果，决定是否把 `agentic AI -> 智能体式AI` 正式提升为当前章节默认裁决
+- [ ] 决定是否把 `agentic AI -> 智能体式AI` 正式提升为当前章节默认裁决，并作为后续 packet 的首选基线
 - [ ] 再决定下一刀是继续强化 concept policy，还是扩大 `STYLE_DRIFT` 规则面
 
 ## 8. Validation Protocol
@@ -518,6 +525,56 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - 这次真实结果已经证明：
   - 核心术语 `context engineering` 可以通过临时 override 稳定拉到“上下文工程”
   - 译文中原本的“情境工程”已经被消掉
+- 已在 live chapter memory 中将 `agentic AI -> 智能体式AI` 做零 token 锁定写回：
+  - 工件：[agentic-ai-lock.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/agentic-ai-lock.json)
+  - `snapshot_version = 101`
+  - 这一步不是只改实验 prompt，而是把裁决真正写入了当前章节的活动记忆
+- 已对后续真实 packet `50e768de-0f32-5421-9a77-8b1e0182f624` 做单 packet execute 验证：
+  - 工件：[post-lock execute](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/50e768de-0f32-5421-9a77-8b1e0182f624.post_lock.execute.json)
+  - `token_in = 1843`
+  - `token_out = 181`
+  - `cost_usd = 0.00052755`
+  - prompt 已显式带上 `Agentic AI => 智能体式AI (locked, seen=18)`
+  - 输出已从“智能体AI通过吸收反馈持续改进...”切到“智能体式AI通过吸收反馈持续改进...”
+- 已把“锁定章节概念”进一步桥接到主链路术语层：
+  - [context_compile.py](/Users/smy/project/book-agent/src/book_agent/services/context_compile.py) 现会把带 `canonical_zh` 的章节概念合并进 `relevant_terms`
+  - [chapter_concept_lock.py](/Users/smy/project/book-agent/src/book_agent/services/chapter_concept_lock.py) 现会同步 upsert 章节级 `TermEntry`
+  - [packet_experiment.py](/Users/smy/project/book-agent/src/book_agent/services/packet_experiment.py) 已补 `raw_relevant_term_count / compiled_relevant_term_count`
+- 已完成零 token post-lock dry-run 验证：
+  - 工件：[post-lock dryrun](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/50e768de-0f32-5421-9a77-8b1e0182f624.post_lock.dryrun.json)
+  - `raw_relevant_term_count = 0`
+  - `compiled_relevant_term_count = 1`
+  - prompt 中已出现 `Locked and Relevant Terms:` 和 `Agentic AI => 智能体式AI`
+- 已补 review 闭环：若某章节概念已经有锁定的活动 `TermEntry`，review 不再继续报 `UNLOCKED_KEY_CONCEPT`
+  - 对应回归在 [test_persistence_and_review.py](/Users/smy/project/book-agent/tests/test_persistence_and_review.py)
+  - 这保证“概念候选 -> 锁定 -> 术语实体 -> review 收敛”已经形成最小闭环，不会反复对同一已裁决概念报 advisory
+- 已进一步补全“锁定术语反查旧译文”的 review 闭环：
+  - 新增单章回归，使用 `Agentic AI` 的旧译文“智能体AI”作为样本
+  - 在章节中零 token 锁定 `agentic AI -> 智能体式AI` 后，review 会自动对旧译文报 `TERM_CONFLICT`
+  - 同时不会再重复报 `UNLOCKED_KEY_CONCEPT`
+  - 这意味着“候选概念 -> 锁定 -> 主链路 prompt -> review 抓存量偏差”已经完成最小闭环
+- 已将 `context engineering -> 上下文工程` 真正写入 live chapter memory：
+  - 工件：[context-engineering-lock.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/context-engineering-lock.json)
+  - `snapshot_version = 102`
+  - post-lock dry-run 工件：[2e26...post_lock.dryrun.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/2e26e803-5d84-52ae-9b01-c5b8e07a7d93.post_lock.dryrun.json)
+  - 当前同一 packet 的 `compiled_relevant_term_count = 2`
+  - prompt 已明确出现 `Locked and Relevant Terms:` 与 `context engineering => 上下文工程`
+- 已完成该定义性 packet 的 live-lock single-packet execute：
+  - 工件：[2e26...post_lock.execute.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/2e26e803-5d84-52ae-9b01-c5b8e07a7d93.post_lock.execute.json)
+  - 对照 diff：[2e26...post_lock.diff.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/2e26e803-5d84-52ae-9b01-c5b8e07a7d93.post_lock.diff.json)
+  - 实际消耗：`cost_usd = 0.00084129`
+- 这次 live-lock execute 的结论是双面的：
+  - 正向：`context engineering` 已经稳定进入“上下文工程”，说明概念锁定链路对核心术语有效
+  - 负向：同一 packet 里的 `weight of evidence` 又回退成了“证据权重表明”，说明单概念锁定不足以解决更广义的直译腔问题
+  - 因而下一默认 slice 不再是继续做更多单词级锁定，而是优先扩大 `STYLE_DRIFT` 的检测与纠偏能力
+- 已落 `STYLE_DRIFT` 第二阶段最小扩展：
+  - `weight_of_evidence_literal` 现已覆盖 `证据权重表明` 这类真实回退变体，不再只抓“证据的分量表明”
+  - 新增 `contextually_accurate_outputs_literal`，用于抓 `上下文更准确的输出`
+- 对应单章回归已更新：
+  - [LiteralismWorker](/Users/smy/project/book-agent/tests/test_persistence_and_review.py) 现在使用更贴近真实 packet 的坏味道样本
+  - review 会稳定产出至少 3 个 `STYLE_DRIFT` issue
+  - `preferred_hint` 现在同时覆盖 `上下文工程` 和 `更符合上下文的输出`
+- 这一轮仍然没有发起任何新的 packet execute；只做了单章级 review 回归，确认新规则已经把真实 live-lock packet 暴露出来的两类回退纳入检测面
   - 同一 packet 里还顺带把 “证据的分量表明” 提升成了 “大量证据表明”
 - 当前残余也更清楚了：
   - 这次 override 还没有触及 `agentic AI`

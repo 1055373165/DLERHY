@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -13,6 +14,10 @@ if str(SRC) not in sys.path:
 from book_agent.core.config import get_settings
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def main() -> int:
@@ -49,11 +54,15 @@ def main() -> int:
             )
             session.commit()
         payload = {
+            "generated_at": _utcnow_iso(),
             "chapter_id": result.chapter_id,
             "source_term": result.source_term,
             "canonical_zh": result.canonical_zh,
             "snapshot_version": result.snapshot_version,
             "created_new_concept": result.created_new_concept,
+            "term_entry_id": result.term_entry_id,
+            "term_entry_version": result.term_entry_version,
+            "created_new_term_entry": result.created_new_term_entry,
             "database_url": args.database_url,
         }
         if args.output_path is not None:

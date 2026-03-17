@@ -65,9 +65,16 @@ STYLE_DRIFT_RULES = (
     _StyleDriftRule(
         pattern_id="weight_of_evidence_literal",
         source_pattern=re.compile(r"\bweight of evidence\b", re.IGNORECASE),
-        target_pattern=re.compile(r"证据的分量(?:表明|显示|说明)?"),
+        target_pattern=re.compile(r"证据(?:的)?(?:分量|权重)(?:表明|显示|说明)?"),
         preferred_hint="大量证据表明 / 现有证据表明",
         message="英文习语被按字面结构硬译，中文技术写作感偏硬。",
+    ),
+    _StyleDriftRule(
+        pattern_id="contextually_accurate_outputs_literal",
+        source_pattern=re.compile(r"\bcontextually accurate outputs?\b", re.IGNORECASE),
+        target_pattern=re.compile(r"上下文更准确的输出"),
+        preferred_hint="更符合上下文的输出",
+        message="英文中的 contextually accurate 被按字面结构硬译，中文表达仍显生硬。",
     ),
 )
 
@@ -300,12 +307,22 @@ class ReviewService:
         if not isinstance(active_concepts, list):
             return []
 
+        locked_term_sources = {
+            term.source_term.casefold()
+            for term in bundle.term_entries
+            if term.status.value == "active"
+            and term.lock_level == LockLevel.LOCKED
+            and term.source_term
+        }
+
         issues: list[ReviewIssue] = []
         for concept in active_concepts:
             if not isinstance(concept, dict):
                 continue
             source_term = str(concept.get("source_term") or "").strip()
             if not source_term:
+                continue
+            if source_term.casefold() in locked_term_sources:
                 continue
             if concept.get("canonical_zh"):
                 continue
