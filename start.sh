@@ -50,7 +50,7 @@ for arg in "$@"; do
 done
 
 HOST="${BOOK_AGENT_HOST:-127.0.0.1}"
-PORT="${BOOK_AGENT_PORT:-8000}"
+PORT="${BOOK_AGENT_PORT:-8999}"
 
 # ---- Guard: already running? ----------------------------------------
 if [[ -f "$PID_FILE" ]]; then
