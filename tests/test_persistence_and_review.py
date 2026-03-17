@@ -91,6 +91,39 @@ IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+CONTEXT_ENGINEERING_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Context engineering determines how context is created.</p>
+    <p>Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
+LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>This broader challenge is what some are beginning to call context engineering, which is the deliberate design of how context is created, maintained, and applied to shape reasoning.</p>
+    <p>In essence, the weight of evidence shows relying on external content supplied at inference time from up-to-date, relevant sources tends to yield more reliable and contextually accurate outputs.</p>
+  </body>
+</html>
+"""
+
+STALE_BRIEF_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>A recipe book offers instructions for many meals.</p>
+    <p>A chef adapts when your pantry is missing ingredients.</p>
+    <p>Memory helps agents act consistently over time.</p>
+    <p>Context engineering determines how context is created.</p>
+    <p>Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
 
 class DuplicateWorker:
     def metadata(self) -> TranslationWorkerMetadata:
@@ -225,6 +258,53 @@ class ParagraphFlowWorker:
                 TranslationTargetSegment(
                     temp_id=temp_id,
                     text_zh=mapping.get(sentence.source_text, f"译文::{sentence.source_text}"),
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class LiteralismWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="LiteralismWorker",
+            model_name="literalism-test",
+            prompt_version="test.literalism.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "context engineering" in sentence.source_text:
+                text = (
+                    "这一更广泛的挑战正被一些人称为情境工程，即对情境如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                )
+            elif "weight of evidence" in sentence.source_text:
+                text = (
+                    "本质上，证据的分量表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且情境更准确的输出。"
+                )
+            else:
+                text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
                     segment_type="sentence",
                     source_sentence_ids=[sentence.id],
                     confidence=0.95,
@@ -455,6 +535,107 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(context_action.action_type, ActionType.REBUILD_PACKET_THEN_RERUN)
             self.assertEqual(context_action.scope_type, JobScopeType.PACKET)
             self.assertEqual(context_action.scope_id, packet_id)
+
+    def test_review_reports_unlocked_key_concept_from_chapter_memory(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session))
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            concept_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            )
+            concept_action = next(
+                action for action in review_artifacts.actions if action.issue_id == concept_issue.id
+            )
+
+            self.assertEqual(concept_issue.root_cause_layer.value, "memory")
+            self.assertFalse(concept_issue.blocking)
+            self.assertEqual(concept_action.action_type, ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED)
+            self.assertEqual(concept_action.scope_type, JobScopeType.CHAPTER)
+            self.assertEqual(concept_action.scope_id, chapter_id)
+            self.assertIn("context engineering", concept_issue.evidence_json["source_term"].lower())
+
+    def test_review_reports_style_drift_literalism_as_non_blocking_advisory(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LiteralismWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            style_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "STYLE_DRIFT"]
+            self.assertGreaterEqual(len(style_issues), 2)
+            self.assertTrue(all(issue.root_cause_layer.value == "packet" for issue in style_issues))
+            self.assertTrue(all(not issue.blocking for issue in style_issues))
+            style_actions = [
+                action
+                for action in review_artifacts.actions
+                if action.issue_id in {issue.id for issue in style_issues}
+            ]
+            self.assertTrue(style_actions)
+            self.assertTrue(all(action.action_type == ActionType.RERUN_PACKET for action in style_actions))
+            self.assertTrue(all(action.scope_type == JobScopeType.PACKET for action in style_actions))
+            self.assertTrue(
+                any(issue.evidence_json.get("preferred_hint") == "上下文工程" for issue in style_issues)
+            )
+            self.assertTrue(
+                any("证据的分量" in str(issue.evidence_json.get("actual_target_text") or "") for issue in style_issues)
+            )
+
+    def test_review_reports_stale_chapter_brief_when_late_concept_is_missing(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session))
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            stale_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "STALE_CHAPTER_BRIEF"
+            )
+            stale_action = next(
+                action for action in review_artifacts.actions if action.issue_id == stale_issue.id
+            )
+
+            self.assertEqual(stale_issue.root_cause_layer.value, "memory")
+            self.assertFalse(stale_issue.blocking)
+            self.assertEqual(stale_action.action_type, ActionType.REBUILD_CHAPTER_BRIEF)
+            self.assertEqual(stale_action.scope_type, JobScopeType.CHAPTER)
+            self.assertEqual(stale_action.scope_id, chapter_id)
+            self.assertIn("context engineering", ",".join(stale_issue.evidence_json["missing_concepts"]).lower())
 
     def test_review_skips_image_only_cover_packet_missing_title_context_failure(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(

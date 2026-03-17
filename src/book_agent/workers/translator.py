@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.models import Sentence
@@ -44,6 +44,27 @@ def _sorted_entity_lines(packet: ContextPacket) -> list[str]:
         f"- {entity.name} [{entity.entity_type}] => {entity.canonical_zh or '(unset)'}"
         for entity in ordered
     ]
+
+
+def _concept_lines(packet: ContextPacket) -> list[str]:
+    if not packet.chapter_concepts:
+        return ["- none"]
+    ordered = sorted(
+        packet.chapter_concepts,
+        key=lambda concept: (
+            0 if concept.canonical_zh else 1,
+            -(concept.times_seen or 0),
+            concept.source_term.lower(),
+        ),
+    )
+    lines: list[str] = []
+    for concept in ordered:
+        canonical = concept.canonical_zh or "(translation not locked yet)"
+        details = [concept.status]
+        if concept.times_seen:
+            details.append(f"seen={concept.times_seen}")
+        lines.append(f"- {concept.source_term} => {canonical} ({', '.join(details)})")
+    return lines
 
 
 def _packet_block_lines(blocks: list[PacketBlock]) -> list[str]:
@@ -98,6 +119,9 @@ class TranslationPromptRequest:
     sentence_alias_map: dict[str, str] = field(default_factory=dict)
 
 
+PromptLayout = Literal["paragraph-led", "sentence-led"]
+
+
 class TranslationModelClient(Protocol):
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult | TranslationWorkerOutput:
         ...
@@ -108,11 +132,13 @@ def build_translation_prompt_request(
     *,
     model_name: str,
     prompt_version: str,
+    prompt_layout: PromptLayout = "paragraph-led",
 ) -> TranslationPromptRequest:
     packet = task.context_packet
     heading_path = " > ".join(packet.heading_path) if packet.heading_path else "(root)"
     term_lines = _sorted_term_lines(packet)
     entity_lines = _sorted_entity_lines(packet)
+    concept_lines = _concept_lines(packet)
     sentence_alias_map = {
         f"S{index}": sentence.id for index, sentence in enumerate(task.current_sentences, start=1)
     }
@@ -130,36 +156,52 @@ def build_translation_prompt_request(
     prev_block_lines = _packet_block_lines(packet.prev_blocks)
     next_block_lines = _packet_block_lines(packet.next_blocks)
     current_paragraph_lines = _current_paragraph_lines(packet)
-    user_prompt = "\n".join(
-        [
-            *_format_section(
-                "Core Translation Contract:",
-                [
-                    "- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.",
-                    "- Reuse the canonical Chinese rendering of any locked or previously established concept.",
-                    "- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.",
-                    "- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.",
-                    "- Use the sentence ledger only for alignment, coverage, and low-confidence flags.",
-                    "- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
-                    "- Return JSON that matches the provided response schema.",
-                ],
-            ),
-            *_format_section(
-                "Section Context:",
-                [
-                    f"- Heading Path: {heading_path}",
-                    f"- Chapter Brief: {packet.chapter_brief or '(none)'}",
-                ],
-            ),
-            *_format_section("Locked and Relevant Terms:", term_lines),
-            *_format_section("Relevant Entities:", entity_lines),
-            *_format_section("Previous Accepted Translations (same local context):", previous_translation_lines),
-            *_format_section("Previous Source Context:", prev_block_lines),
-            *_format_section("Upcoming Source Context:", next_block_lines),
-            *_format_section("Current Paragraph:", current_paragraph_lines),
-            *_format_section("Sentence Ledger:", sentence_lines),
-        ]
-    )
+    contract_lines = [
+        "- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.",
+        "- Reuse the canonical Chinese rendering of any locked or previously established concept.",
+        "- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.",
+        "- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.",
+        "- Use the sentence ledger only for alignment, coverage, and low-confidence flags.",
+        "- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
+        "- Return JSON that matches the provided response schema.",
+    ]
+    if prompt_layout == "sentence-led":
+        contract_lines[0] = (
+            "- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet."
+        )
+        contract_lines[4] = "- Use the current sentences as the primary translation ledger and keep paragraph context coherent."
+
+    sections = [
+        *_format_section("Core Translation Contract:", contract_lines),
+        *_format_section(
+            "Section Context:",
+            [
+                f"- Heading Path: {heading_path}",
+                f"- Chapter Brief: {packet.chapter_brief or '(none)'}",
+            ],
+        ),
+        *_format_section("Locked and Relevant Terms:", term_lines),
+        *_format_section("Relevant Entities:", entity_lines),
+        *_format_section("Chapter Concept Memory:", concept_lines),
+        *_format_section("Previous Accepted Translations (same local context):", previous_translation_lines),
+        *_format_section("Previous Source Context:", prev_block_lines),
+        *_format_section("Upcoming Source Context:", next_block_lines),
+    ]
+    if prompt_layout == "sentence-led":
+        sections.extend(
+            [
+                *_format_section("Current Sentences:", sentence_lines),
+                *_format_section("Current Paragraph:", current_paragraph_lines),
+            ]
+        )
+    else:
+        sections.extend(
+            [
+                *_format_section("Current Paragraph:", current_paragraph_lines),
+                *_format_section("Sentence Ledger:", sentence_lines),
+            ]
+        )
+    user_prompt = "\n".join(sections)
     system_prompt = (
         "You are a high-fidelity book translation worker. "
         "Translate English book content into natural Chinese with paragraph-level coherence, "

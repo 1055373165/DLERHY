@@ -39,6 +39,24 @@ class RuleEngineTests(unittest.TestCase):
         )
         self.assertEqual(action, ActionType.REBUILD_CHAPTER_BRIEF)
 
+    def test_packet_style_drift_routes_to_rerun_packet(self) -> None:
+        action = resolve_action(
+            IssueRoutingContext(
+                issue_type="STYLE_DRIFT",
+                root_cause_layer=RootCauseLayer.PACKET,
+            )
+        )
+        self.assertEqual(action, ActionType.RERUN_PACKET)
+
+    def test_stale_chapter_brief_routes_to_rebuild_chapter_brief(self) -> None:
+        action = resolve_action(
+            IssueRoutingContext(
+                issue_type="STALE_CHAPTER_BRIEF",
+                root_cause_layer=RootCauseLayer.MEMORY,
+            )
+        )
+        self.assertEqual(action, ActionType.REBUILD_CHAPTER_BRIEF)
+
     def test_reference_mistranslation_stays_packet_scoped(self) -> None:
         action = resolve_action(
             IssueRoutingContext(

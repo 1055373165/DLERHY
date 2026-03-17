@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
@@ -17,6 +18,166 @@ from book_agent.workers.translator import EchoTranslationWorker, TranslationTask
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+CONCEPT_HINT_KEYWORDS = {
+    "agent",
+    "agentic",
+    "ai",
+    "context",
+    "engineering",
+    "generative",
+    "language",
+    "llm",
+    "memory",
+    "model",
+    "models",
+    "architecture",
+    "distributed",
+    "infrastructure",
+    "planning",
+    "retrieval",
+    "sql",
+    "substrate",
+}
+CONCEPT_HEADWORDS = {
+    "ai",
+    "agent",
+    "agents",
+    "architecture",
+    "engineering",
+    "infrastructure",
+    "llm",
+    "mechanisms",
+    "memory",
+    "model",
+    "models",
+    "modules",
+    "sql",
+    "stores",
+    "substrate",
+}
+CONCEPT_MODIFIERS = {
+    "adaptive",
+    "agentic",
+    "context",
+    "data",
+    "distributed",
+    "durable",
+    "external",
+    "generative",
+    "language",
+    "large",
+    "memory",
+    "planning",
+    "prompt",
+    "reactive",
+    "retrieval",
+    "structured",
+}
+STOPWORDS = {
+    "about",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "been",
+    "being",
+    "beyond",
+    "by",
+    "call",
+    "called",
+    "calls",
+    "created",
+    "creates",
+    "creating",
+    "does",
+    "doing",
+    "even",
+    "for",
+    "from",
+    "how",
+    "if",
+    "implies",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "made",
+    "maintained",
+    "maintaining",
+    "makes",
+    "more",
+    "not",
+    "of",
+    "on",
+    "or",
+    "our",
+    "out",
+    "over",
+    "same",
+    "some",
+    "that",
+    "their",
+    "them",
+    "then",
+    "the",
+    "these",
+    "this",
+    "those",
+    "to",
+    "through",
+    "up",
+    "we",
+    "what",
+    "when",
+    "with",
+    "why",
+}
+TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
+
+
+def _is_acronym(token: str) -> bool:
+    alpha = "".join(char for char in token if char.isalpha())
+    return bool(alpha) and alpha.isupper() and len(alpha) >= 2
+
+
+def _looks_like_proper_name(token: str) -> bool:
+    return token[:1].isupper() and token[1:].islower()
+
+
+def _is_allowed_concept_phrase(phrase_tokens: list[str]) -> bool:
+    lowered_tokens = [token.lower() for token in phrase_tokens]
+    if any(token in STOPWORDS for token in lowered_tokens):
+        return False
+    if len(phrase_tokens) < 2:
+        return False
+
+    last_token = lowered_tokens[-1]
+    if last_token not in CONCEPT_HEADWORDS:
+        return False
+
+    if all(token.islower() for token in lowered_tokens) and len(phrase_tokens) > 2:
+        return False
+
+    preceding_tokens = phrase_tokens[:-1]
+    if len(preceding_tokens) >= 2 and all(_looks_like_proper_name(token) for token in preceding_tokens[:2]):
+        return False
+
+    for token, lowered in zip(preceding_tokens, lowered_tokens[:-1], strict=True):
+        if lowered in CONCEPT_MODIFIERS or lowered in CONCEPT_HINT_KEYWORDS:
+            continue
+        if _is_acronym(token):
+            continue
+        if _looks_like_proper_name(token) and lowered in CONCEPT_MODIFIERS:
+            continue
+        return False
+    return True
 
 
 def _normalize_segment_type(value: str) -> SegmentType:
@@ -106,7 +267,7 @@ class TranslationService:
             updated_sentences=artifacts.updated_sentences,
             packet=bundle.packet,
         )
-        self._write_chapter_memory(
+        self.write_chapter_memory(
             bundle=bundle,
             artifacts=artifacts,
             current_snapshot=chapter_memory_snapshot,
@@ -212,7 +373,7 @@ class TranslationService:
             updated_sentences=updated_sentences,
         )
 
-    def _write_chapter_memory(
+    def write_chapter_memory(
         self,
         *,
         bundle: TranslationPacketBundle,
@@ -224,6 +385,9 @@ class TranslationService:
         recent_accepted = existing_content.get("recent_accepted_translations", [])
         if not isinstance(recent_accepted, list):
             recent_accepted = []
+        active_concepts = existing_content.get("active_concepts", [])
+        if not isinstance(active_concepts, list):
+            active_concepts = []
 
         target_excerpt = " ".join(segment.text_zh.strip() for segment in artifacts.target_segments if segment.text_zh).strip()
         source_excerpt = " ".join(
@@ -246,12 +410,19 @@ class TranslationService:
             recent_accepted.append(entry)
             recent_accepted = recent_accepted[-4:]
 
+        active_concepts = self._merge_active_concepts(
+            existing_concepts=active_concepts,
+            source_sentences=[sentence.source_text for sentence in bundle.current_sentences],
+            packet_id=bundle.packet.id,
+        )
+
         content_json = {
             "schema_version": 1,
             "chapter_id": bundle.packet.chapter_id,
             "chapter_title": existing_content.get("chapter_title"),
             "heading_path": existing_content.get("heading_path") or compiled_context_packet.heading_path,
             "chapter_brief": existing_content.get("chapter_brief") or compiled_context_packet.chapter_brief,
+            "active_concepts": active_concepts,
             "recent_accepted_translations": recent_accepted,
             "last_packet_id": bundle.packet.id,
             "last_translation_run_id": artifacts.translation_run.id,
@@ -262,6 +433,71 @@ class TranslationService:
             chapter_id=bundle.context_packet.chapter_id,
             content_json=content_json,
         )
+
+    def _merge_active_concepts(
+        self,
+        *,
+        existing_concepts: list[dict[str, Any]],
+        source_sentences: list[str],
+        packet_id: str,
+    ) -> list[dict[str, Any]]:
+        concept_map: dict[str, dict[str, Any]] = {}
+        for concept in existing_concepts:
+            if not isinstance(concept, dict):
+                continue
+            key = str(concept.get("source_term") or "").strip().lower()
+            if not key:
+                continue
+            concept_map[key] = dict(concept)
+
+        for source_term in self._extract_concept_candidates(source_sentences):
+            key = source_term.lower()
+            current = concept_map.get(key)
+            if current is None:
+                concept_map[key] = {
+                    "source_term": source_term,
+                    "canonical_zh": None,
+                    "status": "candidate",
+                    "confidence": 0.6,
+                    "first_seen_packet_id": packet_id,
+                    "last_seen_packet_id": packet_id,
+                    "times_seen": 1,
+                }
+                continue
+            current["last_seen_packet_id"] = packet_id
+            current["times_seen"] = int(current.get("times_seen") or 0) + 1
+
+        concepts = list(concept_map.values())
+        concepts.sort(
+            key=lambda item: (
+                0 if item.get("canonical_zh") else 1,
+                -(int(item.get("times_seen") or 0)),
+                str(item.get("source_term") or "").lower(),
+            )
+        )
+        return concepts[:12]
+
+    def _extract_concept_candidates(self, source_sentences: list[str]) -> list[str]:
+        candidates: dict[str, str] = {}
+        for sentence in source_sentences:
+            tokens = TOKEN_PATTERN.findall(sentence or "")
+            if not tokens:
+                continue
+            for size in range(2, 5):
+                for index in range(0, len(tokens) - size + 1):
+                    phrase_tokens = tokens[index : index + size]
+                    lowered_tokens = [token.lower() for token in phrase_tokens]
+                    if not any(token in CONCEPT_HINT_KEYWORDS for token in lowered_tokens):
+                        continue
+                    if sum(1 for token in lowered_tokens if token not in STOPWORDS) < 2:
+                        continue
+                    if not _is_allowed_concept_phrase(phrase_tokens):
+                        continue
+                    phrase = " ".join(phrase_tokens)
+                    key = phrase.lower()
+                    if key not in candidates:
+                        candidates[key] = phrase
+        return list(candidates.values())
 
     def _coerce_worker_result(
         self,

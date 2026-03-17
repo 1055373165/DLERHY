@@ -5,15 +5,23 @@ import json
 from dataclasses import asdict, is_dataclass
 from decimal import Decimal
 from pathlib import Path
+import sys
 from typing import Any
 
 from sqlalchemy import select
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from book_agent.core.config import get_settings
 from book_agent.domain.models import Block, Chapter, Document, Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationRepository
+from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
 from book_agent.workers.translator import TranslationTask, build_translation_prompt_request
 
 
@@ -77,6 +85,52 @@ def _translation_run_payload(run: TranslationRun | None) -> dict[str, Any] | Non
     }
 
 
+def _prompt_variant_payload(
+    *,
+    raw_context_packet,
+    current_sentences,
+    chapter_memory_snapshot,
+    compiler: ChapterContextCompiler,
+    label: str,
+    compile_options: ChapterContextCompileOptions,
+    prompt_layout: str,
+) -> dict[str, Any]:
+    compiled_packet = compiler.compile(
+        raw_context_packet,
+        chapter_memory_snapshot=chapter_memory_snapshot,
+        options=compile_options,
+    )
+    prompt_request = build_translation_prompt_request(
+        TranslationTask(
+            context_packet=compiled_packet,
+            current_sentences=current_sentences,
+        ),
+        model_name="debug-export",
+        prompt_version=f"debug-export.{label}",
+        prompt_layout=prompt_layout,
+    )
+    return {
+        "label": label,
+        "compile_options": {
+            "include_memory_blocks": compile_options.include_memory_blocks,
+            "include_chapter_concepts": compile_options.include_chapter_concepts,
+            "prefer_memory_chapter_brief": compile_options.prefer_memory_chapter_brief,
+        },
+        "prompt_layout": prompt_layout,
+        "chapter_brief": compiled_packet.chapter_brief,
+        "previous_translation_count": len(compiled_packet.prev_translated_blocks),
+        "chapter_concept_count": len(compiled_packet.chapter_concepts),
+        "prompt_request": {
+            "packet_id": prompt_request.packet_id,
+            "model_name": prompt_request.model_name,
+            "prompt_version": prompt_request.prompt_version,
+            "system_prompt": prompt_request.system_prompt,
+            "user_prompt": prompt_request.user_prompt,
+            "sentence_alias_map": prompt_request.sentence_alias_map,
+        },
+    }
+
+
 def export_packet_debug(
     *,
     database_url: str,
@@ -91,7 +145,16 @@ def export_packet_debug(
         repository = TranslationRepository(session)
         bundle = repository.load_packet_bundle(packet_id)
         packet = bundle.packet
-        context_packet = bundle.context_packet
+        raw_context_packet = bundle.context_packet
+        compiler = ChapterContextCompiler()
+        chapter_memory_snapshot = ChapterTranslationMemoryRepository(session).load_latest(
+            document_id=raw_context_packet.document_id,
+            chapter_id=raw_context_packet.chapter_id,
+        )
+        context_packet = compiler.compile(
+            raw_context_packet,
+            chapter_memory_snapshot=chapter_memory_snapshot,
+        )
         prompt_request = build_translation_prompt_request(
             TranslationTask(
                 context_packet=context_packet,
@@ -100,6 +163,52 @@ def export_packet_debug(
             model_name="debug-export",
             prompt_version="debug-export.v1",
         )
+        prompt_variants = [
+            _prompt_variant_payload(
+                raw_context_packet=raw_context_packet,
+                current_sentences=bundle.current_sentences,
+                chapter_memory_snapshot=chapter_memory_snapshot,
+                compiler=compiler,
+                label="paragraph_led_current",
+                compile_options=ChapterContextCompileOptions(),
+                prompt_layout="paragraph-led",
+            ),
+            _prompt_variant_payload(
+                raw_context_packet=raw_context_packet,
+                current_sentences=bundle.current_sentences,
+                chapter_memory_snapshot=chapter_memory_snapshot,
+                compiler=compiler,
+                label="paragraph_led_no_memory",
+                compile_options=ChapterContextCompileOptions(
+                    include_memory_blocks=False,
+                    include_chapter_concepts=False,
+                    prefer_memory_chapter_brief=False,
+                ),
+                prompt_layout="paragraph-led",
+            ),
+            _prompt_variant_payload(
+                raw_context_packet=raw_context_packet,
+                current_sentences=bundle.current_sentences,
+                chapter_memory_snapshot=chapter_memory_snapshot,
+                compiler=compiler,
+                label="paragraph_led_no_concepts",
+                compile_options=ChapterContextCompileOptions(
+                    include_memory_blocks=True,
+                    include_chapter_concepts=False,
+                    prefer_memory_chapter_brief=True,
+                ),
+                prompt_layout="paragraph-led",
+            ),
+            _prompt_variant_payload(
+                raw_context_packet=raw_context_packet,
+                current_sentences=bundle.current_sentences,
+                chapter_memory_snapshot=chapter_memory_snapshot,
+                compiler=compiler,
+                label="sentence_led_current",
+                compile_options=ChapterContextCompileOptions(),
+                prompt_layout="sentence-led",
+            ),
+        ]
 
         document = session.get(Document, document_id)
         if document is None:
@@ -220,6 +329,7 @@ def export_packet_debug(
                 "risk_score": _coerce(packet.risk_score),
             },
             "context_packet": context_packet.model_dump(),
+            "chapter_memory_snapshot": chapter_memory_snapshot.content_json if chapter_memory_snapshot is not None else None,
             "prompt_request": {
                 "packet_id": prompt_request.packet_id,
                 "model_name": prompt_request.model_name,
@@ -228,6 +338,7 @@ def export_packet_debug(
                 "user_prompt": prompt_request.user_prompt,
                 "sentence_alias_map": prompt_request.sentence_alias_map,
             },
+            "prompt_variants": prompt_variants,
             "current_blocks_ordered": current_blocks_payload,
             "current_sentences_loaded": [_sentence_payload(sentence) for sentence in bundle.current_sentences],
             "sentence_order_diagnostics": {

@@ -19,6 +19,7 @@ class ChapterReviewBundle:
     sentences: list[Sentence]
     packets: list[TranslationPacket]
     chapter_brief: MemorySnapshot | None
+    chapter_translation_memory: MemorySnapshot | None
     translation_runs: list[TranslationRun]
     target_segments: list[TargetSegment]
     alignment_edges: list[AlignmentEdge]
@@ -73,6 +74,15 @@ class ReviewRepository:
                 MemorySnapshot.status == MemoryStatus.ACTIVE,
             )
         )
+        chapter_translation_memory = self.session.scalar(
+            select(MemorySnapshot).where(
+                MemorySnapshot.document_id == chapter.document_id,
+                MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                MemorySnapshot.scope_id == chapter_id,
+                MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                MemorySnapshot.status == MemoryStatus.ACTIVE,
+            )
+        )
         existing_issues = self.session.scalars(
             select(ReviewIssue).where(ReviewIssue.chapter_id == chapter_id)
         ).all()
@@ -84,6 +94,7 @@ class ReviewRepository:
             sentences=sentences,
             packets=packets,
             chapter_brief=chapter_brief,
+            chapter_translation_memory=chapter_translation_memory,
             translation_runs=translation_runs,
             target_segments=target_segments,
             alignment_edges=alignment_edges,

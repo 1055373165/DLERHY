@@ -45,6 +45,33 @@ def _severity_rank(value: Severity | None) -> int:
     return order.get(value, 0)
 
 
+@dataclass(frozen=True, slots=True)
+class _StyleDriftRule:
+    pattern_id: str
+    source_pattern: re.Pattern[str]
+    target_pattern: re.Pattern[str]
+    preferred_hint: str | None = None
+    message: str = ""
+
+
+STYLE_DRIFT_RULES = (
+    _StyleDriftRule(
+        pattern_id="context_engineering_literal",
+        source_pattern=re.compile(r"\bcontext engineering\b", re.IGNORECASE),
+        target_pattern=re.compile(r"情境工程"),
+        preferred_hint="上下文工程",
+        message="核心概念出现明显字面直译，未采用更自然的技术表达。",
+    ),
+    _StyleDriftRule(
+        pattern_id="weight_of_evidence_literal",
+        source_pattern=re.compile(r"\bweight of evidence\b", re.IGNORECASE),
+        target_pattern=re.compile(r"证据的分量(?:表明|显示|说明)?"),
+        preferred_hint="大量证据表明 / 现有证据表明",
+        message="英文习语被按字面结构硬译，中文技术写作感偏硬。",
+    ),
+)
+
+
 @dataclass(slots=True)
 class ChapterQualitySummary:
     coverage_ok: bool
@@ -198,6 +225,9 @@ class ReviewService:
         chapter_context_issue = self._chapter_context_failure_issue(bundle, now)
         if chapter_context_issue is not None:
             issues.append(chapter_context_issue)
+        issues.extend(self._unlocked_key_concept_issues(bundle, now))
+        issues.extend(self._stale_chapter_brief_issues(bundle, now))
+        issues.extend(self._style_drift_issues(bundle, alignment_state, sentence_to_packet, now))
         issues.extend(self._duplication_issues(bundle, alignment_state, now))
 
         active_locked_terms = [
@@ -257,6 +287,167 @@ class ReviewService:
             summary=summary,
             resolved_issue_ids=[],
         )
+
+    def _unlocked_key_concept_issues(
+        self,
+        bundle: ChapterReviewBundle,
+        now: datetime,
+    ) -> list[ReviewIssue]:
+        snapshot = bundle.chapter_translation_memory
+        if snapshot is None:
+            return []
+        active_concepts = snapshot.content_json.get("active_concepts", [])
+        if not isinstance(active_concepts, list):
+            return []
+
+        issues: list[ReviewIssue] = []
+        for concept in active_concepts:
+            if not isinstance(concept, dict):
+                continue
+            source_term = str(concept.get("source_term") or "").strip()
+            if not source_term:
+                continue
+            if concept.get("canonical_zh"):
+                continue
+            times_seen = int(concept.get("times_seen") or 0)
+            if times_seen < 2:
+                continue
+            packet_id = str(concept.get("last_seen_packet_id") or "").strip() or None
+            issues.append(
+                self._make_issue(
+                    now=now,
+                    chapter_id=bundle.chapter.id,
+                    document_id=bundle.chapter.document_id,
+                    sentence_id=None,
+                    packet_id=packet_id,
+                    issue_type="UNLOCKED_KEY_CONCEPT",
+                    root_cause_layer=RootCauseLayer.MEMORY,
+                    severity=Severity.MEDIUM,
+                    blocking=False,
+                    evidence={
+                        "source_term": source_term,
+                        "times_seen": times_seen,
+                        "chapter_memory_snapshot_version": snapshot.version,
+                    },
+                    unique_key=source_term.casefold(),
+                )
+            )
+        return issues
+
+    def _style_drift_issues(
+        self,
+        bundle: ChapterReviewBundle,
+        alignment_state: ReviewAlignmentState,
+        sentence_to_packet: dict[str, str],
+        now: datetime,
+    ) -> list[ReviewIssue]:
+        issues: list[ReviewIssue] = []
+        chapter_memory_snapshot_version = (
+            bundle.chapter_translation_memory.version if bundle.chapter_translation_memory is not None else None
+        )
+        for sentence in bundle.sentences:
+            if not sentence.translatable or sentence.sentence_status == SentenceStatus.BLOCKED:
+                continue
+            aligned_text = self._aligned_text_for_sentence(
+                sentence.id,
+                alignment_state.active_alignments_by_sentence,
+                alignment_state.active_target_map,
+            )
+            if not aligned_text.strip():
+                continue
+            for rule in STYLE_DRIFT_RULES:
+                if not rule.source_pattern.search(sentence.source_text or ""):
+                    continue
+                if not rule.target_pattern.search(aligned_text):
+                    continue
+                issues.append(
+                    self._make_issue(
+                        now=now,
+                        chapter_id=bundle.chapter.id,
+                        document_id=bundle.chapter.document_id,
+                        sentence_id=sentence.id,
+                        packet_id=sentence_to_packet.get(sentence.id),
+                        issue_type="STYLE_DRIFT",
+                        root_cause_layer=RootCauseLayer.PACKET,
+                        severity=Severity.MEDIUM,
+                        blocking=False,
+                        evidence={
+                            "style_subtype": "literalism",
+                            "style_rule": rule.pattern_id,
+                            "source_text": sentence.source_text,
+                            "actual_target_text": aligned_text,
+                            "preferred_hint": rule.preferred_hint,
+                            "chapter_memory_snapshot_version": chapter_memory_snapshot_version,
+                            "message": rule.message,
+                        },
+                        unique_key=f"{sentence.id}:{rule.pattern_id}",
+                    )
+                )
+        return issues
+
+    def _stale_chapter_brief_issues(
+        self,
+        bundle: ChapterReviewBundle,
+        now: datetime,
+    ) -> list[ReviewIssue]:
+        chapter_brief = bundle.chapter_brief
+        snapshot = bundle.chapter_translation_memory
+        if chapter_brief is None or snapshot is None:
+            return []
+
+        brief_summary = _normalize_review_text(str(chapter_brief.content_json.get("summary") or ""))
+        if not brief_summary:
+            return []
+
+        recent_translations = snapshot.content_json.get("recent_accepted_translations", [])
+        if not isinstance(recent_translations, list) or len(recent_translations) < 3:
+            return []
+
+        active_concepts = snapshot.content_json.get("active_concepts", [])
+        if not isinstance(active_concepts, list):
+            return []
+
+        missing_concepts: list[str] = []
+        brief_lower = brief_summary.casefold()
+        for concept in active_concepts:
+            if not isinstance(concept, dict):
+                continue
+            source_term = str(concept.get("source_term") or "").strip()
+            if not source_term:
+                continue
+            if int(concept.get("times_seen") or 0) < 2:
+                continue
+            if source_term.casefold() in brief_lower:
+                continue
+            missing_concepts.append(source_term)
+
+        if not missing_concepts:
+            return []
+
+        representative_sentence_id = next(
+            (sentence.id for sentence in bundle.sentences if sentence.translatable),
+            bundle.sentences[0].id if bundle.sentences else None,
+        )
+        return [
+            self._make_issue(
+                now=now,
+                chapter_id=bundle.chapter.id,
+                document_id=bundle.chapter.document_id,
+                sentence_id=representative_sentence_id,
+                packet_id=None,
+                issue_type="STALE_CHAPTER_BRIEF",
+                root_cause_layer=RootCauseLayer.MEMORY,
+                severity=Severity.LOW,
+                blocking=False,
+                evidence={
+                    "missing_concepts": missing_concepts,
+                    "chapter_brief_summary": brief_summary,
+                    "chapter_brief_version": chapter_brief.version,
+                    "chapter_memory_snapshot_version": snapshot.version,
+                },
+                unique_key=":".join(sorted(term.casefold() for term in missing_concepts)),
+            )
+        ]
 
     def _build_persisted_summary_record(
         self,

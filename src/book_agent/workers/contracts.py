@@ -39,6 +39,16 @@ class TranslatedContextBlock(BaseSchema):
     source_sentence_ids: list[str] = Field(default_factory=list)
 
 
+class ConceptCandidate(BaseSchema):
+    source_term: str
+    canonical_zh: str | None = None
+    status: str = "candidate"
+    confidence: float | None = None
+    first_seen_packet_id: str | None = None
+    last_seen_packet_id: str | None = None
+    times_seen: int = 1
+
+
 class ContextPacket(BaseSchema):
     packet_id: str
     document_id: str
@@ -51,6 +61,7 @@ class ContextPacket(BaseSchema):
     prev_blocks: list[PacketBlock] = Field(default_factory=list)
     next_blocks: list[PacketBlock] = Field(default_factory=list)
     prev_translated_blocks: list[TranslatedContextBlock] = Field(default_factory=list)
+    chapter_concepts: list[ConceptCandidate] = Field(default_factory=list)
     relevant_terms: list[RelevantTerm] = Field(default_factory=list)
     relevant_entities: list[RelevantEntity] = Field(default_factory=list)
     protected_spans: list[ProtectedSpan] = Field(default_factory=list)

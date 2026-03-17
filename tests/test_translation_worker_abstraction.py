@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import zipfile
+from datetime import datetime, timezone
 from unittest.mock import patch
 from pathlib import Path
 import sys
@@ -17,6 +18,7 @@ from book_agent.domain.enums import (
     BlockType,
     ChapterStatus,
     DocumentStatus,
+    MemoryStatus,
     MemoryScopeType,
     PacketSentenceRole,
     PacketStatus,
@@ -34,6 +36,11 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.core.config import Settings
+from book_agent.services.packet_experiment import PacketExperimentOptions, PacketExperimentService
+from book_agent.services.packet_experiment_diff import compare_experiment_payloads
+from book_agent.services.packet_experiment_scan import PacketExperimentScanService
+from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
+from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
 from book_agent.services.translation import TranslationService
 from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.contracts import (
@@ -240,6 +247,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 
         self.assertEqual(len(fake_client.requests), 1)
         self.assertIn("Context engineering is a discipline.", fake_client.requests[0].user_prompt)
+        self.assertIn("Chapter Concept Memory:", fake_client.requests[0].user_prompt)
+        self.assertIn("context engineering =>", fake_client.requests[0].user_prompt.lower())
         self.assertIn("The solution to this problem is context engineering. => ZH::The solution to this problem is context engineering.", fake_client.requests[0].user_prompt)
         self.assertIn("[S1]", fake_client.requests[0].user_prompt)
         self.assertNotIn(first_sentence_id, fake_client.requests[0].user_prompt)
@@ -404,6 +413,416 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertLess(first_index, second_index)
         self.assertLess(second_index, third_index)
 
+    def test_build_translation_prompt_request_supports_sentence_led_layout(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-1",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1", "s2"],
+                    text="First sentence. Second sentence.",
+                )
+            ],
+            chapter_brief="Chapter summary.",
+        )
+        current_sentences = [
+            Sentence(
+                id="s1",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=1,
+                source_text="First sentence.",
+                normalized_text="First sentence.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            ),
+            Sentence(
+                id="s2",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=2,
+                source_text="Second sentence.",
+                normalized_text="Second sentence.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            ),
+        ]
+        prompt_request = build_translation_prompt_request(
+            TranslationTask(
+                context_packet=context_packet,
+                current_sentences=current_sentences,
+            ),
+            model_name="mock-llm",
+            prompt_version="layout-test",
+            prompt_layout="sentence-led",
+        )
+        self.assertIn("Current Sentences:", prompt_request.user_prompt)
+        self.assertIn("Current Paragraph:", prompt_request.user_prompt)
+        self.assertNotIn("Sentence Ledger:", prompt_request.user_prompt)
+        self.assertLess(
+            prompt_request.user_prompt.index("Current Sentences:"),
+            prompt_request.user_prompt.index("Current Paragraph:"),
+        )
+
+    def test_context_compiler_can_disable_chapter_memory_features(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-1",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="Current paragraph text.",
+                )
+            ],
+            prev_translated_blocks=[],
+            chapter_brief="Packet brief.",
+        )
+        snapshot = MemorySnapshot(
+            id="mem-1",
+            document_id="doc-1",
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id="ch-1",
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=3,
+            content_json={
+                "chapter_brief": "Memory brief.",
+                "recent_accepted_translations": [
+                    {
+                        "block_id": "block-0",
+                        "source_excerpt": "Prior source",
+                        "target_excerpt": "先前译文",
+                        "source_sentence_ids": ["s0"],
+                    }
+                ],
+                "active_concepts": [
+                    {
+                        "source_term": "context engineering",
+                        "canonical_zh": "上下文工程",
+                        "status": "locked",
+                        "times_seen": 2,
+                    }
+                ],
+            },
+            status=MemoryStatus.ACTIVE,
+            created_at=datetime.now(timezone.utc),
+        )
+        compiler = ChapterContextCompiler()
+        compiled = compiler.compile(packet, chapter_memory_snapshot=snapshot)
+        self.assertEqual(compiled.chapter_brief, "Memory brief.")
+        self.assertEqual(len(compiled.prev_translated_blocks), 1)
+        self.assertEqual(len(compiled.chapter_concepts), 1)
+
+        compiled_without_memory = compiler.compile(
+            packet,
+            chapter_memory_snapshot=snapshot,
+            options=ChapterContextCompileOptions(
+                include_memory_blocks=False,
+                include_chapter_concepts=False,
+                prefer_memory_chapter_brief=False,
+            ),
+        )
+        self.assertEqual(compiled_without_memory.chapter_brief, "Packet brief.")
+        self.assertEqual(len(compiled_without_memory.prev_translated_blocks), 0)
+        self.assertEqual(len(compiled_without_memory.chapter_concepts), 0)
+
+    def test_packet_experiment_service_dry_run_exports_prompt_without_worker_output(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[1]
+
+        with self.session_factory() as session:
+            service = PacketExperimentService(
+                TranslationRepository(session),
+                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+            )
+            artifacts = service.run(
+                packet_id,
+                PacketExperimentOptions(
+                    include_memory_blocks=False,
+                    include_chapter_concepts=False,
+                    prefer_memory_chapter_brief=False,
+                    prompt_layout="sentence-led",
+                    execute=False,
+                ),
+            )
+
+        self.assertEqual(artifacts.payload["packet_id"], packet_id)
+        self.assertIn("generated_at", artifacts.payload)
+        self.assertEqual(
+            artifacts.payload["database_url"],
+            "sqlite+pysqlite:///./artifacts/book-agent.db",
+        )
+        self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
+        self.assertFalse(artifacts.payload["options"]["execute"])
+        self.assertIsNone(artifacts.payload["worker_output"])
+        self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")
+        self.assertIn("context_sources", artifacts.payload)
+        self.assertIn("chapter_memory_snapshot_id", artifacts.payload)
+        self.assertIn("chapter_memory_snapshot_version", artifacts.payload)
+        self.assertEqual(artifacts.payload["context_sources"]["chapter_brief_source"], "packet")
+        self.assertIn("Current Sentences:", artifacts.payload["prompt_request"]["user_prompt"])
+
+    def test_packet_experiment_service_execute_runs_single_packet_worker(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[1]
+        fake_client = FakeTranslationClient()
+        fake_client.source_sentence_ids = ["S1"]
+        worker = LLMTranslationWorker(
+            fake_client,
+            model_name="mock-llm",
+            prompt_version="experiment.v1",
+            runtime_config={"provider": "fake"},
+        )
+
+        with self.session_factory() as session:
+            service = PacketExperimentService(
+                TranslationRepository(session),
+                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+                worker=worker,
+            )
+            artifacts = service.run(
+                packet_id,
+                PacketExperimentOptions(
+                    prompt_layout="paragraph-led",
+                    execute=True,
+                ),
+            )
+
+        self.assertIsNotNone(artifacts.payload["worker_output"])
+        self.assertEqual(artifacts.payload["worker_metadata"]["model_name"], "mock-llm")
+        self.assertIn("generated_at", artifacts.payload)
+        self.assertEqual(len(fake_client.requests), 1)
+        self.assertIn("Current Paragraph:", artifacts.payload["prompt_request"]["user_prompt"])
+
+    def test_packet_experiment_diff_reports_context_and_prompt_changes(self) -> None:
+        baseline = {
+            "packet_id": "pkt-1",
+            "options": {
+                "prompt_layout": "paragraph-led",
+            },
+            "context_compile_version": "v1",
+            "context_sources": {
+                "raw_prev_translated_count": 0,
+                "compiled_prev_translated_count": 0,
+                "chapter_memory_translation_count": 0,
+                "raw_chapter_concept_count": 0,
+                "compiled_chapter_concept_count": 0,
+                "chapter_memory_concept_count": 0,
+                "chapter_brief_source": "packet",
+            },
+            "context_packet": {
+                "chapter_brief": "Old brief",
+                "prev_translated_blocks": [],
+                "chapter_concepts": [],
+            },
+            "prompt_request": {
+                "system_prompt": "system one",
+                "user_prompt": "Section Context:\nCurrent Paragraph:\n- P1 [paragraph] Alpha",
+            },
+            "worker_output": None,
+        }
+        candidate = {
+            "packet_id": "pkt-1",
+            "options": {
+                "prompt_layout": "sentence-led",
+            },
+            "context_compile_version": "v1",
+            "context_sources": {
+                "raw_prev_translated_count": 0,
+                "compiled_prev_translated_count": 1,
+                "chapter_memory_translation_count": 1,
+                "raw_chapter_concept_count": 0,
+                "compiled_chapter_concept_count": 1,
+                "chapter_memory_concept_count": 1,
+                "chapter_brief_source": "memory",
+            },
+            "context_packet": {
+                "chapter_brief": "New brief",
+                "prev_translated_blocks": [{"block_id": "b1"}],
+                "chapter_concepts": [{"source_term": "context engineering"}],
+            },
+            "prompt_request": {
+                "system_prompt": "system two",
+                "user_prompt": "Section Context:\nCurrent Sentences:\n1. [S1] Alpha\nCurrent Paragraph:\n- P1 [paragraph] Alpha",
+            },
+            "worker_output": {
+                "target_segments": [
+                    {
+                        "text_zh": "译文 Alpha",
+                    }
+                ]
+            },
+        }
+
+        diff = compare_experiment_payloads(
+            baseline,
+            candidate,
+            baseline_label="base",
+            candidate_label="cand",
+        )
+
+        self.assertTrue(diff.payload["summary"]["prompt_layout_changed"])
+        self.assertTrue(diff.payload["summary"]["chapter_brief_changed"])
+        self.assertTrue(diff.payload["summary"]["chapter_brief_source_changed"])
+        self.assertTrue(diff.payload["summary"]["previous_translation_count_changed"])
+        self.assertTrue(diff.payload["summary"]["chapter_concept_count_changed"])
+        self.assertTrue(diff.payload["summary"]["user_prompt_changed"])
+        self.assertTrue(diff.payload["summary"]["worker_output_presence_changed"])
+        self.assertIn("Current Sentences", "\n".join(diff.payload["prompt_delta"]["user_prompt_unified_diff"]))
+        self.assertEqual(diff.payload["context_delta"]["previous_translation_count"]["delta"], 1)
+        self.assertEqual(
+            diff.payload["context_delta"]["context_sources"]["chapter_brief_source"]["cand"],
+            "memory",
+        )
+
+    def test_packet_experiment_scan_ranks_memory_rich_packets_first(self) -> None:
+        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
+
+        class StubExperimentService:
+            def run(self, packet_id: str, options: PacketExperimentOptions):
+                payloads = {
+                    packet_a_id: {
+                        "context_packet": {
+                            "current_blocks": [{"block_type": "paragraph", "sentence_ids": ["s1", "s2"]}],
+                        },
+                        "context_sources": {
+                            "raw_prev_translated_count": 0,
+                            "compiled_prev_translated_count": 3,
+                            "chapter_memory_translation_count": 3,
+                            "raw_chapter_concept_count": 0,
+                            "compiled_chapter_concept_count": 1,
+                            "chapter_memory_concept_count": 1,
+                            "chapter_brief_source": "memory",
+                        },
+                    },
+                    packet_b_id: {
+                        "context_packet": {
+                            "current_blocks": [{"block_type": "paragraph", "sentence_ids": ["s1"]}],
+                        },
+                        "context_sources": {
+                            "raw_prev_translated_count": 0,
+                            "compiled_prev_translated_count": 0,
+                            "chapter_memory_translation_count": 0,
+                            "raw_chapter_concept_count": 0,
+                            "compiled_chapter_concept_count": 0,
+                            "chapter_memory_concept_count": 0,
+                            "chapter_brief_source": "packet",
+                        },
+                    },
+                }
+                return type("Artifacts", (), {"payload": payloads[packet_id]})()
+
+        with self.session_factory() as session:
+            chapter_id = "22222222-2222-2222-2222-222222222222"
+            document_id = "11111111-1111-1111-1111-111111111111"
+            session.add(
+                Document(
+                    id=document_id,
+                    source_type=SourceType.EPUB,
+                    file_fingerprint="fingerprint-1",
+                    source_path="/tmp/sample.epub",
+                    title="Packet Scan Test",
+                    author="Tester",
+                    src_lang="en",
+                    tgt_lang="zh",
+                    status=DocumentStatus.ACTIVE,
+                    parser_version=1,
+                    segmentation_version=1,
+                    active_book_profile_version=1,
+                    metadata_json={},
+                )
+            )
+            session.commit()
+            session.add(
+                Chapter(
+                    id=chapter_id,
+                    document_id=document_id,
+                    ordinal=1,
+                    title_src="Chapter One",
+                    title_tgt=None,
+                    anchor_start=None,
+                    anchor_end=None,
+                    status=ChapterStatus.PACKET_BUILT,
+                    summary_version=1,
+                    risk_level=None,
+                    metadata_json={},
+                )
+            )
+            session.commit()
+            session.add_all(
+                [
+                    TranslationPacket(
+                        id=packet_a_id,
+                        chapter_id=chapter_id,
+                        block_start_id=None,
+                        block_end_id=None,
+                        packet_type=PacketType.TRANSLATE,
+                        book_profile_version=1,
+                        chapter_brief_version=1,
+                        termbase_version=1,
+                        entity_snapshot_version=1,
+                        style_snapshot_version=1,
+                        packet_json={},
+                        risk_score=0.1,
+                        status=PacketStatus.BUILT,
+                    ),
+                    TranslationPacket(
+                        id=packet_b_id,
+                        chapter_id=chapter_id,
+                        block_start_id=None,
+                        block_end_id=None,
+                        packet_type=PacketType.TRANSLATE,
+                        book_profile_version=1,
+                        chapter_brief_version=1,
+                        termbase_version=1,
+                        entity_snapshot_version=1,
+                        style_snapshot_version=1,
+                        packet_json={},
+                        risk_score=0.1,
+                        status=PacketStatus.BUILT,
+                    ),
+                ]
+            )
+            session.commit()
+
+            scan_service = PacketExperimentScanService(
+                TranslationRepository(session),
+                experiment_service=StubExperimentService(),
+            )
+            artifacts = scan_service.scan_chapter(chapter_id)
+
+        self.assertEqual(artifacts.payload["packet_count"], 2)
+        self.assertEqual(artifacts.payload["top_candidate"]["packet_id"], packet_a_id)
+        self.assertGreater(artifacts.payload["entries"][0]["memory_signal_score"], artifacts.payload["entries"][1]["memory_signal_score"])
+
     def test_translation_service_reuses_chapter_memory_across_nonadjacent_packets(self) -> None:
         chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -465,6 +884,157 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt,
         )
         self.assertIn("Current Paragraph:", prompt)
+
+    def test_chapter_memory_backfill_reconstructs_memory_without_rerunning_packets(self) -> None:
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>First translated paragraph introduces context engineering.</p>
+    <p>Second translated paragraph reinforces the context engineering concept.</p>
+    <p>Third translated paragraph closes the section.</p>
+  </body>
+</html>
+"""
+        document_id, packet_ids = self._bootstrap_custom_chapter(chapter_xhtml)
+        heading_packet_id, first_packet_id, second_packet_id, third_packet_id = packet_ids[:4]
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            service = TranslationService(repository)
+            for packet_id in [heading_packet_id, first_packet_id, second_packet_id, third_packet_id]:
+                service.execute_packet(packet_id)
+            session.commit()
+
+            chapter_id = repository.load_packet_bundle(first_packet_id).packet.chapter_id
+            session.query(MemorySnapshot).filter(
+                MemorySnapshot.document_id == document_id,
+                MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                MemorySnapshot.scope_id == chapter_id,
+                MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            ).delete(synchronize_session=False)
+            session.commit()
+
+            artifacts = ChapterMemoryBackfillService(repository).backfill_chapter_with_options(
+                chapter_id,
+                reset_existing=False,
+            )
+            session.commit()
+
+            latest_memory = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter_id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+
+        self.assertTrue(artifacts.payload["seeded_initial_snapshot"])
+        self.assertEqual(artifacts.payload["replayed_packet_count"], 4)
+        self.assertIsNotNone(latest_memory)
+        self.assertEqual(latest_memory.content_json["last_packet_id"], third_packet_id)
+        self.assertGreaterEqual(len(latest_memory.content_json["recent_accepted_translations"]), 3)
+        self.assertGreaterEqual(len(latest_memory.content_json["active_concepts"]), 1)
+
+    def test_chapter_memory_backfill_can_reset_existing_snapshot(self) -> None:
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Agentic AI depends on distributed SQL.</p>
+    <p>Context engineering shapes how context is created.</p>
+  </body>
+</html>
+"""
+        document_id, packet_ids = self._bootstrap_custom_chapter(chapter_xhtml)
+        heading_packet_id, first_packet_id, second_packet_id = packet_ids[:3]
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            service = TranslationService(repository)
+            for packet_id in [heading_packet_id, first_packet_id, second_packet_id]:
+                service.execute_packet(packet_id)
+            session.commit()
+
+            chapter_id = repository.load_packet_bundle(first_packet_id).packet.chapter_id
+            latest_memory = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter_id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+            assert latest_memory is not None
+            latest_memory.content_json["active_concepts"] = [
+                {
+                    "source_term": "Aakash Gupta Context Engineering",
+                    "canonical_zh": None,
+                    "status": "candidate",
+                    "confidence": 0.6,
+                    "first_seen_packet_id": first_packet_id,
+                    "last_seen_packet_id": second_packet_id,
+                    "times_seen": 2,
+                }
+            ]
+            session.merge(latest_memory)
+            session.commit()
+
+            artifacts = ChapterMemoryBackfillService(repository).backfill_chapter_with_options(
+                chapter_id,
+                reset_existing=True,
+            )
+            session.commit()
+
+            rebuilt_memory = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter_id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+
+        self.assertTrue(artifacts.payload["reset_existing"])
+        self.assertIsNotNone(rebuilt_memory)
+        lowered = {item["source_term"].lower() for item in rebuilt_memory.content_json["active_concepts"]}
+        self.assertIn("agentic ai", lowered)
+        self.assertIn("distributed sql", lowered)
+        self.assertIn("context engineering", lowered)
+        self.assertNotIn("aakash gupta context engineering", lowered)
+
+    def test_extract_concept_candidates_filters_noise_and_keeps_core_terms(self) -> None:
+        with self.session_factory() as session:
+            service = TranslationService(TranslationRepository(session))
+            concepts = service._extract_concept_candidates(
+                [
+                    "Agentic AI depends on distributed SQL and context engineering.",
+                    "Generative AI can produce text, but an adaptive agent can act over time.",
+                    "Aakash Gupta Context Engineering is discussed elsewhere.",
+                    "To accomplish these responses agentic systems need to perceive and act.",
+                    "An agent might fail without memory.",
+                ]
+            )
+
+        lowered = {concept.lower() for concept in concepts}
+        self.assertIn("agentic ai", lowered)
+        self.assertIn("distributed sql", lowered)
+        self.assertIn("context engineering", lowered)
+        self.assertIn("generative ai", lowered)
+        self.assertIn("adaptive agent", lowered)
+        self.assertNotIn("agent might", lowered)
+        self.assertNotIn("aakash gupta context engineering", lowered)
+        self.assertNotIn("accomplish these responses agentic", lowered)
 
     def test_llm_worker_drops_invalid_sentence_ids_before_persistence(self) -> None:
         _, packet_ids = self._bootstrap_to_db()

@@ -30,6 +30,10 @@ def resolve_action(context: IssueRoutingContext) -> ActionType:
         return ActionType.REBUILD_CHAPTER_BRIEF
     if context.issue_type == "TERM_CONFLICT" and context.involves_locked_term:
         return ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
+    if context.issue_type == "UNLOCKED_KEY_CONCEPT":
+        return ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
+    if context.issue_type == "STALE_CHAPTER_BRIEF":
+        return ActionType.REBUILD_CHAPTER_BRIEF
     if context.issue_type == "ENTITY_CONFLICT":
         return ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED
     if context.issue_type == "DUPLICATION":
