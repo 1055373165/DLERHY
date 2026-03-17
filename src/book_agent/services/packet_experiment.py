@@ -160,6 +160,8 @@ class PacketExperimentService:
                         chapter_memory_snapshot.content_json if chapter_memory_snapshot is not None else None
                     )
                 ),
+                "raw_relevant_term_count": len(bundle.context_packet.relevant_terms),
+                "compiled_relevant_term_count": len(compiled_context.relevant_terms),
                 "raw_chapter_concept_count": len(bundle.context_packet.chapter_concepts),
                 "compiled_chapter_concept_count": len(compiled_context.chapter_concepts),
                 "chapter_memory_concept_count": len(

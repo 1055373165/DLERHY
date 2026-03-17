@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from book_agent.domain.models import MemorySnapshot
-from book_agent.workers.contracts import ConceptCandidate, ContextPacket, TranslatedContextBlock
+from book_agent.workers.contracts import ConceptCandidate, ContextPacket, RelevantTerm, TranslatedContextBlock
 
 MAX_CHAPTER_MEMORY_TRANSLATIONS = 4
 
@@ -103,6 +103,36 @@ def _merge_concepts(
     return concepts[:12]
 
 
+def _merge_relevant_terms(
+    base: list[RelevantTerm],
+    concepts: list[ConceptCandidate],
+) -> list[RelevantTerm]:
+    merged: dict[str, RelevantTerm] = {}
+    for term in base:
+        if not term.source_term:
+            continue
+        merged[term.source_term.casefold()] = term
+
+    for concept in concepts:
+        if not concept.source_term or not concept.canonical_zh:
+            continue
+        merged[concept.source_term.casefold()] = RelevantTerm(
+            source_term=concept.source_term,
+            target_term=concept.canonical_zh,
+            lock_level="locked",
+        )
+
+    ordered = list(merged.values())
+    ordered.sort(
+        key=lambda term: (
+            {"locked": 0, "preferred": 1, "suggested": 2}.get(term.lock_level, 99),
+            term.source_term.lower(),
+            term.target_term.lower(),
+        )
+    )
+    return ordered
+
+
 @dataclass(slots=True)
 class ChapterContextCompiler:
     compile_version: str = "v1.chapter-memory"
@@ -118,6 +148,7 @@ class ChapterContextCompiler:
         memory_blocks = _memory_blocks(chapter_memory_snapshot) if compile_options.include_memory_blocks else []
         memory_concepts = _memory_concepts(chapter_memory_snapshot) if compile_options.include_chapter_concepts else []
         merged_concepts = _merge_concepts(memory_concepts, compile_options.concept_overrides)
+        merged_terms = _merge_relevant_terms(packet.relevant_terms, merged_concepts)
         merged_previous = _dedupe_translated_blocks([*memory_blocks, *packet.prev_translated_blocks])
         compiled_brief = packet.chapter_brief
         if chapter_memory_snapshot is not None and compile_options.prefer_memory_chapter_brief:
@@ -128,6 +159,7 @@ class ChapterContextCompiler:
             update={
                 "chapter_brief": compiled_brief,
                 "chapter_concepts": merged_concepts,
+                "relevant_terms": merged_terms,
                 "prev_translated_blocks": merged_previous,
             }
         )
