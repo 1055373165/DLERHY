@@ -296,6 +296,7 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - [x] review 已能用章节级锁定术语反查旧译文：若历史译文仍使用过时术语，会自动报 `TERM_CONFLICT`
 - [x] 已完成 `context engineering -> 上下文工程` 的 live 锁定写回与单 packet 真正验证
 - [x] `STYLE_DRIFT` 第二阶段已接入：开始覆盖真实 packet 中暴露出的回退变体 `证据权重表明 / 上下文更准确的输出`
+- [x] 已完成 A/B/C 提示词矩阵实验（3 个固定 packet × 3 组 prompt profile）
 
 ### Planned
 
@@ -303,6 +304,7 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - [ ] 基于这次 `denoised execute` 结果，决定是否继续收紧 `concept registry` 候选策略，尤其是 `智能体AI` 这类仍需人工裁决的术语
 - [ ] 基于 `context engineering` 实验结果，决定是否把“临时 override -> 锁定写回”升成正式术语裁决流程
 - [ ] 决定是否把 `agentic AI -> 智能体式AI` 正式提升为当前章节默认裁决，并作为后续 packet 的首选基线
+- [ ] 决定是否将 `role-style-v2` 提升为新的实验默认提示词基线
 - [ ] 再决定下一刀是继续强化 concept policy，还是扩大 `STYLE_DRIFT` 规则面
 
 ## 8. Validation Protocol
@@ -575,6 +577,29 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
   - review 会稳定产出至少 3 个 `STYLE_DRIFT` issue
   - `preferred_hint` 现在同时覆盖 `上下文工程` 和 `更符合上下文的输出`
 - 这一轮仍然没有发起任何新的 packet execute；只做了单章级 review 回归，确认新规则已经把真实 live-lock packet 暴露出来的两类回退纳入检测面
+- 已完成 3 组提示词 A/B/C 矩阵实验，固定 packet 为：
+  - `670447b0-0bca-5df9-aea8-4f30cbcd8b1f`
+  - `ba917844-c3b9-5689-91ad-f984703dea71`
+  - `2e26e803-5d84-52ae-9b01-c5b8e07a7d93`
+- 实验工件目录：
+  - [prompt-profile-matrix](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/prompt-profile-matrix)
+  - 汇总：[prompt-profile-matrix.summary.json](/Users/smy/project/book-agent/artifacts/analysis/packet-experiments/1d8ba1ca-de9e-5014-b00e-77b6c3dbb3e4/prompt-profile-matrix/prompt-profile-matrix.summary.json)
+- 三组 profile 定义：
+  - `current`：当前主提示词
+  - `role-style-v2`：只升级角色与风格目标
+  - `role-style-memory-v2`：升级角色 + 段落优先 + 结构化问题处理 + 强化 concept memory 使用
+- 当前矩阵结论：
+  - alignment coverage：9/9 全部保持 `1.0`
+  - 术语稳定性：`agentic AI / context engineering` 在这 3 个 packet 上都已稳定，不是当前 profile 差异主因
+  - `STYLE_DRIFT`：只有 `2e26...` 仍有 2 个命中，三组 profile 都未显著降低，说明单靠提示词升级不足以消掉这类 literalism
+  - 中文自然度：`role-style-v2` 整体最佳；`role-style-memory-v2` 在定义段与长段上更容易把段落打碎，收益不如预期
+- 费用汇总：
+  - `current = 0.00173770 USD`
+  - `role-style-v2 = 0.00086504 USD`
+  - `role-style-memory-v2 = 0.00111872 USD`
+- 当前判断：
+  - 下一阶段最值得推进的是把 `role-style-v2` 作为新的实验基线
+  - `role-style-memory-v2` 暂不进入主链路，因为它没有额外降低 `STYLE_DRIFT`，却在长段上更容易产生碎句感
   - 同一 packet 里还顺带把 “证据的分量表明” 提升成了 “大量证据表明”
 - 当前残余也更清楚了：
   - 这次 override 还没有触及 `agentic AI`
