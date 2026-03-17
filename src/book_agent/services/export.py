@@ -506,6 +506,25 @@ class ExportService:
             "blocking_issue_count": blocking_issue_count,
         }
 
+    def _open_blocking_followup_actions(
+        self,
+        chapter_id: str,
+    ) -> tuple[list[ReviewIssue], list[ExportFollowupAction]]:
+        issues = self.repository.list_open_blocking_issues(chapter_id)
+        if not issues:
+            return [], []
+        actions = self.repository.list_planned_issue_actions([issue.id for issue in issues])
+        return issues, [
+            ExportFollowupAction(
+                action_id=action.id,
+                issue_id=action.issue_id,
+                action_type=action.action_type.value,
+                scope_type=action.scope_type.value,
+                scope_id=action.scope_id,
+            )
+            for action in actions
+        ]
+
     def _enforce_gate(self, bundle: ChapterExportBundle, export_type: ExportType) -> None:
         chapter_status = bundle.chapter.status
         if export_type == ExportType.REVIEW_PACKAGE:
@@ -524,8 +543,12 @@ class ExportService:
 
         if export_type in {ExportType.BILINGUAL_HTML, ExportType.MERGED_HTML}:
             if chapter_status not in {ChapterStatus.QA_CHECKED, ChapterStatus.APPROVED, ChapterStatus.EXPORTED}:
+                blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
                 raise ExportGateError(
-                    f"Chapter {bundle.chapter.id} must pass review before final export; current status is {chapter_status.value}."
+                    f"Chapter {bundle.chapter.id} must pass review before final export; current status is {chapter_status.value}.",
+                    chapter_id=bundle.chapter.id,
+                    issue_ids=[issue.id for issue in blocking_issues],
+                    followup_actions=followup_actions,
                 )
             export_alignment_artifacts = self._sync_export_alignment_issues(bundle)
             if export_alignment_artifacts.issues:
@@ -547,8 +570,12 @@ class ExportService:
                     ],
                 )
             if self.repository.has_open_blocking_issues(bundle.chapter.id):
+                blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
                 raise ExportGateError(
-                    f"Chapter {bundle.chapter.id} still has open blocking review issues and cannot be exported."
+                    f"Chapter {bundle.chapter.id} still has open blocking review issues and cannot be exported.",
+                    chapter_id=bundle.chapter.id,
+                    issue_ids=[issue.id for issue in blocking_issues],
+                    followup_actions=followup_actions,
                 )
             return
 
@@ -1648,11 +1675,15 @@ class ExportService:
                     if target_id in target_map and target_id not in seen_target_ids:
                         seen_target_ids.add(target_id)
                         target_ids.append(target_id)
-            target_text = self._join_block_target_text([target_map[target_id].text_zh for target_id in target_ids])
             source_metadata = dict(block.source_span_json or {})
             if source_metadata.get("pdf_block_role") in {"header", "footer", "toc_entry"}:
                 continue
             render_mode = self._render_mode_for_block(block, block_sentences, source_metadata)
+            target_text = self._join_block_target_text(
+                [target_map[target_id].text_zh for target_id in target_ids],
+                block_type=block.block_type,
+                render_mode=render_mode,
+            )
             artifact_kind = self._artifact_kind_for_block(block, render_mode)
             render_blocks.append(
                 MergedRenderBlock(
@@ -1730,9 +1761,64 @@ class ExportService:
             return "参考标识保留"
         return None
 
-    def _join_block_target_text(self, target_texts: list[str]) -> str:
+    def _join_block_target_text(
+        self,
+        target_texts: list[str],
+        *,
+        block_type: BlockType | None = None,
+        render_mode: str | None = None,
+    ) -> str:
         cleaned = [text.strip() for text in target_texts if text and text.strip()]
+        if not cleaned:
+            return ""
+        if self._should_inline_join_target_text(block_type, render_mode):
+            return self._inline_join_target_text(cleaned)
         return "\n".join(cleaned)
+
+    def _should_inline_join_target_text(
+        self,
+        block_type: BlockType | None,
+        render_mode: str | None,
+    ) -> bool:
+        if render_mode in {
+            "source_artifact_full_width",
+            "translated_wrapper_with_preserved_artifact",
+            "reference_preserve_with_translated_label",
+        }:
+            return False
+        return block_type in {
+            BlockType.HEADING,
+            BlockType.PARAGRAPH,
+            BlockType.LIST_ITEM,
+            BlockType.QUOTE,
+            BlockType.CAPTION,
+            BlockType.FOOTNOTE,
+        }
+
+    def _inline_join_target_text(self, target_texts: list[str]) -> str:
+        merged = target_texts[0]
+        for segment in target_texts[1:]:
+            if self._needs_ascii_sentence_gap(merged, segment):
+                merged = f"{merged} {segment}"
+            else:
+                merged = f"{merged}{segment}"
+        return merged
+
+    def _needs_ascii_sentence_gap(self, previous: str, current: str) -> bool:
+        previous = previous.rstrip()
+        current = current.lstrip()
+        if not previous or not current:
+            return False
+        prev_char = previous[-1]
+        curr_char = current[0]
+        if re.match(r"[A-Za-z0-9]", prev_char) and re.match(r"[A-Za-z0-9]", curr_char):
+            return True
+        if prev_char in {".", "!", "?", ";", ":", ",", "\"", "'", ")", "]", "}"} and re.match(
+            r"[A-Za-z0-9\"'(\[]",
+            curr_char,
+        ):
+            return True
+        return False
 
     def _render_block_html(
         self,

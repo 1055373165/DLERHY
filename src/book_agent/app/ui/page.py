@@ -1767,6 +1767,48 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin-top: 12px;
       }}
 
+      .definition-grid {{
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px 12px;
+      }}
+
+      .definition-grid.run-definitions {{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }}
+
+      .definition-item {{
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+        padding: 8px 0;
+      }}
+
+      .definition-item.full {{
+        grid-column: 1 / -1;
+      }}
+
+      .definition-term {{
+        color: var(--ink-soft);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+      }}
+
+      .definition-desc {{
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }}
+
+      .compact-definitions .definition-desc {{
+        font-size: 12px;
+        line-height: 1.35;
+      }}
+
       .detail-block {{
         padding: 14px;
         border-radius: 16px;
@@ -2058,6 +2100,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           grid-template-columns: 1fr;
         }}
 
+        .definition-grid,
+        .definition-grid.run-definitions {{
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }}
+
         .worklist-board-shell,
         .owner-insights-grid {{
           grid-template-columns: 1fr;
@@ -2152,6 +2199,11 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         }}
 
         .detail-grid {{
+          grid-template-columns: 1fr;
+        }}
+
+        .definition-grid,
+        .definition-grid.run-definitions {{
           grid-template-columns: 1fr;
         }}
 
@@ -3979,24 +4031,24 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               }}
               <span class="pill warn">open issues: ${{formatNumber(summary.open_issue_count)}}</span>
             </div>
-            <div class="detail-grid summary-grid">
-              <div class="detail-block compact-block">
-                <div class="detail-label">Document ID</div>
-                <div class="detail-value"><code>${{escapeHtml(summary.document_id)}}</code></div>
+            <dl class="definition-grid compact-definitions">
+              <div class="definition-item">
+                <dt class="definition-term">Document ID</dt>
+                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Latest Run</div>
-                <div class="detail-value">${{summary.latest_run_id ? `<code>${{escapeHtml(summary.latest_run_id)}}</code>` : "No run recorded yet"}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Latest Run</dt>
+                <dd class="definition-desc">${{summary.latest_run_id ? `<code>${{escapeHtml(summary.latest_run_id)}}</code>` : "No run recorded yet"}}</dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Merged Export</div>
-                <div class="detail-value">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Merged Export</dt>
+                <dd class="definition-desc">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">PDF Profile</div>
-                <div class="detail-value">${{summary.pdf_profile ? escapeHtml((summary.pdf_profile.pdf_kind || "pdf") + " · risk=" + (summary.pdf_profile.layout_risk || "unknown")) : "Not a PDF document"}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">PDF Profile</dt>
+                <dd class="definition-desc">${{summary.pdf_profile ? escapeHtml((summary.pdf_profile.pdf_kind || "pdf") + " · risk=" + (summary.pdf_profile.layout_risk || "unknown")) : "Not a PDF document"}}</dd>
               </div>
-            </div>
+            </dl>
             <div class="table-scroll compact dense-scroll">
               <table class="data-table compact dense-table">
                 <thead>
@@ -4187,44 +4239,50 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                     escapeHtml(summary.source_type)
                   }} · ${{
                     escapeHtml(summary.status)
-                  }} · document_id=${{
-                    escapeHtml(summary.document_id)
                   }}
                 </div>
               </div>
             </div>
             <div class="button-row" style="margin-bottom:12px;">
-              <button class="button ghost" type="button" data-history-load-doc="${{escapeHtml(summary.document_id)}}">Load into workspace</button>
+              <button class="button ghost dense" type="button" data-history-load-doc="${{escapeHtml(summary.document_id)}}">Load into workspace</button>
               ${{
                 summary.latest_run_id
-                  ? `<button class="button ghost" type="button" data-history-load-run="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
+                  ? `<button class="button ghost dense" type="button" data-history-load-run="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
                   : ""
               }}
               ${{
                 summary.latest_run_id && canRetryHistoryRun(summary.latest_run_status)
-                  ? `<button class="button" type="button" data-history-retry-run="${{escapeHtml(summary.latest_run_id)}}" data-history-retry-document="${{escapeHtml(summary.document_id)}}">Retry run</button>`
+                  ? `<button class="button dense" type="button" data-history-retry-run="${{escapeHtml(summary.latest_run_id)}}" data-history-retry-document="${{escapeHtml(summary.document_id)}}">Retry run</button>`
                   : ""
               }}
               ${{
                 summary.merged_export_ready
-                  ? `<button class="button gold" type="button" data-history-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
+                  ? `<button class="button gold dense" type="button" data-history-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
                   : '<span class="subtle-note">The analysis archive is not available for this record yet.</span>'
               }}
             </div>
-            <div class="pill-row">
-              <span class="pill">chapters: ${{formatNumber(summary.chapter_count)}}</span>
-              <span class="pill soft">chapter exports: ${{formatNumber(summary.chapter_bilingual_export_count)}}</span>
-              ${{
-                summary.latest_merged_export_at
-                  ? `<span class="pill soft">merged: ${{formatDate(summary.latest_merged_export_at)}}</span>`
-                  : ""
-              }}
-              ${{
-                summary.latest_run_status
-                  ? `<span class="pill soft">latest run: ${{escapeHtml(summary.latest_run_status)}}</span>`
-                  : ""
-              }}
-            </div>
+            <dl class="definition-grid compact-definitions">
+              <div class="definition-item">
+                <dt class="definition-term">Document ID</dt>
+                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
+              </div>
+              <div class="definition-item">
+                <dt class="definition-term">Chapters</dt>
+                <dd class="definition-desc">${{formatNumber(summary.chapter_count)}}</dd>
+              </div>
+              <div class="definition-item">
+                <dt class="definition-term">Chapter Exports</dt>
+                <dd class="definition-desc">${{formatNumber(summary.chapter_bilingual_export_count)}}</dd>
+              </div>
+              <div class="definition-item">
+                <dt class="definition-term">Latest Run</dt>
+                <dd class="definition-desc">${{summary.latest_run_status ? escapeHtml(summary.latest_run_status) : "—"}}</dd>
+              </div>
+              <div class="definition-item full">
+                <dt class="definition-term">Merged Export</dt>
+                <dd class="definition-desc">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</dd>
+              </div>
+            </dl>
             <div class="table-scroll history-table-shell dense-scroll">
               <table class="data-table history-detail-table dense-table">
                 <thead>
@@ -4655,36 +4713,36 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                 <div class="kpi-note">Parallel workers: ${{formatNumber(summary.budget?.max_parallel_workers)}}</div>
               </div>
             </div>
-            <div class="detail-grid summary-grid">
-              <div class="detail-block compact-block">
-                <div class="detail-label">Run ID</div>
-                <div class="detail-value"><code>${{escapeHtml(summary.run_id)}}</code></div>
+            <dl class="definition-grid run-definitions compact-definitions">
+              <div class="definition-item">
+                <dt class="definition-term">Run ID</dt>
+                <dd class="definition-desc"><code>${{escapeHtml(summary.run_id)}}</code></dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Document ID</div>
-                <div class="detail-value"><code>${{escapeHtml(summary.document_id)}}</code></div>
+              <div class="definition-item">
+                <dt class="definition-term">Document ID</dt>
+                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Requested By</div>
-                <div class="detail-value">${{escapeHtml(summary.requested_by || "—")}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Requested By</dt>
+                <dd class="definition-desc">${{escapeHtml(summary.requested_by || "—")}}</dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Created</div>
-                <div class="detail-value">${{formatDate(summary.created_at)}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Created</dt>
+                <dd class="definition-desc">${{formatDate(summary.created_at)}}</dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Started</div>
-                <div class="detail-value">${{formatDate(summary.started_at)}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Started</dt>
+                <dd class="definition-desc">${{formatDate(summary.started_at)}}</dd>
               </div>
-              <div class="detail-block compact-block">
-                <div class="detail-label">Finished</div>
-                <div class="detail-value">${{formatDate(summary.finished_at)}}</div>
+              <div class="definition-item">
+                <dt class="definition-term">Finished</dt>
+                <dd class="definition-desc">${{formatDate(summary.finished_at)}}</dd>
               </div>
-              <div class="detail-block compact-block full">
-                <div class="detail-label">Stop Reason</div>
-                <div class="detail-value">${{escapeHtml(summary.stop_reason || "—")}}</div>
+              <div class="definition-item full">
+                <dt class="definition-term">Stop Reason</dt>
+                <dd class="definition-desc">${{escapeHtml(summary.stop_reason || "—")}}</dd>
               </div>
-            </div>
+            </dl>
           `;
         }}
 

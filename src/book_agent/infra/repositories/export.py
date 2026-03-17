@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import ExportStatus, ExportType, MemoryScopeType, MemoryStatus, SnapshotType
+from book_agent.domain.enums import ActionStatus, ExportStatus, ExportType, MemoryScopeType, MemoryStatus, SnapshotType
 from book_agent.domain.enums import IssueStatus
 from book_agent.domain.models import AuditEvent, Block, BookProfile, Chapter, Document, MemorySnapshot, Sentence
-from book_agent.domain.models.review import ChapterQualitySummary, Export, ReviewIssue
+from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 
 
@@ -235,6 +235,25 @@ class ExportRepository:
             )
         ).first()
         return issue is not None
+
+    def list_open_blocking_issues(self, chapter_id: str) -> list[ReviewIssue]:
+        return self.session.scalars(
+            select(ReviewIssue).where(
+                ReviewIssue.chapter_id == chapter_id,
+                ReviewIssue.blocking.is_(True),
+                ReviewIssue.status == IssueStatus.OPEN,
+            )
+        ).all()
+
+    def list_planned_issue_actions(self, issue_ids: list[str]) -> list[IssueAction]:
+        if not issue_ids:
+            return []
+        return self.session.scalars(
+            select(IssueAction).where(
+                IssueAction.issue_id.in_(issue_ids),
+                IssueAction.status == ActionStatus.PLANNED,
+            )
+        ).all()
 
     def save_export(self, export: Export) -> None:
         self.session.merge(export)

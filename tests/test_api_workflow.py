@@ -34,6 +34,7 @@ from book_agent.domain.enums import (
     LockLevel,
     MemoryScopeType,
     RootCauseLayer,
+    SentenceStatus,
     Severity,
     SnapshotType,
     TermStatus,
@@ -141,6 +142,16 @@ STRUCTURED_ARTIFACT_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
     </table>
     <m:math id="eq-1"><m:mi>x</m:mi><m:mo>=</m:mo><m:mn>1</m:mn></m:math>
     <p>https://example.com/agent-docs</p>
+  </body>
+</html>
+"""
+
+IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <div id="cover" class="browsable-container figure-container">
+      <img src="images/cover.png" alt="Cover illustration" />
+    </div>
   </body>
 </html>
 """
@@ -1044,6 +1055,128 @@ class ApiWorkflowTests(unittest.TestCase):
             json={"export_type": "bilingual_html"},
         )
         self.assertEqual(bilingual_export.status_code, 200)
+
+    def test_image_only_cover_chapter_does_not_block_review_or_export(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Cover", "cover.xhtml", IMAGE_ONLY_FIGURE_XHTML),
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ],
+            extra_files={"OEBPS/images/cover.png": b"fake-cover"},
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        document_id = bootstrap.json()["document_id"]
+
+        with self.session_factory() as session:
+            cover_chapter = session.scalars(
+                select(Chapter)
+                .where(Chapter.document_id == document_id)
+                .order_by(Chapter.ordinal)
+            ).first()
+            self.assertIsNotNone(cover_chapter)
+            cover_sentence = session.scalars(
+                select(Sentence).where(Sentence.chapter_id == cover_chapter.id)
+            ).one()
+            cover_sentence.translatable = True
+            cover_sentence.nontranslatable_reason = None
+            cover_sentence.sentence_status = SentenceStatus.PENDING
+            chapter_brief = session.scalars(
+                select(MemorySnapshot).where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == cover_chapter.id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF,
+                )
+            ).one()
+            content_json = dict(chapter_brief.content_json)
+            content_json["open_questions"] = ["missing_chapter_title"]
+            chapter_brief.content_json = content_json
+            session.merge(cover_sentence)
+            session.merge(chapter_brief)
+            session.commit()
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        with self.session_factory() as session:
+            cover_chapter = session.scalars(
+                select(Chapter)
+                .where(Chapter.document_id == document_id)
+                .order_by(Chapter.ordinal)
+            ).first()
+            assert cover_chapter is not None
+            cover_packet = session.scalars(
+                select(TranslationPacket)
+                .where(TranslationPacket.chapter_id == cover_chapter.id)
+            ).first()
+            self.assertIsNotNone(cover_packet)
+            assert cover_packet is not None
+            packet_json = dict(cover_packet.packet_json)
+            packet_json["open_questions"] = ["missing_chapter_title"]
+            cover_packet.packet_json = packet_json
+            session.merge(cover_packet)
+            session.commit()
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        self.assertEqual(review.json()["total_issue_count"], 0)
+
+        bilingual_export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "bilingual_html"},
+        )
+        self.assertEqual(bilingual_export.status_code, 200)
+
+    def test_final_export_auto_followup_can_rebuild_packet_context_failure(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        self.assertEqual(review.json()["total_issue_count"], 0)
+
+        with self.session_factory() as session:
+            packet = session.scalars(
+                select(TranslationPacket).where(TranslationPacket.chapter_id.is_not(None))
+            ).first()
+            self.assertIsNotNone(packet)
+            assert packet is not None
+            packet_json = dict(packet.packet_json)
+            packet_json["open_questions"] = ["speaker_reference_ambiguous"]
+            packet.packet_json = packet_json
+            session.merge(packet)
+            session.commit()
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        self.assertGreaterEqual(review.json()["total_issue_count"], 1)
+
+        export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "bilingual_html", "auto_execute_followup_on_gate": True},
+        )
+        self.assertEqual(export.status_code, 200)
+        payload = export.json()
+        self.assertTrue(payload["auto_followup_requested"])
+        self.assertTrue(payload["auto_followup_applied"])
+        self.assertEqual(payload["auto_followup_executions"][0]["action_type"], "REBUILD_PACKET_THEN_RERUN")
+        self.assertTrue(payload["auto_followup_executions"][0]["issue_resolved"])
+        self.assertTrue(Path(payload["chapter_results"][0]["file_path"]).exists())
+
+        with self.session_factory() as session:
+            open_issue_count = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == "CONTEXT_FAILURE",
+                    ReviewIssue.root_cause_layer == RootCauseLayer.PACKET,
+                    ReviewIssue.status == IssueStatus.OPEN,
+                )
+            )
+            self.assertEqual(open_issue_count, 0)
 
     def test_format_pollution_is_reported_in_review_summary(self) -> None:
         epub_path = self._write_epub()

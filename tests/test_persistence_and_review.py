@@ -12,8 +12,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.enums import ActionType, JobScopeType, LockLevel, MemoryScopeType, SnapshotType, TermStatus, TermType
-from book_agent.domain.models import ArtifactInvalidation, ChapterQualitySummary, Export, MemorySnapshot, TermEntry
+from book_agent.core.ids import stable_id
+from book_agent.domain.enums import ActionType, ExportType, JobScopeType, LockLevel, MemoryScopeType, SnapshotType, TermStatus, TermType
+from book_agent.domain.enums import PacketStatus, PacketType
+from book_agent.domain.models import ArtifactInvalidation, Block, Chapter, ChapterQualitySummary, Export, MemorySnapshot, Sentence, TermEntry
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -27,6 +29,7 @@ from book_agent.services.actions import IssueActionExecutor
 from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.review import ReviewService
 from book_agent.services.translation import TranslationService
+from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
@@ -74,6 +77,16 @@ CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
     <h1 id="ch1">Chapter One</h1>
     <p>Pricing power matters. Strategy compounds.</p>
     <blockquote>A quoted paragraph.</blockquote>
+  </body>
+</html>
+"""
+
+IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <div class="figure-container">
+      <img src="images/cover.png" alt="cover art" />
+    </div>
   </body>
 </html>
 """
@@ -189,6 +202,49 @@ class SplitSegmentWorker:
         )
 
 
+class ParagraphFlowWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="ParagraphFlowWorker",
+            model_name="paragraph-flow-test",
+            prompt_version="test.paragraph-flow.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        mapping = {
+            "Chapter One": "第一章",
+            "Pricing power matters.": "定价能力很重要。",
+            "Strategy compounds.": "战略会持续复利。",
+            "A quoted paragraph.": "这是一段引用。",
+        }
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=mapping.get(sentence.source_text, f"译文::{sentence.source_text}"),
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
 class PersistenceAndReviewTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = build_engine("sqlite+pysqlite:///:memory:")
@@ -212,6 +268,72 @@ class PersistenceAndReviewTests(unittest.TestCase):
             BootstrapRepository(session).save(artifacts)
             session.commit()
         return artifacts.document.id, artifacts.translation_packets[0].id
+
+    def _bootstrap_custom_epub_to_db(
+        self,
+        chapters: list[tuple[str, str, str]],
+        *,
+        extra_files: dict[str, bytes] | None = None,
+    ) -> str:
+        manifest_items = ['    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />']
+        spine_items: list[str] = []
+        toc_items: list[str] = []
+        for index, (title, href, _content) in enumerate(chapters, start=1):
+            item_id = f"chap{index}"
+            manifest_items.append(f'    <item id="{item_id}" href="{href}" media-type="application/xhtml+xml" />')
+            spine_items.append(f'    <itemref idref="{item_id}" />')
+            toc_items.append(f'        <li><a href="{href}">{title}</a></li>')
+
+        content_opf = "\n".join(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">',
+                '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
+                '    <dc:title>Business Strategy Handbook</dc:title>',
+                '    <dc:creator>Test Author</dc:creator>',
+                '    <dc:language>en</dc:language>',
+                "  </metadata>",
+                "  <manifest>",
+                *manifest_items,
+                "  </manifest>",
+                "  <spine>",
+                *spine_items,
+                "  </spine>",
+                "</package>",
+            ]
+        )
+        nav_xhtml = "\n".join(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">',
+                "  <body>",
+                '    <nav epub:type="toc">',
+                "      <ol>",
+                *toc_items,
+                "      </ol>",
+                "    </nav>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", content_opf)
+                archive.writestr("OEBPS/nav.xhtml", nav_xhtml)
+                for _title, href, content in chapters:
+                    archive.writestr(f"OEBPS/{href}", content)
+                for relative_path, payload in (extra_files or {}).items():
+                    archive.writestr(relative_path, payload)
+            artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+        return artifacts.document.id
 
     def test_bootstrap_persists_to_sqlite(self) -> None:
         document_id, _ = self._bootstrap_to_db()
@@ -333,6 +455,147 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(context_action.action_type, ActionType.REBUILD_PACKET_THEN_RERUN)
             self.assertEqual(context_action.scope_type, JobScopeType.PACKET)
             self.assertEqual(context_action.scope_id, packet_id)
+
+    def test_review_skips_image_only_cover_packet_missing_title_context_failure(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [
+                ("Cover", "cover.xhtml", IMAGE_ONLY_FIGURE_XHTML),
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ],
+            extra_files={"OEBPS/images/cover.png": b"fake-cover"},
+        )
+
+        with self.session_factory() as session:
+            cover_chapter = session.scalars(
+                select(Chapter)
+                .where(Chapter.document_id == document_id)
+                .order_by(Chapter.ordinal)
+            ).first()
+            self.assertIsNotNone(cover_chapter)
+            assert cover_chapter is not None
+            cover_chapter.title_src = None
+
+            cover_sentence = session.scalars(
+                select(Sentence).where(Sentence.chapter_id == cover_chapter.id)
+            ).one()
+
+            chapter_brief = session.scalars(
+                select(MemorySnapshot).where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == cover_chapter.id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF,
+                )
+            ).one()
+            brief_json = dict(chapter_brief.content_json)
+            brief_json["open_questions"] = ["missing_chapter_title"]
+            chapter_brief.content_json = brief_json
+            session.commit()
+
+            cover_block = session.scalars(
+                select(Block).where(Block.chapter_id == cover_chapter.id).order_by(Block.ordinal)
+            ).first()
+            self.assertIsNotNone(cover_block)
+            assert cover_block is not None
+
+            cover_packet = TranslationPacket(
+                id=stable_id("packet", cover_chapter.id, "legacy-cover"),
+                chapter_id=cover_chapter.id,
+                block_start_id=cover_block.id,
+                block_end_id=cover_block.id,
+                packet_type=PacketType.TRANSLATE,
+                book_profile_version=1,
+                chapter_brief_version=1,
+                termbase_version=1,
+                entity_snapshot_version=1,
+                style_snapshot_version=1,
+                packet_json={
+                    "current_blocks": [
+                        {
+                            "sentence_ids": [cover_sentence.id],
+                        }
+                    ],
+                    "open_questions": ["missing_chapter_title"],
+                },
+                status=PacketStatus.BUILT,
+            )
+            session.add(cover_packet)
+            session.commit()
+
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(cover_chapter.id)
+            self.assertEqual(review_artifacts.issues, [])
+            with tempfile.TemporaryDirectory() as outdir:
+                ExportService(ExportRepository(session), output_root=outdir).export_bilingual_html(cover_chapter.id)
+
+    def test_final_export_auto_followup_can_rebuild_packet_context_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as outdir:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                epub_path = Path(tmpdir) / "sample.epub"
+                with zipfile.ZipFile(epub_path, "w") as archive:
+                    archive.writestr("mimetype", "application/epub+zip")
+                    archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                    archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                    archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                    archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+
+                with self.session_factory() as session:
+                    workflow = DocumentWorkflowService(session, export_root=outdir)
+                    summary = workflow.bootstrap_epub(epub_path)
+                    document_id = summary.document_id
+                    workflow.translate_document(document_id)
+                    review = workflow.review_document(document_id)
+                    self.assertEqual(review.total_issue_count, 0)
+
+                    packet = session.scalars(
+                        select(TranslationPacket).where(TranslationPacket.chapter_id.is_not(None))
+                    ).first()
+                    self.assertIsNotNone(packet)
+                    assert packet is not None
+                    packet_json = dict(packet.packet_json)
+                    packet_json["open_questions"] = ["speaker_reference_ambiguous"]
+                    packet.packet_json = packet_json
+                    session.merge(packet)
+                    session.flush()
+
+                    review = workflow.review_document(document_id)
+                    self.assertGreaterEqual(review.total_issue_count, 1)
+
+                    export = workflow.export_document(
+                        document_id,
+                        ExportType.BILINGUAL_HTML,
+                        auto_execute_followup_on_gate=True,
+                    )
+                    self.assertTrue(export.auto_followup_requested)
+                    self.assertTrue(export.auto_followup_applied)
+                    self.assertEqual(export.auto_followup_executions[0].action_type, "REBUILD_PACKET_THEN_RERUN")
+                    self.assertTrue(export.auto_followup_executions[0].issue_resolved)
+                    self.assertTrue(Path(export.chapter_results[0].file_path).exists())
+
+    def test_bilingual_html_keeps_multi_sentence_paragraph_in_single_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as outdir:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                epub_path = Path(tmpdir) / "sample.epub"
+                with zipfile.ZipFile(epub_path, "w") as archive:
+                    archive.writestr("mimetype", "application/epub+zip")
+                    archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                    archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                    archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                    archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+
+                with self.session_factory() as session:
+                    workflow = DocumentWorkflowService(
+                        session,
+                        export_root=outdir,
+                        translation_worker=ParagraphFlowWorker(),
+                    )
+                    summary = workflow.bootstrap_epub(epub_path)
+                    document_id = summary.document_id
+                    workflow.translate_document(document_id)
+                    workflow.review_document(document_id)
+                    export = workflow.export_document(document_id, ExportType.BILINGUAL_HTML)
+                    chapter_html = Path(export.chapter_results[0].file_path).read_text(encoding="utf-8")
+                    self.assertIn("定价能力很重要。战略会持续复利。", chapter_html)
+                    self.assertNotIn("定价能力很重要。<br/>战略会持续复利。", chapter_html)
 
     def test_review_detects_chapter_brief_context_failure_and_routes_to_brief_rebuild(self) -> None:
         document_id, packet_id = self._bootstrap_to_db()

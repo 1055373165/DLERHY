@@ -145,6 +145,11 @@ def _figure_caption_text(element: ET.Element) -> str:
     return ""
 
 
+def _mark_image_only_metadata_nontranslatable(metadata: dict[str, object]) -> None:
+    metadata["translatable"] = False
+    metadata["nontranslatable_reason"] = "image_only_artifact"
+
+
 def _join_path(base_dir: str, href: str) -> str:
     if not base_dir:
         return href
@@ -276,8 +281,12 @@ class _FallbackHTMLBlockExtractor(HTMLParser):
         text = _normalize_preformatted_text(raw_text) if block_type == "code" else _normalize_text(raw_text)
         metadata = dict(self._active_block["metadata"])
         if not text and metadata.get("image_alt"):
+            _mark_image_only_metadata_nontranslatable(metadata)
+            metadata["image_caption_generated"] = "alt"
             text = str(metadata["image_alt"])
         elif not text and metadata.get("image_src"):
+            _mark_image_only_metadata_nontranslatable(metadata)
+            metadata["image_caption_generated"] = "placeholder"
             text = "[Image]"
         if text or metadata.get("image_src"):
             self.blocks.append(
@@ -480,8 +489,13 @@ class EPUBParser:
             return "footnote"
         return None
 
-    def _block_text_and_metadata(self, element: ET.Element, local_name: str, href: str) -> tuple[str, dict[str, str]]:
-        metadata: dict[str, str] = {"tag": local_name}
+    def _block_text_and_metadata(
+        self,
+        element: ET.Element,
+        local_name: str,
+        href: str,
+    ) -> tuple[str, dict[str, object]]:
+        metadata: dict[str, object] = {"tag": local_name}
         class_tokens = _element_class_tokens(element)
         if _figure_like_container(local_name, class_tokens, element):
             image = _first_descendant(element, {"img"})
@@ -496,8 +510,11 @@ class EPUBParser:
             caption_text = _figure_caption_text(element)
             if caption_text:
                 return caption_text, metadata
+            _mark_image_only_metadata_nontranslatable(metadata)
             if metadata.get("image_alt"):
+                metadata["image_caption_generated"] = "alt"
                 return metadata["image_alt"], metadata
+            metadata["image_caption_generated"] = "placeholder"
             return "[Image]", metadata
         if local_name == "pre":
             return _normalize_preformatted_text("".join(element.itertext())), metadata

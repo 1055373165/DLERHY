@@ -109,6 +109,16 @@ print(run_agent())</pre>
 </html>
 """
 
+IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <div id="cover" class="browsable-container figure-container">
+      <img src="images/cover.png" alt="Cover illustration" />
+    </div>
+  </body>
+</html>
+"""
+
 DEDUP_CONTENT_OPF = """<?xml version="1.0" encoding="UTF-8"?>
 <package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -240,6 +250,25 @@ class EPUBParserTests(unittest.TestCase):
             chapter.blocks[1].text,
             'def run_agent():\n    return "ok"\n\nprint(run_agent())',
         )
+
+    def test_parse_epub_marks_image_only_figure_as_nontranslatable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample-image-only.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", IMAGE_ONLY_FIGURE_XHTML)
+
+            parsed = EPUBParser().parse(epub_path)
+
+        chapter = parsed.chapters[0]
+        self.assertEqual([block.block_type for block in chapter.blocks], ["caption"])
+        self.assertEqual(chapter.blocks[0].text, "Cover illustration")
+        self.assertEqual(chapter.blocks[0].metadata["image_caption_generated"], "alt")
+        self.assertFalse(chapter.blocks[0].metadata["translatable"])
+        self.assertEqual(chapter.blocks[0].metadata["nontranslatable_reason"], "image_only_artifact")
 
     def test_parse_epub_skips_non_linear_and_duplicate_spine_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

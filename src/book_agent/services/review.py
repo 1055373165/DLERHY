@@ -10,6 +10,7 @@ from book_agent.domain.enums import (
     ActionActorType,
     ActionStatus,
     ActionType,
+    BlockType,
     ChapterStatus,
     Detector,
     IssueStatus,
@@ -28,6 +29,10 @@ from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_act
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _normalize_review_text(value: str | None) -> str:
+    return re.sub(r"\s+", " ", (value or "")).strip()
 
 
 def _severity_rank(value: Severity | None) -> int:
@@ -317,6 +322,8 @@ class ReviewService:
             open_questions = packet.packet_json.get("open_questions", [])
             if not open_questions:
                 continue
+            if self._should_skip_packet_context_failure(bundle, packet.id, open_questions):
+                continue
             sentence_ids = self._packet_current_sentence_ids(packet)
             if not sentence_ids:
                 continue
@@ -339,6 +346,16 @@ class ReviewService:
                 )
             )
         return issues
+
+    def _should_skip_packet_context_failure(
+        self,
+        bundle: ChapterReviewBundle,
+        packet_id: str,
+        open_questions: list[str],
+    ) -> bool:
+        if set(open_questions) != {"missing_chapter_title"}:
+            return False
+        return self._is_image_only_untitled_chapter(bundle)
 
     def _pdf_structure_issues(
         self,
@@ -789,7 +806,26 @@ class ReviewService:
         if set(open_questions) != {"missing_chapter_title"}:
             return False
         has_translatable_sentences = any(sentence.translatable for sentence in bundle.sentences)
-        return not has_translatable_sentences and not bundle.packets
+        if not has_translatable_sentences and not bundle.packets:
+            return True
+        return self._is_image_only_untitled_chapter(bundle)
+
+    def _is_image_only_untitled_chapter(self, bundle: ChapterReviewBundle) -> bool:
+        if bundle.chapter.title_src:
+            return False
+        image_only_block_count = 0
+        for block in bundle.blocks:
+            metadata = block.source_span_json or {}
+            if not metadata.get("image_src"):
+                return False
+            if block.block_type not in {BlockType.CAPTION, BlockType.FIGURE, BlockType.IMAGE}:
+                return False
+            normalized_text = _normalize_review_text(block.source_text)
+            normalized_alt = _normalize_review_text(str(metadata.get("image_alt") or ""))
+            if normalized_text and normalized_text != "[Image]" and (not normalized_alt or normalized_text != normalized_alt):
+                return False
+            image_only_block_count += 1
+        return image_only_block_count > 0
 
     def _duplication_issues(
         self,
