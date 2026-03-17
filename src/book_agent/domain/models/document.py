@@ -198,3 +198,27 @@ class MemorySnapshot(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
         default=MemoryStatus.ACTIVE,
     )
+
+
+class DocumentImage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "document_images"
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    block_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("blocks.id", ondelete="SET NULL"),
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    image_type: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    bbox_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    ocr_text: Mapped[str | None] = mapped_column(Text)
+    latex: Mapped[str | None] = mapped_column(Text)
+    alt_text: Mapped[str | None] = mapped_column(Text)
+    width_px: Mapped[int | None] = mapped_column(Integer)
+    height_px: Mapped[int | None] = mapped_column(Integer)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
