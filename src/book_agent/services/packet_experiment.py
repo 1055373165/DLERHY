@@ -13,6 +13,7 @@ from book_agent.services.context_compile import ChapterContextCompileOptions, Ch
 from book_agent.workers.contracts import ConceptCandidate, TranslationUsage, TranslationWorkerOutput, TranslationWorkerResult
 from book_agent.workers.translator import (
     PromptLayout,
+    PromptProfile,
     TranslationTask,
     TranslationWorker,
     TranslationWorkerMetadata,
@@ -60,6 +61,7 @@ class PacketExperimentOptions:
     include_chapter_concepts: bool = True
     prefer_memory_chapter_brief: bool = True
     prompt_layout: PromptLayout = "paragraph-led"
+    prompt_profile: PromptProfile = "current"
     execute: bool = False
     concept_overrides: tuple[ConceptCandidate, ...] = ()
 
@@ -113,6 +115,7 @@ class PacketExperimentService:
             model_name=metadata.model_name,
             prompt_version=metadata.prompt_version,
             prompt_layout=options.prompt_layout,
+            prompt_profile=options.prompt_profile,
         )
 
         worker_output: TranslationWorkerOutput | None = None
@@ -142,6 +145,7 @@ class PacketExperimentService:
                 "include_chapter_concepts": options.include_chapter_concepts,
                 "prefer_memory_chapter_brief": options.prefer_memory_chapter_brief,
                 "prompt_layout": options.prompt_layout,
+                "prompt_profile": options.prompt_profile,
                 "execute": options.execute,
                 "concept_overrides": [concept.model_dump() for concept in options.concept_overrides],
             },

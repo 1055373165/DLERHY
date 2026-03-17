@@ -120,6 +120,7 @@ class TranslationPromptRequest:
 
 
 PromptLayout = Literal["paragraph-led", "sentence-led"]
+PromptProfile = Literal["current", "role-style-v2", "role-style-memory-v2"]
 
 
 class TranslationModelClient(Protocol):
@@ -133,6 +134,7 @@ def build_translation_prompt_request(
     model_name: str,
     prompt_version: str,
     prompt_layout: PromptLayout = "paragraph-led",
+    prompt_profile: PromptProfile = "current",
 ) -> TranslationPromptRequest:
     packet = task.context_packet
     heading_path = " > ".join(packet.heading_path) if packet.heading_path else "(root)"
@@ -171,8 +173,32 @@ def build_translation_prompt_request(
         )
         contract_lines[4] = "- Use the current sentences as the primary translation ledger and keep paragraph context coherent."
 
+    style_lines: list[str] = []
+    memory_handling_lines: list[str] = []
+    if prompt_profile in {"role-style-v2", "role-style-memory-v2"}:
+        style_lines = [
+            "- Write like a polished Chinese technical translator, not a sentence-by-sentence converter.",
+            "- Prefer established Chinese technical phrasing and avoid literal calques of English abstract noun chains.",
+            "- Keep terminology stable across the packet and maintain a professional, readable register.",
+            "- Preserve rhetorical emphasis, but do not over-fragment paragraphs unless the source clearly intends it.",
+        ]
+    if prompt_profile == "role-style-memory-v2":
+        memory_handling_lines = [
+            "- Treat Locked and Relevant Terms as authoritative whenever they match the source.",
+            "- Treat locked Chapter Concept Memory as the default rendering for recurring concepts unless the current packet explicitly redefines them.",
+            "- Use Previous Accepted Translations to continue local discourse and terminology continuity across paragraphs.",
+            "- If wording remains ambiguous or risky, keep the translated body clean and report the uncertainty only via structured low_confidence_flags or notes.",
+        ]
+
     sections = [
         *_format_section("Core Translation Contract:", contract_lines),
+    ]
+    if style_lines:
+        sections.extend(_format_section("Chinese Style Priorities:", style_lines))
+    if memory_handling_lines:
+        sections.extend(_format_section("Memory and Ambiguity Handling:", memory_handling_lines))
+    sections.extend(
+        [
         *_format_section(
             "Section Context:",
             [
@@ -186,7 +212,7 @@ def build_translation_prompt_request(
         *_format_section("Previous Accepted Translations (same local context):", previous_translation_lines),
         *_format_section("Previous Source Context:", prev_block_lines),
         *_format_section("Upcoming Source Context:", next_block_lines),
-    ]
+    ])
     if prompt_layout == "sentence-led":
         sections.extend(
             [
@@ -202,12 +228,26 @@ def build_translation_prompt_request(
             ]
         )
     user_prompt = "\n".join(sections)
-    system_prompt = (
-        "You are a high-fidelity book translation worker. "
-        "Translate English book content into natural Chinese with paragraph-level coherence, "
-        "preserve meaning, respect locked terms, and do not translate protected spans. "
-        "You may reorganize sentence structure, but alignment coverage must remain complete."
-    )
+    if prompt_profile == "current":
+        system_prompt = (
+            "You are a high-fidelity book translation worker. "
+            "Translate English book content into natural Chinese with paragraph-level coherence, "
+            "preserve meaning, respect locked terms, and do not translate protected spans. "
+            "You may reorganize sentence structure, but alignment coverage must remain complete."
+        )
+    elif prompt_profile == "role-style-v2":
+        system_prompt = (
+            "You are a senior technical translator and localizer for English-to-Chinese books, papers, and business documents. "
+            "Produce accurate, professional, publication-grade Chinese that preserves structure and terminology consistency. "
+            "Prefer natural Chinese technical prose over literal sentence mirroring, while keeping alignment coverage complete."
+        )
+    else:
+        system_prompt = (
+            "You are a senior English-to-Chinese technical translator working inside a structured translation system. "
+            "Translate with paragraph-first coherence, authoritative use of locked terms and chapter concept memory, and clean professional Chinese. "
+            "Keep the translated body free of inline translator notes; report uncertainty only through structured notes or low-confidence flags. "
+            "Alignment coverage must remain complete."
+        )
     return TranslationPromptRequest(
         packet_id=packet.packet_id,
         model_name=model_name,

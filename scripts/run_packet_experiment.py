@@ -57,6 +57,11 @@ def main() -> int:
         default="paragraph-led",
     )
     parser.add_argument(
+        "--prompt-profile",
+        choices=("current", "role-style-v2", "role-style-memory-v2"),
+        default="current",
+    )
+    parser.add_argument(
         "--execute",
         action="store_true",
         help="Actually call the configured translation worker. Defaults to dry-run prompt/context export only.",
@@ -103,6 +108,7 @@ def main() -> int:
                     include_chapter_concepts=not args.disable_chapter_concepts,
                     prefer_memory_chapter_brief=not args.disable_memory_brief,
                     prompt_layout=args.prompt_layout,
+                    prompt_profile=args.prompt_profile,
                     execute=args.execute,
                     concept_overrides=tuple(args.concept_override),
                 ),

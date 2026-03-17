@@ -487,6 +487,79 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_request.user_prompt.index("Current Paragraph:"),
         )
 
+    def test_build_translation_prompt_request_supports_prompt_profiles(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-1",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="Context engineering shapes reasoning.",
+                )
+            ],
+            chapter_brief="Chapter summary.",
+            chapter_concepts=[
+                ConceptCandidate(
+                    source_term="context engineering",
+                    canonical_zh="上下文工程",
+                    status="locked",
+                    confidence=1.0,
+                    times_seen=3,
+                )
+            ],
+        )
+        current_sentences = [
+            Sentence(
+                id="s1",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=1,
+                source_text="Context engineering shapes reasoning.",
+                normalized_text="Context engineering shapes reasoning.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            )
+        ]
+
+        current_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="current",
+        )
+        role_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-v2",
+        )
+        memory_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-memory-v2",
+        )
+
+        self.assertIn("high-fidelity book translation worker", current_prompt.system_prompt)
+        self.assertIn("senior technical translator and localizer", role_prompt.system_prompt)
+        self.assertIn("Chinese Style Priorities:", role_prompt.user_prompt)
+        self.assertIn("Memory and Ambiguity Handling:", memory_prompt.user_prompt)
+        self.assertIn("locked terms and chapter concept memory", memory_prompt.system_prompt)
+
     def test_context_compiler_can_disable_chapter_memory_features(self) -> None:
         packet = ContextPacket(
             packet_id="pkt-1",
