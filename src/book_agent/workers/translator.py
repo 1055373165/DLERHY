@@ -56,6 +56,15 @@ def _packet_block_lines(blocks: list[PacketBlock]) -> list[str]:
     return lines
 
 
+def _current_paragraph_lines(packet: ContextPacket) -> list[str]:
+    if not packet.current_blocks:
+        return ["- none"]
+    lines: list[str] = []
+    for index, block in enumerate(packet.current_blocks, start=1):
+        lines.append(f"- P{index} [{block.block_type}] {block.text}")
+    return lines
+
+
 @dataclass(frozen=True, slots=True)
 class TranslationWorkerMetadata:
     worker_name: str
@@ -120,21 +129,23 @@ def build_translation_prompt_request(
     ] or ["- none"]
     prev_block_lines = _packet_block_lines(packet.prev_blocks)
     next_block_lines = _packet_block_lines(packet.next_blocks)
+    current_paragraph_lines = _current_paragraph_lines(packet)
     user_prompt = "\n".join(
         [
             *_format_section(
                 "Core Translation Contract:",
                 [
-                    "- Translate every translatable sentence into natural Chinese.",
+                    "- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.",
                     "- Reuse the canonical Chinese rendering of any locked or previously established concept.",
                     "- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.",
                     "- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.",
+                    "- Use the sentence ledger only for alignment, coverage, and low-confidence flags.",
                     "- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
                     "- Return JSON that matches the provided response schema.",
                 ],
             ),
             *_format_section(
-                "Book and Chapter Context:",
+                "Section Context:",
                 [
                     f"- Heading Path: {heading_path}",
                     f"- Chapter Brief: {packet.chapter_brief or '(none)'}",
@@ -145,12 +156,13 @@ def build_translation_prompt_request(
             *_format_section("Previous Accepted Translations (same local context):", previous_translation_lines),
             *_format_section("Previous Source Context:", prev_block_lines),
             *_format_section("Upcoming Source Context:", next_block_lines),
-            *_format_section("Current Sentences:", sentence_lines),
+            *_format_section("Current Paragraph:", current_paragraph_lines),
+            *_format_section("Sentence Ledger:", sentence_lines),
         ]
     )
     system_prompt = (
         "You are a high-fidelity book translation worker. "
-        "Translate every translatable English sentence into natural Chinese, "
+        "Translate English book content into natural Chinese with paragraph-level coherence, "
         "preserve meaning, respect locked terms, and do not translate protected spans. "
         "You may reorganize sentence structure, but alignment coverage must remain complete."
     )

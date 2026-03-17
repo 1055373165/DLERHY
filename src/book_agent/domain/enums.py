@@ -79,6 +79,7 @@ class MemoryScopeType(StrEnum):
 
 class SnapshotType(StrEnum):
     CHAPTER_BRIEF = "chapter_brief"
+    CHAPTER_TRANSLATION_MEMORY = "chapter_translation_memory"
     TERMBASE = "termbase"
     ENTITY_REGISTRY = "entity_registry"
     STYLE_DELTA = "style_delta"

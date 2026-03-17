@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ChapterStatus, PacketSentenceRole, TargetSegmentStatus
-from book_agent.domain.models import Chapter, Sentence
+from book_agent.domain.models import Block, Chapter, Sentence
 from book_agent.domain.models.translation import (
     AlignmentEdge,
     PacketSentenceMap,
@@ -35,7 +35,11 @@ class TranslationRepository:
             raise ValueError(f"Translation packet not found: {packet_id}")
 
         mappings = self.session.scalars(
-            select(PacketSentenceMap).where(PacketSentenceMap.packet_id == packet_id)
+            select(PacketSentenceMap)
+            .join(Sentence, PacketSentenceMap.sentence_id == Sentence.id)
+            .join(Block, Sentence.block_id == Block.id)
+            .where(PacketSentenceMap.packet_id == packet_id)
+            .order_by(Block.ordinal.asc(), Sentence.ordinal_in_block.asc())
         ).all()
         sentence_ids = [mapping.sentence_id for mapping in mappings]
         sentences = self.session.scalars(

@@ -5,11 +5,29 @@ from unittest.mock import patch
 from pathlib import Path
 import sys
 
+from sqlalchemy import select
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.domain.enums import (
+    ArtifactStatus,
+    BlockType,
+    ChapterStatus,
+    DocumentStatus,
+    MemoryScopeType,
+    PacketSentenceRole,
+    PacketStatus,
+    PacketType,
+    ProtectedPolicy,
+    SnapshotType,
+    SentenceStatus,
+    SourceType,
+)
+from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
+from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -20,12 +38,19 @@ from book_agent.services.translation import TranslationService
 from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.contracts import (
     AlignmentSuggestion,
+    ContextPacket,
+    PacketBlock,
     TranslationTargetSegment,
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
 from book_agent.workers.providers.openai_compatible import OpenAICompatibleTranslationClient
-from book_agent.workers.translator import LLMTranslationWorker, TranslationPromptRequest
+from book_agent.workers.translator import (
+    LLMTranslationWorker,
+    TranslationPromptRequest,
+    TranslationTask,
+    build_translation_prompt_request,
+)
 
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -164,6 +189,9 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.session_factory = build_session_factory(engine=self.engine)
 
     def _bootstrap_to_db(self) -> tuple[str, list[str]]:
+        return self._bootstrap_custom_chapter(CHAPTER_XHTML)
+
+    def _bootstrap_custom_chapter(self, chapter_xhtml: str) -> tuple[str, list[str]]:
         with tempfile.TemporaryDirectory() as tmpdir:
             epub_path = Path(tmpdir) / "sample.epub"
             with zipfile.ZipFile(epub_path, "w") as archive:
@@ -171,7 +199,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                 archive.writestr("META-INF/container.xml", CONTAINER_XML)
                 archive.writestr("OEBPS/content.opf", CONTENT_OPF)
                 archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
-                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", chapter_xhtml)
 
             artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
 
@@ -217,7 +245,226 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertNotIn(first_sentence_id, fake_client.requests[0].user_prompt)
         self.assertNotIn("Packet ID:", fake_client.requests[0].user_prompt)
         self.assertEqual(fake_client.requests[0].sentence_alias_map["S1"], first_sentence_id)
+        self.assertIn("Current Paragraph:", fake_client.requests[0].user_prompt)
+        self.assertIn("Sentence Ledger:", fake_client.requests[0].user_prompt)
         self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
+
+    def test_load_packet_bundle_restores_current_sentence_order_by_block_ordinal(self) -> None:
+        document_id = "11111111-1111-1111-1111-111111111111"
+        chapter_id = "22222222-2222-2222-2222-222222222222"
+        block_id = "33333333-3333-3333-3333-333333333333"
+        packet_id = "44444444-4444-4444-4444-444444444444"
+        sentence_ids = [
+            "ffffffff-ffff-ffff-ffff-fffffffffff1",
+            "00000000-0000-0000-0000-000000000002",
+            "88888888-8888-8888-8888-888888888883",
+        ]
+        sentence_texts = [
+            "First sentence establishes the point.",
+            "Second sentence develops the argument.",
+            "Third sentence closes the paragraph.",
+        ]
+
+        with self.session_factory() as session:
+            session.add(
+                Document(
+                    id=document_id,
+                    source_type=SourceType.EPUB,
+                    file_fingerprint="fingerprint-1",
+                    source_path="/tmp/sample.epub",
+                    title="Packet Order Test",
+                    author="Tester",
+                    src_lang="en",
+                    tgt_lang="zh",
+                    status=DocumentStatus.ACTIVE,
+                    parser_version=1,
+                    segmentation_version=1,
+                    active_book_profile_version=1,
+                    metadata_json={},
+                )
+            )
+            session.commit()
+            session.add(
+                Chapter(
+                    id=chapter_id,
+                    document_id=document_id,
+                    ordinal=1,
+                    title_src="Chapter One",
+                    title_tgt=None,
+                    anchor_start=None,
+                    anchor_end=None,
+                    status=ChapterStatus.PACKET_BUILT,
+                    summary_version=1,
+                    risk_level=None,
+                    metadata_json={},
+                )
+            )
+            session.commit()
+            session.add(
+                Block(
+                    id=block_id,
+                    chapter_id=chapter_id,
+                    ordinal=1,
+                    block_type=BlockType.PARAGRAPH,
+                    source_text=" ".join(sentence_texts),
+                    normalized_text=" ".join(sentence_texts),
+                    source_anchor=None,
+                    source_span_json={},
+                    parse_confidence=1.0,
+                    protected_policy=ProtectedPolicy.TRANSLATE,
+                    status=ArtifactStatus.ACTIVE,
+                )
+            )
+            session.commit()
+            for ordinal, (sentence_id, text) in enumerate(zip(sentence_ids, sentence_texts, strict=True), start=1):
+                session.add(
+                    Sentence(
+                        id=sentence_id,
+                        block_id=block_id,
+                        chapter_id=chapter_id,
+                        document_id=document_id,
+                        ordinal_in_block=ordinal,
+                        source_text=text,
+                        normalized_text=text,
+                        source_lang="en",
+                        translatable=True,
+                        nontranslatable_reason=None,
+                        source_anchor=None,
+                        source_span_json={},
+                        upstream_confidence=1.0,
+                        sentence_status=SentenceStatus.PENDING,
+                        active_version=1,
+                    )
+                )
+            session.commit()
+
+            context_packet = ContextPacket(
+                packet_id=packet_id,
+                document_id=document_id,
+                chapter_id=chapter_id,
+                packet_type="translate",
+                book_profile_version=1,
+                chapter_brief_version=1,
+                heading_path=["Chapter One"],
+                current_blocks=[
+                    PacketBlock(
+                        block_id=block_id,
+                        block_type="paragraph",
+                        sentence_ids=sentence_ids,
+                        text=" ".join(sentence_texts),
+                    )
+                ],
+                chapter_brief="Packet order regression test.",
+                style_constraints={"tone": "faithful-clear"},
+                budget_hint={"max_input_tokens": 6000, "max_output_tokens": 2500},
+            )
+            session.add(
+                TranslationPacket(
+                    id=packet_id,
+                    chapter_id=chapter_id,
+                    block_start_id=block_id,
+                    block_end_id=block_id,
+                    packet_type=PacketType.TRANSLATE,
+                    book_profile_version=1,
+                    chapter_brief_version=1,
+                    termbase_version=1,
+                    entity_snapshot_version=1,
+                    style_snapshot_version=1,
+                    packet_json=context_packet.model_dump(mode="json"),
+                    risk_score=0.1,
+                    status=PacketStatus.BUILT,
+                )
+            )
+            session.commit()
+            for sentence_id in sentence_ids:
+                session.add(
+                    PacketSentenceMap(
+                        packet_id=packet_id,
+                        sentence_id=sentence_id,
+                        role=PacketSentenceRole.CURRENT,
+                    )
+                )
+            session.commit()
+
+            bundle = TranslationRepository(session).load_packet_bundle(packet_id)
+            self.assertEqual([sentence.id for sentence in bundle.current_sentences], sentence_ids)
+
+            prompt_request = build_translation_prompt_request(
+                TranslationTask(
+                    context_packet=bundle.context_packet,
+                    current_sentences=bundle.current_sentences,
+                ),
+                model_name="mock-llm",
+                prompt_version="packet-order-test",
+            )
+
+        first_index = prompt_request.user_prompt.index(sentence_texts[0])
+        second_index = prompt_request.user_prompt.index(sentence_texts[1])
+        third_index = prompt_request.user_prompt.index(sentence_texts[2])
+        self.assertLess(first_index, second_index)
+        self.assertLess(second_index, third_index)
+
+    def test_translation_service_reuses_chapter_memory_across_nonadjacent_packets(self) -> None:
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>First memory paragraph introduces the core concept.</p>
+    <p>Second memory paragraph extends the discussion.</p>
+    <p>Third memory paragraph keeps building the case.</p>
+    <p>Fourth memory paragraph revisits the core concept in a new light.</p>
+  </body>
+</html>
+"""
+        document_id, packet_ids = self._bootstrap_custom_chapter(chapter_xhtml)
+        heading_packet_id, first_packet_id, second_packet_id, third_packet_id, fourth_packet_id = packet_ids[:5]
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            service = TranslationService(repository)
+            service.execute_packet(heading_packet_id)
+            service.execute_packet(first_packet_id)
+            service.execute_packet(second_packet_id)
+            service.execute_packet(third_packet_id)
+            session.commit()
+
+            latest_memory = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+            self.assertIsNotNone(latest_memory)
+            self.assertEqual(latest_memory.content_json["last_packet_id"], third_packet_id)
+            self.assertGreaterEqual(len(latest_memory.content_json["recent_accepted_translations"]), 3)
+
+        fake_client = FakeTranslationClient()
+        worker = LLMTranslationWorker(
+            fake_client,
+            model_name="mock-llm",
+            prompt_version="p0.llm.v1",
+            runtime_config={"provider": "fake"},
+        )
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            bundle = repository.load_packet_bundle(fourth_packet_id)
+            fake_client.source_sentence_ids = ["S1"]
+            TranslationService(repository, worker=worker).execute_packet(fourth_packet_id)
+            session.commit()
+
+            self.assertEqual(bundle.current_sentences[0].source_text, "Fourth memory paragraph revisits the core concept in a new light.")
+
+        self.assertEqual(len(fake_client.requests), 1)
+        prompt = fake_client.requests[0].user_prompt
+        self.assertIn(
+            "First memory paragraph introduces the core concept. => ZH::First memory paragraph introduces the core concept.",
+            prompt,
+        )
+        self.assertIn("Current Paragraph:", prompt)
 
     def test_llm_worker_drops_invalid_sentence_ids_before_persistence(self) -> None:
         _, packet_ids = self._bootstrap_to_db()

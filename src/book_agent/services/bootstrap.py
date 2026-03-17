@@ -12,6 +12,7 @@ from book_agent.domain.block_rules import protected_policy_for_block, translatab
 from book_agent.domain.context.builders import (
     BookProfileBuilder,
     ChapterBriefBuilder,
+    ChapterTranslationMemoryBuilder,
     ContextPacketBuilder,
 )
 from book_agent.domain.enums import (
@@ -424,6 +425,7 @@ class BootstrapPipeline:
         segmentation_service: SegmentationService | None = None,
         profile_builder: BookProfileBuilder | None = None,
         chapter_brief_builder: ChapterBriefBuilder | None = None,
+        chapter_translation_memory_builder: ChapterTranslationMemoryBuilder | None = None,
         context_packet_builder: ContextPacketBuilder | None = None,
     ):
         self.ingest_service = ingest_service or IngestService()
@@ -431,6 +433,9 @@ class BootstrapPipeline:
         self.segmentation_service = segmentation_service or SegmentationService()
         self.profile_builder = profile_builder or BookProfileBuilder()
         self.chapter_brief_builder = chapter_brief_builder or ChapterBriefBuilder()
+        self.chapter_translation_memory_builder = (
+            chapter_translation_memory_builder or ChapterTranslationMemoryBuilder()
+        )
         self.context_packet_builder = context_packet_builder or ContextPacketBuilder()
 
     def run(self, file_path: str | Path) -> BootstrapArtifacts:
@@ -452,6 +457,11 @@ class BootstrapPipeline:
             chapters=parse_artifacts.chapters,
             blocks=parse_artifacts.blocks,
             sentences=segment_artifacts.sentences,
+        )
+        chapter_translation_memories = self.chapter_translation_memory_builder.build_many(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            chapter_briefs=chapter_briefs,
         )
         packet_result = self.context_packet_builder.build_many(
             document=parse_artifacts.document,
@@ -482,6 +492,7 @@ class BootstrapPipeline:
                 profile_result.termbase_snapshot,
                 profile_result.entity_snapshot,
                 *chapter_briefs,
+                *chapter_translation_memories,
             ],
             translation_packets=packet_result.translation_packets,
             packet_sentence_maps=packet_result.packet_sentence_maps,

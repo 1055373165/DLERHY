@@ -82,6 +82,9 @@ class BootstrapPipelineTests(unittest.TestCase):
         self.assertEqual(result.book_profile.book_type.value, "business")
         self.assertEqual(len(result.translation_packets), 3)
         self.assertTrue(any(snapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF for snapshot in result.memory_snapshots))
+        self.assertTrue(
+            any(snapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY for snapshot in result.memory_snapshots)
+        )
         self.assertTrue(any(mapping.role == PacketSentenceRole.CURRENT for mapping in result.packet_sentence_maps))
         self.assertGreaterEqual(len(result.job_runs), 6)
 

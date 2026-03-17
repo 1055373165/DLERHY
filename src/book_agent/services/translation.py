@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.models import MemorySnapshot, Sentence
 from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunStatus, SegmentType, SentenceStatus, TargetSegmentStatus
-from book_agent.domain.models import Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
+from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
+from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.workers.contracts import TranslationUsage, TranslationWorkerOutput, TranslationWorkerResult
 from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
 
@@ -67,27 +70,47 @@ class TranslationService:
         self,
         repository: TranslationRepository,
         worker: TranslationWorker | None = None,
+        chapter_memory_repository: ChapterTranslationMemoryRepository | None = None,
+        context_compiler: ChapterContextCompiler | None = None,
     ):
         self.repository = repository
         self.worker = worker or EchoTranslationWorker()
+        self.chapter_memory_repository = chapter_memory_repository or ChapterTranslationMemoryRepository(
+            repository.session
+        )
+        self.context_compiler = context_compiler or ChapterContextCompiler()
 
     def execute_packet(self, packet_id: str) -> TranslationExecutionArtifacts:
         bundle = self.repository.load_packet_bundle(packet_id)
+        chapter_memory_snapshot = self.chapter_memory_repository.load_latest(
+            document_id=bundle.context_packet.document_id,
+            chapter_id=bundle.context_packet.chapter_id,
+        )
+        compiled_context_packet = self.context_compiler.compile(
+            bundle.context_packet,
+            chapter_memory_snapshot=chapter_memory_snapshot,
+        )
         worker_result = self._coerce_worker_result(
             self.worker.translate(
                 TranslationTask(
-                    context_packet=bundle.context_packet,
+                    context_packet=compiled_context_packet,
                     current_sentences=bundle.current_sentences,
                 )
             )
         )
-        artifacts = self._build_artifacts(bundle, worker_result)
+        artifacts = self._build_artifacts(bundle, worker_result, chapter_memory_snapshot)
         self.repository.save_translation_artifacts(
             translation_run=artifacts.translation_run,
             target_segments=artifacts.target_segments,
             alignment_edges=artifacts.alignment_edges,
             updated_sentences=artifacts.updated_sentences,
             packet=bundle.packet,
+        )
+        self._write_chapter_memory(
+            bundle=bundle,
+            artifacts=artifacts,
+            current_snapshot=chapter_memory_snapshot,
+            compiled_context_packet=compiled_context_packet,
         )
         self.repository.session.flush()
         return artifacts
@@ -96,6 +119,7 @@ class TranslationService:
         self,
         bundle: TranslationPacketBundle,
         worker_result: TranslationWorkerResult,
+        chapter_memory_snapshot: MemorySnapshot | None,
     ) -> TranslationExecutionArtifacts:
         now = _utcnow()
         attempt = self.repository.next_attempt(bundle.packet.id)
@@ -108,6 +132,10 @@ class TranslationService:
             model_name=metadata.model_name,
             model_config_json={
                 "worker": metadata.worker_name,
+                "context_compile_version": self.context_compiler.compile_version,
+                "chapter_memory_snapshot_version_used": (
+                    chapter_memory_snapshot.version if chapter_memory_snapshot is not None else None
+                ),
                 **metadata.runtime_config,
             },
             prompt_version=metadata.prompt_version,
@@ -182,6 +210,57 @@ class TranslationService:
             target_segments=target_segments,
             alignment_edges=alignment_edges,
             updated_sentences=updated_sentences,
+        )
+
+    def _write_chapter_memory(
+        self,
+        *,
+        bundle: TranslationPacketBundle,
+        artifacts: TranslationExecutionArtifacts,
+        current_snapshot: MemorySnapshot | None,
+        compiled_context_packet,
+    ) -> None:
+        existing_content = dict(current_snapshot.content_json) if current_snapshot is not None else {}
+        recent_accepted = existing_content.get("recent_accepted_translations", [])
+        if not isinstance(recent_accepted, list):
+            recent_accepted = []
+
+        target_excerpt = " ".join(segment.text_zh.strip() for segment in artifacts.target_segments if segment.text_zh).strip()
+        source_excerpt = " ".join(
+            (sentence.normalized_text or sentence.source_text or "").strip()
+            for sentence in bundle.current_sentences
+        ).strip()
+        if source_excerpt and target_excerpt:
+            entry: dict[str, Any] = {
+                "packet_id": bundle.packet.id,
+                "block_id": bundle.packet.block_start_id,
+                "source_excerpt": source_excerpt,
+                "target_excerpt": target_excerpt,
+                "source_sentence_ids": [sentence.id for sentence in bundle.current_sentences],
+            }
+            recent_accepted = [
+                item
+                for item in recent_accepted
+                if not (isinstance(item, dict) and item.get("packet_id") == bundle.packet.id)
+            ]
+            recent_accepted.append(entry)
+            recent_accepted = recent_accepted[-4:]
+
+        content_json = {
+            "schema_version": 1,
+            "chapter_id": bundle.packet.chapter_id,
+            "chapter_title": existing_content.get("chapter_title"),
+            "heading_path": existing_content.get("heading_path") or compiled_context_packet.heading_path,
+            "chapter_brief": existing_content.get("chapter_brief") or compiled_context_packet.chapter_brief,
+            "recent_accepted_translations": recent_accepted,
+            "last_packet_id": bundle.packet.id,
+            "last_translation_run_id": artifacts.translation_run.id,
+        }
+        self.chapter_memory_repository.supersede_and_create_next(
+            current_snapshot=current_snapshot,
+            document_id=bundle.context_packet.document_id,
+            chapter_id=bundle.context_packet.chapter_id,
+            content_json=content_json,
         )
 
     def _coerce_worker_result(

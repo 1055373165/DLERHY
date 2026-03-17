@@ -226,6 +226,67 @@ class ChapterBriefBuilder:
         )
 
 
+class ChapterTranslationMemoryBuilder:
+    def build_many(
+        self,
+        document: Document,
+        chapters: list[Chapter],
+        chapter_briefs: list[MemorySnapshot],
+        *,
+        version: int = 1,
+    ) -> list[MemorySnapshot]:
+        briefs_by_scope = {brief.scope_id: brief for brief in chapter_briefs}
+        snapshots: list[MemorySnapshot] = []
+        for chapter in chapters:
+            chapter_brief = briefs_by_scope.get(chapter.id)
+            snapshots.append(
+                self.build(
+                    document=document,
+                    chapter=chapter,
+                    chapter_brief=chapter_brief,
+                    version=version,
+                )
+            )
+        return snapshots
+
+    def build(
+        self,
+        *,
+        document: Document,
+        chapter: Chapter,
+        chapter_brief: MemorySnapshot | None,
+        version: int = 1,
+    ) -> MemorySnapshot:
+        now = _utcnow()
+        brief_content = chapter_brief.content_json if chapter_brief is not None else {}
+        return MemorySnapshot(
+            id=stable_id(
+                "snapshot",
+                document.id,
+                SnapshotType.CHAPTER_TRANSLATION_MEMORY.value,
+                chapter.id,
+                version,
+            ),
+            document_id=document.id,
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id=chapter.id,
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=version,
+            content_json={
+                "schema_version": 1,
+                "chapter_id": chapter.id,
+                "chapter_title": chapter.title_src,
+                "heading_path": brief_content.get("heading_path", [chapter.title_src] if chapter.title_src else []),
+                "chapter_brief": brief_content.get("summary"),
+                "recent_accepted_translations": [],
+                "last_packet_id": None,
+                "last_translation_run_id": None,
+            },
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+
+
 class ContextPacketBuilder:
     def build_many(
         self,
