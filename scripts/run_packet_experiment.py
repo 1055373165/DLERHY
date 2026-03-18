@@ -59,7 +59,7 @@ def main() -> int:
     parser.add_argument(
         "--prompt-profile",
         choices=("current", "role-style-v2", "role-style-memory-v2"),
-        default="current",
+        default="role-style-v2",
     )
     parser.add_argument(
         "--execute",

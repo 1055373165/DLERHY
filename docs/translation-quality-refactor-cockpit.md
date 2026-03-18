@@ -297,6 +297,8 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - [x] 已完成 `context engineering -> 上下文工程` 的 live 锁定写回与单 packet 真正验证
 - [x] `STYLE_DRIFT` 第二阶段已接入：开始覆盖真实 packet 中暴露出的回退变体 `证据权重表明 / 上下文更准确的输出`
 - [x] 已完成 A/B/C 提示词矩阵实验（3 个固定 packet × 3 组 prompt profile）
+- [x] 已将 `role-style-v2` 提升为实验工位默认提示词基线；`run_packet_experiment.py` 与 `PacketExperimentOptions` 默认值已切换，相关回归已更新
+- [x] `STYLE_DRIFT` 第二阶段已继续扩面：开始覆盖 `语境工程 / 证据权重显示 / 更具上下文准确性的输出结果` 等更接近真实回退的变体，并在 evidence 中记录 `matched_target_excerpt`
 
 ### Planned
 
@@ -304,7 +306,6 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
 - [ ] 基于这次 `denoised execute` 结果，决定是否继续收紧 `concept registry` 候选策略，尤其是 `智能体AI` 这类仍需人工裁决的术语
 - [ ] 基于 `context engineering` 实验结果，决定是否把“临时 override -> 锁定写回”升成正式术语裁决流程
 - [ ] 决定是否把 `agentic AI -> 智能体式AI` 正式提升为当前章节默认裁决，并作为后续 packet 的首选基线
-- [ ] 决定是否将 `role-style-v2` 提升为新的实验默认提示词基线
 - [ ] 再决定下一刀是继续强化 concept policy，还是扩大 `STYLE_DRIFT` 规则面
 
 ## 8. Validation Protocol
@@ -650,3 +651,13 @@ Scope: `Agentic AI Data Architectures How Distributed SQL Unifies Enterprise Sca
   - 零 token 锁定写回
   - 单 packet 下游连锁验证
 - 当前残余只剩最后一层决策：要不要把这条裁决正式提升为主链路默认策略，以及是否把类似流程产品化到更多高价值概念。
+- 已将 `role-style-v2` 提升为实验工位默认提示词基线：
+  - [PacketExperimentOptions](/Users/smy/project/book-agent/src/book_agent/services/packet_experiment.py) 默认 `prompt_profile` 已从 `current` 切到 `role-style-v2`
+  - [run_packet_experiment.py](/Users/smy/project/book-agent/scripts/run_packet_experiment.py) 的 `--prompt-profile` 默认值也已同步切换
+  - 对应回归已更新，dry-run 产物默认会记录 `prompt_profile = role-style-v2`
+- 这一刀仍然只作用于实验工位，不直接改动正式主链路默认提示词；目标是后续所有 packet 级实验先统一建立在当前最优实验基线上，再继续比较 `STYLE_DRIFT` 与术语策略的增益。
+- 已继续扩展 `STYLE_DRIFT` 第二阶段规则面：
+  - `context engineering` 现会同时抓 `情境工程 / 语境工程`
+  - `weight of evidence` 现会同时抓 `证据权重显示 / 证据重量证明` 等更宽的字面直译变体
+  - `contextually accurate outputs` 现可抓到 `更具上下文准确性的输出结果` 这类真实坏味道
+  - issue evidence 现会写出 `matched_target_excerpt`，后续做 packet rerun 决策时不必再从整段译文里人工定位命中片段

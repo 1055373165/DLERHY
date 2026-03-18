@@ -61,7 +61,7 @@ class PacketExperimentOptions:
     include_chapter_concepts: bool = True
     prefer_memory_chapter_brief: bool = True
     prompt_layout: PromptLayout = "paragraph-led"
-    prompt_profile: PromptProfile = "current"
+    prompt_profile: PromptProfile = "role-style-v2"
     execute: bool = False
     concept_overrides: tuple[ConceptCandidate, ...] = ()
 

@@ -58,21 +58,27 @@ STYLE_DRIFT_RULES = (
     _StyleDriftRule(
         pattern_id="context_engineering_literal",
         source_pattern=re.compile(r"\bcontext engineering\b", re.IGNORECASE),
-        target_pattern=re.compile(r"情境工程"),
+        target_pattern=re.compile(r"(?:情境|语境)工程"),
         preferred_hint="上下文工程",
         message="核心概念出现明显字面直译，未采用更自然的技术表达。",
     ),
     _StyleDriftRule(
         pattern_id="weight_of_evidence_literal",
         source_pattern=re.compile(r"\bweight of evidence\b", re.IGNORECASE),
-        target_pattern=re.compile(r"证据(?:的)?(?:分量|权重)(?:表明|显示|说明)?"),
+        target_pattern=re.compile(r"证据(?:的)?(?:分量|权重|重量)(?:表明|显示|说明|证明)?"),
         preferred_hint="大量证据表明 / 现有证据表明",
         message="英文习语被按字面结构硬译，中文技术写作感偏硬。",
     ),
     _StyleDriftRule(
         pattern_id="contextually_accurate_outputs_literal",
         source_pattern=re.compile(r"\bcontextually accurate outputs?\b", re.IGNORECASE),
-        target_pattern=re.compile(r"上下文更准确的输出"),
+        target_pattern=re.compile(
+            r"(?:"
+            r"(?:上下文|情境)(?:更|更加)(?:准确|精确)(?:的)?(?:输出|结果)"
+            r"|更具(?:上下文|情境)准确性(?:的)?(?:输出|结果)"
+            r"|(?:上下文|情境)准确性(?:更高)?(?:的)?(?:输出|结果)"
+            r")"
+        ),
         preferred_hint="更符合上下文的输出",
         message="英文中的 contextually accurate 被按字面结构硬译，中文表达仍显生硬。",
     ),
@@ -375,7 +381,8 @@ class ReviewService:
             for rule in STYLE_DRIFT_RULES:
                 if not rule.source_pattern.search(sentence.source_text or ""):
                     continue
-                if not rule.target_pattern.search(aligned_text):
+                target_match = rule.target_pattern.search(aligned_text)
+                if target_match is None:
                     continue
                 issues.append(
                     self._make_issue(
@@ -393,6 +400,7 @@ class ReviewService:
                             "style_rule": rule.pattern_id,
                             "source_text": sentence.source_text,
                             "actual_target_text": aligned_text,
+                            "matched_target_excerpt": target_match.group(0),
                             "preferred_hint": rule.preferred_hint,
                             "chapter_memory_snapshot_version": chapter_memory_snapshot_version,
                             "message": rule.message,

@@ -655,6 +655,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             "sqlite+pysqlite:///./artifacts/book-agent.db",
         )
         self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
+        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "role-style-v2")
         self.assertFalse(artifacts.payload["options"]["execute"])
         self.assertIsNone(artifacts.payload["worker_output"])
         self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")

@@ -348,7 +348,7 @@ class LiteralismWorker:
                 )
             elif "weight of evidence" in sentence.source_text:
                 text = (
-                    "本质上，证据权重表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且上下文更准确的输出。"
+                    "本质上，证据权重显示，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且更具上下文准确性的输出结果。"
                 )
             else:
                 text = f"译文::{sentence.source_text}"
@@ -698,10 +698,13 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 any(issue.evidence_json.get("preferred_hint") == "上下文工程" for issue in style_issues)
             )
             self.assertTrue(
-                any("证据权重" in str(issue.evidence_json.get("actual_target_text") or "") for issue in style_issues)
+                any("证据权重显示" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
             )
             self.assertTrue(
                 any(issue.evidence_json.get("preferred_hint") == "更符合上下文的输出" for issue in style_issues)
+            )
+            self.assertTrue(
+                any("更具上下文准确性" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
             )
 
     def test_review_reports_term_conflict_for_locked_chapter_concept_entry(self) -> None:
