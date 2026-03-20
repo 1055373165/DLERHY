@@ -1829,10 +1829,11 @@ def _looks_like_equation(
         return False
     if _looks_like_table(len(normalized_lines), normalized_lines):
         return False
+    normalized = " ".join(normalized_lines)
+    if normalized_lines and normalized_lines[0].startswith("#") and "=" in normalized:
+        return False
     if _looks_like_code(text, line_count):
         return False
-
-    normalized = " ".join(normalized_lines)
     if len(normalized) < 6 or len(normalized) > 120:
         return False
     if _looks_like_caption_text(normalized) or _HEADING_PATTERN.match(normalized):
@@ -4206,7 +4207,7 @@ class PdfStructureRecoveryService:
         block = recovered_blocks[index]
         if block.role != "body" or block.block_type != BlockType.PARAGRAPH:
             return False
-        if block.page_start != block.page_end:
+        if block.page_end < block.page_start or block.page_end - block.page_start > 1:
             return False
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
             return False
@@ -4219,13 +4220,12 @@ class PdfStructureRecoveryService:
         if not _looks_like_code_docstring_text(block.text):
             return False
 
-        page_number = block.page_start
         for offset in range(1, 4):
             for candidate_index in (index - offset, index + offset):
                 if candidate_index < 0 or candidate_index >= len(recovered_blocks):
                     continue
                 candidate = recovered_blocks[candidate_index]
-                if candidate.page_start != page_number or candidate.page_end != page_number:
+                if candidate.page_end < block.page_start - 1 or candidate.page_start > block.page_end + 1:
                     continue
                 if candidate.role == "code_like" and candidate.block_type == BlockType.CODE:
                     return True

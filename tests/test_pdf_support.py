@@ -2011,6 +2011,42 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         self.assertEqual(promoted[1].block_type, BlockType.CODE)
         self.assertIn("late_code_like_promoted", promoted[1].flags)
 
+    def test_recovery_promotes_cross_page_code_body(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "# Define tool groups with descriptions\n"
+                "tool_groups = {\n"
+                "\"Computation\": {\n"
+                "\"tools\": []\n"
+                "}\n"
+                "@tool\n"
+                "def select_group_llm(query: str) -> str:\n"
+                "return response.content.strip()"
+            ),
+            page_start=123,
+            page_end=124,
+            bbox_regions=[
+                {"page_number": 123, "bbox": [72.0, 320.0, 540.0, 700.0]},
+                {"page_number": 124, "bbox": [72.0, 48.0, 540.0, 220.0]},
+            ],
+            reading_order_index=30,
+            parse_confidence=0.91,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/123",
+            anchor="p123-b30",
+        )
+
+        promoted = service._promote_late_code_like_bodies([block])
+
+        self.assertEqual(promoted[0].role, "code_like")
+        self.assertEqual(promoted[0].block_type, BlockType.CODE)
+        self.assertIn("late_code_like_promoted", promoted[0].flags)
+
     def test_bootstrap_pipeline_recovers_inline_academic_section_headings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-inline-sections.pdf"
