@@ -16,14 +16,14 @@ Last Updated: 2026-03-20
 
 如果是新会话接手，先读这 4 份：
 
-1. [TODOS.md](/Users/smy/project/book-agent/TODOS.md)
-2. [pdf_status.md](/Users/smy/project/book-agent/docs/pdf_status.md)
-3. [pdf_backlog.md](/Users/smy/project/book-agent/docs/pdf_backlog.md)
-4. [pdf_decisions.md](/Users/smy/project/book-agent/docs/pdf_decisions.md)
+1. [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
+2. [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
+3. [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
+4. [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)
 
 如果当前目标不是 PDF parser，而是“英译中质量重构 / packet memory / rerun policy”，先补读：
 
-5. [translation-quality-refactor-cockpit.md](/Users/smy/project/book-agent/docs/translation-quality-refactor-cockpit.md)
+5. [translation-quality-refactor-cockpit.md](/Users/smy/projects/mygithub/DLEHY/docs/translation-quality-refactor-cockpit.md)
 
 ## One-Screen Summary
 
@@ -41,6 +41,47 @@ Last Updated: 2026-03-20
 
 > PDF 主线已经从“只能 smoke”推进到“真实样本可运行、可验证、可迭代”，但距离“广泛真实出版 PDF 默认放行”还有一段距离。
 
+## Current Handoff Snapshot
+
+这部分是给下一个程序员看的“接力起点”。如果你只读一段，优先读这里。
+
+- 刚完成的最新一刀：
+  - 针对真实英文书分页区域，修复了 4 类结构错误：`inline heading` 丢失、`contextual image legend` 被并进正文、跨页 bullet 被误切且前半段被误判成 code、页内图片排序错误
+- 本轮主要修改入口：
+  - `/Users/smy/projects/mygithub/DLEHY/src/book_agent/domain/structure/pdf.py`
+  - `/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/export.py`
+  - `/Users/smy/projects/mygithub/DLEHY/tests/test_pdf_support.py`
+- 本轮 parser/export 关键变化：
+  - 页内 block 恢复不再默认“先全部文本、后全部图片”，而是对书籍场景启用 `text/image` 交错排序
+  - 新增 inline book heading promotion，`Tokenization: Breaking Text into Pieces` 这类标题会被提升成真实 `heading`
+  - 新增 contextual image legend promotion，`This sentence contains 27 tokens` 这类短图例会独立保留并作为 caption 候选
+  - 扩展 image-caption target 匹配，允许 contextual legend 绑定图片
+  - export 侧新增 bullet paragraph guard，避免 `• GPT (Byte Pair Encoding): ...` 被误提升成 code artifact
+
+### Latest Real-Book Validation
+
+- 最新真实验收样本：
+  - 源文件：`/Users/smy/Downloads/Patterns of Application Development Using AI (Obie Fernandez) (z-library.sk, 1lib.sk, z-lib.sk).pdf`
+  - 验收目标：首个正文主章节 `Introduction`
+- 最新 rerun 产物：
+  - 数据库：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/run.sqlite`
+  - 章节 HTML：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
+  - review package：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
+  - manifest：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.manifest.json`
+  - run report：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/parallel-report.json`
+- 当前结果：
+  - `135 / 135` packets 已翻译完成
+  - `blocking_issue_count = 0`
+  - 仅剩 `1` 个非阻塞 review issue：`IMAGE_CAPTION_RECOVERY_REQUIRED`
+- 已确认收敛的具体问题：
+  - `Tokenization: Breaking Text into Pieces` 已被正确恢复为标题
+  - `This sentence contains 27 tokens` 已作为图片锚点说明保留，不再混进正文
+  - `• GPT (Byte Pair Encoding)...` 已跨页合并成完整 paragraph，不再被识别成代码块
+- 当前最明显的剩余缺口：
+  - 这一章仍有 `7` 张图片未稳定绑上 caption
+  - review package 已给出未绑 caption 的页号：`22, 27, 31, 32, 47, 48, 49`
+  - 这说明 contextual image legend / figure caption recovery 还只是第一刀，不应误判为“图片 caption 已普遍解决”
+
 ## Hard Constraints
 
 继续开发时默认遵守这些边界：
@@ -51,10 +92,10 @@ Last Updated: 2026-03-20
 - 先修结构恢复，再谈质量锦上添花
 - 优先做 packet / chapter / smoke corpus 级验证；不要轻易上整本 rerun
 - 每做完一轮 PDF slice，都要同步：
-  - [pdf_status.md](/Users/smy/project/book-agent/docs/pdf_status.md)
-  - [pdf_backlog.md](/Users/smy/project/book-agent/docs/pdf_backlog.md)
-  - [pdf_decisions.md](/Users/smy/project/book-agent/docs/pdf_decisions.md)
-  - [TODOS.md](/Users/smy/project/book-agent/TODOS.md)
+  - [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
+  - [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
+  - [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)
+  - [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
 
 ## What Is Already Working
 
@@ -133,32 +174,32 @@ Last Updated: 2026-03-20
 
 ## Verified Real Samples
 
-当前本机 smoke corpus 是 `6/6 passed`，见 [corpus-local.summary.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local.summary.json)。
+当前本机 smoke corpus 是 `6/6 passed`，见 [corpus-local.summary.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local.summary.json)。
 
 已固化样本：
 
 1. `ai-agents-in-action`
-   - 报告：[ai-agents-in-action.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/ai-agents-in-action.json)
+   - 报告：[ai-agents-in-action.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/ai-agents-in-action.json)
    - 价值：低风险长书主样本，覆盖 frontmatter / appendix / index / backmatter
 
 2. `attention-is-all-you-need`
-   - 报告：[attention-is-all-you-need.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/attention-is-all-you-need.json)
+   - 报告：[attention-is-all-you-need.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/attention-is-all-you-need.json)
    - 价值：medium-risk academic paper 主样本
 
 3. `jim-simons-book-scan`
-   - 报告：[jim-simons-book-scan.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/jim-simons-book-scan.json)
+   - 报告：[jim-simons-book-scan.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/jim-simons-book-scan.json)
    - 价值：OCR/scanned fail-safe 样本
 
 4. `building-ai-coding-agents`
-   - 报告：[building-ai-coding-agents.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/building-ai-coding-agents.json)
+   - 报告：[building-ai-coding-agents.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/building-ai-coding-agents.json)
    - 价值：medium-risk appendix 恢复样本
 
 5. `llms-in-production`
-   - 报告：[llms-in-production.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/llms-in-production.json)
+   - 报告：[llms-in-production.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/llms-in-production.json)
    - 价值：第二本低风险长书样本，验证 chapter tree 不是单样本过拟合
 
 6. `forming-effective-human-ai-teams`
-   - 报告：[forming-effective-human-ai-teams.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local/forming-effective-human-ai-teams.json)
+   - 报告：[forming-effective-human-ai-teams.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/forming-effective-human-ai-teams.json)
    - 价值：single-column research paper 样本
 
 ## Verified Live Exports
@@ -166,14 +207,21 @@ Last Updated: 2026-03-20
 最重要的真实 PDF live 产物：
 
 - `Attention Is All You Need v2`
-  - 报告：[report.json](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v2/report.json)
-  - merged HTML：[merged-document.html](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.html)
-  - manifest：[merged-document.manifest.json](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.manifest.json)
+  - 报告：[report.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/report.json)
+  - merged HTML：[merged-document.html](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.html)
+  - manifest：[merged-document.manifest.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.manifest.json)
 
 - `Forming Effective Human-AI Teams v3`
-  - 报告：[report.json](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/report.json)
-  - merged HTML：[merged-document.html](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.html)
-  - manifest：[merged-document.manifest.json](/Users/smy/project/book-agent/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.manifest.json)
+  - 报告：[report.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/report.json)
+  - merged HTML：[merged-document.html](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.html)
+  - manifest：[merged-document.manifest.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.manifest.json)
+
+- `Patterns of Application Development Using AI - Introduction rerun v3`
+  - run report：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/parallel-report.json`
+  - chapter HTML：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
+  - review package：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
+  - manifest：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.manifest.json`
+  - 价值：这是当前最贴近用户真实投诉的 live 验收样本，优先级高于新增样本扩容
 
 ## Current Known Limits
 
@@ -196,39 +244,41 @@ Last Updated: 2026-03-20
 
 如果开新会话、需要直接继续开发，默认按这个顺序推进：
 
-1. 第三篇真实英文论文或更异质 paper 扩样
-   - 目的：确认 current paper-title / references / academic lane 不是双样本过拟合
-   - 验证：先进 smoke corpus，再决定要不要 live run
+1. 先审 `Patterns of Application Development Using AI` 第一章最新 HTML
+   - 目标：把用户刚指出的真实问题区域作为主验收基准，而不是回到抽象 backlog
+   - 输入：
+     - `.../patterns-ai-ch1-rerun-v3/.../bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
+     - `.../patterns-ai-ch1-rerun-v3/.../review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
+   - 输出：整理本章剩余 defect 列表，优先收集 image caption miss、图文顺序错位、table/code residual bug
 
-2. `nested appendix section-tree upgrade`
-   - 当前：`K.2.5` 只进 evidence，不进 section tree
-   - 目标：决定何时正式升级成 chapter/subchapter contract
-   - 风险：过切 appendix tree，误伤真实长书
+2. 继续做 image-caption / contextual legend recovery v2
+   - 目标：把这章里剩余 `7` 张未绑 caption 的图片再压下去
+   - 固定验收页：`22, 27, 31, 32, 47, 48, 49`
+   - 原则：宁可 preserve/fallback，也不要把正文错绑成 caption
 
-3. `chapter-intro title cleanup v2`
-   - 目标：压 `Adeep / Dataislikegarbage / canyougo`
-   - 优先样本：`LLMs in Production`
+3. 如果第一章进一步收敛，再做同一本书的 chapter-2 或多章节扩展
+   - 目标：确认这轮修复不是只对 `Tokenization` 那一段生效
+   - 顺序：先 chapter-level rerun，再考虑 document-level merged export
 
-4. `backmatter cue hardening v2`
-   - 目标：决定是否接受更弱 cue，还是继续停留 explicit-cue policy
-   - 风险：误把 appendix 续页或正文尾页升成 `backmatter`
-
-5. `medium-risk PDF finer-grained policy`
-   - 目标：从“可进但高风险”升级到更可操作的放行策略
-   - 方向：明确哪些 medium-risk 可以走 formal export、哪些必须先 reparse/review
+4. 当前这本真实书样本稳定后，再回到 broader roadmap
+   - 第三篇真实英文论文或更异质 paper 扩样
+   - `nested appendix section-tree upgrade`
+   - `chapter-intro title cleanup v2`
+   - `backmatter cue hardening v2`
+   - `medium-risk PDF finer-grained policy`
 
 ## If Starting A New Session
 
 建议按这个顺序恢复上下文：
 
-1. 读 [TODOS.md](/Users/smy/project/book-agent/TODOS.md)
-2. 读 [pdf_status.md](/Users/smy/project/book-agent/docs/pdf_status.md)
-3. 看 [corpus-local.summary.json](/Users/smy/project/book-agent/artifacts/pdf-smoke/corpus-local.summary.json)
+1. 读 [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
+2. 读 [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
+3. 看 [corpus-local.summary.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local.summary.json)
 4. 看本轮目标对应的真实样本报告
 5. 打开主代码入口：
-   - [pdf.py](/Users/smy/project/book-agent/src/book_agent/domain/structure/pdf.py)
-   - [review.py](/Users/smy/project/book-agent/src/book_agent/services/review.py)
-   - [export.py](/Users/smy/project/book-agent/src/book_agent/services/export.py)
+   - [pdf.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/domain/structure/pdf.py)
+   - [review.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/review.py)
+   - [export.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/export.py)
 6. 先做小回归，不要直接上 live run
 
 ## Main Source Files
@@ -236,22 +286,22 @@ Last Updated: 2026-03-20
 高频入口：
 
 - parser 主体：
-  - [pdf.py](/Users/smy/project/book-agent/src/book_agent/domain/structure/pdf.py)
+  - [pdf.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/domain/structure/pdf.py)
 - bootstrap 分流：
-  - [bootstrap.py](/Users/smy/project/book-agent/src/book_agent/services/bootstrap.py)
+  - [bootstrap.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/bootstrap.py)
 - review：
-  - [review.py](/Users/smy/project/book-agent/src/book_agent/services/review.py)
+  - [review.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/review.py)
 - export：
-  - [export.py](/Users/smy/project/book-agent/src/book_agent/services/export.py)
+  - [export.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/export.py)
 - smoke 工具：
-  - [pdf_smoke.py](/Users/smy/project/book-agent/src/book_agent/tools/pdf_smoke.py)
-  - [run_pdf_smoke.py](/Users/smy/project/book-agent/scripts/run_pdf_smoke.py)
-  - [run_pdf_smoke_corpus.py](/Users/smy/project/book-agent/scripts/run_pdf_smoke_corpus.py)
+  - [pdf_smoke.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/tools/pdf_smoke.py)
+  - [run_pdf_smoke.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_smoke.py)
+  - [run_pdf_smoke_corpus.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_smoke_corpus.py)
 - 候选扫描：
-  - [run_pdf_candidate_scan.py](/Users/smy/project/book-agent/scripts/run_pdf_candidate_scan.py)
+  - [run_pdf_candidate_scan.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_candidate_scan.py)
 - 主要回归：
-  - [test_pdf_support.py](/Users/smy/project/book-agent/tests/test_pdf_support.py)
-  - [test_pdf_smoke_tools.py](/Users/smy/project/book-agent/tests/test_pdf_smoke_tools.py)
+  - [test_pdf_support.py](/Users/smy/projects/mygithub/DLEHY/tests/test_pdf_support.py)
+  - [test_pdf_smoke_tools.py](/Users/smy/projects/mygithub/DLEHY/tests/test_pdf_smoke_tools.py)
 
 ## Safe Verification Loop
 
@@ -273,15 +323,16 @@ Last Updated: 2026-03-20
 
 每做完一轮 PDF 改造，至少同步 4 件事：
 
-1. 更新 [pdf_status.md](/Users/smy/project/book-agent/docs/pdf_status.md)
-2. 更新 [pdf_backlog.md](/Users/smy/project/book-agent/docs/pdf_backlog.md)
-3. 更新 [pdf_decisions.md](/Users/smy/project/book-agent/docs/pdf_decisions.md)（如果有新的取舍冻结）
-4. 更新 [TODOS.md](/Users/smy/project/book-agent/TODOS.md)
+1. 更新 [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
+2. 更新 [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
+3. 更新 [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)（如果有新的取舍冻结）
+4. 更新 [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
 
 ## Resume Hint
 
 如果新会话里不知道“从哪一刀开始”：
 
+- 想继续当前真实书验收：从 `Patterns... Introduction rerun v3` 的 HTML + review package 开始
 - 想继续扩样：从“第三篇真实英文论文扩样”开始
 - 想继续长书结构：从 `nested appendix section-tree upgrade` 开始
 - 想继续文本质量：从 `chapter-intro title cleanup v2` 开始
@@ -289,4 +340,4 @@ Last Updated: 2026-03-20
 
 默认推荐第一刀：
 
-> 先扩第三篇真实英文论文或更异质 paper 样本，再决定 academic-paper 路线下一步是继续 reading-order hardening，还是先转去 appendix/tree 这条长书路线。
+> 先打开 `Patterns of Application Development Using AI` 第一章最新 HTML 和 review package，把剩余的 image-caption miss 与图文顺序残差压下去；只有这一章稳定后，再继续扩新样本或回到 appendix/tree 路线。
