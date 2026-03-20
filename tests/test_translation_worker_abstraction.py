@@ -29,10 +29,11 @@ from book_agent.domain.enums import (
     SourceType,
 )
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
-from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
+from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
+from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.core.config import Settings
@@ -41,7 +42,15 @@ from book_agent.services.packet_experiment_diff import compare_experiment_payloa
 from book_agent.services.packet_experiment_scan import PacketExperimentScanService
 from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
+from book_agent.services.translation_chapter_smoke import (
+    TranslationChapterSmokeOptions,
+    TranslationChapterSmokeService,
+)
+from book_agent.services.context_compile import (
+    ChapterContextCompileOptions,
+    ChapterContextCompiler,
+    _compress_chapter_brief,
+)
 from book_agent.services.translation import TranslationService
 from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.contracts import (
@@ -49,6 +58,8 @@ from book_agent.workers.contracts import (
     ConceptCandidate,
     ContextPacket,
     PacketBlock,
+    RelevantTerm,
+    TranslatedContextBlock,
     TranslationTargetSegment,
     TranslationWorkerOutput,
     TranslationWorkerResult,
@@ -191,6 +202,36 @@ class LooseSchemaClient:
         )
 
 
+class DuplicateAlignmentClient:
+    def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerOutput:
+        return TranslationWorkerOutput(
+            packet_id=request.packet_id,
+            target_segments=[
+                TranslationTargetSegment(
+                    temp_id="temp-1",
+                    text_zh="重复对齐测试译文",
+                    segment_type="sentence",
+                    source_sentence_ids=["S1"],
+                    confidence=0.9,
+                )
+            ],
+            alignment_suggestions=[
+                AlignmentSuggestion(
+                    source_sentence_ids=["S1"],
+                    target_temp_ids=["temp-1", "temp-1"],
+                    relation_type="1:1",
+                    confidence=0.9,
+                ),
+                AlignmentSuggestion(
+                    source_sentence_ids=["S1"],
+                    target_temp_ids=["temp-1"],
+                    relation_type="1:1",
+                    confidence=0.9,
+                ),
+            ],
+        )
+
+
 class TranslationWorkerAbstractionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = build_engine("sqlite+pysqlite:///:memory:")
@@ -243,9 +284,10 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             session.commit()
 
             self.assertEqual(artifacts.translation_run.model_name, "mock-llm")
-            self.assertEqual(artifacts.translation_run.prompt_version, "p0.llm.v1")
-            self.assertEqual(artifacts.translation_run.model_config_json["provider"], "fake")
-            self.assertEqual(artifacts.alignment_edges[0].sentence_id, first_sentence_id)
+        self.assertEqual(artifacts.translation_run.prompt_version, "p0.llm.v1")
+        self.assertEqual(artifacts.translation_run.model_config_json["provider"], "fake")
+        self.assertEqual(artifacts.translation_run.model_config_json["prompt_profile"], "role-style-v2")
+        self.assertEqual(artifacts.alignment_edges[0].sentence_id, first_sentence_id)
 
         self.assertEqual(len(fake_client.requests), 1)
         self.assertIn("Context engineering is a discipline.", fake_client.requests[0].user_prompt)
@@ -259,6 +301,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("Current Paragraph:", fake_client.requests[0].user_prompt)
         self.assertIn("Sentence Ledger:", fake_client.requests[0].user_prompt)
         self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
+        self.assertIn("senior technical translator and localizer", fake_client.requests[0].system_prompt)
 
     def test_load_packet_bundle_restores_current_sentence_order_by_block_ordinal(self) -> None:
         document_id = "11111111-1111-1111-1111-111111111111"
@@ -415,6 +458,27 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertLess(first_index, second_index)
         self.assertLess(second_index, third_index)
 
+    def test_translation_service_dedupes_duplicate_alignment_edges_from_worker_output(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        worker = LLMTranslationWorker(
+            DuplicateAlignmentClient(),
+            model_name="mock-llm",
+            prompt_version="duplicate-alignment-test",
+            runtime_config={"provider": "fake"},
+        )
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            artifacts = TranslationService(repository, worker=worker).execute_packet(packet_ids[1])
+            session.commit()
+
+            stored_edges = session.scalars(
+                select(AlignmentEdge).where(AlignmentEdge.target_segment_id == artifacts.target_segments[0].id)
+            ).all()
+
+        self.assertEqual(len(artifacts.alignment_edges), 1)
+        self.assertEqual(len(stored_edges), 1)
+
     def test_build_translation_prompt_request_supports_sentence_led_layout(self) -> None:
         context_packet = ContextPacket(
             packet_id="pkt-1",
@@ -487,6 +551,195 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_request.user_prompt.index("Current Paragraph:"),
         )
 
+    def test_build_translation_prompt_request_omits_empty_context_sections_and_compacts_single_sentence_ledger(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-compact",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="A compact paragraph that should not duplicate the source sentence twice.",
+                )
+            ],
+            chapter_brief=None,
+        )
+        sentence = Sentence(
+            id="s1",
+            block_id="block-1",
+            chapter_id="ch-1",
+            document_id="doc-1",
+            ordinal_in_block=1,
+            source_text="A compact paragraph that should not duplicate the source sentence twice.",
+            normalized_text="A compact paragraph that should not duplicate the source sentence twice.",
+            source_lang="en",
+            translatable=True,
+            nontranslatable_reason=None,
+            source_anchor=None,
+            source_span_json={},
+            upstream_confidence=1.0,
+            sentence_status=SentenceStatus.PENDING,
+            active_version=1,
+        )
+
+        prompt_request = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=[sentence]),
+            model_name="mock-llm",
+            prompt_version="compact-prompt-test",
+        )
+
+        self.assertIn("Sentence Ledger:", prompt_request.user_prompt)
+        self.assertIn("[S1] This is the only sentence in the current paragraph.", prompt_request.user_prompt)
+        self.assertEqual(
+            prompt_request.user_prompt.count(
+                "A compact paragraph that should not duplicate the source sentence twice."
+            ),
+            1,
+        )
+        self.assertNotIn("Locked and Relevant Terms:", prompt_request.user_prompt)
+        self.assertNotIn("Relevant Entities:", prompt_request.user_prompt)
+        self.assertNotIn("Chapter Concept Memory:", prompt_request.user_prompt)
+        self.assertNotIn("Previous Accepted Translations (same local context):", prompt_request.user_prompt)
+        self.assertNotIn("Previous Source Context:", prompt_request.user_prompt)
+        self.assertNotIn("Upcoming Source Context:", prompt_request.user_prompt)
+
+    def test_build_translation_prompt_request_uses_compact_role_style_prompt_for_self_contained_packet(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-lean-role",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1", "s2"],
+                    text="Short self-contained technical prose. Another short sentence keeps the paragraph local.",
+                )
+            ],
+            chapter_brief=None,
+        )
+        current_sentences = [
+            Sentence(
+                id="s1",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=1,
+                source_text="Short self-contained technical prose.",
+                normalized_text="Short self-contained technical prose.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            ),
+            Sentence(
+                id="s2",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=2,
+                source_text="Another short sentence keeps the paragraph local.",
+                normalized_text="Another short sentence keeps the paragraph local.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            ),
+        ]
+
+        full_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="lean-role-test",
+            prompt_profile="role-style-v2",
+            allow_compact_prompt=False,
+        )
+        compact_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="lean-role-test",
+            prompt_profile="role-style-v2",
+        )
+
+        self.assertIn("Chinese Style Priorities:", full_prompt.user_prompt)
+        self.assertNotIn("Chinese Style Priorities:", compact_prompt.user_prompt)
+        self.assertIn("Current Paragraph:", compact_prompt.user_prompt)
+        self.assertIn("Sentence Ledger:", compact_prompt.user_prompt)
+        self.assertIn("professional English-to-Chinese technical translator", compact_prompt.system_prompt)
+        self.assertLess(len(compact_prompt.user_prompt), len(full_prompt.user_prompt))
+        self.assertLess(len(compact_prompt.system_prompt), len(full_prompt.system_prompt))
+
+    def test_build_translation_prompt_request_includes_open_questions_and_rerun_hints(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-questions",
+            document_id="doc-1",
+            chapter_id="chap-1",
+            packet_type="translate",
+            book_profile_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["sent-1"],
+                    text="Context engineering improves system behavior.",
+                )
+            ],
+            chapter_brief="This section defines a core concept.",
+            open_questions=[
+                "speaker_reference_ambiguous",
+                "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
+            ],
+        )
+        prompt_request = build_translation_prompt_request(
+            TranslationTask(
+                context_packet=context_packet,
+                current_sentences=[
+                    Sentence(
+                        id="sent-1",
+                        block_id="block-1",
+                        chapter_id="chap-1",
+                        document_id="doc-1",
+                        ordinal_in_block=1,
+                        source_text="Context engineering improves system behavior.",
+                        normalized_text="Context engineering improves system behavior.",
+                        source_lang="en",
+                        translatable=True,
+                        nontranslatable_reason=None,
+                        source_anchor=None,
+                        source_span_json={},
+                        upstream_confidence=1.0,
+                        sentence_status=SentenceStatus.PENDING,
+                        active_version=1,
+                    )
+                ],
+            ),
+            model_name="mock-llm",
+            prompt_version="prompt-open-questions-test",
+        )
+
+        self.assertIn("Open Questions and Rerun Hints:", prompt_request.user_prompt)
+        self.assertIn("speaker_reference_ambiguous", prompt_request.user_prompt)
+        self.assertIn("prefer '上下文工程' over literal phrasing", prompt_request.user_prompt)
+
     def test_build_translation_prompt_request_supports_prompt_profiles(self) -> None:
         context_packet = ContextPacket(
             packet_id="pkt-1",
@@ -514,6 +767,15 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                     times_seen=3,
                 )
             ],
+            style_constraints={
+                "paragraph_intent": "definition",
+                "paragraph_intent_hint": "Treat this as concept-definition prose.",
+                "literalism_guardrails": (
+                    "Prefer natural Chinese evidential phrasing such as '大量证据表明' or "
+                    "'现有证据表明', not literal weight metaphors. || "
+                    "Prefer '更符合上下文的输出', not literal forms like '上下文更准确的输出'."
+                ),
+            },
         )
         current_sentences = [
             Sentence(
@@ -553,12 +815,670 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_version="profile-test",
             prompt_profile="role-style-memory-v2",
         )
+        brief_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-brief-v3",
+        )
 
         self.assertIn("high-fidelity book translation worker", current_prompt.system_prompt)
         self.assertIn("senior technical translator and localizer", role_prompt.system_prompt)
         self.assertIn("Chinese Style Priorities:", role_prompt.user_prompt)
+        self.assertIn("Paragraph Intent Signal:", role_prompt.user_prompt)
+        self.assertIn("Intent: definition", role_prompt.user_prompt)
+        self.assertIn("Source-Aware Literalism Guardrails:", role_prompt.user_prompt)
+        self.assertIn("大量证据表明", role_prompt.user_prompt)
         self.assertIn("Memory and Ambiguity Handling:", memory_prompt.user_prompt)
         self.assertIn("locked terms and chapter concept memory", memory_prompt.system_prompt)
+        self.assertIn("publication-grade English-to-Chinese translator and localizer", brief_prompt.system_prompt)
+        self.assertIn("Paragraph Intent Priorities:", brief_prompt.user_prompt)
+        self.assertIn("Literalism Guardrails:", brief_prompt.user_prompt)
+        self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.user_prompt)
+
+    def test_build_translation_prompt_request_supports_material_aware_profiles(self) -> None:
+        technical_packet = ContextPacket(
+            packet_id="pkt-tech",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="It represents a shift from simply telling a computer what to do, to explaining why we need something done and trusting it to figure out the how.",
+                )
+            ],
+            chapter_brief="This chapter introduces agentic systems and why they change how engineers specify work.",
+            chapter_concepts=[
+                ConceptCandidate(
+                    source_term="agentic systems",
+                    canonical_zh="智能体系统",
+                    status="locked",
+                    confidence=1.0,
+                    times_seen=2,
+                )
+            ],
+            style_constraints={
+                "tone": "faithful-clear",
+                "translation_material": "technical_book",
+                "paragraph_intent": "definition",
+                "literalism_guardrails": (
+                    "Prefer: not-x-but-y || "
+                    "Rewrite perspective shells into lighter Chinese technical prose."
+                ),
+            },
+        )
+        paper_packet = technical_packet.model_copy(
+            update={
+                "packet_id": "pkt-paper",
+                "style_constraints": {
+                    "tone": "faithful-clear",
+                    "translation_material": "academic_paper",
+                    "paragraph_intent": "evidence",
+                },
+            }
+        )
+        current_sentences = [
+            Sentence(
+                id="s1",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=1,
+                source_text=technical_packet.current_blocks[0].text,
+                normalized_text=technical_packet.current_blocks[0].text,
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            )
+        ]
+
+        book_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=technical_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="material-test",
+            prompt_profile="material-aware-v1",
+        )
+        paper_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=paper_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="material-test",
+            prompt_profile="material-aware-v1",
+        )
+        minimal_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=technical_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="material-test",
+            prompt_profile="material-aware-minimal-v1",
+        )
+
+        self.assertIn("translator of English computer-science and software-engineering books", book_prompt.system_prompt)
+        self.assertIn("Material-Specific Style Target:", book_prompt.user_prompt)
+        self.assertIn("native Chinese computer-science book author", book_prompt.user_prompt)
+        self.assertIn("Translation Material: technical_book", book_prompt.user_prompt)
+        self.assertIn("translator for computer science and machine-learning papers", paper_prompt.system_prompt)
+        self.assertIn("formal Chinese academic prose", paper_prompt.user_prompt)
+        self.assertIn("Translation Material: academic_paper", paper_prompt.user_prompt)
+        self.assertIn("native, fluent Chinese technical prose", minimal_prompt.system_prompt)
+        self.assertNotIn("Sentence Ledger:", minimal_prompt.user_prompt)
+        self.assertNotIn("Translation Material: technical_book", minimal_prompt.user_prompt)
+        self.assertIn("Source-Aware Literalism Guardrails:", minimal_prompt.user_prompt)
+        self.assertLess(len(minimal_prompt.user_prompt), len(book_prompt.user_prompt))
+
+    def test_context_compiler_infers_paragraph_intent_signal(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-1",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="In technical terms, agentic AI refers to systems that combine a large language model with memory.",
+                )
+            ],
+            chapter_brief="This chapter explains agentic AI and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+        snapshot = MemorySnapshot(
+            id="mem-1",
+            document_id="doc-1",
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id="ch-1",
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=3,
+            content_json={"chapter_brief": "This chapter explains agentic AI and memory."},
+            status=MemoryStatus.ACTIVE,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=snapshot)
+
+        self.assertEqual(compiled.style_constraints["paragraph_intent"], "definition")
+        self.assertIn("concept-definition prose", str(compiled.style_constraints["paragraph_intent_hint"]))
+
+    def test_context_compiler_skips_low_precision_paragraph_intent_signal(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-analogy",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-analogy",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="If generative AI chat is a recipe book, then agentic AI is a personal chef.",
+                )
+            ],
+            chapter_brief="This chapter explains agentic AI through a recipe-book analogy.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+        snapshot = MemorySnapshot(
+            id="mem-analogy",
+            document_id="doc-1",
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id="ch-1",
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=3,
+            content_json={"chapter_brief": "This chapter explains agentic AI through a recipe-book analogy."},
+            status=MemoryStatus.ACTIVE,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=snapshot)
+
+        self.assertNotIn("paragraph_intent", compiled.style_constraints)
+        self.assertNotIn("paragraph_intent_hint", compiled.style_constraints)
+
+    def test_context_compiler_infers_source_aware_literalism_guardrails(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-literalism",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-literalism",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "In essence, the weight of evidence shows relying on external content "
+                        "tends to yield more reliable and contextually accurate outputs."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses context engineering and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("Prefer: 大量证据表明 / 现有证据表明", literalism)
+        self.assertIn("大量证据表明", literalism)
+        self.assertIn("更符合上下文的输出", literalism)
+
+    def test_context_compiler_infers_shift_and_vantage_literalism_guardrails(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-shift-vantage",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Foreword"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-shift-vantage",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "It represents a shift from simply telling a computer what to do, to explaining why "
+                        "we need something done and trusting it to figure out the how. "
+                        "From my vantage point as the CIO of a global financial institution, the stakes are immeasurably high. "
+                        "A fun anecdote is harmless; a production mistake is not."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses agentic systems in enterprise settings.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("不再是……而是…… / 从……转向……", literalism)
+        self.assertIn("告诉它目标与原因，让它自己决定如何实现", literalism)
+        self.assertIn("从我这位……的角度看 / 站在……的角度看", literalism)
+        self.assertIn("风险极高 / 代价极高", literalism)
+        self.assertIn("只是个趣闻 / 只是个小插曲", literalism)
+
+    def test_context_compiler_infers_knowledge_timeline_literalism_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-knowledge-timeline",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-knowledge-timeline",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "Memory is also the structured record of what was known, when it was known, "
+                        "and why it mattered for action."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses context engineering and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("avoid compressed calques like '获知时间'", literalism)
+        self.assertIn("知晓这些内容的时间点", literalism)
+
+    def test_context_compiler_infers_emerging_term_scaffolding_literalism_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-emerging-term",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-emerging-term",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "This broader challenge is what some are beginning to call context engineering, "
+                        "which is the deliberate design of how context is created, maintained, and "
+                        "applied to shape reasoning."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses context engineering and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("Prefer: 有人开始将其称为……，它指的是……", literalism)
+        self.assertIn("avoid scaffolding like '称之为……的领域/内容'", literalism)
+        self.assertIn("有人开始将其称为", literalism)
+        self.assertIn("rendered consistently as '上下文'", literalism)
+
+    def test_context_compiler_infers_durable_substrate_literalism_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-durable-substrate",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-durable-substrate",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "Within this view, memory becomes the durable substrate of context, "
+                        "providing more than just raw recall of what has been said."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses context engineering and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("not rigid calques like '持久基底'", literalism)
+        self.assertIn("使上下文得以持久存在的基础", literalism)
+
+    def test_context_compiler_filters_stale_literalism_and_locked_term_conflict_from_previous_translations(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-memory-sanitize",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="Current paragraph.",
+                )
+            ],
+            prev_translated_blocks=[
+                TranslatedContextBlock(
+                    block_id="block-stale-style",
+                    source_excerpt="Research further shows that in-context information can shape behavior through external context.",
+                    target_excerpt="研究进一步表明，情境信息能够通过外部情境塑造行为。",
+                    source_sentence_ids=["s-prev-1"],
+                ),
+                TranslatedContextBlock(
+                    block_id="block-term-conflict",
+                    source_excerpt="Agentic AI must take on more than that.",
+                    target_excerpt="然而，智能体AI必须承担更多。",
+                    source_sentence_ids=["s-prev-2"],
+                ),
+                TranslatedContextBlock(
+                    block_id="block-clean",
+                    source_excerpt="Memory supports continuity across tasks.",
+                    target_excerpt="记忆支持跨任务的连续性。",
+                    source_sentence_ids=["s-prev-3"],
+                ),
+            ],
+            relevant_terms=[
+                RelevantTerm(source_term="Agentic AI", target_term="智能体式AI", lock_level="locked")
+            ],
+            chapter_brief="This chapter discusses agentic AI and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual(len(compiled.prev_translated_blocks), 1)
+        self.assertEqual(compiled.prev_translated_blocks[0].block_id, "block-clean")
+
+    def test_context_compiler_can_disable_source_aware_literalism_guardrails(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-literalism",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-literalism",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "In essence, the weight of evidence shows relying on external content "
+                        "tends to yield more reliable and contextually accurate outputs."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter discusses context engineering and memory.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(
+            packet,
+            chapter_memory_snapshot=None,
+            options=ChapterContextCompileOptions(include_literalism_guardrails=False),
+        )
+
+        self.assertNotIn("literalism_guardrails", compiled.style_constraints)
+
+    def test_context_compiler_trims_default_source_context_and_brief_for_self_contained_packet(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-trim",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1", "s2"],
+                    text=(
+                        "Agentic AI systems coordinate memory, tools, and planning into a single operating loop. "
+                        "This paragraph is long enough to stand on its own without relying on neighboring blocks. "
+                        "It also names the operational consequences directly, so the local meaning does not depend on a prior paragraph."
+                    ),
+                )
+            ],
+            prev_blocks=[
+                PacketBlock(
+                    block_id="block-prev-1",
+                    block_type="paragraph",
+                    sentence_ids=["sp1"],
+                    text="Previous context one.",
+                ),
+                PacketBlock(
+                    block_id="block-prev-2",
+                    block_type="paragraph",
+                    sentence_ids=["sp2"],
+                    text="Previous context two.",
+                ),
+            ],
+            next_blocks=[
+                PacketBlock(
+                    block_id="block-next-1",
+                    block_type="paragraph",
+                    sentence_ids=["sn1"],
+                    text="Next context one.",
+                ),
+                PacketBlock(
+                    block_id="block-next-2",
+                    block_type="paragraph",
+                    sentence_ids=["sn2"],
+                    text="Next context two.",
+                ),
+            ],
+            chapter_brief=(
+                "This chapter explains agentic AI, context engineering, memory, planning, and tool use in detail. "
+                "It also frames how these pieces fit together in production systems and why the operating loop matters."
+            ),
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual(compiled.prev_blocks, [])
+        self.assertEqual(compiled.next_blocks, [])
+        self.assertEqual(compiled.chapter_brief, _compress_chapter_brief(packet.chapter_brief or ""))
+
+    def test_context_compiler_keeps_minimal_context_for_short_bridge_paragraph(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-short-bridge",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="However, this changes in practice.",
+                )
+            ],
+            prev_blocks=[
+                PacketBlock(
+                    block_id="block-prev-1",
+                    block_type="paragraph",
+                    sentence_ids=["sp1"],
+                    text="Previous context one.",
+                ),
+                PacketBlock(
+                    block_id="block-prev-2",
+                    block_type="paragraph",
+                    sentence_ids=["sp2"],
+                    text="Previous context two.",
+                ),
+            ],
+            next_blocks=[
+                PacketBlock(
+                    block_id="block-next-1",
+                    block_type="paragraph",
+                    sentence_ids=["sn1"],
+                    text="Next context one.",
+                ),
+                PacketBlock(
+                    block_id="block-next-2",
+                    block_type="paragraph",
+                    sentence_ids=["sn2"],
+                    text="Next context two.",
+                ),
+            ],
+            chapter_brief=(
+                "This chapter explains how execution reality diverges from the simplified intuition presented earlier. "
+                "The paragraph is a transition into practical constraints."
+            ),
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual([block.block_id for block in compiled.prev_blocks], ["block-prev-2"])
+        self.assertEqual(compiled.next_blocks, [])
+        self.assertEqual(compiled.chapter_brief, _compress_chapter_brief(packet.chapter_brief or ""))
+
+    def test_context_compiler_prefers_previous_translations_over_raw_source_context_when_available(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-prev-translation-primary",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="However, this changes in practice.",
+                )
+            ],
+            prev_blocks=[
+                PacketBlock(
+                    block_id="block-prev-1",
+                    block_type="paragraph",
+                    sentence_ids=["sp1"],
+                    text="Previous context one.",
+                ),
+                PacketBlock(
+                    block_id="block-prev-2",
+                    block_type="paragraph",
+                    sentence_ids=["sp2"],
+                    text="Previous context two.",
+                ),
+            ],
+            next_blocks=[
+                PacketBlock(
+                    block_id="block-next-1",
+                    block_type="paragraph",
+                    sentence_ids=["sn1"],
+                    text="Next context one.",
+                ),
+            ],
+            prev_translated_blocks=[
+                TranslatedContextBlock(
+                    block_id="block-prev-2",
+                    source_excerpt="Previous context two.",
+                    target_excerpt="上一段上下文二。",
+                    source_sentence_ids=["sp2"],
+                )
+            ],
+            chapter_brief=(
+                "This chapter explains how execution reality diverges from the simplified intuition presented earlier. "
+                "The paragraph is a transition into practical constraints."
+            ),
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual(compiled.prev_blocks, [])
+        self.assertEqual(compiled.next_blocks, [])
+        self.assertEqual(compiled.chapter_brief, _compress_chapter_brief(packet.chapter_brief or ""))
+        self.assertTrue(compiled.style_constraints.get("suppress_chapter_brief_in_prompt"))
+        self.assertEqual(len(compiled.prev_translated_blocks), 1)
+
+    def test_context_compiler_keeps_brief_for_shift_statement_even_with_previous_translations(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-shift-brief",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "It represents a shift from simply telling a computer what to do, "
+                        "to explaining why we need something done and trusting it to figure out the how."
+                    ),
+                )
+            ],
+            prev_blocks=[
+                PacketBlock(
+                    block_id="block-prev-1",
+                    block_type="paragraph",
+                    sentence_ids=["sp1"],
+                    text="Previous context one.",
+                )
+            ],
+            prev_translated_blocks=[
+                TranslatedContextBlock(
+                    block_id="block-prev-1",
+                    source_excerpt="Previous context one.",
+                    target_excerpt="上一段上下文一。",
+                    source_sentence_ids=["sp1"],
+                )
+            ],
+            chapter_brief="This chapter explains why agentic systems mark a shift in how engineers specify work.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual(compiled.prev_blocks, [])
+        self.assertEqual(
+            compiled.chapter_brief,
+            _compress_chapter_brief(packet.chapter_brief or ""),
+        )
+        self.assertNotIn("suppress_chapter_brief_in_prompt", compiled.style_constraints)
 
     def test_context_compiler_can_disable_chapter_memory_features(self) -> None:
         packet = ContextPacket(
@@ -574,7 +1494,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                     block_id="block-1",
                     block_type="paragraph",
                     sentence_ids=["s1"],
-                    text="Current paragraph text.",
+                    text="Current paragraph text about context engineering.",
                 )
             ],
             prev_translated_blocks=[],
@@ -589,6 +1509,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             version=3,
             content_json={
                 "chapter_brief": "Memory brief.",
+                "chapter_brief_version": 5,
                 "recent_accepted_translations": [
                     {
                         "block_id": "block-0",
@@ -622,11 +1543,108 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                 include_memory_blocks=False,
                 include_chapter_concepts=False,
                 prefer_memory_chapter_brief=False,
+                include_paragraph_intent=False,
             ),
         )
         self.assertEqual(compiled_without_memory.chapter_brief, "Packet brief.")
         self.assertEqual(len(compiled_without_memory.prev_translated_blocks), 0)
         self.assertEqual(len(compiled_without_memory.chapter_concepts), 0)
+        self.assertNotIn("paragraph_intent", compiled_without_memory.style_constraints)
+
+    def test_context_compiler_prefers_newer_packet_brief_over_stale_memory_brief(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-fresh-brief",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=3,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="Current paragraph text about context engineering.",
+                )
+            ],
+            prev_translated_blocks=[],
+            chapter_brief="Fresh packet brief with updated context engineering framing.",
+        )
+        snapshot = MemorySnapshot(
+            id="mem-stale-brief",
+            document_id="doc-1",
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id="ch-1",
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=2,
+            content_json={
+                "chapter_brief": "Old memory brief.",
+                "chapter_brief_version": 1,
+            },
+            status=MemoryStatus.ACTIVE,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=snapshot)
+
+        self.assertEqual(
+            compiled.chapter_brief,
+            "Fresh packet brief with updated context engineering framing.",
+        )
+
+    def test_context_compiler_filters_chapter_concepts_to_local_relevance(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-concepts",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="This section explains durable memory for agent systems.",
+                )
+            ],
+            prev_translated_blocks=[],
+            chapter_brief=None,
+        )
+        snapshot = MemorySnapshot(
+            id="mem-2",
+            document_id="doc-1",
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id="ch-1",
+            snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+            version=4,
+            content_json={
+                "chapter_brief": "Memory brief.",
+                "active_concepts": [
+                    {
+                        "source_term": "durable memory",
+                        "canonical_zh": "持久记忆",
+                        "status": "locked",
+                        "times_seen": 4,
+                    },
+                    {
+                        "source_term": "context engineering",
+                        "canonical_zh": "上下文工程",
+                        "status": "locked",
+                        "times_seen": 6,
+                    },
+                ],
+            },
+            status=MemoryStatus.ACTIVE,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=snapshot)
+
+        self.assertEqual([concept.source_term for concept in compiled.chapter_concepts], ["durable memory"])
+        self.assertEqual([term.source_term for term in compiled.relevant_terms], ["durable memory"])
 
     def test_packet_experiment_service_dry_run_exports_prompt_without_worker_output(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
@@ -643,6 +1661,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                     include_memory_blocks=False,
                     include_chapter_concepts=False,
                     prefer_memory_chapter_brief=False,
+                    include_paragraph_intent=False,
+                    include_literalism_guardrails=False,
                     prompt_layout="sentence-led",
                     execute=False,
                 ),
@@ -654,14 +1674,21 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             artifacts.payload["database_url"],
             "sqlite+pysqlite:///./artifacts/book-agent.db",
         )
+        self.assertFalse(artifacts.payload["options"]["include_paragraph_intent"])
+        self.assertFalse(artifacts.payload["options"]["include_literalism_guardrails"])
+        self.assertTrue(artifacts.payload["options"]["prefer_previous_translations_over_source_context"])
         self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
         self.assertEqual(artifacts.payload["options"]["prompt_profile"], "role-style-v2")
         self.assertFalse(artifacts.payload["options"]["execute"])
         self.assertIsNone(artifacts.payload["worker_output"])
         self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")
         self.assertIn("context_sources", artifacts.payload)
+        self.assertIn("prompt_stats", artifacts.payload)
         self.assertIn("chapter_memory_snapshot_id", artifacts.payload)
         self.assertIn("chapter_memory_snapshot_version", artifacts.payload)
+        self.assertIn("compiled_prev_block_count", artifacts.payload["context_sources"])
+        self.assertIn("compiled_next_block_count", artifacts.payload["context_sources"])
+        self.assertIn("prompt_chapter_brief_present", artifacts.payload["context_sources"])
         self.assertEqual(artifacts.payload["context_sources"]["chapter_brief_source"], "packet")
         self.assertIn("Current Sentences:", artifacts.payload["prompt_request"]["user_prompt"])
 
@@ -727,6 +1754,90 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             artifacts.payload["options"]["concept_overrides"][0]["canonical_zh"],
             "上下文工程",
         )
+
+    def test_packet_experiment_service_supports_material_profile_override(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[1]
+
+        with self.session_factory() as session:
+            service = PacketExperimentService(
+                TranslationRepository(session),
+                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+            )
+            artifacts = service.run(
+                packet_id,
+                PacketExperimentOptions(
+                    prompt_profile="material-aware-minimal-v1",
+                    material_profile_override="academic_paper",
+                ),
+            )
+
+        self.assertEqual(artifacts.payload["options"]["material_profile_override"], "academic_paper")
+        self.assertEqual(artifacts.payload["context_sources"]["translation_material"], "academic_paper")
+        self.assertNotIn("Translation Material:", artifacts.payload["prompt_request"]["user_prompt"])
+        self.assertGreater(artifacts.payload["prompt_stats"]["total_prompt_chars"], 0)
+
+    def test_packet_experiment_service_rerun_hints_appear_in_prompt(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[2]
+
+        with self.session_factory() as session:
+            service = PacketExperimentService(
+                TranslationRepository(session),
+                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+            )
+            artifacts = service.run(
+                packet_id,
+                PacketExperimentOptions(
+                    prompt_layout="paragraph-led",
+                    rerun_hints=(
+                        "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
+                    ),
+                ),
+            )
+
+        self.assertIn("Open Questions and Rerun Hints:", artifacts.payload["prompt_request"]["user_prompt"])
+        self.assertIn("prefer '上下文工程' over literal phrasing", artifacts.payload["prompt_request"]["user_prompt"])
+        self.assertEqual(
+            artifacts.payload["options"]["rerun_hints"][0],
+            "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
+        )
+
+    def test_translation_service_execute_packet_accepts_rerun_overrides_and_hints(self) -> None:
+        _, packet_ids = self._bootstrap_to_db()
+        packet_id = packet_ids[2]
+        fake_client = FakeTranslationClient()
+        worker = LLMTranslationWorker(
+            fake_client,
+            model_name="mock-llm",
+            prompt_version="rerun-hints-test",
+            runtime_config={"provider": "fake"},
+        )
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            service = TranslationService(repository, worker=worker)
+            service.execute_packet(
+                packet_id,
+                compile_options=ChapterContextCompileOptions(
+                    concept_overrides=(
+                        ConceptCandidate(
+                            source_term="context engineering",
+                            canonical_zh="上下文工程",
+                            status="locked",
+                            confidence=1.0,
+                        ),
+                    ),
+                ),
+                rerun_hints=(
+                    "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
+                ),
+            )
+
+        self.assertEqual(len(fake_client.requests), 1)
+        self.assertIn("context engineering => 上下文工程 (locked)", fake_client.requests[0].user_prompt)
+        self.assertIn("Open Questions and Rerun Hints:", fake_client.requests[0].user_prompt)
+        self.assertIn("prefer '上下文工程' over literal phrasing", fake_client.requests[0].user_prompt)
 
     def test_chapter_concept_lock_updates_memory_and_prompt(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
@@ -833,18 +1944,21 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         )
 
         self.assertTrue(diff.payload["summary"]["prompt_layout_changed"])
+        self.assertFalse(diff.payload["summary"]["prompt_profile_changed"])
         self.assertTrue(diff.payload["summary"]["chapter_brief_changed"])
         self.assertTrue(diff.payload["summary"]["chapter_brief_source_changed"])
         self.assertTrue(diff.payload["summary"]["previous_translation_count_changed"])
         self.assertTrue(diff.payload["summary"]["chapter_concept_count_changed"])
         self.assertTrue(diff.payload["summary"]["user_prompt_changed"])
         self.assertTrue(diff.payload["summary"]["worker_output_presence_changed"])
+        self.assertTrue(diff.payload["summary"]["prompt_size_changed"])
         self.assertIn("Current Sentences", "\n".join(diff.payload["prompt_delta"]["user_prompt_unified_diff"]))
         self.assertEqual(diff.payload["context_delta"]["previous_translation_count"]["delta"], 1)
         self.assertEqual(
             diff.payload["context_delta"]["context_sources"]["chapter_brief_source"]["cand"],
             "memory",
         )
+        self.assertIn("prompt_stats", diff.payload["prompt_delta"])
 
     def test_packet_experiment_scan_ranks_memory_rich_packets_first(self) -> None:
         packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
@@ -967,15 +2081,183 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(artifacts.payload["top_candidate"]["packet_id"], packet_a_id)
         self.assertGreater(artifacts.payload["entries"][0]["memory_signal_score"], artifacts.payload["entries"][1]["memory_signal_score"])
 
+    def test_translation_chapter_smoke_selects_top_packets_and_summarizes_style_drift(self) -> None:
+        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
+
+        class StubScanService:
+            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
+                return type(
+                    "Artifacts",
+                    (),
+                    {
+                        "payload": {
+                            "chapter_id": chapter_id,
+                            "packet_count": 2,
+                            "entries": [
+                                {
+                                    "packet_id": packet_a_id,
+                                    "memory_signal_score": 250,
+                                    "current_sentence_count": 2,
+                                },
+                                {
+                                    "packet_id": packet_b_id,
+                                    "memory_signal_score": 100,
+                                    "current_sentence_count": 1,
+                                },
+                            ],
+                        }
+                    },
+                )()
+
+        class StubExperimentService:
+            def run(self, packet_id: str, options: PacketExperimentOptions):
+                payloads = {
+                    packet_a_id: {
+                        "context_packet": {
+                            "current_blocks": [
+                                {
+                                    "block_id": "block-a",
+                                    "block_type": "paragraph",
+                                    "sentence_ids": ["s1"],
+                                    "text": "This broader challenge is what some are beginning to call context engineering.",
+                                }
+                            ]
+                        },
+                        "context_sources": {"compiled_prev_translated_count": 2},
+                        "worker_output": {
+                            "target_segments": [
+                                {
+                                    "text_zh": "这一挑战正被称为情境工程。",
+                                    "source_sentence_ids": ["s1"],
+                                }
+                            ],
+                            "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
+                            "low_confidence_flags": [],
+                        },
+                        "usage": {"cost_usd": 0.1},
+                        "prompt_request": {"user_prompt": "prompt-a"},
+                    },
+                    packet_b_id: {
+                        "context_packet": {
+                            "current_blocks": [
+                                {
+                                    "block_id": "block-b",
+                                    "block_type": "paragraph",
+                                    "sentence_ids": ["s1"],
+                                    "text": "This paragraph discusses distributed SQL foundations.",
+                                }
+                            ]
+                        },
+                        "context_sources": {"compiled_prev_translated_count": 1},
+                        "worker_output": {
+                            "target_segments": [
+                                {
+                                    "text_zh": "这一挑战正被称为上下文工程。",
+                                    "source_sentence_ids": ["s1"],
+                                }
+                            ],
+                            "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
+                            "low_confidence_flags": [],
+                        },
+                        "usage": {"cost_usd": 0.2},
+                        "prompt_request": {"user_prompt": "prompt-b"},
+                    },
+                }
+                return type("Artifacts", (), {"payload": payloads[packet_id]})()
+
+        smoke_service = TranslationChapterSmokeService(
+            experiment_service=StubExperimentService(),
+            scan_service=StubScanService(),
+        )
+        artifacts = smoke_service.run_chapter(
+            "chapter-1",
+            options=TranslationChapterSmokeOptions(selected_packet_limit=1, execute_selected=True),
+        )
+
+        self.assertEqual(artifacts.payload["selected_packet_ids"], [packet_a_id])
+        self.assertEqual(artifacts.payload["aggregate_summary"]["selected_packet_count"], 1)
+        self.assertEqual(artifacts.payload["aggregate_summary"]["total_style_drift_hits"], 1)
+        self.assertEqual(artifacts.payload["packet_results"][0]["style_drift_hits"], ["context_engineering_literal"])
+        self.assertEqual(artifacts.payload["aggregate_summary"]["total_cost_usd"], 0.1)
+
+    def test_translation_chapter_smoke_requires_source_pattern_match_for_style_drift(self) -> None:
+        packet_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+
+        class StubScanService:
+            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
+                return type(
+                    "Artifacts",
+                    (),
+                    {
+                        "payload": {
+                            "chapter_id": chapter_id,
+                            "packet_count": 1,
+                            "entries": [
+                                {
+                                    "packet_id": packet_id,
+                                    "memory_signal_score": 100,
+                                    "current_sentence_count": 1,
+                                }
+                            ],
+                        }
+                    },
+                )()
+
+        class StubExperimentService:
+            def run(self, packet_id: str, options: PacketExperimentOptions):
+                return type(
+                    "Artifacts",
+                    (),
+                    {
+                        "payload": {
+                            "context_packet": {
+                                "current_blocks": [
+                                    {
+                                        "block_id": "block-1",
+                                        "block_type": "paragraph",
+                                        "sentence_ids": ["s1"],
+                                        "text": "This paragraph discusses distributed SQL foundations.",
+                                    }
+                                ]
+                            },
+                            "worker_output": {
+                                "target_segments": [
+                                    {
+                                        "text_zh": "这一挑战正被一些人称为情境工程。",
+                                        "source_sentence_ids": ["s1"],
+                                    }
+                                ],
+                                "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
+                                "low_confidence_flags": [],
+                            },
+                            "usage": {"cost_usd": 0.1},
+                            "prompt_request": {"user_prompt": "prompt-a"},
+                        }
+                    },
+                )()
+
+        smoke_service = TranslationChapterSmokeService(
+            experiment_service=StubExperimentService(),
+            scan_service=StubScanService(),
+        )
+        artifacts = smoke_service.run_chapter(
+            "chapter-1",
+            options=TranslationChapterSmokeOptions(selected_packet_limit=1, execute_selected=True),
+        )
+
+        self.assertEqual(artifacts.payload["aggregate_summary"]["total_style_drift_hits"], 0)
+        self.assertEqual(artifacts.payload["packet_results"][0]["style_drift_hits"], [])
+
     def test_translation_service_reuses_chapter_memory_across_nonadjacent_packets(self) -> None:
         chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
-    <p>First memory paragraph introduces the core concept.</p>
-    <p>Second memory paragraph extends the discussion.</p>
-    <p>Third memory paragraph keeps building the case.</p>
-    <p>Fourth memory paragraph revisits the core concept in a new light.</p>
+    <p>First memory paragraph introduces the core concept. It explains why continuity matters. It also frames the upcoming discussion. Finally, it anchors the terminology for later packets.</p>
+    <p>Second memory paragraph extends the discussion. It keeps the concept active in local discourse. It adds another angle on the same idea. Finally, it reinforces the naming choice.</p>
+    <p>Third memory paragraph keeps building the case. It connects the concept to runtime behavior. It highlights the operational consequence. Finally, it closes the local argument before the next packet.</p>
+    <p>Fourth memory paragraph revisits the core concept in a new light. It introduces a contrast with prior assumptions. It preserves the same terminology across packets. Finally, it gives the translator another place to reuse memory.</p>
   </body>
 </html>
 """
@@ -1024,7 +2306,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(len(fake_client.requests), 1)
         prompt = fake_client.requests[0].user_prompt
         self.assertIn(
-            "First memory paragraph introduces the core concept. => ZH::First memory paragraph introduces the core concept.",
+            "First memory paragraph introduces the core concept. It explains why continuity matters.",
             prompt,
         )
         self.assertIn("Current Paragraph:", prompt)
@@ -1034,9 +2316,9 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
-    <p>First translated paragraph introduces context engineering.</p>
-    <p>Second translated paragraph reinforces the context engineering concept.</p>
-    <p>Third translated paragraph closes the section.</p>
+    <p>First translated paragraph introduces context engineering. It gives the chapter a stable anchor term. It also explains why the term matters. Finally, it sets up the following discussion.</p>
+    <p>Second translated paragraph reinforces the context engineering concept. It reuses the same core term. It adds another supporting explanation. Finally, it keeps the concept active for memory replay.</p>
+    <p>Third translated paragraph closes the section. It summarizes the earlier framing. It preserves the same terminology. Finally, it ends the chapter segment cleanly.</p>
   </body>
 </html>
 """
@@ -1089,8 +2371,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
-    <p>Agentic AI depends on distributed SQL.</p>
-    <p>Context engineering shapes how context is created.</p>
+    <p>Agentic AI depends on distributed SQL. It also depends on stable orchestration. It benefits from explicit memory design. Finally, it needs infrastructure that can persist state.</p>
+    <p>Context engineering shapes how context is created. It also shapes how context is maintained. It influences how context is retrieved. Finally, it determines how context is applied during execution.</p>
   </body>
 </html>
 """
@@ -1179,6 +2461,85 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertNotIn("agent might", lowered)
         self.assertNotIn("aakash gupta context engineering", lowered)
         self.assertNotIn("accomplish these responses agentic", lowered)
+
+    def test_merge_active_concepts_counts_unique_packets_only(self) -> None:
+        with self.session_factory() as session:
+            service = TranslationService(TranslationRepository(session))
+            merged = service._merge_active_concepts(
+                existing_concepts=[
+                    {
+                        "source_term": "Context engineering",
+                        "canonical_zh": None,
+                        "status": "candidate",
+                        "confidence": 0.6,
+                        "first_seen_packet_id": "packet-1",
+                        "last_seen_packet_id": "packet-1",
+                        "packet_ids_seen": ["packet-1"],
+                        "times_seen": 1,
+                        "mention_count": 1,
+                        "packet_mention_counts": {"packet-1": 1},
+                    }
+                ],
+                source_sentences=["Context engineering shapes how context is created."],
+                packet_id="packet-1",
+            )
+            self.assertEqual(len(merged), 1)
+            self.assertEqual(merged[0]["packet_ids_seen"], ["packet-1"])
+            self.assertEqual(merged[0]["times_seen"], 1)
+            self.assertEqual(merged[0]["mention_count"], 1)
+            self.assertEqual(merged[0]["packet_mention_counts"], {"packet-1": 1})
+
+            merged = service._merge_active_concepts(
+                existing_concepts=merged,
+                source_sentences=["Context engineering also determines how context is maintained."],
+                packet_id="packet-2",
+            )
+            self.assertEqual(merged[0]["packet_ids_seen"], ["packet-1", "packet-2"])
+            self.assertEqual(merged[0]["times_seen"], 2)
+            self.assertEqual(merged[0]["mention_count"], 2)
+            self.assertEqual(
+                merged[0]["packet_mention_counts"],
+                {"packet-1": 1, "packet-2": 1},
+            )
+
+    def test_translation_service_updates_chapter_memory_with_newer_packet_brief(self) -> None:
+        document_id, packet_ids = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            repository = TranslationRepository(session)
+            heading_packet_id, first_packet_id = packet_ids[:2]
+            service = TranslationService(repository)
+            service.execute_packet(heading_packet_id)
+            service.execute_packet(first_packet_id)
+            chapter_id = repository.load_packet_bundle(first_packet_id).packet.chapter_id
+            chapter_memory_repository = ChapterTranslationMemoryRepository(session)
+            current_snapshot = chapter_memory_repository.load_latest(
+                document_id=document_id,
+                chapter_id=chapter_id,
+            )
+            assert current_snapshot is not None
+
+            stale_snapshot = chapter_memory_repository.supersede_and_create_next(
+                current_snapshot=current_snapshot,
+                document_id=document_id,
+                chapter_id=chapter_id,
+                content_json={
+                    **dict(current_snapshot.content_json),
+                    "chapter_brief": "Old stale brief.",
+                    "chapter_brief_version": 0,
+                },
+            )
+            session.flush()
+
+            service.execute_packet(first_packet_id)
+            refreshed_snapshot = chapter_memory_repository.load_latest(
+                document_id=document_id,
+                chapter_id=chapter_id,
+            )
+            assert refreshed_snapshot is not None
+            self.assertGreater(refreshed_snapshot.version, stale_snapshot.version)
+            self.assertNotEqual(refreshed_snapshot.content_json.get("chapter_brief"), "Old stale brief.")
+            self.assertEqual(refreshed_snapshot.content_json.get("chapter_brief_version"), 1)
 
     def test_llm_worker_drops_invalid_sentence_ids_before_persistence(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
@@ -1388,11 +2749,105 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
 
+    def test_openai_compatible_client_normalizes_common_alignment_aliases(self) -> None:
+        transport = FakeJSONTransport(
+            {
+                "id": "chatcmpl_alias_123",
+                "usage": {"prompt_tokens": 77, "completion_tokens": 19, "total_tokens": 96},
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"packet_id":"pkt_1","target_segments":[{"temp_id":"t1","text_zh":"译文","segment_type":"sentence","source_id":"s1","confidence":0.91}],'
+                                '"alignment_suggestions":[{"source_id":["s1"],"target_temp_id":"t1","relation_type":"1:1","confidence":0.93}],'
+                                '"notes":[]}'
+                            )
+                        }
+                    }
+                ],
+            }
+        )
+        client = OpenAICompatibleTranslationClient(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            transport=transport,
+        )
+
+        output = client.generate_translation(
+            TranslationPromptRequest(
+                packet_id="pkt_1",
+                model_name="deepseek-chat",
+                prompt_version="p0.llm.v1",
+                system_prompt="system",
+                user_prompt="user",
+                response_schema=TranslationWorkerOutput.model_json_schema(),
+            )
+        )
+
+        self.assertEqual(output.packet_id, "pkt_1")
+        self.assertEqual(output.target_segments[0].source_sentence_ids, ["s1"])
+        self.assertEqual(output.alignment_suggestions[0].source_sentence_ids, ["s1"])
+        self.assertEqual(output.alignment_suggestions[0].target_temp_ids, ["t1"])
+        self.assertEqual(output.low_confidence_flags, [])
+
+    def test_openai_compatible_client_generates_generic_structured_object_in_chat_mode(self) -> None:
+        transport = FakeJSONTransport(
+            {
+                "id": "chatcmpl_concept_123",
+                "usage": {"prompt_tokens": 42, "completion_tokens": 18, "total_tokens": 60},
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"source_term":"Context Engineering","canonical_zh":"上下文工程",'
+                                '"confidence":0.96,"rationale":"The translated examples already use 上下文工程。"}'
+                            )
+                        }
+                    }
+                ],
+            }
+        )
+        client = OpenAICompatibleTranslationClient(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            timeout_seconds=30,
+            transport=transport,
+        )
+
+        payload, usage = client.generate_structured_object(
+            model_name="deepseek-chat",
+            system_prompt="system",
+            user_prompt="user",
+            response_schema={
+                "type": "object",
+                "properties": {
+                    "source_term": {"type": "string"},
+                    "canonical_zh": {"type": "string"},
+                    "confidence": {"type": "number"},
+                    "rationale": {"type": "string"},
+                },
+                "required": ["source_term", "canonical_zh"],
+            },
+            schema_name="concept_resolution",
+        )
+
+        self.assertEqual(payload["source_term"], "Context Engineering")
+        self.assertEqual(payload["canonical_zh"], "上下文工程")
+        self.assertEqual(usage.token_in, 42)
+        self.assertEqual(usage.token_out, 18)
+        self.assertEqual(usage.provider_request_id, "chatcmpl_concept_123")
+        self.assertEqual(len(transport.calls), 1)
+        call = transport.calls[0]
+        self.assertEqual(call["url"], "https://api.deepseek.com/chat/completions")
+        self.assertEqual(call["payload"]["model"], "deepseek-chat")
+        self.assertEqual(call["payload"]["response_format"]["type"], "json_object")
+
     def test_factory_builds_openai_compatible_worker_when_credentials_exist(self) -> None:
         settings = Settings(
             translation_backend="openai_compatible",
             translation_model="gpt-test",
             translation_prompt_version="p0.llm.v1",
+            translation_prompt_profile="role-style-v2",
             translation_openai_api_key="test-key",
             translation_openai_base_url="https://provider.example/v1/responses",
             translation_timeout_seconds=30,
@@ -1406,6 +2861,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         metadata = worker.metadata()
         self.assertEqual(metadata.model_name, "gpt-test")
         self.assertEqual(metadata.runtime_config["provider"], "openai_compatible")
+        self.assertEqual(metadata.runtime_config["prompt_profile"], "role-style-v2")
         self.assertEqual(metadata.runtime_config["base_url"], "https://provider.example/v1/responses")
         self.assertEqual(metadata.runtime_config["timeout_seconds"], 30)
         self.assertEqual(metadata.runtime_config["max_retries"], 1)

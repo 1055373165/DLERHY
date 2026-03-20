@@ -23,6 +23,7 @@ def _copy_content(snapshot: MemorySnapshot | None, chapter: Chapter) -> dict[str
             "chapter_title": chapter.title_src,
             "heading_path": [chapter.title_src] if chapter.title_src else [],
             "chapter_brief": None,
+            "chapter_brief_version": None,
             "active_concepts": [],
             "recent_accepted_translations": [],
             "last_packet_id": None,
@@ -33,6 +34,7 @@ def _copy_content(snapshot: MemorySnapshot | None, chapter: Chapter) -> dict[str
     content.setdefault("chapter_title", chapter.title_src)
     content.setdefault("heading_path", [chapter.title_src] if chapter.title_src else [])
     content.setdefault("chapter_brief", None)
+    content.setdefault("chapter_brief_version", None)
     content.setdefault("active_concepts", [])
     content.setdefault("recent_accepted_translations", [])
     content.setdefault("last_packet_id", None)

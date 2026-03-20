@@ -29,6 +29,26 @@ def _target_texts(worker_output: dict[str, Any] | None) -> list[str]:
     ]
 
 
+def _prompt_stats(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    stats = payload.get("prompt_stats")
+    if isinstance(stats, dict):
+        return stats
+    prompt_request = payload.get("prompt_request") or {}
+    if not isinstance(prompt_request, dict):
+        return {}
+    system_prompt = str(prompt_request.get("system_prompt") or "")
+    user_prompt = str(prompt_request.get("user_prompt") or "")
+    return {
+        "system_prompt_chars": len(system_prompt),
+        "user_prompt_chars": len(user_prompt),
+        "total_prompt_chars": len(system_prompt) + len(user_prompt),
+        "system_prompt_lines": len(system_prompt.splitlines()),
+        "user_prompt_lines": len(user_prompt.splitlines()),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class PacketExperimentDiffArtifacts:
     payload: dict[str, Any]
@@ -60,6 +80,8 @@ def compare_experiment_payloads(
     candidate_output = candidate.get("worker_output") if isinstance(candidate, dict) else None
     baseline_sources = (baseline.get("context_sources") or {}) if isinstance(baseline, dict) else {}
     candidate_sources = (candidate.get("context_sources") or {}) if isinstance(candidate, dict) else {}
+    baseline_prompt_stats = _prompt_stats(baseline if isinstance(baseline, dict) else None)
+    candidate_prompt_stats = _prompt_stats(candidate if isinstance(candidate, dict) else None)
 
     baseline_prev_count = len(list(baseline_context.get("prev_translated_blocks") or []))
     candidate_prev_count = len(list(candidate_context.get("prev_translated_blocks") or []))
@@ -82,13 +104,21 @@ def compare_experiment_payloads(
                 ((baseline.get("options") or {}).get("prompt_layout"))
                 != ((candidate.get("options") or {}).get("prompt_layout"))
             ),
+            "prompt_profile_changed": (
+                ((baseline.get("options") or {}).get("prompt_profile"))
+                != ((candidate.get("options") or {}).get("prompt_profile"))
+            ),
             "chapter_brief_changed": baseline_context.get("chapter_brief") != candidate_context.get("chapter_brief"),
             "previous_translation_count_changed": baseline_prev_count != candidate_prev_count,
             "chapter_concept_count_changed": baseline_concept_count != candidate_concept_count,
             "chapter_brief_source_changed": baseline_sources.get("chapter_brief_source")
             != candidate_sources.get("chapter_brief_source"),
+            "translation_material_changed": baseline_sources.get("translation_material")
+            != candidate_sources.get("translation_material"),
             "user_prompt_changed": baseline_prompt != candidate_prompt,
             "system_prompt_changed": baseline_system_prompt != candidate_system_prompt,
+            "prompt_size_changed": baseline_prompt_stats.get("total_prompt_chars")
+            != candidate_prompt_stats.get("total_prompt_chars"),
             "worker_output_changed": baseline_targets != candidate_targets,
             "worker_output_presence_changed": bool(baseline_output) != bool(candidate_output),
         },
@@ -136,9 +166,29 @@ def compare_experiment_payloads(
                     baseline_label: baseline_sources.get("chapter_brief_source"),
                     candidate_label: candidate_sources.get("chapter_brief_source"),
                 },
+                "translation_material": {
+                    baseline_label: baseline_sources.get("translation_material"),
+                    candidate_label: candidate_sources.get("translation_material"),
+                },
             },
         },
         "prompt_delta": {
+            "prompt_stats": {
+                baseline_label: baseline_prompt_stats,
+                candidate_label: candidate_prompt_stats,
+                "total_prompt_chars_delta": (
+                    int(candidate_prompt_stats.get("total_prompt_chars") or 0)
+                    - int(baseline_prompt_stats.get("total_prompt_chars") or 0)
+                ),
+                "user_prompt_chars_delta": (
+                    int(candidate_prompt_stats.get("user_prompt_chars") or 0)
+                    - int(baseline_prompt_stats.get("user_prompt_chars") or 0)
+                ),
+                "system_prompt_chars_delta": (
+                    int(candidate_prompt_stats.get("system_prompt_chars") or 0)
+                    - int(baseline_prompt_stats.get("system_prompt_chars") or 0)
+                ),
+            },
             "baseline_sections": _section_titles(baseline_prompt),
             "candidate_sections": _section_titles(candidate_prompt),
             "user_prompt_unified_diff": list(

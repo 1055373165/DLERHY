@@ -58,8 +58,27 @@ def main() -> int:
     )
     parser.add_argument(
         "--prompt-profile",
-        choices=("current", "role-style-v2", "role-style-memory-v2"),
+        choices=(
+            "current",
+            "role-style-v2",
+            "role-style-memory-v2",
+            "role-style-brief-v3",
+            "material-aware-v1",
+            "material-aware-minimal-v1",
+        ),
         default="role-style-v2",
+    )
+    parser.add_argument(
+        "--material-profile",
+        choices=(
+            "general_nonfiction",
+            "technical_book",
+            "academic_paper",
+            "technical_blog",
+            "business_document",
+        ),
+        default=None,
+        help="Override packet translation_material for prompt A/B experiments without mutating the database.",
     )
     parser.add_argument(
         "--execute",
@@ -82,11 +101,32 @@ def main() -> int:
         help="Use packet brief instead of the latest chapter memory brief.",
     )
     parser.add_argument(
+        "--disable-prev-translation-primary",
+        action="store_true",
+        help="Do not let previous accepted translations suppress raw prev/next source context and chapter brief.",
+    )
+    parser.add_argument(
+        "--disable-paragraph-intent",
+        action="store_true",
+        help="Disable paragraph intent signal inference when compiling packet context.",
+    )
+    parser.add_argument(
+        "--disable-literalism-guardrails",
+        action="store_true",
+        help="Disable source-aware literalism guardrails when compiling packet context.",
+    )
+    parser.add_argument(
         "--concept-override",
         action="append",
         type=_parse_concept_override,
         default=[],
         help="Temporary concept override in source_term=canonical_zh form. Can be repeated.",
+    )
+    parser.add_argument(
+        "--rerun-hint",
+        action="append",
+        default=[],
+        help="Temporary rerun hint injected into packet open_questions. Can be repeated.",
     )
     args = parser.parse_args()
     args.output_path = args.output_path.resolve()
@@ -107,10 +147,17 @@ def main() -> int:
                     include_memory_blocks=not args.disable_memory_blocks,
                     include_chapter_concepts=not args.disable_chapter_concepts,
                     prefer_memory_chapter_brief=not args.disable_memory_brief,
+                    prefer_previous_translations_over_source_context=(
+                        not args.disable_prev_translation_primary
+                    ),
+                    include_paragraph_intent=not args.disable_paragraph_intent,
+                    include_literalism_guardrails=not args.disable_literalism_guardrails,
                     prompt_layout=args.prompt_layout,
                     prompt_profile=args.prompt_profile,
+                    material_profile_override=args.material_profile,
                     execute=args.execute,
                     concept_overrides=tuple(args.concept_override),
+                    rerun_hints=tuple(str(item) for item in args.rerun_hint),
                 ),
             )
         args.output_path.parent.mkdir(parents=True, exist_ok=True)

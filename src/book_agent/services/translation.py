@@ -11,13 +11,26 @@ from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunSt
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
-from book_agent.services.context_compile import ChapterContextCompiler
-from book_agent.workers.contracts import TranslationUsage, TranslationWorkerOutput, TranslationWorkerResult
+from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
+from book_agent.services.memory_service import MemoryService
+from book_agent.workers.contracts import (
+    CompiledTranslationContext,
+    TranslationUsage,
+    TranslationWorkerOutput,
+    TranslationWorkerResult,
+)
 from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _coerce_nonnegative_int(value: object) -> int:
+    try:
+        return max(int(value or 0), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 CONCEPT_HINT_KEYWORDS = {
@@ -218,6 +231,18 @@ def _normalize_relation_type(value: str) -> RelationType:
     return mapping.get(normalized, RelationType.ONE_TO_ONE)
 
 
+def _dedupe_alignment_edges(edges: list[AlignmentEdge]) -> list[AlignmentEdge]:
+    deduped: list[AlignmentEdge] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for edge in edges:
+        key = (edge.sentence_id, edge.target_segment_id)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        deduped.append(edge)
+    return deduped
+
+
 @dataclass(slots=True)
 class TranslationExecutionArtifacts:
     translation_run: TranslationRun
@@ -233,6 +258,7 @@ class TranslationService:
         worker: TranslationWorker | None = None,
         chapter_memory_repository: ChapterTranslationMemoryRepository | None = None,
         context_compiler: ChapterContextCompiler | None = None,
+        memory_service: MemoryService | None = None,
     ):
         self.repository = repository
         self.worker = worker or EchoTranslationWorker()
@@ -240,17 +266,26 @@ class TranslationService:
             repository.session
         )
         self.context_compiler = context_compiler or ChapterContextCompiler()
+        self.memory_service = memory_service or MemoryService(
+            chapter_memory_repository=self.chapter_memory_repository,
+            context_compiler=self.context_compiler,
+        )
 
-    def execute_packet(self, packet_id: str) -> TranslationExecutionArtifacts:
+    def execute_packet(
+        self,
+        packet_id: str,
+        *,
+        compile_options: ChapterContextCompileOptions | None = None,
+        rerun_hints: tuple[str, ...] = (),
+    ) -> TranslationExecutionArtifacts:
         bundle = self.repository.load_packet_bundle(packet_id)
-        chapter_memory_snapshot = self.chapter_memory_repository.load_latest(
-            document_id=bundle.context_packet.document_id,
-            chapter_id=bundle.context_packet.chapter_id,
+        compiled_context_result = self.memory_service.load_compiled_context(
+            packet=bundle.context_packet,
+            options=compile_options,
+            rerun_hints=rerun_hints,
         )
-        compiled_context_packet = self.context_compiler.compile(
-            bundle.context_packet,
-            chapter_memory_snapshot=chapter_memory_snapshot,
-        )
+        chapter_memory_snapshot = compiled_context_result.chapter_memory_snapshot
+        compiled_context_packet = compiled_context_result.context
         worker_result = self._coerce_worker_result(
             self.worker.translate(
                 TranslationTask(
@@ -259,7 +294,7 @@ class TranslationService:
                 )
             )
         )
-        artifacts = self._build_artifacts(bundle, worker_result, chapter_memory_snapshot)
+        artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet)
         self.repository.save_translation_artifacts(
             translation_run=artifacts.translation_run,
             target_segments=artifacts.target_segments,
@@ -280,7 +315,7 @@ class TranslationService:
         self,
         bundle: TranslationPacketBundle,
         worker_result: TranslationWorkerResult,
-        chapter_memory_snapshot: MemorySnapshot | None,
+        compiled_context_packet: CompiledTranslationContext,
     ) -> TranslationExecutionArtifacts:
         now = _utcnow()
         attempt = self.repository.next_attempt(bundle.packet.id)
@@ -293,10 +328,9 @@ class TranslationService:
             model_name=metadata.model_name,
             model_config_json={
                 "worker": metadata.worker_name,
-                "context_compile_version": self.context_compiler.compile_version,
-                "chapter_memory_snapshot_version_used": (
-                    chapter_memory_snapshot.version if chapter_memory_snapshot is not None else None
-                ),
+                "context_compile_version": compiled_context_packet.context_compile_version,
+                "chapter_memory_snapshot_version_used": compiled_context_packet.memory_version_used,
+                "compiled_context_metadata": dict(compiled_context_packet.compile_metadata),
                 **metadata.runtime_config,
             },
             prompt_version=metadata.prompt_version,
@@ -354,6 +388,7 @@ class TranslationService:
                             created_at=now,
                         )
                     )
+        alignment_edges = _dedupe_alignment_edges(alignment_edges)
 
         low_confidence_ids = {flag.sentence_id for flag in output.low_confidence_flags}
         updated_sentences: list[Sentence] = []
@@ -388,6 +423,16 @@ class TranslationService:
         active_concepts = existing_content.get("active_concepts", [])
         if not isinstance(active_concepts, list):
             active_concepts = []
+        existing_brief_version = _coerce_nonnegative_int(existing_content.get("chapter_brief_version"))
+        packet_brief_version = _coerce_nonnegative_int(bundle.packet.chapter_brief_version)
+        chapter_brief = existing_content.get("chapter_brief")
+        heading_path = existing_content.get("heading_path") or compiled_context_packet.heading_path
+        if compiled_context_packet.chapter_brief and (
+            chapter_brief is None or packet_brief_version >= existing_brief_version
+        ):
+            chapter_brief = compiled_context_packet.chapter_brief
+            existing_brief_version = packet_brief_version
+            heading_path = compiled_context_packet.heading_path
 
         target_excerpt = " ".join(segment.text_zh.strip() for segment in artifacts.target_segments if segment.text_zh).strip()
         source_excerpt = " ".join(
@@ -420,8 +465,9 @@ class TranslationService:
             "schema_version": 1,
             "chapter_id": bundle.packet.chapter_id,
             "chapter_title": existing_content.get("chapter_title"),
-            "heading_path": existing_content.get("heading_path") or compiled_context_packet.heading_path,
-            "chapter_brief": existing_content.get("chapter_brief") or compiled_context_packet.chapter_brief,
+            "heading_path": heading_path,
+            "chapter_brief": chapter_brief,
+            "chapter_brief_version": existing_brief_version or None,
             "active_concepts": active_concepts,
             "recent_accepted_translations": recent_accepted,
             "last_packet_id": bundle.packet.id,
@@ -452,8 +498,10 @@ class TranslationService:
 
         for source_term in self._extract_concept_candidates(source_sentences):
             key = source_term.lower()
+            mention_count = self._count_concept_mentions(source_term, source_sentences)
             current = concept_map.get(key)
             if current is None:
+                packet_mention_counts = {packet_id: mention_count}
                 concept_map[key] = {
                     "source_term": source_term,
                     "canonical_zh": None,
@@ -461,11 +509,26 @@ class TranslationService:
                     "confidence": 0.6,
                     "first_seen_packet_id": packet_id,
                     "last_seen_packet_id": packet_id,
+                    "packet_ids_seen": [packet_id],
                     "times_seen": 1,
+                    "mention_count": mention_count,
+                    "packet_mention_counts": packet_mention_counts,
                 }
                 continue
             current["last_seen_packet_id"] = packet_id
-            current["times_seen"] = int(current.get("times_seen") or 0) + 1
+            packet_ids_seen = [
+                str(item).strip()
+                for item in list(current.get("packet_ids_seen") or [])
+                if str(item).strip()
+            ]
+            if packet_id not in packet_ids_seen:
+                packet_ids_seen.append(packet_id)
+            current["packet_ids_seen"] = packet_ids_seen
+            current["times_seen"] = len(packet_ids_seen)
+            packet_mention_counts = self._normalize_packet_mention_counts(current, packet_ids_seen)
+            packet_mention_counts[packet_id] = mention_count
+            current["packet_mention_counts"] = packet_mention_counts
+            current["mention_count"] = sum(packet_mention_counts.values())
 
         concepts = list(concept_map.values())
         concepts.sort(
@@ -476,6 +539,42 @@ class TranslationService:
             )
         )
         return concepts[:12]
+
+    def _count_concept_mentions(self, source_term: str, source_sentences: list[str]) -> int:
+        lowered = source_term.casefold()
+        return sum(1 for sentence in source_sentences if lowered in str(sentence or "").casefold())
+
+    def _normalize_packet_mention_counts(
+        self,
+        concept: dict[str, Any],
+        packet_ids_seen: list[str],
+    ) -> dict[str, int]:
+        raw_counts = concept.get("packet_mention_counts")
+        normalized: dict[str, int] = {}
+        if isinstance(raw_counts, dict):
+            for packet_id, count in raw_counts.items():
+                key = str(packet_id).strip()
+                if not key:
+                    continue
+                normalized[key] = max(int(count or 0), 0)
+        if normalized:
+            for packet_id in packet_ids_seen:
+                normalized.setdefault(packet_id, 0)
+            return normalized
+
+        if not packet_ids_seen:
+            return {}
+
+        total_mentions = max(int(concept.get("mention_count") or concept.get("times_seen") or 0), 0)
+        if total_mentions == 0:
+            return {packet_id: 0 for packet_id in packet_ids_seen}
+
+        base = max(total_mentions // len(packet_ids_seen), 1)
+        remainder = max(total_mentions - (base * len(packet_ids_seen)), 0)
+        fallback_counts: dict[str, int] = {}
+        for index, packet_id in enumerate(packet_ids_seen):
+            fallback_counts[packet_id] = base + (1 if index < remainder else 0)
+        return fallback_counts
 
     def _extract_concept_candidates(self, source_sentences: list[str]) -> list[str]:
         candidates: dict[str, str] = {}

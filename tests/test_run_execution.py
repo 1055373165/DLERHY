@@ -2,6 +2,11 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+from book_agent.app.runtime.document_run_executor import (
+    DocumentRunExecutor,
+    _is_retryable_exception,
+    _pause_reason_for_exception,
+)
 from book_agent.domain.enums import DocumentStatus, DocumentRunType, SourceType
 from book_agent.domain.models import Document
 from book_agent.infra.db.base import Base
@@ -219,6 +224,79 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertTrue(guardrail.budget_exceeded)
         self.assertEqual(guardrail.stop_reason, "budget.consecutive_failures_exceeded")
         self.assertEqual(guardrail.run_summary.status, "failed")
+
+    def test_retryable_exception_helper_treats_http_429_as_retryable(self) -> None:
+        exc = RuntimeError("Provider returned HTTP 429: rate limit exceeded")
+        self.assertTrue(_is_retryable_exception(exc))
+
+    def test_retryable_exception_helper_treats_http_402_insufficient_balance_as_non_retryable(self) -> None:
+        exc = RuntimeError(
+            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
+        )
+        self.assertFalse(_is_retryable_exception(exc))
+        self.assertEqual(_pause_reason_for_exception(exc), "provider.insufficient_balance")
+
+    def test_provider_insufficient_balance_pauses_run_immediately(self) -> None:
+        run_id = self._create_running_run(
+            budget=RunBudgetSummary(
+                max_wall_clock_seconds=None,
+                max_total_cost_usd=None,
+                max_total_token_in=None,
+                max_total_token_out=None,
+                max_retry_count_per_work_item=2,
+                max_consecutive_failures=24,
+                max_parallel_workers=1,
+                max_parallel_requests_per_provider=1,
+                max_auto_followup_attempts=1,
+            )
+        )
+        packet_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            execution.seed_translate_work_items(run_id=run_id, packet_ids=[packet_id])
+            claimed = execution.claim_next_translate_work_item(
+                run_id=run_id,
+                worker_name="test.translate",
+                worker_instance_id="worker-6",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            session.commit()
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+        exc = RuntimeError(
+            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
+        )
+        executor._complete_failure(
+            run_id=run_id,
+            claimed=claimed,
+            exc=exc,
+            stage_key="translate",
+        )
+
+        with self.session_factory() as session:
+            summary = RunControlService(RunControlRepository(session)).get_run_summary(run_id)
+
+        self.assertEqual(summary.status, "paused")
+        self.assertEqual(summary.stop_reason, "provider.insufficient_balance")
+        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 1)
+
+    def test_run_control_isoformat_treats_naive_sqlite_datetimes_as_utc(self) -> None:
+        with self.session_factory() as session:
+            control = RunControlService(RunControlRepository(session))
+            naive = datetime(2026, 3, 18, 13, 30, 19, 791297)
+
+            self.assertEqual(
+                control._isoformat(naive),
+                "2026-03-18T13:30:19.791297+00:00",
+            )
 
 
 if __name__ == "__main__":

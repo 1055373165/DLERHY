@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from book_agent.domain.enums import ArtifactStatus
 from book_agent.domain.models import (
     Block,
     BookProfile,
     Chapter,
     Document,
+    DocumentImage,
     JobRun,
     MemorySnapshot,
     Sentence,
@@ -35,11 +37,18 @@ class PersistedDocumentBundle:
     book_profile: BookProfile | None
     memory_snapshots: list[MemorySnapshot]
     job_runs: list[JobRun]
+    document_images: list[DocumentImage]
 
 
 class BootstrapRepository:
     def __init__(self, session: Session):
         self.session = session
+
+    def _document_images_table_available(self) -> bool:
+        bind = self.session.get_bind()
+        if bind is None:
+            return False
+        return bool(inspect(bind).has_table(DocumentImage.__tablename__))
 
     def save(self, artifacts: BootstrapArtifacts) -> None:
         self.session.merge(artifacts.document)
@@ -66,6 +75,7 @@ class BootstrapRepository:
 
         self._merge_collection(artifacts.packet_sentence_maps)
         self._merge_collection(artifacts.job_runs)
+        self._merge_collection(artifacts.document_images)
         self.session.flush()
 
     def _merge_collection(self, collection: list[object]) -> None:
@@ -81,7 +91,12 @@ class BootstrapRepository:
             select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)
         ).all()
         blocks = self.session.scalars(
-            select(Block).join(Chapter, Block.chapter_id == Chapter.id).where(Chapter.document_id == document_id)
+            select(Block)
+            .join(Chapter, Block.chapter_id == Chapter.id)
+            .where(
+                Chapter.document_id == document_id,
+                Block.status == ArtifactStatus.ACTIVE,
+            )
         ).all()
         sentences = self.session.scalars(
             select(Sentence).where(Sentence.document_id == document_id)
@@ -89,6 +104,15 @@ class BootstrapRepository:
         memory_snapshots = self.session.scalars(
             select(MemorySnapshot).where(MemorySnapshot.document_id == document_id)
         ).all()
+        document_images = (
+            self.session.scalars(
+                select(DocumentImage)
+                .where(DocumentImage.document_id == document_id)
+                .order_by(DocumentImage.page_number, DocumentImage.id)
+            ).all()
+            if self._document_images_table_available()
+            else []
+        )
         packets = self.session.scalars(
             select(TranslationPacket)
             .join(Chapter, TranslationPacket.chapter_id == Chapter.id)
@@ -147,4 +171,5 @@ class BootstrapRepository:
             book_profile=book_profile,
             memory_snapshots=memory_snapshots,
             job_runs=job_runs,
+            document_images=document_images,
         )

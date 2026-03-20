@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"
     translation_prompt_version: str = "p0.echo.v1"
+    translation_prompt_profile: str = "role-style-v2"
     translation_timeout_seconds: int = 60
     translation_max_retries: int = 1
     translation_retry_backoff_seconds: float = 1.5

@@ -338,30 +338,56 @@ class TargetedRebuildService:
             packet = packet_by_id.get(packet_id)
             if packet is None or packet.block_start_id is None:
                 continue
-            block = blocks_by_id.get(packet.block_start_id)
-            if block is None:
+            start_block = blocks_by_id.get(packet.block_start_id)
+            end_block = blocks_by_id.get(packet.block_end_id or packet.block_start_id)
+            if start_block is None or end_block is None:
                 continue
             try:
-                index = next(idx for idx, item in enumerate(translatable_blocks) if item.id == block.id)
+                start_index = next(idx for idx, item in enumerate(translatable_blocks) if item.id == start_block.id)
             except StopIteration:
                 continue
-            prev_blocks = translatable_blocks[max(0, index - 2):index]
-            next_blocks = translatable_blocks[index + 1:index + 3]
-            rebuilt_packet, packet_maps = self.context_packet_builder.build_packet(
-                document=document,
-                chapter=chapter,
-                block=block,
-                prev_blocks=prev_blocks,
-                next_blocks=next_blocks,
-                sentences_by_block=sentences_by_block,
-                book_profile=book_profile,
-                chapter_brief=chapter_brief,
-                termbase_snapshot=termbase_snapshot,
-                entity_snapshot=entity_snapshot,
-                packet_id=packet.id,
-                packet_type=PacketType.RETRANSLATE,
-                created_at=packet.created_at,
-            )
+            try:
+                end_index = next(idx for idx, item in enumerate(translatable_blocks) if item.id == end_block.id)
+            except StopIteration:
+                continue
+            if end_index < start_index:
+                continue
+            current_blocks = translatable_blocks[start_index : end_index + 1]
+            prev_blocks = translatable_blocks[max(0, start_index - 2):start_index]
+            next_blocks = translatable_blocks[end_index + 1:end_index + 3]
+            if len(current_blocks) == 1:
+                rebuilt_packet, packet_maps = self.context_packet_builder.build_packet(
+                    document=document,
+                    chapter=chapter,
+                    block=current_blocks[0],
+                    prev_blocks=prev_blocks,
+                    next_blocks=next_blocks,
+                    sentences_by_block=sentences_by_block,
+                    book_profile=book_profile,
+                    chapter_brief=chapter_brief,
+                    termbase_snapshot=termbase_snapshot,
+                    entity_snapshot=entity_snapshot,
+                    packet_id=packet.id,
+                    packet_type=PacketType.RETRANSLATE,
+                    created_at=packet.created_at,
+                )
+            else:
+                rebuilt_packet, packet_maps = self.context_packet_builder._build_merged_packet(
+                    document=document,
+                    chapter=chapter,
+                    current_blocks=current_blocks,
+                    prev_blocks=prev_blocks,
+                    next_blocks=next_blocks,
+                    sentences_by_block=sentences_by_block,
+                    book_profile=book_profile,
+                    chapter_brief=chapter_brief,
+                    termbase_snapshot=termbase_snapshot,
+                    entity_snapshot=entity_snapshot,
+                    now=packet.created_at,
+                    packet_id=packet.id,
+                    packet_type=PacketType.RETRANSLATE,
+                    created_at=packet.created_at,
+                )
             rebuilt_packets.append(rebuilt_packet)
             rebuilt_maps.extend(packet_maps)
         return rebuilt_packets, rebuilt_maps

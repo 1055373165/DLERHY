@@ -2,12 +2,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, inspect, select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import ActionStatus, ExportStatus, ExportType, MemoryScopeType, MemoryStatus, SnapshotType
+from book_agent.domain.enums import (
+    ActionStatus,
+    ArtifactStatus,
+    ExportStatus,
+    ExportType,
+    MemoryScopeType,
+    MemoryStatus,
+    SnapshotType,
+)
 from book_agent.domain.enums import IssueStatus
-from book_agent.domain.models import AuditEvent, Block, BookProfile, Chapter, Document, MemorySnapshot, Sentence
+from book_agent.domain.models import (
+    AuditEvent,
+    Block,
+    BookProfile,
+    Chapter,
+    Document,
+    DocumentImage,
+    MemorySnapshot,
+    Sentence,
+)
 from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 
@@ -18,6 +35,7 @@ class ChapterExportBundle:
     document: Document
     book_profile: BookProfile | None
     blocks: list[Block]
+    document_images: list[DocumentImage]
     sentences: list[Sentence]
     packets: list[TranslationPacket]
     translation_runs: list[TranslationRun]
@@ -39,6 +57,12 @@ class DocumentExportBundle:
 class ExportRepository:
     def __init__(self, session: Session):
         self.session = session
+
+    def _document_images_table_available(self) -> bool:
+        bind = self.session.get_bind()
+        if bind is None:
+            return False
+        return bool(inspect(bind).has_table(DocumentImage.__tablename__))
 
     def get_document(self, document_id: str) -> Document:
         document = self.session.get(Document, document_id)
@@ -143,8 +167,23 @@ class ExportRepository:
             raise ValueError(f"Chapter not found: {chapter_id}")
         document = self.get_document(chapter.document_id)
         blocks = self.session.scalars(
-            select(Block).where(Block.chapter_id == chapter_id).order_by(Block.ordinal)
+            select(Block)
+            .where(
+                Block.chapter_id == chapter_id,
+                Block.status == ArtifactStatus.ACTIVE,
+            )
+            .order_by(Block.ordinal)
         ).all()
+        block_ids = [block.id for block in blocks]
+        document_images = (
+            self.session.scalars(
+                select(DocumentImage)
+                .where(DocumentImage.block_id.in_(block_ids))
+                .order_by(DocumentImage.page_number, DocumentImage.id)
+            ).all()
+            if block_ids and self._document_images_table_available()
+            else []
+        )
 
         sentences = self.session.scalars(select(Sentence).where(Sentence.chapter_id == chapter_id)).all()
         packets = self.session.scalars(
@@ -201,6 +240,7 @@ class ExportRepository:
             document=document,
             book_profile=book_profile,
             blocks=blocks,
+            document_images=document_images,
             sentences=sentences,
             packets=packets,
             translation_runs=translation_runs,

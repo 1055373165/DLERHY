@@ -22,9 +22,11 @@ from book_agent.domain.enums import (
     Severity,
 )
 from book_agent.domain.models.review import ChapterQualitySummary as ChapterQualitySummaryRecord, IssueAction, ReviewIssue
+from book_agent.domain.structure.artifact_grouping import normalize_artifact_role, resolve_artifact_group_context_ids
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
+from book_agent.services.style_drift import STYLE_DRIFT_RULES
 
 
 def _utcnow() -> datetime:
@@ -44,45 +46,7 @@ def _severity_rank(value: Severity | None) -> int:
     }
     return order.get(value, 0)
 
-
-@dataclass(frozen=True, slots=True)
-class _StyleDriftRule:
-    pattern_id: str
-    source_pattern: re.Pattern[str]
-    target_pattern: re.Pattern[str]
-    preferred_hint: str | None = None
-    message: str = ""
-
-
-STYLE_DRIFT_RULES = (
-    _StyleDriftRule(
-        pattern_id="context_engineering_literal",
-        source_pattern=re.compile(r"\bcontext engineering\b", re.IGNORECASE),
-        target_pattern=re.compile(r"(?:情境|语境)工程"),
-        preferred_hint="上下文工程",
-        message="核心概念出现明显字面直译，未采用更自然的技术表达。",
-    ),
-    _StyleDriftRule(
-        pattern_id="weight_of_evidence_literal",
-        source_pattern=re.compile(r"\bweight of evidence\b", re.IGNORECASE),
-        target_pattern=re.compile(r"证据(?:的)?(?:分量|权重|重量)(?:表明|显示|说明|证明)?"),
-        preferred_hint="大量证据表明 / 现有证据表明",
-        message="英文习语被按字面结构硬译，中文技术写作感偏硬。",
-    ),
-    _StyleDriftRule(
-        pattern_id="contextually_accurate_outputs_literal",
-        source_pattern=re.compile(r"\bcontextually accurate outputs?\b", re.IGNORECASE),
-        target_pattern=re.compile(
-            r"(?:"
-            r"(?:上下文|情境)(?:更|更加)(?:准确|精确)(?:的)?(?:输出|结果)"
-            r"|更具(?:上下文|情境)准确性(?:的)?(?:输出|结果)"
-            r"|(?:上下文|情境)准确性(?:更高)?(?:的)?(?:输出|结果)"
-            r")"
-        ),
-        preferred_hint="更符合上下文的输出",
-        message="英文中的 contextually accurate 被按字面结构硬译，中文表达仍显生硬。",
-    ),
-)
+_FRAGMENTARY_PDF_OMISSION_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{1,24}[.?!:;]$")
 
 
 @dataclass(slots=True)
@@ -144,6 +108,23 @@ class ReviewService:
         self.repository.session.flush()
         return artifacts
 
+    def _should_suppress_fragmentary_pdf_omission(self, sentence, block) -> bool:
+        if block is None:
+            return False
+        source_path = str((sentence.source_span_json or {}).get("source_path") or block.source_anchor or "")
+        if not source_path.startswith("pdf://"):
+            return False
+        text = _normalize_review_text(sentence.source_text)
+        if not _FRAGMENTARY_PDF_OMISSION_PATTERN.fullmatch(text):
+            return False
+        if sentence.ordinal_in_block != 1:
+            return False
+        block_text = _normalize_review_text(block.source_text)
+        if len(block_text) <= len(text) + 1 or not block_text.startswith(text):
+            return False
+        parse_confidence = float(block.parse_confidence or 0.0)
+        return parse_confidence <= 0.8
+
     def _max_issue_severity(
         self,
         issues: list[ReviewIssue],
@@ -158,6 +139,7 @@ class ReviewService:
         now = _utcnow()
         alignment_state = self._build_alignment_state(bundle)
         sentence_to_packet = self._sentence_to_packet_map(bundle)
+        block_map = {block.id: block for block in bundle.blocks}
         handled_missing_alignment_ids: set[str] = set()
         alignment_issues, handled_missing_alignment_ids = self._alignment_failure_issues(
             bundle,
@@ -175,6 +157,8 @@ class ReviewService:
             packet_id = sentence_to_packet.get(sentence.id)
             if sentence.id not in alignment_state.active_alignments_by_sentence:
                 if sentence.id in handled_missing_alignment_ids:
+                    continue
+                if self._should_suppress_fragmentary_pdf_omission(sentence, block_map.get(sentence.block_id)):
                     continue
                 issues.append(
                     self._make_issue(
@@ -271,11 +255,15 @@ class ReviewService:
                             blocking=True,
                             evidence={
                                 "source_term": term.source_term,
+                                "source_terms": [term.source_term],
                                 "expected_target_term": term.target_term,
                                 "actual_target_text": aligned_text,
                             },
+                            unique_key=self._term_conflict_unique_key(term.target_term, term.source_term),
                         )
                     )
+
+        issues = self._dedupe_issues(issues)
 
         actions: list[IssueAction] = []
         rerun_plans: list[RerunPlan] = []
@@ -300,6 +288,59 @@ class ReviewService:
             summary=summary,
             resolved_issue_ids=[],
         )
+
+    def _term_conflict_unique_key(self, expected_target_term: str | None, source_term: str | None) -> str:
+        normalized_expected = _normalize_review_text(expected_target_term)
+        if normalized_expected:
+            return normalized_expected.casefold()
+        normalized_source = _normalize_review_text(source_term)
+        return normalized_source.casefold() or "term-conflict"
+
+    def _dedupe_issues(self, issues: list[ReviewIssue]) -> list[ReviewIssue]:
+        deduped: dict[str, ReviewIssue] = {}
+        for issue in issues:
+            existing = deduped.get(issue.id)
+            if existing is None:
+                deduped[issue.id] = issue
+                continue
+            existing.severity = max(existing.severity, issue.severity, key=_severity_rank)
+            existing.blocking = existing.blocking or issue.blocking
+            existing.confidence = max(float(existing.confidence or 0.0), float(issue.confidence or 0.0))
+            existing.updated_at = max(existing.updated_at, issue.updated_at)
+            existing.evidence_json = self._merge_issue_evidence(existing, issue)
+        return list(deduped.values())
+
+    def _merge_issue_evidence(self, existing: ReviewIssue, incoming: ReviewIssue) -> dict[str, Any]:
+        merged = dict(existing.evidence_json or {})
+        incoming_evidence = incoming.evidence_json or {}
+        for key, value in incoming_evidence.items():
+            if key == "source_terms" and isinstance(value, list):
+                existing_terms = merged.get("source_terms", [])
+                source_terms = {
+                    str(item).strip()
+                    for item in [*existing_terms, *value]
+                    if str(item).strip()
+                }
+                if source_terms:
+                    merged["source_terms"] = sorted(source_terms)
+                continue
+            if key not in merged or merged[key] in (None, "", [], {}):
+                merged[key] = value
+        if existing.issue_type == "TERM_CONFLICT":
+            source_terms = {
+                str(item).strip()
+                for item in [
+                    merged.get("source_term"),
+                    incoming_evidence.get("source_term"),
+                    *(merged.get("source_terms", []) or []),
+                    *(incoming_evidence.get("source_terms", []) or []),
+                ]
+                if str(item).strip()
+            }
+            if source_terms:
+                merged["source_terms"] = sorted(source_terms)
+                merged["source_term"] = sorted(source_terms)[0]
+        return merged
 
     def _unlocked_key_concept_issues(
         self,
@@ -333,9 +374,15 @@ class ReviewService:
             if concept.get("canonical_zh"):
                 continue
             times_seen = int(concept.get("times_seen") or 0)
-            if times_seen < 2:
+            mention_count = int(concept.get("mention_count") or times_seen or 0)
+            if mention_count < 2:
                 continue
-            packet_id = str(concept.get("last_seen_packet_id") or "").strip() or None
+            packet_ids_seen = [
+                str(packet_id).strip()
+                for packet_id in list(concept.get("packet_ids_seen") or [])
+                if str(packet_id).strip()
+            ]
+            packet_id = packet_ids_seen[0] if len(packet_ids_seen) == 1 else None
             issues.append(
                 self._make_issue(
                     now=now,
@@ -350,6 +397,8 @@ class ReviewService:
                     evidence={
                         "source_term": source_term,
                         "times_seen": times_seen,
+                        "mention_count": mention_count,
+                        "packet_ids_seen": packet_ids_seen,
                         "chapter_memory_snapshot_version": snapshot.version,
                     },
                     unique_key=source_term.casefold(),
@@ -432,7 +481,16 @@ class ReviewService:
         if not isinstance(active_concepts, list):
             return []
 
+        locked_term_sources = {
+            term.source_term.casefold()
+            for term in bundle.term_entries
+            if term.status.value == "active"
+            and term.lock_level == LockLevel.LOCKED
+            and term.source_term
+        }
+
         missing_concepts: list[str] = []
+        missing_concept_packet_ids: set[str] = set()
         brief_lower = brief_summary.casefold()
         for concept in active_concepts:
             if not isinstance(concept, dict):
@@ -442,9 +500,15 @@ class ReviewService:
                 continue
             if int(concept.get("times_seen") or 0) < 2:
                 continue
+            if concept.get("canonical_zh") or source_term.casefold() in locked_term_sources:
+                continue
             if source_term.casefold() in brief_lower:
                 continue
             missing_concepts.append(source_term)
+            for packet_id in list(concept.get("packet_ids_seen") or []):
+                normalized_packet_id = str(packet_id).strip()
+                if normalized_packet_id:
+                    missing_concept_packet_ids.add(normalized_packet_id)
 
         if not missing_concepts:
             return []
@@ -466,6 +530,7 @@ class ReviewService:
                 blocking=False,
                 evidence={
                     "missing_concepts": missing_concepts,
+                    "packet_ids_seen": sorted(missing_concept_packet_ids),
                     "chapter_brief_summary": brief_summary,
                     "chapter_brief_version": chapter_brief.version,
                     "chapter_memory_snapshot_version": snapshot.version,
@@ -608,12 +673,28 @@ class ReviewService:
             and page.get("layout_suspect") is True
             and isinstance(page.get("page_number"), int)
         ]
+        local_layout_risk_pages = [
+            int(page["page_number"])
+            for page in chapter_page_evidence
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+            and str(page.get("page_layout_risk") or "low") != "low"
+        ]
+        local_high_layout_risk_pages = [
+            int(page["page_number"])
+            for page in chapter_page_evidence
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+            and str(page.get("page_layout_risk") or "low") == "high"
+        ]
         review_policy = self._pdf_layout_review_policy(
             bundle,
             layout_risk,
             parse_confidence,
             suspicious_pages,
             local_suspicious_pages,
+            local_layout_risk_pages,
+            local_high_layout_risk_pages,
             chapter_page_evidence,
         )
 
@@ -633,6 +714,19 @@ class ReviewService:
                         "layout_risk": layout_risk,
                         "parse_confidence": parse_confidence,
                         "suspicious_page_numbers": local_suspicious_pages or suspicious_pages,
+                        "page_layout_risk_pages": local_layout_risk_pages,
+                        "high_layout_risk_pages": local_high_layout_risk_pages,
+                        "page_layout_reasons_by_page": {
+                            str(page["page_number"]): [
+                                str(reason)
+                                for reason in list(page.get("page_layout_reasons") or [])
+                                if isinstance(reason, str)
+                            ]
+                            for page in chapter_page_evidence
+                            if isinstance(page, dict)
+                            and isinstance(page.get("page_number"), int)
+                            and str(page.get("page_layout_risk") or "low") != "low"
+                        },
                         "structure_flags": structure_flags,
                         "recovery_lane": review_policy["recovery_lane"],
                         "review_policy": review_policy["reason"],
@@ -704,6 +798,121 @@ class ReviewService:
                 )
             )
 
+        artifact_group_context_ids = resolve_artifact_group_context_ids(
+            pdf_blocks,
+            academic_paper=review_policy["recovery_lane"] == "academic_paper",
+        )
+        captioned_artifact_blocks = [
+            block
+            for block in pdf_blocks
+            if normalize_artifact_role(
+                (block.source_span_json or {}).get("pdf_block_role"),
+                block.block_type,
+            ) in {"image", "table", "equation"}
+            and (
+                isinstance((block.source_span_json or {}).get("linked_caption_block_id"), str)
+                or isinstance((block.source_span_json or {}).get("linked_caption_text"), str)
+            )
+        ]
+        missing_group_context_blocks = [
+            block
+            for block in captioned_artifact_blocks
+            if int((block.source_span_json or {}).get("source_page_start", 0) or 0) in local_high_layout_risk_pages
+            and not artifact_group_context_ids.get(block.id)
+        ]
+        artifact_group_review_policy = self._pdf_artifact_group_review_policy(
+            review_policy["recovery_lane"],
+            local_high_layout_risk_pages,
+            missing_group_context_blocks,
+        )
+        if missing_group_context_blocks and bool(artifact_group_review_policy["emit_issue"]):
+            issues.append(
+                self._make_issue(
+                    now=now,
+                    chapter_id=bundle.chapter.id,
+                    document_id=bundle.chapter.document_id,
+                    sentence_id=representative_sentence_id,
+                    packet_id=None,
+                    issue_type="ARTIFACT_GROUP_RECOVERY_REQUIRED",
+                    root_cause_layer=RootCauseLayer.STRUCTURE,
+                    severity=artifact_group_review_policy["severity"],
+                    blocking=bool(artifact_group_review_policy["blocking"]),
+                    evidence={
+                        "captioned_artifact_count": len(captioned_artifact_blocks),
+                        "grouped_artifact_count": len(artifact_group_context_ids),
+                        "missing_group_context_count": len(missing_group_context_blocks),
+                        "missing_group_context_block_ids": [block.id for block in missing_group_context_blocks],
+                        "missing_group_context_page_numbers": sorted(
+                            {
+                                int((block.source_span_json or {})["source_page_start"])
+                                for block in missing_group_context_blocks
+                                if isinstance((block.source_span_json or {}).get("source_page_start"), int)
+                            }
+                        ),
+                        "high_layout_risk_pages": local_high_layout_risk_pages,
+                        "recovery_lane": artifact_group_review_policy["recovery_lane"],
+                        "review_policy": artifact_group_review_policy["reason"],
+                    },
+                    unique_key="artifact-group-recovery",
+                )
+            )
+
+        image_blocks = [
+            block
+            for block in pdf_blocks
+            if block.block_type in {BlockType.IMAGE, BlockType.FIGURE}
+            or (block.source_span_json or {}).get("pdf_block_role") in {"image", "figure"}
+        ]
+        linked_image_blocks = []
+        uncaptioned_image_blocks = []
+        for block in image_blocks:
+            metadata = block.source_span_json or {}
+            linked_caption_block_id = metadata.get("linked_caption_block_id")
+            linked_caption_text = metadata.get("linked_caption_text")
+            if linked_caption_block_id or (
+                isinstance(linked_caption_text, str) and linked_caption_text.strip()
+            ):
+                linked_image_blocks.append(block)
+            else:
+                uncaptioned_image_blocks.append(block)
+
+        image_caption_review_policy = self._pdf_image_caption_review_policy(
+            bundle,
+            pdf_blocks,
+            linked_image_blocks,
+            uncaptioned_image_blocks,
+        )
+        if uncaptioned_image_blocks and bool(image_caption_review_policy["emit_issue"]):
+            issues.append(
+                self._make_issue(
+                    now=now,
+                    chapter_id=bundle.chapter.id,
+                    document_id=bundle.chapter.document_id,
+                    sentence_id=representative_sentence_id,
+                    packet_id=None,
+                    issue_type="IMAGE_CAPTION_RECOVERY_REQUIRED",
+                    root_cause_layer=RootCauseLayer.STRUCTURE,
+                    severity=image_caption_review_policy["severity"],
+                    blocking=bool(image_caption_review_policy["blocking"]),
+                    evidence={
+                        "image_count": len(image_blocks),
+                        "caption_linked_count": len(linked_image_blocks),
+                        "uncaptioned_image_count": len(uncaptioned_image_blocks),
+                        "uncaptioned_block_ids": [block.id for block in uncaptioned_image_blocks],
+                        "uncaptioned_page_numbers": sorted(
+                            {
+                                int((block.source_span_json or {})["source_page_start"])
+                                for block in uncaptioned_image_blocks
+                                if isinstance((block.source_span_json or {}).get("source_page_start"), int)
+                            }
+                        ),
+                        "recovery_lane": image_caption_review_policy["recovery_lane"],
+                        "review_policy": image_caption_review_policy["reason"],
+                    },
+                    unique_key="image-caption-recovery",
+                )
+            )
+
         return issues
 
     def _pdf_layout_review_policy(
@@ -713,6 +922,8 @@ class ReviewService:
         parse_confidence: float | None,
         suspicious_pages: list[int],
         local_suspicious_pages: list[int],
+        local_layout_risk_pages: list[int],
+        local_high_layout_risk_pages: list[int],
         chapter_page_evidence: list[dict[str, Any]],
     ) -> dict[str, object]:
         default = {
@@ -725,13 +936,13 @@ class ReviewService:
         if layout_risk != "medium":
             return default
 
-        if not local_suspicious_pages:
+        if not local_suspicious_pages and not local_layout_risk_pages:
             return {
                 "severity": Severity.LOW,
                 "blocking": False,
                 "emit_issue": False,
                 "recovery_lane": None,
-                "reason": "no_local_suspicious_pages",
+                "reason": "no_local_layout_signals",
             }
 
         pdf_profile = (bundle.document.metadata_json or {}).get("pdf_profile")
@@ -748,13 +959,7 @@ class ReviewService:
                 "reason": "academic_paper_medium_confidence_too_low",
             }
 
-        if len(suspicious_pages) > 2:
-            return default | {
-                "recovery_lane": recovery_lane,
-                "reason": "academic_paper_medium_too_many_suspicious_pages",
-            }
-
-        if self._academic_paper_suspicious_pages_structurally_anchored(chapter_page_evidence):
+        if local_suspicious_pages and self._academic_paper_suspicious_pages_structurally_anchored(chapter_page_evidence):
             return {
                 "severity": Severity.LOW,
                 "blocking": False,
@@ -763,12 +968,128 @@ class ReviewService:
                 "reason": "academic_paper_medium_structurally_anchored",
             }
 
+        if local_high_layout_risk_pages and not local_suspicious_pages:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_local_page_layout_advisory",
+            }
+
+        if len(suspicious_pages) > 2:
+            return {
+                "severity": Severity.MEDIUM,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_medium_wide_layout_advisory",
+            }
+
         return {
             "severity": Severity.MEDIUM,
             "blocking": False,
             "emit_issue": True,
             "recovery_lane": recovery_lane,
             "reason": "academic_paper_medium_layout_advisory",
+        }
+
+    def _pdf_image_caption_review_policy(
+        self,
+        bundle: ChapterReviewBundle,
+        pdf_blocks: list[object],
+        linked_image_blocks: list[object],
+        uncaptioned_image_blocks: list[object],
+    ) -> dict[str, object]:
+        pdf_profile = (bundle.document.metadata_json or {}).get("pdf_profile")
+        recovery_lane = None
+        if isinstance(pdf_profile, dict) and pdf_profile.get("recovery_lane"):
+            recovery_lane = str(pdf_profile["recovery_lane"])
+
+        if not uncaptioned_image_blocks:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "no_uncaptioned_images",
+            }
+
+        if recovery_lane == "academic_paper":
+            return {
+                "severity": Severity.MEDIUM,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "academic_paper_uncaptioned_images",
+            }
+
+        if linked_image_blocks:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "partial_caption_link_coverage",
+            }
+
+        chapter_has_caption_blocks = any(
+            (block.source_span_json or {}).get("pdf_block_role") == "caption"
+            for block in pdf_blocks
+        )
+        if chapter_has_caption_blocks:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "caption_blocks_present_but_images_unlinked",
+            }
+
+        return {
+            "severity": Severity.LOW,
+            "blocking": False,
+            "emit_issue": False,
+            "recovery_lane": recovery_lane,
+            "reason": "no_caption_context",
+        }
+
+    def _pdf_artifact_group_review_policy(
+        self,
+        recovery_lane: str | None,
+        local_high_layout_risk_pages: list[int],
+        missing_group_context_blocks: list[object],
+    ) -> dict[str, object]:
+        if recovery_lane != "academic_paper":
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "non_academic_lane",
+            }
+        if not local_high_layout_risk_pages:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "no_local_high_layout_risk_pages",
+            }
+        if not missing_group_context_blocks:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "artifact_groups_already_recovered",
+            }
+        return {
+            "severity": Severity.LOW,
+            "blocking": False,
+            "emit_issue": True,
+            "recovery_lane": recovery_lane,
+            "reason": "academic_paper_captioned_artifact_missing_group_context",
         }
 
     def _chapter_pdf_page_evidence(self, bundle: ChapterReviewBundle) -> list[dict[str, Any]]:
@@ -1236,6 +1557,24 @@ class ReviewService:
     def _scope_for_action(self, issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
         if action_type in {ActionType.RERUN_PACKET, ActionType.REBUILD_PACKET_THEN_RERUN, ActionType.REALIGN_ONLY} and issue.packet_id:
             return JobScopeType.PACKET, issue.packet_id
+        if (
+            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
+            and issue.issue_type == "TERM_CONFLICT"
+            and issue.packet_id
+        ):
+            return JobScopeType.PACKET, issue.packet_id
+        if (
+            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
+            and issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            and issue.packet_id
+        ):
+            packet_ids_seen = [
+                str(packet_id).strip()
+                for packet_id in list((issue.evidence_json or {}).get("packet_ids_seen") or [])
+                if str(packet_id).strip()
+            ]
+            if len(packet_ids_seen) == 1:
+                return JobScopeType.PACKET, issue.packet_id
         if action_type in {
             ActionType.RESEGMENT_CHAPTER,
             ActionType.REPARSE_CHAPTER,
@@ -1244,4 +1583,6 @@ class ReviewService:
             ActionType.REBUILD_CHAPTER_BRIEF,
         }:
             return JobScopeType.CHAPTER, issue.chapter_id
+        if action_type == ActionType.REPARSE_DOCUMENT:
+            return JobScopeType.DOCUMENT, issue.document_id
         return JobScopeType.SENTENCE, issue.sentence_id

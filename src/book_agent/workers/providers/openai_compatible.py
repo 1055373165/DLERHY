@@ -97,6 +97,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         output_payload = self._extract_output_payload(response, api_mode=api_mode)
+        output_payload = self._normalize_translation_payload(output_payload)
         try:
             output = TranslationWorkerOutput.model_validate(output_payload)
         except Exception as exc:
@@ -105,6 +106,33 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             output=output,
             usage=self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms),
         )
+
+    def generate_structured_object(
+        self,
+        *,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any],
+        schema_name: str = "structured_output",
+    ) -> tuple[dict[str, Any], TranslationUsage]:
+        endpoint_url, api_mode = self._resolve_endpoint()
+        request_started_at = time.perf_counter()
+        response = self._request_with_retries(
+            url=endpoint_url,
+            payload=self._build_structured_payload(
+                model_name=model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_schema=response_schema,
+                schema_name=schema_name,
+                api_mode=api_mode,
+            ),
+        )
+        latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
+        payload = self._extract_generic_output_payload(response, api_mode=api_mode)
+        usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
+        return payload, usage
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -183,6 +211,46 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             },
         }
 
+    def _build_structured_payload(
+        self,
+        *,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any],
+        schema_name: str,
+        api_mode: str,
+    ) -> dict[str, Any]:
+        if api_mode == "chat_completions":
+            return {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "response_format": {"type": "json_object"},
+            }
+        return {
+            "model": model_name,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt}],
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema_name,
+                    "schema": response_schema,
+                }
+            },
+        }
+
     def _chat_completions_user_prompt(self, request: TranslationPromptRequest) -> str:
         schema_json = json.dumps(request.response_schema, ensure_ascii=False, separators=(",", ":"))
         output_contract = (
@@ -212,6 +280,32 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     payload = self._extract_payload_from_content(content)
                     if payload is not None:
                         return payload
+
+        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+
+    def _extract_generic_output_payload(self, response: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
+        if api_mode == "chat_completions":
+            choices = response.get("choices")
+            if not isinstance(choices, list) or not choices:
+                raise RuntimeError("Provider response did not include chat completion choices.")
+            message = choices[0].get("message")
+            if not isinstance(message, dict):
+                raise RuntimeError("Provider response did not include a chat completion message.")
+            payload = self._extract_json_object_from_content(message.get("content"))
+            if payload is not None:
+                return payload
+            raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        if isinstance(response.get("output_parsed"), dict):
+            return response["output_parsed"]
+
+        output_blocks = response.get("output")
+        if isinstance(output_blocks, list):
+            for block in output_blocks:
+                if not isinstance(block, dict):
+                    continue
+                payload = self._extract_json_object_from_content(block.get("content", []))
+                if payload is not None:
+                    return payload
 
         raise RuntimeError("Provider response did not include a structured JSON output payload.")
 
@@ -341,6 +435,50 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
 
         return self._extract_balanced_json_object(text)
 
+    def _extract_json_object_from_content(self, content: Any) -> dict[str, Any] | None:
+        if isinstance(content, list):
+            for item in content:
+                payload = self._extract_json_object_from_content(item)
+                if payload is not None:
+                    return payload
+            return None
+        if not isinstance(content, dict):
+            if isinstance(content, str):
+                return self._extract_json_object_from_text(content)
+            return None
+
+        json_payload = content.get("json")
+        if isinstance(json_payload, dict):
+            return json_payload
+
+        text = content.get("text")
+        if isinstance(text, str):
+            return self._extract_json_object_from_text(text)
+
+        return None
+
+    def _extract_json_object_from_text(self, text: str) -> dict[str, Any] | None:
+        parsed = self._parse_json_dict_candidate(text)
+        if parsed is not None:
+            return parsed
+
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence_match is not None:
+            parsed = self._parse_json_dict_candidate(fence_match.group(1))
+            if parsed is not None:
+                return parsed
+
+        return self._extract_balanced_json_dict(text)
+
+    def _parse_json_dict_candidate(self, text: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        return parsed
+
     def _parse_json_object_candidate(self, text: str) -> dict[str, Any] | None:
         try:
             parsed = json.loads(text)
@@ -364,7 +502,103 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         required_keys = {"packet_id", "target_segments", "alignment_suggestions"}
         return required_keys.issubset(payload.keys())
 
+    def _normalize_translation_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        normalized.setdefault("low_confidence_flags", [])
+        normalized.setdefault("notes", [])
+        normalized["target_segments"] = [
+            self._normalize_target_segment(item)
+            for item in list(normalized.get("target_segments") or [])
+            if isinstance(item, dict)
+        ]
+        normalized["alignment_suggestions"] = [
+            self._normalize_alignment_suggestion(item)
+            for item in list(normalized.get("alignment_suggestions") or [])
+            if isinstance(item, dict)
+        ]
+        normalized["low_confidence_flags"] = [
+            self._normalize_low_confidence_flag(item)
+            for item in list(normalized.get("low_confidence_flags") or [])
+            if isinstance(item, dict)
+        ]
+        return normalized
+
+    def _normalize_target_segment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        if "segment_type" not in normalized:
+            for alias in ("type", "target_type"):
+                value = normalized.get(alias)
+                if value is not None:
+                    normalized["segment_type"] = value
+                    break
+        normalized["source_sentence_ids"] = self._normalize_id_list(
+            normalized.get("source_sentence_ids"),
+            fallback_keys=("source_sentence_id", "source_ids", "source_id"),
+            payload=normalized,
+        )
+        for alias in ("source_sentence_id", "source_ids", "source_id", "type", "target_type"):
+            normalized.pop(alias, None)
+        return normalized
+
+    def _normalize_alignment_suggestion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        normalized["source_sentence_ids"] = self._normalize_id_list(
+            normalized.get("source_sentence_ids"),
+            fallback_keys=("source_sentence_id", "source_ids", "source_id"),
+            payload=normalized,
+        )
+        normalized["target_temp_ids"] = self._normalize_id_list(
+            normalized.get("target_temp_ids"),
+            fallback_keys=("target_temp_id", "target_ids", "target_id"),
+            payload=normalized,
+        )
+        for alias in ("source_sentence_id", "source_ids", "source_id", "target_temp_id", "target_ids", "target_id"):
+            normalized.pop(alias, None)
+        return normalized
+
+    def _normalize_low_confidence_flag(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        if normalized.get("sentence_id") is None:
+            for alias in ("source_sentence_id", "source_id"):
+                value = normalized.get(alias)
+                if value is not None:
+                    normalized["sentence_id"] = value
+                    break
+        for alias in ("source_sentence_id", "source_id"):
+            normalized.pop(alias, None)
+        return normalized
+
+    def _normalize_id_list(
+        self,
+        value: Any,
+        *,
+        fallback_keys: tuple[str, ...],
+        payload: dict[str, Any] | None = None,
+    ) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if item is not None and str(item).strip()]
+        if value is not None and str(value).strip():
+            return [str(value)]
+        if payload is not None:
+            for key in fallback_keys:
+                fallback_value = payload.get(key)
+                if isinstance(fallback_value, list):
+                    return [str(item) for item in fallback_value if item is not None and str(item).strip()]
+                if fallback_value is not None and str(fallback_value).strip():
+                    return [str(fallback_value)]
+        return []
+
     def _extract_balanced_json_object(self, text: str) -> dict[str, Any] | None:
+        return self._extract_balanced_json_with_parser(text, self._parse_json_object_candidate)
+
+    def _extract_balanced_json_dict(self, text: str) -> dict[str, Any] | None:
+        return self._extract_balanced_json_with_parser(text, self._parse_json_dict_candidate)
+
+    def _extract_balanced_json_with_parser(
+        self,
+        text: str,
+        parser,
+    ) -> dict[str, Any] | None:
         in_string = False
         escape = False
         depth = 0
@@ -393,7 +627,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             if depth != 0 or start_index is None:
                 continue
             candidate = text[start_index : index + 1]
-            parsed = self._parse_json_object_candidate(candidate)
+            parsed = parser(candidate)
             if parsed is not None:
                 return parsed
             start_index = None

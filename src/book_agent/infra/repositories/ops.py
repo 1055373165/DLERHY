@@ -37,6 +37,20 @@ class OpsRepository:
             raise ValueError(f"Review issue not found: {issue_id}")
         return issue
 
+    def list_unresolved_issues_for_packet(
+        self,
+        packet_id: str,
+        *,
+        exclude_issue_id: str | None = None,
+    ) -> list[ReviewIssue]:
+        stmt = select(ReviewIssue).where(
+            ReviewIssue.packet_id == packet_id,
+            ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+        )
+        if exclude_issue_id is not None:
+            stmt = stmt.where(ReviewIssue.id != exclude_issue_id)
+        return self.session.scalars(stmt.order_by(ReviewIssue.id)).all()
+
     def get_chapter(self, chapter_id: str) -> Chapter:
         chapter = self.session.get(Chapter, chapter_id)
         if chapter is None:

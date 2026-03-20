@@ -60,6 +60,29 @@ CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+MERGED_PARAGRAPH_CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Context engineering shapes what information enters the model.</p>
+    <p>Memory keeps the system behavior stable across steps.</p>
+  </body>
+</html>
+"""
+
+LATE_CONCEPT_CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>A recipe book offers instructions for many meals.</p>
+    <p>A chef adapts when your pantry is missing ingredients.</p>
+    <p>Memory helps agents act consistently over time.</p>
+    <p>Context engineering determines how context is created.</p>
+    <p>Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
 
 class BootstrapPipelineTests(unittest.TestCase):
     def test_bootstrap_pipeline_builds_packets_and_briefs(self) -> None:
@@ -157,6 +180,33 @@ class BootstrapPipelineTests(unittest.TestCase):
             )
         )
 
+    def test_bootstrap_pipeline_merges_adjacent_short_paragraphs_into_one_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", MERGED_PARAGRAPH_CHAPTER_XHTML)
+
+            result = BootstrapOrchestrator().bootstrap_epub(epub_path)
+
+        chapter_one = next(chapter for chapter in result.chapters if chapter.title_src == "Chapter One")
+        chapter_packets = [packet for packet in result.translation_packets if packet.chapter_id == chapter_one.id]
+        merged_packet = next(
+            packet for packet in chapter_packets if len(packet.packet_json.get("current_blocks", [])) == 2
+        )
+        current_sentence_ids = {
+            mapping.sentence_id
+            for mapping in result.packet_sentence_maps
+            if mapping.packet_id == merged_packet.id and mapping.role == PacketSentenceRole.CURRENT
+        }
+
+        self.assertEqual(len(chapter_packets), 2)
+        self.assertNotEqual(merged_packet.block_start_id, merged_packet.block_end_id)
+        self.assertEqual(len(current_sentence_ids), 2)
+
     def test_bootstrap_pipeline_splits_oversized_body_block_into_multiple_packets(self) -> None:
         long_paragraph = " ".join(
             f"Sentence number {index} keeps the body packet within a manageable size."
@@ -192,6 +242,24 @@ class BootstrapPipelineTests(unittest.TestCase):
                 for packet in chapter_packets
             )
         )
+
+    def test_bootstrap_pipeline_chapter_brief_captures_late_high_signal_concept(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", LATE_CONCEPT_CHAPTER_XHTML)
+
+            result = BootstrapOrchestrator().bootstrap_epub(epub_path)
+
+        chapter_brief = next(
+            snapshot for snapshot in result.memory_snapshots if snapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF
+        )
+        summary = chapter_brief.content_json.get("summary") or ""
+        self.assertIn("Context engineering determines how context is created.", summary)
 
 
 if __name__ == "__main__":

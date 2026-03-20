@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 from typing import Iterable
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.block_rules import block_is_context_translatable
 from book_agent.domain.enums import (
+    BlockType,
     BookType,
     JobScopeType,
     JobStatus,
@@ -38,6 +40,22 @@ def _utcnow() -> datetime:
 
 MAX_REFERENCE_PACKET_SENTENCES = 24
 MAX_GENERAL_PACKET_SENTENCES = 32
+MAX_CHAPTER_BRIEF_SENTENCES = 3
+MAX_MERGED_PACKET_BLOCKS = 3
+MAX_MERGED_PACKET_CHARS = 900
+MAX_MERGED_PACKET_SENTENCES = 6
+MAX_MERGED_SINGLE_BLOCK_CHARS = 420
+MAX_MERGED_SINGLE_BLOCK_SENTENCES = 3
+CHAPTER_BRIEF_PRIORITY_KEYWORDS = {
+    "agentic",
+    "context",
+    "distributed",
+    "engineering",
+    "llm",
+    "memory",
+    "retrieval",
+    "sql",
+}
 
 
 def _group_by(items: Iterable, key):
@@ -45,6 +63,50 @@ def _group_by(items: Iterable, key):
     for item in items:
         grouped.setdefault(key(item), []).append(item)
     return grouped
+
+
+def _brief_sentence_score(text: str, *, index: int, total: int) -> int:
+    lowered = text.casefold()
+    keyword_hits = sum(1 for keyword in CHAPTER_BRIEF_PRIORITY_KEYWORDS if keyword in lowered)
+    later_bonus = 2 if total > 1 and index >= max(total // 2, 1) else 0
+    return keyword_hits * 10 + later_bonus
+
+
+def _select_chapter_brief_sentences(sentences: list[str]) -> list[str]:
+    normalized = [" ".join(str(sentence or "").split()) for sentence in sentences if str(sentence or "").strip()]
+    if len(normalized) <= MAX_CHAPTER_BRIEF_SENTENCES:
+        return normalized
+
+    selected_indices: list[int] = [0]
+    remaining_indices = [index for index in range(1, len(normalized))]
+
+    later_candidates = [
+        index
+        for index in remaining_indices
+        if index >= max(len(normalized) // 2, 1)
+    ]
+    if later_candidates:
+        best_later = max(
+            later_candidates,
+            key=lambda index: (_brief_sentence_score(normalized[index], index=index, total=len(normalized)), -index),
+        )
+        selected_indices.append(best_later)
+
+    remaining_indices = [index for index in remaining_indices if index not in selected_indices]
+    while remaining_indices and len(selected_indices) < MAX_CHAPTER_BRIEF_SENTENCES:
+        next_index = max(
+            remaining_indices,
+            key=lambda index: (
+                _brief_sentence_score(normalized[index], index=index, total=len(normalized)),
+                min(abs(index - selected) for selected in selected_indices),
+                -index,
+            ),
+        )
+        selected_indices.append(next_index)
+        remaining_indices.remove(next_index)
+
+    selected_indices.sort()
+    return [normalized[index] for index in selected_indices]
 
 
 @dataclass(slots=True)
@@ -67,6 +129,7 @@ class BookProfileBuilder:
     def build(self, document: Document, chapters: list[Chapter], blocks: list[Block]) -> BookProfileBuildResult:
         now = _utcnow()
         book_type = self._infer_book_type(document, chapters, blocks)
+        translation_material = self._infer_translation_material(document, book_type)
         book_profile = BookProfile(
             id=stable_id("book-profile", document.id, 1),
             document_id=document.id,
@@ -76,6 +139,8 @@ class BookProfileBuilder:
                 "tone": "faithful-clear",
                 "sentence_preference": "natural_cn",
                 "preserve_structure": True,
+                "translation_material": translation_material,
+                "translation_register": self._translation_register_for_material(translation_material),
             },
             quote_policy_json={"preserve_speaker_attribution": True},
             special_content_policy_json={
@@ -156,6 +221,28 @@ class BookProfileBuilder:
             return BookType.TECH
         return BookType.NONFICTION
 
+    def _infer_translation_material(self, document: Document, book_type: BookType) -> str:
+        pdf_profile = document.metadata_json.get("pdf_profile", {}) if isinstance(document.metadata_json, dict) else {}
+        recovery_lane = str(pdf_profile.get("recovery_lane") or "").strip()
+        if recovery_lane == "academic_paper":
+            return "academic_paper"
+        if book_type == BookType.TECH:
+            return "technical_book"
+        if book_type == BookType.BUSINESS:
+            return "business_document"
+        return "general_nonfiction"
+
+    def _translation_register_for_material(self, material: str) -> str:
+        if material == "academic_paper":
+            return "formal_academic_cn"
+        if material == "technical_book":
+            return "native_technical_cn"
+        if material == "technical_blog":
+            return "engineer_facing_cn"
+        if material == "business_document":
+            return "professional_business_cn"
+        return "publication_nonfiction_cn"
+
 
 class ChapterBriefBuilder:
     def build_many(
@@ -190,12 +277,12 @@ class ChapterBriefBuilder:
         version: int = 1,
     ) -> MemorySnapshot:
         now = _utcnow()
-        summary_sentences = [
+        translatable_sentences = [
             sentence.normalized_text or sentence.source_text
             for sentence in sentences
             if sentence.translatable
-        ][:3]
-        summary = " ".join(summary_sentences)
+        ]
+        summary = " ".join(_select_chapter_brief_sentences(translatable_sentences))
         open_questions = []
         if chapter.title_src is None:
             open_questions.append("missing_chapter_title")
@@ -314,51 +401,70 @@ class ContextPacketBuilder:
             if not translatable_blocks:
                 continue
             chapter_brief = briefs_by_scope[chapter.id]
-            for index, block in enumerate(translatable_blocks):
-                prev_blocks = translatable_blocks[max(0, index - 2):index]
-                next_blocks = translatable_blocks[index + 1:index + 3]
-                current_sentences = sentences_by_block.get(block.id, [])
-                for chunk_index, sentence_window in enumerate(
-                    self._packet_sentence_windows(chapter, current_sentences),
-                    start=1,
-                ):
-                    packet_id = None
-                    current_block_text = None
-                    if len(sentence_window) != len(current_sentences):
-                        packet_id = stable_id(
-                            "packet",
-                            document.id,
-                            chapter.id,
-                            block.id,
-                            sentence_window[0].id,
-                            sentence_window[-1].id,
-                            chapter_brief.version,
-                            termbase_snapshot.version,
-                            entity_snapshot.version,
-                            chunk_index,
+            for start_index, end_index, current_group in self._block_groups(translatable_blocks, sentences_by_block):
+                prev_blocks = translatable_blocks[max(0, start_index - 2):start_index]
+                next_blocks = translatable_blocks[end_index + 1:end_index + 3]
+                if len(current_group) == 1:
+                    block = current_group[0]
+                    current_sentences = sentences_by_block.get(block.id, [])
+                    for chunk_index, sentence_window in enumerate(
+                        self._packet_sentence_windows(chapter, current_sentences),
+                        start=1,
+                    ):
+                        packet_id = None
+                        current_block_text = None
+                        if len(sentence_window) != len(current_sentences):
+                            packet_id = stable_id(
+                                "packet",
+                                document.id,
+                                chapter.id,
+                                block.id,
+                                sentence_window[0].id,
+                                sentence_window[-1].id,
+                                chapter_brief.version,
+                                termbase_snapshot.version,
+                                entity_snapshot.version,
+                                chunk_index,
+                            )
+                            current_block_text = " ".join(
+                                sentence.normalized_text or sentence.source_text
+                                for sentence in sentence_window
+                            )
+                        packet, packet_maps = self._build_packet(
+                            document=document,
+                            chapter=chapter,
+                            block=block,
+                            prev_blocks=prev_blocks,
+                            next_blocks=next_blocks,
+                            sentences_by_block=sentences_by_block,
+                            book_profile=book_profile,
+                            chapter_brief=chapter_brief,
+                            termbase_snapshot=termbase_snapshot,
+                            entity_snapshot=entity_snapshot,
+                            now=now,
+                            packet_id=packet_id,
+                            current_sentences=sentence_window,
+                            current_block_text=current_block_text,
                         )
-                        current_block_text = " ".join(
-                            sentence.normalized_text or sentence.source_text
-                            for sentence in sentence_window
-                        )
-                    packet, packet_maps = self._build_packet(
-                        document=document,
-                        chapter=chapter,
-                        block=block,
-                        prev_blocks=prev_blocks,
-                        next_blocks=next_blocks,
-                        sentences_by_block=sentences_by_block,
-                        book_profile=book_profile,
-                        chapter_brief=chapter_brief,
-                        termbase_snapshot=termbase_snapshot,
-                        entity_snapshot=entity_snapshot,
-                        now=now,
-                        packet_id=packet_id,
-                        current_sentences=sentence_window,
-                        current_block_text=current_block_text,
-                    )
-                    packets.append(packet)
-                    maps.extend(packet_maps)
+                        packets.append(packet)
+                        maps.extend(packet_maps)
+                    continue
+
+                packet, packet_maps = self._build_merged_packet(
+                    document=document,
+                    chapter=chapter,
+                    current_blocks=current_group,
+                    prev_blocks=prev_blocks,
+                    next_blocks=next_blocks,
+                    sentences_by_block=sentences_by_block,
+                    book_profile=book_profile,
+                    chapter_brief=chapter_brief,
+                    termbase_snapshot=termbase_snapshot,
+                    entity_snapshot=entity_snapshot,
+                    now=now,
+                )
+                packets.append(packet)
+                maps.extend(packet_maps)
 
             jobs.append(
                 JobRun(
@@ -378,6 +484,59 @@ class ContextPacketBuilder:
             packet_sentence_maps=maps,
             job_runs=jobs,
         )
+
+    def _block_groups(
+        self,
+        translatable_blocks: list[Block],
+        sentences_by_block: dict[str, list[Sentence]],
+    ) -> list[tuple[int, int, list[Block]]]:
+        groups: list[tuple[int, int, list[Block]]] = []
+        index = 0
+        while index < len(translatable_blocks):
+            block = translatable_blocks[index]
+            if not self._is_merge_candidate(block, sentences_by_block):
+                groups.append((index, index, [block]))
+                index += 1
+                continue
+
+            group = [block]
+            total_chars = self._merge_block_char_count(block)
+            total_sentences = len(sentences_by_block.get(block.id, []))
+            cursor = index + 1
+            while cursor < len(translatable_blocks) and len(group) < MAX_MERGED_PACKET_BLOCKS:
+                candidate = translatable_blocks[cursor]
+                if candidate.ordinal != group[-1].ordinal + 1:
+                    break
+                if not self._is_merge_candidate(candidate, sentences_by_block):
+                    break
+                candidate_chars = self._merge_block_char_count(candidate)
+                candidate_sentences = len(sentences_by_block.get(candidate.id, []))
+                if total_chars + candidate_chars > MAX_MERGED_PACKET_CHARS:
+                    break
+                if total_sentences + candidate_sentences > MAX_MERGED_PACKET_SENTENCES:
+                    break
+                group.append(candidate)
+                total_chars += candidate_chars
+                total_sentences += candidate_sentences
+                cursor += 1
+            groups.append((index, index + len(group) - 1, group))
+            index += len(group)
+        return groups
+
+    def _is_merge_candidate(
+        self,
+        block: Block,
+        sentences_by_block: dict[str, list[Sentence]],
+    ) -> bool:
+        if block.block_type != BlockType.PARAGRAPH:
+            return False
+        sentence_count = len(sentences_by_block.get(block.id, []))
+        if sentence_count == 0 or sentence_count > MAX_MERGED_SINGLE_BLOCK_SENTENCES:
+            return False
+        return 0 < self._merge_block_char_count(block) <= MAX_MERGED_SINGLE_BLOCK_CHARS
+
+    def _merge_block_char_count(self, block: Block) -> int:
+        return len(" ".join((block.normalized_text or block.source_text or "").split()))
 
     def build_packet(
         self,
@@ -517,6 +676,114 @@ class ContextPacketBuilder:
                         role=PacketSentenceRole.NEXT_CONTEXT,
                     )
         )
+        return packet, packet_maps
+
+    def _build_merged_packet(
+        self,
+        *,
+        document: Document,
+        chapter: Chapter,
+        current_blocks: list[Block],
+        prev_blocks: list[Block],
+        next_blocks: list[Block],
+        sentences_by_block: dict[str, list[Sentence]],
+        book_profile: BookProfile,
+        chapter_brief: MemorySnapshot,
+        termbase_snapshot: MemorySnapshot,
+        entity_snapshot: MemorySnapshot,
+        now: datetime,
+        packet_id: str | None = None,
+        packet_type: PacketType = PacketType.TRANSLATE,
+        created_at: datetime | None = None,
+    ) -> tuple[TranslationPacket, list[PacketSentenceMap]]:
+        current_packet_blocks = [
+            self._to_packet_block(block, sentences_by_block.get(block.id, []))
+            for block in current_blocks
+        ]
+        context_text = " ".join(
+            filter(
+                None,
+                [
+                    *(item.source_text for item in prev_blocks),
+                    *(block.text for block in current_packet_blocks),
+                    *(item.source_text for item in next_blocks),
+                ],
+            )
+        )
+        packet_id = packet_id or stable_id(
+            "packet",
+            document.id,
+            chapter.id,
+            current_blocks[0].id,
+            current_blocks[-1].id,
+            chapter_brief.version,
+            termbase_snapshot.version,
+            entity_snapshot.version,
+        )
+        context_packet = ContextPacket(
+            packet_id=packet_id,
+            document_id=document.id,
+            chapter_id=chapter.id,
+            packet_type=packet_type.value,
+            book_profile_version=book_profile.version,
+            chapter_brief_version=chapter_brief.version,
+            heading_path=chapter_brief.content_json.get("heading_path", []),
+            current_blocks=current_packet_blocks,
+            prev_blocks=[self._to_packet_block(item, sentences_by_block.get(item.id, [])) for item in prev_blocks],
+            next_blocks=[self._to_packet_block(item, sentences_by_block.get(item.id, [])) for item in next_blocks],
+            relevant_terms=self._match_terms(context_text, termbase_snapshot),
+            relevant_entities=self._match_entities(context_text, entity_snapshot),
+            protected_spans=[],
+            chapter_brief=chapter_brief.content_json.get("summary"),
+            style_constraints=book_profile.style_policy_json,
+            open_questions=chapter_brief.content_json.get("open_questions", []),
+            budget_hint={"max_input_tokens": 6000, "max_output_tokens": 2500},
+        )
+        packet = TranslationPacket(
+            id=packet_id,
+            chapter_id=chapter.id,
+            block_start_id=current_blocks[0].id,
+            block_end_id=current_blocks[-1].id,
+            packet_type=packet_type,
+            book_profile_version=book_profile.version,
+            chapter_brief_version=chapter_brief.version,
+            termbase_version=termbase_snapshot.version,
+            entity_snapshot_version=entity_snapshot.version,
+            style_snapshot_version=book_profile.version,
+            packet_json=context_packet.model_dump(mode="json"),
+            risk_score=0.1,
+            status=PacketStatus.BUILT,
+            created_at=created_at or now,
+            updated_at=now,
+        )
+        packet_maps: list[PacketSentenceMap] = []
+        for current_block in current_blocks:
+            for source_sentence in sentences_by_block.get(current_block.id, []):
+                packet_maps.append(
+                    PacketSentenceMap(
+                        packet_id=packet.id,
+                        sentence_id=source_sentence.id,
+                        role=PacketSentenceRole.CURRENT,
+                    )
+                )
+        for source_block in prev_blocks:
+            for source_sentence in sentences_by_block.get(source_block.id, []):
+                packet_maps.append(
+                    PacketSentenceMap(
+                        packet_id=packet.id,
+                        sentence_id=source_sentence.id,
+                        role=PacketSentenceRole.PREV_CONTEXT,
+                    )
+                )
+        for source_block in next_blocks:
+            for source_sentence in sentences_by_block.get(source_block.id, []):
+                packet_maps.append(
+                    PacketSentenceMap(
+                        packet_id=packet.id,
+                        sentence_id=source_sentence.id,
+                        role=PacketSentenceRole.NEXT_CONTEXT,
+                    )
+                )
         return packet, packet_maps
 
     def _to_packet_block(

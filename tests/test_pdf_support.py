@@ -5,9 +5,13 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.pool import StaticPool
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,26 +22,60 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.app.main import create_app
-from book_agent.domain.enums import ActionType, BlockType, ChapterStatus, JobScopeType, SourceType
+from book_agent.domain.enums import (
+    ActionType,
+    ArtifactStatus,
+    BlockType,
+    ChapterStatus,
+    DocumentStatus,
+    JobScopeType,
+    ProtectedPolicy,
+    RootCauseLayer,
+    Severity,
+    SourceType,
+)
+from book_agent.domain.models import Block, Document
 from book_agent.domain.structure.pdf import (
     BasicPdfTextExtractor,
     PDFParser,
     PdfExtraction,
     PdfFileProfiler,
+    PdfFileProfile,
+    PdfImageBlock,
+    PdfOutlineEntry,
     PdfPage,
+    PdfStructureRecoveryService,
     PdfTextBlock,
+    PyMuPDFTextExtractor,
+    _RecoveredBlock,
     _detect_backmatter_cue,
     _infer_appendix_intro_title,
     _infer_appendix_nested_subheading_title,
     _infer_appendix_subheading_title,
     _infer_intro_page_title,
+    _looks_like_code,
+    _looks_like_reference_entry,
+    _looks_like_table,
 )
+from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
+from book_agent.domain.structure.ocr import OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
+from book_agent.infra.repositories.export import ExportRepository
+from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.review import ReviewRepository
+from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.services.actions import IssueActionExecutor
+from book_agent.services.bootstrap import BootstrapArtifacts, BootstrapPipeline, IngestService, ParseService
+from book_agent.services.export import ExportService
+from book_agent.services.pdf_structure_refresh import PdfStructureRefreshService
+from book_agent.services.realign import RealignService
+from book_agent.services.rebuild import TargetedRebuildService
+from book_agent.services.rerun import RerunService
 from book_agent.services.review import ReviewService
+from book_agent.services.translation import TranslationService
 from book_agent.services.workflows import DocumentWorkflowService
 
 
@@ -475,6 +513,243 @@ def _write_positioned_multi_column_academic_paper_pdf(path: Path) -> None:
         ],
     ]
     _write_pdf(path, pages, title="Transformer Attention in Practice", author="Test Author")
+
+
+def _write_asymmetric_first_page_academic_paper_pdf(path: Path) -> None:
+    outline_entries = [
+        (1, "1 Introduction", 1),
+        (1, "2 Related Work", 2),
+        (1, "References", 3),
+    ]
+    pages = [
+        [
+            _text_command(
+                120,
+                760,
+                20,
+                "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+            ),
+            _text_command(170, 730, 12, "P. Hemmer, S. Schellhammer, M. Vossing, J. Jakubik, G. Satzger"),
+            _text_command(126, 704, 11, "Karlsruhe Institute of Technology"),
+            _text_command(146, 684, 11, "patrick.hemmer@kit.edu"),
+            _text_command(154, 656, 12, "Abstract"),
+            _text_command(14, 646, 10, "arXiv:2206.07948v1 [cs.AI]"),
+            _text_command(
+                72,
+                632,
+                11,
+                "Machine learning (ML) models are increasingly used in application domains with human experts.",
+            ),
+            _text_command(
+                72,
+                602,
+                11,
+                "When predictions are difficult, teams may defer selected instances to people with complementary skills.",
+            ),
+            _text_command(
+                330,
+                632,
+                11,
+                "of side information that is not accessible to the ML model and motivates expert allocation policies.",
+            ),
+            _text_command(
+                330,
+                602,
+                11,
+                "This abstract continuation should remain with the title page rather than spilling into the introduction chapter.",
+            ),
+            _text_command(72, 418, 14, "1 Introduction"),
+            _text_command(
+                72,
+                384,
+                11,
+                "Over the last years, the performance of machine learning models has become comparable to human experts.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(72, 724, 14, "2 Related Work"),
+            _text_command(
+                72,
+                684,
+                11,
+                "Related work compares deferral methods, human-AI teamwork baselines, and allocation systems.",
+            ),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(72, 724, 14, "References"),
+            _text_command(72, 684, 11, "[1] A. Researcher. 2024. Structured recovery for academic PDFs. ACL."),
+            _text_command(298, 36, 10, "3"),
+        ],
+    ]
+    _write_pdf(
+        path,
+        pages,
+        title="Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        author="Test Author",
+        outline_entries=outline_entries,
+    )
+
+
+def _write_asymmetric_first_page_academic_paper_with_uppercase_continuation_pdf(path: Path) -> None:
+    outline_entries = [
+        (1, "1 Introduction", 1),
+        (1, "2 Related Work", 2),
+        (1, "References", 3),
+    ]
+    pages = [
+        [
+            _text_command(
+                120,
+                760,
+                20,
+                "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+            ),
+            _text_command(170, 730, 12, "P. Hemmer, S. Schellhammer, M. Vossing, J. Jakubik, G. Satzger"),
+            _text_command(126, 704, 11, "Karlsruhe Institute of Technology"),
+            _text_command(146, 684, 11, "patrick.hemmer@kit.edu"),
+            _text_command(154, 656, 12, "Abstract"),
+            _text_command(
+                72,
+                632,
+                11,
+                "Machine learning (ML) models are increasingly used in application domains with human experts.",
+            ),
+            _text_command(
+                72,
+                602,
+                11,
+                "Teams may defer selected instances to people with complementary skills when predictions are difficult.",
+            ),
+            _text_command(
+                330,
+                632,
+                11,
+                "This abstract continuation begins with uppercase text but still belongs to the abstract discussion.",
+            ),
+            _text_command(
+                330,
+                602,
+                11,
+                "These concluding abstract sentences describe expert allocation before the introduction begins.",
+            ),
+            _text_command(72, 418, 14, "1 Introduction"),
+            _text_command(
+                72,
+                384,
+                11,
+                "Over the last years, the performance of machine learning models has become comparable to human experts.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(72, 724, 14, "2 Related Work"),
+            _text_command(
+                72,
+                684,
+                11,
+                "Related work compares deferral methods, human-AI teamwork baselines, and allocation systems.",
+            ),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(72, 724, 14, "References"),
+            _text_command(72, 684, 11, "[1] A. Researcher. 2024. Structured recovery for academic PDFs. ACL."),
+            _text_command(298, 36, 10, "3"),
+        ],
+    ]
+    _write_pdf(
+        path,
+        pages,
+        title="Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+        author="Test Author",
+        outline_entries=outline_entries,
+    )
+
+
+def _write_outlined_multi_column_academic_paper_pdf(path: Path) -> None:
+    outline_entries = [
+        (1, "1 Introduction", 2),
+        (1, "2 Related Work", 2),
+        (1, "3 Approach", 3),
+        (1, "References", 4),
+    ]
+    reference_one = (
+        "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL."
+    )
+    reference_two = (
+        "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP."
+    )
+    pages = [
+        [
+            _text_command(
+                120,
+                760,
+                20,
+                "Forming Effective Human-AI Teams: Building Machine Learning Models that Complement the Capabilities of Multiple Experts",
+            ),
+            _text_command(180, 730, 12, "P. Hemmer, S. Schellhammer, M. Vossing, J. Jakubik, G. Satzger"),
+            _text_command(
+                72,
+                684,
+                12,
+                "Abstract This paper studies how to recover section-aware structure from dual-column academic PDFs before translation.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(72, 724, 14, "1 Introduction"),
+            _text_command(
+                72,
+                684,
+                11,
+                "Introduction left column explains why human-AI teamwork papers need section-faithful recovery before translation.",
+            ),
+            _text_command(
+                72,
+                648,
+                11,
+                "The introduction continues in the left column before the reader should move to the second top-level section.",
+            ),
+            _text_command(330, 724, 14, "2 Related Work"),
+            _text_command(
+                330,
+                684,
+                11,
+                "Related work in the right column compares prior deferral methods, teamwork baselines, and allocation systems.",
+            ),
+            _text_command(
+                330,
+                648,
+                11,
+                "The right column continues only after the left column introduction content has been consumed in reading order.",
+            ),
+            _text_command(298, 36, 10, "2"),
+        ],
+        [
+            _text_command(72, 724, 14, "3 Approach"),
+            _text_command(
+                72,
+                684,
+                11,
+                "The approach section formalizes the classifier and allocation system as a coordinated human-AI team.",
+            ),
+            _text_command(298, 36, 10, "3"),
+        ],
+        [
+            _text_command(244, 748, 16, "References"),
+            _text_command(72, 700, 10, f"{reference_one} {reference_two}"),
+            _text_command(298, 36, 10, "4"),
+        ],
+    ]
+    _write_pdf(
+        path,
+        pages,
+        title="Forming Effective Human-AI Teams",
+        author="Test Author",
+        outline_entries=outline_entries,
+    )
 
 
 def _write_single_column_research_paper_pdf(path: Path) -> None:
@@ -1235,7 +1510,199 @@ def _write_frontmatter_intro_recovery_pdf(path: Path) -> None:
     _write_pdf(path, pages, title="Frontmatter Intro Recovery Sample", author="Test Author")
 
 
+def _write_book_with_preface_contact_and_internal_conclusion_pdf(path: Path) -> None:
+    pages = [
+        [
+            _text_command(72, 724, 22, "Preface"),
+            _text_command(72, 670, 12, "This preface explains how to use the book as a practical field guide."),
+            _text_command(298, 36, 10, "i"),
+        ],
+        [
+            _text_command(72, 724, 18, "O'Reilly Online Learning"),
+            _text_command(72, 684, 12, "Our online learning platform gives you on-demand access to courses and books."),
+            _text_command(72, 648, 12, "Please address comments and questions to support@oreilly.com or visit https://oreilly.com."),
+            _text_command(72, 612, 18, "How to Contact Us"),
+            _text_command(72, 576, 12, "Find us on LinkedIn: https://linkedin.com/company/oreilly-media"),
+            _text_command(72, 540, 12, "Watch us on YouTube: https://youtube.com/oreillymedia"),
+            _text_command(298, 36, 10, "ii"),
+        ],
+        [
+            _text_command(72, 724, 18, "Acknowledgments"),
+            _text_command(72, 670, 12, "We thank the reviewers and early readers who improved the manuscript."),
+            _text_command(298, 36, 10, "iii"),
+        ],
+        [
+            _text_command(72, 724, 22, "Chapter 1 Durable Products"),
+            _text_command(72, 670, 12, "Agent systems become durable when memory, tools, and evaluation reinforce one another."),
+            _text_command(72, 610, 18, "Conclusion"),
+            _text_command(72, 574, 12, "This conclusion wraps the chapter but should not become a standalone chapter."),
+            _text_command(298, 36, 10, "1"),
+        ],
+        [
+            _text_command(72, 724, 22, "Chapter 2 Learning Systems"),
+            _text_command(72, 670, 12, "The next chapter explains how feedback loops improve agent quality over time."),
+            _text_command(298, 36, 10, "19"),
+        ],
+    ]
+    _write_pdf(
+        path,
+        pages,
+        title="Practical Agent Systems",
+        author="Test Author",
+        outline_entries=[
+            (1, "Preface", 1),
+            (1, "Chapter 1 Durable Products", 4),
+            (2, "Conclusion", 4),
+            (1, "Chapter 2 Learning Systems", 5),
+        ],
+    )
+
+
+def _write_multiline_heading_pdf(path: Path) -> None:
+    pages = [
+        [
+            _text_command(72, 722, 24, "A Thought Leader's Perspective: Power"),
+            _text_command(72, 686, 24, "and Responsibility"),
+            _text_command(
+                72,
+                620,
+                12,
+                "This section explains why powerful systems also require careful governance.",
+            ),
+            _text_command(298, 36, 10, "1"),
+        ]
+    ]
+    _write_pdf(path, pages, title="Multiline Heading Sample", author="Test Author")
+
+
 class PdfBootstrapPipelineTests(unittest.TestCase):
+    def test_wrapped_prose_heuristics_do_not_treat_acknowledgement_text_as_code_or_table(self) -> None:
+        lines = [
+            "I am deeply indebted to the many talented people who helped bring this book to life. My",
+            "heartfelt thanks go to Marco Fago for his immense contributions, from code and",
+            "diagrams to reviewing the entire text. I'm also grateful to Mahtab Syed for his coding work",
+            "and to Ankita Guha for her incredibly detailed feedback on so many chapters. The book was",
+            "significantly improved by the insightful amendments from Priya Saxena, the careful reviews",
+            "from Jae Lee, and the dedicated work of Mario da Roza in creating the NotebookLM version.",
+        ]
+        text = "\n".join(lines)
+
+        self.assertFalse(_looks_like_code(text, len(lines)))
+        self.assertFalse(_looks_like_table(len(lines), lines))
+
+    def test_wrapped_numeric_academic_table_heuristics_detect_compressed_multiline_tables(self) -> None:
+        lines = [
+            "Team Accuracy (%) Method",
+            "[F, 357, 117]",
+            "[F, 357, 121]",
+            "[F, 249, 124]",
+            "[F, 249, 296] Baselines:",
+            "- JSF",
+            "94.69 (± 0.25)",
+            "90.14 (± 0.17)",
+            "88.69 (± 0.32)",
+            "90.92 (± 0.13)",
+            "- One Classifier",
+            "83.13 (± 0.21)",
+            "84.70 (± 0.13)",
+            "84.59 (± 0.12)",
+            "83.63 (± 0.08)",
+            "Our Approach:",
+            "- C. & E. Team",
+            "95.45 (± 0.06)",
+            "91.72 (± 0.12)",
+            "90.36 (± 0.11)",
+            "91.74 (± 0.09)",
+        ]
+
+        self.assertTrue(_looks_like_table(len(lines), lines))
+
+    def test_wrapped_individual_accuracy_table_heuristics_detect_id_equals_layout(self) -> None:
+        lines = [
+            "Individual Accuracy (%) Instances allocated to",
+            "Classifier F",
+            "ID = 357",
+            "ID = 117 Classifier F",
+            "97.73 (± 1.76)",
+            "78.93 (± 2.47)",
+            "96.43 (± 1.86)",
+            "ID = 357",
+            "31.88 (± 4.73)",
+            "98.78 (± 0.32)",
+            "98.55 (± 0.34)",
+            "ID = 117",
+            "61.69 (± 1.15)",
+            "79.90 (± 0.29)",
+            "94.67 (± 0.02)",
+        ]
+
+        self.assertTrue(_looks_like_table(len(lines), lines))
+
+    def test_late_table_promotion_merges_wrapped_table_fragments_before_caption_linking(self) -> None:
+        service = PdfStructureRecoveryService()
+        recovered_blocks = [
+            _RecoveredBlock(
+                role="body",
+                block_type=BlockType.PARAGRAPH,
+                text="Team Accuracy (%) Method\n[F, 357, 117]\n[F, 357, 121]\n[F, 249, 124]\n[F, 249, 296]",
+                page_start=1,
+                page_end=1,
+                bbox_regions=[{"page_number": 1, "bbox": [72.0, 96.0, 292.0, 126.0]}],
+                reading_order_index=1,
+                parse_confidence=0.9,
+                flags=[],
+                font_size_avg=10.0,
+                source_path="sample.pdf",
+                anchor="p1-b1",
+                metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            ),
+            _RecoveredBlock(
+                role="table_like",
+                block_type=BlockType.TABLE,
+                text="Baselines:\n- JSF\n94.69 (± 0.25)\n90.14 (± 0.17)\n88.69 (± 0.32)\n90.92 (± 0.13)",
+                page_start=1,
+                page_end=1,
+                bbox_regions=[{"page_number": 1, "bbox": [72.0, 132.0, 292.0, 224.0]}],
+                reading_order_index=2,
+                parse_confidence=0.9,
+                flags=[],
+                font_size_avg=10.0,
+                source_path="sample.pdf",
+                anchor="p1-b2",
+                metadata={"pdf_page_family": "body", "pdf_block_role": "table_like"},
+            ),
+            _RecoveredBlock(
+                role="caption",
+                block_type=BlockType.CAPTION,
+                text="Table 1: Team accuracies of our approach and the baselines.",
+                page_start=1,
+                page_end=1,
+                bbox_regions=[{"page_number": 1, "bbox": [72.0, 232.0, 292.0, 252.0]}],
+                reading_order_index=3,
+                parse_confidence=0.9,
+                flags=[],
+                font_size_avg=9.0,
+                source_path="sample.pdf",
+                anchor="p1-b3",
+                metadata={"pdf_page_family": "body", "pdf_block_role": "caption"},
+            ),
+        ]
+
+        promoted_blocks = service._promote_late_table_like_bodies(recovered_blocks)
+        merged_blocks = service._merge_adjacent_table_fragments(promoted_blocks)
+        service._link_artifact_captions(merged_blocks)
+
+        table_blocks = [block for block in merged_blocks if block.role == "table_like"]
+        self.assertEqual(len(table_blocks), 1)
+        self.assertIn("Team Accuracy (%) Method", table_blocks[0].text)
+        self.assertIn("94.69 (± 0.25)", table_blocks[0].text)
+        self.assertEqual(
+            table_blocks[0].metadata.get("linked_caption_text"),
+            "Table 1: Team accuracies of our approach and the baselines.",
+        )
+        self.assertIn("late_table_like_promoted", table_blocks[0].flags)
+        self.assertIn("table_fragments_merged", table_blocks[0].flags)
+
     def test_bootstrap_pipeline_supports_low_risk_text_pdf(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "sample.pdf"
@@ -1274,31 +1741,291 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         )
         self.assertTrue(all(sentence.source_text not in {"1", "2"} for sentence in result.sentences if sentence.translatable))
 
+    def test_bootstrap_pipeline_merges_multiline_heading_continuations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "multiline-heading.pdf"
+            _write_multiline_heading_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        heading_blocks = [block for block in result.blocks if block.block_type == BlockType.HEADING]
+        self.assertEqual(len(heading_blocks), 1)
+        self.assertEqual(
+            heading_blocks[0].source_text,
+            "A Thought Leader’s Perspective: Power and Responsibility",
+        )
+
+    def test_structure_recovery_merges_heading_continuation_fragments(self) -> None:
+        service = PdfStructureRecoveryService()
+        previous = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="A Thought Leader’s Perspective: Power",
+            page_start=6,
+            page_end=6,
+            bbox_regions=[{"page_number": 6, "bbox": [93.0, 103.0, 709.0, 133.0]}],
+            reading_order_index=32,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=24.0,
+            source_path="pdf://page/6",
+            anchor="p6-b34",
+        )
+        current = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="and Responsibility",
+            page_start=6,
+            page_end=6,
+            bbox_regions=[{"page_number": 6, "bbox": [94.0, 145.0, 380.0, 178.0]}],
+            reading_order_index=33,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=24.0,
+            source_path="pdf://page/6",
+            anchor="p6-b35",
+        )
+
+        merged = service._merge_adjacent_heading_continuations([previous, current])
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].text, "A Thought Leader’s Perspective: Power and Responsibility")
+        self.assertIn("multiline_heading_merged", merged[0].flags)
+
+    def test_structure_recovery_repairs_prose_continuation_misclassified_as_code(self) -> None:
+        service = PdfStructureRecoveryService()
+        pages = [PdfPage(page_number=10, width=595.0, height=842.0, blocks=[])]
+        previous = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "While the chapters are ordered to build concepts progressively, feel free to use the book "
+                "as a reference, jumping to chapters that address specific challenges you face in your "
+                "own agent development projects. The appendices provide a comprehensive look at advanced "
+                "prompting techniques, principles for applying AI agents in real-world"
+            ),
+            page_start=10,
+            page_end=10,
+            bbox_regions=[{"page_number": 10, "bbox": [94.0, 516.0, 724.0, 642.0]}],
+            reading_order_index=69,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=13.0,
+            source_path="pdf://page/10",
+            anchor="p10-b69",
+        )
+        current = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "environments, and an overview of essential agentic frameworks. To complement this,\n"
+                "practical online-only tutorials are included, offering step-by-step guidance on building\n"
+                "agents with specific platforms like AgentSpace and for the command-line interface. The\n"
+                "emphasis throughout is on practical application; we strongly encourage you to run the\n"
+                "code examples, experiment with them, and adapt them to build your own intelligent\n"
+                "systems on your chosen canvas."
+            ),
+            page_start=10,
+            page_end=10,
+            bbox_regions=[{"page_number": 10, "bbox": [94.0, 648.0, 724.0, 790.0]}],
+            reading_order_index=70,
+            parse_confidence=0.7,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=13.0,
+            source_path="pdf://page/10",
+            anchor="p10-b70",
+        )
+
+        repaired = service._repair_prose_artifact_continuations([previous, current], pages)
+
+        self.assertEqual(len(repaired), 1)
+        self.assertEqual(repaired[0].role, "body")
+        self.assertEqual(repaired[0].block_type, BlockType.PARAGRAPH)
+        self.assertIn("essential agentic frameworks", repaired[0].text)
+        self.assertIn("practical online-only tutorials", repaired[0].text)
+        self.assertEqual(repaired[0].metadata["pdf_block_role"], "body")
+        self.assertIn("prose_artifact_continuation_repaired", repaired[0].flags)
+
     def test_bootstrap_pipeline_supports_academic_paper_pdf_lane(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-paper.pdf"
-            _write_academic_paper_pdf(pdf_path)
+            _write_outlined_multi_column_academic_paper_pdf(pdf_path)
 
             result = BootstrapOrchestrator().bootstrap_document(pdf_path)
 
         profile = result.document.metadata_json["pdf_profile"]
         self.assertEqual(result.document.source_type, SourceType.PDF_TEXT)
+        self.assertEqual(profile["extractor_kind"], "pymupdf")
         self.assertEqual(profile["layout_risk"], "medium")
         self.assertEqual(profile["recovery_lane"], "academic_paper")
         self.assertTrue(profile["academic_paper_candidate"])
-        self.assertEqual(profile["trailing_reference_page_count"], 2)
-        self.assertEqual([chapter.metadata_json["pdf_section_family"] for chapter in result.chapters], ["body", "references"])
-        self.assertEqual(result.chapters[0].risk_level.value, "high")
-        self.assertEqual(result.chapters[1].metadata_json["pdf_section_family"], "references")
+        self.assertEqual(profile["trailing_reference_page_count"], 1)
+        self.assertIn("1 Introduction", [chapter.title_src for chapter in result.chapters])
+        self.assertEqual(result.chapters[-1].title_src, "References")
+        self.assertEqual(result.chapters[-1].metadata_json["pdf_section_family"], "references")
+
+    def test_recovery_splits_leading_code_prefix_from_mixed_body_block(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "from langchain_openai import ChatOpenAI\n"
+                "llm = ChatOpenAI(model_name=\"gpt-4o\")\n"
+                "messages = [HumanMessage(\"What is the weather today?\")]\n"
+                "Tools, meanwhile, are external functions that your model can call to extend its "
+                "capabilities beyond text generation."
+            ),
+            page_start=94,
+            page_end=94,
+            bbox_regions=[{"page_number": 94, "bbox": [72.0, 320.0, 540.0, 420.0]}],
+            reading_order_index=12,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/94",
+            anchor="p94-b12",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertTrue(repaired[0].text.startswith("from langchain_openai"))
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertIn("Tools, meanwhile", repaired[1].text)
+        self.assertIn("mixed_code_prose_split", repaired[0].flags)
+
+    def test_looks_like_code_uses_multiline_text_when_raw_line_count_is_one(self) -> None:
+        text = (
+            "from langchain_core.tools import tool\n"
+            "import requests\n"
+            "@tool\n"
+            "def query_wolfram_alpha(expression: str) -> str:\n"
+            "    return requests.get(expression).text"
+        )
+
+        self.assertTrue(_looks_like_code(text, 1))
+
+    def test_recovery_splits_code_like_block_with_inline_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "tool_embeddings = []\n"
+                "index_to_tool = {\n"
+                "0: query_wolfram_alpha,\n"
+                "1: trigger_zapier_webhook,\n"
+                "} Those embeddings for your tool catalog only need to be computed once, and now\n"
+                "they're ready to be quickly retrieved."
+            ),
+            page_start=98,
+            page_end=98,
+            bbox_regions=[{"page_number": 98, "bbox": [72.0, 320.0, 540.0, 420.0]}],
+            reading_order_index=18,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/98",
+            anchor="p98-b18",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertNotIn("Those embeddings", repaired[0].text)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertIn("Those embeddings for your tool catalog", repaired[1].text)
+
+    def test_recovery_promotes_docstring_body_adjacent_to_code(self) -> None:
+        service = PdfStructureRecoveryService()
+        code_prefix = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text="@tool\ndef trigger_zapier_webhook(zap_id: str, payload: dict) -> str:",
+            page_start=95,
+            page_end=95,
+            bbox_regions=[{"page_number": 95, "bbox": [72.0, 180.0, 540.0, 230.0]}],
+            reading_order_index=10,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/95",
+            anchor="p95-b10",
+        )
+        docstring_block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "\"\"\"\n"
+                "Trigger a Zapier webhook to execute a predefined Zap.\n"
+                "Args:\n"
+                "zap_id (str): The unique identifier for the Zap.\n"
+                "Returns:\n"
+                "str: Confirmation message upon successful triggering.\n"
+                "\"\"\""
+            ),
+            page_start=95,
+            page_end=95,
+            bbox_regions=[{"page_number": 95, "bbox": [72.0, 232.0, 540.0, 300.0]}],
+            reading_order_index=11,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/95",
+            anchor="p95-b11",
+        )
+        code_suffix = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="response = requests.post(zapier_webhook_url, json=payload)\nreturn response.text",
+            page_start=95,
+            page_end=95,
+            bbox_regions=[{"page_number": 95, "bbox": [72.0, 302.0, 540.0, 360.0]}],
+            reading_order_index=12,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/95",
+            anchor="p95-b12",
+        )
+
+        promoted = service._promote_late_code_like_bodies([code_prefix, docstring_block, code_suffix])
+
+        self.assertEqual(promoted[1].role, "code_like")
+        self.assertEqual(promoted[1].block_type, BlockType.CODE)
+        self.assertIn("late_code_like_promoted", promoted[1].flags)
 
     def test_bootstrap_pipeline_recovers_inline_academic_section_headings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-inline-sections.pdf"
             _write_academic_paper_with_inline_sections_pdf(pdf_path)
 
-            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
 
-        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        heading_texts = [
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
         self.assertIn("Abstract", heading_texts)
         self.assertIn("1 Introduction", heading_texts)
         self.assertIn("2 Model Architecture", heading_texts)
@@ -1307,21 +2034,29 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
 
         recovered_heading = next(
             block
-            for block in result.blocks
-            if block.block_type == BlockType.HEADING and block.source_text == "2 Model Architecture"
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value and block.text == "2 Model Architecture"
         )
-        self.assertIn("academic_section_heading_recovered", recovered_heading.source_span_json["recovery_flags"])
-        self.assertEqual(recovered_heading.source_span_json["pdf_academic_heading_kind"], "numbered")
-        self.assertEqual(recovered_heading.source_span_json["pdf_academic_section_level"], 1)
+        self.assertIn("academic_section_heading_recovered", recovered_heading.metadata["recovery_flags"])
+        self.assertEqual(recovered_heading.metadata["pdf_academic_heading_kind"], "numbered")
+        self.assertEqual(recovered_heading.metadata["pdf_academic_section_level"], 1)
 
     def test_bootstrap_pipeline_cleans_noisy_inline_academic_section_headings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-noisy-inline-sections.pdf"
             _write_academic_paper_with_noisy_inline_sections_pdf(pdf_path)
 
-            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
 
-        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        heading_texts = [
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
         self.assertIn("3 Model Architecture", heading_texts)
         self.assertIn("3.1 Encoder and Decoder Stacks", heading_texts)
         self.assertIn("3.4 Embeddings and Softmax", heading_texts)
@@ -1336,18 +2071,26 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
             pdf_path = Path(tmpdir) / "academic-broken-heading-tail.pdf"
             _write_academic_paper_with_broken_heading_tail_pdf(pdf_path)
 
-            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
 
-        heading_texts = [block.source_text for block in result.blocks if block.block_type == BlockType.HEADING]
+        heading_texts = [
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
         self.assertIn("3.2.1 Scaled Dot-Product Attention", heading_texts)
         self.assertIn("3.2.2 Multi-Head Attention", heading_texts)
         self.assertNotIn("3.2.1 Scaled Dot-Pr", heading_texts)
         broken_heading = next(
             block
-            for block in result.blocks
-            if block.block_type == BlockType.HEADING and block.source_text == "3.2.1 Scaled Dot-Product Attention"
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.HEADING.value and block.text == "3.2.1 Scaled Dot-Product Attention"
         )
-        self.assertIn("academic_section_heading_recovered", broken_heading.source_span_json["recovery_flags"])
+        self.assertIn("academic_section_heading_recovered", broken_heading.metadata["recovery_flags"])
 
     def test_profiler_keeps_positioned_multi_column_academic_paper_in_medium_lane(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1367,13 +2110,16 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
             pdf_path = Path(tmpdir) / "academic-positioned-columns.pdf"
             _write_positioned_multi_column_academic_paper_pdf(pdf_path)
 
-            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            parser = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+            parsed = parser.parse(pdf_path)
 
         body_texts = [
-            block.source_text
-            for block in result.blocks
-            if block.source_span_json.get("pdf_page_family") == "body"
-            and block.block_type in {BlockType.HEADING, BlockType.PARAGRAPH}
+            block.text
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.metadata.get("pdf_page_family") == "body"
+            and block.block_type in {BlockType.HEADING.value, BlockType.PARAGRAPH.value}
         ]
         combined_body_text = " ".join(
             block_text
@@ -1388,10 +2134,121 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
             combined_body_text.index("Left column ends with a final sentence"),
             combined_body_text.index("Right column then discusses related work"),
         )
-        profile = result.document.metadata_json["pdf_profile"]
+        profile = parsed.metadata["pdf_profile"]
         self.assertEqual(profile["layout_risk"], "medium")
         self.assertEqual(profile["recovery_lane"], "academic_paper")
         self.assertGreaterEqual(profile["multi_column_page_count"], 2)
+
+    def test_profiler_recognizes_outlined_multi_column_academic_paper_with_pymupdf(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-outlined-columns.pdf"
+            _write_outlined_multi_column_academic_paper_pdf(pdf_path)
+
+            extractor = PyMuPDFTextExtractor()
+            profile = PdfFileProfiler(extractor).profile(pdf_path)
+
+        self.assertEqual(profile.extractor_kind, "pymupdf")
+        self.assertEqual(profile.layout_risk, "medium")
+        self.assertEqual(profile.recovery_lane, "academic_paper")
+        self.assertTrue(profile.academic_paper_candidate)
+        self.assertTrue(profile.outline_present)
+
+    def test_bootstrap_pipeline_waits_for_same_page_outline_heading_in_academic_paper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-outlined-columns.pdf"
+            _write_outlined_multi_column_academic_paper_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        chapter_titles = [chapter.title_src for chapter in result.chapters]
+        self.assertIn("1 Introduction", chapter_titles)
+        self.assertIn("2 Related Work", chapter_titles)
+
+        introduction_chapter = next(chapter for chapter in result.chapters if chapter.title_src == "1 Introduction")
+        related_work_chapter = next(chapter for chapter in result.chapters if chapter.title_src == "2 Related Work")
+        self.assertLess(introduction_chapter.ordinal, related_work_chapter.ordinal)
+        related_work_blocks = [block for block in result.blocks if block.chapter_id == related_work_chapter.id]
+        self.assertTrue(related_work_blocks)
+        self.assertEqual(related_work_blocks[0].block_type, BlockType.HEADING)
+        self.assertEqual(related_work_blocks[0].source_text, "2 Related Work")
+        self.assertIn(
+            "Related work in the right column compares prior deferr",
+            " ".join(block.source_text for block in related_work_blocks),
+        )
+        self.assertNotEqual(related_work_chapter.metadata_json.get("source_page_start"), 1)
+
+        profile = result.document.metadata_json["pdf_profile"]
+        self.assertEqual(profile["extractor_kind"], "pymupdf")
+        self.assertEqual(profile["layout_risk"], "medium")
+        self.assertEqual(profile["recovery_lane"], "academic_paper")
+
+    def test_bootstrap_pipeline_keeps_first_page_abstract_continuation_with_title_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-asymmetric-first-page.pdf"
+            _write_asymmetric_first_page_academic_paper_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        chapter_titles = [chapter.title_src for chapter in result.chapters]
+        self.assertIn("1 Introduction", chapter_titles)
+        title_page = result.chapters[0]
+        introduction_chapter = next(chapter for chapter in result.chapters if chapter.title_src == "1 Introduction")
+        title_page_blocks = [block for block in result.blocks if block.chapter_id == title_page.id]
+        introduction_blocks = [block for block in result.blocks if block.chapter_id == introduction_chapter.id]
+        title_page_text = " ".join(block.source_text for block in title_page_blocks)
+        introduction_text = " ".join(block.source_text for block in introduction_blocks)
+
+        self.assertIn(
+            "Machine learning (ML) models are increasingly used in application domains with human experts.",
+            title_page_text,
+        )
+        self.assertIn(
+            "of side information that is not accessible to the ML mod",
+            title_page_text,
+        )
+        self.assertNotIn(
+            "of side information that is not accessible to the ML mod",
+            introduction_text,
+        )
+        self.assertTrue(introduction_blocks)
+        self.assertEqual(introduction_blocks[0].block_type, BlockType.HEADING)
+        self.assertEqual(introduction_blocks[0].source_text, "1 Introduction")
+        first_page_evidence = result.document.metadata_json["pdf_page_evidence"]["pdf_pages"][0]
+        self.assertEqual(first_page_evidence["page_layout_risk"], "high")
+        self.assertIn("academic_first_page_asymmetric", first_page_evidence["page_layout_reasons"])
+
+    def test_bootstrap_pipeline_keeps_uppercase_first_page_abstract_continuation_with_title_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-asymmetric-uppercase-first-page.pdf"
+            _write_asymmetric_first_page_academic_paper_with_uppercase_continuation_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        chapter_titles = [chapter.title_src for chapter in result.chapters]
+        self.assertIn("1 Introduction", chapter_titles)
+        title_page = result.chapters[0]
+        introduction_chapter = next(chapter for chapter in result.chapters if chapter.title_src == "1 Introduction")
+        title_page_text = " ".join(block.source_text for block in result.blocks if block.chapter_id == title_page.id)
+        introduction_text = " ".join(
+            block.source_text for block in result.blocks if block.chapter_id == introduction_chapter.id
+        )
+
+        self.assertIn(
+            "This abstract continuation begins with uppercase text",
+            title_page_text,
+        )
+        self.assertIn(
+            "These concluding abstract sentences describe expert",
+            title_page_text,
+        )
+        self.assertNotIn(
+            "This abstract continuation begins with uppercase text",
+            introduction_text,
+        )
+        self.assertNotIn(
+            "These concluding abstract sentences describe expert",
+            introduction_text,
+        )
 
     def test_parser_recovers_title_and_references_for_single_column_research_paper(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2125,7 +2982,8 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
             pdf_path = Path(tmpdir) / "sample.pdf"
             _write_low_risk_text_pdf(pdf_path)
 
-            parsed = PDFParser().parse(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            parsed = PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor)).parse(pdf_path)
 
         evidence = parsed.metadata["pdf_page_evidence"]
         self.assertEqual(evidence["schema_version"], 1)
@@ -2137,9 +2995,901 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
         self.assertEqual(first_page["page_number"], 1)
         self.assertEqual(first_page["page_family"], "body")
         self.assertEqual(first_page["layout_signals"], [])
+        self.assertEqual(first_page["page_layout_risk"], "low")
+        self.assertEqual(first_page["page_layout_reasons"], [])
         self.assertEqual(first_page["role_counts"]["heading"], 1)
         self.assertIn("cross_page_repaired", second_page["recovery_flags"])
         self.assertIn("dehyphenated", second_page["recovery_flags"])
+
+    def test_recovery_preserves_pdf_image_blocks_as_image_blocks(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Image Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Vision Systems",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Vision Systems"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="Models improve when diagrams and screenshots remain visible to reviewers.",
+                            bbox=(72.0, 148.0, 540.0, 188.0),
+                            line_texts=["Models improve when diagrams and screenshots remain visible to reviewers."],
+                            span_count=72,
+                            line_count=2,
+                            font_size_min=11.0,
+                            font_size_max=11.0,
+                            font_size_avg=11.0,
+                        ),
+                    ],
+                    image_blocks=[
+                        PdfImageBlock(
+                            page_number=1,
+                            block_number=3,
+                            bbox=(72.0, 240.0, 420.0, 520.0),
+                            width_px=1024,
+                            height_px=768,
+                            image_ext="png",
+                        )
+                    ],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("image-sample.pdf", extraction, profile)
+
+        image_blocks = [
+            block
+            for block in parsed.chapters[0].blocks
+            if block.block_type == BlockType.IMAGE.value
+        ]
+        self.assertEqual(len(image_blocks), 1)
+        self.assertEqual(image_blocks[0].text, "[Image]")
+        self.assertEqual(image_blocks[0].metadata["pdf_block_role"], "image")
+        self.assertEqual(image_blocks[0].metadata["image_ext"], "png")
+        self.assertEqual(image_blocks[0].metadata["image_width_px"], 1024)
+        self.assertEqual(image_blocks[0].metadata["image_height_px"], 768)
+        page_evidence = parsed.metadata["pdf_page_evidence"]["pdf_pages"][0]
+        self.assertEqual(page_evidence["raw_image_block_count"], 1)
+        self.assertEqual(page_evidence["role_counts"]["image"], 1)
+
+    def test_recovery_classifies_centered_equation_block_as_equation(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Equation Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Differentiable Objectives",
+                            bbox=(72.0, 72.0, 360.0, 94.0),
+                            line_texts=["Chapter 1 Differentiable Objectives"],
+                            span_count=1,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="We optimize the model using a normalized probabilistic objective.",
+                            bbox=(72.0, 132.0, 540.0, 150.0),
+                            line_texts=["We optimize the model using a normalized probabilistic objective."],
+                            span_count=1,
+                            line_count=1,
+                            font_size_min=11.0,
+                            font_size_max=11.0,
+                            font_size_avg=11.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=3,
+                            text="p(y|x) = softmax(W_h h_t + b)",
+                            bbox=(192.0, 228.0, 420.0, 244.0),
+                            line_texts=["p(y|x) = softmax(W_h h_t + b)"],
+                            span_count=1,
+                            line_count=1,
+                            font_size_min=12.0,
+                            font_size_max=12.0,
+                            font_size_avg=12.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=4,
+                            text="The decoder then samples the next token from this distribution.",
+                            bbox=(72.0, 290.0, 540.0, 308.0),
+                            line_texts=["The decoder then samples the next token from this distribution."],
+                            span_count=1,
+                            line_count=1,
+                            font_size_min=11.0,
+                            font_size_max=11.0,
+                            font_size_avg=11.0,
+                        ),
+                    ],
+                    image_blocks=[],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("equation-sample.pdf", extraction, profile)
+
+        equation_blocks = [
+            block
+            for block in parsed.chapters[0].blocks
+            if block.block_type == BlockType.EQUATION.value
+        ]
+        self.assertEqual(len(equation_blocks), 1)
+        self.assertEqual(equation_blocks[0].text, "p(y|x) = softmax(W_h h_t + b)")
+        self.assertEqual(equation_blocks[0].metadata["pdf_block_role"], "equation")
+        page_evidence = parsed.metadata["pdf_page_evidence"]["pdf_pages"][0]
+        self.assertEqual(page_evidence["role_counts"]["equation"], 1)
+
+    def test_recovery_links_pdf_image_blocks_to_nearby_caption_blocks(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Image Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Vision Systems",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Vision Systems"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="Figure 1. System overview diagram.",
+                            bbox=(96.0, 532.0, 396.0, 556.0),
+                            line_texts=["Figure 1. System overview diagram."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[
+                        PdfImageBlock(
+                            page_number=1,
+                            block_number=3,
+                            bbox=(72.0, 240.0, 420.0, 520.0),
+                            width_px=1024,
+                            height_px=768,
+                            image_ext="png",
+                        )
+                    ],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("image-sample.pdf", extraction, profile)
+
+        image_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.IMAGE.value)
+        caption_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.CAPTION.value)
+        self.assertEqual(image_block.metadata["linked_caption_text"], "Figure 1. System overview diagram.")
+        self.assertEqual(image_block.metadata["image_alt"], "Figure 1. System overview diagram.")
+        self.assertTrue(image_block.metadata["linked_caption_source_anchor"].endswith(caption_block.anchor))
+        self.assertIn("caption_linked", image_block.metadata["recovery_flags"])
+        self.assertTrue(caption_block.metadata["caption_for_source_anchor"].endswith(image_block.anchor))
+        self.assertEqual(caption_block.metadata["caption_for_role"], "image")
+        self.assertIn("image_caption_linked", caption_block.metadata["recovery_flags"])
+
+    def test_recovery_links_pdf_table_blocks_to_nearby_caption_blocks(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Table Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Model Comparison",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Model Comparison"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19\nBaseline  25.1  8.0x10^18",
+                            bbox=(84.0, 244.0, 420.0, 314.0),
+                            line_texts=[
+                                "Model  BLEU  Cost",
+                                "Transformer  27.5  1.0x10^19",
+                                "Baseline  25.1  8.0x10^18",
+                            ],
+                            span_count=42,
+                            line_count=3,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=3,
+                            text="Table 1. Translation quality and training cost.",
+                            bbox=(96.0, 330.0, 420.0, 352.0),
+                            line_texts=["Table 1. Translation quality and training cost."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("table-sample.pdf", extraction, profile)
+
+        table_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.TABLE.value)
+        caption_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.CAPTION.value)
+        self.assertEqual(table_block.metadata["linked_caption_text"], "Table 1. Translation quality and training cost.")
+        self.assertTrue(table_block.metadata["linked_caption_source_anchor"].endswith(caption_block.anchor))
+        self.assertIn("caption_linked", table_block.metadata["recovery_flags"])
+        self.assertTrue(caption_block.metadata["caption_for_source_anchor"].endswith(table_block.anchor))
+        self.assertEqual(caption_block.metadata["caption_for_role"], "table")
+        self.assertIn("table_caption_linked", caption_block.metadata["recovery_flags"])
+
+    def test_recovery_links_pdf_table_blocks_to_adjacent_explanation_blocks(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Table Context Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Model Comparison",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Model Comparison"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19\nBaseline  25.1  8.0x10^18",
+                            bbox=(84.0, 244.0, 420.0, 314.0),
+                            line_texts=[
+                                "Model  BLEU  Cost",
+                                "Transformer  27.5  1.0x10^19",
+                                "Baseline  25.1  8.0x10^18",
+                            ],
+                            span_count=42,
+                            line_count=3,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=3,
+                            text="Table 1. Translation quality and training cost.",
+                            bbox=(96.0, 330.0, 420.0, 352.0),
+                            line_texts=["Table 1. Translation quality and training cost."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=4,
+                            text="Table 1 reports the main translation results and highlights the compute gap between the stronger Transformer and the cheaper baseline.",
+                            bbox=(96.0, 366.0, 504.0, 410.0),
+                            line_texts=[
+                                "Table 1 reports the main translation results and highlights the compute gap",
+                                "between the stronger Transformer and the cheaper baseline.",
+                            ],
+                            span_count=36,
+                            line_count=2,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("table-context-sample.pdf", extraction, profile)
+
+        table_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.TABLE.value)
+        explanation_block = next(
+            block
+            for block in parsed.chapters[0].blocks
+            if block.block_type == BlockType.PARAGRAPH.value
+            and "Table 1 reports the main translation results" in block.text
+        )
+        self.assertEqual(
+            table_block.metadata["artifact_group_context_source_anchors"],
+            [f"pdf://page/1#{explanation_block.anchor}"],
+        )
+        self.assertIn("artifact_group_context_linked", table_block.metadata["recovery_flags"])
+        self.assertEqual(
+            explanation_block.metadata["artifact_group_source_anchor"],
+            f"pdf://page/1#{table_block.anchor}",
+        )
+        self.assertEqual(explanation_block.metadata["artifact_group_role"], "table")
+        self.assertIn("table_group_context_linked", explanation_block.metadata["recovery_flags"])
+
+    def test_recovery_does_not_link_table_caption_to_image_block(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Mixed Caption Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Table 1. This caption belongs to the table below, not the figure above.",
+                            bbox=(96.0, 532.0, 430.0, 556.0),
+                            line_texts=["Table 1. This caption belongs to the table below, not the figure above."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[
+                        PdfImageBlock(
+                            page_number=1,
+                            block_number=2,
+                            bbox=(72.0, 240.0, 420.0, 520.0),
+                            width_px=1024,
+                            height_px=768,
+                            image_ext="png",
+                        )
+                    ],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("mixed-caption-sample.pdf", extraction, profile)
+
+        image_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.IMAGE.value)
+        caption_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.CAPTION.value)
+        self.assertNotIn("linked_caption_text", image_block.metadata)
+        self.assertNotIn("caption_linked", image_block.metadata.get("recovery_flags", []))
+        self.assertNotIn("caption_for_source_anchor", caption_block.metadata)
+
+    def test_recovery_links_equation_blocks_to_nearby_equation_captions(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Equation Caption Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Optimization",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Optimization"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="p(y|x) = softmax(W_h h_t + b)",
+                            bbox=(192.0, 228.0, 420.0, 244.0),
+                            line_texts=["p(y|x) = softmax(W_h h_t + b)"],
+                            span_count=1,
+                            line_count=1,
+                            font_size_min=12.0,
+                            font_size_max=12.0,
+                            font_size_avg=12.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=3,
+                            text="Equation 1. Decoder token distribution.",
+                            bbox=(168.0, 268.0, 444.0, 288.0),
+                            line_texts=["Equation 1. Decoder token distribution."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("equation-caption-sample.pdf", extraction, profile)
+
+        equation_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.EQUATION.value)
+        caption_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.CAPTION.value)
+        self.assertEqual(equation_block.metadata["linked_caption_text"], "Equation 1. Decoder token distribution.")
+        self.assertTrue(equation_block.metadata["linked_caption_source_anchor"].endswith(caption_block.anchor))
+        self.assertIn("caption_linked", equation_block.metadata["recovery_flags"])
+        self.assertTrue(caption_block.metadata["caption_for_source_anchor"].endswith(equation_block.anchor))
+        self.assertEqual(caption_block.metadata["caption_for_role"], "equation")
+        self.assertIn("equation_caption_linked", caption_block.metadata["recovery_flags"])
+
+    def test_parse_service_emits_document_image_records_for_pdf_image_blocks(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="11111111-1111-4111-8111-111111111111",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+
+        artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+
+        self.assertEqual(len(artifacts.document_images), 1)
+        image = artifacts.document_images[0]
+        self.assertEqual(image.document_id, document.id)
+        self.assertEqual(image.block_id, artifacts.blocks[0].id)
+        self.assertEqual(image.page_number, 1)
+        self.assertEqual(image.image_type, "embedded_image")
+        self.assertEqual(image.alt_text, "System overview diagram")
+        self.assertEqual(image.width_px, 1024)
+        self.assertEqual(image.height_px, 768)
+        self.assertEqual(image.metadata_json["image_ext"], "png")
+
+    def test_parse_service_materializes_image_caption_block_links(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "linked_caption_text": "Figure 1. System overview diagram.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Figure 1. System overview diagram.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "caption_for_source_anchor": "pdf://page/1#p1-img1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="77777777-7777-4777-8777-777777777777",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-caption-link-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+
+        artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+
+        image_block = artifacts.blocks[0]
+        caption_block = artifacts.blocks[1]
+        self.assertEqual(image_block.source_span_json["linked_caption_block_id"], caption_block.id)
+        self.assertEqual(caption_block.source_span_json["caption_for_block_id"], image_block.id)
+        self.assertEqual(artifacts.document_images[0].alt_text, "Figure 1. System overview diagram.")
+        self.assertEqual(artifacts.document_images[0].metadata_json["linked_caption_block_id"], caption_block.id)
+
+    def test_ocr_pdf_text_extractor_groups_surya_lines_into_pdf_blocks(self) -> None:
+        class _FakeRunner:
+            def run(self, *, file_path, output_dir):
+                results_path = Path(output_dir) / "results.json"
+                results_path.write_text(
+                    json.dumps(
+                        {
+                            Path(file_path).stem: [
+                                {
+                                    "image_bbox": [0, 0, 600, 800],
+                                    "text_lines": [
+                                        {
+                                            "text": "<b>Chapter 1 Intelligent Systems</b>",
+                                            "confidence": 0.98,
+                                            "bbox": [150, 80, 450, 124],
+                                        },
+                                        {
+                                            "text": "<b>Agentic</b> design patterns help teams structure complex AI workflows.",
+                                            "confidence": 0.94,
+                                            "bbox": [72, 180, 540, 202],
+                                        },
+                                        {
+                                            "text": "They make planning, tool use, and memory more reliable in practice.",
+                                            "confidence": 0.93,
+                                            "bbox": [72, 206, 548, 228],
+                                        },
+                                    ],
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return results_path
+
+        extraction = OcrPdfTextExtractor(runner=_FakeRunner()).extract("scan-sample.pdf")
+
+        self.assertEqual(extraction.metadata["pdf_extractor"], "surya_ocr")
+        self.assertEqual(len(extraction.pages), 1)
+        self.assertEqual(extraction.pages[0].width, 600.0)
+        self.assertEqual(extraction.pages[0].height, 800.0)
+        self.assertEqual(len(extraction.pages[0].blocks), 2)
+        self.assertEqual(extraction.pages[0].blocks[0].text, "Chapter 1 Intelligent Systems")
+        self.assertNotIn("<b>", extraction.pages[0].blocks[0].text)
+        self.assertIn("Agentic design patterns help teams structure", extraction.pages[0].blocks[1].text)
+        self.assertEqual(extraction.pages[0].blocks[1].line_count, 2)
+
+    def test_uv_surya_ocr_runner_pins_transformers_for_runtime_compatibility(self) -> None:
+        with patch("book_agent.domain.structure.ocr.shutil.which", side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"]):
+            command = UvSuryaOcrRunner(page_range="0-31")._build_command(
+                file_path="scan-sample.pdf",
+                output_dir="/tmp/book-agent-ocr-smoke",
+            )
+
+        self.assertEqual(command[:4], ["uv", "run", "--python", "3.13"])
+        self.assertIn("surya-ocr==0.17.1", command)
+        self.assertIn("transformers==4.56.1", command)
+        self.assertIn("--page_range", command)
+        self.assertIn("0-31", command)
+        self.assertIn("surya_ocr", command)
+        self.assertEqual(command[-2:], ["--output_dir", str(Path("/tmp/book-agent-ocr-smoke").resolve())])
+
+    def test_uv_surya_ocr_runner_writes_status_snapshots_during_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "ocr-output"
+            output_dir.mkdir()
+            status_path = Path(temp_dir) / "ocr-status.json"
+            poll_results = [None, 0]
+
+            class _FakeProcess:
+                pid = 4321
+
+                def poll(self):
+                    result = poll_results.pop(0)
+                    if result == 0:
+                        (output_dir / "results.json").write_text(
+                            json.dumps({"scan-sample": []}),
+                            encoding="utf-8",
+                        )
+                    return result
+
+            def _fake_popen(_command, stdout, stderr, text):
+                self.assertTrue(text)
+                stdout.write("warming up model weights\n")
+                stdout.flush()
+                stderr.write("loading OCR runtime\n")
+                stderr.flush()
+                return _FakeProcess()
+
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "BOOK_AGENT_OCR_STATUS_PATH": str(status_path),
+                        "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "0.1",
+                    },
+                    clear=False,
+                ),
+                patch(
+                    "book_agent.domain.structure.ocr.shutil.which",
+                    side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
+                ),
+                patch("book_agent.domain.structure.ocr.subprocess.Popen", side_effect=_fake_popen),
+                patch("book_agent.domain.structure.ocr.time.sleep", return_value=None),
+            ):
+                results_path = UvSuryaOcrRunner().run(
+                    file_path="scan-sample.pdf",
+                    output_dir=output_dir,
+                )
+            self.assertEqual(results_path, output_dir / "results.json")
+            status_payload = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(status_payload["state"], "succeeded")
+            self.assertEqual(status_payload["pid"], 4321)
+            self.assertEqual(status_payload["returncode"], 0)
+            self.assertEqual(status_payload["output_snapshot"]["results_json_path"], str(results_path.resolve()))
+            self.assertIn("warming up model weights", status_payload["stdout_tail"])
+            self.assertIn("loading OCR runtime", status_payload["stderr_tail"])
+
+    def test_parse_service_routes_pdf_scan_documents_to_ocr_parser(self) -> None:
+        class _UnexpectedPdfParser:
+            def parse(self, _file_path, profile=None):
+                raise AssertionError("text PDF parser should not be used for pdf_scan")
+
+        class _StubOcrPdfParser:
+            def __init__(self):
+                self.called = False
+
+            def parse(self, _file_path, profile=None):
+                self.called = True
+                return ParsedDocument(
+                    title="OCR Sample",
+                    author="OCR Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="OCR Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Scanned text recovered through OCR.",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 120.0, 520.0, 180.0]}
+                                            ]
+                                        },
+                                    },
+                                    parse_confidence=0.81,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={"pdf_extractor": "surya_ocr"},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="99999999-9999-4999-8999-999999999999",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-ocr-route-test",
+            source_path="scan-sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "scanned_pdf",
+                    "layout_risk": "high",
+                    "ocr_required": True,
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        ocr_parser = _StubOcrPdfParser()
+
+        artifacts = ParseService(
+            pdf_parser=_UnexpectedPdfParser(),
+            ocr_pdf_parser=ocr_parser,
+        ).parse(document, "scan-sample.pdf")
+
+        self.assertTrue(ocr_parser.called)
+        self.assertEqual(artifacts.document.status, DocumentStatus.PARSED)
+        self.assertEqual(artifacts.document.title, "OCR Sample")
+        self.assertEqual(artifacts.blocks[0].source_text, "Scanned text recovered through OCR.")
 
 
 class PdfProfilerTests(unittest.TestCase):
@@ -2414,6 +4164,134 @@ class PdfProfilerTests(unittest.TestCase):
         self.assertEqual(profile.trailing_reference_page_count, 2)
         self.assertTrue(profile.academic_paper_candidate)
 
+    def test_reference_entry_ignores_publisher_contact_and_social_lines(self) -> None:
+        self.assertFalse(
+            _looks_like_reference_entry(
+                "Please address comments and questions to support@oreilly.com or visit https://oreilly.com."
+            )
+        )
+        self.assertFalse(
+            _looks_like_reference_entry(
+                "Find us on LinkedIn: https://linkedin.com/company/oreilly-media"
+            )
+        )
+        self.assertTrue(
+            _looks_like_reference_entry(
+                "[1] Smith, J. 2024. Agent evaluation in practice. https://doi.org/10.1234/example"
+            )
+        )
+
+    def test_profiler_downgrades_outlined_localized_multi_column_book_to_medium_risk(self) -> None:
+        dense_text = "agent systems " * 240
+        pages: list[PdfPage] = []
+        for index in range(1, 101):
+            if index in {25, 40, 55, 70, 85, 96}:
+                blocks = [
+                    PdfTextBlock(
+                        page_number=index,
+                        block_number=1,
+                        text=dense_text,
+                        bbox=(72.0, 100.0, 250.0, 330.0),
+                        line_texts=[dense_text],
+                        span_count=900,
+                        line_count=22,
+                        font_size_min=9.0,
+                        font_size_max=10.0,
+                        font_size_avg=9.5,
+                    ),
+                    PdfTextBlock(
+                        page_number=index,
+                        block_number=2,
+                        text=dense_text,
+                        bbox=(330.0, 88.0, 510.0, 318.0),
+                        line_texts=[dense_text],
+                        span_count=900,
+                        line_count=22,
+                        font_size_min=9.0,
+                        font_size_max=10.0,
+                        font_size_avg=9.5,
+                    ),
+                    PdfTextBlock(
+                        page_number=index,
+                        block_number=3,
+                        text=dense_text,
+                        bbox=(72.0, 352.0, 250.0, 582.0),
+                        line_texts=[dense_text],
+                        span_count=900,
+                        line_count=22,
+                        font_size_min=9.0,
+                        font_size_max=10.0,
+                        font_size_avg=9.5,
+                    ),
+                    PdfTextBlock(
+                        page_number=index,
+                        block_number=4,
+                        text=dense_text,
+                        bbox=(330.0, 340.0, 510.0, 570.0),
+                        line_texts=[dense_text],
+                        span_count=900,
+                        line_count=22,
+                        font_size_min=9.0,
+                        font_size_max=10.0,
+                        font_size_avg=9.5,
+                    ),
+                ]
+            else:
+                blocks = [
+                    PdfTextBlock(
+                        page_number=index,
+                        block_number=1,
+                        text=dense_text,
+                        bbox=(72.0, 100.0, 540.0, 744.0),
+                        line_texts=[dense_text],
+                        span_count=1800,
+                        line_count=40,
+                        font_size_min=9.0,
+                        font_size_max=10.0,
+                        font_size_avg=9.5,
+                    )
+                ]
+            pages.append(PdfPage(page_number=index, width=612.0, height=792.0, blocks=blocks))
+
+        extraction = PdfExtraction(
+            title="Building Agent Systems",
+            author="Test Author",
+            metadata={"pdf_extractor": "pymupdf"},
+            outline_entries=[
+                PdfOutlineEntry(level=1, title="Preface", page_number=5),
+                PdfOutlineEntry(level=1, title="Chapter 1 Durable Products", page_number=10),
+                PdfOutlineEntry(level=1, title="Chapter 2 Learning Systems", page_number=30),
+            ],
+            pages=pages,
+        )
+
+        profile = PdfFileProfiler().profile_from_extraction(extraction)
+
+        self.assertEqual(profile.pdf_kind, "text_pdf")
+        self.assertEqual(profile.multi_column_page_count, 6)
+        self.assertEqual(profile.layout_risk, "medium")
+        self.assertEqual(profile.recovery_lane, "outlined_book")
+
+    def test_bootstrap_pipeline_keeps_book_conclusion_and_contact_pages_out_of_top_level_chapters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "book-preface-contact-conclusion.pdf"
+            _write_book_with_preface_contact_and_internal_conclusion_pdf(pdf_path)
+
+            parser = PDFParser(extractor=BasicPdfTextExtractor())
+            profile = parser.profiler.profile(pdf_path)
+            result = parser.parse(pdf_path, profile=profile)
+
+        self.assertEqual(profile.layout_risk, "low")
+        self.assertEqual(
+            [chapter.title for chapter in result.chapters],
+            ["Preface", "Chapter 1 Durable Products", "Chapter 2 Learning Systems"],
+        )
+        self.assertNotIn("Conclusion", [chapter.title for chapter in result.chapters])
+        self.assertNotIn("References", [chapter.title for chapter in result.chapters])
+        self.assertEqual(result.chapters[0].metadata["pdf_section_family"], "frontmatter")
+        self.assertEqual(result.chapters[1].metadata["pdf_section_family"], "body")
+        self.assertEqual(result.chapters[2].metadata["pdf_section_family"], "body")
+
 
 class PdfApiWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -2471,19 +4349,117 @@ class PdfApiWorkflowTests(unittest.TestCase):
 
     def test_bootstrap_document_accepts_academic_paper_pdf_lane(self) -> None:
         pdf_path = Path(self.tempdir.name) / "academic-paper.pdf"
-        _write_academic_paper_pdf(pdf_path)
+        _write_outlined_multi_column_academic_paper_pdf(pdf_path)
 
         response = self.client.post("/v1/documents/bootstrap", json={"source_path": str(pdf_path)})
 
         self.assertEqual(response.status_code, 201)
         payload = response.json()
+        self.assertEqual(payload["pdf_profile"]["extractor_kind"], "pymupdf")
         self.assertEqual(payload["pdf_profile"]["layout_risk"], "medium")
         self.assertEqual(payload["pdf_profile"]["recovery_lane"], "academic_paper")
         self.assertTrue(payload["pdf_profile"]["academic_paper_candidate"])
-        self.assertEqual(payload["pdf_profile"]["trailing_reference_page_count"], 2)
-        self.assertEqual(len(payload["chapters"]), 2)
-        self.assertEqual(payload["chapters"][0]["risk_level"], "high")
+        self.assertEqual(payload["pdf_profile"]["trailing_reference_page_count"], 1)
+        self.assertGreaterEqual(len(payload["chapters"]), 4)
+        self.assertIn("1 Introduction", [chapter["title_src"] for chapter in payload["chapters"]])
         self.assertEqual(payload["pdf_page_evidence"]["pdf_pages"][3]["page_family"], "references")
+
+    def test_document_summary_exposes_pdf_image_summary(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Summary Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Summary Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={
+                        "pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"},
+                        "pdf_page_evidence": {
+                            "schema_version": 1,
+                            "page_count": 1,
+                            "pdf_pages": [{"page_number": 1, "page_family": "body"}],
+                        },
+                    },
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="55555555-5555-4555-8555-555555555555",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-summary-test",
+            source_path=str(Path(self.tempdir.name) / "image-summary.pdf"),
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "image-summary.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+        response = self.client.get(f"/v1/documents/{document.id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["pdf_image_summary"]["schema_version"], 1)
+        self.assertEqual(payload["pdf_image_summary"]["image_count"], 1)
+        self.assertEqual(payload["pdf_image_summary"]["page_count"], 1)
+        self.assertEqual(payload["pdf_image_summary"]["page_numbers"], [1])
+        self.assertEqual(payload["pdf_image_summary"]["stored_asset_count"], 0)
+        self.assertEqual(payload["pdf_image_summary"]["unassigned_image_count"], 0)
+        self.assertEqual(payload["pdf_image_summary"]["caption_linked_count"], 0)
+        self.assertEqual(payload["pdf_image_summary"]["uncaptioned_image_count"], 1)
+        self.assertEqual(payload["pdf_image_summary"]["image_type_counts"]["embedded_image"], 1)
+        self.assertEqual(
+            payload["pdf_image_summary"]["chapter_image_counts"][parse_artifacts.chapters[0].id],
+            1,
+        )
+        self.assertEqual(payload["chapters"][0]["pdf_image_summary"]["image_count"], 1)
+        self.assertEqual(payload["chapters"][0]["pdf_image_summary"]["page_count"], 1)
+        self.assertEqual(payload["chapters"][0]["pdf_image_summary"]["caption_linked_count"], 0)
+        self.assertEqual(payload["chapters"][0]["pdf_image_summary"]["uncaptioned_image_count"], 1)
 
     def test_review_package_export_includes_pdf_page_evidence(self) -> None:
         pdf_path = Path(self.tempdir.name) / "sample.pdf"
@@ -2523,6 +4499,51 @@ class PdfApiWorkflowTests(unittest.TestCase):
         self.assertEqual(review_package["pdf_page_debug_evidence"]["schema_version"], 1)
         self.assertEqual(review_package["pdf_page_debug_evidence"]["page_count"], 0)
         self.assertEqual(review_package["pdf_page_debug_evidence"]["pages"], [])
+
+    def test_review_package_export_surfaces_page_layout_risk_debug_evidence(self) -> None:
+        pdf_path = Path(self.tempdir.name) / "academic-asymmetric-first-page.pdf"
+        _write_asymmetric_first_page_academic_paper_pdf(pdf_path)
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="66666666-6666-4666-8666-666666666666",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-academic-layout-risk-review-package",
+            source_path=str(pdf_path),
+            status=DocumentStatus.INGESTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService().parse(document, pdf_path)
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            review_package = export_service._build_review_package(chapter_bundle)
+
+        page = review_package["pdf_page_evidence"]["pdf_pages"][0]
+        self.assertEqual(page["page_number"], 1)
+        self.assertEqual(page["page_layout_risk"], "high")
+        self.assertIn("academic_first_page_asymmetric", page["page_layout_reasons"])
+
+        debug_evidence = review_package["pdf_page_debug_evidence"]
+        self.assertEqual(debug_evidence["page_count"], 1)
+        debug_page = debug_evidence["pages"][0]
+        self.assertEqual(debug_page["page_number"], 1)
+        self.assertEqual(debug_page["page_layout_risk"], "high")
+        self.assertIn("academic_first_page_asymmetric", debug_page["page_layout_reasons"])
+        self.assertIn("page_layout_risk", debug_page["debug_reasons"])
 
     def test_review_package_export_includes_backmatter_preserve_evidence(self) -> None:
         pdf_path = Path(self.tempdir.name) / "inline-index-heading.pdf"
@@ -2755,7 +4776,7 @@ class PdfReviewTests(unittest.TestCase):
             BootstrapRepository(session).save(artifacts)
             session.commit()
 
-        chapter_id = artifacts.chapters[0].id
+        chapter_id = next(chapter.id for chapter in artifacts.chapters if chapter.title_src == "Abstract")
         with self.session_factory() as session:
             review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
 
@@ -2780,7 +4801,14 @@ class PdfReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-paper.pdf"
             _write_academic_paper_pdf(pdf_path)
-            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            pipeline = BootstrapPipeline(
+                ingest_service=IngestService(pdf_profiler=PdfFileProfiler(extractor)),
+                parse_service=ParseService(
+                    pdf_parser=PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+                )
+            )
+            artifacts = BootstrapOrchestrator(pipeline).bootstrap_document(pdf_path)
 
         with self.session_factory() as session:
             BootstrapRepository(session).save(artifacts)
@@ -2788,7 +4816,7 @@ class PdfReviewTests(unittest.TestCase):
             DocumentWorkflowService(session).translate_document(artifacts.document.id)
             session.commit()
 
-        chapter_id = artifacts.chapters[0].id
+        chapter_id = next(chapter.id for chapter in artifacts.chapters if chapter.title_src == "Abstract")
         with self.session_factory() as session:
             review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
 
@@ -2819,7 +4847,14 @@ class PdfReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-paper.pdf"
             _write_academic_paper_pdf(pdf_path)
-            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+            extractor = BasicPdfTextExtractor()
+            pipeline = BootstrapPipeline(
+                ingest_service=IngestService(pdf_profiler=PdfFileProfiler(extractor)),
+                parse_service=ParseService(
+                    pdf_parser=PDFParser(extractor=extractor, profiler=PdfFileProfiler(extractor))
+                )
+            )
+            artifacts = BootstrapOrchestrator(pipeline).bootstrap_document(pdf_path)
 
         with self.session_factory() as session:
             BootstrapRepository(session).save(artifacts)
@@ -2827,7 +4862,7 @@ class PdfReviewTests(unittest.TestCase):
             DocumentWorkflowService(session).translate_document(artifacts.document.id)
             session.commit()
 
-        chapter_id = artifacts.chapters[1].id
+        chapter_id = next(chapter.id for chapter in artifacts.chapters if chapter.title_src == "References")
         with self.session_factory() as session:
             review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
             self.assertFalse(any(issue.issue_type == "MISORDERING" for issue in review_artifacts.issues))
@@ -2850,6 +4885,640 @@ class PdfReviewTests(unittest.TestCase):
             self.assertFalse(any(issue.issue_type == "MISORDERING" for issue in review_artifacts.issues))
             refreshed_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
             self.assertEqual(refreshed_bundle.chapter.status, ChapterStatus.QA_CHECKED)
+
+    def test_academic_paper_medium_many_suspicious_pages_stays_advisory(self) -> None:
+        with self.session_factory() as session:
+            service = ReviewService(ReviewRepository(session))
+            bundle = SimpleNamespace(
+                document=SimpleNamespace(metadata_json={"pdf_profile": {"recovery_lane": "academic_paper"}})
+            )
+            policy = service._pdf_layout_review_policy(
+                bundle,
+                "medium",
+                0.82,
+                [3, 4, 6],
+                [3, 4, 6],
+                [3, 4, 6],
+                [],
+                [
+                    {
+                        "page_number": 3,
+                        "layout_suspect": True,
+                        "recovery_flags": ["academic_section_heading_recovered"],
+                        "role_counts": {"heading": 1, "body": 2},
+                    },
+                    {
+                        "page_number": 4,
+                        "layout_suspect": True,
+                        "recovery_flags": [],
+                        "role_counts": {"body": 4, "caption": 1, "table_like": 1},
+                    },
+                    {
+                        "page_number": 6,
+                        "layout_suspect": True,
+                        "recovery_flags": [],
+                        "role_counts": {"body": 3, "table_like": 1},
+                    },
+                ],
+            )
+
+        self.assertEqual(policy["reason"], "academic_paper_medium_wide_layout_advisory")
+        self.assertTrue(policy["emit_issue"])
+        self.assertFalse(policy["blocking"])
+        self.assertEqual(policy["severity"], Severity.MEDIUM)
+
+    def test_academic_paper_local_high_page_layout_risk_creates_low_advisory_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "academic-asymmetric-first-page.pdf"
+            _write_asymmetric_first_page_academic_paper_pdf(pdf_path)
+            artifacts = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            DocumentWorkflowService(session).translate_document(artifacts.document.id)
+            session.commit()
+
+        chapter_id = artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            misordering_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "MISORDERING"
+            )
+
+        self.assertEqual(misordering_issue.severity, Severity.LOW)
+        self.assertFalse(misordering_issue.blocking)
+        self.assertEqual(misordering_issue.evidence_json["layout_risk"], "medium")
+        self.assertEqual(misordering_issue.evidence_json["recovery_lane"], "academic_paper")
+        self.assertEqual(
+            misordering_issue.evidence_json["review_policy"],
+            "academic_paper_local_page_layout_advisory",
+        )
+        self.assertEqual(misordering_issue.evidence_json["page_layout_risk_pages"], [1])
+        self.assertEqual(misordering_issue.evidence_json["high_layout_risk_pages"], [1])
+        self.assertEqual(
+            misordering_issue.evidence_json["page_layout_reasons_by_page"]["1"],
+            ["academic_first_page_asymmetric"],
+        )
+
+    def test_academic_paper_captioned_artifact_missing_group_context_creates_structure_issue(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [84.0, 244.0, 420.0, 314.0]}
+                                            ]
+                                        },
+                                        "reading_order_index": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [96.0, 330.0, 420.0, 352.0]}
+                                            ]
+                                        },
+                                        "reading_order_index": 2,
+                                        "pdf_block_role": "caption",
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="67676767-6767-4676-8676-676767676767",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-review-artifact-group",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "text_pdf",
+                    "layout_risk": "medium",
+                    "recovery_lane": "academic_paper",
+                },
+                "pdf_page_evidence": {
+                    "pdf_pages": [
+                        {
+                            "page_number": 1,
+                            "page_layout_risk": "high",
+                            "page_layout_reasons": ["academic_first_page_asymmetric"],
+                            "layout_suspect": False,
+                            "role_counts": {"table_like": 1, "caption": 1, "body": 0},
+                            "recovery_flags": [],
+                        }
+                    ]
+                },
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+        chapter_id = parse_artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            issue = next(
+                artifact_issue
+                for artifact_issue in review_artifacts.issues
+                if artifact_issue.issue_type == "ARTIFACT_GROUP_RECOVERY_REQUIRED"
+            )
+            action = next(action for action in review_artifacts.actions if action.issue_id == issue.id)
+
+        self.assertEqual(issue.root_cause_layer, RootCauseLayer.STRUCTURE)
+        self.assertEqual(issue.severity, Severity.LOW)
+        self.assertFalse(issue.blocking)
+        self.assertEqual(issue.evidence_json["captioned_artifact_count"], 1)
+        self.assertEqual(issue.evidence_json["grouped_artifact_count"], 0)
+        self.assertEqual(issue.evidence_json["missing_group_context_count"], 1)
+        self.assertEqual(issue.evidence_json["missing_group_context_page_numbers"], [1])
+        self.assertEqual(
+            issue.evidence_json["review_policy"],
+            "academic_paper_captioned_artifact_missing_group_context",
+        )
+        self.assertEqual(action.action_type, ActionType.REPARSE_CHAPTER)
+        self.assertEqual(action.scope_type, JobScopeType.CHAPTER)
+
+    def test_pdf_structure_refresh_updates_caption_links_and_group_context_in_place(self) -> None:
+        class _OldStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Model  BLEU  Cost",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.91,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "caption",
+                                    },
+                                    parse_confidence=0.92,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Table 1 reports the translation quality and training cost trade-off.",
+                                    source_path="pdf://page/1",
+                                    ordinal=3,
+                                    anchor="p1-body1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.96,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Instances allocated to\nClassifier F\nID = 357\n97.73 (± 1.76)",
+                                    source_path="pdf://page/1",
+                                    ordinal=4,
+                                    anchor="p1-stale1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "table_like",
+                                    },
+                                    parse_confidence=0.9,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _NewStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                        "artifact_group_context_source_anchors": ["pdf://page/1#p1-body1"],
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "caption",
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.95,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Table 1 reports the translation quality and training cost trade-off.",
+                                    source_path="pdf://page/1",
+                                    ordinal=3,
+                                    anchor="p1-body1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                        "artifact_group_source_anchor": "pdf://page/1#p1-tbl1",
+                                        "artifact_group_role": "table",
+                                    },
+                                    parse_confidence=0.98,
+                                ),
+                            ],
+                            metadata={
+                                "source_page_start": 1,
+                                "source_page_end": 1,
+                                "pdf_layout_risk": "medium",
+                            },
+                        )
+                    ],
+                    metadata={
+                        "pdf_page_evidence": {
+                            "pdf_pages": [
+                                {
+                                    "page_number": 1,
+                                    "page_layout_risk": "high",
+                                    "page_layout_reasons": ["academic_first_page_asymmetric"],
+                                }
+                            ]
+                        }
+                    },
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "structure-refresh.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4\n")
+            now = datetime.now(timezone.utc)
+            document = Document(
+                id="78787878-7878-4787-8787-787878787878",
+                source_type=SourceType.PDF_TEXT,
+                file_fingerprint="fingerprint-structure-refresh",
+                source_path=str(pdf_path),
+                status=DocumentStatus.INGESTED,
+                metadata_json={
+                    "pdf_profile": {
+                        "pdf_kind": "text_pdf",
+                        "layout_risk": "medium",
+                        "recovery_lane": "academic_paper",
+                    }
+                },
+                created_at=now,
+                updated_at=now,
+            )
+            parse_artifacts = ParseService(pdf_parser=_OldStubPdfParser()).parse(document, str(pdf_path))
+            artifacts = BootstrapArtifacts(
+                document=parse_artifacts.document,
+                chapters=parse_artifacts.chapters,
+                blocks=parse_artifacts.blocks,
+                sentences=[],
+                job_runs=[parse_artifacts.job_run],
+            )
+
+            with self.session_factory() as session:
+                BootstrapRepository(session).save(artifacts)
+                session.commit()
+
+                refresh_artifacts = PdfStructureRefreshService(
+                    session,
+                    BootstrapRepository(session),
+                    parse_service=ParseService(pdf_parser=_NewStubPdfParser()),
+                ).refresh_document(parse_artifacts.document.id, chapter_ids=[parse_artifacts.chapters[0].id])
+                session.commit()
+
+                bundle = BootstrapRepository(session).load_document_bundle(parse_artifacts.document.id)
+                chapter_bundle = bundle.chapters[0]
+                table_block = next(block for block in chapter_bundle.blocks if block.source_anchor.endswith("p1-tbl1"))
+                caption_block = next(block for block in chapter_bundle.blocks if block.source_anchor.endswith("p1-cap1"))
+                context_block = next(block for block in chapter_bundle.blocks if block.source_anchor.endswith("p1-body1"))
+                stale_block = session.scalar(
+                    select(Block).where(Block.source_anchor == "pdf://page/1#p1-stale1")
+                )
+
+        self.assertEqual(refresh_artifacts.matched_chapter_count, 1)
+        self.assertEqual(refresh_artifacts.refreshed_block_count, 3)
+        self.assertEqual(refresh_artifacts.skipped_block_count, 1)
+        self.assertEqual(table_block.block_type, BlockType.TABLE)
+        self.assertEqual(table_block.protected_policy, ProtectedPolicy.PROTECT)
+        self.assertIn("Transformer  27.5  1.0x10^19", table_block.source_text)
+        self.assertEqual(table_block.source_span_json["linked_caption_block_id"], caption_block.id)
+        self.assertEqual(table_block.source_span_json["artifact_group_context_block_ids"], [context_block.id])
+        self.assertEqual(caption_block.source_span_json["caption_for_block_id"], table_block.id)
+        self.assertEqual(context_block.source_span_json["artifact_group_block_id"], table_block.id)
+        self.assertNotIn("pdf://page/1#p1-stale1", {block.source_anchor for block in chapter_bundle.blocks})
+        self.assertIsNotNone(stale_block)
+        self.assertEqual(stale_block.status, ArtifactStatus.INVALIDATED)
+        self.assertIn("pdf_page_evidence", bundle.document.metadata_json)
+        self.assertEqual(
+            bundle.document.metadata_json["pdf_structure_refresh"]["refreshed_block_count"],
+            3,
+        )
+        self.assertEqual(
+            bundle.document.metadata_json["pdf_structure_refresh"]["invalidated_block_count"],
+            1,
+        )
+
+    def test_reparse_chapter_followup_refreshes_structure_and_resolves_artifact_group_issue(self) -> None:
+        class _OldStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "caption",
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Table 1 reports the translation quality and training cost trade-off.",
+                                    source_path="pdf://page/1",
+                                    ordinal=3,
+                                    anchor="p1-body1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.93,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _NewStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                        "artifact_group_context_source_anchors": ["pdf://page/1#p1-body1"],
+                                    },
+                                    parse_confidence=0.98,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "caption",
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.95,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Table 1 reports the translation quality and training cost trade-off.",
+                                    source_path="pdf://page/1",
+                                    ordinal=3,
+                                    anchor="p1-body1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                        "artifact_group_source_anchor": "pdf://page/1#p1-tbl1",
+                                        "artifact_group_role": "table",
+                                    },
+                                    parse_confidence=0.96,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "reparse-chapter.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4\n")
+            now = datetime.now(timezone.utc)
+            document = Document(
+                id="79797979-7979-4797-8797-797979797979",
+                source_type=SourceType.PDF_TEXT,
+                file_fingerprint="fingerprint-reparse-chapter-refresh",
+                source_path=str(pdf_path),
+                status=DocumentStatus.INGESTED,
+                metadata_json={
+                    "pdf_profile": {
+                        "pdf_kind": "text_pdf",
+                        "layout_risk": "medium",
+                        "recovery_lane": "academic_paper",
+                    },
+                    "pdf_page_evidence": {
+                        "pdf_pages": [
+                            {
+                                "page_number": 1,
+                                "page_layout_risk": "high",
+                                "page_layout_reasons": ["academic_first_page_asymmetric"],
+                                "layout_suspect": False,
+                                "role_counts": {"table_like": 1, "caption": 1, "body": 1},
+                                "recovery_flags": [],
+                            }
+                        ]
+                    },
+                },
+                created_at=now,
+                updated_at=now,
+            )
+            parse_artifacts = ParseService(pdf_parser=_OldStubPdfParser()).parse(document, str(pdf_path))
+            artifacts = BootstrapArtifacts(
+                document=parse_artifacts.document,
+                chapters=parse_artifacts.chapters,
+                blocks=parse_artifacts.blocks,
+                sentences=[],
+                job_runs=[parse_artifacts.job_run],
+            )
+
+            with self.session_factory() as session:
+                BootstrapRepository(session).save(artifacts)
+                session.commit()
+
+                review_service = ReviewService(ReviewRepository(session))
+                review_artifacts = review_service.review_chapter(parse_artifacts.chapters[0].id)
+                issue = next(
+                    artifact_issue
+                    for artifact_issue in review_artifacts.issues
+                    if artifact_issue.issue_type == "ARTIFACT_GROUP_RECOVERY_REQUIRED"
+                )
+                action = next(action for action in review_artifacts.actions if action.issue_id == issue.id)
+                action_execution = IssueActionExecutor(OpsRepository(session)).execute(action.id)
+
+                rerun_execution = RerunService(
+                    OpsRepository(session),
+                    TranslationService(TranslationRepository(session)),
+                    review_service,
+                    TargetedRebuildService(session, BootstrapRepository(session)),
+                    RealignService(OpsRepository(session)),
+                    PdfStructureRefreshService(
+                        session,
+                        BootstrapRepository(session),
+                        parse_service=ParseService(pdf_parser=_NewStubPdfParser()),
+                    ),
+                ).execute(action_execution.rerun_plan)
+                session.commit()
+
+                final_review = ReviewService(ReviewRepository(session)).review_chapter(parse_artifacts.chapters[0].id)
+                refreshed_bundle = BootstrapRepository(session).load_document_bundle(parse_artifacts.document.id)
+                table_block = next(block for block in refreshed_bundle.chapters[0].blocks if block.source_anchor.endswith("p1-tbl1"))
+                context_block = next(block for block in refreshed_bundle.chapters[0].blocks if block.source_anchor.endswith("p1-body1"))
+
+        self.assertEqual(len(action_execution.invalidations), 0)
+        self.assertIsNotNone(rerun_execution.structure_refresh_artifacts)
+        self.assertEqual(rerun_execution.translation_run_ids, [])
+        self.assertTrue(rerun_execution.issue_resolved)
+        self.assertEqual(table_block.source_span_json["artifact_group_context_block_ids"], [context_block.id])
+        self.assertFalse(
+            any(issue.issue_type == "ARTIFACT_GROUP_RECOVERY_REQUIRED" for issue in final_review.issues)
+        )
 
     def test_orphaned_pdf_footnotes_create_structure_review_issue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2880,3 +5549,1235 @@ class PdfReviewTests(unittest.TestCase):
             self.assertEqual(footnote_issue.evidence_json["orphaned_footnote_count"], 1)
             self.assertEqual(footnote_issue.evidence_json["orphaned_footnote_labels"], ["2"])
             self.assertEqual(footnote_action.action_type, ActionType.REPARSE_CHAPTER)
+
+    def test_academic_paper_uncaptioned_pdf_images_create_advisory_structure_issue(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "pdf_block_role": "image",
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                    },
+                                    parse_confidence=0.95,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="12121212-1212-4212-8212-121212121212",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-review-image-caption-academic",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "text_pdf",
+                    "layout_risk": "low",
+                    "recovery_lane": "academic_paper",
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+        chapter_id = parse_artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+
+            image_issue = next(
+                issue
+                for issue in review_artifacts.issues
+                if issue.issue_type == "IMAGE_CAPTION_RECOVERY_REQUIRED"
+            )
+            image_action = next(
+                action for action in review_artifacts.actions if action.issue_id == image_issue.id
+            )
+
+            self.assertEqual(image_issue.root_cause_layer.value, "structure")
+            self.assertEqual(image_issue.severity.value, "medium")
+            self.assertFalse(image_issue.blocking)
+            self.assertEqual(image_issue.evidence_json["image_count"], 1)
+            self.assertEqual(image_issue.evidence_json["caption_linked_count"], 0)
+            self.assertEqual(image_issue.evidence_json["uncaptioned_image_count"], 1)
+            self.assertEqual(image_issue.evidence_json["uncaptioned_page_numbers"], [1])
+            self.assertEqual(
+                image_issue.evidence_json["review_policy"],
+                "academic_paper_uncaptioned_images",
+            )
+            self.assertEqual(image_action.action_type, ActionType.REPARSE_CHAPTER)
+            self.assertEqual(image_action.scope_type, JobScopeType.CHAPTER)
+
+    def test_plain_pdf_images_without_caption_context_do_not_create_structure_issue(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "pdf_block_role": "image",
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                    },
+                                    parse_confidence=0.95,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="13131313-1313-4313-8313-131313131313",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-review-image-caption-plain",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+        chapter_id = parse_artifacts.chapters[0].id
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertFalse(
+                any(
+                    issue.issue_type == "IMAGE_CAPTION_RECOVERY_REQUIRED"
+                    for issue in review_artifacts.issues
+                )
+            )
+
+    def test_image_caption_recovery_issue_drives_worklist_queue(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Academic Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Academic Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "pdf_block_role": "image",
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                    },
+                                    parse_confidence=0.95,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="17171717-1717-4717-8717-171717171717",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-review-image-caption-worklist",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "text_pdf",
+                    "layout_risk": "low",
+                    "recovery_lane": "academic_paper",
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            job_runs=[parse_artifacts.job_run],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            ReviewService(ReviewRepository(session)).review_chapter(parse_artifacts.chapters[0].id)
+            session.commit()
+
+            workflow_service = DocumentWorkflowService(session)
+            worklist = workflow_service.get_document_chapter_worklist(document.id)
+            self.assertEqual(len(worklist.entries), 1)
+            self.assertEqual(worklist.entries[0].queue_priority, "high")
+            self.assertEqual(worklist.entries[0].queue_driver, "pdf_image_caption_gap")
+            self.assertTrue(worklist.entries[0].owner_ready)
+            self.assertEqual(
+                worklist.entries[0].owner_ready_reason,
+                "pdf_image_caption_issue_detected",
+            )
+            self.assertEqual(
+                worklist.entries[0].dominant_issue_type,
+                "IMAGE_CAPTION_RECOVERY_REQUIRED",
+            )
+
+            detail = workflow_service.get_document_chapter_worklist_detail(
+                document.id,
+                parse_artifacts.chapters[0].id,
+            )
+            self.assertIsNotNone(detail.queue_entry)
+            self.assertEqual(detail.queue_entry.queue_priority, "high")
+            self.assertEqual(detail.queue_entry.queue_driver, "pdf_image_caption_gap")
+            self.assertEqual(
+                detail.queue_entry.owner_ready_reason,
+                "pdf_image_caption_issue_detected",
+            )
+
+
+class PdfDocumentImagePersistenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = build_engine("sqlite+pysqlite:///:memory:")
+        self.addCleanup(self.engine.dispose)
+        Base.metadata.create_all(self.engine)
+        self.session_factory = build_session_factory(engine=self.engine)
+
+    def test_bootstrap_repository_persists_document_images(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="22222222-2222-4222-8222-222222222222",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-persist-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document.id)
+
+        self.assertEqual(len(bundle.document_images), 1)
+        image = bundle.document_images[0]
+        self.assertEqual(image.block_id, bundle.chapters[0].blocks[0].id)
+        self.assertEqual(image.page_number, 1)
+        self.assertEqual(image.storage_path, f"document-images/{document.id}/{image.block_id}.png")
+        self.assertEqual(image.metadata_json["storage_status"], "logical_only")
+
+    def test_export_payloads_include_pdf_image_evidence(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="33333333-3333-4333-8333-333333333333",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-export-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            review_package = export_service._build_review_package(chapter_bundle)
+            self.assertEqual(review_package["pdf_image_evidence"]["image_count"], 1)
+            self.assertEqual(review_package["pdf_image_evidence"]["caption_linked_count"], 0)
+            self.assertEqual(
+                review_package["pdf_image_evidence"]["images"][0]["image_type"],
+                "embedded_image",
+            )
+
+            document_bundle = export_repository.load_document_bundle(document.id)
+            merged_manifest = export_service._build_merged_document_manifest(document_bundle, Path("/tmp/merged.html"))
+            self.assertEqual(merged_manifest["pdf_image_summary"]["image_count"], 1)
+            self.assertEqual(merged_manifest["pdf_image_summary"]["caption_linked_count"], 0)
+            self.assertEqual(
+                merged_manifest["pdf_image_summary"]["chapter_image_counts"][parse_artifacts.chapters[0].id],
+                1,
+            )
+
+    def test_export_prefers_persisted_document_image_assets_when_available(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            materialized_asset = Path(tmpdir) / "materialized-image.png"
+            materialized_asset.write_bytes(b"not-a-real-png-but-good-enough-for-copy")
+            output_dir = Path(tmpdir) / "exports"
+
+            now = datetime.now(timezone.utc)
+            document = Document(
+                id="44444444-4444-4444-8444-444444444444",
+                source_type=SourceType.PDF_TEXT,
+                file_fingerprint="fingerprint-image-asset-test",
+                source_path=str(Path(tmpdir) / "missing-source.pdf"),
+                status=DocumentStatus.INGESTED,
+                metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+                created_at=now,
+                updated_at=now,
+            )
+            parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+            parse_artifacts.document_images[0].storage_path = str(materialized_asset)
+            parse_artifacts.document_images[0].metadata_json = {
+                **(parse_artifacts.document_images[0].metadata_json or {}),
+                "storage_status": "materialized",
+            }
+            artifacts = BootstrapArtifacts(
+                document=parse_artifacts.document,
+                chapters=parse_artifacts.chapters,
+                blocks=parse_artifacts.blocks,
+                sentences=[],
+                document_images=parse_artifacts.document_images,
+            )
+
+            with self.session_factory() as session:
+                BootstrapRepository(session).save(artifacts)
+                session.commit()
+
+                export_repository = ExportRepository(session)
+                export_service = ExportService(export_repository, output_root=output_dir)
+                chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+                asset_map = export_service._export_epub_assets_for_chapter_bundle(chapter_bundle, output_dir)
+
+            block_id = parse_artifacts.blocks[0].id
+            self.assertIn(block_id, asset_map)
+            copied_asset = output_dir / asset_map[block_id]
+            self.assertTrue(copied_asset.exists())
+            self.assertEqual(copied_asset.read_bytes(), materialized_asset.read_bytes())
+
+    def test_pdf_export_materializes_document_images_for_reuse(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "image_alt": "System overview diagram",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _FakePixmap:
+            def __init__(self, payload: bytes) -> None:
+                self.payload = payload
+
+            def save(self, path: str) -> None:
+                Path(path).write_bytes(self.payload)
+
+        class _FakePage:
+            def get_pixmap(self, clip=None, alpha=False):
+                return _FakePixmap(b"fake-pdf-crop")
+
+        class _FakeDocument:
+            page_count = 1
+
+            def load_page(self, index: int):
+                self.last_index = index
+                return _FakePage()
+
+            def close(self) -> None:
+                return None
+
+        class _FakeRect:
+            def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.width = x1 - x0
+                self.height = y1 - y0
+
+        class _FakeFitz:
+            @staticmethod
+            def open(_path: str):
+                return _FakeDocument()
+
+            @staticmethod
+            def Rect(x0: float, y0: float, x1: float, y1: float):
+                return _FakeRect(x0, y0, x1, y1)
+
+        original_fitz = sys.modules.get("fitz")
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                sys.modules["fitz"] = _FakeFitz()
+                source_pdf = Path(tmpdir) / "source.pdf"
+                source_pdf.write_bytes(b"%PDF-1.4 fake")
+                output_dir = Path(tmpdir) / "exports"
+
+                now = datetime.now(timezone.utc)
+                document = Document(
+                    id="66666666-6666-4666-8666-666666666666",
+                    source_type=SourceType.PDF_TEXT,
+                    file_fingerprint="fingerprint-image-materialize-test",
+                    source_path=str(source_pdf),
+                    status=DocumentStatus.INGESTED,
+                    metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+                    created_at=now,
+                    updated_at=now,
+                )
+                parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, str(source_pdf))
+                artifacts = BootstrapArtifacts(
+                    document=parse_artifacts.document,
+                    chapters=parse_artifacts.chapters,
+                    blocks=parse_artifacts.blocks,
+                    sentences=[],
+                    document_images=parse_artifacts.document_images,
+                )
+
+                with self.session_factory() as session:
+                    BootstrapRepository(session).save(artifacts)
+                    session.commit()
+
+                    export_repository = ExportRepository(session)
+                    export_service = ExportService(export_repository, output_root=output_dir)
+                    chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+                    asset_map = export_service._export_epub_assets_for_chapter_bundle(chapter_bundle, output_dir)
+                    session.commit()
+
+                    reloaded_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+
+                block_id = parse_artifacts.blocks[0].id
+                self.assertEqual(asset_map[block_id], f"assets/pdf-images/{block_id}.png")
+                exported_asset = output_dir / asset_map[block_id]
+                self.assertTrue(exported_asset.exists())
+                self.assertEqual(exported_asset.read_bytes(), b"fake-pdf-crop")
+
+                materialized_path = Path(reloaded_bundle.document_images[0].storage_path)
+                self.assertTrue(materialized_path.exists())
+                self.assertEqual(materialized_path.read_bytes(), b"fake-pdf-crop")
+                self.assertEqual(reloaded_bundle.document_images[0].metadata_json["storage_status"], "materialized")
+                self.assertEqual(
+                    reloaded_bundle.document_images[0].metadata_json["materialized_via"],
+                    "pdf_export_crop",
+                )
+        finally:
+            if original_fitz is None:
+                sys.modules.pop("fitz", None)
+            else:
+                sys.modules["fitz"] = original_fitz
+
+    def test_export_merges_linked_pdf_image_caption_into_single_render_block(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "linked_caption_text": "Figure 1. System overview diagram.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Figure 1. System overview diagram.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "caption_for_source_anchor": "pdf://page/1#p1-img1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="88888888-8888-4888-8888-888888888888",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-caption-render-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            render_blocks = export_service._render_blocks_for_chapter(chapter_bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_id, parse_artifacts.blocks[0].id)
+        self.assertEqual(render_blocks[0].render_mode, "image_anchor_with_translated_caption")
+        self.assertEqual(render_blocks[0].artifact_kind, "image")
+        self.assertEqual(render_blocks[0].source_text, "Figure 1. System overview diagram.")
+
+    def test_export_treats_equation_blocks_as_equation_artifacts(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Equation Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-equation-001",
+                            href="pdf://page/1",
+                            title="Equation Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.EQUATION.value,
+                                    text="p(y|x) = softmax(W_h h_t + b)",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-eq1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "equation",
+                                    },
+                                    parse_confidence=0.98,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="12121212-1212-4212-8212-121212121212",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-equation-render-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            render_blocks = export_service._render_blocks_for_chapter(chapter_bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].render_mode, "source_artifact_full_width")
+        self.assertEqual(render_blocks[0].artifact_kind, "equation")
+        self.assertEqual(render_blocks[0].notice, "公式保持原样")
+
+    def test_export_merges_linked_pdf_table_caption_into_single_render_block(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Table Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-table-001",
+                            href="pdf://page/1",
+                            title="Table Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="34343434-3434-4434-8434-343434343434",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-table-caption-render-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            render_blocks = export_service._render_blocks_for_chapter(chapter_bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_id, parse_artifacts.blocks[0].id)
+        self.assertEqual(render_blocks[0].render_mode, "translated_wrapper_with_preserved_artifact")
+        self.assertEqual(render_blocks[0].artifact_kind, "table")
+        self.assertEqual(render_blocks[0].source_text, "Model  BLEU  Cost\nTransformer  27.5  1.0x10^19")
+        self.assertEqual(
+            render_blocks[0].source_metadata["linked_caption_text"],
+            "Table 1. Translation quality and training cost.",
+        )
+
+    def test_export_merges_linked_pdf_table_caption_and_adjacent_context_into_single_render_block(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Table Context Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-table-context-001",
+                            href="pdf://page/1",
+                            title="Table Context Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.TABLE.value,
+                                    text="Model  BLEU  Cost\nTransformer  27.5  1.0x10^19",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-tbl1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [84.0, 244.0, 420.0, 314.0]}
+                                            ]
+                                        },
+                                        "reading_order_index": 1,
+                                        "pdf_block_role": "table_like",
+                                        "linked_caption_text": "Table 1. Translation quality and training cost.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Table 1. Translation quality and training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [96.0, 330.0, 420.0, 352.0]}
+                                            ]
+                                        },
+                                        "reading_order_index": 2,
+                                        "pdf_block_role": "caption",
+                                        "caption_for_source_anchor": "pdf://page/1#p1-tbl1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="Table 1 reports the main translation results and shows that the Transformer improves BLEU at a higher training cost.",
+                                    source_path="pdf://page/1",
+                                    ordinal=3,
+                                    anchor="p1-body1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [96.0, 366.0, 504.0, 410.0]}
+                                            ]
+                                        },
+                                        "reading_order_index": 3,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.96,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="45454545-4545-4454-8454-454545454545",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-table-context-render-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "text_pdf",
+                    "layout_risk": "medium",
+                    "recovery_lane": "academic_paper",
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            render_blocks = export_service._render_blocks_for_chapter(chapter_bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_id, parse_artifacts.blocks[0].id)
+        self.assertEqual(render_blocks[0].render_mode, "translated_wrapper_with_preserved_artifact")
+        self.assertEqual(
+            render_blocks[0].source_metadata["artifact_group_context_block_ids"],
+            [parse_artifacts.blocks[2].id],
+        )
+
+    def test_export_merges_linked_pdf_equation_caption_into_single_render_block(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Equation Caption Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-equation-caption-001",
+                            href="pdf://page/1",
+                            title="Equation Caption Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.EQUATION.value,
+                                    text="p(y|x) = softmax(W_h h_t + b)",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-eq1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "equation",
+                                        "linked_caption_text": "Equation 1. Decoder token distribution.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.98,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Equation 1. Decoder token distribution.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "caption_for_source_anchor": "pdf://page/1#p1-eq1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="56565656-5656-4565-8565-565656565656",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-equation-caption-render-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            render_blocks = export_service._render_blocks_for_chapter(chapter_bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_id, parse_artifacts.blocks[0].id)
+        self.assertEqual(render_blocks[0].render_mode, "translated_wrapper_with_preserved_artifact")
+        self.assertEqual(render_blocks[0].artifact_kind, "equation")
+        self.assertEqual(
+            render_blocks[0].source_metadata["linked_caption_text"],
+            "Equation 1. Decoder token distribution.",
+        )
+
+    def test_export_and_summary_report_linked_caption_counts(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "png",
+                                        "image_width_px": 1024,
+                                        "image_height_px": 768,
+                                        "linked_caption_text": "Figure 1. System overview diagram.",
+                                        "linked_caption_source_anchor": "pdf://page/1#p1-cap1",
+                                    },
+                                    parse_confidence=0.97,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.CAPTION.value,
+                                    text="Figure 1. System overview diagram.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-cap1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "caption_for_source_anchor": "pdf://page/1#p1-img1",
+                                    },
+                                    parse_confidence=0.94,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={
+                        "pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"},
+                        "pdf_page_evidence": {
+                            "schema_version": 1,
+                            "page_count": 1,
+                            "pdf_pages": [{"page_number": 1, "page_family": "body"}],
+                        },
+                    },
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="99999999-9999-4999-8999-999999999999",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-image-caption-summary-test",
+            source_path="sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+            created_at=now,
+            updated_at=now,
+        )
+        parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, "sample.pdf")
+        artifacts = BootstrapArtifacts(
+            document=parse_artifacts.document,
+            chapters=parse_artifacts.chapters,
+            blocks=parse_artifacts.blocks,
+            sentences=[],
+            document_images=parse_artifacts.document_images,
+        )
+
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+
+            export_repository = ExportRepository(session)
+            export_service = ExportService(export_repository)
+            chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+            review_package = export_service._build_review_package(chapter_bundle)
+            self.assertEqual(review_package["pdf_image_evidence"]["caption_linked_count"], 1)
+            self.assertEqual(review_package["pdf_image_evidence"]["uncaptioned_image_count"], 0)
+            self.assertTrue(review_package["pdf_image_evidence"]["images"][0]["caption_linked"])
+            self.assertEqual(
+                review_package["pdf_image_evidence"]["images"][0]["linked_caption_text"],
+                "Figure 1. System overview diagram.",
+            )
+
+            document_bundle = export_repository.load_document_bundle(document.id)
+            merged_manifest = export_service._build_merged_document_manifest(document_bundle, Path("/tmp/merged.html"))
+            self.assertEqual(merged_manifest["pdf_image_summary"]["caption_linked_count"], 1)
+            self.assertEqual(merged_manifest["pdf_image_summary"]["uncaptioned_image_count"], 0)
+
+            workflow_summary = DocumentWorkflowService(session).get_document_summary(document.id)
+            self.assertEqual(workflow_summary.pdf_image_summary["caption_linked_count"], 1)
+            self.assertEqual(workflow_summary.pdf_image_summary["uncaptioned_image_count"], 0)
+            self.assertEqual(workflow_summary.chapters[0].pdf_image_summary["image_count"], 1)
+            self.assertEqual(workflow_summary.chapters[0].pdf_image_summary["caption_linked_count"], 1)
+            self.assertEqual(workflow_summary.chapters[0].pdf_image_summary["uncaptioned_image_count"], 0)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import ActorType, RelationType, TargetSegmentStatus
@@ -12,6 +13,18 @@ from book_agent.infra.repositories.ops import OpsRepository
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _dedupe_alignment_edges(edges: list[AlignmentEdge]) -> list[AlignmentEdge]:
+    deduped: list[AlignmentEdge] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for edge in edges:
+        key = (edge.sentence_id, edge.target_segment_id)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        deduped.append(edge)
+    return deduped
 
 
 @dataclass(slots=True)
@@ -46,7 +59,11 @@ class RealignService:
             if not target_segments:
                 continue
 
-            alignment_edges = self._rebuild_alignment_edges(latest_run.output_json or {}, target_segments)
+            alignment_edges = self._rebuild_alignment_edges(
+                latest_run.output_json or {},
+                target_segments,
+                packet_sentence_ids=self._ordered_packet_sentence_ids(bundle.packet, bundle.sentence_ids),
+            )
             if not alignment_edges:
                 continue
 
@@ -86,6 +103,8 @@ class RealignService:
         self,
         output_json: dict[str, object],
         target_segments: list[object],
+        *,
+        packet_sentence_ids: list[str],
     ) -> list[AlignmentEdge]:
         output_segments = output_json.get("target_segments", [])
         if not isinstance(output_segments, list) or len(output_segments) != len(target_segments):
@@ -99,10 +118,29 @@ class RealignService:
         if not temp_to_target_id:
             return []
 
+        edges: list[AlignmentEdge] = []
         alignment_payload = output_json.get("alignment_suggestions", [])
         if isinstance(alignment_payload, list) and alignment_payload:
-            return self._edges_from_alignment_suggestions(alignment_payload, temp_to_target_id)
-        return self._edges_from_target_segments(output_segments, temp_to_target_id)
+            edges.extend(self._edges_from_alignment_suggestions(alignment_payload, temp_to_target_id))
+        edges.extend(self._edges_from_target_segments(output_segments, temp_to_target_id))
+        edges = _dedupe_alignment_edges(edges)
+        if not packet_sentence_ids:
+            return edges
+        return self._attach_short_orphan_tail_edges(
+            edges=edges,
+            output_segments=output_segments,
+            temp_to_target_id=temp_to_target_id,
+            packet_sentence_ids=packet_sentence_ids,
+        )
+
+    def _ordered_packet_sentence_ids(self, packet, fallback_sentence_ids: list[str]) -> list[str]:
+        packet_json = packet.packet_json or {}
+        ordered_sentence_ids: list[str] = []
+        for block in packet_json.get("current_blocks", []):
+            ordered_sentence_ids.extend(str(sentence_id) for sentence_id in block.get("sentence_ids", []))
+        if ordered_sentence_ids:
+            return ordered_sentence_ids
+        return [str(sentence_id) for sentence_id in fallback_sentence_ids]
 
     def _edges_from_alignment_suggestions(
         self,
@@ -136,7 +174,7 @@ class RealignService:
                             created_at=now,
                         )
                     )
-        return edges
+        return _dedupe_alignment_edges(edges)
 
     def _edges_from_target_segments(
         self,
@@ -168,4 +206,63 @@ class RealignService:
                         created_at=now,
                     )
                 )
-        return edges
+        return _dedupe_alignment_edges(edges)
+
+    def _attach_short_orphan_tail_edges(
+        self,
+        *,
+        edges: list[AlignmentEdge],
+        output_segments: list[object],
+        temp_to_target_id: dict[str, str],
+        packet_sentence_ids: list[str],
+    ) -> list[AlignmentEdge]:
+        if not edges:
+            return edges
+        now = _utcnow()
+        edges_by_target: dict[str, list[str]] = {}
+        attached_sentence_ids = {edge.sentence_id for edge in edges}
+        for edge in edges:
+            edges_by_target.setdefault(edge.target_segment_id, []).append(edge.sentence_id)
+
+        last_attached_sentence_id = packet_sentence_ids[-1]
+        for segment_payload in output_segments:
+            if not isinstance(segment_payload, dict):
+                continue
+            temp_id = segment_payload.get("temp_id")
+            if temp_id not in temp_to_target_id:
+                continue
+            target_id = temp_to_target_id[temp_id]
+            existing_sentence_ids = edges_by_target.get(target_id, [])
+            if existing_sentence_ids:
+                last_attached_sentence_id = existing_sentence_ids[-1]
+                continue
+            if not self._is_short_tail_label_segment(segment_payload.get("text_zh")):
+                continue
+            relation_type = (
+                RelationType.ONE_TO_MANY
+                if last_attached_sentence_id in attached_sentence_ids
+                else RelationType.ONE_TO_ONE
+            )
+            new_edge = AlignmentEdge(
+                id=stable_id("alignment-edge", last_attached_sentence_id, target_id),
+                sentence_id=last_attached_sentence_id,
+                target_segment_id=target_id,
+                relation_type=relation_type,
+                confidence=segment_payload.get("confidence"),
+                created_by=ActorType.SYSTEM,
+                created_at=now,
+            )
+            edges.append(new_edge)
+            attached_sentence_ids.add(last_attached_sentence_id)
+            edges_by_target[target_id] = [last_attached_sentence_id]
+        return _dedupe_alignment_edges(edges)
+
+    def _is_short_tail_label_segment(self, text: object) -> bool:
+        normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not normalized:
+            return False
+        if len(normalized) > 24:
+            return False
+        if normalized.endswith((":", "：", ";", "；")):
+            return True
+        return len(normalized) <= 12 and not any(mark in normalized for mark in "。！？.!?")

@@ -17,6 +17,7 @@ from book_agent.domain.enums import (
     ExportStatus,
     ExportType,
     IssueStatus,
+    JobScopeType,
     PacketStatus,
     SourceType,
 )
@@ -35,9 +36,12 @@ from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.orchestrator.rerun import build_rerun_plan, packet_scope_ids_for_issue
 from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts
+from book_agent.services.chapter_concept_autolock import ChapterConceptAutoLockService, build_default_concept_resolver
 from book_agent.services.export import ExportArtifacts, ExportGateError, ExportService
+from book_agent.services.pdf_structure_refresh import PdfStructureRefreshArtifacts, PdfStructureRefreshService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
@@ -48,6 +52,10 @@ from book_agent.workers.translator import TranslationWorker
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+MAX_SAFE_UNLOCKED_CONCEPT_PACKET_FOLLOWUP = 3
+MAX_SAFE_STALE_CHAPTER_BRIEF_PACKET_FOLLOWUP = 3
 
 
 @dataclass(slots=True)
@@ -64,6 +72,7 @@ class ChapterSummary:
     open_issue_count: int
     bilingual_export_ready: bool = False
     latest_bilingual_export_at: str | None = None
+    pdf_image_summary: dict[str, Any] | None = None
     quality_summary: "StoredChapterQualitySummary | None" = None
 
 
@@ -90,6 +99,7 @@ class DocumentSummary:
     author: str | None
     pdf_profile: dict[str, Any] | None
     pdf_page_evidence: dict[str, Any] | None
+    pdf_image_summary: dict[str, Any] | None
     chapter_count: int
     block_count: int
     sentence_count: int
@@ -176,6 +186,25 @@ class DocumentReviewResult:
     total_issue_count: int
     total_action_count: int
     chapter_results: list[ChapterReviewResult]
+    auto_followup_requested: bool = False
+    auto_followup_applied: bool = False
+    auto_followup_attempt_count: int = 0
+    auto_followup_attempt_limit: int | None = None
+    auto_followup_executions: list["ReviewAutoFollowupExecution"] | None = None
+
+
+@dataclass(slots=True)
+class ReviewAutoFollowupExecution:
+    action_id: str
+    issue_id: str
+    issue_type: str
+    action_type: str
+    rerun_scope_type: str
+    rerun_scope_ids: list[str]
+    followup_executed: bool
+    rerun_packet_ids: list[str]
+    rerun_translation_run_ids: list[str]
+    issue_resolved: bool | None
 
 
 @dataclass(slots=True)
@@ -672,12 +701,17 @@ class DocumentWorkflowService:
             session,
             self.bootstrap_repository,
         )
+        self.pdf_structure_refresh_service = PdfStructureRefreshService(
+            session,
+            self.bootstrap_repository,
+        )
         self.rerun_service = RerunService(
             self.ops_repository,
             self.translation_service,
             self.review_service,
             self.targeted_rebuild_service,
             RealignService(self.ops_repository),
+            self.pdf_structure_refresh_service,
         )
 
     def bootstrap_document(self, source_path: str | Path) -> DocumentSummary:
@@ -688,12 +722,21 @@ class DocumentWorkflowService:
     def bootstrap_epub(self, source_path: str | Path) -> DocumentSummary:
         return self.bootstrap_document(source_path)
 
+    def refresh_pdf_structure(
+        self,
+        document_id: str,
+        *,
+        chapter_ids: list[str] | None = None,
+    ) -> PdfStructureRefreshArtifacts:
+        return self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+
     def get_document_summary(self, document_id: str) -> DocumentSummary:
         bundle = self.bootstrap_repository.load_document_bundle(document_id)
         open_issue_counts = self._open_issue_counts(document_id)
         quality_summary_map = self.review_repository.load_quality_summaries_for_document(document_id)
         chapter_export_map, merged_export_ready, latest_merged_export_at = self._chapter_export_status_map(document_id)
         latest_run = self._latest_document_run(document_id)
+        chapter_pdf_image_summary_map = self._chapter_pdf_image_summary_map(bundle)
 
         chapter_summaries: list[ChapterSummary] = []
         block_count = 0
@@ -717,6 +760,7 @@ class DocumentWorkflowService:
                     open_issue_count=open_issue_counts.get(chapter_bundle.chapter.id, 0),
                     bilingual_export_ready=(chapter_bundle.chapter.id in chapter_export_map),
                     latest_bilingual_export_at=chapter_export_map.get(chapter_bundle.chapter.id),
+                    pdf_image_summary=chapter_pdf_image_summary_map.get(chapter_bundle.chapter.id),
                     quality_summary=self._to_stored_quality_summary(
                         quality_summary_map.get(chapter_bundle.chapter.id)
                     ),
@@ -731,6 +775,7 @@ class DocumentWorkflowService:
             author=_display_author_value(bundle.document.author),
             pdf_profile=bundle.document.metadata_json.get("pdf_profile"),
             pdf_page_evidence=bundle.document.metadata_json.get("pdf_page_evidence"),
+            pdf_image_summary=self._document_pdf_image_summary(bundle),
             chapter_count=len(bundle.chapters),
             block_count=block_count,
             sentence_count=sentence_count,
@@ -838,6 +883,86 @@ class DocumentWorkflowService:
     def _chapter_structure_flags(self, chapter: Chapter) -> list[str]:
         flags = (chapter.metadata_json or {}).get("structure_flags") or []
         return [str(flag) for flag in flags]
+
+    def _pdf_image_summary_payload(self, images: list[object]) -> dict[str, Any] | None:
+        if not images:
+            return None
+
+        image_type_counts: dict[str, int] = {}
+        page_numbers: set[int] = set()
+        image_count = 0
+        stored_asset_count = 0
+        caption_linked_count = 0
+
+        for image in images:
+            image_count += 1
+            page_numbers.add(int(image.page_number))
+            image_type_counts[image.image_type] = image_type_counts.get(image.image_type, 0) + 1
+            if (image.metadata_json or {}).get("linked_caption_block_id"):
+                caption_linked_count += 1
+
+            storage_path = str(image.storage_path or "")
+            if storage_path and Path(storage_path).is_file():
+                stored_asset_count += 1
+
+        return {
+            "schema_version": 1,
+            "image_count": image_count,
+            "page_count": len(page_numbers),
+            "page_numbers": sorted(page_numbers),
+            "stored_asset_count": stored_asset_count,
+            "caption_linked_count": caption_linked_count,
+            "uncaptioned_image_count": image_count - caption_linked_count,
+            "image_type_counts": image_type_counts,
+        }
+
+    def _chapter_pdf_image_summary_map(self, bundle) -> dict[str, dict[str, Any]]:
+        if not bundle.document_images:
+            return {}
+
+        block_id_to_chapter_id = {
+            block.id: chapter_bundle.chapter.id
+            for chapter_bundle in bundle.chapters
+            for block in chapter_bundle.blocks
+        }
+        images_by_chapter: dict[str, list[object]] = {}
+        for image in bundle.document_images:
+            chapter_id = block_id_to_chapter_id.get(image.block_id or "")
+            if chapter_id is None:
+                continue
+            images_by_chapter.setdefault(chapter_id, []).append(image)
+        return {
+            chapter_id: summary
+            for chapter_id, summary in (
+                (chapter_id, self._pdf_image_summary_payload(images))
+                for chapter_id, images in images_by_chapter.items()
+            )
+            if summary is not None
+        }
+
+    def _document_pdf_image_summary(self, bundle) -> dict[str, Any] | None:
+        summary = self._pdf_image_summary_payload(bundle.document_images)
+        if summary is None:
+            return None
+
+        block_id_to_chapter_id = {
+            block.id: chapter_bundle.chapter.id
+            for chapter_bundle in bundle.chapters
+            for block in chapter_bundle.blocks
+        }
+        chapter_image_counts: dict[str, int] = {}
+        unassigned_image_count = 0
+
+        for image in bundle.document_images:
+            chapter_id = block_id_to_chapter_id.get(image.block_id or "")
+            if chapter_id is None:
+                unassigned_image_count += 1
+            else:
+                chapter_image_counts[chapter_id] = chapter_image_counts.get(chapter_id, 0) + 1
+        return summary | {
+            "unassigned_image_count": unassigned_image_count,
+            "chapter_image_counts": chapter_image_counts,
+        }
 
     def _latest_document_run(self, document_id: str) -> DocumentRun | None:
         return self.session.scalars(
@@ -982,11 +1107,18 @@ class DocumentWorkflowService:
             review_required_sentence_ids=review_required_sentence_ids,
         )
 
-    def review_document(self, document_id: str) -> DocumentReviewResult:
-        bundle = self.bootstrap_repository.load_document_bundle(document_id)
-        chapter_results: list[ChapterReviewResult] = []
-        total_issue_count = 0
-        total_action_count = 0
+    def _review_document_impl(
+        self,
+        bundle,
+        *,
+        chapter_results: list[ChapterReviewResult],
+        total_issue_count: int,
+        total_action_count: int,
+        auto_execute_packet_followups: bool,
+        max_auto_followup_attempts: int,
+    ) -> DocumentReviewResult:
+        auto_followup_executions: list[ReviewAutoFollowupExecution] = []
+        attempted_action_ids: set[str] = set()
 
         for chapter_bundle in bundle.chapters:
             if chapter_bundle.translation_packets and not all(
@@ -995,6 +1127,14 @@ class DocumentWorkflowService:
                 continue
 
             artifacts: ReviewArtifacts = self.review_service.review_chapter(chapter_bundle.chapter.id)
+            if auto_execute_packet_followups:
+                artifacts = self._apply_review_auto_followups(
+                    chapter_id=chapter_bundle.chapter.id,
+                    artifacts=artifacts,
+                    attempted_action_ids=attempted_action_ids,
+                    executions=auto_followup_executions,
+                    attempt_limit=max_auto_followup_attempts,
+                )
             total_issue_count += len(artifacts.issues)
             total_action_count += len(artifacts.actions)
             chapter = self.session.get(Chapter, chapter_bundle.chapter.id)
@@ -1016,11 +1156,261 @@ class DocumentWorkflowService:
             )
 
         return DocumentReviewResult(
-            document_id=document_id,
+            document_id=bundle.document.id,
             total_issue_count=total_issue_count,
             total_action_count=total_action_count,
             chapter_results=chapter_results,
+            auto_followup_requested=auto_execute_packet_followups,
+            auto_followup_applied=bool(auto_followup_executions),
+            auto_followup_attempt_count=len(auto_followup_executions),
+            auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_packet_followups else None),
+            auto_followup_executions=auto_followup_executions,
         )
+
+    def review_document(
+        self,
+        document_id: str,
+        *,
+        auto_execute_packet_followups: bool = False,
+        max_auto_followup_attempts: int = 2,
+    ) -> DocumentReviewResult:
+        bundle = self.bootstrap_repository.load_document_bundle(document_id)
+        return self._review_document_impl(
+            bundle,
+            chapter_results=[],
+            total_issue_count=0,
+            total_action_count=0,
+            auto_execute_packet_followups=auto_execute_packet_followups,
+            max_auto_followup_attempts=max_auto_followup_attempts,
+        )
+
+    def _apply_review_auto_followups(
+        self,
+        *,
+        chapter_id: str,
+        artifacts: ReviewArtifacts,
+        attempted_action_ids: set[str],
+        executions: list[ReviewAutoFollowupExecution],
+        attempt_limit: int,
+    ) -> ReviewArtifacts:
+        current_artifacts = artifacts
+        while len(executions) < attempt_limit:
+            issue_by_id = {issue.id: issue for issue in current_artifacts.issues}
+            candidate_actions = self._review_auto_followup_candidate_actions(
+                current_artifacts,
+                issue_by_id=issue_by_id,
+                attempted_action_ids=attempted_action_ids,
+            )
+            if not candidate_actions:
+                break
+            followup_action = candidate_actions[0]
+            if len(executions) >= attempt_limit:
+                break
+            issue = issue_by_id.get(followup_action.issue_id)
+            if issue is not None and issue.issue_type == "UNLOCKED_KEY_CONCEPT":
+                if not self._auto_lock_review_unlocked_concept(issue):
+                    fallback_action = self._fallback_stale_brief_action_for_unlocked_concept(
+                        artifacts=current_artifacts,
+                        issue_by_id=issue_by_id,
+                        attempted_action_ids=attempted_action_ids,
+                        issue=issue,
+                    )
+                    if fallback_action is None:
+                        continue
+                    followup_action = fallback_action
+                    issue = issue_by_id.get(followup_action.issue_id)
+            projected_rerun_plan = (
+                build_rerun_plan(issue, followup_action)
+                if issue is not None
+                else None
+            )
+            attempted_action_ids.add(followup_action.id)
+            result = self.execute_action(
+                followup_action.id,
+                run_followup=(
+                    projected_rerun_plan is not None
+                    and projected_rerun_plan.scope_type == JobScopeType.PACKET
+                ),
+            )
+            executions.append(
+                ReviewAutoFollowupExecution(
+                    action_id=followup_action.id,
+                    issue_id=followup_action.issue_id,
+                    issue_type=(issue.issue_type if issue is not None else "unknown"),
+                    action_type=followup_action.action_type.value,
+                    rerun_scope_type=result.action_execution.rerun_plan.scope_type.value,
+                    rerun_scope_ids=result.action_execution.rerun_plan.scope_ids,
+                    followup_executed=result.rerun_execution is not None,
+                    rerun_packet_ids=(
+                        result.rerun_execution.translated_packet_ids if result.rerun_execution else []
+                    ),
+                    rerun_translation_run_ids=(
+                        result.rerun_execution.translation_run_ids if result.rerun_execution else []
+                    ),
+                    issue_resolved=(
+                        result.rerun_execution.issue_resolved if result.rerun_execution else None
+                    ),
+                )
+            )
+            if result.rerun_execution is not None and result.rerun_execution.review_artifacts is not None:
+                current_artifacts = result.rerun_execution.review_artifacts
+            else:
+                current_artifacts = self.review_service.review_chapter(chapter_id)
+        return current_artifacts
+
+    def _review_auto_followup_candidate_actions(
+        self,
+        artifacts: ReviewArtifacts,
+        *,
+        issue_by_id: dict[str, ReviewIssue],
+        attempted_action_ids: set[str],
+    ) -> list[IssueAction]:
+        # Keep STALE_CHAPTER_BRIEF out of the general auto-followup pool.
+        # It is only safe as a packet-scoped fallback when concept auto-lock fails
+        # on the same affected packet set.
+        eligible_issue_types = {"STYLE_DRIFT", "TERM_CONFLICT", "UNLOCKED_KEY_CONCEPT"}
+        packet_issue_counts: dict[str, int] = {}
+        for issue in artifacts.issues:
+            if issue.issue_type not in eligible_issue_types:
+                continue
+            if issue.issue_type == "UNLOCKED_KEY_CONCEPT" and not self._review_issue_supports_unlocked_concept_auto_followup(issue):
+                continue
+            if issue.blocking and not self._review_issue_supports_blocking_auto_followup(issue):
+                continue
+            for packet_id in self._review_issue_followup_packet_ids(issue):
+                packet_issue_counts[packet_id] = packet_issue_counts.get(packet_id, 0) + 1
+
+        filtered_actions: list[IssueAction] = []
+        projected_rerun_plans: dict[str, object] = {}
+        for action in artifacts.actions:
+            if action.id in attempted_action_ids:
+                continue
+            issue = issue_by_id.get(action.issue_id)
+            if issue is None:
+                continue
+            if issue.issue_type == "UNLOCKED_KEY_CONCEPT" and not self._review_issue_supports_unlocked_concept_auto_followup(issue):
+                continue
+            if issue.blocking and not self._review_issue_supports_blocking_auto_followup(issue):
+                continue
+            if issue.issue_type not in eligible_issue_types:
+                continue
+            rerun_plan = build_rerun_plan(issue, action)
+            if rerun_plan.scope_type != JobScopeType.PACKET or not rerun_plan.scope_ids:
+                continue
+            projected_rerun_plans[action.id] = rerun_plan
+            filtered_actions.append(action)
+
+        candidate_actions: list[IssueAction] = []
+        seen_packet_ids: set[str] = set()
+
+        def _candidate_priority(action: IssueAction) -> tuple[int, int, int, str, str]:
+            issue = issue_by_id.get(action.issue_id)
+            rerun_plan = projected_rerun_plans.get(action.id)
+            if issue is None:
+                return (2, 2, 0, str(action.scope_id), action.id)
+            type_priority = {
+                "TERM_CONFLICT": 0,
+                "UNLOCKED_KEY_CONCEPT": 1,
+                "STYLE_DRIFT": 2,
+            }.get(issue.issue_type, 3)
+            packet_weight = (
+                sum(packet_issue_counts.get(packet_id, 0) for packet_id in rerun_plan.scope_ids)
+                if rerun_plan is not None
+                else packet_issue_counts.get(str(action.scope_id), 0)
+            )
+            return (
+                0 if issue.blocking else 1,
+                type_priority,
+                -packet_weight,
+                ",".join(rerun_plan.scope_ids) if rerun_plan is not None else str(action.scope_id),
+                action.id,
+            )
+
+        for action in sorted(
+            filtered_actions,
+            key=_candidate_priority,
+        ):
+            rerun_plan = projected_rerun_plans[action.id]
+            if any(packet_id in seen_packet_ids for packet_id in rerun_plan.scope_ids):
+                continue
+            seen_packet_ids.update(rerun_plan.scope_ids)
+            candidate_actions.append(action)
+        return candidate_actions
+
+    def _review_issue_supports_blocking_auto_followup(self, issue: ReviewIssue) -> bool:
+        return bool(
+            issue.issue_type == "TERM_CONFLICT"
+            and issue.packet_id
+            and str((issue.evidence_json or {}).get("expected_target_term") or "").strip()
+        )
+
+    def _review_issue_supports_unlocked_concept_auto_followup(self, issue: ReviewIssue) -> bool:
+        packet_ids_seen = self._review_issue_followup_packet_ids(issue)
+        return bool(
+            issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            and packet_ids_seen
+            and len(packet_ids_seen) <= MAX_SAFE_UNLOCKED_CONCEPT_PACKET_FOLLOWUP
+            and str((issue.evidence_json or {}).get("source_term") or "").strip()
+        )
+
+    def _review_issue_supports_stale_brief_auto_followup(self, issue: ReviewIssue) -> bool:
+        packet_ids_seen = self._review_issue_followup_packet_ids(issue)
+        missing_concepts = [
+            str(term).strip()
+            for term in list((issue.evidence_json or {}).get("missing_concepts") or [])
+            if str(term).strip()
+        ]
+        return bool(
+            issue.issue_type == "STALE_CHAPTER_BRIEF"
+            and packet_ids_seen
+            and len(packet_ids_seen) <= MAX_SAFE_STALE_CHAPTER_BRIEF_PACKET_FOLLOWUP
+            and missing_concepts
+        )
+
+    def _review_issue_followup_packet_ids(self, issue: ReviewIssue) -> list[str]:
+        return packet_scope_ids_for_issue(issue)
+
+    def _auto_lock_review_unlocked_concept(self, issue: ReviewIssue) -> bool:
+        source_term = str((issue.evidence_json or {}).get("source_term") or "").strip()
+        if not source_term or issue.chapter_id is None:
+            return False
+        artifacts = ChapterConceptAutoLockService(
+            self.session,
+            resolver=build_default_concept_resolver(),
+        ).auto_lock_chapter_concepts(
+            issue.chapter_id,
+            source_terms=[source_term],
+            min_times_seen=1,
+        )
+        return any(record.source_term.casefold() == source_term.casefold() for record in artifacts.locked_records)
+
+    def _fallback_stale_brief_action_for_unlocked_concept(
+        self,
+        *,
+        artifacts: ReviewArtifacts,
+        issue_by_id: dict[str, ReviewIssue],
+        attempted_action_ids: set[str],
+        issue: ReviewIssue,
+    ) -> IssueAction | None:
+        packet_ids_seen = set(self._review_issue_followup_packet_ids(issue))
+        if not packet_ids_seen:
+            return None
+        for action in artifacts.actions:
+            if action.id in attempted_action_ids:
+                continue
+            fallback_issue = issue_by_id.get(action.issue_id)
+            if fallback_issue is None or fallback_issue.issue_type != "STALE_CHAPTER_BRIEF":
+                continue
+            if not self._review_issue_supports_stale_brief_auto_followup(fallback_issue):
+                continue
+            fallback_packet_ids = set(self._review_issue_followup_packet_ids(fallback_issue))
+            if fallback_packet_ids != packet_ids_seen:
+                continue
+            rerun_plan = build_rerun_plan(fallback_issue, action)
+            if rerun_plan.scope_type != JobScopeType.PACKET or not rerun_plan.scope_ids:
+                continue
+            return action
+        return None
 
     def export_document(
         self,
@@ -1161,6 +1551,22 @@ class DocumentWorkflowService:
 
         if export_type == ExportType.MERGED_HTML:
             artifacts = self.export_service.export_document_merged_html(document_id)
+            document = self.session.get(type(bundle.document), document_id) or bundle.document
+            return DocumentExportResult(
+                document_id=document_id,
+                export_type=export_type.value,
+                document_status=document.status.value,
+                file_path=str(artifacts.file_path),
+                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
+                chapter_results=results,
+                auto_followup_requested=auto_execute_followup_on_gate,
+                auto_followup_applied=bool(auto_followup_executions),
+                auto_followup_attempt_count=len(auto_followup_executions),
+                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
+                auto_followup_executions=auto_followup_executions,
+            )
+        if export_type == ExportType.MERGED_MARKDOWN:
+            artifacts = self.export_service.export_document_merged_markdown(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
             return DocumentExportResult(
                 document_id=document_id,
@@ -2290,9 +2696,14 @@ class DocumentWorkflowService:
             or entry.active_blocking_issue_count > 0
         ]
 
+        def _is_pdf_image_caption_gap(entry: IssueChapterHeatmapEntry) -> bool:
+            return entry.dominant_issue_type == "IMAGE_CAPTION_RECOVERY_REQUIRED"
+
         def _priority(entry: IssueChapterHeatmapEntry) -> str:
             if entry.active_blocking_issue_count > 0:
                 return "immediate"
+            if _is_pdf_image_caption_gap(entry):
+                return "high"
             if entry.heat_score >= 6 or entry.open_issue_count >= 3:
                 return "high"
             return "medium"
@@ -2300,6 +2711,8 @@ class DocumentWorkflowService:
         def _driver(entry: IssueChapterHeatmapEntry) -> str:
             if entry.active_blocking_issue_count > 0:
                 return "active_blocking"
+            if _is_pdf_image_caption_gap(entry):
+                return "pdf_image_caption_gap"
             if entry.open_issue_count > 0:
                 return "open_pressure"
             return "triaged_backlog"
@@ -2334,6 +2747,8 @@ class DocumentWorkflowService:
         def _owner_ready_reason(entry: IssueChapterHeatmapEntry) -> str:
             if entry.dominant_issue_type is None or entry.dominant_root_cause_layer is None:
                 return "missing_issue_family"
+            if _is_pdf_image_caption_gap(entry):
+                return "pdf_image_caption_issue_detected"
             return "clear_dominant_issue_family"
 
         def _regression_hint(timeline: list[IssueActivityTimelineEntry]) -> str:

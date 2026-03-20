@@ -26,10 +26,20 @@ from book_agent.domain.enums import (
     Severity,
     SourceType,
 )
-from book_agent.domain.models import Block, BookProfile, Chapter, Document, JobRun, MemorySnapshot, Sentence
+from book_agent.domain.models import (
+    Block,
+    BookProfile,
+    Chapter,
+    Document,
+    DocumentImage,
+    JobRun,
+    MemorySnapshot,
+    Sentence,
+)
 from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
 from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
 from book_agent.domain.structure.epub import EPUBParser
+from book_agent.domain.structure.ocr import OcrPdfParser
 from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler, PdfFileProfile
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
 
@@ -40,6 +50,7 @@ class ParseArtifacts:
     chapters: list[Chapter]
     blocks: list[Block]
     job_run: JobRun
+    document_images: list[DocumentImage] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -61,6 +72,7 @@ class BootstrapArtifacts:
     translation_packets: list[TranslationPacket] = field(default_factory=list)
     packet_sentence_maps: list[PacketSentenceMap] = field(default_factory=list)
     job_runs: list[JobRun] = field(default_factory=list)
+    document_images: list[DocumentImage] = field(default_factory=list)
 
 
 def _utcnow() -> datetime:
@@ -151,29 +163,30 @@ class ParseService:
         self,
         epub_parser: EPUBParser | None = None,
         pdf_parser: PDFParser | None = None,
+        ocr_pdf_parser: OcrPdfParser | None = None,
     ):
         self.epub_parser = epub_parser or EPUBParser()
         self.pdf_parser = pdf_parser or PDFParser()
+        self.ocr_pdf_parser = ocr_pdf_parser or OcrPdfParser()
 
     def parse(self, document: Document, file_path: str | Path) -> ParseArtifacts:
         if document.source_type == SourceType.EPUB:
             parsed = self.epub_parser.parse(file_path)
         elif document.source_type == SourceType.PDF_TEXT:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            if isinstance(pdf_profile, dict) and pdf_profile.get("layout_risk") == "high":
+            if (
+                isinstance(pdf_profile, dict)
+                and pdf_profile.get("layout_risk") == "high"
+                and pdf_profile.get("recovery_lane") != "academic_paper"
+            ):
                 raise ValueError("P1-A only supports low-risk or medium-risk text PDFs; layout_risk=high")
             parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
         elif document.source_type == SourceType.PDF_MIXED:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            if isinstance(pdf_profile, dict) and pdf_profile.get("layout_risk") == "high":
-                raise ValueError("P1-A only supports low-risk or medium-risk text PDFs; layout_risk=high")
-            # Phase 3 will route to OcrPdfParser; for now use text extraction for available pages
-            parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
         elif document.source_type == SourceType.PDF_SCAN:
-            raise ValueError(
-                "OCR-required or scanned PDFs require surya-ocr. "
-                "Install with: pip install surya-ocr Pillow"
-            )
+            pdf_profile = document.metadata_json.get("pdf_profile")
+            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
         else:
             raise ValueError(f"Unsupported source type: {document.source_type}")
 
@@ -188,11 +201,20 @@ class ParseService:
 
         chapters: list[Chapter] = []
         blocks: list[Block] = []
+        document_images: list[DocumentImage] = []
         for ordinal, parsed_chapter in enumerate(parsed.chapters, start=1):
             chapter = self._build_chapter(document, parsed_chapter, ordinal, now)
             chapters.append(chapter)
+            chapter_block_pairs: list[tuple[ParsedBlock, Block]] = []
             for parsed_block in parsed_chapter.blocks:
-                blocks.append(self._build_block(document, chapter, parsed_block, now))
+                block = self._build_block(document, chapter, parsed_block, now)
+                chapter_block_pairs.append((parsed_block, block))
+            self._materialize_pdf_block_relations(chapter_block_pairs)
+            for parsed_block, block in chapter_block_pairs:
+                blocks.append(block)
+                document_image = self._build_document_image(document, block, parsed_block, now)
+                if document_image is not None:
+                    document_images.append(document_image)
 
         job = JobRun(
             id=stable_id("job", JobType.PARSE.value, document.id, document.parser_version),
@@ -204,7 +226,13 @@ class ParseService:
             ended_at=now,
             created_at=now,
         )
-        return ParseArtifacts(document=document, chapters=chapters, blocks=blocks, job_run=job)
+        return ParseArtifacts(
+            document=document,
+            chapters=chapters,
+            blocks=blocks,
+            job_run=job,
+            document_images=document_images,
+        )
 
     def _build_chapter(
         self,
@@ -331,6 +359,106 @@ class ParseService:
             created_at=now,
             updated_at=now,
         )
+
+    def _build_document_image(
+        self,
+        document: Document,
+        block: Block,
+        parsed_block: ParsedBlock,
+        now: datetime,
+    ) -> DocumentImage | None:
+        if block.block_type not in {BlockType.IMAGE, BlockType.FIGURE}:
+            return None
+
+        metadata = parsed_block.metadata or {}
+        source_page_start = metadata.get("source_page_start")
+        if not isinstance(source_page_start, int):
+            return None
+
+        source_bbox_json = metadata.get("source_bbox_json")
+        bbox_json = source_bbox_json if isinstance(source_bbox_json, dict) else {"regions": []}
+        storage_path = metadata.get("storage_path")
+        if not isinstance(storage_path, str) or not storage_path.strip():
+            storage_path = f"document-images/{document.id}/{block.id}.png"
+
+        width_px = metadata.get("image_width_px")
+        height_px = metadata.get("image_height_px")
+        return DocumentImage(
+            id=stable_id("document-image", document.id, block.id),
+            document_id=document.id,
+            block_id=block.id,
+            page_number=source_page_start,
+            image_type=str(metadata.get("image_type") or block.block_type.value),
+            storage_path=storage_path,
+            bbox_json=bbox_json,
+            ocr_text=str(metadata["ocr_text"]) if metadata.get("ocr_text") is not None else None,
+            latex=str(metadata["latex"]) if metadata.get("latex") is not None else None,
+            alt_text=(
+                str(metadata["image_alt"])
+                if metadata.get("image_alt") is not None
+                else str(metadata["alt_text"])
+                if metadata.get("alt_text") is not None
+                else str(metadata["linked_caption_text"])
+                if metadata.get("linked_caption_text") is not None
+                else None
+            ),
+            width_px=int(width_px) if isinstance(width_px, (int, float)) else None,
+            height_px=int(height_px) if isinstance(height_px, (int, float)) else None,
+            metadata_json={
+                "source_path": parsed_block.source_path,
+                "anchor": parsed_block.anchor,
+                "image_ext": metadata.get("image_ext"),
+                "linked_caption_block_id": metadata.get("linked_caption_block_id"),
+                "storage_status": "logical_only",
+            },
+            created_at=now,
+        )
+
+    def _materialize_pdf_block_relations(self, block_pairs: list[tuple[ParsedBlock, Block]]) -> None:
+        if not block_pairs:
+            return
+        block_id_by_source_anchor = {
+            block.source_anchor: block.id
+            for _parsed_block, block in block_pairs
+            if block.source_anchor
+        }
+        for parsed_block, block in block_pairs:
+            metadata = parsed_block.metadata or {}
+            block_metadata = dict(block.source_span_json or {})
+            linked_caption_source_anchor = metadata.get("linked_caption_source_anchor")
+            if isinstance(linked_caption_source_anchor, str):
+                linked_caption_block_id = block_id_by_source_anchor.get(linked_caption_source_anchor)
+                if linked_caption_block_id:
+                    metadata["linked_caption_block_id"] = linked_caption_block_id
+                    block_metadata["linked_caption_block_id"] = linked_caption_block_id
+            caption_for_source_anchor = metadata.get("caption_for_source_anchor")
+            if isinstance(caption_for_source_anchor, str):
+                caption_for_block_id = block_id_by_source_anchor.get(caption_for_source_anchor)
+                if caption_for_block_id:
+                    metadata["caption_for_block_id"] = caption_for_block_id
+                    block_metadata["caption_for_block_id"] = caption_for_block_id
+            artifact_group_context_source_anchors = metadata.get("artifact_group_context_source_anchors")
+            if isinstance(artifact_group_context_source_anchors, list):
+                artifact_group_context_block_ids = [
+                    block_id_by_source_anchor.get(str(source_anchor))
+                    for source_anchor in artifact_group_context_source_anchors
+                    if isinstance(source_anchor, str)
+                ]
+                artifact_group_context_block_ids = [
+                    block_id
+                    for block_id in artifact_group_context_block_ids
+                    if isinstance(block_id, str) and block_id.strip()
+                ]
+                if artifact_group_context_block_ids:
+                    metadata["artifact_group_context_block_ids"] = artifact_group_context_block_ids
+                    block_metadata["artifact_group_context_block_ids"] = artifact_group_context_block_ids
+            artifact_group_source_anchor = metadata.get("artifact_group_source_anchor")
+            if isinstance(artifact_group_source_anchor, str):
+                artifact_group_block_id = block_id_by_source_anchor.get(artifact_group_source_anchor)
+                if artifact_group_block_id:
+                    metadata["artifact_group_block_id"] = artifact_group_block_id
+                    block_metadata["artifact_group_block_id"] = artifact_group_block_id
+            block.source_span_json = block_metadata
 
 
 class SegmentationService:
@@ -505,6 +633,7 @@ class BootstrapPipeline:
                 *self._build_brief_jobs(document.id, chapter_briefs),
                 *packet_result.job_runs,
             ],
+            document_images=parse_artifacts.document_images,
         )
 
     def _build_brief_jobs(self, document_id: str, chapter_briefs: Iterable[MemorySnapshot]) -> list[JobRun]:

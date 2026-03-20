@@ -147,6 +147,7 @@ class ChapterMemoryBackfillService:
                 "chapter_title": chapter.title_src,
                 "heading_path": brief_content.get("heading_path", [chapter.title_src] if chapter.title_src else []),
                 "chapter_brief": brief_content.get("summary"),
+                "chapter_brief_version": chapter_brief.version if chapter_brief is not None else None,
                 "active_concepts": [],
                 "recent_accepted_translations": [],
                 "last_packet_id": None,

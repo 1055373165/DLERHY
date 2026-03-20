@@ -161,7 +161,7 @@ def _build_export_bundle_filename(
 
 
 def _export_sidecar_paths(file_path: Path) -> list[Path]:
-    if file_path.suffix.lower() != ".html":
+    if file_path.suffix.lower() not in {".html", ".md"}:
         return []
     assets_dir = file_path.parent / "assets"
     if not assets_dir.is_dir():
@@ -546,6 +546,7 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
         author=summary.author,
         pdf_profile=summary.pdf_profile,
         pdf_page_evidence=summary.pdf_page_evidence,
+        pdf_image_summary=summary.pdf_image_summary,
         chapter_count=summary.chapter_count,
         block_count=summary.block_count,
         sentence_count=summary.sentence_count,
@@ -570,6 +571,7 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
                 "open_issue_count": chapter.open_issue_count,
                 "bilingual_export_ready": chapter.bilingual_export_ready,
                 "latest_bilingual_export_at": chapter.latest_bilingual_export_at,
+                "pdf_image_summary": chapter.pdf_image_summary,
                 "quality_summary": (
                     {
                         "issue_count": chapter.quality_summary.issue_count,

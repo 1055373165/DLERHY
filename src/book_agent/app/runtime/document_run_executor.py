@@ -38,6 +38,18 @@ def _utcnow() -> datetime:
 
 def _is_retryable_exception(exc: Exception) -> bool:
     message = str(exc).lower()
+    non_retryable_markers = [
+        "http 400",
+        "http 401",
+        "http 402",
+        "http 403",
+        "http 404",
+        "insufficient balance",
+        "invalid api key",
+        "authentication failed",
+    ]
+    if any(marker in message for marker in non_retryable_markers):
+        return False
     retryable_markers = [
         "http 408",
         "http 409",
@@ -54,10 +66,17 @@ def _is_retryable_exception(exc: Exception) -> bool:
         "connection aborted",
         "connection refused",
         "database is locked",
+        "structured json output payload",
+        "translationworkeroutput schema",
     ]
-    if any(marker in message for marker in retryable_markers):
-        return True
-    return isinstance(exc, RuntimeError)
+    return any(marker in message for marker in retryable_markers)
+
+
+def _pause_reason_for_exception(exc: Exception) -> str | None:
+    message = str(exc).lower()
+    if "http 402" in message and "insufficient balance" in message:
+        return "provider.insufficient_balance"
+    return None
 
 
 def ensure_document_run_executor(app) -> "DocumentRunExecutor":
@@ -388,12 +407,19 @@ class DocumentRunExecutor:
         def _run_review() -> dict[str, Any]:
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                result = workflow.review_document(claimed.scope_id)
+                result = workflow.review_document(
+                    claimed.scope_id,
+                    auto_execute_packet_followups=True,
+                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                )
             return {
                 "document_id": claimed.scope_id,
                 "total_issue_count": result.total_issue_count,
                 "total_action_count": result.total_action_count,
                 "chapter_count": len(result.chapter_results),
+                "auto_followup_requested": result.auto_followup_requested,
+                "auto_followup_applied": result.auto_followup_applied,
+                "auto_followup_attempt_count": result.auto_followup_attempt_count,
             }
 
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:
@@ -561,6 +587,8 @@ class DocumentRunExecutor:
         exc: Exception,
         stage_key: str,
     ) -> None:
+        retryable = _is_retryable_exception(exc)
+        pause_reason = _pause_reason_for_exception(exc)
         error_detail = {
             "message": str(exc),
             "traceback": traceback.format_exc(limit=8),
@@ -571,14 +599,32 @@ class DocumentRunExecutor:
                 lease_token=claimed.lease_token,
                 error_class=exc.__class__.__name__,
                 error_detail_json=error_detail,
-                retryable=_is_retryable_exception(exc),
+                retryable=retryable,
             )
-            summary = execution.reconcile_run_terminal_state(run_id=run_id)
+            if pause_reason is not None:
+                control = self._run_control_service(session)
+                summary = control.pause_run_system(
+                    run_id,
+                    stop_reason=pause_reason,
+                    detail_json={
+                        "error_class": exc.__class__.__name__,
+                        "error_message": str(exc),
+                        "work_item_id": claimed.work_item_id,
+                        "scope_type": claimed.scope_type,
+                        "scope_id": claimed.scope_id,
+                    },
+                )
+            else:
+                summary = execution.reconcile_run_terminal_state(run_id=run_id)
         self._update_pipeline_stage(
             run_id,
             stage_key,
-            status=("retryable_failed" if _is_retryable_exception(exc) else "failed"),
-            extra={"error_class": exc.__class__.__name__, "error_message": str(exc)},
+            status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
+            extra={
+                "error_class": exc.__class__.__name__,
+                "error_message": str(exc),
+                **({"stop_reason": pause_reason} if pause_reason is not None else {}),
+            },
             current_stage=stage_key,
         )
         if summary.status in {"failed", "paused", "cancelled"}:

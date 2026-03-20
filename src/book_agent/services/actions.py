@@ -42,26 +42,36 @@ class IssueActionExecutor:
         now = _utcnow()
         action.status = ActionStatus.RUNNING
         self.repository.mark_issue_triaged(issue, "Action executed; awaiting rerun validation.")
+        rerun_plan = build_rerun_plan(issue, action)
 
         invalidations: list[ArtifactInvalidation] = []
         audits: list[AuditEvent] = []
 
-        if action.action_type == ActionType.REALIGN_ONLY and action.scope_type == JobScopeType.PACKET and action.scope_id:
-            audits.append(self._audit("packet", action.scope_id, "packet.marked_for_realign", issue.id, now))
-        elif action.scope_type == JobScopeType.PACKET and action.scope_id:
-            invalidations.extend(self._invalidate_packet_scope(action.scope_id, issue.id, now))
-        elif action.scope_type == JobScopeType.CHAPTER and action.scope_id:
-            for bundle in self.repository.list_packet_bundles_for_chapter(action.scope_id):
-                invalidations.extend(self._invalidate_packet_bundle(bundle, issue.id, now))
-            chapter = self.repository.get_chapter(action.scope_id)
-            chapter.status = ChapterStatus.PACKET_BUILT
-            audits.append(self._audit("chapter", chapter.id, "chapter.invalidated", issue.id, now))
-        elif action.scope_type == JobScopeType.SENTENCE and action.scope_id:
-            audits.append(self._audit("sentence", action.scope_id, "sentence.marked_for_manual_review", issue.id, now))
+        if rerun_plan.action_type == ActionType.REALIGN_ONLY and rerun_plan.scope_type == JobScopeType.PACKET:
+            for packet_id in rerun_plan.scope_ids:
+                audits.append(self._audit("packet", packet_id, "packet.marked_for_realign", issue.id, now))
+        elif rerun_plan.action_type == ActionType.REPARSE_CHAPTER and rerun_plan.scope_type == JobScopeType.CHAPTER:
+            for chapter_id in rerun_plan.scope_ids:
+                audits.append(self._audit("chapter", chapter_id, "chapter.marked_for_reparse", issue.id, now))
+        elif rerun_plan.action_type == ActionType.REPARSE_DOCUMENT and rerun_plan.scope_type == JobScopeType.DOCUMENT:
+            for document_id in rerun_plan.scope_ids:
+                audits.append(self._audit("document", document_id, "document.marked_for_reparse", issue.id, now))
+        elif rerun_plan.scope_type == JobScopeType.PACKET:
+            for packet_id in rerun_plan.scope_ids:
+                invalidations.extend(self._invalidate_packet_scope(packet_id, issue.id, now))
+        elif rerun_plan.scope_type == JobScopeType.CHAPTER:
+            for chapter_id in rerun_plan.scope_ids:
+                for bundle in self.repository.list_packet_bundles_for_chapter(chapter_id):
+                    invalidations.extend(self._invalidate_packet_bundle(bundle, issue.id, now))
+                chapter = self.repository.get_chapter(chapter_id)
+                chapter.status = ChapterStatus.PACKET_BUILT
+                audits.append(self._audit("chapter", chapter.id, "chapter.invalidated", issue.id, now))
+        elif rerun_plan.scope_type == JobScopeType.SENTENCE and rerun_plan.scope_ids:
+            for sentence_id in rerun_plan.scope_ids:
+                audits.append(self._audit("sentence", sentence_id, "sentence.marked_for_manual_review", issue.id, now))
 
         action.status = ActionStatus.COMPLETED
         action.updated_at = now
-        rerun_plan = build_rerun_plan(issue, action)
         self.repository.save_invalidations(action, invalidations, audits)
         self.repository.session.flush()
         return ActionExecutionArtifacts(rerun_plan=rerun_plan, invalidations=invalidations, audits=audits)

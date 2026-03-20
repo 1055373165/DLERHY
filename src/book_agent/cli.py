@@ -53,6 +53,13 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--auto-followup-on-gate", action="store_true")
     export.add_argument("--max-auto-followup-attempts", type=int, default=3)
 
+    refresh_pdf_structure = subparsers.add_parser(
+        "refresh-pdf-structure",
+        help="Refresh persisted PDF structure metadata in place without rerunning translation",
+    )
+    refresh_pdf_structure.add_argument("--document-id", required=True)
+    refresh_pdf_structure.add_argument("--chapter-id", action="append", default=[])
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -95,6 +102,16 @@ def main(argv: list[str] | None = None) -> int:
                         ExportType(args.export_type),
                         auto_execute_followup_on_gate=args.auto_followup_on_gate,
                         max_auto_followup_attempts=args.max_auto_followup_attempts,
+                    )
+                )
+            )
+            return 0
+        if args.command == "refresh-pdf-structure":
+            _dump(
+                asdict(
+                    service.refresh_pdf_structure(
+                        args.document_id,
+                        chapter_ids=(args.chapter_id or None),
                     )
                 )
             )

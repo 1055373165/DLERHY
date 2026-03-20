@@ -214,6 +214,25 @@ def _parse_summary(parsed) -> dict[str, Any]:
             if isinstance(page, dict)
             and isinstance(page.get("page_number"), int)
         },
+        "page_layout_risks": {
+            str(page["page_number"]): str(page.get("page_layout_risk") or "low")
+            for page in pages
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+        },
+        "page_layout_reasons": {
+            str(page["page_number"]): page.get("page_layout_reasons") or []
+            for page in pages
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+        },
+        "page_layout_risk_pages": [
+            int(page["page_number"])
+            for page in pages
+            if isinstance(page, dict)
+            and isinstance(page.get("page_number"), int)
+            and str(page.get("page_layout_risk") or "low") != "low"
+        ],
         "layout_suspect_pages": [
             int(page["page_number"])
             for page in pages

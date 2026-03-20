@@ -35,6 +35,7 @@ class ChapterSummaryResponse(BaseSchema):
     open_issue_count: int = 0
     bilingual_export_ready: bool = False
     latest_bilingual_export_at: str | None = None
+    pdf_image_summary: dict[str, Any] | None = None
     quality_summary: StoredChapterQualitySummaryResponse | None = None
 
 
@@ -46,6 +47,7 @@ class DocumentSummaryResponse(BaseSchema):
     author: str | None = None
     pdf_profile: dict[str, Any] | None = None
     pdf_page_evidence: dict[str, Any] | None = None
+    pdf_image_summary: dict[str, Any] | None = None
     chapter_count: int
     block_count: int
     sentence_count: int
@@ -126,7 +128,7 @@ class ReviewDocumentResponse(BaseSchema):
 
 
 class ExportDocumentRequest(BaseSchema):
-    export_type: Literal["review_package", "bilingual_html", "merged_html"]
+    export_type: Literal["review_package", "bilingual_html", "merged_html", "merged_markdown"]
     auto_execute_followup_on_gate: bool = False
     max_auto_followup_attempts: int = Field(default=3, ge=1)
 

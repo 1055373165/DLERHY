@@ -71,6 +71,33 @@ class ContextPacket(BaseSchema):
     budget_hint: dict[str, int] = Field(default_factory=dict)
 
 
+class CompiledTranslationContext(ContextPacket):
+    source_packet_id: str
+    context_compile_version: str
+    memory_version_used: int | None = None
+    compile_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_context_packet(
+        cls,
+        packet: ContextPacket,
+        *,
+        context_compile_version: str,
+        memory_version_used: int | None,
+        compile_metadata: dict[str, Any] | None = None,
+    ) -> "CompiledTranslationContext":
+        payload = packet.model_dump(mode="python")
+        payload.update(
+            {
+                "source_packet_id": packet.packet_id,
+                "context_compile_version": context_compile_version,
+                "memory_version_used": memory_version_used,
+                "compile_metadata": dict(compile_metadata or {}),
+            }
+        )
+        return cls.model_validate(payload)
+
+
 class TranslationTargetSegment(BaseSchema):
     temp_id: str
     text_zh: str

@@ -2846,6 +2846,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                         <label for="export-type">Export type</label>
                         <select id="export-type" name="export_type">
                           <option value="merged_html">merged_html</option>
+                          <option value="merged_markdown">merged_markdown</option>
                           <option value="bilingual_html">bilingual_html</option>
                           <option value="review_package">review_package</option>
                         </select>
@@ -3938,6 +3939,26 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
           `).join("");
         }}
 
+        function renderChapterPdfImageSummary(imageSummary) {{
+          if (!imageSummary) {{
+            return "—";
+          }}
+          const headline = escapeHtml(
+            String(imageSummary.image_count || 0)
+            + " imgs across "
+            + String(imageSummary.page_count || 0)
+            + " pages"
+          );
+          const annotation = imageSummary.uncaptioned_image_count
+            ? `<div class="mini-meta"><span class="pill warn">uncaptioned ${{formatNumber(imageSummary.uncaptioned_image_count)}}</span></div>`
+            : imageSummary.caption_linked_count
+              ? `<div class="mini-meta">linked=${{formatNumber(imageSummary.caption_linked_count)}}</div>`
+              : imageSummary.stored_asset_count
+                ? `<div class="mini-meta">stored=${{formatNumber(imageSummary.stored_asset_count)}}</div>`
+                : "";
+          return headline + annotation;
+        }}
+
         function renderDocumentSummary(summary) {{
           const chapters = (summary.chapters || []).slice(0, 8).map((chapter) => `
             <tr>
@@ -3974,6 +3995,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               </td>
               <td>${{formatNumber(chapter.sentence_count)}}</td>
               <td>${{formatNumber(chapter.packet_count)}}</td>
+              <td>${{renderChapterPdfImageSummary(chapter.pdf_image_summary)}}</td>
               <td>${{formatNumber(chapter.open_issue_count)}}</td>
               <td>
                 ${{
@@ -4025,6 +4047,26 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                   : ""
               }}
               ${{
+                summary.pdf_image_summary
+                  ? `<span class="pill soft">pdf images: ${{formatNumber(summary.pdf_image_summary.image_count)}} on ${{formatNumber(summary.pdf_image_summary.page_count)}} pages</span>`
+                  : ""
+              }}
+              ${{
+                summary.pdf_image_summary?.stored_asset_count
+                  ? `<span class="pill soft">stored image assets: ${{formatNumber(summary.pdf_image_summary.stored_asset_count)}}</span>`
+                  : ""
+              }}
+              ${{
+                summary.pdf_image_summary?.caption_linked_count
+                  ? `<span class="pill soft">captions linked: ${{formatNumber(summary.pdf_image_summary.caption_linked_count)}}</span>`
+                  : ""
+              }}
+              ${{
+                summary.pdf_image_summary?.uncaptioned_image_count
+                  ? `<span class="pill warn">uncaptioned images: ${{formatNumber(summary.pdf_image_summary.uncaptioned_image_count)}}</span>`
+                  : ""
+              }}
+              ${{
                 summary.latest_merged_export_at
                   ? `<span class="pill soft">merged: ${{formatDate(summary.latest_merged_export_at)}}</span>`
                   : ""
@@ -4048,6 +4090,34 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                 <dt class="definition-term">PDF Profile</dt>
                 <dd class="definition-desc">${{summary.pdf_profile ? escapeHtml((summary.pdf_profile.pdf_kind || "pdf") + " · risk=" + (summary.pdf_profile.layout_risk || "unknown")) : "Not a PDF document"}}</dd>
               </div>
+              <div class="definition-item">
+                <dt class="definition-term">PDF Images</dt>
+                <dd class="definition-desc">${{
+                  summary.pdf_image_summary
+                    ? escapeHtml(
+                        String(summary.pdf_image_summary.image_count || 0)
+                        + " images across "
+                        + String(summary.pdf_image_summary.page_count || 0)
+                        + " pages"
+                        + (
+                          summary.pdf_image_summary.stored_asset_count
+                            ? " · stored assets=" + String(summary.pdf_image_summary.stored_asset_count)
+                            : ""
+                        )
+                        + (
+                          summary.pdf_image_summary.caption_linked_count
+                            ? " · captions linked=" + String(summary.pdf_image_summary.caption_linked_count)
+                            : ""
+                        )
+                        + (
+                          summary.pdf_image_summary.uncaptioned_image_count
+                            ? " · uncaptioned=" + String(summary.pdf_image_summary.uncaptioned_image_count)
+                            : ""
+                        )
+                      )
+                    : "No PDF image artifacts recorded"
+                }}</dd>
+              </div>
             </dl>
             <div class="table-scroll compact dense-scroll">
               <table class="data-table compact dense-table">
@@ -4059,13 +4129,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                     <th>Risk</th>
                     <th>Sentences</th>
                     <th>Packets</th>
+                    <th>PDF Images</th>
                     <th>Open Issues</th>
                     <th>Download</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${{
-                    chapters || `<tr><td colspan="8">No chapter records found.</td></tr>`
+                    chapters || `<tr><td colspan="9">No chapter records found.</td></tr>`
                   }}
                 </tbody>
               </table>
@@ -4217,6 +4288,7 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
               <td>${{escapeHtml(chapter.title_src || "Untitled chapter")}}</td>
               <td>${{escapeHtml(chapter.status)}}</td>
               <td>${{formatNumber(chapter.packet_count)}}</td>
+              <td>${{renderChapterPdfImageSummary(chapter.pdf_image_summary)}}</td>
               <td>${{chapter.bilingual_export_ready ? formatDate(chapter.latest_bilingual_export_at) : "—"}}</td>
               <td>
                 ${{
@@ -4278,6 +4350,29 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                 <dt class="definition-term">Latest Run</dt>
                 <dd class="definition-desc">${{summary.latest_run_status ? escapeHtml(summary.latest_run_status) : "—"}}</dd>
               </div>
+              <div class="definition-item">
+                <dt class="definition-term">PDF Images</dt>
+                <dd class="definition-desc">${{
+                  summary.pdf_image_summary
+                    ? escapeHtml(
+                        String(summary.pdf_image_summary.image_count || 0)
+                        + " images across "
+                        + String(summary.pdf_image_summary.page_count || 0)
+                        + " pages"
+                        + (
+                          summary.pdf_image_summary.caption_linked_count
+                            ? " · captions linked=" + String(summary.pdf_image_summary.caption_linked_count)
+                            : ""
+                        )
+                        + (
+                          summary.pdf_image_summary.uncaptioned_image_count
+                            ? " · uncaptioned=" + String(summary.pdf_image_summary.uncaptioned_image_count)
+                            : ""
+                        )
+                      )
+                    : "No PDF image artifacts recorded"
+                }}</dd>
+              </div>
               <div class="definition-item full">
                 <dt class="definition-term">Merged Export</dt>
                 <dd class="definition-desc">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</dd>
@@ -4291,13 +4386,14 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
                     <th>Title</th>
                     <th>Status</th>
                     <th>Packets</th>
+                    <th>PDF Images</th>
                     <th>Latest Export</th>
                     <th>Download</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${{
-                    chapterRows || `<tr><td colspan="6">This record has no chapter rows.</td></tr>`
+                    chapterRows || `<tr><td colspan="7">This record has no chapter rows.</td></tr>`
                   }}
                 </tbody>
               </table>

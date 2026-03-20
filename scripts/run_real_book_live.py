@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
 import threading
 import time
 import traceback
+from contextlib import contextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -69,6 +71,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-total-token-out", type=int, default=None)
     parser.add_argument("--max-retry-count-per-work-item", type=int, default=2)
     parser.add_argument("--max-consecutive-failures", type=int, default=20)
+    parser.add_argument("--auto-review-followups", action="store_true")
     parser.add_argument("--skip-final-export", action="store_true")
     parser.add_argument("--auto-followup-on-gate", action="store_true")
     parser.add_argument("--max-auto-followup-attempts", type=int, default=2)
@@ -80,6 +83,25 @@ def _write_report(report_path: Path, report: dict[str, Any]) -> None:
         json.dumps(report, ensure_ascii=False, indent=2, default=_json_default),
         encoding="utf-8",
     )
+
+
+def _ocr_status_path_for(report_path: Path) -> Path:
+    return report_path.with_name(f"{report_path.stem}.ocr.json")
+
+
+@contextmanager
+def _temporary_environment(updates: dict[str, str]) -> Any:
+    originals = {key: os.environ.get(key) for key in updates}
+    try:
+        for key, value in updates.items():
+            os.environ[key] = value
+        yield
+    finally:
+        for key, original in originals.items():
+            if original is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = original
 
 
 def _new_service(session, *, export_root: str) -> DocumentWorkflowService:
@@ -116,6 +138,18 @@ def _build_run_budget(args: argparse.Namespace) -> RunBudgetSummary:
 
 def _is_retryable_exception(exc: Exception) -> bool:
     message = str(exc).lower()
+    non_retryable_markers = [
+        "http 400",
+        "http 401",
+        "http 402",
+        "http 403",
+        "http 404",
+        "insufficient balance",
+        "invalid api key",
+        "authentication failed",
+    ]
+    if any(marker in message for marker in non_retryable_markers):
+        return False
     retryable_markers = [
         "http 408",
         "http 409",
@@ -131,10 +165,17 @@ def _is_retryable_exception(exc: Exception) -> bool:
         "connection reset",
         "connection aborted",
         "connection refused",
+        "structured json output payload",
+        "translationworkeroutput schema",
     ]
-    if any(marker in message for marker in retryable_markers):
-        return True
-    return isinstance(exc, RuntimeError)
+    return any(marker in message for marker in retryable_markers)
+
+
+def _pause_reason_for_exception(exc: Exception) -> str | None:
+    message = str(exc).lower()
+    if "http 402" in message and "insufficient balance" in message:
+        return "provider.insufficient_balance"
+    return None
 
 
 def _summarize_samples(session, document_id: str, *, limit: int) -> list[dict[str, Any]]:
@@ -388,6 +429,8 @@ def _execute_controlled_translate_work_item(
     except Exception as exc:
         stop_event.set()
         heartbeat_thread.join(timeout=max(1, heartbeat_interval_seconds))
+        retryable = _is_retryable_exception(exc)
+        pause_reason = _pause_reason_for_exception(exc)
         error_detail = {
             "message": str(exc),
             "traceback": traceback.format_exc(limit=8),
@@ -399,8 +442,21 @@ def _execute_controlled_translate_work_item(
                     lease_token=lease_token,
                     error_class=exc.__class__.__name__,
                     error_detail_json=error_detail,
-                    retryable=_is_retryable_exception(exc),
+                    retryable=retryable,
                 )
+                if pause_reason is not None:
+                    run_control = _new_run_control_service(session)
+                    run_control.pause_run_system(
+                        claimed_work_item.run_id,
+                        stop_reason=pause_reason,
+                        detail_json={
+                            "error_class": exc.__class__.__name__,
+                            "error_message": str(exc),
+                            "work_item_id": claimed_work_item.work_item_id,
+                            "scope_type": claimed_work_item.scope_type,
+                            "scope_id": claimed_work_item.scope_id,
+                        },
+                    )
                 work_item = RunControlRepository(session).get_work_item(released.work_item_id)
             return {
                 "work_item_id": claimed_work_item.work_item_id,
@@ -415,6 +471,7 @@ def _execute_controlled_translate_work_item(
                 "latency_ms": 0,
                 "error_class": exc.__class__.__name__,
                 "error_message": str(exc),
+                "stop_reason": pause_reason,
             }
         except Exception as completion_exc:
             return {
@@ -430,6 +487,7 @@ def _execute_controlled_translate_work_item(
                 "latency_ms": 0,
                 "error_class": exc.__class__.__name__,
                 "error_message": str(exc),
+                "stop_reason": pause_reason,
                 "completion_error": str(completion_exc),
             }
 
@@ -449,6 +507,26 @@ def _refresh_run_report(
     )
     report["translate_recent_results"] = recent_results[-50:]
     _write_report(report_path, report)
+
+
+def _refresh_retry_run_status_detail(
+    session,
+    *,
+    run_id: str,
+    source_path: Path,
+    report_path: Path,
+    export_root: Path,
+) -> None:
+    repository = RunControlRepository(session)
+    run = repository.get_run(run_id)
+    detail = dict(run.status_detail_json or {})
+    detail["source_path"] = str(source_path.resolve())
+    detail["report_path"] = str(report_path.resolve())
+    detail["export_root"] = str(export_root.resolve())
+    detail.pop("last_failure", None)
+    detail.pop("last_progress", None)
+    run.status_detail_json = detail
+    repository.save_run(run)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -475,14 +553,32 @@ def main(argv: list[str] | None = None) -> int:
         "translation_model": settings.translation_model,
         "translate_batch_size": args.translate_batch_size,
         "parallel_workers": args.parallel_workers,
+        "auto_review_followups": args.auto_review_followups,
+        "auto_followup_on_gate": args.auto_followup_on_gate,
+        "max_auto_followup_attempts": args.max_auto_followup_attempts,
     }
+    ocr_environment: dict[str, str] = {}
+    if Path(args.source_path).suffix.lower() == ".pdf":
+        ocr_environment = {
+            "BOOK_AGENT_OCR_STATUS_PATH": str(_ocr_status_path_for(report_path).resolve()),
+            "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "15",
+        }
+        report["ocr_status_path"] = ocr_environment["BOOK_AGENT_OCR_STATUS_PATH"]
+    if args.run_id is None:
+        report["bootstrap_in_progress"] = True
+    else:
+        report["resume_in_progress"] = True
+    _write_report(report_path, report)
 
     if args.run_id is None:
-        with session_scope(session_factory) as session:
-            service = _new_service(session, export_root=str(export_root))
-            bootstrap = service.bootstrap_epub(args.source_path)
-            report["bootstrap"] = asdict(bootstrap)
-            document_id = bootstrap.document_id
+        with _temporary_environment(ocr_environment):
+            with session_scope(session_factory) as session:
+                service = _new_service(session, export_root=str(export_root))
+                bootstrap = service.bootstrap_epub(args.source_path)
+                report["bootstrap"] = asdict(bootstrap)
+                document_id = bootstrap.document_id
+                report["bootstrap_in_progress"] = False
+                report["bootstrap_finished_at"] = _utcnow().isoformat()
         _write_report(report_path, report)
     else:
         with session_scope(session_factory) as session:
@@ -491,6 +587,11 @@ def main(argv: list[str] | None = None) -> int:
             document_id = existing_run.document_id
             report["resume_from_run_id"] = args.run_id
             report["resume_from_status"] = existing_run.status
+            if existing_run.status in {"failed", "cancelled"}:
+                report["retry_from_run_id"] = args.run_id
+                report["retry_from_status"] = existing_run.status
+            report["resume_in_progress"] = False
+            report["resume_ready_at"] = _utcnow().isoformat()
         _write_report(report_path, report)
 
     with session_scope(session_factory) as session:
@@ -533,6 +634,24 @@ def main(argv: list[str] | None = None) -> int:
                     actor_id=args.requested_by,
                     note="resume translate_full live run",
                 )
+            elif run_summary.status in {"failed", "cancelled"}:
+                run_summary = run_control.retry_run(
+                    run_summary.run_id,
+                    actor_id=args.requested_by,
+                    note="retry translate_full live run",
+                    detail_json={
+                        "source_path": str(Path(args.source_path).resolve()),
+                        "report_path": str(report_path.resolve()),
+                        "export_root": str(export_root.resolve()),
+                    },
+                )
+                _refresh_retry_run_status_detail(
+                    session,
+                    run_id=run_summary.run_id,
+                    source_path=Path(args.source_path),
+                    report_path=report_path,
+                    export_root=export_root,
+                )
         run_id = run_summary.run_id
         seeded_work_item_ids = run_execution.seed_translate_work_items(
             run_id=run_id,
@@ -543,6 +662,7 @@ def main(argv: list[str] | None = None) -> int:
             "run_id": run_id,
             "seeded_work_item_count": len(seeded_work_item_ids),
             "pending_packet_count_initial": len(pending_packet_ids),
+            "source_run_id": args.run_id,
         }
     recent_results: list[dict[str, Any]] = []
     _refresh_run_report(
@@ -735,7 +855,11 @@ def main(argv: list[str] | None = None) -> int:
 
     with session_scope(session_factory) as session:
         service = _new_service(session, export_root=str(export_root))
-        review = service.review_document(document_id)
+        review = service.review_document(
+            document_id,
+            auto_execute_packet_followups=args.auto_review_followups,
+            max_auto_followup_attempts=args.max_auto_followup_attempts,
+        )
         report["review"] = asdict(review)
     _write_report(report_path, report)
 

@@ -1,8 +1,13 @@
+import html
+import json
+import shutil
 import tempfile
 import unittest
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -13,25 +18,41 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.core.ids import stable_id
-from book_agent.domain.enums import ActionType, ExportType, JobScopeType, LockLevel, MemoryScopeType, SnapshotType, TermStatus, TermType
+from book_agent.core.config import Settings
+from book_agent.domain.enums import ActionActorType, ActionStatus, ActionType, ActorType, ArtifactStatus, BlockType, BookType, ChapterStatus, Detector, DocumentStatus, ExportType, IssueStatus, JobScopeType, LockLevel, MemoryScopeType, MemoryStatus, ProtectedPolicy, RelationType, RootCauseLayer, Severity, SnapshotType, SentenceStatus, SourceType, TargetSegmentStatus, TermStatus, TermType
 from book_agent.domain.enums import PacketStatus, PacketType
-from book_agent.domain.models import ArtifactInvalidation, Block, Chapter, ChapterQualitySummary, Export, MemorySnapshot, Sentence, TermEntry
+from book_agent.domain.models import ArtifactInvalidation, Block, BookProfile, Chapter, ChapterQualitySummary, Document, Export, MemorySnapshot, Sentence, TermEntry
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
-from book_agent.infra.repositories.export import ExportRepository
+from book_agent.infra.repositories.export import ChapterExportBundle, DocumentExportBundle, ExportRepository
 from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.orchestrator.rerun import RerunPlan
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
-from book_agent.services.actions import IssueActionExecutor
+from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExecutor
+from book_agent.services.chapter_concept_autolock import (
+    ChapterConceptAutoLockService,
+    ConceptTranslationExample,
+    ConceptResolutionPayload,
+    FallbackConceptResolver,
+    HeuristicConceptResolver,
+    OpenAICompatibleConceptResolver,
+    build_default_concept_resolver,
+)
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.services.export import ExportGateError, ExportService
-from book_agent.services.review import ReviewService
+from book_agent.services.export import ExportGateError, ExportService, MergedRenderBlock
+from book_agent.services.pdf_prose_artifact_repair import PdfProseArtifactRepairService
+from book_agent.services.realign import RealignService
+from book_agent.services.rebuild import TargetedRebuildService
+from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
+from book_agent.services.review import ChapterQualitySummary as ReviewChapterQualitySummary, ReviewArtifacts, ReviewService
 from book_agent.services.translation import TranslationService
-from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.services.workflows import ActionWorkflowResult, DocumentWorkflowService
+from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationUsage, TranslationWorkerOutput
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
 
@@ -92,6 +113,41 @@ IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+CODE_CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Use the example carefully.</p>
+    <pre class="code-area">def run_agent():
+    return "ok"
+
+print(run_agent())</pre>
+  </body>
+</html>
+"""
+
+STRUCTURED_ARTIFACT_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:m="http://www.w3.org/1998/Math/MathML">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <div id="fig-1" class="browsable-container figure-container">
+      <img src="images/agent-loop.png" alt="Agent loop architecture" />
+      <h5>Figure 1.1 Agent loop architecture</h5>
+    </div>
+    <pre class="code-area">def run_agent():
+    return "ok"
+
+print(run_agent())</pre>
+    <table id="tbl-1">
+      <tr><th>Tier</th><th>Latency</th></tr>
+      <tr><td>Basic</td><td>Slow</td></tr>
+    </table>
+    <m:math id="eq-1"><m:mi>x</m:mi><m:mo>=</m:mo><m:mn>1</m:mn></m:math>
+    <p>https://example.com/agent-docs</p>
+  </body>
+</html>
+"""
+
 CONTEXT_ENGINEERING_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
@@ -102,10 +158,61 @@ CONTEXT_ENGINEERING_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+CONTEXT_ENGINEERING_THREE_PACKET_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Context engineering determines how context is created.</p>
+    <p>Strategy compounds over time.</p>
+    <p>Decision records reduce surprises.</p>
+    <p>Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
+CONTEXT_ENGINEERING_PACKET_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Context engineering determines how context is created. Context engineering also determines how context is maintained.</p>
+  </body>
+</html>
+"""
+
 LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
+    <p>This broader challenge is what some are beginning to call context engineering, which is the deliberate design of how context is created, maintained, and applied to shape reasoning.</p>
+    <p>In essence, the weight of evidence shows relying on external content supplied at inference time from up-to-date, relevant sources tends to yield more reliable and contextually accurate outputs.</p>
+  </body>
+</html>
+"""
+
+KNOWLEDGE_TIMELINE_LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Memory is also the structured record of what was known, when it was known, and why it mattered for action.</p>
+  </body>
+</html>
+"""
+
+DURABLE_SUBSTRATE_LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Within this view, memory becomes the durable substrate of context, providing more than just raw recall of what has been said.</p>
+  </body>
+</html>
+"""
+
+MIXED_AUTO_FOLLOWUP_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Agentic AI continuously improves by absorbing feedback.</p>
+    <p>Agentic AI also adapts over time.</p>
     <p>This broader challenge is what some are beginning to call context engineering, which is the deliberate design of how context is created, maintained, and applied to shape reasoning.</p>
     <p>In essence, the weight of evidence shows relying on external content supplied at inference time from up-to-date, relevant sources tends to yield more reliable and contextually accurate outputs.</p>
   </body>
@@ -125,12 +232,44 @@ STALE_BRIEF_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+STALE_BRIEF_ADAPTIVE_AGENT_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>A recipe book offers instructions for many meals.</p>
+    <p>A chef adapts when your pantry is missing ingredients.</p>
+    <p>An adaptive agent adjusts plans when feedback changes.</p>
+    <p>Memory helps systems remain reliable over time.</p>
+    <p>An adaptive agent also revises priorities over time.</p>
+    <p>Decision records reduce operational surprises.</p>
+  </body>
+</html>
+"""
+
 AGENTIC_AI_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
     <h1 id="ch1">Chapter One</h1>
     <p>Agentic AI continuously improves by ingesting feedback.</p>
     <p>Agentic AI also adapts over time.</p>
+  </body>
+</html>
+"""
+
+LANGUAGE_MODELS_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Language models improve over time.</p>
+  </body>
+</html>
+"""
+
+AGENTIC_AI_PACKET_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Agentic AI continuously improves by ingesting feedback. Agentic AI also adapts over time.</p>
   </body>
 </html>
 """
@@ -246,6 +385,47 @@ class SplitSegmentWorker:
         )
 
 
+class TrailingLabelWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="TrailingLabelWorker",
+            model_name="trailing-label-test",
+            prompt_version="test.trailing-label.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        sentence_ids = [sentence.id for sentence in task.current_sentences]
+        target_segments = [
+            TranslationTargetSegment(
+                temp_id="temp-main",
+                text_zh="主要译文内容。",
+                segment_type="sentence",
+                source_sentence_ids=sentence_ids,
+                confidence=0.95,
+            ),
+            TranslationTargetSegment(
+                temp_id="temp-tail",
+                text_zh="输入摘要：",
+                segment_type="sentence",
+                source_sentence_ids=[],
+                confidence=0.9,
+            ),
+        ]
+        alignments = [
+            AlignmentSuggestion(
+                source_sentence_ids=sentence_ids,
+                target_temp_ids=["temp-main"],
+                relation_type="n:1",
+                confidence=0.95,
+            )
+        ]
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
 class ParagraphFlowWorker:
     def metadata(self) -> TranslationWorkerMetadata:
         return TranslationWorkerMetadata(
@@ -330,6 +510,48 @@ class AgenticLiteralWorker:
         )
 
 
+class LanguageModelLiteralWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="LanguageModelLiteralWorker",
+            model_name="language-model-literal-test",
+            prompt_version="test.language-model-literal.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "Language models" in source_text:
+                text = "语言模型会随着时间不断改进。"
+            else:
+                text = f"译文::{source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
 class LiteralismWorker:
     def metadata(self) -> TranslationWorkerMetadata:
         return TranslationWorkerMetadata(
@@ -344,14 +566,363 @@ class LiteralismWorker:
         for sentence in task.current_sentences:
             if "context engineering" in sentence.source_text:
                 text = (
-                    "这一更广泛的挑战正被一些人称为情境工程，即对情境如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                    "这一更广泛的挑战正被一些人称之为情境工程的内容，即对情境如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
                 )
+            elif "durable substrate" in sentence.source_text:
+                text = "在这一视角下，记忆成为上下文的持久基底，其作用远不止于对已述内容的原始回忆。"
+            elif "what was known, when it was known" in sentence.source_text:
+                text = "记忆也是关于已知内容、获知时间及其对行动重要性的结构化记录。"
             elif "weight of evidence" in sentence.source_text:
                 text = (
                     "本质上，证据权重显示，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且更具上下文准确性的输出结果。"
                 )
             else:
                 text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class GuidanceAwareLiteralismWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="GuidanceAwareLiteralismWorker",
+            model_name="guidance-aware-literalism-test",
+            prompt_version="test.literalism-guided.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        open_questions = " | ".join(task.context_packet.open_questions)
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "context engineering" in source_text:
+                if "上下文工程" in open_questions:
+                    text = (
+                        "这一更广泛的挑战正被一些人称为上下文工程，即对上下文如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                    )
+                else:
+                    text = (
+                        "这一更广泛的挑战正被一些人称为情境工程，即对情境如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                    )
+            elif "weight of evidence" in source_text:
+                if "大量证据表明" in open_questions and "更符合上下文的输出" in open_questions:
+                    text = (
+                        "本质上，大量证据表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且更符合上下文的输出。"
+                    )
+                else:
+                    text = (
+                        "本质上，证据权重表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且上下文更准确的输出。"
+                    )
+            else:
+                text = f"译文::{source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class GuidanceAwareAgenticWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="GuidanceAwareAgenticWorker",
+            model_name="guidance-aware-agentic-test",
+            prompt_version="test.agentic-guided.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        relevant_terms = " | ".join(
+            f"{term.source_term}=>{term.target_term}"
+            for term in task.context_packet.relevant_terms
+        )
+        chapter_concepts = " | ".join(
+            f"{concept.source_term}=>{concept.canonical_zh}"
+            for concept in task.context_packet.chapter_concepts
+            if concept.canonical_zh
+        )
+        open_questions = " | ".join(task.context_packet.open_questions)
+        guidance = " | ".join([relevant_terms, chapter_concepts, open_questions])
+        use_locked_term = "智能体式AI" in guidance
+
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "Agentic AI" in source_text:
+                if "continuously improves" in source_text:
+                    text = (
+                        "智能体式AI通过吸收反馈持续改进。"
+                        if use_locked_term
+                        else "智能体AI通过吸收反馈持续改进。"
+                    )
+                elif "adapts over time" in source_text:
+                    text = (
+                        "智能体式AI也会随着时间推移不断适应。"
+                        if use_locked_term
+                        else "智能体AI也会随着时间推移不断适应。"
+                    )
+                else:
+                    text = (
+                        "智能体式AI会持续改进。"
+                        if use_locked_term
+                        else "智能体AI会持续改进。"
+                    )
+            else:
+                text = f"译文::{source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class CountingGuidanceAwareAdaptiveAgentWorker:
+    def __init__(self) -> None:
+        self.packet_ids_seen: list[str] = []
+
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="CountingGuidanceAwareAdaptiveAgentWorker",
+            model_name="guidance-aware-adaptive-agent-test",
+            prompt_version="test.adaptive-agent-guided.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        self.packet_ids_seen.append(task.context_packet.packet_id)
+        target_segments = []
+        alignments = []
+        relevant_terms = " | ".join(
+            f"{term.source_term}=>{term.target_term}"
+            for term in task.context_packet.relevant_terms
+        )
+        chapter_concepts = " | ".join(
+            f"{concept.source_term}=>{concept.canonical_zh}"
+            for concept in task.context_packet.chapter_concepts
+            if concept.canonical_zh
+        )
+        open_questions = " | ".join(task.context_packet.open_questions)
+        guidance = " | ".join([relevant_terms, chapter_concepts, open_questions])
+        use_locked_term = "自适应智能体" in guidance
+
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "adaptive agent" in source_text.lower():
+                if "adjusts plans" in source_text:
+                    text = (
+                        "自适应智能体会在反馈变化时调整计划。"
+                        if use_locked_term
+                        else "适应性智能体会在反馈变化时调整计划。"
+                    )
+                elif "revises priorities" in source_text:
+                    text = (
+                        "自适应智能体也会随着时间推移重新调整优先级。"
+                        if use_locked_term
+                        else "适应性智能体也会随着时间推移重新调整优先级。"
+                    )
+                else:
+                    text = "自适应智能体会持续调整。"
+            else:
+                text = f"译文::{source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class ConsistentContextEngineeringWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="ConsistentContextEngineeringWorker",
+            model_name="context-engineering-consistent-test",
+            prompt_version="test.context-engineering-consistent.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "Context engineering" in source_text:
+                text = (
+                    "上下文工程决定了上下文如何被创建。"
+                    if "created" in source_text
+                    else "上下文工程也决定了上下文如何被维护。"
+                )
+            else:
+                text = f"译文::{source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class CountingConsistentContextEngineeringWorker(ConsistentContextEngineeringWorker):
+    def __init__(self) -> None:
+        self.packet_ids_seen: list[str] = []
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        self.packet_ids_seen.append(task.context_packet.packet_id)
+        return super().translate(task)
+
+
+class GuidanceAwareMixedWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="GuidanceAwareMixedWorker",
+            model_name="guidance-aware-mixed-test",
+            prompt_version="test.mixed-guided.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        relevant_terms = " | ".join(
+            f"{term.source_term}=>{term.target_term}"
+            for term in task.context_packet.relevant_terms
+        )
+        chapter_concepts = " | ".join(
+            f"{concept.source_term}=>{concept.canonical_zh}"
+            for concept in task.context_packet.chapter_concepts
+            if concept.canonical_zh
+        )
+        open_questions = " | ".join(task.context_packet.open_questions)
+        guidance = " | ".join([relevant_terms, chapter_concepts, open_questions])
+        use_locked_term = "智能体式AI" in guidance
+        has_style_hints = "大量证据表明" in open_questions and "更符合上下文的输出" in open_questions
+
+        for sentence in task.current_sentences:
+            source_text = sentence.source_text
+            if "Agentic AI" in source_text:
+                if "continuously improves" in source_text:
+                    text = (
+                        "智能体式AI通过吸收反馈持续改进。"
+                        if use_locked_term
+                        else "智能体AI通过吸收反馈持续改进。"
+                    )
+                elif "adapts over time" in source_text:
+                    text = (
+                        "智能体式AI也会随着时间推移不断适应。"
+                        if use_locked_term
+                        else "智能体AI也会随着时间推移不断适应。"
+                    )
+                else:
+                    text = "智能体式AI会持续改进。" if use_locked_term else "智能体AI会持续改进。"
+            elif "context engineering" in source_text:
+                if "上下文工程" in open_questions:
+                    text = (
+                        "这一更广泛的挑战正被一些人称为上下文工程，即对上下文如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                    )
+                else:
+                    text = (
+                        "这一更广泛的挑战正被一些人称为情境工程，即对情境如何被创建、维护并应用于塑造推理过程进行有意识的设计。"
+                    )
+            elif "weight of evidence" in source_text:
+                if has_style_hints:
+                    text = (
+                        "本质上，大量证据表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且更符合上下文的输出。"
+                    )
+                else:
+                    text = (
+                        "本质上，证据权重表明，在推理时依赖来自最新相关来源的外部内容，往往能产生更可靠且上下文更准确的输出。"
+                    )
+            else:
+                text = f"译文::{source_text}"
             temp_id = f"temp-{sentence.id}"
             target_segments.append(
                 TranslationTargetSegment(
@@ -385,16 +956,17 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.session_factory = build_session_factory(engine=self.engine)
 
     def _bootstrap_to_db(self) -> tuple[str, str]:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            epub_path = Path(tmpdir) / "sample.epub"
-            with zipfile.ZipFile(epub_path, "w") as archive:
-                archive.writestr("mimetype", "application/epub+zip")
-                archive.writestr("META-INF/container.xml", CONTAINER_XML)
-                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
-                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
-                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+        tmpdir = Path(tempfile.mkdtemp(prefix="book-agent-test-epub-"))
+        self.addCleanup(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+        epub_path = tmpdir / "sample.epub"
+        with zipfile.ZipFile(epub_path, "w") as archive:
+            archive.writestr("mimetype", "application/epub+zip")
+            archive.writestr("META-INF/container.xml", CONTAINER_XML)
+            archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+            archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+            archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
 
-            artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
+        artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
 
         with self.session_factory() as session:
             BootstrapRepository(session).save(artifacts)
@@ -449,18 +1021,19 @@ class PersistenceAndReviewTests(unittest.TestCase):
             ]
         )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            epub_path = Path(tmpdir) / "sample.epub"
-            with zipfile.ZipFile(epub_path, "w") as archive:
-                archive.writestr("mimetype", "application/epub+zip")
-                archive.writestr("META-INF/container.xml", CONTAINER_XML)
-                archive.writestr("OEBPS/content.opf", content_opf)
-                archive.writestr("OEBPS/nav.xhtml", nav_xhtml)
-                for _title, href, content in chapters:
-                    archive.writestr(f"OEBPS/{href}", content)
-                for relative_path, payload in (extra_files or {}).items():
-                    archive.writestr(relative_path, payload)
-            artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
+        tmpdir = Path(tempfile.mkdtemp(prefix="book-agent-test-epub-"))
+        self.addCleanup(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+        epub_path = tmpdir / "sample.epub"
+        with zipfile.ZipFile(epub_path, "w") as archive:
+            archive.writestr("mimetype", "application/epub+zip")
+            archive.writestr("META-INF/container.xml", CONTAINER_XML)
+            archive.writestr("OEBPS/content.opf", content_opf)
+            archive.writestr("OEBPS/nav.xhtml", nav_xhtml)
+            for _title, href, content in chapters:
+                archive.writestr(f"OEBPS/{href}", content)
+            for relative_path, payload in (extra_files or {}).items():
+                archive.writestr(relative_path, payload)
+        artifacts = BootstrapOrchestrator().bootstrap_epub(epub_path)
 
         with self.session_factory() as session:
             BootstrapRepository(session).save(artifacts)
@@ -513,7 +1086,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertGreaterEqual(len(review_artifacts.issues), 1)
             self.assertTrue(any(issue.issue_type == "TERM_CONFLICT" for issue in review_artifacts.issues))
             self.assertTrue(any(action.action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED for action in review_artifacts.actions))
-            self.assertTrue(any(action.scope_type == JobScopeType.CHAPTER for action in review_artifacts.actions))
+            self.assertTrue(any(action.scope_type == JobScopeType.PACKET for action in review_artifacts.actions))
             persisted_summary = session.query(ChapterQualitySummary).filter_by(chapter_id=chapter_id).one()
             self.assertGreaterEqual(persisted_summary.issue_count, 1)
             self.assertEqual(persisted_summary.action_count, len(review_artifacts.actions))
@@ -563,6 +1136,2598 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     ExportService(ExportRepository(session), output_root=outdir).export_bilingual_html(chapter_id)
                 self.assertGreaterEqual(session.query(ArtifactInvalidation).count(), 1)
                 self.assertGreaterEqual(session.query(Export).count(), 1)
+
+    def test_export_service_reflows_flattened_code_artifact_text(self) -> None:
+        flattened = (
+            'def booking handler(request: str) -> str:\n'
+            '"""Simulates the Booking Agent handling a request."""\n'
+            'print("\\n--- DELEGATING TO BOOKING HANDLER ---")\n'
+            "return f\"Booking Handler processed request: '{request}'. Result:\n"
+            'Simulated booking action."'
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            formatted = html.unescape(service._format_preformatted_text(flattened))
+
+        self.assertIn(
+            'def booking handler(request: str) -> str:\n'
+            '    """Simulates the Booking Agent handling a request."""',
+            formatted,
+        )
+        self.assertIn(
+            '\n    print("\\n--- DELEGATING TO BOOKING HANDLER ---")',
+            formatted,
+        )
+        self.assertIn(
+            "Result: Simulated booking action.\"",
+            formatted,
+        )
+        self.assertNotIn(
+            "Result:\nSimulated booking action.",
+            formatted,
+        )
+
+    def test_export_service_leaves_non_code_preformatted_text_unchanged(self) -> None:
+        prose = (
+            "I admit, I began as a skeptic.\n"
+            "Plausibility, I've found, is often inversely proportional to one's own\n"
+            "knowledge of a subject."
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            formatted = html.unescape(service._format_preformatted_text(prose))
+
+        self.assertEqual(formatted, prose)
+
+    def test_export_service_detects_prose_artifact_text_with_phrase_class_of(self) -> None:
+        prose = (
+            "I admit, I began as a skeptic. Plausibility, I've found, is often inversely proportional "
+            "to one's own knowledge of a subject. Early models, for all their fluency, felt like they "
+            "were operating with a kind of impostor syndrome, optimized for credibility over "
+            "correctness. But then came the inflection point, a step-change brought about by a new "
+            'class of "reasoning" models. Suddenly, we were getting a peek into a nascent form of cognition.'
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+
+        self.assertTrue(service._looks_like_prose_artifact_text(prose))
+        self.assertFalse(service._looks_like_code_artifact_text(prose))
+
+    def test_export_service_does_not_detect_codeish_ocr_block_as_prose_artifact(self) -> None:
+        codeish = (
+            "# 1. Define the block of tasks to run in parallel.\n"
+            "map chain = RunnableParallel(\n"
+            "{\n"
+            '"summary": summarize chain,\n'
+            '"questions": questions chain,\n'
+            '"topic": lambda x: x,\n'
+            "}\n"
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+
+        self.assertFalse(service._looks_like_prose_artifact_text(codeish))
+
+    def test_export_service_does_not_detect_single_strong_code_line_as_prose_artifact(self) -> None:
+        codeish = 'def aggregator(state: State):\n"""Combine the joke and story into a single output"""'
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+
+        self.assertFalse(service._looks_like_prose_artifact_text(codeish))
+
+    def test_workflow_exports_merged_markdown_with_assets(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STRUCTURED_ARTIFACT_XHTML)],
+            extra_files={"OEBPS/images/agent-loop.png": b"fake-png-binary"},
+        )
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                workflow = DocumentWorkflowService(session, export_root=outdir)
+                workflow.translate_document(document_id)
+                with patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None):
+                    export = workflow.export_document(document_id, ExportType.MERGED_MARKDOWN)
+
+            markdown_path = Path(export.file_path)
+            manifest_path = Path(export.manifest_path)
+            self.assertTrue(markdown_path.exists())
+            self.assertTrue(manifest_path.exists())
+            markdown_text = markdown_path.read_text(encoding="utf-8")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertTrue((markdown_path.parent / "assets" / "OEBPS" / "images" / "agent-loop.png").exists())
+
+        self.assertEqual(manifest["export_type"], "merged_markdown")
+        self.assertEqual(manifest["markdown_path"], str(markdown_path))
+        self.assertIn("# Business Strategy Handbook", markdown_text)
+        self.assertIn("## Reading Map", markdown_text)
+        self.assertIn("## Chapter 1: Chapter One", markdown_text)
+        self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
+        self.assertIn("```python", markdown_text)
+        self.assertIn('return "ok"', markdown_text)
+        self.assertIn("```text\nTier | Latency\nBasic | Slow", markdown_text)
+        self.assertIn("https://example.com/agent-docs", markdown_text)
+
+    def test_workflow_exports_merged_markdown_from_legacy_db_without_document_images_table(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STRUCTURED_ARTIFACT_XHTML)],
+            extra_files={"OEBPS/images/agent-loop.png": b"fake-png-binary"},
+        )
+        Base.metadata.tables["document_images"].drop(self.engine)
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                workflow = DocumentWorkflowService(session, export_root=outdir)
+                workflow.translate_document(document_id)
+                with patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None):
+                    export = workflow.export_document(document_id, ExportType.MERGED_MARKDOWN)
+
+            markdown_path = Path(export.file_path)
+            self.assertTrue(markdown_path.exists())
+            markdown_text = markdown_path.read_text(encoding="utf-8")
+
+        self.assertIn("## Chapter 1: Chapter One", markdown_text)
+        self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
+
+    def test_visible_merged_chapters_group_pdf_auxiliary_sections_under_real_top_level_titles(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-visible-merged-pdf",
+            source_path="/tmp/sample.pdf",
+            title="Sample PDF",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+
+        def make_block(chapter_id: str, ordinal: int, block_type: BlockType, text: str, page: int) -> Block:
+            return Block(
+                id=f"{chapter_id}-{ordinal}",
+                chapter_id=chapter_id,
+                ordinal=ordinal,
+                block_type=block_type,
+                source_text=text,
+                normalized_text=text,
+                source_anchor=f"pdf://page/{page}#b{ordinal}",
+                source_span_json={
+                    "source_page_start": page,
+                    "source_page_end": page,
+                    "source_bbox_json": {"regions": [{"page_number": page, "bbox": [96.0, 96.0, 520.0, 144.0]}]},
+                    "pdf_block_role": "heading" if block_type == BlockType.HEADING else "body",
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+
+        def make_bundle(ordinal: int, title: str, page: int, extra_text: str | None = None) -> ChapterExportBundle:
+            chapter_id = f"chapter-{ordinal}"
+            chapter = Chapter(
+                id=chapter_id,
+                document_id=document.id,
+                ordinal=ordinal,
+                title_src=title,
+                title_tgt=None,
+                anchor_start=None,
+                anchor_end=None,
+                status=ChapterStatus.TRANSLATED,
+                summary_version=None,
+                risk_level=None,
+                metadata_json={"source_page_start": page, "source_page_end": page, "href": f"pdf://page/{page}"},
+                created_at=now,
+                updated_at=now,
+            )
+            blocks = [make_block(chapter_id, 1, BlockType.HEADING, title, page)]
+            if extra_text:
+                blocks.append(make_block(chapter_id, 2, BlockType.PARAGRAPH, extra_text, page))
+            return ChapterExportBundle(
+                chapter=chapter,
+                document=document,
+                book_profile=None,
+                blocks=blocks,
+                document_images=[],
+                sentences=[],
+                packets=[],
+                translation_runs=[],
+                target_segments=[],
+                alignment_edges=[],
+                review_issues=[],
+                quality_summary=None,
+                active_snapshots=[],
+                audit_events=[],
+            )
+
+        bundle = DocumentExportBundle(
+            document=document,
+            book_profile=None,
+            chapters=[
+                make_bundle(1, "Acknowledgment", 1),
+                make_bundle(2, "Foreword", 5),
+                make_bundle(3, "Chapter 17.", 15, "stray early heading"),
+                make_bundle(4, "Conclusion", 20, "aux section"),
+                make_bundle(5, "References", 20, "aux refs"),
+                make_bundle(6, "Chapter 1: Prompt Chaining", 21, "real chapter one"),
+                make_bundle(7, "References", 33, "chapter one refs"),
+                make_bundle(8, "Chapter 2: Routing", 34, "real chapter two"),
+                make_bundle(9, "Appendix A: Advanced Prompting", 347, "appendix content"),
+                make_bundle(10, "Techniques", 347, "appendix subsection"),
+            ],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            visible = service._visible_merged_chapters(bundle)
+
+        self.assertEqual(
+            [title for _ordinal, _chapter_bundle, _render_blocks, title in visible],
+            [
+                "Acknowledgment",
+                "Foreword",
+                "Chapter 1: Prompt Chaining",
+                "Chapter 2: Routing",
+                "Appendix A: Advanced Prompting",
+            ],
+        )
+        self.assertNotIn(
+            "Chapter 17.",
+            [block.source_text for block in visible[1][2]],
+        )
+        self.assertIn(
+            "References",
+            [block.source_text for block in visible[2][2]],
+        )
+        self.assertIn(
+            "Techniques",
+            [block.source_text for block in visible[4][2]],
+        )
+
+    def test_visible_merged_chapters_keep_academic_paper_sections_separate(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="dddddddd-dddd-4ddd-8ddd-aaaaaaaaaaaa",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-academic-paper-visible",
+            source_path="/tmp/paper.pdf",
+            title="Academic Paper",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={"pdf_profile": {"recovery_lane": "academic_paper", "layout_risk": "medium"}},
+            created_at=now,
+            updated_at=now,
+        )
+
+        def make_block(chapter_id: str, ordinal: int, block_type: BlockType, text: str, page: int) -> Block:
+            return Block(
+                id=f"{chapter_id}-{ordinal}",
+                chapter_id=chapter_id,
+                ordinal=ordinal,
+                block_type=block_type,
+                source_text=text,
+                normalized_text=text,
+                source_anchor=f"pdf://page/{page}#b{ordinal}",
+                source_span_json={
+                    "source_page_start": page,
+                    "source_page_end": page,
+                    "pdf_page_family": "body",
+                    "source_bbox_json": {"regions": [{"page_number": page, "bbox": [96.0, 96.0, 520.0, 144.0]}]},
+                    "pdf_block_role": "heading" if block_type == BlockType.HEADING else "body",
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+
+        def make_bundle(ordinal: int, title: str, page: int, body: str | None = None) -> ChapterExportBundle:
+            chapter_id = f"paper-chapter-{ordinal}"
+            chapter = Chapter(
+                id=chapter_id,
+                document_id=document.id,
+                ordinal=ordinal,
+                title_src=title,
+                title_tgt=None,
+                anchor_start=None,
+                anchor_end=None,
+                status=ChapterStatus.TRANSLATED,
+                summary_version=None,
+                risk_level=None,
+                metadata_json={"source_page_start": page, "source_page_end": page},
+                created_at=now,
+                updated_at=now,
+            )
+            blocks = [make_block(chapter_id, 1, BlockType.HEADING, title, page)]
+            if body:
+                blocks.append(make_block(chapter_id, 2, BlockType.PARAGRAPH, body, page))
+            return ChapterExportBundle(
+                chapter=chapter,
+                document=document,
+                book_profile=None,
+                blocks=blocks,
+                document_images=[],
+                sentences=[],
+                packets=[],
+                translation_runs=[],
+                target_segments=[],
+                alignment_edges=[],
+                review_issues=[],
+                quality_summary=None,
+                active_snapshots=[],
+                audit_events=[],
+            )
+
+        bundle = DocumentExportBundle(
+            document=document,
+            book_profile=None,
+            chapters=[
+                make_bundle(1, "Forming Effective Human-AI Teams", 1, "authors and abstract"),
+                make_bundle(2, "1 Introduction", 1, "intro"),
+                make_bundle(3, "2 Related Work", 2, "related"),
+                make_bundle(4, "3 Problem Formulation", 3, "problem"),
+                make_bundle(5, "4 Approach", 4, "approach"),
+                make_bundle(6, "5 Experiments", 5, "experiments"),
+                make_bundle(7, "6 Conclusion", 6, "conclusion"),
+                make_bundle(8, "References", 7, "refs"),
+            ],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            visible = service._visible_merged_chapters(bundle)
+
+        self.assertEqual(
+            [title for _ordinal, _chapter_bundle, _render_blocks, title in visible],
+            [
+                "Forming Effective Human-AI Teams",
+                "1 Introduction",
+                "2 Related Work",
+                "3 Problem Formulation",
+                "4 Approach",
+                "5 Experiments",
+                "6 Conclusion",
+                "References",
+            ],
+        )
+
+    def test_export_service_does_not_treat_academic_prose_as_code_artifact(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="ffffffff-eeee-4eee-8eee-eeeeeeeeeeee",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-academic-prose",
+            source_path="/tmp/paper.pdf",
+            title="Academic Paper",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={"pdf_profile": {"recovery_lane": "academic_paper", "layout_risk": "medium"}},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-academic-prose",
+            document_id=document.id,
+            ordinal=2,
+            title_src="1 Introduction",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 1, "source_page_end": 1},
+            created_at=now,
+            updated_at=now,
+        )
+
+        def make_block(ordinal: int, block_type: BlockType, text: str, role: str = "body") -> Block:
+            return Block(
+                id=f"academic-prose-{ordinal}",
+                chapter_id=chapter.id,
+                ordinal=ordinal,
+                block_type=block_type,
+                source_text=text,
+                normalized_text=text,
+                source_anchor=f"pdf://page/1#b{ordinal}",
+                source_span_json={
+                    "source_page_start": 1,
+                    "source_page_end": 1,
+                    "pdf_page_family": "body",
+                    "source_bbox_json": {"regions": [{"page_number": 1, "bbox": [72.0, 96.0, 530.0, 260.0]}]},
+                    "pdf_block_role": role,
+                },
+                parse_confidence=0.9,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[
+                make_block(1, BlockType.HEADING, "1 Introduction", role="heading"),
+                make_block(
+                    2,
+                    BlockType.PARAGRAPH,
+                    "In recent years, there has been growing interest in optimiz-\n"
+                    "ing the performance of human-AI teams—teams consisting of\n"
+                    "both a human expert and a classiﬁer [Hemmer et al., 2021]—\n"
+                    "by allocating a subset of the instances to a single human\n"
+                    "expert [De et al., 2021; Keswani et al., 2021].",
+                ),
+            ],
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(render_blocks[1].render_mode, "zh_primary_with_optional_source")
+        self.assertIsNone(render_blocks[1].artifact_kind)
+
+    def test_export_service_splits_academic_paper_frontmatter_and_abstract(self) -> None:
+        block = MergedRenderBlock(
+            block_id="paper-frontmatter",
+            chapter_id="chapter-paper",
+            block_type=BlockType.PARAGRAPH.value,
+            render_mode="zh_primary_with_optional_source",
+            artifact_kind=None,
+            title=None,
+            source_text=(
+                "Patrick Hemmer1, Sebastian Schellhammer2\n"
+                "Karlsruhe Institute of Technology\n"
+                "patrick@example.com\n"
+                "Abstract Machine learning models are increasingly used in application domains."
+            ),
+            target_text=(
+                "Patrick Hemmer1，Sebastian Schellhammer2\n"
+                "卡尔斯鲁厄理工学院\n"
+                "patrick@example.com\n"
+                "摘要 机器学习模型正越来越多地应用于各类场景。"
+            ),
+            source_metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            source_sentence_ids=["s1"],
+            target_segment_ids=["t1"],
+            is_expected_source_only=False,
+            notice=None,
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            fragments = service._split_academic_paper_frontmatter_block(block)
+
+        self.assertEqual([fragment.block_type for fragment in fragments], ["paragraph", "heading", "paragraph"])
+        self.assertIn("Karlsruhe Institute of Technology", fragments[0].source_text)
+        self.assertEqual(fragments[1].target_text, "摘要")
+        self.assertIn("机器学习模型正越来越多地应用于各类场景。", fragments[2].target_text or "")
+
+    def test_export_service_splits_abstract_only_paragraph_into_heading_and_body(self) -> None:
+        block = MergedRenderBlock(
+            block_id="paper-abstract-only",
+            chapter_id="chapter-paper",
+            block_type=BlockType.PARAGRAPH.value,
+            render_mode="zh_primary_with_optional_source",
+            artifact_kind=None,
+            title=None,
+            source_text="Abstract Machine learning models are increasingly used in application domains.",
+            target_text="摘要 机器学习模型正越来越多地应用于各类场景。",
+            source_metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            source_sentence_ids=["s2"],
+            target_segment_ids=["t2"],
+            is_expected_source_only=False,
+            notice=None,
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            fragments = service._split_academic_paper_frontmatter_block(block)
+
+        self.assertEqual([fragment.block_type for fragment in fragments], ["heading", "paragraph"])
+        self.assertEqual(fragments[0].target_text, "摘要")
+        self.assertIn("机器学习模型正越来越多地应用于各类场景。", fragments[1].target_text or "")
+
+    def test_export_service_does_not_treat_wrapped_book_prose_as_code_artifact(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="book-prose-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-book-prose-guard",
+            source_path="/tmp/book-prose.pdf",
+            title="Acknowledgment Sample",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-book-prose",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Acknowledgment",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 3, "source_page_end": 3},
+            created_at=now,
+            updated_at=now,
+        )
+        block = Block(
+            id="block-book-prose",
+            chapter_id=chapter.id,
+            ordinal=2,
+            block_type=BlockType.PARAGRAPH,
+            source_text=(
+                "I am deeply indebted to the many talented people who helped bring this book to life. My\n"
+                "heartfelt thanks go to Marco Fago for his immense contributions, from code and\n"
+                "diagrams to reviewing the entire text. I'm also grateful to Mahtab Syed for his coding work\n"
+                "and to Ankita Guha for her incredibly detailed feedback on so many chapters."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/3#b2",
+            source_span_json={
+                "source_page_start": 3,
+                "source_page_end": 3,
+                "source_bbox_json": {"regions": [{"page_number": 3, "bbox": [94.0, 696.0, 723.0, 860.0]}]},
+                "pdf_block_role": "body",
+                "pdf_page_family": "body",
+            },
+            parse_confidence=0.95,
+            protected_policy=ProtectedPolicy.TRANSLATE,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[block],
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].render_mode, "zh_primary_with_optional_source")
+        self.assertIsNone(render_blocks[0].artifact_kind)
+
+    def test_render_blocks_merge_multiline_heading_fragments_from_historical_pdf_export(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="heading-merge-doc",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-heading-merge",
+            source_path="/tmp/heading-merge.pdf",
+            title="Foreword",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={"pdf_profile": {"recovery_lane": "book_pdf"}},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-heading-merge",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Foreword",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 6, "source_page_end": 6},
+            created_at=now,
+            updated_at=now,
+        )
+        blocks = [
+            Block(
+                id="heading-block-1",
+                chapter_id=chapter.id,
+                ordinal=1,
+                block_type=BlockType.HEADING,
+                source_text="A Thought Leader's Perspective: Power",
+                normalized_text="",
+                source_anchor="pdf://page/6#b1",
+                source_span_json={
+                    "source_page_start": 6,
+                    "source_page_end": 6,
+                    "source_bbox_json": {"regions": [{"page_number": 6, "bbox": [94.0, 104.0, 701.0, 132.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 31,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="heading-block-2",
+                chapter_id=chapter.id,
+                ordinal=2,
+                block_type=BlockType.HEADING,
+                source_text="and Responsibility",
+                normalized_text="",
+                source_anchor="pdf://page/6#b2",
+                source_span_json={
+                    "source_page_start": 6,
+                    "source_page_end": 6,
+                    "source_bbox_json": {"regions": [{"page_number": 6, "bbox": [95.0, 144.0, 382.0, 176.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 32,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        sentences = [
+            Sentence(
+                id="heading-sentence-1",
+                block_id="heading-block-1",
+                chapter_id=chapter.id,
+                document_id=document.id,
+                ordinal_in_block=1,
+                source_text="A Thought Leader's Perspective: Power",
+                normalized_text="A Thought Leader's Perspective: Power",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor="pdf://page/6#s1",
+                source_span_json={},
+                upstream_confidence=0.95,
+                sentence_status=SentenceStatus.TRANSLATED,
+                active_version=1,
+                created_at=now,
+                updated_at=now,
+            ),
+            Sentence(
+                id="heading-sentence-2",
+                block_id="heading-block-2",
+                chapter_id=chapter.id,
+                document_id=document.id,
+                ordinal_in_block=1,
+                source_text="and Responsibility",
+                normalized_text="and Responsibility",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor="pdf://page/6#s2",
+                source_span_json={},
+                upstream_confidence=0.95,
+                sentence_status=SentenceStatus.TRANSLATED,
+                active_version=1,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        target_segments = [
+            TargetSegment(
+                id="heading-target-1",
+                chapter_id=chapter.id,
+                translation_run_id="heading-run",
+                ordinal=1,
+                text_zh="思想领袖视角：力量",
+                segment_type="sentence",
+                confidence=0.95,
+                final_status=TargetSegmentStatus.FINALIZED,
+                created_at=now,
+                updated_at=now,
+            ),
+            TargetSegment(
+                id="heading-target-2",
+                chapter_id=chapter.id,
+                translation_run_id="heading-run",
+                ordinal=2,
+                text_zh="与责任",
+                segment_type="sentence",
+                confidence=0.95,
+                final_status=TargetSegmentStatus.FINALIZED,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        alignment_edges = [
+            AlignmentEdge(
+                id="heading-edge-1",
+                sentence_id="heading-sentence-1",
+                target_segment_id="heading-target-1",
+                relation_type=RelationType.ONE_TO_ONE,
+                confidence=0.95,
+                created_by=ActorType.MODEL,
+                created_at=now,
+            ),
+            AlignmentEdge(
+                id="heading-edge-2",
+                sentence_id="heading-sentence-2",
+                target_segment_id="heading-target-2",
+                relation_type=RelationType.ONE_TO_ONE,
+                confidence=0.95,
+                created_by=ActorType.MODEL,
+                created_at=now,
+            ),
+        ]
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=blocks,
+            document_images=[],
+            sentences=sentences,
+            packets=[],
+            translation_runs=[],
+            target_segments=target_segments,
+            alignment_edges=alignment_edges,
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_type, BlockType.HEADING.value)
+        self.assertEqual(render_blocks[0].source_text, "A Thought Leader's Perspective: Power and Responsibility")
+        self.assertEqual(render_blocks[0].target_text, "思想领袖视角：力量与责任")
+        self.assertIn("export_multiline_heading_merged", render_blocks[0].source_metadata["recovery_flags"])
+
+    def test_render_blocks_treat_prose_like_code_block_with_targets_as_translated_paragraph(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="prose-code-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-prose-code",
+            source_path="/tmp/prose-code.pdf",
+            title="Acknowledgment",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-prose-code",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Acknowledgment",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 2, "source_page_end": 2},
+            created_at=now,
+            updated_at=now,
+        )
+        block = Block(
+            id="prose-code-block",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.CODE,
+            source_text=(
+                "I am deeply indebted to the many talented people who helped bring this book to life.\n"
+                "My heartfelt thanks go to Marco Fago for his immense contributions."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/2#b1",
+            source_span_json={
+                "source_page_start": 2,
+                "source_page_end": 2,
+                "source_bbox_json": {"regions": [{"page_number": 2, "bbox": [94.0, 720.0, 724.0, 812.0]}]},
+                "pdf_block_role": "code_like",
+                "pdf_page_family": "body",
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        sentence = Sentence(
+            id="prose-code-sentence",
+            block_id=block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=block.source_text,
+            normalized_text=block.source_text.replace("\n", " "),
+            source_lang="en",
+            translatable=False,
+            nontranslatable_reason="code_protected",
+            source_anchor="pdf://page/2#s1",
+            source_span_json={},
+            upstream_confidence=0.7,
+            sentence_status=SentenceStatus.PROTECTED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        target_segment = TargetSegment(
+            id="prose-code-target",
+            chapter_id=chapter.id,
+            translation_run_id="prose-code-run",
+            ordinal=1,
+            text_zh="我衷心感谢众多才华横溢的伙伴们，正是他们的帮助让这本书得以问世。我也特别感谢 Marco Fago 所做出的巨大贡献。",
+            segment_type="sentence",
+            confidence=0.92,
+            final_status=TargetSegmentStatus.FINALIZED,
+            created_at=now,
+            updated_at=now,
+        )
+        alignment_edge = AlignmentEdge(
+            id="prose-code-edge",
+            sentence_id=sentence.id,
+            target_segment_id=target_segment.id,
+            relation_type=RelationType.ONE_TO_ONE,
+            confidence=0.92,
+            created_by=ActorType.MODEL,
+            created_at=now,
+        )
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[block],
+            document_images=[],
+            sentences=[sentence],
+            packets=[],
+            translation_runs=[],
+            target_segments=[target_segment],
+            alignment_edges=[alignment_edge],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].render_mode, "zh_primary_with_optional_source")
+        self.assertIsNone(render_blocks[0].artifact_kind)
+        self.assertIn("我衷心感谢众多才华横溢的伙伴们", render_blocks[0].target_text or "")
+
+    def test_render_blocks_honor_prose_artifact_repair_metadata_and_skip_continuation(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="repair-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-repair-doc",
+            source_path="/tmp/repair-doc.pdf",
+            title="Acknowledgment",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-repair-doc",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Acknowledgment",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 2, "source_page_end": 3},
+            created_at=now,
+            updated_at=now,
+        )
+        lead_block = Block(
+            id="repair-lead-block",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.CODE,
+            source_text="A special thanks to Yingchao Huang for being a brilliant AI engineer with a great career ahead of you,",
+            normalized_text="",
+            source_anchor="pdf://page/2#b1",
+            source_span_json={
+                "source_page_start": 2,
+                "source_page_end": 2,
+                "source_bbox_json": {"regions": [{"page_number": 2, "bbox": [94.0, 880.0, 718.0, 920.0]}]},
+                "pdf_block_role": "code_like",
+                "pdf_page_family": "body",
+                "repair_source_text": (
+                    "A special thanks to Yingchao Huang for being a brilliant AI engineer with a great career ahead of you, "
+                    "Hann Wang for challenging me to return to my interest in Agents after an initial interest in 1994, "
+                    "and to Lee Boonstra for your amazing work on prompt engineering."
+                ),
+                "repair_target_text": (
+                    "特别感谢 Yingchao Huang，你是一位才华出众的 AI 工程师，前途无量；"
+                    "感谢 Hann Wang，在我自 1994 年萌生最初兴趣之后，又激发我重新投入对智能体的关注；"
+                    "也感谢 Lee Boonstra 在提示工程方面所做的出色工作。"
+                ),
+                "repair_block_type": "paragraph",
+                "repair_skip_block_ids": ["repair-continuation-block"],
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_block = Block(
+            id="repair-continuation-block",
+            chapter_id=chapter.id,
+            ordinal=2,
+            block_type=BlockType.PARAGRAPH,
+            source_text="and to Lee Boonstra for your amazing work on prompt engineering.",
+            normalized_text="",
+            source_anchor="pdf://page/3#b2",
+            source_span_json={
+                "source_page_start": 3,
+                "source_page_end": 3,
+                "source_bbox_json": {"regions": [{"page_number": 3, "bbox": [94.0, 104.0, 718.0, 140.0]}]},
+                "pdf_block_role": "body",
+                "pdf_page_family": "body",
+            },
+            parse_confidence=0.95,
+            protected_policy=ProtectedPolicy.TRANSLATE,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[lead_block, continuation_block],
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_type, BlockType.PARAGRAPH.value)
+        self.assertEqual(render_blocks[0].render_mode, "zh_primary_with_optional_source")
+        self.assertIsNone(render_blocks[0].artifact_kind)
+        self.assertIn("Hann Wang", render_blocks[0].source_text)
+        self.assertIn("Lee Boonstra 在提示工程方面所做的出色工作", render_blocks[0].target_text or "")
+
+    def test_render_blocks_merge_translated_prose_artifact_continuation_after_paragraph(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="prose-cont-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-prose-cont-doc",
+            source_path="/tmp/prose-cont-doc.pdf",
+            title="Foreword",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-prose-cont-doc",
+            document_id=document.id,
+            ordinal=2,
+            title_src="Foreword",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 10, "source_page_end": 10},
+            created_at=now,
+            updated_at=now,
+        )
+        lead_block = Block(
+            id="prose-cont-lead",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.PARAGRAPH,
+            source_text=(
+                "While the chapters are ordered to build concepts progressively, feel free to use the book "
+                "as a reference, jumping to chapters that address specific challenges you face in your own "
+                "agent development projects. The appendices provide a comprehensive look at advanced "
+                "prompting techniques, principles for applying AI agents in real-world"
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/10#b69",
+            source_span_json={
+                "source_page_start": 10,
+                "source_page_end": 10,
+                "source_bbox_json": {"regions": [{"page_number": 10, "bbox": [94.0, 516.0, 724.0, 642.0]}]},
+                "pdf_block_role": "body",
+                "pdf_page_family": "body",
+                "reading_order_index": 69,
+            },
+            parse_confidence=0.95,
+            protected_policy=ProtectedPolicy.TRANSLATE,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_block = Block(
+            id="prose-cont-tail",
+            chapter_id=chapter.id,
+            ordinal=2,
+            block_type=BlockType.CODE,
+            source_text=(
+                "environments, and an overview of essential agentic frameworks. To complement this,\n"
+                "practical online-only tutorials are included, offering step-by-step guidance on building\n"
+                "agents with specific platforms like AgentSpace and for the command-line interface. The\n"
+                "emphasis throughout is on practical application; we strongly encourage you to run the\n"
+                "code examples, experiment with them, and adapt them to build your own intelligent\n"
+                "systems on your chosen canvas."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/10#b70",
+            source_span_json={
+                "source_page_start": 10,
+                "source_page_end": 10,
+                "source_bbox_json": {"regions": [{"page_number": 10, "bbox": [94.0, 648.0, 724.0, 790.0]}]},
+                "pdf_block_role": "code_like",
+                "pdf_page_family": "body",
+                "reading_order_index": 70,
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        lead_sentence = Sentence(
+            id="prose-cont-lead-sentence",
+            block_id=lead_block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=lead_block.source_text,
+            normalized_text=lead_block.source_text.replace("\n", " "),
+            source_lang="en",
+            translatable=True,
+            nontranslatable_reason=None,
+            source_anchor="pdf://page/10#s69",
+            source_span_json={},
+            upstream_confidence=0.95,
+            sentence_status=SentenceStatus.TRANSLATED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_sentence = Sentence(
+            id="prose-cont-tail-sentence",
+            block_id=continuation_block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=continuation_block.source_text,
+            normalized_text=continuation_block.source_text.replace("\n", " "),
+            source_lang="en",
+            translatable=False,
+            nontranslatable_reason="code_protected",
+            source_anchor="pdf://page/10#s70",
+            source_span_json={},
+            upstream_confidence=0.7,
+            sentence_status=SentenceStatus.PROTECTED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        lead_target = TargetSegment(
+            id="prose-cont-lead-target",
+            chapter_id=chapter.id,
+            translation_run_id="prose-cont-run",
+            ordinal=1,
+            text_zh="尽管本书各章节按概念递进顺序编排，但您完全可以将其作为参考工具使用，直接跳转到与您自身智能体开发项目中具体挑战相关的章节。附录部分则全面探讨了高级提示技术，以及在实际场景中应用 AI 智能体的核心原则，",
+            segment_type="sentence",
+            confidence=0.92,
+            final_status=TargetSegmentStatus.FINALIZED,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_target = TargetSegment(
+            id="prose-cont-tail-target",
+            chapter_id=chapter.id,
+            translation_run_id="prose-cont-run",
+            ordinal=2,
+            text_zh="并概述了关键的智能体框架。除此之外，书中还配有仅在线提供的实操教程，逐步讲解如何在 AgentSpace 等平台以及命令行界面上构建智能体。全书始终强调实践应用；我们强烈建议您亲自运行这些代码示例，动手实验，并将其改造成适合自己画布的智能系统。",
+            segment_type="sentence",
+            confidence=0.92,
+            final_status=TargetSegmentStatus.FINALIZED,
+            created_at=now,
+            updated_at=now,
+        )
+        lead_edge = AlignmentEdge(
+            id="prose-cont-lead-edge",
+            sentence_id=lead_sentence.id,
+            target_segment_id=lead_target.id,
+            relation_type=RelationType.ONE_TO_ONE,
+            confidence=0.92,
+            created_by=ActorType.MODEL,
+            created_at=now,
+        )
+        continuation_edge = AlignmentEdge(
+            id="prose-cont-tail-edge",
+            sentence_id=continuation_sentence.id,
+            target_segment_id=continuation_target.id,
+            relation_type=RelationType.ONE_TO_ONE,
+            confidence=0.92,
+            created_by=ActorType.MODEL,
+            created_at=now,
+        )
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[lead_block, continuation_block],
+            document_images=[],
+            sentences=[lead_sentence, continuation_sentence],
+            packets=[],
+            translation_runs=[],
+            target_segments=[lead_target, continuation_target],
+            alignment_edges=[lead_edge, continuation_edge],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_type, BlockType.PARAGRAPH.value)
+        self.assertEqual(render_blocks[0].render_mode, "zh_primary_with_optional_source")
+        self.assertIsNone(render_blocks[0].artifact_kind)
+        self.assertIn("essential agentic frameworks", render_blocks[0].source_text)
+        self.assertIn("关键的智能体框架", render_blocks[0].target_text or "")
+        self.assertIn(
+            "export_prose_artifact_continuation_merged",
+            list(render_blocks[0].source_metadata.get("recovery_flags") or []),
+        )
+
+    def test_pdf_prose_artifact_repair_service_translates_and_hides_continuation_blocks(self) -> None:
+        class _RepairWorker:
+            def metadata(self) -> TranslationWorkerMetadata:
+                return TranslationWorkerMetadata(
+                    worker_name="repair-worker",
+                    model_name="repair-model",
+                    prompt_version="repair.v1",
+                )
+
+            def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+                merged = " ".join(block.text for block in task.context_packet.current_blocks)
+                return TranslationWorkerOutput(
+                    packet_id=task.context_packet.packet_id,
+                    target_segments=[
+                        TranslationTargetSegment(
+                            temp_id="repair-temp-1",
+                            text_zh=f"ZH::{merged}",
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id for sentence in task.current_sentences],
+                            confidence=0.9,
+                        )
+                    ],
+                    alignment_suggestions=[],
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="11111111-1111-4111-8111-111111111111",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-repair-service-doc",
+            source_path="/tmp/repair-service-doc.pdf",
+            title="Foreword",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="22222222-2222-4222-8222-222222222222",
+            document_id=document.id,
+            ordinal=2,
+            title_src="Foreword",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.EXPORTED,
+            summary_version=1,
+            risk_level=None,
+            metadata_json={"source_page_start": 10, "source_page_end": 10},
+            created_at=now,
+            updated_at=now,
+        )
+        lead_block = Block(
+            id="33333333-3333-4333-8333-333333333333",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.PARAGRAPH,
+            source_text=(
+                "While the chapters are ordered to build concepts progressively, feel free to use the book "
+                "as a reference, jumping to chapters that address specific challenges you face in your own "
+                "agent development projects. The appendices provide a comprehensive look at advanced "
+                "prompting techniques, principles for applying AI agents in real-world"
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/10#b69",
+            source_span_json={
+                "source_page_start": 10,
+                "source_page_end": 10,
+                "source_bbox_json": {"regions": [{"page_number": 10, "bbox": [94.0, 516.0, 724.0, 642.0]}]},
+                "pdf_block_role": "body",
+                "pdf_page_family": "body",
+                "reading_order_index": 69,
+            },
+            parse_confidence=0.95,
+            protected_policy=ProtectedPolicy.TRANSLATE,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_block = Block(
+            id="44444444-4444-4444-8444-444444444444",
+            chapter_id=chapter.id,
+            ordinal=2,
+            block_type=BlockType.CODE,
+            source_text=(
+                "environments, and an overview of essential agentic frameworks. To complement this,\n"
+                "practical online-only tutorials are included, offering step-by-step guidance on building\n"
+                "agents with specific platforms like AgentSpace and for the command-line interface."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/10#b70",
+            source_span_json={
+                "source_page_start": 10,
+                "source_page_end": 10,
+                "source_bbox_json": {"regions": [{"page_number": 10, "bbox": [94.0, 648.0, 724.0, 790.0]}]},
+                "pdf_block_role": "code_like",
+                "pdf_page_family": "body",
+                "reading_order_index": 70,
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        lead_sentence = Sentence(
+            id="55555555-5555-4555-8555-555555555555",
+            block_id=lead_block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=lead_block.source_text,
+            normalized_text=lead_block.source_text.replace("\n", " "),
+            source_lang="en",
+            translatable=True,
+            nontranslatable_reason=None,
+            source_anchor="pdf://page/10#s69",
+            source_span_json={},
+            upstream_confidence=0.95,
+            sentence_status=SentenceStatus.TRANSLATED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        continuation_sentence = Sentence(
+            id="66666666-6666-4666-8666-666666666666",
+            block_id=continuation_block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=continuation_block.source_text,
+            normalized_text=continuation_block.source_text.replace("\n", " "),
+            source_lang="en",
+            translatable=False,
+            nontranslatable_reason="code_protected",
+            source_anchor="pdf://page/10#s70",
+            source_span_json={},
+            upstream_confidence=0.7,
+            sentence_status=SentenceStatus.PROTECTED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        book_profile = BookProfile(
+            id="77777777-7777-4777-8777-777777777777",
+            document_id=document.id,
+            version=1,
+            book_type=BookType.TECH,
+            style_policy_json={"translation_material": "technical_book"},
+            quote_policy_json={},
+            special_content_policy_json={},
+            created_by="test",
+            created_at=now,
+        )
+        chapter_brief = MemorySnapshot(
+            id="88888888-8888-4888-8888-888888888888",
+            document_id=document.id,
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id=chapter.id,
+            snapshot_type=SnapshotType.CHAPTER_BRIEF,
+            version=1,
+            content_json={"heading_path": ["Foreword"], "summary": "Foreword summary."},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        termbase = MemorySnapshot(
+            id="99999999-9999-4999-8999-999999999999",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.TERMBASE,
+            version=1,
+            content_json={"terms": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        entity_registry = MemorySnapshot(
+            id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.ENTITY_REGISTRY,
+            version=1,
+            content_json={"entities": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+
+        with self.session_factory() as session:
+            session.add(document)
+            session.flush()
+            session.add(chapter)
+            session.flush()
+            session.add_all([lead_block, continuation_block])
+            session.flush()
+            session.add_all([lead_sentence, continuation_sentence])
+            session.add_all([book_profile, chapter_brief, termbase, entity_registry])
+            session.commit()
+
+            service = PdfProseArtifactRepairService(session, worker=_RepairWorker())
+            result = service.apply(document.id)
+            self.assertEqual(result.candidate_count, 1)
+            self.assertEqual(result.repaired_chain_count, 1)
+
+            bundle = BootstrapRepository(session).load_document_bundle(document.id).chapters[0]
+            render_blocks = ExportService(ExportRepository(session))._render_blocks_for_chapter(
+                ChapterExportBundle(
+                    chapter=bundle.chapter,
+                    document=document,
+                    book_profile=book_profile,
+                    blocks=bundle.blocks,
+                    document_images=[],
+                    sentences=bundle.sentences,
+                    packets=bundle.translation_packets,
+                    translation_runs=[],
+                    target_segments=[],
+                    alignment_edges=[],
+                    review_issues=[],
+                    quality_summary=None,
+                    active_snapshots=[chapter_brief, termbase, entity_registry],
+                    audit_events=[],
+                )
+            )
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertIn("ZH::While the chapters are ordered", render_blocks[0].target_text or "")
+        self.assertIn(
+            "44444444-4444-4444-8444-444444444444",
+            list(render_blocks[0].source_metadata.get("repair_skip_block_ids") or []),
+        )
+        self.assertIn(
+            "persisted_prose_artifact_chain_repaired",
+            list(render_blocks[0].source_metadata.get("recovery_flags") or []),
+        )
+
+    def test_pdf_prose_artifact_repair_service_translates_standalone_prose_artifact_blocks(self) -> None:
+        class _RepairWorker:
+            def metadata(self) -> TranslationWorkerMetadata:
+                return TranslationWorkerMetadata(
+                    worker_name="repair-worker",
+                    model_name="repair-model",
+                    prompt_version="repair.v1",
+                )
+
+            def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+                merged = " ".join(block.text for block in task.context_packet.current_blocks)
+                return TranslationWorkerOutput(
+                    packet_id=task.context_packet.packet_id,
+                    target_segments=[
+                        TranslationTargetSegment(
+                            temp_id="repair-temp-1",
+                            text_zh=f"ZH::{merged}",
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id for sentence in task.current_sentences],
+                            confidence=0.9,
+                        )
+                    ],
+                    alignment_suggestions=[],
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-standalone-prose-repair",
+            source_path="/tmp/standalone-prose-repair.pdf",
+            title="Foreword",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            document_id=document.id,
+            ordinal=2,
+            title_src="Foreword",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.EXPORTED,
+            summary_version=1,
+            risk_level=None,
+            metadata_json={"source_page_start": 10, "source_page_end": 10},
+            created_at=now,
+            updated_at=now,
+        )
+        block = Block(
+            id="dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.CODE,
+            source_text=(
+                "Of course, it wasn't perfect. It made mistakes. It got stuck. It required my "
+                "supervision and, crucially, my judgment to steer it back on course."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/10#b1",
+            source_span_json={
+                "source_page_start": 10,
+                "source_page_end": 10,
+                "source_bbox_json": {"regions": [{"page_number": 10, "bbox": [94.0, 516.0, 724.0, 642.0]}]},
+                "pdf_block_role": "code_like",
+                "pdf_page_family": "body",
+                "reading_order_index": 10,
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        protected_sentence = Sentence(
+            id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            block_id=block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=block.source_text,
+            normalized_text=block.source_text,
+            source_lang="en",
+            translatable=False,
+            nontranslatable_reason="code_protected",
+            source_anchor="pdf://page/10#s1",
+            source_span_json={},
+            upstream_confidence=0.7,
+            sentence_status=SentenceStatus.PROTECTED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        book_profile = BookProfile(
+            id="ffffffff-ffff-4fff-8fff-ffffffffffff",
+            document_id=document.id,
+            version=1,
+            book_type=BookType.TECH,
+            style_policy_json={"translation_material": "technical_book"},
+            quote_policy_json={},
+            special_content_policy_json={},
+            created_by="test",
+            created_at=now,
+        )
+        chapter_brief = MemorySnapshot(
+            id="10101010-1010-4010-8010-101010101010",
+            document_id=document.id,
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id=chapter.id,
+            snapshot_type=SnapshotType.CHAPTER_BRIEF,
+            version=1,
+            content_json={"heading_path": ["Foreword"], "summary": "Foreword summary."},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        termbase = MemorySnapshot(
+            id="20202020-2020-4020-8020-202020202020",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.TERMBASE,
+            version=1,
+            content_json={"terms": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        entity_registry = MemorySnapshot(
+            id="30303030-3030-4030-8030-303030303030",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.ENTITY_REGISTRY,
+            version=1,
+            content_json={"entities": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+
+        with self.session_factory() as session:
+            session.add(document)
+            session.flush()
+            session.add(chapter)
+            session.flush()
+            session.add(block)
+            session.flush()
+            session.add(protected_sentence)
+            session.add_all([book_profile, chapter_brief, termbase, entity_registry])
+            session.commit()
+
+            service = PdfProseArtifactRepairService(session, worker=_RepairWorker())
+            result = service.apply(document.id)
+            self.assertEqual(result.candidate_count, 1)
+            self.assertEqual(result.repaired_chain_count, 1)
+            bundle = BootstrapRepository(session).load_document_bundle(document.id).chapters[0]
+            render_blocks = ExportService(ExportRepository(session))._render_blocks_for_chapter(
+                ChapterExportBundle(
+                    chapter=bundle.chapter,
+                    document=document,
+                    book_profile=book_profile,
+                    blocks=bundle.blocks,
+                    document_images=[],
+                    sentences=bundle.sentences,
+                    packets=bundle.translation_packets,
+                    translation_runs=[],
+                    target_segments=[],
+                    alignment_edges=[],
+                    review_issues=[],
+                    quality_summary=None,
+                    active_snapshots=[chapter_brief, termbase, entity_registry],
+                    audit_events=[],
+                )
+            )
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_type, BlockType.PARAGRAPH.value)
+        self.assertIsNone(render_blocks[0].artifact_kind)
+        self.assertIn("ZH::Of course, it wasn't perfect.", render_blocks[0].target_text or "")
+        self.assertIn(
+            "persisted_prose_artifact_block_repaired",
+            list(render_blocks[0].source_metadata.get("recovery_flags") or []),
+        )
+
+    def test_pdf_prose_artifact_repair_service_translates_reference_family_prose_artifact_blocks(self) -> None:
+        class _RepairWorker:
+            def metadata(self) -> TranslationWorkerMetadata:
+                return TranslationWorkerMetadata(
+                    worker_name="repair-worker",
+                    model_name="repair-model",
+                    prompt_version="repair.v1",
+                )
+
+            def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+                merged = " ".join(block.text for block in task.context_packet.current_blocks)
+                return TranslationWorkerOutput(
+                    packet_id=task.context_packet.packet_id,
+                    target_segments=[
+                        TranslationTargetSegment(
+                            temp_id="repair-temp-1",
+                            text_zh=f"ZH::{merged}",
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id for sentence in task.current_sentences],
+                            confidence=0.9,
+                        )
+                    ],
+                    alignment_suggestions=[],
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-reference-prose-repair",
+            source_path="/tmp/reference-prose-repair.pdf",
+            title="References",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="cccccccc-cccc-4ccc-8ccc-cccccccccccd",
+            document_id=document.id,
+            ordinal=10,
+            title_src="References",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.EXPORTED,
+            summary_version=1,
+            risk_level=None,
+            metadata_json={"source_page_start": 62, "source_page_end": 62},
+            created_at=now,
+            updated_at=now,
+        )
+        block = Block(
+            id="dddddddd-dddd-4ddd-8ddd-ddddddddddde",
+            chapter_id=chapter.id,
+            ordinal=1,
+            block_type=BlockType.TABLE,
+            source_text=(
+                "Frameworks provide distinct mechanisms for implementing this pattern. In LangChain, "
+                "constructs like RunnableParallel are used to explicitly define and execute multiple "
+                "processing chains simultaneously."
+            ),
+            normalized_text="",
+            source_anchor="pdf://page/62#b1",
+            source_span_json={
+                "source_page_start": 62,
+                "source_page_end": 62,
+                "source_bbox_json": {"regions": [{"page_number": 62, "bbox": [94.0, 516.0, 724.0, 642.0]}]},
+                "pdf_block_role": "table_like",
+                "pdf_page_family": "references",
+                "reading_order_index": 10,
+            },
+            parse_confidence=0.7,
+            protected_policy=ProtectedPolicy.PROTECT,
+            status=ArtifactStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        protected_sentence = Sentence(
+            id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeef",
+            block_id=block.id,
+            chapter_id=chapter.id,
+            document_id=document.id,
+            ordinal_in_block=1,
+            source_text=block.source_text,
+            normalized_text=block.source_text,
+            source_lang="en",
+            translatable=False,
+            nontranslatable_reason="code_protected",
+            source_anchor="pdf://page/62#s1",
+            source_span_json={},
+            upstream_confidence=0.7,
+            sentence_status=SentenceStatus.PROTECTED,
+            active_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        book_profile = BookProfile(
+            id="ffffffff-ffff-4fff-8fff-fffffffffffe",
+            document_id=document.id,
+            version=1,
+            book_type=BookType.TECH,
+            style_policy_json={"translation_material": "technical_book"},
+            quote_policy_json={},
+            special_content_policy_json={},
+            created_by="test",
+            created_at=now,
+        )
+        chapter_brief = MemorySnapshot(
+            id="10101010-1010-4010-8010-101010101011",
+            document_id=document.id,
+            scope_type=MemoryScopeType.CHAPTER,
+            scope_id=chapter.id,
+            snapshot_type=SnapshotType.CHAPTER_BRIEF,
+            version=1,
+            content_json={"heading_path": ["References"], "summary": "References summary."},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        termbase = MemorySnapshot(
+            id="20202020-2020-4020-8020-202020202021",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.TERMBASE,
+            version=1,
+            content_json={"terms": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+        entity_registry = MemorySnapshot(
+            id="30303030-3030-4030-8030-303030303031",
+            document_id=document.id,
+            scope_type=MemoryScopeType.GLOBAL,
+            scope_id=None,
+            snapshot_type=SnapshotType.ENTITY_REGISTRY,
+            version=1,
+            content_json={"entities": []},
+            status=MemoryStatus.ACTIVE,
+            created_at=now,
+        )
+
+        with self.session_factory() as session:
+            session.add(document)
+            session.flush()
+            session.add(chapter)
+            session.flush()
+            session.add(block)
+            session.flush()
+            session.add(protected_sentence)
+            session.add_all([book_profile, chapter_brief, termbase, entity_registry])
+            session.commit()
+
+            service = PdfProseArtifactRepairService(session, worker=_RepairWorker())
+            result = service.apply(document.id)
+            self.assertEqual(result.candidate_count, 1)
+            self.assertEqual(result.repaired_chain_count, 1)
+            bundle = BootstrapRepository(session).load_document_bundle(document.id).chapters[0]
+            render_blocks = ExportService(ExportRepository(session))._render_blocks_for_chapter(
+                ChapterExportBundle(
+                    chapter=bundle.chapter,
+                    document=document,
+                    book_profile=book_profile,
+                    blocks=bundle.blocks,
+                    document_images=[],
+                    sentences=bundle.sentences,
+                    packets=bundle.translation_packets,
+                    translation_runs=[],
+                    target_segments=[],
+                    alignment_edges=[],
+                    review_issues=[],
+                    quality_summary=None,
+                    active_snapshots=[chapter_brief, termbase, entity_registry],
+                    audit_events=[],
+                )
+            )
+
+        self.assertEqual(len(render_blocks), 1)
+        self.assertEqual(render_blocks[0].block_type, BlockType.PARAGRAPH.value)
+        self.assertIn("ZH::Frameworks provide distinct mechanisms", render_blocks[0].target_text or "")
+
+    def test_render_blocks_merge_code_like_paragraphs_and_tables_into_single_code_artifact(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-code-like-merge",
+            source_path="/tmp/sample.pdf",
+            title="Code Example",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="chapter-code",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Chapter 16: Resource-Aware",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 247, "source_page_end": 248},
+            created_at=now,
+            updated_at=now,
+        )
+
+        def codeish_block(
+            ordinal: int,
+            block_type: BlockType,
+            text: str,
+            page: int,
+            role: str = "body",
+        ) -> Block:
+            return Block(
+                id=f"code-block-{ordinal}",
+                chapter_id=chapter.id,
+                ordinal=ordinal,
+                block_type=block_type,
+                source_text=text,
+                normalized_text=text,
+                source_anchor=f"pdf://page/{page}#b{ordinal}",
+                source_span_json={
+                    "source_page_start": page,
+                    "source_page_end": page,
+                    "source_bbox_json": {"regions": [{"page_number": page, "bbox": [102.0, 144.0, 677.0, 337.0]}]},
+                    "pdf_block_role": role,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[
+                codeish_block(1, BlockType.HEADING, "Chapter 16: Resource-Aware", 247, role="heading"),
+                codeish_block(
+                    2,
+                    BlockType.PARAGRAPH,
+                    "# Conceptual Python-like structure\nfrom google.adk.agents import Agent, BaseAgent",
+                    247,
+                    role="code_like",
+                ),
+                codeish_block(
+                    3,
+                    BlockType.CODE,
+                    'class QueryRouterAgent(BaseAgent):\n    name = "QueryRouter"',
+                    247,
+                    role="code_like",
+                ),
+                codeish_block(
+                    4,
+                    BlockType.TABLE,
+                    "async def run_async_impl(self, context):\n    return None",
+                    247,
+                    role="code_like",
+                ),
+                codeish_block(
+                    5,
+                    BlockType.PARAGRAPH,
+                    "The router chooses a cheaper model for easy questions.",
+                    248,
+                    role="body",
+                ),
+            ],
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 3)
+        self.assertEqual(render_blocks[1].artifact_kind, "code")
+        self.assertEqual(render_blocks[1].render_mode, "source_artifact_full_width")
+        self.assertIn("from google.adk.agents import Agent, BaseAgent", render_blocks[1].source_text)
+        self.assertIn("class QueryRouterAgent(BaseAgent):", render_blocks[1].source_text)
+        self.assertIn("async def run_async_impl(self, context):", render_blocks[1].source_text)
+        self.assertEqual(render_blocks[2].artifact_kind, None)
+
+    def test_render_blocks_drop_pure_chapter_label_heading_false_positive(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="drop-chapter-label-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-drop-chapter-label",
+            source_path="/tmp/drop-chapter-label.pdf",
+            title="Foreword",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="drop-chapter-label-chapter",
+            document_id=document.id,
+            ordinal=3,
+            title_src="Chapter 17.",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 15, "source_page_end": 19},
+            created_at=now,
+            updated_at=now,
+        )
+        blocks = [
+            Block(
+                id="drop-chapter-label-body-1",
+                chapter_id=chapter.id,
+                ordinal=1,
+                block_type=BlockType.PARAGRAPH,
+                source_text="performs context engineering by selecting the most relevant information.",
+                normalized_text="",
+                source_anchor="pdf://page/15#b1",
+                source_span_json={
+                    "source_page_start": 15,
+                    "source_page_end": 15,
+                    "source_bbox_json": {"regions": [{"page_number": 15, "bbox": [94.0, 132.0, 704.0, 186.0]}]},
+                    "pdf_block_role": "body",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 1,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="drop-chapter-label-heading",
+                chapter_id=chapter.id,
+                ordinal=2,
+                block_type=BlockType.HEADING,
+                source_text="Chapter 17.",
+                normalized_text="",
+                source_anchor="pdf://page/15#b2",
+                source_span_json={
+                    "source_page_start": 15,
+                    "source_page_end": 15,
+                    "source_bbox_json": {"regions": [{"page_number": 15, "bbox": [286.0, 204.0, 482.0, 232.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 2,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="drop-chapter-label-body-2",
+                chapter_id=chapter.id,
+                ordinal=3,
+                block_type=BlockType.PARAGRAPH,
+                source_text="Level 3: The Rise of Collaborative Multi-Agent Systems",
+                normalized_text="",
+                source_anchor="pdf://page/15#b3",
+                source_span_json={
+                    "source_page_start": 15,
+                    "source_page_end": 15,
+                    "source_bbox_json": {"regions": [{"page_number": 15, "bbox": [94.0, 248.0, 704.0, 282.0]}]},
+                    "pdf_block_role": "body",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 3,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=blocks,
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual([block.source_text for block in render_blocks], [blocks[0].source_text, blocks[2].source_text])
+
+    def test_render_blocks_demote_sentence_like_heading_false_positive_and_merge_fragments(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="demote-heading-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-demote-heading",
+            source_path="/tmp/demote-heading.pdf",
+            title="Planning",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="demote-heading-chapter",
+            document_id=document.id,
+            ordinal=6,
+            title_src="Chapter 6: Planning",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 101, "source_page_end": 101},
+            created_at=now,
+            updated_at=now,
+        )
+
+        def make_block(block_id: str, ordinal: int, block_type: BlockType, text: str, reading_order_index: int) -> Block:
+            role = "heading" if block_type == BlockType.HEADING else "body"
+            return Block(
+                id=block_id,
+                chapter_id=chapter.id,
+                ordinal=ordinal,
+                block_type=block_type,
+                source_text=text,
+                normalized_text="",
+                source_anchor=f"pdf://page/101#{block_id}",
+                source_span_json={
+                    "source_page_start": 101,
+                    "source_page_end": 101,
+                    "source_bbox_json": {"regions": [{"page_number": 101, "bbox": [94.0, 120.0 + ordinal * 24.0, 704.0, 144.0 + ordinal * 24.0]}]},
+                    "pdf_block_role": role,
+                    "pdf_page_family": "body",
+                    "reading_order_index": reading_order_index,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=[
+                make_block("chapter-title", 1, BlockType.HEADING, "Chapter 6: Planning", 1),
+                make_block(
+                    "bad-heading-1",
+                    2,
+                    BlockType.HEADING,
+                    "user-provided documents, combining information from private sources with its",
+                    2,
+                ),
+                make_block(
+                    "bad-heading-2",
+                    3,
+                    BlockType.HEADING,
+                    "web-based research. The final output is not merely a concatenated list of findings.",
+                    3,
+                ),
+            ],
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(len(render_blocks), 2)
+        self.assertEqual(render_blocks[1].block_type, BlockType.PARAGRAPH.value)
+        self.assertIn("user-provided documents", render_blocks[1].source_text)
+        self.assertIn("web-based research", render_blocks[1].source_text)
+        self.assertIn("export_book_heading_demoted", render_blocks[1].source_metadata["recovery_flags"])
+        self.assertIn("export_book_paragraph_fragments_merged", render_blocks[1].source_metadata["recovery_flags"])
+
+    def test_render_blocks_promote_single_line_codeish_heading_to_code_artifact(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="promote-code-heading-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-promote-code-heading",
+            source_path="/tmp/promote-code-heading.pdf",
+            title="Prompt Chaining",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="promote-code-heading-chapter",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Chapter 1: Prompt Chaining",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 21, "source_page_end": 21},
+            created_at=now,
+            updated_at=now,
+        )
+        blocks = [
+            Block(
+                id="promote-code-heading-title",
+                chapter_id=chapter.id,
+                ordinal=1,
+                block_type=BlockType.HEADING,
+                source_text="Chapter 1: Prompt Chaining",
+                normalized_text="",
+                source_anchor="pdf://page/21#b1",
+                source_span_json={
+                    "source_page_start": 21,
+                    "source_page_end": 21,
+                    "source_bbox_json": {"regions": [{"page_number": 21, "bbox": [94.0, 108.0, 704.0, 142.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 1,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="promote-code-heading-bad",
+                chapter_id=chapter.id,
+                ordinal=2,
+                block_type=BlockType.HEADING,
+                source_text='final_result = full_chain.invoke({"text_input": input_text})',
+                normalized_text="",
+                source_anchor="pdf://page/21#b2",
+                source_span_json={
+                    "source_page_start": 21,
+                    "source_page_end": 21,
+                    "source_bbox_json": {"regions": [{"page_number": 21, "bbox": [94.0, 168.0, 704.0, 198.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 2,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=blocks,
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(render_blocks[1].block_type, BlockType.CODE.value)
+        self.assertEqual(render_blocks[1].render_mode, "source_artifact_full_width")
+        self.assertEqual(render_blocks[1].artifact_kind, "code")
+        self.assertIn("export_book_code_promoted", render_blocks[1].source_metadata["recovery_flags"])
+
+    def test_render_blocks_keep_cjk_chapter_heading_out_of_code_artifact(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="keep-cjk-heading-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-keep-cjk-heading",
+            source_path="/tmp/keep-cjk-heading.pdf",
+            title="Tool Use",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="keep-cjk-heading-chapter",
+            document_id=document.id,
+            ordinal=17,
+            title_src="Chapter 5: Tool Use (Function Calling)",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 155, "source_page_end": 155},
+            created_at=now,
+            updated_at=now,
+        )
+        blocks = [
+            Block(
+                id="keep-cjk-heading-title",
+                chapter_id=chapter.id,
+                ordinal=1,
+                block_type=BlockType.HEADING,
+                source_text="第五章：工具使用（函数调用）",
+                normalized_text="",
+                source_anchor="pdf://page/155#b1",
+                source_span_json={
+                    "source_page_start": 155,
+                    "source_page_end": 155,
+                    "source_bbox_json": {"regions": [{"page_number": 155, "bbox": [94.0, 108.0, 704.0, 142.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 1,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="keep-cjk-heading-overview",
+                chapter_id=chapter.id,
+                ordinal=2,
+                block_type=BlockType.HEADING,
+                source_text="工具使用模式概述",
+                normalized_text="",
+                source_anchor="pdf://page/155#b2",
+                source_span_json={
+                    "source_page_start": 155,
+                    "source_page_end": 155,
+                    "source_bbox_json": {"regions": [{"page_number": 155, "bbox": [94.0, 168.0, 704.0, 198.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "body",
+                    "reading_order_index": 2,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=blocks,
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(render_blocks[0].block_type, BlockType.HEADING.value)
+        self.assertEqual(render_blocks[0].artifact_kind, None)
+        self.assertEqual(render_blocks[0].source_text, "第五章：工具使用（函数调用）")
+
+    def test_render_blocks_demote_short_prose_code_false_positive(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="demote-short-prose-code-doc",
+            source_type=SourceType.PDF_SCAN,
+            file_fingerprint="fingerprint-demote-short-prose-code",
+            source_path="/tmp/demote-short-prose-code.pdf",
+            title="Acknowledgment",
+            status=DocumentStatus.EXPORTED,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        chapter = Chapter(
+            id="demote-short-prose-code-chapter",
+            document_id=document.id,
+            ordinal=1,
+            title_src="Acknowledgment",
+            title_tgt=None,
+            anchor_start=None,
+            anchor_end=None,
+            status=ChapterStatus.TRANSLATED,
+            summary_version=None,
+            risk_level=None,
+            metadata_json={"source_page_start": 3, "source_page_end": 3},
+            created_at=now,
+            updated_at=now,
+        )
+        blocks = [
+            Block(
+                id="demote-short-prose-code-title",
+                chapter_id=chapter.id,
+                ordinal=1,
+                block_type=BlockType.HEADING,
+                source_text="Acknowledgment",
+                normalized_text="",
+                source_anchor="pdf://page/3#b1",
+                source_span_json={
+                    "source_page_start": 3,
+                    "source_page_end": 3,
+                    "source_bbox_json": {"regions": [{"page_number": 3, "bbox": [94.0, 108.0, 704.0, 142.0]}]},
+                    "pdf_block_role": "heading",
+                    "pdf_page_family": "frontmatter",
+                    "reading_order_index": 1,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+            Block(
+                id="demote-short-prose-code-bad",
+                chapter_id=chapter.id,
+                ordinal=2,
+                block_type=BlockType.CODE,
+                source_text="With all my love.",
+                normalized_text="",
+                source_anchor="pdf://page/3#b2",
+                source_span_json={
+                    "source_page_start": 3,
+                    "source_page_end": 3,
+                    "source_bbox_json": {"regions": [{"page_number": 3, "bbox": [120.0, 180.0, 400.0, 208.0]}]},
+                    "pdf_block_role": "code_like",
+                    "pdf_page_family": "frontmatter",
+                    "reading_order_index": 2,
+                },
+                parse_confidence=0.95,
+                protected_policy=ProtectedPolicy.PROTECT,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        bundle = ChapterExportBundle(
+            chapter=chapter,
+            document=document,
+            book_profile=None,
+            blocks=blocks,
+            document_images=[],
+            sentences=[],
+            packets=[],
+            translation_runs=[],
+            target_segments=[],
+            alignment_edges=[],
+            review_issues=[],
+            quality_summary=None,
+            active_snapshots=[],
+            audit_events=[],
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            render_blocks = service._render_blocks_for_chapter(bundle)
+
+        self.assertEqual(render_blocks[1].block_type, BlockType.PARAGRAPH.value)
+        self.assertEqual(render_blocks[1].artifact_kind, None)
+        self.assertEqual(render_blocks[1].render_mode, "zh_primary_with_optional_source")
+        self.assertIn("export_book_code_demoted", render_blocks[1].source_metadata["recovery_flags"])
+
+    def test_short_source_paragraph_drops_suspicious_target_text(self) -> None:
+        block = MergedRenderBlock(
+            block_id="demote-short-prose-code-target",
+            chapter_id="chapter-1",
+            block_type=BlockType.PARAGRAPH.value,
+            render_mode="zh_primary_with_optional_source",
+            artifact_kind=None,
+            title=None,
+            source_text="With all my love.",
+            target_text=(
+                "致我的儿子布鲁诺，他在两岁时为我的人生带来了崭新而璀璨的光芒。"
+                "感谢Lee Boonstra在提示工程方面的出色工作。"
+                "特别感谢Patti Maes，她在90年代率先提出软件代理的概念。"
+            ),
+            source_metadata={"pdf_block_role": "code_like", "pdf_page_family": "frontmatter"},
+            source_sentence_ids=[],
+            target_segment_ids=["segment-1"],
+            is_expected_source_only=False,
+            notice="代码保持原样",
+        )
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            self.assertTrue(service._should_clear_suspicious_short_source_target_text(block))
+            repaired = service._drop_render_block_target_text(
+                block,
+                flag="export_book_short_source_target_cleared",
+            )
+
+        self.assertIsNone(repaired.target_text)
+        self.assertEqual(repaired.block_type, BlockType.PARAGRAPH.value)
+        self.assertIn("export_book_short_source_target_cleared", repaired.source_metadata["recovery_flags"])
+
+    def test_layout_guided_pdf_crop_bbox_prefers_seed_aligned_image_block(self) -> None:
+        class _FakeRect:
+            x0 = 0.0
+            y0 = 0.0
+            x1 = 768.0
+            y1 = 1024.0
+
+        class _FakePage:
+            rect = _FakeRect()
+
+            def get_text(self, mode: str):
+                assert mode == "blocks"
+                return [
+                    (92.0, 108.0, 706.0, 174.0, "Text above the image.", 0, 0),
+                    (182.0, 206.0, 598.0, 472.0, "", 1, 1),
+                    (96.0, 486.0, 708.0, 526.0, "Caption or text below.", 2, 0),
+                ]
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            bbox = service._layout_guided_pdf_crop_bbox(_FakePage(), [128.0, 144.0, 644.0, 528.0])
+
+        self.assertEqual(bbox, [172.0, 196.0, 608.0, 482.0])
+
+    def test_caption_anchored_pdf_crop_bbox_stays_above_caption_region(self) -> None:
+        block = MergedRenderBlock(
+            block_id="caption-1",
+            chapter_id="chapter-1",
+            block_type=BlockType.CAPTION.value,
+            render_mode="image_anchor_with_translated_caption",
+            artifact_kind="image",
+            title=None,
+            source_text="Fig. 3: Various instances demonstrating the spectrum of agent complexity.",
+            target_text="图 3：展示智能体复杂度谱系的不同实例。",
+            source_metadata={
+                "source_bbox_json": {
+                    "regions": [
+                        {"page_number": 16, "bbox": [146.0, 482.0, 672.0, 497.0]}
+                    ]
+                }
+            },
+            source_sentence_ids=[],
+            target_segment_ids=[],
+            is_expected_source_only=True,
+            notice="图片锚点保留",
+        )
+
+        class _FakeRect:
+            x0 = 0.0
+            y0 = 0.0
+            x1 = 768.0
+            y1 = 1024.0
+
+        class _FakePage:
+            rect = _FakeRect()
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            crop_spec = service._pdf_asset_crop_spec(block)
+            bbox = service._caption_anchored_pdf_crop_bbox(_FakePage(), crop_spec[2] if crop_spec else [])
+
+        self.assertEqual(crop_spec, ("caption_anchor", 16, [146.0, 482.0, 672.0, 497.0]))
+        assert bbox is not None
+        self.assertLess(bbox[1], 482.0)
+        self.assertLess(bbox[0], 146.0)
+        self.assertGreater(bbox[2], 672.0)
+
+    def test_caption_anchored_pdf_crop_bbox_prefers_layout_image_block(self) -> None:
+        class _FakeRect:
+            x0 = 0.0
+            y0 = 0.0
+            x1 = 768.0
+            y1 = 1024.0
+
+        class _FakePage:
+            rect = _FakeRect()
+
+            def get_text(self, mode: str):
+                assert mode == "blocks"
+                return [
+                    (72.0, 96.0, 708.0, 164.0, "Introductory paragraph above the figure.", 0, 0),
+                    (184.0, 214.0, 612.0, 454.0, "", 1, 1),
+                    (620.0, 220.0, 732.0, 436.0, "Right column text.", 2, 0),
+                ]
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            bbox = service._caption_anchored_pdf_crop_bbox(_FakePage(), [208.0, 482.0, 590.0, 497.0])
+
+        self.assertEqual(bbox, [172.0, 202.0, 624.0, 466.0])
+
+    def test_caption_anchored_pdf_crop_bbox_trims_above_overlapping_text_blocks(self) -> None:
+        class _FakeRect:
+            x0 = 0.0
+            y0 = 0.0
+            x1 = 768.0
+            y1 = 1024.0
+
+        class _FakePage:
+            rect = _FakeRect()
+
+            def get_text(self, mode: str):
+                assert mode == "blocks"
+                return [
+                    (138.0, 126.0, 682.0, 238.0, "Paragraph text immediately above the figure.", 0, 0),
+                    (54.0, 90.0, 120.0, 196.0, "Left margin note", 1, 0),
+                ]
+
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+            bbox = service._caption_anchored_pdf_crop_bbox(_FakePage(), [146.0, 482.0, 672.0, 497.0])
+
+        assert bbox is not None
+        self.assertGreaterEqual(bbox[1], 250.0)
+        self.assertLess(bbox[3], 482.0)
+
+    def test_extract_main_chapter_number_rejects_lowercase_fragment_after_number(self) -> None:
+        with self.session_factory() as session:
+            service = ExportService(ExportRepository(session))
+
+        self.assertEqual(service._extract_main_chapter_number("Chapter 8: Memory Management"), 8)
+        self.assertIsNone(
+            service._extract_main_chapter_number(
+                "Chapter 8) is initialized to manage sessions for the agent."
+            )
+        )
 
     def test_review_detects_packet_context_failure_and_routes_to_packet_rebuild(self) -> None:
         document_id, packet_id = self._bootstrap_to_db()
@@ -616,9 +3781,81 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(concept_issue.root_cause_layer.value, "memory")
             self.assertFalse(concept_issue.blocking)
             self.assertEqual(concept_action.action_type, ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED)
-            self.assertEqual(concept_action.scope_type, JobScopeType.CHAPTER)
-            self.assertEqual(concept_action.scope_id, chapter_id)
+            self.assertEqual(concept_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(concept_action.scope_id, concept_issue.packet_id)
             self.assertIn("context engineering", concept_issue.evidence_json["source_term"].lower())
+            self.assertEqual(len(concept_issue.evidence_json.get("packet_ids_seen") or []), 1)
+            self.assertEqual(concept_issue.evidence_json.get("mention_count"), 2)
+
+    def test_review_scopes_single_packet_unlocked_key_concept_to_packet(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=ConsistentContextEngineeringWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            concept_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            )
+            concept_action = next(
+                action for action in review_artifacts.actions if action.issue_id == concept_issue.id
+            )
+
+            self.assertEqual(concept_issue.evidence_json.get("packet_ids_seen"), [concept_issue.packet_id])
+            self.assertEqual(concept_issue.evidence_json.get("mention_count"), 2)
+            self.assertEqual(concept_action.action_type, ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED)
+            self.assertEqual(concept_action.scope_type, JobScopeType.PACKET)
+            self.assertEqual(concept_action.scope_id, concept_issue.packet_id)
+
+    def test_unlocked_key_concept_action_targets_only_packets_seen(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_THREE_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            self.assertGreaterEqual(len(packet_ids), 3)
+            service = TranslationService(TranslationRepository(session), worker=ConsistentContextEngineeringWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            concept_issue = next(
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            )
+            concept_action = next(
+                action for action in review_artifacts.actions if action.issue_id == concept_issue.id
+            )
+            affected_packet_ids = set(concept_issue.evidence_json.get("packet_ids_seen") or [])
+            unaffected_packet_ids = set(packet_ids) - affected_packet_ids
+            self.assertEqual(concept_action.scope_type, JobScopeType.CHAPTER)
+            self.assertEqual(len(affected_packet_ids), 2)
+
+            action_execution = IssueActionExecutor(OpsRepository(session)).execute(concept_action.id)
+            invalidated_packet_ids = {
+                invalidation.object_id
+                for invalidation in action_execution.invalidations
+                if invalidation.object_type.value == "packet"
+            }
+
+            self.assertEqual(action_execution.rerun_plan.scope_type, JobScopeType.PACKET)
+            self.assertEqual(set(action_execution.rerun_plan.scope_ids), affected_packet_ids)
+            self.assertEqual(invalidated_packet_ids, affected_packet_ids)
+            self.assertTrue(unaffected_packet_ids.isdisjoint(invalidated_packet_ids))
 
     def test_review_skips_unlocked_key_concept_when_locked_term_entry_exists(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
@@ -698,6 +3935,9 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 any(issue.evidence_json.get("preferred_hint") == "上下文工程" for issue in style_issues)
             )
             self.assertTrue(
+                any(issue.evidence_json.get("preferred_hint") == "有人开始将其称为……，它指的是……" for issue in style_issues)
+            )
+            self.assertTrue(
                 any("证据权重显示" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
             )
             self.assertTrue(
@@ -706,6 +3946,116 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertTrue(
                 any("更具上下文准确性" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
             )
+            self.assertTrue(
+                any("称之为情境工程的内容" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
+            )
+
+    def test_review_reports_knowledge_timeline_literalism_as_non_blocking_advisory(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", KNOWLEDGE_TIMELINE_LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LiteralismWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            style_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "STYLE_DRIFT"]
+            self.assertTrue(style_issues)
+            self.assertTrue(all(issue.root_cause_layer.value == "packet" for issue in style_issues))
+            self.assertTrue(all(not issue.blocking for issue in style_issues))
+            self.assertTrue(
+                any(issue.evidence_json.get("preferred_hint") == "已知内容、知晓这些内容的时间点，以及其对行动的重要性" for issue in style_issues)
+            )
+            self.assertTrue(
+                any("获知时间" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
+            )
+
+    def test_review_reports_durable_substrate_literalism_as_non_blocking_advisory(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", DURABLE_SUBSTRATE_LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LiteralismWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            style_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "STYLE_DRIFT"]
+            self.assertTrue(style_issues)
+            self.assertTrue(all(issue.root_cause_layer.value == "packet" for issue in style_issues))
+            self.assertTrue(all(not issue.blocking for issue in style_issues))
+            self.assertTrue(
+                any(issue.evidence_json.get("preferred_hint") == "使上下文得以持久存在的基础" for issue in style_issues)
+            )
+            self.assertTrue(
+                any("持久基底" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
+            )
+
+    def test_packet_style_drift_action_rerun_uses_aggregated_hints_and_resolves_packet_issues(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LiteralismWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_service = ReviewService(ReviewRepository(session))
+            review_artifacts = review_service.review_chapter(chapter_id)
+            target_issue = next(
+                issue
+                for issue in review_artifacts.issues
+                if issue.issue_type == "STYLE_DRIFT"
+                and issue.evidence_json.get("preferred_hint") == "更符合上下文的输出"
+            )
+            target_action = next(action for action in review_artifacts.actions if action.issue_id == target_issue.id)
+            action_execution = IssueActionExecutor(OpsRepository(session)).execute(target_action.id)
+
+            rerun_service = RerunService(
+                OpsRepository(session),
+                TranslationService(TranslationRepository(session), worker=GuidanceAwareLiteralismWorker()),
+                review_service,
+                TargetedRebuildService(session, BootstrapRepository(session)),
+                RealignService(OpsRepository(session)),
+            )
+            rerun_execution = rerun_service.execute(action_execution.rerun_plan)
+            session.commit()
+
+            self.assertTrue(any("大量证据表明" in hint for hint in rerun_execution.rerun_plan.style_hints))
+            self.assertTrue(any("更符合上下文的输出" in hint for hint in rerun_execution.rerun_plan.style_hints))
+            self.assertTrue(rerun_execution.issue_resolved)
+
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            remaining_packet_style_issues = [
+                issue
+                for issue in final_review.issues
+                if issue.issue_type == "STYLE_DRIFT"
+                and issue.packet_id == target_issue.packet_id
+            ]
+            self.assertEqual(remaining_packet_style_issues, [])
 
     def test_review_reports_term_conflict_for_locked_chapter_concept_entry(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
@@ -743,9 +4093,111 @@ class PersistenceAndReviewTests(unittest.TestCase):
             ]
             self.assertEqual(unlocked_issues, [])
 
+    def test_review_collapses_term_conflict_variants_with_shared_expected_target(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", LANGUAGE_MODELS_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LanguageModelLiteralWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="language model",
+                canonical_zh="大语言模型",
+            )
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="language models",
+                canonical_zh="大语言模型",
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            term_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "TERM_CONFLICT"]
+            self.assertEqual(len(term_issues), 1)
+            self.assertEqual(term_issues[0].evidence_json.get("expected_target_term"), "大语言模型")
+            self.assertEqual(
+                term_issues[0].evidence_json.get("source_terms"),
+                ["language model", "language models"],
+            )
+            persisted_issues = session.scalars(
+                select(ReviewIssue).where(
+                    ReviewIssue.chapter_id == chapter_id,
+                    ReviewIssue.issue_type == "TERM_CONFLICT",
+                )
+            ).all()
+            self.assertEqual(len(persisted_issues), 1)
+
+    def test_packet_term_conflict_action_rerun_uses_locked_concept_and_resolves_packet_issues(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", AGENTIC_AI_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=AgenticLiteralWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="agentic AI",
+                canonical_zh="智能体式AI",
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            chapter_id = BootstrapRepository(session).load_document_bundle(document_id).chapters[0].chapter.id
+            review_service = ReviewService(ReviewRepository(session))
+            review_artifacts = review_service.review_chapter(chapter_id)
+            target_issue = next(
+                issue
+                for issue in review_artifacts.issues
+                if issue.issue_type == "TERM_CONFLICT"
+                and issue.evidence_json.get("expected_target_term") == "智能体式AI"
+            )
+            target_action = next(action for action in review_artifacts.actions if action.issue_id == target_issue.id)
+            self.assertEqual(target_action.scope_type, JobScopeType.PACKET)
+            action_execution = IssueActionExecutor(OpsRepository(session)).execute(target_action.id)
+
+            rerun_service = RerunService(
+                OpsRepository(session),
+                TranslationService(TranslationRepository(session), worker=GuidanceAwareAgenticWorker()),
+                review_service,
+                TargetedRebuildService(session, BootstrapRepository(session)),
+                RealignService(OpsRepository(session)),
+            )
+            rerun_execution = rerun_service.execute(action_execution.rerun_plan)
+            session.commit()
+
+            self.assertEqual(
+                [concept.source_term for concept in rerun_execution.rerun_plan.concept_overrides],
+                ["agentic AI"],
+            )
+            self.assertEqual(rerun_execution.rerun_plan.scope_type, JobScopeType.PACKET)
+            self.assertTrue(rerun_execution.issue_resolved)
+
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            remaining_packet_term_issues = [
+                issue
+                for issue in final_review.issues
+                if issue.issue_type == "TERM_CONFLICT"
+                and issue.packet_id == target_issue.packet_id
+            ]
+            self.assertEqual(remaining_packet_term_issues, [])
+
     def test_review_reports_stale_chapter_brief_when_late_concept_is_missing(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
-            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_XHTML)]
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_ADAPTIVE_AGENT_XHTML)]
         )
 
         with self.session_factory() as session:
@@ -773,7 +4225,358 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(stale_action.action_type, ActionType.REBUILD_CHAPTER_BRIEF)
             self.assertEqual(stale_action.scope_type, JobScopeType.CHAPTER)
             self.assertEqual(stale_action.scope_id, chapter_id)
-            self.assertIn("context engineering", ",".join(stale_issue.evidence_json["missing_concepts"]).lower())
+            self.assertIn("adaptive agent", ",".join(stale_issue.evidence_json["missing_concepts"]).lower())
+            self.assertEqual(len(stale_issue.evidence_json.get("packet_ids_seen") or []), 2)
+
+    def test_review_skips_stale_chapter_brief_when_missing_concept_is_locked(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_ADAPTIVE_AGENT_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session))
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="adaptive agent",
+                canonical_zh="自适应智能体",
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            stale_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "STALE_CHAPTER_BRIEF"
+            ]
+            self.assertEqual(stale_issues, [])
+
+    def test_review_skips_stale_chapter_brief_when_late_high_signal_concept_is_already_in_summary(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session))
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            chapter_brief = bundle.chapters[0].chapter_brief
+            assert chapter_brief is not None
+            summary = str(chapter_brief.content_json.get("summary") or "")
+            self.assertIn("Context engineering determines how context is created.", summary)
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            stale_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "STALE_CHAPTER_BRIEF"
+            ]
+            self.assertEqual(stale_issues, [])
+
+    def test_chapter_concept_auto_lock_service_locks_unresolved_concepts_and_clears_memory_issues(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_XHTML)]
+        )
+
+        class _ContextEngineeringWorker:
+            def metadata(self) -> TranslationWorkerMetadata:
+                return TranslationWorkerMetadata(
+                    worker_name="ContextEngineeringWorker",
+                    model_name="context-engineering-test",
+                    prompt_version="test.context-engineering.v1",
+                )
+
+            def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+                target_segments = []
+                alignments = []
+                for sentence in task.current_sentences:
+                    source_text = sentence.source_text
+                    if "Context engineering" in source_text:
+                        text = f"上下文工程::{source_text}"
+                    else:
+                        text = f"译文::{source_text}"
+                    temp_id = f"temp-{sentence.id}"
+                    target_segments.append(
+                        TranslationTargetSegment(
+                            temp_id=temp_id,
+                            text_zh=text,
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id],
+                            confidence=0.95,
+                        )
+                    )
+                    alignments.append(
+                        AlignmentSuggestion(
+                            source_sentence_ids=[sentence.id],
+                            target_temp_ids=[temp_id],
+                            relation_type="1:1",
+                            confidence=0.95,
+                        )
+                    )
+                return TranslationWorkerOutput(
+                    packet_id=task.context_packet.packet_id,
+                    target_segments=target_segments,
+                    alignment_suggestions=alignments,
+                )
+
+        class _FakeResolver:
+            def resolve(self, *, source_term, chapter_title, chapter_brief, examples):
+                if source_term.casefold() != "context engineering":
+                    return None, None
+                self.last_request = {
+                    "source_term": source_term,
+                    "chapter_title": chapter_title,
+                    "chapter_brief": chapter_brief,
+                    "examples": examples,
+                }
+                return (
+                    ConceptResolutionPayload(
+                        source_term=source_term,
+                        canonical_zh="上下文工程",
+                        confidence=0.97,
+                        rationale="Examples already use 上下文工程.",
+                    ),
+                    None,
+                )
+
+        resolver = _FakeResolver()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=_ContextEngineeringWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            unlocked_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            ]
+            self.assertTrue(unlocked_issues)
+
+            auto_lock = ChapterConceptAutoLockService(session, resolver=resolver)
+            lock_artifacts = auto_lock.auto_lock_chapter_concepts(chapter_id)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            session.commit()
+
+            self.assertEqual(lock_artifacts.requested_source_terms, ["Context engineering"])
+            self.assertEqual([record.canonical_zh for record in lock_artifacts.locked_records], ["上下文工程"])
+            self.assertEqual(lock_artifacts.skipped_source_terms, [])
+            self.assertTrue(resolver.last_request["examples"])
+            self.assertEqual(final_review.issues, [])
+
+    def test_chapter_concept_auto_lock_service_heuristically_locks_consistent_examples_without_token_usage(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_XHTML)]
+        )
+
+        class _ContextEngineeringWorker:
+            def metadata(self) -> TranslationWorkerMetadata:
+                return TranslationWorkerMetadata(
+                    worker_name="ContextEngineeringWorker",
+                    model_name="context-engineering-test",
+                    prompt_version="test.context-engineering.v1",
+                )
+
+            def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+                target_segments = []
+                alignments = []
+                for sentence in task.current_sentences:
+                    source_text = sentence.source_text
+                    if "Context engineering" in source_text:
+                        text = (
+                            "这被称为上下文工程，它决定了上下文如何被创建。"
+                            if "created" in source_text
+                            else "这也被称为上下文工程，它决定了上下文如何被维护。"
+                        )
+                    else:
+                        text = f"译文::{source_text}"
+                    temp_id = f"temp-{sentence.id}"
+                    target_segments.append(
+                        TranslationTargetSegment(
+                            temp_id=temp_id,
+                            text_zh=text,
+                            segment_type="sentence",
+                            source_sentence_ids=[sentence.id],
+                            confidence=0.95,
+                        )
+                    )
+                    alignments.append(
+                        AlignmentSuggestion(
+                            source_sentence_ids=[sentence.id],
+                            target_temp_ids=[temp_id],
+                            relation_type="1:1",
+                            confidence=0.95,
+                        )
+                    )
+                return TranslationWorkerOutput(
+                    packet_id=task.context_packet.packet_id,
+                    target_segments=target_segments,
+                    alignment_suggestions=alignments,
+                )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=_ContextEngineeringWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            unlocked_issues = [
+                issue for issue in review_artifacts.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            ]
+            self.assertTrue(unlocked_issues)
+
+            auto_lock = ChapterConceptAutoLockService(session, resolver=HeuristicConceptResolver())
+            lock_artifacts = auto_lock.auto_lock_chapter_concepts(chapter_id)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            session.commit()
+
+            self.assertEqual(lock_artifacts.requested_source_terms, ["Context engineering"])
+            self.assertEqual([record.canonical_zh for record in lock_artifacts.locked_records], ["上下文工程"])
+            self.assertEqual([record.token_in for record in lock_artifacts.locked_records], [0])
+            self.assertEqual([record.token_out for record in lock_artifacts.locked_records], [0])
+            self.assertEqual(final_review.issues, [])
+
+    def test_openai_compatible_concept_resolver_backfills_missing_source_term_from_request(self) -> None:
+        class _FakeClient:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def generate_structured_object(
+                self,
+                *,
+                model_name,
+                system_prompt,
+                user_prompt,
+                response_schema,
+                schema_name,
+            ):
+                self.calls.append(
+                    {
+                        "model_name": model_name,
+                        "system_prompt": system_prompt,
+                        "user_prompt": user_prompt,
+                        "response_schema": response_schema,
+                        "schema_name": schema_name,
+                    }
+                )
+                return (
+                    {
+                        "canonical_zh": "上下文工程",
+                        "confidence": 0.96,
+                        "rationale": "Examples consistently use 上下文工程.",
+                    },
+                    TranslationUsage(token_in=123, token_out=45, total_tokens=168, latency_ms=3210),
+                )
+
+        resolver = OpenAICompatibleConceptResolver(client=_FakeClient(), model_name="mock-concept-model")
+        resolution, usage = resolver.resolve(
+            source_term="Context Engineering",
+            chapter_title="Chapter One",
+            chapter_brief="A chapter about context engineering.",
+            examples=[
+                ConceptTranslationExample(
+                    source_text="Context Engineering determines how context is created.",
+                    target_text="上下文工程决定了上下文如何被创建。",
+                )
+            ],
+        )
+
+        self.assertIsNotNone(resolution)
+        assert resolution is not None
+        self.assertEqual(resolution.source_term, "Context Engineering")
+        self.assertEqual(resolution.canonical_zh, "上下文工程")
+        self.assertIsNotNone(usage)
+        assert usage is not None
+        self.assertEqual(usage.token_in, 123)
+
+    def test_chapter_concept_auto_lock_service_reuses_singular_variant_key_for_plural_terms(self) -> None:
+        with self.session_factory() as session:
+            service = ChapterConceptAutoLockService(session, resolver=HeuristicConceptResolver())
+            observed_terms = {"language model", "language models", "prompt engineering"}
+            self.assertEqual(
+                service._variant_key_for_source_term("language models", observed_terms),
+                "language model",
+            )
+            self.assertEqual(
+                service._variant_key_for_source_term("prompt engineering", observed_terms),
+                "prompt engineering",
+            )
+
+    def test_heuristic_concept_resolver_rejects_overly_generic_candidate_for_multiword_term(self) -> None:
+        resolver = HeuristicConceptResolver()
+        resolution, usage = resolver.resolve(
+            source_term="Context Engineering",
+            chapter_title="Chapter One",
+            chapter_brief="A chapter about context engineering.",
+            examples=[
+                ConceptTranslationExample(
+                    source_text="Context Engineering improves system behavior.",
+                    target_text="语境工程改善系统行为。",
+                ),
+                ConceptTranslationExample(
+                    source_text="Prompt Engineering complements Context Engineering.",
+                    target_text="提示工程补充工程实践。",
+                ),
+            ],
+        )
+        self.assertIsNone(resolution)
+        self.assertIsNone(usage)
+
+    def test_build_default_concept_resolver_prefers_openai_compatible_before_heuristic_fallback(self) -> None:
+        resolver = build_default_concept_resolver(
+            Settings(
+                translation_backend="openai_compatible",
+                translation_model="mock-model",
+                translation_openai_api_key="test-key",
+                translation_openai_base_url="https://example.com/v1/responses",
+            )
+        )
+        self.assertIsInstance(resolver, FallbackConceptResolver)
+        assert isinstance(resolver, FallbackConceptResolver)
+        self.assertIsInstance(resolver.resolvers[0], OpenAICompatibleConceptResolver)
+        self.assertIsInstance(resolver.resolvers[1], HeuristicConceptResolver)
+
+    def test_review_suppresses_fragmentary_low_confidence_pdf_omission(self) -> None:
+        with self.session_factory() as session:
+            review_service = ReviewService(ReviewRepository(session))
+            block = Block(
+                chapter_id="chapter-1",
+                ordinal=1,
+                block_type=BlockType.PARAGRAPH,
+                source_text="format. The final result is then printed.",
+                normalized_text="format. The final result is then printed.",
+                source_anchor="pdf://page/9#p9-b79",
+                source_span_json={"source_path": "pdf://page/9"},
+                parse_confidence=0.65,
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+            )
+            sentence = Sentence(
+                block_id="block-1",
+                chapter_id="chapter-1",
+                document_id="document-1",
+                ordinal_in_block=1,
+                source_text="format.",
+                normalized_text="format.",
+                translatable=True,
+                source_anchor="pdf://page/9#p9-b79",
+                source_span_json={"source_path": "pdf://page/9"},
+                sentence_status=SentenceStatus.PENDING,
+            )
+            self.assertTrue(review_service._should_suppress_fragmentary_pdf_omission(sentence, block))
 
     def test_review_skips_image_only_cover_packet_missing_title_context_failure(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
@@ -916,6 +4719,513 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     self.assertIn("定价能力很重要。战略会持续复利。", chapter_html)
                     self.assertNotIn("定价能力很重要。<br/>战略会持续复利。", chapter_html)
 
+    def test_review_auto_followups_recompute_candidates_after_each_rerun(self) -> None:
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session)
+            now = datetime.now(timezone.utc)
+            issue = ReviewIssue(
+                id="issue-style-1",
+                document_id="doc-1",
+                chapter_id="chapter-1",
+                block_id=None,
+                sentence_id="sent-1",
+                packet_id="packet-1",
+                issue_type="STYLE_DRIFT",
+                root_cause_layer=RootCauseLayer.PACKET,
+                severity=Severity.MEDIUM,
+                blocking=False,
+                detector=Detector.RULE,
+                confidence=1.0,
+                evidence_json={
+                    "style_rule": "context_engineering_literal",
+                    "preferred_hint": "上下文工程",
+                },
+                status=IssueStatus.OPEN,
+                created_at=now,
+                updated_at=now,
+            )
+            action = IssueAction(
+                id="action-style-1",
+                issue_id=issue.id,
+                action_type=ActionType.RERUN_PACKET,
+                scope_type=JobScopeType.PACKET,
+                scope_id="packet-1",
+                status=ActionStatus.PLANNED,
+                reason_json={},
+                created_by=ActionActorType.SYSTEM,
+                created_at=now,
+                updated_at=now,
+            )
+            initial_artifacts = ReviewArtifacts(
+                issues=[issue],
+                actions=[action],
+                rerun_plans=[],
+                summary=ReviewChapterQualitySummary(
+                    coverage_ok=True,
+                    alignment_ok=True,
+                    term_ok=True,
+                    format_ok=True,
+                    blocking_issue_count=0,
+                    low_confidence_count=0,
+                    format_pollution_count=0,
+                ),
+                resolved_issue_ids=[],
+            )
+            updated_artifacts = ReviewArtifacts(
+                issues=[],
+                actions=[],
+                rerun_plans=[],
+                summary=ReviewChapterQualitySummary(
+                    coverage_ok=True,
+                    alignment_ok=True,
+                    term_ok=True,
+                    format_ok=True,
+                    blocking_issue_count=0,
+                    low_confidence_count=0,
+                    format_pollution_count=0,
+                ),
+                resolved_issue_ids=[issue.id],
+            )
+            rerun_plan = RerunPlan(
+                issue_id=issue.id,
+                action_type=ActionType.RERUN_PACKET,
+                scope_type=JobScopeType.PACKET,
+                scope_ids=["packet-1"],
+                style_hints=(
+                    "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
+                ),
+            )
+            executions: list = []
+
+            with patch.object(
+                workflow,
+                "_review_auto_followup_candidate_actions",
+                side_effect=[[action], []],
+            ) as candidate_mock, patch.object(
+                workflow,
+                "execute_action",
+                return_value=ActionWorkflowResult(
+                    action_execution=ActionExecutionArtifacts(
+                        rerun_plan=rerun_plan,
+                        invalidations=[],
+                        audits=[],
+                    ),
+                    rerun_execution=RerunExecutionArtifacts(
+                        rerun_plan=rerun_plan,
+                        translated_packet_ids=["packet-1"],
+                        translation_run_ids=["run-1"],
+                        review_artifacts=updated_artifacts,
+                        issue_resolved=True,
+                    ),
+                ),
+            ) as execute_mock:
+                result = workflow._apply_review_auto_followups(
+                    chapter_id="chapter-1",
+                    artifacts=initial_artifacts,
+                    attempted_action_ids=set(),
+                    executions=executions,
+                    attempt_limit=2,
+                )
+
+            self.assertIs(result, updated_artifacts)
+            self.assertEqual(candidate_mock.call_count, 2)
+            self.assertEqual(execute_mock.call_count, 1)
+            self.assertEqual(len(executions), 1)
+
+    def test_workflow_review_auto_executes_packet_style_followups(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=GuidanceAwareLiteralismWorker(),
+            )
+            workflow.translate_document(document_id)
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=2,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(review.chapter_results), 1)
+            self.assertEqual(review.chapter_results[0].status, ChapterStatus.QA_CHECKED.value)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "STYLE_DRIFT")
+            self.assertEqual(execution.action_type, ActionType.RERUN_PACKET.value)
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertTrue(execution.followup_executed)
+            self.assertTrue(execution.issue_resolved)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(
+                workflow.bootstrap_repository.load_document_bundle(document_id).chapters[0].chapter.id
+            )
+            self.assertEqual(final_review.issues, [])
+
+    def test_workflow_review_auto_executes_packet_term_followups(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", AGENTIC_AI_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=GuidanceAwareAgenticWorker(),
+            )
+            workflow.translate_document(document_id)
+            bundle = workflow.bootstrap_repository.load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="agentic AI",
+                canonical_zh="智能体式AI",
+            )
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=1,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(review.chapter_results), 1)
+            self.assertEqual(review.chapter_results[0].status, ChapterStatus.QA_CHECKED.value)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "TERM_CONFLICT")
+            self.assertEqual(
+                execution.action_type,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED.value,
+            )
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertTrue(execution.followup_executed)
+            self.assertTrue(execution.issue_resolved)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(
+                workflow.bootstrap_repository.load_document_bundle(document_id).chapters[0].chapter.id
+            )
+            self.assertEqual(final_review.issues, [])
+
+    def test_workflow_review_auto_followups_prioritize_packet_term_conflicts_before_style_drift(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", MIXED_AUTO_FOLLOWUP_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=GuidanceAwareMixedWorker(),
+            )
+            workflow.translate_document(document_id)
+            bundle = workflow.bootstrap_repository.load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id,
+                source_term="agentic AI",
+                canonical_zh="智能体式AI",
+            )
+            initial_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=1,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "TERM_CONFLICT")
+            self.assertEqual(
+                execution.action_type,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED.value,
+            )
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertTrue(execution.issue_resolved)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            initial_term_issues = [
+                issue for issue in initial_review.issues if issue.issue_type == "TERM_CONFLICT"
+            ]
+            initial_style_issues = [
+                issue for issue in initial_review.issues if issue.issue_type == "STYLE_DRIFT"
+            ]
+            remaining_term_issues = [
+                issue for issue in final_review.issues if issue.issue_type == "TERM_CONFLICT"
+            ]
+            remaining_style_issues = [
+                issue for issue in final_review.issues if issue.issue_type == "STYLE_DRIFT"
+            ]
+            self.assertTrue(initial_term_issues)
+            self.assertTrue(initial_style_issues)
+            self.assertLess(len(remaining_term_issues), len(initial_term_issues))
+            self.assertTrue(remaining_style_issues)
+
+    def test_workflow_review_auto_executes_single_packet_unlocked_concept_followups(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=ConsistentContextEngineeringWorker(),
+            )
+            workflow.translate_document(document_id)
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=1,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "UNLOCKED_KEY_CONCEPT")
+            self.assertEqual(
+                execution.action_type,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED.value,
+            )
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertTrue(execution.followup_executed)
+            self.assertTrue(execution.issue_resolved)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(
+                workflow.bootstrap_repository.load_document_bundle(document_id).chapters[0].chapter.id
+            )
+            self.assertEqual(final_review.issues, [])
+
+    def test_workflow_review_unlocked_concept_followup_uses_default_concept_resolver(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_PACKET_XHTML)]
+        )
+
+        class _PatchedResolver:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def resolve(self, *, source_term, chapter_title, chapter_brief, examples):
+                self.calls.append(
+                    {
+                        "source_term": source_term,
+                        "chapter_title": chapter_title,
+                        "chapter_brief": chapter_brief,
+                        "example_count": len(examples),
+                    }
+                )
+                if source_term.casefold() != "context engineering":
+                    return None, None
+                return (
+                    ConceptResolutionPayload(
+                        source_term=source_term,
+                        canonical_zh="上下文工程",
+                        confidence=0.98,
+                        rationale="Patched resolver uses the preferred canonical term.",
+                    ),
+                    None,
+                )
+
+        resolver = _PatchedResolver()
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=ConsistentContextEngineeringWorker(),
+            )
+            workflow.translate_document(document_id)
+            with patch("book_agent.services.workflows.build_default_concept_resolver", return_value=resolver):
+                review = workflow.review_document(
+                    document_id,
+                    auto_execute_packet_followups=True,
+                    max_auto_followup_attempts=1,
+                )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(resolver.calls), 1)
+            self.assertEqual(str(resolver.calls[0]["source_term"]).casefold(), "context engineering")
+
+    def test_workflow_review_auto_executes_multi_packet_unlocked_concept_followups_without_chapter_rerun(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CONTEXT_ENGINEERING_THREE_PACKET_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            worker = CountingConsistentContextEngineeringWorker()
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=worker,
+            )
+            workflow.translate_document(document_id)
+            bundle = workflow.bootstrap_repository.load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            self.assertGreaterEqual(len(packet_ids), 3)
+
+            initial_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            concept_issue = next(
+                issue for issue in initial_review.issues if issue.issue_type == "UNLOCKED_KEY_CONCEPT"
+            )
+            affected_packet_ids = set(concept_issue.evidence_json.get("packet_ids_seen") or [])
+            unaffected_packet_ids = set(packet_ids) - affected_packet_ids
+            self.assertEqual(len(affected_packet_ids), 2)
+
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=1,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "UNLOCKED_KEY_CONCEPT")
+            self.assertEqual(
+                execution.action_type,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED.value,
+            )
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertEqual(set(execution.rerun_scope_ids), affected_packet_ids)
+            self.assertEqual(set(execution.rerun_packet_ids), affected_packet_ids)
+            packet_counts = {packet_id: worker.packet_ids_seen.count(packet_id) for packet_id in packet_ids}
+            for packet_id in affected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 2)
+            for packet_id in unaffected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 1)
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertEqual(final_review.issues, [])
+
+    def test_workflow_review_auto_executes_packet_scoped_stale_brief_followups_when_concept_autolock_fails(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_ADAPTIVE_AGENT_XHTML)]
+        )
+
+        class _NullResolver:
+            def resolve(self, *, source_term, chapter_title, chapter_brief, examples):
+                return None, None
+
+        with self.session_factory() as session:
+            worker = CountingConsistentContextEngineeringWorker()
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=worker,
+            )
+            workflow.translate_document(document_id)
+            bundle = workflow.bootstrap_repository.load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            initial_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            stale_issue = next(
+                issue for issue in initial_review.issues if issue.issue_type == "STALE_CHAPTER_BRIEF"
+            )
+            affected_packet_ids = set(stale_issue.evidence_json.get("packet_ids_seen") or [])
+            unaffected_packet_ids = set(packet_ids) - affected_packet_ids
+            self.assertEqual(len(affected_packet_ids), 2)
+
+            with patch("book_agent.services.workflows.build_default_concept_resolver", return_value=_NullResolver()):
+                review = workflow.review_document(
+                    document_id,
+                    auto_execute_packet_followups=True,
+                    max_auto_followup_attempts=1,
+                )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 1)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            stale_execution = review.auto_followup_executions[0]
+            self.assertEqual(stale_execution.issue_type, "STALE_CHAPTER_BRIEF")
+            self.assertEqual(stale_execution.action_type, ActionType.REBUILD_CHAPTER_BRIEF.value)
+            self.assertEqual(stale_execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertEqual(set(stale_execution.rerun_scope_ids), affected_packet_ids)
+            self.assertEqual(set(stale_execution.rerun_packet_ids), affected_packet_ids)
+            self.assertTrue(stale_execution.followup_executed)
+            self.assertTrue(stale_execution.issue_resolved)
+
+            packet_counts = {packet_id: worker.packet_ids_seen.count(packet_id) for packet_id in packet_ids}
+            for packet_id in affected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 2)
+            for packet_id in unaffected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 1)
+
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            remaining_issue_types = {issue.issue_type for issue in final_review.issues}
+            self.assertEqual(remaining_issue_types, {"UNLOCKED_KEY_CONCEPT"})
+
+    def test_workflow_review_does_not_run_stale_brief_followup_when_concept_autolock_succeeds(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STALE_BRIEF_ADAPTIVE_AGENT_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            worker = CountingGuidanceAwareAdaptiveAgentWorker()
+            workflow = DocumentWorkflowService(
+                session,
+                translation_worker=worker,
+            )
+            workflow.translate_document(document_id)
+            bundle = workflow.bootstrap_repository.load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            initial_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            stale_issue = next(
+                issue for issue in initial_review.issues if issue.issue_type == "STALE_CHAPTER_BRIEF"
+            )
+            affected_packet_ids = set(stale_issue.evidence_json.get("packet_ids_seen") or [])
+            unaffected_packet_ids = set(packet_ids) - affected_packet_ids
+
+            review = workflow.review_document(
+                document_id,
+                auto_execute_packet_followups=True,
+                max_auto_followup_attempts=2,
+            )
+            session.commit()
+
+            self.assertTrue(review.auto_followup_requested)
+            self.assertTrue(review.auto_followup_applied)
+            self.assertEqual(review.auto_followup_attempt_count, 1)
+            self.assertEqual(review.total_issue_count, 0)
+            self.assertEqual(len(review.auto_followup_executions or []), 1)
+            execution = review.auto_followup_executions[0]
+            self.assertEqual(execution.issue_type, "UNLOCKED_KEY_CONCEPT")
+            self.assertEqual(
+                execution.action_type,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED.value,
+            )
+            self.assertEqual(execution.rerun_scope_type, JobScopeType.PACKET.value)
+            self.assertEqual(set(execution.rerun_scope_ids), affected_packet_ids)
+            self.assertEqual(set(execution.rerun_packet_ids), affected_packet_ids)
+            self.assertTrue(execution.followup_executed)
+            self.assertTrue(execution.issue_resolved)
+
+            packet_counts = {packet_id: worker.packet_ids_seen.count(packet_id) for packet_id in packet_ids}
+            for packet_id in affected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 2)
+            for packet_id in unaffected_packet_ids:
+                self.assertEqual(packet_counts[packet_id], 1)
+
+            final_review = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            self.assertEqual(final_review.issues, [])
+
     def test_review_detects_chapter_brief_context_failure_and_routes_to_brief_rebuild(self) -> None:
         document_id, packet_id = self._bootstrap_to_db()
 
@@ -1044,6 +5354,49 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(alignment_action.action_type, ActionType.REALIGN_ONLY)
             self.assertEqual(alignment_action.scope_type, JobScopeType.PACKET)
             self.assertEqual(alignment_action.scope_id, packet_id)
+
+    def test_realign_attaches_short_orphan_tail_segment_to_last_sentence(self) -> None:
+        document_id, _ = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            document_bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet = next(
+                packet
+                for packet in document_bundle.chapters[0].translation_packets
+                if any(len(block.get("sentence_ids", [])) >= 2 for block in packet.packet_json.get("current_blocks", []))
+            )
+            packet_id = packet.id
+            current_sentence_ids: list[str] = []
+            for block in packet.packet_json.get("current_blocks", []):
+                current_sentence_ids.extend(block.get("sentence_ids", []))
+
+        with self.session_factory() as session:
+            TranslationService(TranslationRepository(session), worker=TrailingLabelWorker()).execute_packet(packet_id)
+            latest_run_id = session.scalars(
+                select(TranslationRun.id)
+                .where(TranslationRun.packet_id == packet_id)
+                .order_by(TranslationRun.attempt.desc())
+            ).first()
+            orphan_target_id = session.scalars(
+                select(TargetSegment.id)
+                .where(TargetSegment.translation_run_id == latest_run_id)
+                .order_by(TargetSegment.ordinal.desc())
+            ).first()
+            self.assertEqual(
+                session.scalars(
+                    select(AlignmentEdge).where(AlignmentEdge.target_segment_id == orphan_target_id)
+                ).all(),
+                [],
+            )
+            RealignService(OpsRepository(session)).execute([packet_id])
+            session.commit()
+
+        with self.session_factory() as session:
+            repaired_edges = session.scalars(
+                select(AlignmentEdge).where(AlignmentEdge.target_segment_id == orphan_target_id)
+            ).all()
+            self.assertEqual([edge.sentence_id for edge in repaired_edges], [current_sentence_ids[-1]])
+            self.assertEqual(repaired_edges[0].relation_type, RelationType.ONE_TO_MANY)
 
 
 if __name__ == "__main__":

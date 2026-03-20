@@ -31,8 +31,10 @@ def build_translation_worker(settings: Settings) -> TranslationWorker:
             client,
             model_name=settings.translation_model,
             prompt_version=settings.translation_prompt_version,
+            prompt_profile=settings.translation_prompt_profile,
             runtime_config={
                 "provider": backend,
+                "prompt_profile": settings.translation_prompt_profile,
                 "base_url": settings.translation_openai_base_url,
                 "timeout_seconds": settings.translation_timeout_seconds,
                 "max_retries": settings.translation_max_retries,

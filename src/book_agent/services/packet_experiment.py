@@ -17,6 +17,7 @@ from book_agent.workers.translator import (
     TranslationTask,
     TranslationWorker,
     TranslationWorkerMetadata,
+    TranslationMaterial,
     build_translation_prompt_request,
 )
 
@@ -35,6 +36,19 @@ def _coerce(value: Any) -> Any:
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _prompt_stats(system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    system_lines = system_prompt.splitlines()
+    user_lines = user_prompt.splitlines()
+    return {
+        "system_prompt_chars": len(system_prompt),
+        "user_prompt_chars": len(user_prompt),
+        "total_prompt_chars": len(system_prompt) + len(user_prompt),
+        "system_prompt_lines": len(system_lines),
+        "user_prompt_lines": len(user_lines),
+        "user_prompt_sections": [line.rstrip(":") for line in user_lines if line.endswith(":")],
+    }
 
 
 def _memory_translation_entries(snapshot_content: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -60,10 +74,15 @@ class PacketExperimentOptions:
     include_memory_blocks: bool = True
     include_chapter_concepts: bool = True
     prefer_memory_chapter_brief: bool = True
+    prefer_previous_translations_over_source_context: bool = True
+    include_paragraph_intent: bool = True
+    include_literalism_guardrails: bool = True
     prompt_layout: PromptLayout = "paragraph-led"
     prompt_profile: PromptProfile = "role-style-v2"
+    material_profile_override: TranslationMaterial | None = None
     execute: bool = False
     concept_overrides: tuple[ConceptCandidate, ...] = ()
+    rerun_hints: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -102,9 +121,31 @@ class PacketExperimentService:
                 include_memory_blocks=options.include_memory_blocks,
                 include_chapter_concepts=options.include_chapter_concepts,
                 prefer_memory_chapter_brief=options.prefer_memory_chapter_brief,
+                prefer_previous_translations_over_source_context=(
+                    options.prefer_previous_translations_over_source_context
+                ),
+                include_paragraph_intent=options.include_paragraph_intent,
+                include_literalism_guardrails=options.include_literalism_guardrails,
                 concept_overrides=options.concept_overrides,
             ),
         )
+        if options.rerun_hints:
+            merged_open_questions = list(compiled_context.open_questions)
+            for hint in options.rerun_hints:
+                if hint and hint not in merged_open_questions:
+                    merged_open_questions.append(hint)
+            compiled_context = compiled_context.model_copy(
+                update={"open_questions": merged_open_questions}
+            )
+        if options.material_profile_override is not None:
+            compiled_context = compiled_context.model_copy(
+                update={
+                    "style_constraints": {
+                        **compiled_context.style_constraints,
+                        "translation_material": options.material_profile_override,
+                    }
+                }
+            )
 
         metadata = self.worker.metadata() if self.worker is not None else self._planned_metadata()
         prompt_request = build_translation_prompt_request(
@@ -144,10 +185,17 @@ class PacketExperimentService:
                 "include_memory_blocks": options.include_memory_blocks,
                 "include_chapter_concepts": options.include_chapter_concepts,
                 "prefer_memory_chapter_brief": options.prefer_memory_chapter_brief,
+                "prefer_previous_translations_over_source_context": (
+                    options.prefer_previous_translations_over_source_context
+                ),
+                "include_paragraph_intent": options.include_paragraph_intent,
+                "include_literalism_guardrails": options.include_literalism_guardrails,
                 "prompt_layout": options.prompt_layout,
                 "prompt_profile": options.prompt_profile,
+                "material_profile_override": options.material_profile_override,
                 "execute": options.execute,
                 "concept_overrides": [concept.model_dump() for concept in options.concept_overrides],
+                "rerun_hints": list(options.rerun_hints),
             },
             "context_compile_version": self.context_compiler.compile_version,
             "chapter_memory_snapshot_id": (
@@ -159,6 +207,10 @@ class PacketExperimentService:
             "context_sources": {
                 "raw_prev_translated_count": len(bundle.context_packet.prev_translated_blocks),
                 "compiled_prev_translated_count": len(compiled_context.prev_translated_blocks),
+                "raw_prev_block_count": len(bundle.context_packet.prev_blocks),
+                "compiled_prev_block_count": len(compiled_context.prev_blocks),
+                "raw_next_block_count": len(bundle.context_packet.next_blocks),
+                "compiled_next_block_count": len(compiled_context.next_blocks),
                 "chapter_memory_translation_count": len(
                     _memory_translation_entries(
                         chapter_memory_snapshot.content_json if chapter_memory_snapshot is not None else None
@@ -173,11 +225,18 @@ class PacketExperimentService:
                         chapter_memory_snapshot.content_json if chapter_memory_snapshot is not None else None
                     )
                 ),
+                "raw_chapter_brief_present": bool(bundle.context_packet.chapter_brief),
+                "compiled_chapter_brief_present": bool(compiled_context.chapter_brief),
+                "prompt_chapter_brief_present": (
+                    bool(compiled_context.chapter_brief)
+                    and not bool(compiled_context.style_constraints.get("suppress_chapter_brief_in_prompt"))
+                ),
                 "chapter_brief_source": (
                     "memory"
                     if compiled_context.chapter_brief != bundle.context_packet.chapter_brief
                     else "packet"
                 ),
+                "translation_material": compiled_context.style_constraints.get("translation_material"),
             },
             "worker_metadata": {
                 "worker_name": metadata.worker_name,
@@ -185,6 +244,10 @@ class PacketExperimentService:
                 "prompt_version": metadata.prompt_version,
                 "runtime_config": metadata.runtime_config,
             },
+            "prompt_stats": _prompt_stats(
+                prompt_request.system_prompt,
+                prompt_request.user_prompt,
+            ),
             "context_packet": compiled_context.model_dump(),
             "prompt_request": {
                 "packet_id": prompt_request.packet_id,

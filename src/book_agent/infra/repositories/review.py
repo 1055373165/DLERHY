@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import IssueStatus, MemoryScopeType, MemoryStatus, SnapshotType, TermStatus
+from book_agent.domain.enums import ArtifactStatus, IssueStatus, MemoryScopeType, MemoryStatus, SnapshotType, TermStatus
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
 from book_agent.domain.models.review import ChapterQualitySummary, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TermEntry, TranslationPacket, TranslationRun
@@ -43,7 +43,12 @@ class ReviewRepository:
             select(Sentence).where(Sentence.chapter_id == chapter_id)
         ).all()
         blocks = self.session.scalars(
-            select(Block).where(Block.chapter_id == chapter_id).order_by(Block.ordinal)
+            select(Block)
+            .where(
+                Block.chapter_id == chapter_id,
+                Block.status == ArtifactStatus.ACTIVE,
+            )
+            .order_by(Block.ordinal)
         ).all()
         packets = self.session.scalars(
             select(TranslationPacket).where(TranslationPacket.chapter_id == chapter_id)
@@ -180,5 +185,13 @@ class ReviewRepository:
         return resolved
 
     def _merge_collection(self, collection: list[object]) -> None:
+        deduped: dict[str, object] = {}
+        passthrough: list[object] = []
         for item in collection:
+            item_id = getattr(item, "id", None)
+            if item_id is None:
+                passthrough.append(item)
+                continue
+            deduped[str(item_id)] = item
+        for item in [*deduped.values(), *passthrough]:
             self.session.merge(item)

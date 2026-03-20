@@ -121,11 +121,13 @@ class PdfSmokeToolsTests(unittest.TestCase):
             report = build_pdf_smoke_report(pdf_path, include_parse_summary=True)
 
         self.assertEqual(report["profile"]["layout_risk"], "low")
-        self.assertEqual(report["profile"]["extractor_kind"], "basic")
+        self.assertIn(report["profile"]["extractor_kind"], {"basic", "pymupdf"})
         self.assertEqual(report["bootstrap"]["status"], "succeeded")
         self.assertEqual(report["parse_summary"]["chapter_count"], 1)
-        self.assertEqual(report["parse_summary"]["extractor_kind"], "basic")
+        self.assertEqual(report["parse_summary"]["extractor_kind"], report["profile"]["extractor_kind"])
         self.assertEqual(report["parse_summary"]["page_families"], {"1": "body", "2": "body"})
+        self.assertEqual(report["parse_summary"]["page_layout_risks"], {"1": "low", "2": "low"})
+        self.assertEqual(report["parse_summary"]["page_layout_risk_pages"], [])
 
     def test_evaluate_pdf_smoke_expectations_reports_failures(self) -> None:
         report = {

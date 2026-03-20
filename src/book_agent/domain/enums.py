@@ -224,6 +224,7 @@ class ActionStatus(StrEnum):
 class ExportType(StrEnum):
     BILINGUAL_HTML = "bilingual_html"
     MERGED_HTML = "merged_html"
+    MERGED_MARKDOWN = "merged_markdown"
     ZH_EPUB = "zh_epub"
     REVIEW_PACKAGE = "review_package"
     JSONL = "jsonl"
