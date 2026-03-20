@@ -5476,3 +5476,92 @@ Status: Completed on 2026-03-19
 - 但代码识别还不是最终形态：
   - 仍有部分 code block 带着 trailing prose
   - 图片裁图质量也还需要通过单章导出继续验收
+
+### Step 80: chapter-5 review gate hardening for real technical book
+
+目标：
+
+- 在整本翻译之前，把真实技术书 `Chapter 5 Orchestration` 做成可审查 gate
+- 重点先解决：
+  - code / prose 混淆
+  - docstring / 参数说明漏升格
+  - `equation` 误吃两行代码
+  - 先用真实 image block 抽样验证图片裁切
+
+这轮新增修复：
+
+- [pdf.py](/Users/smy/project/book-agent/src/book_agent/domain/structure/pdf.py)
+  - `_looks_like_code(...)`
+    - 不再死依赖 extractor 给出的 `line_count`
+    - 改为按真实 multiline 文本、decorator、docstring/comment、dict-entry 等代码特征综合判断
+  - 新增 inline code/prose boundary repair
+    - 例如 `} Those embeddings ...` 这类“代码结尾 + 正文说明”会先在行级拆开
+  - `_split_mixed_code_prose_blocks(...)`
+    - 现在既能拆 `body -> code + prose`
+    - 也能拆 `code_like -> code + prose`
+    - prose half 会显式回写成 `body + paragraph`
+  - 新增 late code promotion
+    - `docstring / Args / Returns / typed parameter lines`
+    - 以及跨页 `body` 代码块
+    - 都可以被晚期提升为 `code_like`
+  - `_looks_like_equation(...)`
+    - 加了 `# ...` + assignment guard
+    - 两行初始化代码不再被误判成公式
+
+对应新增测试：
+
+- [test_pdf_support.py](/Users/smy/project/book-agent/tests/test_pdf_support.py)
+  - `test_looks_like_code_uses_multiline_text_when_raw_line_count_is_one`
+  - `test_recovery_splits_code_like_block_with_inline_trailing_prose`
+  - `test_recovery_promotes_docstring_body_adjacent_to_code`
+  - `test_recovery_promotes_cross_page_code_body`
+
+定向验证：
+
+- `uv run python -m py_compile src/book_agent/domain/structure/pdf.py tests/test_pdf_support.py`
+- `PYTHONWARNINGS='ignore::ResourceWarning' uv run python -m unittest ...`
+  - `6 tests OK`
+
+真实 gate 进展：
+
+- 旧 chapter gate 已多次主动止损：
+  - `v4` / `v5` / `v6`
+  - 原因都是在 bootstrap 后及时发现 parser 还没到可审查质量
+- 当前最新 gate：
+  - [v8 chapter smoke report](/Users/smy/project/book-agent/artifacts/real-book-live/building-applications-with-ai-agents-v8-ch5-review-smoke-final-fixed/chapter-smoke.report.json)
+
+最新 bootstrap 结果：
+
+- `CHAPTER 5 Orchestration`
+  - `paragraph: 109`
+  - `code: 29`
+  - `image: 8`
+  - `equation: 0`
+- 关键坏例已回正：
+  - 原先误成 `equation` 的
+    - `# Initialize the LLM / llm = ChatOpenAI(...)`
+    - 已并回大代码块
+  - 原先没升格的 docstring continuation
+    - `Select the most relevant tool(s)... Args ... Returns ...`
+    - 已变成 `code`
+  - `Those embeddings for your tool catalog ...`
+    - 已从代码块尾部拆出为独立正文 paragraph
+
+图片抽样：
+
+- 直接根据 `source_bbox_json` 抽样裁出了前 4 张图：
+  - `/Users/smy/project/book-agent/artifacts/real-book-live/building-applications-with-ai-agents-v8-ch5-review-smoke-final-fixed/image-probes/chapter8-block-5-page-111.png`
+  - `/Users/smy/project/book-agent/artifacts/real-book-live/building-applications-with-ai-agents-v8-ch5-review-smoke-final-fixed/image-probes/chapter8-block-76-page-119.png`
+  - `/Users/smy/project/book-agent/artifacts/real-book-live/building-applications-with-ai-agents-v8-ch5-review-smoke-final-fixed/image-probes/chapter8-block-81-page-120.png`
+  - `/Users/smy/project/book-agent/artifacts/real-book-live/building-applications-with-ai-agents-v8-ch5-review-smoke-final-fixed/image-probes/chapter8-block-96-page-123.png`
+- 当前观察：
+  - 这 4 张都已是干净图形，没有把周围正文一起吃进去
+  - 说明对“有真实 image block 的页面”，当前裁图链路已经基本可用
+
+当前状态：
+
+- `v8` 正在继续翻译 `Chapter 5`
+- 当前库内已开始出现真实 `translation_runs`
+- 下一步只做两件事：
+  - 等这章翻译完并生成 export
+  - 直接把 chapter 的 markdown/html + review package 交给用户审查
