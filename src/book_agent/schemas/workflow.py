@@ -44,6 +44,8 @@ class DocumentSummaryResponse(BaseSchema):
     source_type: str
     status: str
     title: str | None = None
+    title_src: str | None = None
+    title_tgt: str | None = None
     author: str | None = None
     pdf_profile: dict[str, Any] | None = None
     pdf_page_evidence: dict[str, Any] | None = None
@@ -66,6 +68,8 @@ class DocumentHistoryEntryResponse(BaseSchema):
     source_type: str
     status: str
     title: str | None = None
+    title_src: str | None = None
+    title_tgt: str | None = None
     author: str | None = None
     source_path: str | None = None
     created_at: str
@@ -78,6 +82,9 @@ class DocumentHistoryEntryResponse(BaseSchema):
     chapter_bilingual_export_count: int = 0
     latest_run_id: str | None = None
     latest_run_status: str | None = None
+    latest_run_current_stage: str | None = None
+    latest_run_completed_work_item_count: int | None = None
+    latest_run_total_work_item_count: int | None = None
 
 
 class DocumentHistoryPageResponse(BaseSchema):

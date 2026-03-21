@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.ids import stable_id
@@ -102,21 +103,32 @@ class DocumentRunExecutor:
         translation_worker: TranslationWorker | None,
         poll_interval_seconds: float = 1.0,
         lease_seconds: int = 120,
+        review_lease_seconds: int = 1800,
         heartbeat_interval_seconds: int = 15,
         default_max_auto_followup_attempts: int = 2,
+        default_max_blocker_repair_rounds: int = 4,
+        default_max_parallel_workers: int = 8,
     ) -> None:
         self.session_factory = session_factory
         self.export_root = str(Path(export_root).resolve())
         self.translation_worker = translation_worker
         self.poll_interval_seconds = poll_interval_seconds
         self.lease_seconds = lease_seconds
+        self.review_lease_seconds = max(self.lease_seconds, int(review_lease_seconds))
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.default_max_auto_followup_attempts = default_max_auto_followup_attempts
+        self.default_max_blocker_repair_rounds = max(1, int(default_max_blocker_repair_rounds))
+        self.default_max_parallel_workers = max(1, int(default_max_parallel_workers))
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
         self._supervisor_thread: threading.Thread | None = None
         self._active_run_threads: dict[str, threading.Thread] = {}
+        self._active_work_threads: dict[str, dict[str, threading.Thread]] = {}
         self._lock = threading.Lock()
+
+    def _is_sqlite_session(self, session: Session) -> bool:
+        bind = session.get_bind()
+        return bind is not None and bind.dialect.name == "sqlite"
 
     def start(self) -> None:
         with self._lock:
@@ -137,12 +149,20 @@ class DocumentRunExecutor:
         with self._lock:
             supervisor = self._supervisor_thread
             run_threads = list(self._active_run_threads.values())
+            work_threads = [
+                thread
+                for thread_map in self._active_work_threads.values()
+                for thread in thread_map.values()
+            ]
         if supervisor is not None:
             supervisor.join(timeout=5)
         for thread in run_threads:
             thread.join(timeout=5)
+        for thread in work_threads:
+            thread.join(timeout=5)
         with self._lock:
             self._active_run_threads = {}
+            self._active_work_threads = {}
             self._supervisor_thread = None
 
     def wake(self, run_id: str | None = None) -> None:
@@ -192,6 +212,19 @@ class DocumentRunExecutor:
             ]
             for run_id in finished:
                 self._active_run_threads.pop(run_id, None)
+            empty_runs: list[str] = []
+            for run_id, thread_map in self._active_work_threads.items():
+                finished_work_items = [
+                    work_item_id
+                    for work_item_id, thread in thread_map.items()
+                    if not thread.is_alive()
+                ]
+                for work_item_id in finished_work_items:
+                    thread_map.pop(work_item_id, None)
+                if not thread_map:
+                    empty_runs.append(run_id)
+            for run_id in empty_runs:
+                self._active_work_threads.pop(run_id, None)
 
     def _ensure_run_thread(self, run_id: str) -> None:
         with self._lock:
@@ -205,6 +238,27 @@ class DocumentRunExecutor:
                 daemon=True,
             )
             self._active_run_threads[run_id] = thread
+            thread.start()
+
+    def _ensure_work_thread(
+        self,
+        *,
+        run_id: str,
+        work_item_id: str,
+        thread_name: str,
+        target,
+    ) -> None:
+        with self._lock:
+            thread_map = self._active_work_threads.setdefault(run_id, {})
+            existing = thread_map.get(work_item_id)
+            if existing is not None and existing.is_alive():
+                return
+            thread = threading.Thread(
+                target=target,
+                name=thread_name,
+                daemon=True,
+            )
+            thread_map[work_item_id] = thread
             thread.start()
 
     def _list_runnable_run_ids(self) -> list[str]:
@@ -231,6 +285,7 @@ class DocumentRunExecutor:
                 return
 
             try:
+                self._reclaim_expired_leases(run_id)
                 if self._process_translate_stage(run_id):
                     continue
                 if self._process_review_stage(run_id):
@@ -252,6 +307,12 @@ class DocumentRunExecutor:
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
 
+    def _reclaim_expired_leases(self, run_id: str) -> bool:
+        with session_scope(self.session_factory) as session:
+            execution = self._run_execution_service(session)
+            reclaimed = execution.reclaim_expired_leases(run_id=run_id)
+        return reclaimed.expired_lease_count > 0
+
     def _process_translate_stage(self, run_id: str) -> bool:
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
@@ -261,7 +322,11 @@ class DocumentRunExecutor:
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             if not translate_items:
                 packet_ids = self._list_pending_packet_ids(session, document_id)
-                execution.seed_translate_work_items(run_id=run_id, packet_ids=packet_ids)
+                execution.seed_translate_work_items(
+                    run_id=run_id,
+                    packet_ids=packet_ids,
+                    input_version_bundle_by_packet_id=self._translate_input_versions(session, packet_ids),
+                )
                 self._update_pipeline_stage(
                     run_id,
                     "translate",
@@ -278,20 +343,24 @@ class DocumentRunExecutor:
             if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in translate_items):
                 return False
 
+            claimed_items: list[ClaimedRunWorkItem] = []
             if any(item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED} for item in translate_items):
                 self._update_pipeline_stage(run_id, "translate", status="running", current_stage="translate", session=session)
-                claimed = execution.claim_next_work_item(
+                claimed_items = self._claim_translate_work_items(
+                    session=session,
+                    execution=execution,
                     run_id=run_id,
-                    stage=WorkItemStage.TRANSLATE,
-                    worker_name="app.run.translate",
-                    worker_instance_id=f"app.translate:{uuid4()}",
-                    lease_seconds=self.lease_seconds,
+                    translate_items=translate_items,
                 )
-            else:
-                claimed = None
 
-        if claimed is not None:
-            self._execute_translate_work_item(run_id, claimed)
+        if claimed_items:
+            for claimed in claimed_items:
+                self._ensure_work_thread(
+                    run_id=run_id,
+                    work_item_id=claimed.work_item_id,
+                    thread_name=f"book-agent-translate-{claimed.work_item_id}",
+                    target=lambda claimed=claimed: self._execute_translate_work_item(run_id, claimed),
+                )
             return True
 
         if translate_items and all(item.status == WorkItemStatus.SUCCEEDED for item in translate_items):
@@ -348,7 +417,9 @@ class DocumentRunExecutor:
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
-            if review_items and any(item.status != WorkItemStatus.SUCCEEDED for item in review_items):
+            if not review_items:
+                return False
+            if any(item.status != WorkItemStatus.SUCCEEDED for item in review_items):
                 return False
             if export_type == ExportType.MERGED_HTML:
                 bilingual_items = self._list_export_items(session, run_id, ExportType.BILINGUAL_HTML)
@@ -401,26 +472,62 @@ class DocumentRunExecutor:
             claimed=claimed,
             worker_fn=lambda: self._translate_single_packet(claimed.scope_id),
             on_success=self._complete_translate_success,
+            lease_seconds=self.lease_seconds,
         )
 
     def _execute_review_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         def _run_review() -> dict[str, Any]:
+            payload: dict[str, Any]
+            remaining_blocking_issue_count = 0
+            stop_reason = "unknown"
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                result = workflow.review_document(
+                initial_result = workflow.review_document(
                     claimed.scope_id,
                     auto_execute_packet_followups=True,
                     max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
                 )
-            return {
-                "document_id": claimed.scope_id,
-                "total_issue_count": result.total_issue_count,
-                "total_action_count": result.total_action_count,
-                "chapter_count": len(result.chapter_results),
-                "auto_followup_requested": result.auto_followup_requested,
-                "auto_followup_applied": result.auto_followup_applied,
-                "auto_followup_attempt_count": result.auto_followup_attempt_count,
-            }
+                repair_result = workflow.repair_document_blockers_until_exportable(
+                    claimed.scope_id,
+                    max_rounds=self._max_blocker_repair_rounds(session, run_id),
+                )
+                result = initial_result
+                if repair_result.applied:
+                    result = workflow.review_document(
+                        claimed.scope_id,
+                        auto_execute_packet_followups=False,
+                    )
+                remaining_blocking_issue_count = repair_result.blocking_issue_count_after
+                stop_reason = repair_result.stop_reason or "unknown"
+                payload = {
+                    "document_id": claimed.scope_id,
+                    "total_issue_count": result.total_issue_count,
+                    "total_action_count": result.total_action_count,
+                    "chapter_count": len(result.chapter_results),
+                    "auto_followup_requested": initial_result.auto_followup_requested,
+                    "auto_followup_applied": initial_result.auto_followup_applied,
+                    "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
+                    "blocker_repair_requested": repair_result.requested,
+                    "blocker_repair_applied": repair_result.applied,
+                    "blocker_repair_round_count": repair_result.round_count,
+                    "blocker_repair_round_limit": repair_result.round_limit,
+                    "blocker_repair_execution_count": len(repair_result.executions),
+                    "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                }
+            if remaining_blocking_issue_count > 0:
+                self._update_pipeline_stage(
+                    run_id,
+                    "review",
+                    status="running",
+                    extra=payload,
+                    current_stage="review",
+                )
+                raise RuntimeError(
+                    "Document still has unresolved blocking review issues after repair: "
+                    f"{remaining_blocking_issue_count} remaining "
+                    f"(stop_reason={stop_reason})."
+                )
+            return payload
 
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:
             with session_scope(self.session_factory) as session:
@@ -444,6 +551,7 @@ class DocumentRunExecutor:
             worker_fn=_run_review,
             on_success=_on_success,
             stage_key="review",
+            lease_seconds=self.review_lease_seconds,
         )
 
     def _execute_export_work_item(
@@ -497,6 +605,7 @@ class DocumentRunExecutor:
             worker_fn=_run_export,
             on_success=_on_success,
             stage_key=pipeline_key,
+            lease_seconds=self.lease_seconds,
         )
 
     def _execute_claimed_work_item(
@@ -507,12 +616,15 @@ class DocumentRunExecutor:
         worker_fn,
         on_success,
         stage_key: str | None = None,
+        lease_seconds: int | None = None,
     ) -> None:
+        lease_window_seconds = max(1, int(lease_seconds or self.lease_seconds))
         stop_event = threading.Event()
         heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
             kwargs={
                 "lease_token": claimed.lease_token,
+                "lease_seconds": lease_window_seconds,
                 "stop_event": stop_event,
             },
             daemon=True,
@@ -522,7 +634,7 @@ class DocumentRunExecutor:
                 execution = self._run_execution_service(session)
                 execution.start_work_item(
                     lease_token=claimed.lease_token,
-                    lease_seconds=self.lease_seconds,
+                    lease_seconds=lease_window_seconds,
                 )
             heartbeat_thread.start()
             payload = worker_fn()
@@ -631,14 +743,122 @@ class DocumentRunExecutor:
             self._sync_pipeline_status(run_id, summary.status)
         self.wake(run_id)
 
-    def _heartbeat_loop(self, *, lease_token: str, stop_event: threading.Event) -> None:
+    def _claim_translate_work_items(
+        self,
+        *,
+        session: Session,
+        execution: RunExecutionService,
+        run_id: str,
+        translate_items: list[WorkItem],
+    ) -> list[ClaimedRunWorkItem]:
+        parallelism_limit = self._translate_parallelism_limit(session, run_id)
+        active_items = [
+            item
+            for item in translate_items
+            if item.status in {WorkItemStatus.LEASED, WorkItemStatus.RUNNING}
+        ]
+        available_slots = max(parallelism_limit - len(active_items), 0)
+        if available_slots <= 0:
+            return []
+
+        active_chapter_ids = set(
+            self._translate_item_chapter_id_map(session, active_items).values()
+        )
+        candidate_items = sorted(
+            (
+                item
+                for item in translate_items
+                if item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}
+            ),
+            key=lambda item: (item.priority, item.created_at, item.id),
+        )
+        candidate_chapter_map = self._translate_item_chapter_id_map(session, candidate_items)
+        reserved_chapter_ids = set(active_chapter_ids)
+        claimed_items: list[ClaimedRunWorkItem] = []
+        for item in candidate_items:
+            chapter_id = candidate_chapter_map.get(item.scope_id)
+            if not chapter_id or chapter_id in reserved_chapter_ids:
+                continue
+            claimed = execution.claim_work_item_by_id(
+                work_item_id=item.id,
+                worker_name="app.run.translate",
+                worker_instance_id=f"app.translate:{uuid4()}",
+                lease_seconds=self.lease_seconds,
+            )
+            if claimed is None:
+                continue
+            claimed_items.append(claimed)
+            reserved_chapter_ids.add(chapter_id)
+            if len(claimed_items) >= available_slots:
+                break
+        return claimed_items
+
+    def _translate_parallelism_limit(self, session: Session, run_id: str) -> int:
+        budget = RunControlRepository(session).get_budget_for_run(run_id)
+        if budget is not None and budget.max_parallel_workers is not None:
+            try:
+                return max(1, int(budget.max_parallel_workers))
+            except (TypeError, ValueError):
+                return self.default_max_parallel_workers
+        if self._is_sqlite_session(session):
+            return 1
+        return self.default_max_parallel_workers
+
+    def _translate_input_versions(
+        self,
+        session: Session,
+        packet_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        chapter_map = self._packet_chapter_id_map(session, packet_ids)
+        return {
+            packet_id: {
+                "packet_id": packet_id,
+                **({"chapter_id": chapter_map[packet_id]} if packet_id in chapter_map else {}),
+            }
+            for packet_id in packet_ids
+        }
+
+    def _translate_item_chapter_id_map(
+        self,
+        session: Session,
+        items: list[WorkItem],
+    ) -> dict[str, str]:
+        packet_ids_to_query: list[str] = []
+        chapter_map: dict[str, str] = {}
+        for item in items:
+            bundle = dict(item.input_version_bundle_json or {})
+            chapter_id = bundle.get("chapter_id")
+            if chapter_id:
+                chapter_map[str(item.scope_id)] = str(chapter_id)
+            else:
+                packet_ids_to_query.append(str(item.scope_id))
+        if packet_ids_to_query:
+            chapter_map.update(self._packet_chapter_id_map(session, packet_ids_to_query))
+        return chapter_map
+
+    def _packet_chapter_id_map(
+        self,
+        session: Session,
+        packet_ids: list[str],
+    ) -> dict[str, str]:
+        normalized_ids = [packet_id for packet_id in packet_ids if packet_id]
+        if not normalized_ids:
+            return {}
+        rows = session.execute(
+            select(TranslationPacket.id, TranslationPacket.chapter_id).where(
+                TranslationPacket.id.in_(normalized_ids)
+            )
+        ).all()
+        return {str(packet_id): str(chapter_id) for packet_id, chapter_id in rows}
+
+    def _heartbeat_loop(self, *, lease_token: str, lease_seconds: int, stop_event: threading.Event) -> None:
         while not stop_event.wait(timeout=max(1, self.heartbeat_interval_seconds)):
             try:
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
                     alive = execution.heartbeat_work_item(
                         lease_token=lease_token,
-                        lease_seconds=self.lease_seconds,
+                        lease_seconds=lease_seconds,
                     )
                 if not alive:
                     return
@@ -697,6 +917,12 @@ class DocumentRunExecutor:
             return max(1, int(budget.max_auto_followup_attempts))
         return self.default_max_auto_followup_attempts
 
+    def _max_blocker_repair_rounds(self, session, run_id: str) -> int:
+        return max(
+            self.default_max_blocker_repair_rounds,
+            self._max_auto_followup_attempts(session, run_id),
+        )
+
     def _update_pipeline_stage(
         self,
         run_id: str,
@@ -709,9 +935,20 @@ class DocumentRunExecutor:
     ) -> None:
         if session is not None:
             self._do_update_pipeline_stage(session, run_id, stage_key, status, extra, current_stage)
-        else:
-            with session_scope(self.session_factory) as s:
-                self._do_update_pipeline_stage(s, run_id, stage_key, status, extra, current_stage)
+            return
+
+        attempts = 3 if session is None else 1
+        for attempt in range(attempts):
+            try:
+                with session_scope(self.session_factory) as s:
+                    self._do_update_pipeline_stage(s, run_id, stage_key, status, extra, current_stage)
+                return
+            except OperationalError as exc:
+                if "database is locked" not in str(exc).lower():
+                    raise
+                if attempt == attempts - 1:
+                    return
+            time.sleep(0.1 * (attempt + 1))
 
     def _do_update_pipeline_stage(
         self,

@@ -85,7 +85,7 @@ class PacketExperimentOptions:
     include_paragraph_intent: bool = True
     include_literalism_guardrails: bool = True
     prompt_layout: PromptLayout = "paragraph-led"
-    prompt_profile: PromptProfile = "role-style-v2"
+    prompt_profile: PromptProfile = "role-style-faithful-v6"
     material_profile_override: TranslationMaterial | None = None
     execute: bool = False
     concept_overrides: tuple[ConceptCandidate, ...] = ()

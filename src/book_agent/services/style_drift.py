@@ -16,6 +16,17 @@ class StyleDriftRule:
 
 STYLE_DRIFT_RULES = (
     StyleDriftRule(
+        pattern_id="agentic_ai_stiff_term",
+        source_pattern=re.compile(r"\bagentic AI\b", re.IGNORECASE),
+        target_pattern=re.compile(r"智能体式(?:AI|人工智能)"),
+        preferred_hint="智能体AI",
+        message="术语被译成了生硬的“智能体式AI”，会把整段技术中文拉回翻译腔。",
+        prompt_guidance=(
+            "For running technical prose, prefer '智能体AI' when translating 'agentic AI'; "
+            "avoid stiff renderings like '智能体式AI'."
+        ),
+    ),
+    StyleDriftRule(
         pattern_id="context_engineering_literal",
         source_pattern=re.compile(r"\bcontext engineering\b", re.IGNORECASE),
         target_pattern=re.compile(r"(?:情境|语境)工程|(?:对|将|把)?(?:情境|语境)如何"),
@@ -169,6 +180,26 @@ STYLE_DRIFT_RULES = (
         prompt_guidance=(
             "For phrases like 'a profound sense of responsibility', prefer plain Chinese such as "
             "'强烈的责任感' or '很强的责任意识', not heavy calques like '深刻的责任感'."
+        ),
+    ),
+    StyleDriftRule(
+        pattern_id="consistency_care_service_literal",
+        source_pattern=re.compile(r"\bprovide consistency and care over time\b", re.IGNORECASE),
+        target_pattern=re.compile(
+            r"(?:"
+            r"连贯性和(?:关怀|照料)"
+            r"|一致(?:性)?和(?:关怀|照料)"
+            r"|贴心(?:的)?服务"
+            r"|悉心照料"
+            r"|长期服务中提供(?:连贯性|一致性|关怀|照料)"
+            r")"
+        ),
+        preferred_hint="长期稳定、周到地照应 / 始终如一地细心照应",
+        message="具体的人物照应关系被抽象成了服务化、概念化中文，技术书里的比喻感被冲淡了。",
+        prompt_guidance=(
+            "When 'provide consistency and care over time' appears inside a concrete personal-service analogy, "
+            "keep the Chinese ending concrete. Express it as the actor steadily and attentively taking care of the same person over time; "
+            "avoid abstract service-language such as '提供连贯性和关怀', '贴心服务', or '悉心照料'."
         ),
     ),
 )

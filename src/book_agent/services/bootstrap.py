@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
 from book_agent.domain.context.builders import (
     BookProfileBuilder,
@@ -191,11 +192,37 @@ class ParseService:
             raise ValueError(f"Unsupported source type: {document.source_type}")
 
         now = _utcnow()
-        document.title = parsed.title
+        pdf_profile = document.metadata_json.get("pdf_profile")
+        effective_pdf_profile = pdf_profile if isinstance(pdf_profile, dict) else {}
+        resolved_titles = resolve_document_titles(
+            source_type=document.source_type,
+            parsed_title=parsed.title,
+            parsed_metadata=parsed.metadata,
+            source_path=file_path,
+            src_lang=parsed.language,
+            tgt_lang=document.tgt_lang,
+            pdf_recovery_lane=(
+                str(effective_pdf_profile.get("recovery_lane")).strip() or None
+                if effective_pdf_profile
+                else None
+            ),
+        )
+        document.title = resolved_titles.title
+        document.title_src = resolved_titles.title_src
+        document.title_tgt = resolved_titles.title_tgt
         document.author = parsed.author
         if parsed.language:
             document.src_lang = parsed.language
-        document.metadata_json = {**document.metadata_json, **parsed.metadata}
+        document.metadata_json = {
+            **document.metadata_json,
+            **parsed.metadata,
+            "document_title": {
+                "title": resolved_titles.title,
+                "src": resolved_titles.title_src,
+                "tgt": resolved_titles.title_tgt,
+                "resolution_source": resolved_titles.resolution_source,
+            },
+        }
         document.status = DocumentStatus.PARSED
         document.updated_at = now
 

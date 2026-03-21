@@ -36,6 +36,8 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     file_fingerprint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     source_path: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
+    title_src: Mapped[str | None] = mapped_column(Text)
+    title_tgt: Mapped[str | None] = mapped_column(Text)
     author: Mapped[str | None] = mapped_column(Text)
     src_lang: Mapped[str] = mapped_column(Text, nullable=False, default="en")
     tgt_lang: Mapped[str] = mapped_column(Text, nullable=False, default="zh")

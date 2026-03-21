@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from book_agent.domain.enums import ActionType, JobScopeType
 from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.services.term_normalization import normalize_term_rendering
 from book_agent.workers.contracts import ConceptCandidate
 
 
@@ -26,6 +27,7 @@ def concept_overrides_for_issue(issue: ReviewIssue) -> tuple[ConceptCandidate, .
         or evidence.get("preferred_hint")
         or ""
     ).strip()
+    canonical_zh = normalize_term_rendering(source_term, canonical_zh)
     if issue.issue_type != "TERM_CONFLICT" or not source_term or not canonical_zh:
         return ()
     return (

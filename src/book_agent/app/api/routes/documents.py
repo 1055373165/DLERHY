@@ -15,6 +15,7 @@ from starlette.background import BackgroundTask
 
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
+from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
 from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, SourceType
 from book_agent.infra.db.legacy_backfill import backfill_legacy_history
 from book_agent.schemas.document import DocumentContractResponse
@@ -212,6 +213,50 @@ def _preferred_archive_name(original_path: str | Path, resolved_path: Path) -> s
     if not original_name or original_name == resolved_path.name:
         return None
     return original_name
+
+
+def _document_export_download_filename(
+    document,
+    export_type: ExportType,
+    *,
+    file_suffix: str,
+    include_related_exports: bool = False,
+) -> str:
+    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
+    if include_related_exports and export_type == ExportType.MERGED_HTML:
+        return f"{book_title}-整书译制包.zip"
+    label_map = {
+        ExportType.MERGED_HTML: "中文阅读稿",
+        ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
+        ExportType.BILINGUAL_HTML: "双语章节包",
+        ExportType.REVIEW_PACKAGE: "审校包",
+    }
+    label = label_map.get(export_type, export_type.value)
+    return f"{book_title}-{label}{file_suffix}"
+
+
+def _chapter_export_download_filename(
+    document,
+    chapter,
+    export_type: ExportType,
+    *,
+    file_suffix: str,
+    archive: bool = False,
+) -> str:
+    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
+    chapter_ordinal = getattr(chapter, "ordinal", None)
+    chapter_title = safe_title_for_filename(
+        getattr(chapter, "title_tgt", None) or getattr(chapter, "title_src", None),
+        fallback="未命名章节",
+    )
+    chapter_prefix = f"第{chapter_ordinal}章" if isinstance(chapter_ordinal, int) and chapter_ordinal > 0 else "章节导出"
+    label_map = {
+        ExportType.BILINGUAL_HTML: "双语章节包",
+        ExportType.REVIEW_PACKAGE: "审校包",
+    }
+    label = label_map.get(export_type, export_type.value)
+    suffix = ".zip" if archive else file_suffix
+    return f"{book_title}-{chapter_prefix}-{chapter_title}-{label}{suffix}"
 
 
 def _append_archive_input(
@@ -543,6 +588,8 @@ def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryRe
         source_type=summary.source_type,
         status=summary.status,
         title=summary.title,
+        title_src=summary.title_src,
+        title_tgt=summary.title_tgt,
         author=summary.author,
         pdf_profile=summary.pdf_profile,
         pdf_page_evidence=summary.pdf_page_evidence,
@@ -607,6 +654,8 @@ def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHis
                 "source_type": entry.source_type,
                 "status": entry.status,
                 "title": entry.title,
+                "title_src": entry.title_src,
+                "title_tgt": entry.title_tgt,
                 "author": entry.author,
                 "source_path": entry.source_path,
                 "created_at": entry.created_at,
@@ -619,6 +668,9 @@ def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHis
                 "chapter_bilingual_export_count": entry.chapter_bilingual_export_count,
                 "latest_run_id": entry.latest_run_id,
                 "latest_run_status": entry.latest_run_status,
+                "latest_run_current_stage": entry.latest_run_current_stage,
+                "latest_run_completed_work_item_count": entry.latest_run_completed_work_item_count,
+                "latest_run_total_work_item_count": entry.latest_run_total_work_item_count,
             }
             for entry in page.entries
         ],
@@ -1092,6 +1144,9 @@ def bootstrap_document(
         )
     try:
         summary = _workflow_service(request, session).bootstrap_document(source_path)
+        # Commit before returning so a follow-up read from the web UI can resolve
+        # the newly created document immediately.
+        session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_document_summary_response(summary)
@@ -1113,6 +1168,9 @@ def bootstrap_uploaded_document(
         with target_path.open("wb") as buffer:
             shutil.copyfileobj(source_file.file, buffer)
         summary = _workflow_service(request, session).bootstrap_document(target_path)
+        # Commit before returning so a follow-up read from the web UI can resolve
+        # the newly created document immediately.
+        session.commit()
     except ValueError as exc:
         _cleanup_path(target_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -1310,6 +1368,7 @@ def download_document_chapter_export(
     session: Session = Depends(get_db_session),
 ) -> FileResponse:
     workflow = _workflow_service(request, session)
+    chapter_bundle = workflow.export_repository.load_chapter_bundle(chapter_id)
     try:
         records = workflow.export_repository.list_document_exports_filtered(
             document_id,
@@ -1343,14 +1402,25 @@ def download_document_chapter_export(
         return FileResponse(
             path=file_path,
             media_type=_artifact_media_type(file_path),
-            filename=file_path.name,
+            filename=_chapter_export_download_filename(
+                chapter_bundle.document,
+                chapter_bundle.chapter,
+                export_type,
+                file_suffix=file_path.suffix or "",
+            ),
         )
 
     archive_path = _build_export_archive(document_id, export_type, archive_inputs)
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=f"{chapter_id}-{export_type.value}.zip",
+        filename=_chapter_export_download_filename(
+            chapter_bundle.document,
+            chapter_bundle.chapter,
+            export_type,
+            file_suffix=".zip",
+            archive=True,
+        ),
         background=BackgroundTask(_cleanup_path, archive_path),
     )
 
@@ -1363,6 +1433,7 @@ def download_document_export(
     session: Session = Depends(get_db_session),
 ) -> FileResponse:
     workflow = _workflow_service(request, session)
+    document = workflow.export_repository.get_document(document_id)
     try:
         primary_records = workflow.export_repository.list_document_exports_filtered(
             document_id,
@@ -1406,7 +1477,11 @@ def download_document_export(
         return FileResponse(
             path=file_path,
             media_type=_artifact_media_type(file_path),
-            filename=file_path.name,
+            filename=_document_export_download_filename(
+                document,
+                export_type,
+                file_suffix=file_path.suffix or "",
+            ),
         )
 
     archive_path = _build_export_archive(
@@ -1418,9 +1493,10 @@ def download_document_export(
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=_build_export_bundle_filename(
-            document_id,
+        filename=_document_export_download_filename(
+            document,
             export_type,
+            file_suffix=".zip",
             include_related_exports=include_related_exports,
         ),
         background=BackgroundTask(_cleanup_path, archive_path),

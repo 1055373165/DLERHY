@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "elegant-design": {
+      "source": "rand/cc-polymath",
+      "sourceType": "github",
+      "computedHash": "04216e0901837ab5259b1866ffe6853093ce278891d4a53940ef09d6cf51dd6d"
+    }
+  }
+}

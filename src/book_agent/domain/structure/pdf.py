@@ -10,6 +10,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Protocol
 
+from book_agent.domain.document_titles import cleaned_filename_book_title, looks_like_auxiliary_document_title
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
@@ -64,6 +65,29 @@ _CODE_CONTROL_LINE_PATTERN = re.compile(
     r")$",
     re.IGNORECASE,
 )
+_SHELL_COMMAND_LINE_PATTERN = re.compile(
+    r"^(?:"
+    r"(?:(?:python|python3)\s+-m\s+)?pip(?:3)?\s+install\b.+"
+    r"|uv\s+(?:run|sync|add|pip)\b.+"
+    r"|npm\s+(?:install|run|exec)\b.+"
+    r"|npx\b.+"
+    r"|pnpm\s+(?:add|install|run|dlx)\b.+"
+    r"|yarn\s+(?:add|install|run|dlx)\b.+"
+    r"|bun\s+(?:add|install|run|runx)\b.+"
+    r"|poetry\s+(?:add|install|run)\b.+"
+    r"|conda\s+install\b.+"
+    r"|brew\s+install\b.+"
+    r"|apt(?:-get)?\s+install\b.+"
+    r"|curl\b.+"
+    r"|wget\b.+"
+    r"|git\s+clone\b.+"
+    r")$",
+    re.IGNORECASE,
+)
+_SHELL_COMMAND_CONTINUATION_PATTERN = re.compile(
+    r"^(?:[A-Za-z0-9][A-Za-z0-9._/+:-]*)(?:\s+[A-Za-z0-9][A-Za-z0-9._/+:-]*)+$"
+)
+_PACKAGE_LIKE_TOKEN_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._/+:-]*$")
 _TABLE_SEPARATOR_PATTERN = re.compile(r"\S(?:\s{2,}|\t)\S")
 _EQUATION_OPERATOR_PATTERN = re.compile(
     r"(?:=|≤|≥|≈|∝|×|÷|±|∑|∫|λ|α|β|γ|δ|θ|μ|σ|π|→|↔|\b(?:argmax|argmin|softmax|max|min)\b)",
@@ -120,6 +144,17 @@ _BACKMATTER_HEADING_TITLES = {
     "reader services",
     "share your thoughts",
 }
+_OUTLINED_BOOK_FRONTMATTER_TITLES = {
+    "acknowledgment",
+    "acknowledgments",
+    "acknowledgements",
+    "dedication",
+    "foreword",
+    "introduction",
+    "preface",
+    "prologue",
+}
+_OUTLINED_BOOK_TOP_LEVEL_SPECIAL_TITLES = _OUTLINED_BOOK_FRONTMATTER_TITLES.union({"glossary"})
 _BOOK_SPECIAL_OUTLINE_TITLES = _FRONTMATTER_SIGNAL_TITLES.union(
     _REFERENCES_HEADING_TITLES,
     _INDEX_HEADING_TITLES,
@@ -165,6 +200,31 @@ _PROSE_CONTINUATION_START_WORDS = _HEADING_CONTINUATION_START_WORDS.union(
         "while",
     }
 )
+_PROSE_LABEL_LINE_PATTERN = re.compile(r"^(?P<label>[A-Za-z][A-Za-z ]{0,40}?):\s+(?P<body>.+)$")
+_PROSE_LABEL_TITLES = {
+    "benefits",
+    "best practice",
+    "best practices",
+    "context",
+    "example",
+    "examples",
+    "how",
+    "key takeaway",
+    "key takeaways",
+    "limitations",
+    "overview",
+    "problem",
+    "rule of thumb",
+    "solution",
+    "summary",
+    "use case",
+    "use cases",
+    "what",
+    "when",
+    "where",
+    "who",
+    "why",
+}
 _MULTI_COLUMN_BLOCK_WIDTH_RATIO = 0.58
 _PROSE_CONTINUATION_STOPWORDS = {
     "a",
@@ -406,7 +466,8 @@ _BROKEN_REFERENCES_HEADING_PATTERN = re.compile(
 
 
 def _normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    sanitized = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text or "")
+    return re.sub(r"\s+", " ", sanitized).strip()
 
 
 def _normalize_multiline_text(text: str) -> str:
@@ -452,6 +513,46 @@ def _should_keep_book_top_level_outline_title(text: str) -> bool:
     if _looks_like_book_primary_outline_title(normalized):
         return True
     return lowered in _BOOK_SPECIAL_OUTLINE_TITLES
+
+
+def _extract_book_main_chapter_number(text: str) -> int | None:
+    normalized = _normalize_outline_heading_text(text)
+    match = re.match(r"^\s*chapter\s+(\d+)\b", normalized, flags=re.IGNORECASE)
+    if not match:
+        return None
+    remainder = normalized[match.end() :]
+    normalized_remainder = remainder.lstrip(" .:_-)\u2013\u2014")
+    if normalized_remainder and not normalized_remainder[:1].isupper():
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _looks_like_outlined_book_frontmatter_title(text: str | None) -> bool:
+    normalized = _normalize_outline_heading_text(text or "")
+    return normalized.casefold() in _OUTLINED_BOOK_FRONTMATTER_TITLES
+
+
+def _looks_like_outlined_book_appendix_title(text: str | None) -> bool:
+    normalized = _normalize_outline_heading_text(text or "")
+    return bool(_APPENDIX_LABEL_PATTERN.match(normalized))
+
+
+def _looks_like_outlined_book_glossary_title(text: str | None) -> bool:
+    normalized = _normalize_outline_heading_text(text or "")
+    return normalized.casefold() == "glossary"
+
+
+def _should_start_outlined_book_top_level_chapter(title: str | None) -> bool:
+    if _extract_book_main_chapter_number(title or "") is not None:
+        return True
+    if _looks_like_outlined_book_appendix_title(title):
+        return True
+    if _looks_like_outlined_book_glossary_title(title):
+        return True
+    return _looks_like_outlined_book_frontmatter_title(title)
 
 
 def _roman_to_int(value: str) -> int | None:
@@ -1619,6 +1720,7 @@ def _looks_like_code(text: str, line_count: int) -> bool:
         for line in normalized_lines
         if _CODE_IMPORT_LINE_PATTERN.match(line)
     )
+    command_lines = sum(1 for line in normalized_lines if _looks_like_shell_command_line(line))
     decorator_lines = sum(1 for line in normalized_lines if line.startswith("@"))
     comment_doc_lines = sum(
         1
@@ -1643,6 +1745,11 @@ def _looks_like_code(text: str, line_count: int) -> bool:
     ):
         return False
     if import_like_lines >= 2:
+        return True
+    if command_lines >= 1 and (
+        len(normalized_lines) <= 3
+        or _looks_like_shell_command_continuation_line(normalized_lines[-1])
+    ):
         return True
     if keyword_lines >= 2:
         return True
@@ -1685,6 +1792,35 @@ def _split_inline_code_prose_line(text: str) -> tuple[str, str] | None:
     return code, prose
 
 
+def _split_inline_shell_command_prose_line(
+    text: str,
+    previous_lines: list[str] | None = None,
+) -> tuple[str, str] | None:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 400:
+        return None
+    previous = ""
+    for candidate in reversed(previous_lines or []):
+        previous = _normalize_text(candidate)
+        if previous:
+            break
+    if not (_looks_like_shell_command_line(normalized) or _looks_like_shell_command_line(previous)):
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 6:
+        return None
+    for index in range(2, len(tokens) - 3):
+        command_tokens = tokens[:index]
+        prose_tokens = tokens[index:]
+        if len(command_tokens) < 2 or not all(_PACKAGE_LIKE_TOKEN_PATTERN.match(token) for token in command_tokens):
+            continue
+        prose = " ".join(prose_tokens).strip()
+        if not _looks_like_sentence_prose_line(prose):
+            continue
+        return " ".join(command_tokens), prose
+    return None
+
+
 def _expanded_code_candidate_lines(text: str) -> list[str]:
     expanded: list[str] = []
     for line in text.splitlines():
@@ -1693,19 +1829,109 @@ def _expanded_code_candidate_lines(text: str) -> list[str]:
             continue
         split = _split_inline_code_prose_line(normalized)
         if split is None:
-            expanded.append(normalized)
+            shell_split = _split_inline_shell_command_prose_line(normalized, expanded)
+            if shell_split is None:
+                expanded.append(normalized)
+                continue
+            expanded.extend(part for part in shell_split if part)
             continue
         expanded.extend(part for part in split if part)
     return expanded
+
+
+def _looks_like_labeled_prose_line(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 320:
+        return False
+    match = _PROSE_LABEL_LINE_PATTERN.match(normalized)
+    if match is None:
+        return False
+    label = re.sub(r"\s+", " ", match.group("label")).strip().casefold()
+    if label not in _PROSE_LABEL_TITLES:
+        return False
+    body = match.group("body").strip()
+    if not body or any(marker in body for marker in ("{", "}", "[", "]", "=>", "::", "->")):
+        return False
+    tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", body.casefold())
+    if len(tokens) < 8:
+        return False
+    stopword_hits = sum(1 for token in tokens if token in _PROSE_CONTINUATION_STOPWORDS)
+    return stopword_hits >= max(2, len(tokens) // 7)
+
+
+def _looks_like_structured_data_line(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 240:
+        return False
+    if _looks_like_labeled_prose_line(normalized):
+        return False
+    if re.fullmatch(r"[\[\]\{\}][,]?", normalized):
+        return True
+    return bool(
+        re.match(
+            r"^(?:[\"'][^\"'\n]{1,120}[\"']|[A-Za-z_][A-Za-z0-9_-]{0,80}|\d+)\s*:\s*\S+",
+            normalized,
+        )
+    )
+
+
+def _looks_like_shell_command_line(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 320:
+        return False
+    return bool(_SHELL_COMMAND_LINE_PATTERN.match(normalized))
+
+
+def _looks_like_shell_command_continuation_line(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 240:
+        return False
+    if _looks_like_labeled_prose_line(normalized):
+        return False
+    if _looks_like_sentence_prose_line(normalized):
+        return False
+    if re.search(r"[.!?](?:[\"'\)\]\u201d\u2019])?$", normalized):
+        return False
+    return bool(_SHELL_COMMAND_CONTINUATION_PATTERN.match(normalized))
+
+
+def _looks_like_splitworthy_single_line_code_fragment(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 800:
+        return False
+    if _looks_like_labeled_prose_line(normalized):
+        return False
+    if _looks_like_shell_command_line(normalized):
+        return True
+    if _looks_like_structured_data_line(normalized):
+        return True
+    if _CODE_IMPORT_LINE_PATTERN.match(normalized) or _CODE_CONTROL_LINE_PATTERN.match(normalized):
+        return True
+    if normalized.startswith(("@", "#", ">>>")):
+        return True
+    if not _looks_like_embedded_code_line(normalized):
+        return False
+    punctuation_hits = sum(
+        1 for marker in ("{", "}", "[", "]", "(", ")", "=", ":", ",", "->", "=>", "::") if marker in normalized
+    )
+    return punctuation_hits >= 2
 
 
 def _looks_like_embedded_code_line(text: str) -> bool:
     normalized = _normalize_text(text)
     if not normalized or len(normalized) > 220:
         return False
+    if _looks_like_labeled_prose_line(normalized):
+        return False
+    if _looks_like_shell_command_line(normalized):
+        return True
+    if _looks_like_structured_data_line(normalized):
+        return True
     if _CODE_IMPORT_LINE_PATTERN.match(normalized) or _CODE_CONTROL_LINE_PATTERN.match(normalized):
         return True
     if normalized.startswith(("@", "#", ">>>")):
+        return True
+    if re.match(r"^\|\s*[A-Za-z_{(\[\"']", normalized):
         return True
     if re.match(r"^(?:[\"'][^\"']+[\"']|\d+|[A-Za-z_][A-Za-z0-9_]*)\s*:\s*\S+", normalized):
         return True
@@ -1717,8 +1943,78 @@ def _looks_like_embedded_code_line(text: str) -> bool:
         return True
     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\(", normalized):
         return True
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)\s*$", normalized):
+        return True
     if re.match(r"^(?:print|await|yield|return)\(", normalized):
         return True
+    return False
+
+
+def _looks_like_code_continuation_line(text: str, previous_lines: list[str] | None = None) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 220:
+        return False
+    if _looks_like_labeled_prose_line(normalized):
+        return False
+
+    previous = ""
+    for candidate in reversed(previous_lines or []):
+        previous = _normalize_text(candidate)
+        if previous:
+            break
+    if not previous:
+        return False
+
+    previous_joined = "\n".join(_normalize_text(candidate) for candidate in (previous_lines or []) if _normalize_text(candidate))
+
+    if re.fullmatch(r"[\]\)\}][,]?", normalized):
+        return True
+
+    if normalized == "---" and previous.startswith("# ---"):
+        return True
+
+    if normalized.startswith("|"):
+        recent_context = [
+            _normalize_text(candidate)
+            for candidate in (previous_lines or [])[-4:]
+            if _normalize_text(candidate)
+        ]
+        if any(
+            candidate.endswith(("(", "[", "{", ",", "\\", "+", "|", "="))
+            or "=" in candidate
+            or _looks_like_embedded_code_line(candidate)
+            for candidate in recent_context
+        ):
+            return True
+
+    if previous.endswith((",", "(", "[", "{")):
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*[,\)]?$", normalized):
+            return True
+        if re.match(r"^[\"'][^\"'\n]{1,200}[\"'][,]?$", normalized):
+            return True
+        if normalized.startswith(("'", '"')):
+            return True
+
+    if previous.endswith(",") and re.match(
+        r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$",
+        normalized,
+    ):
+        return True
+
+    if _looks_like_shell_command_line(previous) and _looks_like_shell_command_continuation_line(normalized):
+        return True
+
+    if _has_unterminated_triple_quoted_string(previous_joined):
+        return True
+
+    if _has_unterminated_quoted_string(previous_joined or previous, '"') or _has_unterminated_quoted_string(previous_joined or previous, "'"):
+        return True
+
+    if "#" in previous:
+        token_count = len(re.findall(r"[A-Za-z][A-Za-z'-]*", normalized))
+        if 1 <= token_count <= 10 and len(normalized) <= 72:
+            return True
+
     return False
 
 
@@ -1735,6 +2031,13 @@ def _looks_like_sentence_prose_line(text: str) -> bool:
     if stopword_hits < max(2, len(tokens) // 6):
         return False
     return bool(re.search(r"[.!?](?:[\"'\)\]\u201d\u2019])?$", normalized) or normalized[:1].isupper())
+
+
+def _looks_like_prose_line_group(lines: list[str]) -> bool:
+    compact = " ".join(_normalize_text(line) for line in lines if _normalize_text(line))
+    if not compact:
+        return False
+    return _looks_like_sentence_prose_line(compact)
 
 
 def _looks_like_code_docstring_line(text: str) -> bool:
@@ -1769,6 +2072,39 @@ def _looks_like_code_docstring_text(text: str) -> bool:
         return True
     prose_lines = sum(1 for line in normalized_lines if len(line.split()) >= 4)
     return quote_lines >= 2 and prose_lines >= 3
+
+
+def _has_unterminated_quoted_string(text: str, quote_char: str = '"') -> bool:
+    if not text:
+        return False
+    quote_count = 0
+    escaped = False
+    for index, char in enumerate(text):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == quote_char:
+            if (
+                quote_char == "'"
+                and index > 0
+                and index + 1 < len(text)
+                and text[index - 1].isalnum()
+                and text[index + 1].isalnum()
+            ):
+                # Ignore apostrophes in prose/comment text like "LLM's" so they
+                # do not masquerade as unterminated single-quoted strings.
+                continue
+            quote_count += 1
+    return quote_count % 2 == 1
+
+
+def _has_unterminated_triple_quoted_string(text: str) -> bool:
+    if not text:
+        return False
+    return text.count('"""') % 2 == 1 or text.count("'''") % 2 == 1
 
 
 def _looks_like_code_comment_text(text: str) -> bool:
@@ -3156,6 +3492,8 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._recover_academic_section_blocks(recovered_blocks, profile)
         recovered_blocks = self._merge_adjacent_heading_continuations(recovered_blocks)
         recovered_blocks = self._repair_prose_artifact_continuations(recovered_blocks, ordered_pages)
+        recovered_blocks = self._merge_same_anchor_code_continuations(recovered_blocks)
+        recovered_blocks = self._merge_cross_page_code_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
         recovered_blocks = self._promote_late_code_like_bodies(recovered_blocks)
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
@@ -3174,17 +3512,30 @@ class PdfStructureRecoveryService:
             profile,
         )
 
-        title = (
-            extraction.title
-            or self._infer_document_title_from_recovered_blocks(recovered_blocks)
-            or (chapters[0].title if chapters else None)
-        )
+        inferred_title = self._infer_document_title_from_recovered_blocks(recovered_blocks)
+        filename_title = cleaned_filename_book_title(file_path)
+        if profile.recovery_lane == "academic_paper":
+            title = extraction.title or inferred_title or (chapters[0].title if chapters else None) or filename_title
+        else:
+            title = extraction.title or inferred_title
+            if title and looks_like_auxiliary_document_title(title):
+                title = None
+            title = title or filename_title
         if title and chapters and chapters[0].title and _titles_overlap(chapters[0].title, title):
             chapters[0] = replace(chapters[0], title=title)
         metadata = {
             **extraction.metadata,
             "pdf_profile": profile.to_dict(),
             "outline_entry_count": len(extraction.outline_entries),
+            "document_title_resolution_source": (
+                "extraction_metadata"
+                if title and title == extraction.title
+                else "recovered_heading"
+                if title and title == inferred_title
+                else "source_filename"
+                if title and title == filename_title
+                else None
+            ),
             "pdf_page_evidence": self._page_evidence(
                 ordered_pages,
                 page_contexts,
@@ -4159,14 +4510,19 @@ class PdfStructureRecoveryService:
 
     def _merge_blocks(self, previous: _RecoveredBlock, current: _RecoveredBlock) -> _RecoveredBlock:
         flags = [*previous.flags]
-        previous_text = previous.text.rstrip()
-        current_text = current.text.lstrip()
+        code_merge = previous.block_type == BlockType.CODE and current.block_type == BlockType.CODE
+        if code_merge:
+            previous_text = previous.text.rstrip("\n")
+            current_text = current.text.lstrip("\n")
+        else:
+            previous_text = previous.text.rstrip()
+            current_text = current.text.lstrip()
 
-        if previous_text.endswith("-") and current_text[:1].islower():
+        if not code_merge and previous_text.endswith("-") and current_text[:1].islower():
             merged_text = previous_text[:-1] + current_text
             flags.append("dehyphenated")
         else:
-            separator = "" if previous_text.endswith(" ") else " "
+            separator = "\n" if code_merge else ("" if previous_text.endswith(" ") else " ")
             merged_text = previous_text + separator + current_text
 
         if current.page_start > previous.page_end:
@@ -4292,6 +4648,150 @@ class PdfStructureRecoveryService:
             repaired.append(current)
         return repaired
 
+    def _merge_same_anchor_code_continuations(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+    ) -> list[_RecoveredBlock]:
+        merged: list[_RecoveredBlock] = []
+        for current in recovered_blocks:
+            if merged and self._should_merge_same_anchor_code_continuation(merged[-1], current):
+                merged_block = self._merge_blocks(merged[-1], current)
+                merged_block.flags = list(
+                    dict.fromkeys([*merged_block.flags, "same_anchor_code_continuation_merged"])
+                )
+                merged[-1] = merged_block
+                continue
+            merged.append(current)
+        return merged
+
+    def _merge_cross_page_code_continuations(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage],
+    ) -> list[_RecoveredBlock]:
+        merged: list[_RecoveredBlock] = []
+        for current in recovered_blocks:
+            target_index = self._cross_page_code_merge_target_index(merged, current, pages)
+            if target_index is not None:
+                merged_block = self._merge_blocks(merged[target_index], current)
+                merged_block.flags = list(
+                    dict.fromkeys([*merged_block.flags, "cross_page_code_continuation_merged"])
+                )
+                merged[target_index] = merged_block
+                continue
+            merged.append(current)
+        return merged
+
+    def _cross_page_code_merge_target_index(
+        self,
+        recovered: list[_RecoveredBlock],
+        current: _RecoveredBlock,
+        pages: list[PdfPage],
+    ) -> int | None:
+        if not recovered:
+            return None
+        index = len(recovered) - 1
+        while index >= 0 and self._is_ignorable_code_separator(recovered[index]):
+            index -= 1
+        if index < 0:
+            return None
+        if any(not self._is_ignorable_code_separator(block) for block in recovered[index + 1 :]):
+            return None
+        if self._should_merge_cross_page_code_continuation(recovered[index], current, pages):
+            return index
+        return None
+
+    def _is_ignorable_code_separator(self, block: _RecoveredBlock) -> bool:
+        if block.role in {"header", "footer"}:
+            return True
+        return block.block_type == BlockType.PARAGRAPH and _is_page_number_text(block.text)
+
+    def _should_merge_cross_page_code_continuation(
+        self,
+        previous: _RecoveredBlock,
+        current: _RecoveredBlock,
+        pages: list[PdfPage],
+    ) -> bool:
+        if previous.role != "code_like" or current.role != "code_like":
+            return False
+        if previous.block_type != BlockType.CODE or current.block_type != BlockType.CODE:
+            return False
+        if previous.source_path != current.source_path:
+            return False
+        if current.page_start != previous.page_end + 1:
+            return False
+        if str(previous.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        if str(current.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+
+        page_lookup = {page.page_number: page for page in pages}
+        previous_page = page_lookup.get(previous.page_end)
+        current_page = page_lookup.get(current.page_start)
+        if previous_page is None or current_page is None:
+            return False
+
+        previous_bbox = self._page_bbox(previous, previous.page_end)
+        current_bbox = self._page_bbox(current, current.page_start)
+        if previous_bbox is None or current_bbox is None:
+            return False
+        prev_bottom = float(previous_bbox[3])
+        curr_top = float(current_bbox[1])
+        if prev_bottom < previous_page.height * 0.68:
+            return False
+        if curr_top > current_page.height * 0.34:
+            return False
+        if (
+            self._horizontal_overlap_ratio(previous_bbox, current_bbox) < 0.25
+            and abs(float(previous_bbox[0]) - float(current_bbox[0])) > 96.0
+        ):
+            return False
+
+        previous_lines = _expanded_code_candidate_lines(previous.text)
+        current_lines = _expanded_code_candidate_lines(current.text)
+        if not previous_lines or not current_lines:
+            return False
+        if _looks_like_code_continuation_line(current_lines[0], previous_lines):
+            return True
+
+        previous_last_line = previous_lines[-1].strip()
+        if previous_last_line.endswith(("(", "[", "{", ",", "\\", "+", "|", "=")):
+            return True
+        if _CODE_CONTROL_LINE_PATTERN.match(previous_last_line):
+            return True
+        if _looks_like_shell_command_line(previous_last_line) and _looks_like_shell_command_continuation_line(current_lines[0]):
+            return True
+        if previous_last_line.startswith("# ---") and current_lines[0].strip() == "---":
+            return True
+
+        previous_joined = "\n".join(previous_lines)
+        if (
+            _has_unterminated_triple_quoted_string(previous_joined)
+            or _has_unterminated_quoted_string(previous_joined, '"')
+            or _has_unterminated_quoted_string(previous_joined, "'")
+        ):
+            return True
+        return False
+
+    def _should_merge_same_anchor_code_continuation(
+        self,
+        previous: _RecoveredBlock,
+        current: _RecoveredBlock,
+    ) -> bool:
+        if not previous.anchor or previous.anchor != current.anchor:
+            return False
+        if previous.source_path != current.source_path:
+            return False
+        if previous.role != "code_like" or current.role != "code_like":
+            return False
+        if previous.block_type != BlockType.CODE or current.block_type != BlockType.CODE:
+            return False
+        if current.page_start < previous.page_start:
+            return False
+        if current.reading_order_index - previous.reading_order_index > 1:
+            return False
+        return True
+
     def _split_mixed_code_prose_blocks(
         self,
         recovered_blocks: list[_RecoveredBlock],
@@ -4308,26 +4808,47 @@ class PdfStructureRecoveryService:
         if block.role not in {"body", "code_like"} or block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE}:
             return [block]
         raw_lines = _expanded_code_candidate_lines(block.text)
-        if len(raw_lines) < 3:
+        if len(raw_lines) < 2:
             return [block]
 
         code_prefix_length = 0
+        unterminated_string = False
         for line in raw_lines:
-            if _looks_like_embedded_code_line(line) or _looks_like_code_docstring_line(line):
+            if (
+                _looks_like_embedded_code_line(line)
+                or _looks_like_code_docstring_line(line)
+                or _looks_like_code_continuation_line(line, raw_lines[:code_prefix_length])
+                or unterminated_string
+            ):
                 code_prefix_length += 1
+                joined_prefix = "\n".join(raw_lines[:code_prefix_length])
+                unterminated_string = (
+                    _has_unterminated_triple_quoted_string(joined_prefix)
+                    or _has_unterminated_quoted_string(joined_prefix, '"')
+                    or _has_unterminated_quoted_string(joined_prefix, "'")
+                )
                 continue
             break
-        if code_prefix_length < 2 or code_prefix_length >= len(raw_lines):
+        if code_prefix_length >= len(raw_lines):
             return [block]
 
         code_lines = raw_lines[:code_prefix_length]
         prose_lines = raw_lines[code_prefix_length:]
-        if not _looks_like_code("\n".join(code_lines), len(code_lines)):
+        single_line_code_ok = (
+            code_prefix_length == 1
+            and len(code_lines) == 1
+            and bool(prose_lines)
+            and _looks_like_splitworthy_single_line_code_fragment(code_lines[0])
+        )
+        if code_prefix_length < 2 and not single_line_code_ok:
             return [block]
-        if not prose_lines or not _looks_like_sentence_prose_line(prose_lines[0]):
+        if not _looks_like_code("\n".join(code_lines), len(code_lines)) and not single_line_code_ok:
+            return [block]
+        if not prose_lines or not _looks_like_prose_line_group(prose_lines):
             return [block]
 
         base_metadata = dict(block.metadata)
+        split_source_anchor_base = f"{block.source_path}#{block.anchor}"
         code_metadata = {
             **base_metadata,
             "pdf_block_role": "code_like",
@@ -4337,6 +4858,7 @@ class PdfStructureRecoveryService:
             **base_metadata,
             "pdf_block_role": "body",
             "pdf_mixed_code_prose_split": "trailing_prose_suffix",
+            "pdf_split_source_anchor_base": split_source_anchor_base,
         }
         code_flags = list(dict.fromkeys([*block.flags, "mixed_code_prose_split", "leading_code_prefix"]))
         prose_flags = list(dict.fromkeys([*block.flags, "mixed_code_prose_split", "trailing_prose_suffix"]))
@@ -4356,6 +4878,7 @@ class PdfStructureRecoveryService:
             metadata=prose_metadata,
             flags=prose_flags,
             reading_order_index=block.reading_order_index + 1,
+            anchor=f"{block.anchor}-trailing-prose",
         )
         return [code_block, prose_block]
 
@@ -5544,6 +6067,8 @@ class PdfStructureRecoveryService:
             current_blocks.append(block)
 
         flush_current()
+        if chapters and profile.recovery_lane == "outlined_book":
+            chapters = self._merge_outlined_book_auxiliary_chapters(chapters)
         if chapters:
             return chapters
 
@@ -5574,6 +6099,12 @@ class PdfStructureRecoveryService:
             _ChapterStartCandidate(page_number=entry.page_number, title=entry.title, source="outline")
             for entry in self._top_level_outline_entries(outline_entries)
         ]
+        if profile.recovery_lane == "outlined_book":
+            outline_candidates = [
+                candidate
+                for candidate in outline_candidates
+                if _should_start_outlined_book_top_level_chapter(candidate.title)
+            ]
         if outline_candidates:
             return self._merge_chapter_start_candidates(section_candidates, outline_candidates)
 
@@ -6075,6 +6606,74 @@ class PdfStructureRecoveryService:
             if block.role == "heading":
                 return block.text
         return f"Chapter {ordinal}"
+
+    def _merge_outlined_book_auxiliary_chapters(
+        self,
+        chapters: list[ParsedChapter],
+    ) -> list[ParsedChapter]:
+        merged: list[ParsedChapter] = []
+        next_expected_main_chapter = 1
+        main_sequence_started = False
+
+        for chapter in chapters:
+            title = _normalize_text(chapter.title or "")
+            main_chapter_number = _extract_book_main_chapter_number(title)
+            starts_appendix = _looks_like_outlined_book_appendix_title(title)
+            starts_glossary = _looks_like_outlined_book_glossary_title(title)
+            starts_frontmatter = _looks_like_outlined_book_frontmatter_title(title)
+
+            start_new_group = False
+            if main_chapter_number is not None:
+                if not main_sequence_started:
+                    start_new_group = main_chapter_number == 1 or not merged
+                elif main_chapter_number >= next_expected_main_chapter:
+                    start_new_group = True
+            elif starts_appendix or starts_glossary:
+                start_new_group = True
+            elif not merged:
+                start_new_group = True
+            elif not main_sequence_started and starts_frontmatter:
+                start_new_group = True
+
+            if start_new_group or not merged:
+                merged.append(chapter)
+                if main_chapter_number is not None:
+                    main_sequence_started = True
+                    next_expected_main_chapter = main_chapter_number + 1
+                continue
+
+            merged[-1] = self._merge_parsed_chapters(merged[-1], chapter)
+
+        return merged
+
+    def _merge_parsed_chapters(
+        self,
+        primary: ParsedChapter,
+        secondary: ParsedChapter,
+    ) -> ParsedChapter:
+        merged_blocks = list(primary.blocks)
+        starting_ordinal = len(merged_blocks)
+        merged_blocks.extend(
+            replace(block, ordinal=starting_ordinal + index)
+            for index, block in enumerate(secondary.blocks, start=1)
+        )
+        merged_metadata = {
+            **primary.metadata,
+            "source_page_end": secondary.metadata.get(
+                "source_page_end",
+                primary.metadata.get("source_page_end"),
+            ),
+            "pdf_collapsed_auxiliary_titles": [
+                *list(primary.metadata.get("pdf_collapsed_auxiliary_titles") or []),
+                *(
+                    [secondary.title]
+                    if secondary.title and secondary.title != primary.title
+                    else []
+                ),
+                *list(secondary.metadata.get("pdf_collapsed_auxiliary_titles") or []),
+            ],
+        }
+        return replace(primary, blocks=merged_blocks, metadata=merged_metadata)
 
 
 class PDFParser:

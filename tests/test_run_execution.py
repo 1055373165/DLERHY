@@ -125,7 +125,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             expired_at = datetime.now(timezone.utc) - timedelta(minutes=2)
             lease.lease_expires_at = expired_at
             work_item.lease_expires_at = expired_at
-            session.flush()
+            session.commit()
 
             reclaimed = execution.reclaim_expired_leases(run_id=run_id)
             self.assertEqual(reclaimed.expired_lease_count, 1)
@@ -135,6 +135,65 @@ class RunExecutionServiceTests(unittest.TestCase):
                 run_id=run_id,
                 worker_name="test.translate",
                 worker_instance_id="worker-3",
+                lease_seconds=30,
+            )
+
+        self.assertIsNotNone(reclaimed_claim)
+        assert reclaimed_claim is not None
+        self.assertEqual(reclaimed_claim.attempt, 2)
+
+    def test_executor_reclaims_expired_leases_before_stage_progression(self) -> None:
+        run_id = self._create_running_run(
+            budget=RunBudgetSummary(
+                max_wall_clock_seconds=None,
+                max_total_cost_usd=None,
+                max_total_token_in=None,
+                max_total_token_out=None,
+                max_retry_count_per_work_item=2,
+                max_consecutive_failures=None,
+                max_parallel_workers=1,
+                max_parallel_requests_per_provider=1,
+                max_auto_followup_attempts=1,
+            )
+        )
+        packet_id = str(uuid4())
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            execution = RunExecutionService(repository)
+            execution.seed_translate_work_items(run_id=run_id, packet_ids=[packet_id])
+            claimed = execution.claim_next_translate_work_item(
+                run_id=run_id,
+                worker_name="test.translate",
+                worker_instance_id="worker-expired",
+                lease_seconds=30,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=30)
+
+            lease = repository.get_active_lease_by_token(claimed.lease_token)
+            work_item = repository.get_work_item(claimed.work_item_id)
+            expired_at = datetime.now(timezone.utc) - timedelta(minutes=2)
+            lease.lease_expires_at = expired_at
+            work_item.lease_expires_at = expired_at
+            session.commit()
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+
+        self.assertTrue(executor._reclaim_expired_leases(run_id))
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            execution = RunExecutionService(repository)
+            reclaimed_claim = execution.claim_next_translate_work_item(
+                run_id=run_id,
+                worker_name="test.translate",
+                worker_instance_id="worker-after-reclaim",
                 lease_seconds=30,
             )
 

@@ -115,6 +115,7 @@ class RunExecutionService:
         run_id: str,
         packet_ids: list[str],
         priority: int = 100,
+        input_version_bundle_by_packet_id: dict[str, dict] | None = None,
     ) -> list[str]:
         return self.seed_work_items(
             run_id=run_id,
@@ -122,10 +123,13 @@ class RunExecutionService:
             scope_type=WorkItemScopeType.PACKET,
             scope_ids=packet_ids,
             priority=priority,
-            input_version_bundle_by_scope_id={
-                packet_id: {"packet_id": packet_id}
-                for packet_id in packet_ids
-            },
+            input_version_bundle_by_scope_id=(
+                input_version_bundle_by_packet_id
+                or {
+                    packet_id: {"packet_id": packet_id}
+                    for packet_id in packet_ids
+                }
+            ),
         )
 
     def claim_next_work_item(
@@ -145,40 +149,61 @@ class RunExecutionService:
             stage=stage,
             limit=32,
         )
-        now = _utcnow()
-        lease_expires_at = now + timedelta(seconds=lease_seconds)
         for work_item_id in candidate_ids:
-            bundle = self.repository.claim_work_item(
+            claimed = self.claim_work_item_by_id(
                 work_item_id=work_item_id,
                 worker_name=worker_name,
                 worker_instance_id=worker_instance_id,
-                lease_token=str(uuid4()),
-                heartbeat_at=now,
-                lease_expires_at=lease_expires_at,
+                lease_seconds=lease_seconds,
             )
-            if bundle is None:
-                continue
-            self.repository.save_run(
-                run,
-                audit_event=RunAuditEvent(
-                    run_id=run_id,
-                    work_item_id=bundle.work_item.id,
-                    event_type="work_item.leased",
-                    actor_type=ActorType.SYSTEM,
-                    actor_id=worker_instance_id,
-                    created_at=now,
-                    payload_json={
-                        "stage": bundle.work_item.stage.value,
-                        "scope_type": bundle.work_item.scope_type.value,
-                        "scope_id": bundle.work_item.scope_id,
-                        "attempt": bundle.work_item.attempt,
-                        "lease_token": bundle.worker_lease.lease_token,
-                        "worker_name": worker_name,
-                    },
-                ),
-            )
-            return self._to_claimed_run_work_item(bundle)
+            if claimed is not None:
+                return claimed
         return None
+
+    def claim_work_item_by_id(
+        self,
+        *,
+        work_item_id: str,
+        worker_name: str,
+        worker_instance_id: str,
+        lease_seconds: int,
+    ) -> ClaimedRunWorkItem | None:
+        work_item = self.repository.get_work_item(work_item_id)
+        run = self.repository.get_run(work_item.run_id)
+        if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING}:
+            return None
+        now = _utcnow()
+        lease_expires_at = now + timedelta(seconds=lease_seconds)
+        bundle = self.repository.claim_work_item(
+            work_item_id=work_item_id,
+            worker_name=worker_name,
+            worker_instance_id=worker_instance_id,
+            lease_token=str(uuid4()),
+            heartbeat_at=now,
+            lease_expires_at=lease_expires_at,
+        )
+        if bundle is None:
+            return None
+        self.repository.save_run(
+            run,
+            audit_event=RunAuditEvent(
+                run_id=run.id,
+                work_item_id=bundle.work_item.id,
+                event_type="work_item.leased",
+                actor_type=ActorType.SYSTEM,
+                actor_id=worker_instance_id,
+                created_at=now,
+                payload_json={
+                    "stage": bundle.work_item.stage.value,
+                    "scope_type": bundle.work_item.scope_type.value,
+                    "scope_id": bundle.work_item.scope_id,
+                    "attempt": bundle.work_item.attempt,
+                    "lease_token": bundle.worker_lease.lease_token,
+                    "worker_name": worker_name,
+                },
+            ),
+        )
+        return self._to_claimed_run_work_item(bundle)
 
     def claim_next_translate_work_item(
         self,

@@ -27,6 +27,7 @@ from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepo
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
 from book_agent.services.style_drift import STYLE_DRIFT_RULES
+from book_agent.services.term_normalization import normalize_term_rendering
 
 
 def _utcnow() -> datetime:
@@ -47,6 +48,26 @@ def _severity_rank(value: Severity | None) -> int:
     return order.get(value, 0)
 
 _FRAGMENTARY_PDF_OMISSION_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{1,24}[.?!:;]$")
+_LOCKED_TERM_PREFIX_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "via",
+    "with",
+}
+_REFERENCE_LIKE_CHAPTER_TITLES = {"reference", "references", "glossary", "bibliography", "index"}
+_LOCKED_TERM_LEADING_MODIFIERS = {"大", "小", "超", "微", "强", "弱", "多", "单"}
 
 
 @dataclass(slots=True)
@@ -231,6 +252,7 @@ class ReviewService:
             term for term in bundle.term_entries if term.lock_level == LockLevel.LOCKED and term.status.value == "active"
         ]
         for term in active_locked_terms:
+            expected_target_term = normalize_term_rendering(term.source_term, term.target_term)
             for sentence in bundle.sentences:
                 if not sentence.translatable:
                     continue
@@ -241,7 +263,15 @@ class ReviewService:
                     alignment_state.active_alignments_by_sentence,
                     alignment_state.active_target_map,
                 )
-                if term.target_term not in aligned_text:
+                if self._should_skip_locked_term_conflict(
+                    bundle=bundle,
+                    sentence=sentence,
+                    source_term=term.source_term,
+                    expected_target_term=expected_target_term,
+                    aligned_text=aligned_text,
+                ):
+                    continue
+                if expected_target_term not in aligned_text:
                     issues.append(
                         self._make_issue(
                             now=now,
@@ -256,10 +286,10 @@ class ReviewService:
                             evidence={
                                 "source_term": term.source_term,
                                 "source_terms": [term.source_term],
-                                "expected_target_term": term.target_term,
+                                "expected_target_term": expected_target_term,
                                 "actual_target_text": aligned_text,
                             },
-                            unique_key=self._term_conflict_unique_key(term.target_term, term.source_term),
+                            unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
                         )
                     )
 
@@ -593,6 +623,76 @@ class ReviewService:
             if sentence_id in sentence_ids:
                 return packet.id
         return None
+
+    def _should_skip_locked_term_conflict(
+        self,
+        *,
+        bundle: ChapterReviewBundle,
+        sentence,
+        source_term: str | None,
+        expected_target_term: str | None,
+        aligned_text: str,
+    ) -> bool:
+        if not aligned_text.strip():
+            return False
+        if not source_term or not expected_target_term:
+            return False
+        has_modifier_variant = self._source_term_has_modifier_variant(sentence.source_text or "", source_term)
+        if not has_modifier_variant:
+            return False
+        if self._is_reference_like_chapter(bundle.chapter.title_src):
+            return True
+        if self._aligned_text_contains_locked_term_variant(aligned_text, expected_target_term):
+            return True
+        return False
+
+    def _source_term_has_modifier_variant(self, source_text: str, source_term: str) -> bool:
+        pattern = re.compile(rf"(?i)\b{re.escape(source_term)}\b")
+        for match in pattern.finditer(source_text):
+            prefix = source_text[: match.start()].rstrip()
+            suffix = source_text[match.end() :].lstrip()
+            previous_token = re.search(r"([A-Za-z][A-Za-z0-9.+_-]*)\s*$", prefix) if prefix else None
+            next_token = re.search(r"^([A-Za-z][A-Za-z0-9.+_-]*)", suffix) if suffix else None
+            if self._modifier_token_is_structural(previous_token.group(1) if previous_token else None):
+                return True
+            if self._modifier_token_is_structural(next_token.group(1) if next_token else None):
+                return True
+        return False
+
+    def _modifier_token_is_structural(self, token: str | None) -> bool:
+        if not token:
+            return False
+        normalized = token.strip()
+        if not normalized:
+            return False
+        if normalized.lower() in _LOCKED_TERM_PREFIX_STOPWORDS:
+            return False
+        if any(char in normalized for char in ".-_+/"):
+            return True
+        return normalized[0].isupper()
+
+    def _aligned_text_contains_locked_term_variant(self, aligned_text: str, expected_target_term: str) -> bool:
+        normalized_aligned = _normalize_review_text(aligned_text)
+        candidates = self._locked_term_variant_candidates(expected_target_term)
+        if not normalized_aligned or not candidates:
+            return False
+        return any(candidate in normalized_aligned for candidate in candidates)
+
+    def _locked_term_variant_candidates(self, expected_target_term: str | None) -> set[str]:
+        normalized_expected = _normalize_review_text(expected_target_term)
+        if not normalized_expected:
+            return set()
+        candidates = {normalized_expected}
+        trailing_cjk = re.search(r"([\u4e00-\u9fff]{2,})$", normalized_expected)
+        if trailing_cjk is not None:
+            candidates.add(trailing_cjk.group(1))
+        if normalized_expected[0] in _LOCKED_TERM_LEADING_MODIFIERS and len(normalized_expected) > 2:
+            candidates.add(normalized_expected[1:])
+        return {candidate for candidate in candidates if candidate}
+
+    def _is_reference_like_chapter(self, title_src: str | None) -> bool:
+        normalized_title = _normalize_review_text(title_src).lower()
+        return normalized_title in _REFERENCE_LIKE_CHAPTER_TITLES
 
     def _packet_context_failure_issues(
         self,
@@ -951,6 +1051,23 @@ class ReviewService:
         if isinstance(pdf_profile, dict) and pdf_profile.get("recovery_lane"):
             recovery_lane = str(pdf_profile["recovery_lane"])
 
+        if recovery_lane == "outlined_book":
+            if self._outlined_book_single_multi_column_is_advisory(
+                parse_confidence=parse_confidence,
+                local_suspicious_pages=local_suspicious_pages,
+                local_layout_risk_pages=local_layout_risk_pages,
+                local_high_layout_risk_pages=local_high_layout_risk_pages,
+                chapter_page_evidence=chapter_page_evidence,
+            ):
+                return {
+                    "severity": Severity.LOW,
+                    "blocking": False,
+                    "emit_issue": True,
+                    "recovery_lane": recovery_lane,
+                    "reason": "outlined_book_single_multi_column_advisory",
+                }
+            return default | {"recovery_lane": recovery_lane}
+
         if recovery_lane != "academic_paper":
             return default | {"recovery_lane": recovery_lane}
 
@@ -994,6 +1111,67 @@ class ReviewService:
             "recovery_lane": recovery_lane,
             "reason": "academic_paper_medium_layout_advisory",
         }
+
+    def _outlined_book_single_multi_column_is_advisory(
+        self,
+        *,
+        parse_confidence: float | None,
+        local_suspicious_pages: list[int],
+        local_layout_risk_pages: list[int],
+        local_high_layout_risk_pages: list[int],
+        chapter_page_evidence: list[dict[str, Any]],
+    ) -> bool:
+        if parse_confidence is None or float(parse_confidence) < 0.82:
+            return False
+        if local_high_layout_risk_pages:
+            return False
+
+        suspect_pages = sorted(
+            {
+                int(page_number)
+                for page_number in [*local_suspicious_pages, *local_layout_risk_pages]
+                if isinstance(page_number, int)
+            }
+        )
+        if len(suspect_pages) != 1 or len(chapter_page_evidence) < 4:
+            return False
+
+        page_by_number = {
+            int(page["page_number"]): page
+            for page in chapter_page_evidence
+            if isinstance(page, dict) and isinstance(page.get("page_number"), int)
+        }
+        suspect_page = page_by_number.get(suspect_pages[0])
+        if suspect_page is None:
+            return False
+
+        reasons = {
+            str(reason)
+            for reason in list(suspect_page.get("page_layout_reasons") or [])
+            if isinstance(reason, str)
+        }
+        if not reasons or not reasons.issubset({"multi_column"}):
+            return False
+
+        anchored_page_count = 0
+        for page in chapter_page_evidence:
+            if not isinstance(page, dict):
+                continue
+            recovery_flags = {
+                str(flag)
+                for flag in list(page.get("recovery_flags") or [])
+                if isinstance(flag, str)
+            }
+            role_counts = page.get("role_counts")
+            heading_count = 0
+            caption_count = 0
+            if isinstance(role_counts, dict):
+                heading_count = int(role_counts.get("heading", 0) or 0)
+                caption_count = int(role_counts.get("caption", 0) or 0)
+            if "cross_page_repaired" in recovery_flags or heading_count > 0 or caption_count > 0:
+                anchored_page_count += 1
+
+        return anchored_page_count >= 3
 
     def _pdf_image_caption_review_policy(
         self,
@@ -1267,6 +1445,11 @@ class ReviewService:
                 if segment.id in recoverable_target_sentence_ids
                 and segment.id not in active_target_ids
             ]
+            requires_packet_rerun = self._alignment_failure_requires_packet_rerun(
+                orphan_target_ids=orphan_target_ids,
+                latest_segments=latest_segments,
+                recoverable_target_sentence_ids=recoverable_target_sentence_ids,
+            )
             orphan_sentence_ids = sorted(
                 {
                     sentence_id
@@ -1279,7 +1462,11 @@ class ReviewService:
             representative_sentence_id = (
                 recoverable_missing[0]
                 if recoverable_missing
-                else orphan_sentence_ids[0]
+                else (
+                    orphan_sentence_ids[0]
+                    if orphan_sentence_ids
+                    else (current_sentence_ids[0] if current_sentence_ids else None)
+                )
             )
             issues.append(
                 self._make_issue(
@@ -1287,7 +1474,7 @@ class ReviewService:
                     chapter_id=bundle.chapter.id,
                     document_id=bundle.chapter.document_id,
                     sentence_id=representative_sentence_id,
-                    packet_id=sentence_to_packet.get(representative_sentence_id),
+                    packet_id=sentence_to_packet.get(representative_sentence_id) if representative_sentence_id else packet.id,
                     issue_type="ALIGNMENT_FAILURE",
                     root_cause_layer=RootCauseLayer.ALIGNMENT,
                     severity=Severity.HIGH,
@@ -1298,6 +1485,7 @@ class ReviewService:
                         "missing_sentence_ids": ",".join(recoverable_missing),
                         "orphan_target_segment_ids": ",".join(orphan_target_ids),
                         "orphan_sentence_ids": ",".join(orphan_sentence_ids),
+                        "requires_packet_rerun": requires_packet_rerun,
                     },
                     unique_key=packet.id,
                 )
@@ -1494,6 +1682,36 @@ class ReviewService:
             recoverable_target_sentence_ids[target_id] = source_sentence_ids
         return recoverable_sentence_ids, recoverable_target_sentence_ids
 
+    def _alignment_failure_requires_packet_rerun(
+        self,
+        *,
+        orphan_target_ids: list[str],
+        latest_segments: list[object],
+        recoverable_target_sentence_ids: dict[str, list[str]],
+    ) -> bool:
+        if not orphan_target_ids:
+            return False
+        segment_map = {segment.id: segment for segment in latest_segments}
+        for target_id in orphan_target_ids:
+            if recoverable_target_sentence_ids.get(target_id):
+                continue
+            segment = segment_map.get(target_id)
+            if segment is None:
+                continue
+            if not self._is_short_tail_label_text(segment.text_zh):
+                return True
+        return False
+
+    def _is_short_tail_label_text(self, text: object) -> bool:
+        normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not normalized:
+            return False
+        if len(normalized) > 24:
+            return False
+        if normalized.endswith((":", "：", ";", "；")):
+            return True
+        return len(normalized) <= 12 and not any(mark in normalized for mark in "。！？.!?")
+
     def _make_issue(
         self,
         *,
@@ -1533,12 +1751,17 @@ class ReviewService:
         )
 
     def _build_action(self, issue: ReviewIssue) -> IssueAction:
-        action_type = resolve_action(
-            IssueRoutingContext(
-                issue_type=issue.issue_type,
-                root_cause_layer=issue.root_cause_layer,
-                involves_locked_term=issue.issue_type == "TERM_CONFLICT",
-                translation_content_ok=issue.issue_type != "OMISSION",
+        action_type = (
+            ActionType.RERUN_PACKET
+            if issue.issue_type == "ALIGNMENT_FAILURE"
+            and bool((issue.evidence_json or {}).get("requires_packet_rerun"))
+            else resolve_action(
+                IssueRoutingContext(
+                    issue_type=issue.issue_type,
+                    root_cause_layer=issue.root_cause_layer,
+                    involves_locked_term=issue.issue_type == "TERM_CONFLICT",
+                    translation_content_ok=issue.issue_type != "OMISSION",
+                )
             )
         )
         scope_type, scope_id = self._scope_for_action(issue, action_type)

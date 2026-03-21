@@ -295,7 +295,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             self.assertEqual(artifacts.translation_run.model_name, "mock-llm")
         self.assertEqual(artifacts.translation_run.prompt_version, "p0.llm.v1")
         self.assertEqual(artifacts.translation_run.model_config_json["provider"], "fake")
-        self.assertEqual(artifacts.translation_run.model_config_json["prompt_profile"], "role-style-v2")
+        self.assertEqual(artifacts.translation_run.model_config_json["prompt_profile"], "role-style-faithful-v6")
         self.assertEqual(artifacts.alignment_edges[0].sentence_id, first_sentence_id)
 
         self.assertEqual(len(fake_client.requests), 1)
@@ -310,7 +310,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("Current Paragraph:", fake_client.requests[0].user_prompt)
         self.assertIn("Sentence Ledger:", fake_client.requests[0].user_prompt)
         self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
-        self.assertIn("senior technical translator and localizer", fake_client.requests[0].system_prompt)
+        self.assertIn("publication-grade English-to-Chinese translator", fake_client.requests[0].system_prompt)
 
     def test_load_packet_bundle_restores_current_sentence_order_by_block_ordinal(self) -> None:
         document_id = "11111111-1111-1111-1111-111111111111"
@@ -818,6 +818,24 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_version="profile-test",
             prompt_profile="role-style-v2",
         )
+        faithful_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-faithful-v4",
+        )
+        faithful_prompt_v5 = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-faithful-v5",
+        )
+        faithful_prompt_v6 = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="role-style-faithful-v6",
+        )
         memory_prompt = build_translation_prompt_request(
             TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
             model_name="mock-llm",
@@ -833,6 +851,19 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 
         self.assertIn("high-fidelity book translation worker", current_prompt.system_prompt)
         self.assertIn("senior technical translator and localizer", role_prompt.system_prompt)
+        self.assertIn("High fidelity comes first", faithful_prompt.system_prompt)
+        self.assertIn("never promotional, chatty, or over-interpreted", faithful_prompt.system_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt.user_prompt)
+        self.assertIn("Paragraph Intent Signal:", faithful_prompt.user_prompt)
+        self.assertIn("Keep concrete imagery concrete", faithful_prompt_v5.system_prompt)
+        self.assertIn("abstract noun-heavy phrasing", faithful_prompt_v5.system_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt_v5.user_prompt)
+        self.assertIn("Paragraph Intent Signal:", faithful_prompt_v5.user_prompt)
+        self.assertIn("service, marketing, or management language", faithful_prompt_v6.system_prompt)
+        self.assertIn("simple ending into a slogan about consistency, care, or service", faithful_prompt_v6.system_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt_v6.user_prompt)
+        self.assertIn("Paragraph Intent Signal:", faithful_prompt_v6.user_prompt)
+        self.assertIn("follow them over generic smoothing", faithful_prompt_v6.user_prompt)
         self.assertIn("Chinese Style Priorities:", role_prompt.user_prompt)
         self.assertIn("Paragraph Intent Signal:", role_prompt.user_prompt)
         self.assertIn("Intent: definition", role_prompt.user_prompt)
@@ -1186,6 +1217,63 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("强烈的责任感 / 很强的责任意识", literalism)
         self.assertIn("深刻的责任感", literalism)
 
+    def test_context_compiler_infers_consistency_care_literalism_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-consistency-care",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Introduction"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-consistency-care",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text=(
+                        "The chef’s value is greater than just preparing a single meal, because the chef "
+                        "draws on memory and experience to provide consistency and care over time."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter explains agentic AI through a recipe-book versus chef analogy.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("长期稳定、周到地照应", literalism)
+        self.assertIn("提供连贯性和关怀", literalism)
+
+    def test_context_compiler_infers_agentic_ai_term_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-agentic-ai-term",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Introduction"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-agentic-ai-term",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="If generative AI chat is a recipe book, then agentic AI is a personal chef.",
+                )
+            ],
+            chapter_brief="This chapter explains agentic AI through a recipe-book analogy.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("智能体AI", literalism)
+        self.assertIn("智能体式AI", literalism)
+
     def test_context_compiler_infers_knowledge_timeline_literalism_guardrail(self) -> None:
         packet = ContextPacket(
             packet_id="pkt-knowledge-timeline",
@@ -1306,7 +1394,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                 TranslatedContextBlock(
                     block_id="block-term-conflict",
                     source_excerpt="Agentic AI must take on more than that.",
-                    target_excerpt="然而，智能体AI必须承担更多。",
+                    target_excerpt="然而，智能体式AI必须承担更多。",
                     source_sentence_ids=["s-prev-2"],
                 ),
                 TranslatedContextBlock(
@@ -1327,6 +1415,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 
         self.assertEqual(len(compiled.prev_translated_blocks), 1)
         self.assertEqual(compiled.prev_translated_blocks[0].block_id, "block-clean")
+        self.assertEqual(compiled.relevant_terms[0].target_term, "智能体AI")
 
     def test_context_compiler_can_disable_source_aware_literalism_guardrails(self) -> None:
         packet = ContextPacket(
@@ -1421,6 +1510,52 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(compiled.prev_blocks, [])
         self.assertEqual(compiled.next_blocks, [])
         self.assertEqual(compiled.chapter_brief, _compress_chapter_brief(packet.chapter_brief or ""))
+
+    def test_context_compiler_drops_previous_translations_for_self_contained_long_paragraph(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-prev-translation-trim",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-current",
+                    block_type="paragraph",
+                    sentence_ids=["s1", "s2"],
+                    text=(
+                        "If generative AI chat is a recipe book, then agentic AI is a personal chef. "
+                        "A chef remembers what you liked last week and keeps track of what is in the fridge."
+                    ),
+                )
+            ],
+            prev_translated_blocks=[
+                TranslatedContextBlock(
+                    block_id="block-prev-1",
+                    source_excerpt="Prior reference one.",
+                    target_excerpt="上一段引用一。",
+                    source_sentence_ids=["sp1"],
+                ),
+                TranslatedContextBlock(
+                    block_id="block-prev-2",
+                    source_excerpt="Prior reference two.",
+                    target_excerpt="上一段引用二。",
+                    source_sentence_ids=["sp2"],
+                ),
+            ],
+            chapter_brief="This chapter explains agentic AI through a recipe-book analogy.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        self.assertEqual(compiled.prev_translated_blocks, [])
+        self.assertEqual(
+            compiled.compile_metadata.get("selected_prev_translated_block_count"),
+            0,
+        )
 
     def test_context_compiler_keeps_minimal_context_for_short_bridge_paragraph(self) -> None:
         packet = ContextPacket(
@@ -1846,7 +1981,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertFalse(artifacts.payload["options"]["include_literalism_guardrails"])
         self.assertTrue(artifacts.payload["options"]["prefer_previous_translations_over_source_context"])
         self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
-        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "role-style-v2")
+        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "role-style-faithful-v6")
         self.assertFalse(artifacts.payload["options"]["execute"])
         self.assertIsNone(artifacts.payload["worker_output"])
         self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")
@@ -3382,7 +3517,15 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(metadata.runtime_config["max_retries"], 1)
         self.assertEqual(metadata.runtime_config["retry_backoff_seconds"], 1.5)
 
-    def test_settings_accept_standard_openai_env_aliases(self) -> None:
+    def test_settings_read_openai_key_from_dotenv_and_ignore_shell_env(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as handle:
+            handle.write(
+                "OPENAI_API_KEY=dotenv-test-key\n"
+                "OPENAI_BASE_URL=https://provider.example/v1/responses\n"
+            )
+            env_path = Path(handle.name)
+        self.addCleanup(lambda: env_path.unlink(missing_ok=True))
+
         with patch.dict(
             "os.environ",
             {
@@ -3392,12 +3535,13 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             clear=False,
         ):
             settings = Settings(
+                _env_file=env_path,
                 translation_backend="openai_compatible",
                 translation_model="gpt-test",
                 translation_prompt_version="p0.llm.v1",
             )
 
-        self.assertEqual(settings.translation_openai_api_key, "env-test-key")
+        self.assertEqual(settings.translation_openai_api_key, "dotenv-test-key")
         self.assertEqual(settings.translation_openai_base_url, "https://provider.example/v1/responses")
 
     def test_factory_rejects_openai_compatible_worker_without_api_key(self) -> None:
@@ -3410,6 +3554,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             clear=False,
         ):
             settings = Settings(
+                _env_file=None,
                 translation_backend="openai_compatible",
                 translation_model="gpt-test",
                 translation_prompt_version="p0.llm.v1",

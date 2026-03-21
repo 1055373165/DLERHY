@@ -1,6 +1,7 @@
 # ruff: noqa: E402
 
 import os
+import json
 import sqlite3
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from book_agent.domain.enums import DocumentStatus, ExportStatus, ExportType, So
 from book_agent.domain.models.document import Document
 from book_agent.domain.models.review import Export
 from book_agent.infra.db.base import Base
+from book_agent.infra.db.sqlite_schema_backfill import ensure_sqlite_schema_compat
 from book_agent.infra.db.session import build_engine, build_session_factory
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -188,6 +190,82 @@ class AppRuntimeTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["title"], "Runtime Smoke Book")
         self.assertTrue(db_path.exists())
+
+    def test_sqlite_schema_backfill_adds_document_title_columns(self) -> None:
+        db_path = Path(self.tempdir.name) / "legacy-runtime.sqlite"
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE documents (
+                    id TEXT PRIMARY KEY,
+                    title TEXT
+                )
+                """
+            )
+            connection.execute("INSERT INTO documents (id, title) VALUES (?, ?)", ("doc-1", "Legacy Title"))
+            connection.commit()
+
+        added_column_count = ensure_sqlite_schema_compat(f"sqlite+pysqlite:///{db_path}")
+
+        self.assertEqual(added_column_count, 2)
+        with sqlite3.connect(db_path) as connection:
+            columns = [str(row[1]) for row in connection.execute("PRAGMA table_info('documents')").fetchall()]
+            self.assertIn("title_src", columns)
+            self.assertIn("title_tgt", columns)
+            row = connection.execute(
+                "SELECT title, title_src, title_tgt FROM documents WHERE id = ?",
+                ("doc-1",),
+            ).fetchone()
+        self.assertEqual(row[0], "Legacy Title")
+        self.assertEqual(row[1], "Legacy Title")
+        self.assertIsNone(row[2])
+
+    def test_sqlite_schema_backfill_corrects_auxiliary_pdf_document_titles_from_source_filename(self) -> None:
+        db_path = Path(self.tempdir.name) / "legacy-runtime-title-backfill.sqlite"
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE documents (
+                    id TEXT PRIMARY KEY,
+                    title TEXT,
+                    source_type TEXT,
+                    source_path TEXT,
+                    src_lang TEXT,
+                    tgt_lang TEXT,
+                    metadata_json TEXT
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO documents (id, title, source_type, source_path, src_lang, tgt_lang, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "doc-2",
+                    "Dedication",
+                    SourceType.PDF_TEXT.value,
+                    "/tmp/Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gulli) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+                    "en",
+                    "zh",
+                    json.dumps({"pdf_profile": {"recovery_lane": "outlined_book"}}),
+                ),
+            )
+            connection.commit()
+
+        added_column_count = ensure_sqlite_schema_compat(f"sqlite+pysqlite:///{db_path}")
+
+        self.assertEqual(added_column_count, 2)
+        with sqlite3.connect(db_path) as connection:
+            row = connection.execute(
+                "SELECT title, title_src, title_tgt, metadata_json FROM documents WHERE id = ?",
+                ("doc-2",),
+            ).fetchone()
+        self.assertEqual(row[0], "Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems")
+        self.assertEqual(row[1], "Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems")
+        self.assertIsNone(row[2])
+        metadata = json.loads(row[3])
+        self.assertEqual(metadata["document_title"]["resolution_source"], "source_filename")
 
     def test_create_app_returns_503_when_database_is_unavailable(self) -> None:
         self._set_env(

@@ -1,350 +1,391 @@
 # TODOS
 
-Last Updated: 2026-03-20
+Last Updated: 2026-03-21 16:10 CST
 
 ## Purpose
 
-这份文档是 **PDF 改造主线的接力开发手册**。
+这份文档是当前 `book-agent` 项目的接力开发快照。
 
-目标不是记录所有历史，而是保证：
+目标只有两个：
 
-- 重新打开一个新会话时，不需要重新考古就能继续推进
-- 明确知道当前做到哪里、哪些已冻结、哪些还没做
-- 每完成一刀后，记得同步更新对应驾驶舱文档，避免状态丢失
+- 让新接手的程序员 5 分钟内知道项目做到哪里了
+- 让下一刀开发可以直接开始，而不是重新考古
 
 ## Read First
 
-如果是新会话接手，先读这 4 份：
+**架构重构主线（当前活跃方向）：**
 
-1. [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
-2. [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
-3. [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
-4. [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)
+1. `docs/multi-agent-final-implementation-plan.md` — **Phase 1 锁定计划（必读）**，7 个 workstream、编码顺序、验收标准
+2. `docs/multi-agent-translation-product-review.md` — 产品评审，确定"selective expansion"方向
+3. `docs/multi-agent-architecture-design.md` — 技术深度补充（OCR 方案对比、Memory 数据结构、成本模型、Markdown 中间格式 schema）
+4. `auto-pilot.md` — 开发框架协议
 
-如果当前目标不是 PDF parser，而是“英译中质量重构 / packet memory / rerun policy”，先补读：
+**项目基础（仍然有效）：**
 
-5. [translation-quality-refactor-cockpit.md](/Users/smy/projects/mygithub/DLEHY/docs/translation-quality-refactor-cockpit.md)
+5. `PROGRESS.md` — Web 产品化 slice 已 100% 完成
+6. `DECISIONS.md` — 已有 14 条 ADR
+7. `README.md` — 项目总览
+8. `docs/translation-agent-system-design.md` — 系统设计
+9. `docs/orchestrator-state-machine.md` — 状态机设计
+
+如果要继续看实现，按 workstream 顺序入手：
+
+- WS2 起点：`src/book_agent/services/memory_service.py`（当前只有 64 行骨架）
+- WS2 上游：`src/book_agent/services/context_compile.py`、`src/book_agent/infra/repositories/chapter_memory.py`
+- WS3 起点：`src/book_agent/workers/contracts.py`、`src/book_agent/services/translation.py`
+- WS4 起点：`src/book_agent/app/runtime/document_run_executor.py`、`src/book_agent/services/run_execution.py`
+- WS5 起点：`src/book_agent/services/review.py`、`src/book_agent/orchestrator/rule_engine.py`
 
 ## One-Screen Summary
 
-- 内部阶段：`P1-A complete, P1-B partial`
-- 对外 contract：仍是 `p1_text_pdf_bootstrap`
-- 当前主结论：
-  - 低风险文本 PDF 已能进入主链路
-  - 一部分 `medium-risk` 文本 PDF 已能 bootstrap / review / export
-  - 短篇 academic paper 已可通过 `academic_paper` lane 正式导出
-  - 单栏 research paper 已能恢复“真实标题 + References”
-  - 扫描 / OCR 仍未支持
-  - 复杂双栏 / figure/equation-heavy 页面仍未达到 robust support
+```
+                        ┌──────────────────────────┐
+                        │  Web 产品化 slice: 100%   │  ← 上一轮完成
+                        │  Dedication: exported      │
+                        │  Agentic AI: translating   │
+                        └────────────┬─────────────┘
+                                     │
+                        ┌────────────▼─────────────┐
+                        │  Multi-Agent 架构重构      │  ← 当前活跃方向
+                        │  设计阶段: 100% 完成       │
+                        │  编码阶段: 0% 未开始       │
+                        │  下一步: WS2 + WS3 编码    │
+                        └──────────────────────────┘
+```
+
+- Web 产品化 slice 已全部完成（33/33 MDU）。上传、整书翻译、review/repair loop、导出全链路已通。
+- 首页刚完成第二轮整页重写：主流程已改为全宽工作台结构，书库历史不再挤在右侧窄栏里。
+- Multi-Agent 架构重构已完成**全部设计工作**：产品评审 → 实施计划锁定 → 技术深度补充文档。
+- **编码尚未开始。** 下一步是按锁定计划的 WS2 + WS3 开始实现。
 
 一句话判断：
 
-> PDF 主线已经从“只能 smoke”推进到“真实样本可运行、可验证、可迭代”，但距离“广泛真实出版 PDF 默认放行”还有一段距离。
+> 架构设计文档已齐备并互相一致，Phase 1 范围已冻结，编码顺序已锁定。接手后直接进入 WS2 编码，不需要再做任何设计讨论。
 
-## Current Handoff Snapshot
+## Recent Addendum: UI Rewrite Snapshot
 
-这部分是给下一个程序员看的“接力起点”。如果你只读一段，优先读这里。
+这轮新增了一次**彻底的首页工作台重写**，不是旧布局改皮肤。
 
-- 刚完成的最新一刀：
-  - `chapter-intro title cleanup v2`：修正真实长书 intro title 中的 article/question 误粘连与 epigraph sentence restart 泄漏
-  - 针对真实英文书分页区域，修复了 4 类结构错误：`inline heading` 丢失、`contextual image legend` 被并进正文、跨页 bullet 被误切且前半段被误判成 code、页内图片排序错误
-- 本轮主要修改入口：
-  - `/Users/smy/project/book-agent/src/book_agent/domain/structure/pdf.py`
-  - `/Users/smy/project/book-agent/tests/test_pdf_support.py`
-- 本轮 parser/export 关键变化：
-  - intro title cleanup 不再把正常 `A deep` / `you go` 误粘成 `Adeep` / `yougo`
-  - 当 chapter-intro title 后紧跟 uppercase spaced-letter epigraph / quote restart 时，会在 parser 侧直接截断，避免 `Dataislikegarbage` 这类句子残片泄漏到标题
-  - 单块 `title + epigraph` 合并场景现已进入回归测试，不再只覆盖双块标题页
-  - 页内 block 恢复不再默认“先全部文本、后全部图片”，而是对书籍场景启用 `text/image` 交错排序
-  - 新增 inline book heading promotion，`Tokenization: Breaking Text into Pieces` 这类标题会被提升成真实 `heading`
-  - 新增 contextual image legend promotion，`This sentence contains 27 tokens` 这类短图例会独立保留并作为 caption 候选
-  - 扩展 image-caption target 匹配，允许 contextual legend 绑定图片
-  - export 侧新增 bullet paragraph guard，避免 `• GPT (Byte Pair Encoding): ...` 被误提升成 code artifact
+### 新首页现在是什么
 
-### Latest Real-Book Validation
+- 入口文件仍是 `src/book_agent/app/ui/page.py`
+- 但整页 HTML / CSS / JS 已重写为新的“整书译制工作台”结构
+- 信息架构变成：
+  - 新建书籍任务
+  - 当前书籍
+  - 运行总览
+  - 交付资产
+  - 复核与阻塞
+  - 章节注意区
+  - 最近运行记录
+  - 书库历史（底部全宽）
 
-- 最新 parser targeted 验收：
-  - 样本：`LLMs in Production`
-  - 验收方式：直接 parse 真实样本的 3 个 chapter-intro 起始页，不重跑整本 translation
-  - 已确认收敛：
-    - page `42`：`Large language models: A deep dive into language modeling`
-    - page `133`：`Data engineering for large language models: Setting up for success`
-    - page `377`：`Deploying an LLM on a Raspberry Pi: How low can you go?`
-- 最新真实验收样本：
-  - 源文件：`/Users/smy/Downloads/Patterns of Application Development Using AI (Obie Fernandez) (z-library.sk, 1lib.sk, z-lib.sk).pdf`
-  - 验收目标：首个正文主章节 `Introduction`
-- 最新 rerun 产物：
-  - 数据库：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/run.sqlite`
-  - 章节 HTML：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
-  - review package：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
-  - manifest：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.manifest.json`
-  - run report：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/parallel-report.json`
-- 当前结果：
-  - `135 / 135` packets 已翻译完成
-  - `blocking_issue_count = 0`
-  - 仅剩 `1` 个非阻塞 review issue：`IMAGE_CAPTION_RECOVERY_REQUIRED`
-- 已确认收敛的具体问题：
-  - `Tokenization: Breaking Text into Pieces` 已被正确恢复为标题
-  - `This sentence contains 27 tokens` 已作为图片锚点说明保留，不再混进正文
-  - `• GPT (Byte Pair Encoding)...` 已跨页合并成完整 paragraph，不再被识别成代码块
-- 当前最明显的剩余缺口：
-  - 这一章仍有 `7` 张图片未稳定绑上 caption
-  - review package 已给出未绑 caption 的页号：`22, 27, 31, 32, 47, 48, 49`
-  - 这说明 contextual image legend / figure caption recovery 还只是第一刀，不应误判为“图片 caption 已普遍解决”
+### 第二轮收敛现在又做了什么
 
-## Hard Constraints
+- 核心流程区全部改为 full-width，不再和历史书库抢宽度
+- 书库历史从右侧窄栏挪到底部整段展示，长标题、长路径和筛选器不再截断
+- 视觉系统从偏暖、偏柔光的奶油背景收敛到更冷静的 slate / blue-gray 工作台配色
+- 主字体改为现代无衬线，弱化过强的“编辑部样张感”，提升专业工具感
+- 历史卡片的源路径被拆到独立 `history-path` 容器，不再把卡片正文撑爆
 
-继续开发时默认遵守这些边界：
+### 这次重写顺手修掉了什么
 
-- 不为 PDF 单独重造第二套翻译系统，继续复用统一 IR 与主链路
-- 高风险复杂版式继续 fail-safe，不假装支持
-- medium-risk 可以进入，但必须把结构风险显式传播到 review / rerun
-- 先修结构恢复，再谈质量锦上添花
-- 优先做 packet / chapter / smoke corpus 级验证；不要轻易上整本 rerun
-- 每做完一轮 PDF slice，都要同步：
-  - [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
-  - [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
-  - [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)
-  - [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
+- 刷新页面后丢当前 document 上下文：
+  - 前端现在会把 `document_id` 存到 `localStorage`
+  - 刷新后优先恢复上次查看的书
+  - 没有缓存时，会自动打开当前仍在处理中的历史书籍
 
-## What Is Already Working
+### 接手时要知道的约束
 
-### Intake And Parse
+- 这仍然是 FastAPI 直出页面，不是独立前端工程
+- 所以如果继续做 UI，优先在 `page.py` 内维护信息架构和样式 token，而不是马上拆出前端构建链
+- 如果后面要上多页路由、复杂组件复用、浏览器级状态管理，再考虑拆前端工程
 
-- `PdfFileProfiler` 已支持：
-  - `text_pdf / mixed_pdf / scanned_pdf`
-  - `layout_risk`
-  - `extractor_kind`
-- 文本型 PDF 已接进统一 IR：
-  - `document -> chapter -> block -> sentence -> packet -> review -> export`
-- 已有：
-  - geometry-aware 提取
-  - reading order recovery
-  - header/footer 剔除
-  - paragraph merge
-  - cross-page repair
-  - hyphen fix
+## Architecture Refactor State
 
-### Structure Recovery
+### 已完成的设计工件
 
-- 章节恢复已支持：
-  - outline / bookmark
-  - TOC heuristic
-  - heading heuristic
-  - chapter-intro cue
-- 页面家族已支持：
-  - `toc`
-  - `frontmatter`
-  - `appendix`
-  - `references`
-  - `index`
-  - `backmatter`
-- 长书恢复已验证：
-  - `Front Matter + body chapters + appendix/index/back matter`
-- appendix split 已支持：
-  - `Appendix A / B`
-  - 顶层 continuation subheading
-- nested appendix subheading 当前只进 evidence，不进正式 section tree
+| 文档 | 状态 | 核心内容 |
+|------|------|---------|
+| `docs/multi-agent-translation-product-review.md` | locked | 产品方向："selective expansion"，不做自由协作 agent swarm |
+| `docs/multi-agent-final-implementation-plan.md` | locked-mvp-scope | Phase 1 范围冻结，7 workstreams，编码顺序，验收标准 |
+| `docs/multi-agent-architecture-design.md` | reference-supplement | 10 节技术深度：OCR 方案对比、Markdown schema、Memory 数据结构、成本/延迟模型 |
 
-### Risk / Review / Export
+### Phase 1 锁定范围
 
-- 结构风险已接入 review：
-  - `MISORDERING`
-  - `STRUCTURE_POLLUTION`
-  - `FOOTNOTE_RECOVERY_REQUIRED`
-- `backmatter` 已正式进入 source-only / preserve contract
-- review package / manifest 已导出：
-  - `pdf_page_evidence`
-  - `pdf_page_debug_evidence`
-  - `pdf_preserve_evidence`
-- `bilingual_html` 已使用 block-level render contract，不再绕开 preserve policy
-- `image_anchor` 导出已修正为“图片在上、caption 在下”，不再把图注排到图片上方
-- PDF 图片导出现在会刷新旧持久化 crop，并按更高目标像素尺寸重渲染，避免 merged HTML 继续复用历史低清图片
-- recoverable table 已支持语义化 HTML `<table>` 导出，而不是一律降级成 monospace 文本块
-- code continuity 已补第一刀：紧邻代码的 comment-only body 会提升为 code，`code -> inline image -> code` 的误切在 export 侧会桥接收敛
+- 输入格式：`EPUB`、`PDF_TEXT`、`PDF_MIXED`（`PDF_SCAN` 推迟）
+- 输出格式：`MERGED_MARKDOWN`、`BILINGUAL_HTML`（rebuilt EPUB/PDF 推迟）
+- Reviewer 不做自由重写（只做 deterministic hard-gate QA）
+- 控制面保持确定性（不引入 agent-to-agent 对话循环）
+- 服务角色在进程内做 boundary，不拆分进程
 
-### Academic Paper Lane
+### 7 个 Workstream 及当前状态
 
-- `Attention Is All You Need` 已从“高风险拒绝”推进到：
-  - `layout_risk=medium`
-  - `recovery_lane=academic_paper`
-  - 可正式导出 merged HTML
-- heading recovery 已能恢复：
-  - `Abstract`
-  - `1 Introduction`
-  - `3.1 Encoder and Decoder Stacks`
-  - `3.4 Embeddings and Softmax`
-  - `6 Results`
-  - `7 Conclusion`
-- 第二篇英文论文 `Forming Effective Human-AI Teams...` 已验证：
-  - single-column 低风险路径
-  - 真实标题恢复
-  - `References` 恢复
-  - live run 成功导出 merged HTML
+| WS | 名称 | 状态 | 依赖 | 主要文件 | 完成标志 |
+|----|------|------|------|---------|---------|
+| WS1 | Structure provenance hardening | 未开始 | 无 | `domain/structure/pdf.py`, `services/bootstrap.py` | 下游可读 `layout_risk`, `bbox`, `linked_caption` |
+| **WS2** | **Memory service extraction** | **未开始 ← 从这里开始** | WS1 不阻塞 | `services/memory_service.py`, `services/context_compile.py` | 翻译不再从多处 ad-hoc 读 chapter memory |
+| **WS3** | **Compiled translation context** | **未开始** | WS2 | `workers/contracts.py`, `services/translation.py` | 每次翻译记录 compiled context version + memory version |
+| WS4 | Chapter-lane packet control | 未开始 | WS3 | `app/runtime/document_run_executor.py`, `services/run_execution.py` | 同一章节不出现竞争 packet |
+| WS5 | Deterministic review gate | 未开始 | WS3 | `services/review.py`, `orchestrator/rule_engine.py` | rerun 决策显式且可重复 |
+| WS6 | Layout validation gate | 未开始 | WS1, WS5 | `services/layout_validate.py`(新), `services/export.py` | export 可在结构损坏时快速失败 |
+| WS7 | Regression harness | 与 WS1-6 并行 | 各 WS | `tests/*` | 每个 WS 至少一个聚焦回归 + 一个集成证明 |
 
-## Verified Real Samples
+**编码顺序硬约束（见锁定计划 §16）：**
 
-当前本机 smoke corpus 是 `6/6 passed`，见 [corpus-local.summary.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local.summary.json)。
+```
+WS2 → WS3 → WS4 → WS5 → WS6
+         WS7 并行跟进
+         WS1 可随时穿插
+```
 
-已固化样本：
+### Pre-Code Readiness Checklist
 
-1. `ai-agents-in-action`
-   - 报告：[ai-agents-in-action.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/ai-agents-in-action.json)
-   - 价值：低风险长书主样本，覆盖 frontmatter / appendix / index / backmatter
+以下各项均已在设计阶段确认为 true：
 
-2. `attention-is-all-you-need`
-   - 报告：[attention-is-all-you-need.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/attention-is-all-you-need.json)
-   - 价值：medium-risk academic paper 主样本
+- [x] Phase 1 只覆盖 `EPUB` + `PDF_TEXT` + `PDF_MIXED`
+- [x] Phase 1 只产出 `MERGED_MARKDOWN` + `BILINGUAL_HTML`
+- [x] Reviewer 不做自由重写
+- [x] `ContextPacket` vs `CompiledTranslationContext` 边界已明确
+- [x] Memory 写入权限已明确：worker propose → review approve → memory commit
+- [x] 章节 lane 规则已明确：每章一个活跃 packet
+- [x] Layout validation 确认阻塞 export
+- [x] 优先用 JSON payload 扩展（`packet_json`, `model_config_json`, `source_span_json`, `chapter.metadata_json`）
+- [x] 不新增 table 除非 join/uniqueness/audit 要求
+- [x] Packet sub-state 先用 JSON，稳定后再升级为 enum
+- [ ] 回归语料选定（需要 1 个 EPUB + 1 个 text PDF + 1 个 mixed PDF 样本）
 
-3. `jim-simons-book-scan`
-   - 报告：[jim-simons-book-scan.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/jim-simons-book-scan.json)
-   - 价值：OCR/scanned fail-safe 样本
+**唯一未完成的 checklist 项是选定回归语料。** 接手后第一步建议先从现有测试 fixtures 或真实样本中选定三个。
 
-4. `building-ai-coding-agents`
-   - 报告：[building-ai-coding-agents.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/building-ai-coding-agents.json)
-   - 价值：medium-risk appendix 恢复样本
+## Next Step: How to Start WS2
 
-5. `llms-in-production`
-   - 报告：[llms-in-production.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/llms-in-production.json)
-   - 价值：第二本低风险长书样本，验证 chapter tree 不是单样本过拟合
+### WS2 目标
 
-6. `forming-effective-human-ai-teams`
-   - 报告：[forming-effective-human-ai-teams.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local/forming-effective-human-ai-teams.json)
-   - 价值：single-column research paper 样本
+把 `memory_service.py`（当前 64 行骨架）升级为 Memory Service 的显式读/提议/提交门面。
 
-## Verified Live Exports
+### WS2 要做的事
 
-最重要的真实 PDF live 产物：
+1. **`load_compiled_context(packet_id)`** — 冻结 memory snapshot，返回 compiled context + `memory_snapshot_version`
+2. **`load_latest_chapter_memory(document_id, chapter_id)`** — 读取最新章节记忆
+3. **`record_translation_proposals(packet_id, proposals)`** — 记录 worker 的术语/概念候选（只提议不锁定）
+4. **`commit_approved_packet_memory(packet_id, translation_run_id)`** — review 通过后提交章节记忆
 
-- `Attention Is All You Need v2`
-  - 报告：[report.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/report.json)
-  - merged HTML：[merged-document.html](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.html)
-  - manifest：[merged-document.manifest.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-attention-paper-v2/exports/b111498d-25cd-5ad7-8141-5cfbf0065481/merged-document.manifest.json)
+### WS2 主要改动文件
 
-- `Forming Effective Human-AI Teams v3`
-  - 报告：[report.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/report.json)
-  - merged HTML：[merged-document.html](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.html)
-  - manifest：[merged-document.manifest.json](/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/deepseek-forming-teams-paper-v3/exports/b90a689e-bf00-5a3a-b1e3-0d5c88a12c1b/merged-document.manifest.json)
+- 扩展 `src/book_agent/services/memory_service.py`
+- 调整 `src/book_agent/services/context_compile.py`（把分散的 memory 读取收敛到 memory service）
+- 调整 `src/book_agent/infra/repositories/chapter_memory.py`
+- 新增 `tests/test_memory_service.py`
 
-- `Patterns of Application Development Using AI - Introduction rerun v3`
-  - run report：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/parallel-report.json`
-  - chapter HTML：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
-  - review package：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
-  - manifest：`/Users/smy/projects/mygithub/DLEHY/artifacts/real-book-live/patterns-ai-ch1-rerun-v3/exports/0498168f-2c5a-53c1-8af9-cb5a5735f7af/bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.manifest.json`
-  - 价值：这是当前最贴近用户真实投诉的 live 验收样本，优先级高于新增样本扩容
+### WS2 不做的事
 
-## Current Known Limits
+- 不新建术语表系统（继续用现有 `TermEntry`）
+- 不新建 table（用 `MemorySnapshot` payload 扩展）
+- 不改翻译 prompt（那是 WS3 的事）
 
-这些不是 bug 列表，而是当前仍明确存在的能力边界：
+### WS2 验收标准
 
-- 仍不支持扫描/OCR 主路径
-- medium-risk PDF 虽可放行，但只是“可进链路”，不是“默认稳定交付”
-- academic paper 的双栏 reading order 仍未 robust
-- table / figure / equation-heavy 页面仍需更强 around-order hardening
-- 语义化 table export 当前只覆盖规则较稳定的可恢复表格；复杂跨页/合并单元格表格仍以 preserve/fallback 为主
-- code continuity repair 当前只处理“夹在两段代码之间的无 caption 可疑图片”这一类误插入，不等于已完全解决复杂版式下的 code/figure 边界
-- appendix 内更细 section tree 仍未正式进入公共 contract
-- `LLMs in Production` 的 chapter-intro title 噪声已进一步压下去，但正文更深层 extractor 断词仍未系统治理
-- `backmatter` 当前仍偏 explicit-cue policy
+- 翻译请求始终携带显式 `memory_version`
+- rerun 可重现翻译时使用的 memory snapshot
+- `test_memory_service.py` 覆盖 load/propose/commit 路径
 
-## Immediate Next Work
+## Current Live Snapshot
 
-如果开新会话、需要直接继续开发，默认按这个顺序推进：
+### Book A: `Dedication`
 
-1. 先审 `Patterns of Application Development Using AI` 第一章最新 HTML
-   - 目标：把用户刚指出的真实问题区域作为主验收基准，而不是回到抽象 backlog
-   - 输入：
-     - `.../patterns-ai-ch1-rerun-v3/.../bilingual-82e5eeb7-5932-5e05-ac0c-bc33246c1297.html`
-     - `.../patterns-ai-ch1-rerun-v3/.../review-package-82e5eeb7-5932-5e05-ac0c-bc33246c1297.json`
-   - 输出：整理本章剩余 defect 列表，优先收集 image caption miss、图文顺序错位、table/code residual bug
+- document id: `67283f52-b775-533f-988b-c7433a22a28f`
+- 文档状态：`exported`
+- open blocking issue：`0`
+- 章节状态：`92 exported`
+- 历史污染修复状态：
+  - 旧 document title 已纠偏，不再显示 `Dedication`
+  - 历史 mixed code/prose block 已通过 `refresh + fragment repair` 修干净
+  - merged export 标题已稳定为真实书名
+- 已产物：
+  - 整书阅读包：`artifacts/exports/67283f52-b775-533f-988b-c7433a22a28f/merged-document.html`
+  - 双语章节导出目录：`artifacts/exports/67283f52-b775-533f-988b-c7433a22a28f/`
 
-2. 继续做 image-caption / contextual legend recovery v2
-   - 目标：把这章里剩余 `7` 张未绑 caption 的图片再压下去
-   - 固定验收页：`22, 27, 31, 32, 47, 48, 49`
-   - 原则：宁可 preserve/fallback，也不要把正文错绑成 caption
+### Book B: `Agentic AI`
 
-3. 如果第一章进一步收敛，再做同一本书的 chapter-2 或多章节扩展
-   - 目标：确认这轮修复不是只对 `Tokenization` 那一段生效
-   - 顺序：先 chapter-level rerun，再考虑 document-level merged export
+- document id: `cf32d839-ac79-5503-bcde-ba5ea12e92e6`
+- 当前活跃 run：`229a6dc6-5072-4ea3-ada7-3cc0db0f8113`
+- run 状态：`running`
+- 当前阶段：`translate`
+- 截至本次快照：`701 succeeded / 189 pending / 1 running`
+- 当前有 `1` 个 active lease
+- 这本书之前是为了给 `Dedication` 让路被手动暂停的；本轮已经重新拉起
 
-4. 当前这本真实书样本稳定后，再回到 broader roadmap
-   - 第三篇真实英文论文或更异质 paper 扩样
-   - `nested appendix section-tree upgrade`
-   - `chapter-intro title cleanup v2`
-   - `backmatter cue hardening v2`
-   - `medium-risk PDF finer-grained policy`
+## Key Design Decisions for the Refactor
 
-## If Starting A New Session
+接手后不需要重新做这些决策：
 
-建议按这个顺序恢复上下文：
+1. **不做 agent swarm** — 保持确定性控制面，服务角色在进程内做 boundary（见 product review §1）
+2. **Markdown 是工作视图，DB 是真相源** — Markdown 不替代 sentence alignment / issue routing / packet provenance（见 implementation plan §2.3）
+3. **Translation packet 是语义块，不是 RAG chunk** — 按 heading/paragraph/table/code boundary 切，不按固定字符窗切（见 implementation plan §2.4）
+4. **Worker 只 propose，Reviewer approve，Memory commit** — 术语锁定权在 reviewer 和人工（见 architecture design §4.3）
+5. **Path A（Orchestrator 重调度）为默认修复路径** — Reviewer 不直接重写翻译（见 architecture design §6.3）
+6. **实时同步 + review 后锁定** — 不需要翻译前统一术语 pass（见 architecture design §8.4）
 
-1. 读 [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
-2. 读 [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
-3. 看 [corpus-local.summary.json](/Users/smy/projects/mygithub/DLEHY/artifacts/pdf-smoke/corpus-local.summary.json)
-4. 看本轮目标对应的真实样本报告
-5. 打开主代码入口：
-   - [pdf.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/domain/structure/pdf.py)
-   - [review.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/review.py)
-   - [export.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/export.py)
-6. 先做小回归，不要直接上 live run
+## Important Operational Constraints
 
-## Main Source Files
+### SQLite 仍然是单机保守模式
 
-高频入口：
+- 本地默认数据库还是 `artifacts/book-agent.db`
+- SQLite 可以支持当前开发和单书长跑
+- 但不要同时放多本大书并行跑
+- 如果需要恢复运行，优先保证同一时刻只有一条重型 run 在持续写库
 
-- parser 主体：
-  - [pdf.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/domain/structure/pdf.py)
-- bootstrap 分流：
-  - [bootstrap.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/bootstrap.py)
-- review：
-  - [review.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/review.py)
-- export：
-  - [export.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/services/export.py)
-- smoke 工具：
-  - [pdf_smoke.py](/Users/smy/projects/mygithub/DLEHY/src/book_agent/tools/pdf_smoke.py)
-  - [run_pdf_smoke.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_smoke.py)
-  - [run_pdf_smoke_corpus.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_smoke_corpus.py)
-- 候选扫描：
-  - [run_pdf_candidate_scan.py](/Users/smy/projects/mygithub/DLEHY/scripts/run_pdf_candidate_scan.py)
-- 主要回归：
-  - [test_pdf_support.py](/Users/smy/projects/mygithub/DLEHY/tests/test_pdf_support.py)
-  - [test_pdf_smoke_tools.py](/Users/smy/projects/mygithub/DLEHY/tests/test_pdf_smoke_tools.py)
+### 当前推荐的运行方式
 
-## Safe Verification Loop
+- 如果只是查看页面：
+  - `uv run uvicorn book_agent.app.main:app --host 127.0.0.1 --port 8000`
+- 如果只是继续后台整书翻译：
+  - 启一个本地 executor daemon 即可，不一定要开 Web
 
-默认验证顺序：
+### 当前 UI 还剩下的最值钱工作
 
-1. 先跑定向单测  
-   `uv run pytest tests/test_pdf_support.py -q`
+- 做一次稳定的浏览器级 UI QA：
+  - 这轮代码和测试都通过了，但本地 `browse` 工具当时因为端口分配失败，没有留下完整视觉验收证据
+- 继续把“导出阻塞解释”做得更细：
+  - 现在已经能展示 blocker/hotspot/最重章节
+  - 但还没把 chapter queue / owner-ready / SLA 这些 review worklist 信息产品化进首页
 
-2. 如果改了 smoke 工具，再跑  
-   `uv run pytest tests/test_pdf_smoke_tools.py -q`
+### 当前已拉起的后台翻译
 
-3. 如果改到 API / export / review，再补  
-   `uv run pytest tests/test_api_workflow.py tests/test_bootstrap_pipeline.py tests/test_cli.py tests/test_frontend_entry.py tests/test_epub_parser.py -q`
+- `Agentic AI` 已由之前的会话拉起本地 executor daemon
+- 如果你接手时发现它不再推进，先不要同时再拉第二个 daemon
+- 先检查当前是否还有旧的 `uvicorn` / daemon 在跑，避免双 executor 抢 SQLite 锁
 
-4. 如果改 parser 主体，再跑 smoke corpus  
-   `uv run python scripts/run_pdf_smoke_corpus.py --manifest-path artifacts/pdf-smoke/corpus.local.json --output-dir artifacts/pdf-smoke/corpus-local --report-path artifacts/pdf-smoke/corpus-local.summary.json`
+## Command Cheat Sheet
 
-## What Not To Forget After Each Slice
+### 1. 查看某本书最新 run 状态
 
-每做完一轮 PDF 改造，至少同步 4 件事：
+```bash
+uv run python - <<'PY'
+from sqlalchemy import select
+from book_agent.core.config import get_settings
+from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.domain.models.ops import DocumentRun, WorkItem
 
-1. 更新 [pdf_status.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_status.md)
-2. 更新 [pdf_backlog.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_backlog.md)
-3. 更新 [pdf_decisions.md](/Users/smy/projects/mygithub/DLEHY/docs/pdf_decisions.md)（如果有新的取舍冻结）
-4. 更新 [TODOS.md](/Users/smy/projects/mygithub/DLEHY/TODOS.md)
+settings = get_settings()
+session_factory = build_session_factory(database_url=settings.database_url)
+document_id = "cf32d839-ac79-5503-bcde-ba5ea12e92e6"
+with session_scope(session_factory) as session:
+    run = session.scalars(
+        select(DocumentRun).where(DocumentRun.document_id == document_id).order_by(DocumentRun.created_at.desc())
+    ).first()
+    items = session.scalars(select(WorkItem).where(WorkItem.run_id == run.id)).all()
+    counts = {}
+    for item in items:
+        key = getattr(item.status, "value", item.status)
+        counts[key] = counts.get(key, 0) + 1
+    print(run.id, getattr(run.status, "value", run.status), counts)
+PY
+```
 
-## Resume Hint
+### 2. 恢复 `Agentic AI` 的当前 paused / queued run
 
-如果新会话里不知道“从哪一刀开始”：
+```bash
+uv run python - <<'PY'
+from book_agent.core.config import get_settings
+from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.services.run_control import RunControlService
 
-- 想继续当前真实书验收：从 `Patterns... Introduction rerun v3` 的 HTML + review package 开始
-- 想继续扩样：从“第三篇真实英文论文扩样”开始
-- 想继续长书结构：从 `nested appendix section-tree upgrade` 开始
-- 想继续文本质量：从 `chapter-intro title cleanup v2` 开始
-- 想继续边界策略：从 `backmatter cue hardening v2` 开始
+settings = get_settings()
+session_factory = build_session_factory(database_url=settings.database_url)
+run_id = "229a6dc6-5072-4ea3-ada7-3cc0db0f8113"
+with session_scope(session_factory) as session:
+    summary = RunControlService(RunControlRepository(session)).resume_run(
+        run_id,
+        actor_id="ops",
+        note="resume Agentic AI",
+        detail_json={"source": "handoff"},
+    )
+    print(summary.run_id, summary.status)
+PY
+```
 
-默认推荐第一刀：
+### 3. 启本地 executor daemon
 
-> 先打开 `Patterns of Application Development Using AI` 第一章最新 HTML 和 review package，把剩余的 image-caption miss 与图文顺序残差压下去；只有这一章稳定后，再继续扩新样本或回到 appendix/tree 路线。
+```bash
+uv run python - <<'PY'
+import time
+from book_agent.core.config import get_settings
+from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.services.run_control import RunControlService, RunControlTransitionError
+from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+from book_agent.workers.factory import build_translation_worker
+
+run_id = "229a6dc6-5072-4ea3-ada7-3cc0db0f8113"
+settings = get_settings()
+session_factory = build_session_factory(database_url=settings.database_url)
+
+with session_scope(session_factory) as session:
+    control = RunControlService(RunControlRepository(session))
+    try:
+        control.resume_run(run_id, actor_id="ops", note="resume from daemon", detail_json={"source": "handoff"})
+    except RunControlTransitionError:
+        pass
+
+executor = DocumentRunExecutor(
+    session_factory=session_factory,
+    export_root=settings.export_root,
+    translation_worker=build_translation_worker(settings),
+)
+executor.start()
+executor.wake(run_id)
+print("executor started", run_id, flush=True)
+
+try:
+    while True:
+        time.sleep(60)
+except KeyboardInterrupt:
+    executor.stop()
+PY
+```
+
+### 4. 启 Web 页面
+
+```bash
+uv run uvicorn book_agent.app.main:app --host 127.0.0.1 --port 8000
+```
+
+页面地址：
+
+- `http://127.0.0.1:8000/`
+
+### 5. 跑全量测试
+
+```bash
+uv run --extra dev python -m pytest tests/ -q
+```
+
+## Anti-Drift Rules
+
+在 Phase 1 编码期间，主动拒绝以下诱惑（来自锁定计划 §19）：
+
+- "顺便支持一下 scanned PDF"
+- "顺便加个更智能的 reviewer 自动重写"
+- "顺便把 JSON payload 换成新 table"
+- "顺便加个向量库做 memory retrieval"
+- "顺便把 service 拆成独立进程"
+
+如果一个改动不能减少控制流、memory provenance 或 export gating 的歧义，它大概率不属于 Phase 1。
+
+## Known Gaps
+
+- 回归语料尚未选定（需要 1 EPUB + 1 text PDF + 1 mixed PDF 样本）
+- 全量测试没有在最近一轮全部复跑
+- 这轮只完成了代码级与入口/API 级验证，仍缺一次稳定的浏览器级截图验收
+- 后台 executor 还是进程内模型，离真正的 durable worker 还有距离
+- 目前更适合单用户 / 单机使用，不适合多人同时提交多本大书长跑
+
+## Bottom Line
+
+- `Dedication`：已完成，可直接交付
+- `Agentic AI`：已恢复，继续翻译中
+- Multi-Agent 重构：**设计阶段 100% 完成，编码阶段 0% 未开始**
+- 下一位程序员的第一个任务：**选定回归语料 → 开始 WS2（memory_service.py 升级）**
+- 不需要再做任何架构讨论，所有决策已在三份设计文档中锁定

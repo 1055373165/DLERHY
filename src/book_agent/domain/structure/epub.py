@@ -9,6 +9,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
+from book_agent.domain.document_titles import compose_document_title
 
 _CONTAINER_PATH = "META-INF/container.xml"
 _CONTAINER_NS = {"container": "urn:oasis:names:tc:opendocument:xmlns:container"}
@@ -76,6 +77,22 @@ _KNOWN_HTML_TAGS = {
     "math",
     *list(_HEADING_TAGS),
 }
+_TOC_LIKE_TITLES = {"contents", "table of contents", "brief contents"}
+_TOC_LIKE_PATH_TOKENS = {"contents", "table-of-contents", "toc"}
+_TITLEPAGE_PATH_TOKENS = {"titlepage", "title-page", "cover", "half-title"}
+_GENERIC_SPINE_NAV_TITLES = {
+    "back matter",
+    "body matter",
+    "contents",
+    "cover",
+    "front matter",
+    "landmarks",
+    "navigation",
+    "pages",
+    "table of contents",
+}
+_PAGE_LABEL_PATTERN = re.compile(r"^(?:\d+|[ivxlcdm]+)$", re.IGNORECASE)
+_EPUB_TYPE_ATTR = "{http://www.idpf.org/2007/ops}type"
 
 
 def _local_name(tag: str) -> str:
@@ -154,6 +171,17 @@ def _join_path(base_dir: str, href: str) -> str:
     if not base_dir:
         return href
     return posixpath.normpath(posixpath.join(base_dir, href))
+
+
+def _looks_like_page_nav_label(value: str | None) -> bool:
+    normalized = _normalize_text(value or "")
+    if not normalized:
+        return False
+    return bool(_PAGE_LABEL_PATTERN.fullmatch(normalized))
+
+
+def _looks_like_generic_spine_nav_title(value: str | None) -> bool:
+    return _normalize_text(value or "").casefold() in _GENERIC_SPINE_NAV_TITLES
 
 
 def _parse_xml_document(raw: bytes) -> ET.Element:
@@ -326,6 +354,7 @@ class EPUBParser:
             nav_map = self._read_nav_map(archive, manifest)
             metadata = self._read_metadata(opf_root)
             chapters = self._read_spine_chapters(archive, opf_root, manifest, nav_map)
+            chapters = self._normalize_spine_chapters(chapters, book_title=metadata.get("title"))
 
         return ParsedDocument(
             title=metadata.get("title"),
@@ -358,11 +387,48 @@ class EPUBParser:
 
     def _read_metadata(self, opf_root: ET.Element) -> dict[str, str]:
         metadata: dict[str, str] = {}
-        title = opf_root.findtext(".//dc:title", default=None, namespaces=_OPF_NS)
+        title_refinements: dict[str, dict[str, str]] = {}
+        for meta in opf_root.findall(".//opf:metadata/opf:meta", _OPF_NS):
+            refines = _normalize_text(meta.attrib.get("refines", "")).lstrip("#")
+            property_name = _normalize_text(meta.attrib.get("property"))
+            value = _normalize_text("".join(meta.itertext()))
+            if not refines or not property_name or not value:
+                continue
+            title_refinements.setdefault(refines, {})[property_name] = value
+
+        title_elements = opf_root.findall(".//opf:metadata/dc:title", _OPF_NS)
+        main_title: str | None = None
+        subtitle: str | None = None
+        fallback_titles: list[str] = []
+        for title_element in title_elements:
+            title_text = _normalize_text("".join(title_element.itertext()))
+            if not title_text:
+                continue
+            title_type = title_refinements.get(title_element.attrib.get("id", ""), {}).get("title-type", "").casefold()
+            if title_type == "main" and main_title is None:
+                main_title = title_text
+                continue
+            if title_type == "subtitle" and subtitle is None:
+                subtitle = title_text
+                continue
+            fallback_titles.append(title_text)
+        if main_title is None and fallback_titles:
+            main_title = fallback_titles.pop(0)
+        if subtitle is None:
+            subtitle = next(
+                (candidate for candidate in fallback_titles if candidate.casefold() != (main_title or "").casefold()),
+                None,
+            )
+
         author = opf_root.findtext(".//dc:creator", default=None, namespaces=_OPF_NS)
         language = opf_root.findtext(".//dc:language", default=None, namespaces=_OPF_NS)
-        if title:
-            metadata["title"] = _normalize_text(title)
+        if main_title:
+            metadata["title"] = main_title
+        if subtitle and not _looks_like_metadata_filename(subtitle):
+            metadata["subtitle"] = subtitle
+        combined_title = compose_document_title(main_title, subtitle)
+        if combined_title and not _looks_like_metadata_filename(combined_title):
+            metadata["document_title_src"] = combined_title
         if author and not _looks_like_metadata_filename(author):
             metadata["author"] = _normalize_text(author)
         if language:
@@ -382,7 +448,16 @@ class EPUBParser:
         nav_root = _parse_xml_document(archive.read(nav_path))
         nav_dir = posixpath.dirname(nav_path)
         nav_map: dict[str, str] = {}
-        for anchor in nav_root.findall(".//xhtml:nav//xhtml:a", _XHTML_NS):
+        toc_anchors: list[ET.Element] = []
+        for nav in nav_root.findall(".//xhtml:nav", _XHTML_NS):
+            epub_type = _normalize_text(nav.attrib.get(_EPUB_TYPE_ATTR) or nav.attrib.get("type") or "")
+            epub_type_tokens = {token.casefold() for token in re.split(r"\s+", epub_type) if token}
+            if "toc" not in epub_type_tokens:
+                continue
+            toc_anchors.extend(nav.findall(".//xhtml:a", _XHTML_NS))
+
+        anchors = toc_anchors or nav_root.findall(".//xhtml:nav//xhtml:a", _XHTML_NS)
+        for anchor in anchors:
             href = anchor.attrib.get("href", "")
             title = _normalize_text("".join(anchor.itertext()))
             if not href or not title:
@@ -436,7 +511,7 @@ class EPUBParser:
             blocks = _FallbackHTMLBlockExtractor(href).extract(raw.decode("utf-8", errors="replace"))
         nav_title = nav_map.get(posixpath.normpath(href))
         heading_title = next((block.text for block in blocks if block.block_type == "heading"), None)
-        chapter_title = nav_title or heading_title
+        chapter_title = self._resolve_chapter_title(nav_title, heading_title)
 
         return ParsedChapter(
             chapter_id=f"chapter-{chapter_index}",
@@ -445,6 +520,64 @@ class EPUBParser:
             blocks=blocks,
             metadata={"source_path": href},
         )
+
+    def _resolve_chapter_title(self, nav_title: str | None, heading_title: str | None) -> str | None:
+        normalized_nav = _normalize_text(nav_title or "")
+        normalized_heading = _normalize_text(heading_title or "")
+        if normalized_nav and not (
+            _looks_like_page_nav_label(normalized_nav) or _looks_like_generic_spine_nav_title(normalized_nav)
+        ):
+            return normalized_nav
+        return normalized_heading or normalized_nav or None
+
+    def _normalize_spine_chapters(
+        self,
+        chapters: list[ParsedChapter],
+        *,
+        book_title: str | None,
+    ) -> list[ParsedChapter]:
+        normalized: list[ParsedChapter] = []
+        for chapter in chapters:
+            if self._should_drop_empty_spine_chapter(chapter):
+                continue
+            if self._should_drop_toc_like_spine_chapter(chapter):
+                continue
+            if self._should_drop_titlepage_spine_chapter(chapter, book_title=book_title):
+                continue
+            normalized.append(chapter)
+        return normalized
+
+    def _should_drop_empty_spine_chapter(self, chapter: ParsedChapter) -> bool:
+        return not any(_normalize_text(block.text) for block in chapter.blocks)
+
+    def _should_drop_toc_like_spine_chapter(self, chapter: ParsedChapter) -> bool:
+        normalized_title = _normalize_text(chapter.title or "").casefold()
+        href = posixpath.basename(chapter.href).casefold()
+        if normalized_title not in _TOC_LIKE_TITLES and not any(token in href for token in _TOC_LIKE_PATH_TOKENS):
+            return False
+        block_types = {block.block_type for block in chapter.blocks}
+        if block_types - {"heading", "paragraph", "list_item"}:
+            return False
+        return len(chapter.blocks) >= 2
+
+    def _should_drop_titlepage_spine_chapter(
+        self,
+        chapter: ParsedChapter,
+        *,
+        book_title: str | None,
+    ) -> bool:
+        href = posixpath.basename(chapter.href).casefold()
+        if not any(token in href for token in _TITLEPAGE_PATH_TOKENS):
+            return False
+        if not chapter.blocks:
+            return True
+        normalized_book_title = _normalize_text(book_title or "").casefold()
+        meaningful_texts = [_normalize_text(block.text) for block in chapter.blocks if _normalize_text(block.text)]
+        if not meaningful_texts:
+            return True
+        if len(meaningful_texts) > 2 or not normalized_book_title:
+            return False
+        return all(text.casefold() == normalized_book_title or len(text.split()) <= 4 for text in meaningful_texts)
 
     def _extract_blocks(self, body: ET.Element, href: str) -> list[ParsedBlock]:
         blocks: list[ParsedBlock] = []

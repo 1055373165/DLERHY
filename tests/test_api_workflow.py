@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import threading
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,8 @@ from io import BytesIO
 from pathlib import Path
 import sys
 import time
+from urllib.parse import unquote
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
@@ -24,11 +27,14 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.app.main import create_app
+from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+from book_agent.domain.document_titles import safe_title_for_filename
 from book_agent.domain.enums import (
     ActionActorType,
     ActionStatus,
     ActionType,
     Detector,
+    DocumentRunStatus,
     IssueStatus,
     JobScopeType,
     LockLevel,
@@ -39,12 +45,18 @@ from book_agent.domain.enums import (
     SnapshotType,
     TermStatus,
     TermType,
+    WorkItemStage,
+    WorkItemStatus,
 )
 from book_agent.domain.models import Chapter, Document, IssueAction, MemorySnapshot, Sentence, TermEntry
+from book_agent.domain.models.ops import DocumentRun
 from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.services.run_execution import RunExecutionService
+from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
@@ -371,6 +383,141 @@ class LiteralTagWorker:
         )
 
 
+class RepairLoopBrokenWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="RepairLoopBrokenWorker",
+            model_name="repair-loop-broken-test",
+            prompt_version="test.repair-loop.broken.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "Selection bias matters." in sentence.source_text:
+                continue
+            if "Pricing power" in sentence.source_text:
+                text = "价格力量很重要。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.95,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class RepairLoopRecoveryWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="RepairLoopRecoveryWorker",
+            model_name="repair-loop-recovery-test",
+            prompt_version="test.repair-loop.recovery.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        relevant_terms = {
+            term.source_term.lower(): term.target_term
+            for term in task.context_packet.relevant_terms
+        }
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "Pricing power" in sentence.source_text:
+                text = f"{relevant_terms.get('pricing power', '定价能力')}很重要。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.99,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.99,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class RepairLoopPartialRecoveryWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="RepairLoopPartialRecoveryWorker",
+            model_name="repair-loop-partial-recovery-test",
+            prompt_version="test.repair-loop.partial-recovery.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        relevant_terms = {
+            term.source_term.lower(): term.target_term
+            for term in task.context_packet.relevant_terms
+        }
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "Selection bias matters." in sentence.source_text:
+                continue
+            if "Pricing power" in sentence.source_text:
+                text = f"{relevant_terms.get('pricing power', '定价能力')}很重要。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.99,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.99,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
 class ApiWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
@@ -391,6 +538,13 @@ class ApiWorkflowTests(unittest.TestCase):
         self.app.state.upload_root = str(Path(self.tempdir.name) / "uploads")
         self.client = TestClient(self.app)
         self.addCleanup(self.client.close)
+        self.addCleanup(self._stop_executor)
+
+    def _stop_executor(self) -> None:
+        executor = getattr(self.app.state, "document_run_executor", None)
+        if executor is not None:
+            executor.stop()
+            self.app.state.document_run_executor = None
 
     def _write_epub(self) -> Path:
         epub_path = Path(self.tempdir.name) / "sample.epub"
@@ -426,6 +580,73 @@ class ApiWorkflowTests(unittest.TestCase):
                 archive.writestr(asset_path, content)
         return epub_path
 
+    def _write_epub_with_frontmatter_titlepage(self) -> Path:
+        content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title id="pub-title">Agentic AI</dc:title>
+    <meta refines="#pub-title" property="title-type">main</meta>
+    <dc:title id="pub-subtitle">Theories and Practices</dc:title>
+    <meta refines="#pub-subtitle" property="title-type">subtitle</meta>
+    <dc:creator>Ken Huang</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="navigation.xhtml" media-type="application/xhtml+xml" properties="nav" />
+    <item id="frontmatter" href="frontmatter.xhtml" media-type="application/xhtml+xml" />
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml" />
+  </manifest>
+  <spine>
+    <itemref idref="frontmatter" />
+    <itemref idref="chap1" />
+  </spine>
+</package>
+"""
+        navigation_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="frontmatter.xhtml">Front Matter</a></li>
+        <li><a href="chapter1.xhtml">1. The Genesis and Evolution of AI Agents</a></li>
+      </ol>
+    </nav>
+    <nav epub:type="page-list">
+      <ol>
+        <li><a href="frontmatter.xhtml#PBxxxviii">xxxviii</a></li>
+        <li><a href="chapter1.xhtml#PB20">20</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>
+"""
+        frontmatter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="book-title">Agentic AI</h1>
+    <h2 id="book-subtitle">Theories and Practices</h2>
+    <p>Dedicated to builders.</p>
+  </body>
+</html>
+"""
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">1. The Genesis and Evolution of AI Agents</h1>
+    <p>Pricing power matters. Strategy compounds.</p>
+  </body>
+</html>
+"""
+        epub_path = Path(self.tempdir.name) / "agentic-ai-titlepage.epub"
+        with zipfile.ZipFile(epub_path, "w") as archive:
+            archive.writestr("mimetype", "application/epub+zip")
+            archive.writestr("META-INF/container.xml", CONTAINER_XML)
+            archive.writestr("OEBPS/content.opf", content_opf)
+            archive.writestr("OEBPS/navigation.xhtml", navigation_xhtml)
+            archive.writestr("OEBPS/frontmatter.xhtml", frontmatter_xhtml)
+            archive.writestr("OEBPS/chapter1.xhtml", chapter_xhtml)
+        return epub_path
+
     def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 10.0) -> dict:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
@@ -436,6 +657,26 @@ class ApiWorkflowTests(unittest.TestCase):
                 return payload
             time.sleep(0.2)
         self.fail(f"Run {run_id} did not reach terminal state within {timeout_seconds} seconds.")
+
+    def _chapter_xhtml_with_sentences(
+        self,
+        *,
+        title: str,
+        sentence_prefix: str,
+        sentence_count: int = 40,
+    ) -> str:
+        sentences = " ".join(
+            f"{sentence_prefix} sentence {index}."
+            for index in range(1, sentence_count + 1)
+        )
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>{title}</h1>
+    <p>{sentences}</p>
+  </body>
+</html>
+"""
 
     def test_document_api_happy_path(self) -> None:
         epub_path = self._write_epub()
@@ -494,6 +735,24 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(payload["title"], "Business Strategy Handbook")
         uploaded_files = list(Path(self.app.state.upload_root).rglob("uploaded-book.epub"))
         self.assertEqual(len(uploaded_files), 1)
+
+    def test_bootstrap_upload_document_is_immediately_readable(self) -> None:
+        epub_path = self._write_epub()
+
+        with epub_path.open("rb") as handle:
+            response = self.client.post(
+                "/v1/documents/bootstrap-upload",
+                files={"source_file": ("uploaded-book.epub", handle, "application/epub+zip")},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        document_id = response.json()["document_id"]
+
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
+        payload = summary.json()
+        self.assertEqual(payload["document_id"], document_id)
+        self.assertEqual(payload["title"], "Business Strategy Handbook")
 
     def test_translate_full_run_executes_review_and_exports_in_background(self) -> None:
         epub_path = self._write_epub()
@@ -556,6 +815,416 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(history_payload["entries"][0]["document_id"], document_id)
         self.assertTrue(history_payload["entries"][0]["merged_export_ready"])
         self.assertEqual(history_payload["entries"][0]["chapter_bilingual_export_count"], 1)
+
+    def test_translate_full_run_repairs_document_blockers_before_export(self) -> None:
+        chapter_two = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>Chapter Two</h1>
+    <p>Selection bias matters. Literature review helps.</p>
+  </body>
+</html>
+"""
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+                ("Chapter Two", "chapter2.xhtml", chapter_two),
+            ]
+        )
+
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        self.app.state.translation_worker = RepairLoopBrokenWorker()
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        with self.session_factory() as session:
+            locked_term = TermEntry(
+                id=str(uuid4()),
+                document_id=document_id,
+                scope_type=MemoryScopeType.GLOBAL,
+                scope_id=None,
+                source_term="Pricing power",
+                target_term="定价能力",
+                term_type=TermType.CONCEPT,
+                lock_level=LockLevel.LOCKED,
+                status=TermStatus.ACTIVE,
+                evidence_sentence_id=None,
+                version=1,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            session.merge(locked_term)
+            session.commit()
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        self.assertGreaterEqual(review.json()["total_issue_count"], 2)
+
+        self.app.state.translation_worker = RepairLoopRecoveryWorker()
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "blocker-repair-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        resumed = self.client.post(
+            f"/v1/runs/{run_id}/resume",
+            json={"actor_id": "api-test", "note": "repair blockers and export"},
+        )
+        self.assertEqual(resumed.status_code, 200)
+
+        terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
+        self.assertEqual(terminal["status"], "succeeded")
+
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
+        summary_payload = summary.json()
+        self.assertTrue(summary_payload["merged_export_ready"])
+        self.assertEqual(summary_payload["chapter_bilingual_export_count"], 2)
+
+        with self.session_factory() as session:
+            remaining_blocking_issue_count = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.blocking.is_(True),
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                )
+            )
+            self.assertEqual(remaining_blocking_issue_count, 0)
+
+            open_term_conflicts = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == "TERM_CONFLICT",
+                    ReviewIssue.status == IssueStatus.OPEN,
+                )
+            )
+            open_omissions = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == "OMISSION",
+                    ReviewIssue.status == IssueStatus.OPEN,
+                )
+            )
+            self.assertEqual(open_term_conflicts, 0)
+            self.assertEqual(open_omissions, 0)
+
+            run = session.get(DocumentRun, run_id)
+            self.assertIsNotNone(run)
+            assert run is not None
+            pipeline = dict((run.status_detail_json or {}).get("pipeline") or {})
+            review_stage = dict((pipeline.get("stages") or {}).get("review") or {})
+            self.assertEqual(review_stage.get("status"), "succeeded")
+            self.assertTrue(review_stage.get("blocker_repair_requested"))
+            self.assertTrue(review_stage.get("blocker_repair_applied"))
+            self.assertGreaterEqual(int(review_stage.get("blocker_repair_execution_count") or 0), 1)
+            self.assertEqual(int(review_stage.get("remaining_blocking_issue_count") or 0), 0)
+
+    def test_failed_review_persists_partial_repair_progress(self) -> None:
+        chapter_two = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>Chapter Two</h1>
+    <p>Selection bias matters. Literature review helps.</p>
+  </body>
+</html>
+"""
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+                ("Chapter Two", "chapter2.xhtml", chapter_two),
+            ]
+        )
+
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        self.app.state.translation_worker = RepairLoopBrokenWorker()
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        with self.session_factory() as session:
+            locked_term = TermEntry(
+                id=str(uuid4()),
+                document_id=document_id,
+                scope_type=MemoryScopeType.GLOBAL,
+                scope_id=None,
+                source_term="Pricing power",
+                target_term="定价能力",
+                term_type=TermType.CONCEPT,
+                lock_level=LockLevel.LOCKED,
+                status=TermStatus.ACTIVE,
+                evidence_sentence_id=None,
+                version=1,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            session.merge(locked_term)
+            session.commit()
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        self.assertGreaterEqual(review.json()["total_issue_count"], 2)
+
+        self.app.state.translation_worker = RepairLoopPartialRecoveryWorker()
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "partial-repair-persistence-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        resumed = self.client.post(
+            f"/v1/runs/{run_id}/resume",
+            json={"actor_id": "api-test", "note": "persist partial repair progress"},
+        )
+        self.assertEqual(resumed.status_code, 200)
+
+        terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
+        self.assertEqual(terminal["status"], "failed")
+
+        with self.session_factory() as session:
+            remaining_blocking_issue_count = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.blocking.is_(True),
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                )
+            )
+            self.assertEqual(remaining_blocking_issue_count, 1)
+
+            open_term_conflicts = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == "TERM_CONFLICT",
+                    ReviewIssue.status == IssueStatus.OPEN,
+                )
+            )
+            open_omissions = session.scalar(
+                select(func.count(ReviewIssue.id)).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == "OMISSION",
+                    ReviewIssue.status == IssueStatus.OPEN,
+                )
+            )
+            self.assertEqual(open_term_conflicts, 0)
+            self.assertEqual(open_omissions, 1)
+
+            run = session.get(DocumentRun, run_id)
+            self.assertIsNotNone(run)
+            assert run is not None
+            pipeline = dict((run.status_detail_json or {}).get("pipeline") or {})
+            review_stage = dict((pipeline.get("stages") or {}).get("review") or {})
+            self.assertEqual(review_stage.get("status"), "failed")
+            self.assertTrue(review_stage.get("blocker_repair_requested"))
+            self.assertTrue(review_stage.get("blocker_repair_applied"))
+            self.assertGreaterEqual(int(review_stage.get("blocker_repair_execution_count") or 0), 1)
+            self.assertEqual(int(review_stage.get("remaining_blocking_issue_count") or 0), 1)
+
+    def test_translate_executor_claims_parallel_chapters_without_same_chapter_overlap(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                (
+                    f"Chapter {index}",
+                    f"chapter{index}.xhtml",
+                    self._chapter_xhtml_with_sentences(
+                        title=f"Chapter {index}",
+                        sentence_prefix=f"Chapter {index}",
+                    ),
+                )
+                for index in range(1, 10)
+            ]
+        )
+
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "chapter-parallelism-test"},
+                "budget": {"max_parallel_workers": 8},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root=self.app.state.export_root,
+            translation_worker=self.app.state.translation_worker,
+        )
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            packet_ids = executor._list_pending_packet_ids(session, document_id)
+            self.assertGreaterEqual(len(packet_ids), 18)
+
+            chapter_counts: dict[str, int] = {}
+            for chapter_id in executor._packet_chapter_id_map(session, packet_ids).values():
+                chapter_counts[chapter_id] = chapter_counts.get(chapter_id, 0) + 1
+            self.assertEqual(len(chapter_counts), 9)
+            self.assertTrue(all(count >= 2 for count in chapter_counts.values()))
+
+            execution.seed_translate_work_items(
+                run_id=run_id,
+                packet_ids=packet_ids,
+                input_version_bundle_by_packet_id=executor._translate_input_versions(session, packet_ids),
+            )
+
+            translate_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            first_wave = executor._claim_translate_work_items(
+                session=session,
+                execution=execution,
+                run_id=run_id,
+                translate_items=translate_items,
+            )
+            self.assertEqual(len(first_wave), 8)
+
+            first_wave_chapters = executor._packet_chapter_id_map(
+                session,
+                [item.scope_id for item in first_wave],
+            )
+            self.assertEqual(len(set(first_wave_chapters.values())), 8)
+
+            second_attempt = executor._claim_translate_work_items(
+                session=session,
+                execution=execution,
+                run_id=run_id,
+                translate_items=executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE),
+            )
+            self.assertEqual(second_attempt, [])
+
+            execution.complete_translate_success(
+                lease_token=first_wave[0].lease_token,
+                packet_id=first_wave[0].scope_id,
+                translation_run_id="test-translation-run",
+                token_in=0,
+                token_out=0,
+                cost_usd=0.0,
+                latency_ms=0,
+            )
+
+            third_attempt = executor._claim_translate_work_items(
+                session=session,
+                execution=execution,
+                run_id=run_id,
+                translate_items=executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE),
+            )
+            self.assertEqual(len(third_attempt), 1)
+
+            active_items = [
+                item
+                for item in executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+                if item.status in {WorkItemStatus.LEASED, WorkItemStatus.RUNNING}
+            ]
+            active_chapter_ids = list(
+                executor._translate_item_chapter_id_map(session, active_items).values()
+            )
+            self.assertEqual(len(active_chapter_ids), 8)
+            self.assertEqual(len(active_chapter_ids), len(set(active_chapter_ids)))
+
+    def test_translate_executor_defaults_to_single_worker_on_sqlite_without_budget_override(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "sqlite-default-parallelism-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        explicit = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "sqlite-explicit-parallelism-test"},
+                "budget": {"max_parallel_workers": 3},
+            },
+        )
+        self.assertEqual(explicit.status_code, 201)
+        explicit_run_id = explicit.json()["run_id"]
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root=self.app.state.export_root,
+            translation_worker=self.app.state.translation_worker,
+        )
+        with self.session_factory() as session:
+            self.assertEqual(executor._translate_parallelism_limit(session, run_id), 1)
+            self.assertEqual(executor._translate_parallelism_limit(session, explicit_run_id), 3)
+
+    def test_translate_executor_seeds_pending_packets_without_sqlite_stage_update_deadlock(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "sqlite-stage-update-deadlock-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root=self.app.state.export_root,
+            translation_worker=self.app.state.translation_worker,
+        )
+
+        outcome: dict[str, object] = {}
+
+        def _run_stage() -> None:
+            outcome["progressed"] = executor._process_translate_stage(run_id)
+
+        worker = threading.Thread(target=_run_stage, daemon=True)
+        worker.start()
+        worker.join(timeout=2)
+
+        self.assertFalse(
+            worker.is_alive(),
+            "translate stage seeding self-deadlocked on SQLite while updating pipeline status",
+        )
+        self.assertTrue(outcome.get("progressed"))
+
+        with self.session_factory() as session:
+            translate_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            self.assertGreater(len(translate_items), 0)
 
     def test_document_history_supports_search_and_filters(self) -> None:
         first_epub_path = self._write_epub_with_chapters(
@@ -656,6 +1325,59 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(merged_pending_payload["total_count"], 1)
         self.assertEqual(merged_pending_payload["entries"][0]["document_id"], second_document_id)
 
+    def test_document_history_includes_latest_run_stage_and_progress(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {
+                    "source": "history-progress-test",
+                    "pipeline": {
+                        "current_stage": "translate",
+                        "stages": {
+                            "translate": {
+                                "status": "running",
+                                "total_packet_count": 3163,
+                                "pending_packet_count": 3015,
+                            }
+                        },
+                    },
+                    "control_counters": {
+                        "seeded_work_item_count": 3163,
+                        "completed_work_item_count": 148,
+                    },
+                },
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        with self.session_factory() as session:
+            run = session.get(DocumentRun, run_id)
+            self.assertIsNotNone(run)
+            assert run is not None
+            run.status = DocumentRunStatus.RUNNING
+            session.commit()
+
+        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        payload = history.json()
+        self.assertEqual(payload["total_count"], 1)
+        entry = payload["entries"][0]
+        self.assertEqual(entry["document_id"], document_id)
+        self.assertEqual(entry["latest_run_id"], run_id)
+        self.assertEqual(entry["latest_run_status"], "running")
+        self.assertEqual(entry["latest_run_current_stage"], "translate")
+        self.assertEqual(entry["latest_run_completed_work_item_count"], 148)
+        self.assertEqual(entry["latest_run_total_work_item_count"], 3163)
+
     def test_retry_run_restarts_pipeline_with_previous_lineage(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
@@ -709,6 +1431,65 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(history_payload["entries"][0]["document_id"], document_id)
         self.assertEqual(history_payload["entries"][0]["latest_run_id"], retry_payload["run_id"])
 
+    def test_retry_run_recovers_stale_failed_stage_run_still_marked_running(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {"source": "stale-retry-test"},
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        original_run_id = created.json()["run_id"]
+
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        stale_pipeline = {
+            "current_stage": "translate",
+            "stages": {
+                "bootstrap": {"status": "succeeded"},
+                "translate": {
+                    "status": "failed",
+                    "error_message": "Provider returned HTTP 401: invalid api key",
+                    "updated_at": stale_at.isoformat(),
+                },
+            },
+        }
+        with self.session_factory() as session:
+            run = session.get(DocumentRun, original_run_id)
+            self.assertIsNotNone(run)
+            run.status = DocumentRunStatus.RUNNING
+            run.status_detail_json = {"pipeline": stale_pipeline}
+            run.updated_at = stale_at
+            run.finished_at = None
+            run.stop_reason = None
+            session.commit()
+
+        retried = self.client.post(
+            f"/v1/runs/{original_run_id}/retry",
+            json={"actor_id": "api-retry", "note": "recover stale failed-stage run"},
+        )
+        self.assertEqual(retried.status_code, 200)
+        retry_payload = retried.json()
+        self.assertNotEqual(retry_payload["run_id"], original_run_id)
+        self.assertEqual(retry_payload["resume_from_run_id"], original_run_id)
+        self.assertEqual(retry_payload["status"], "running")
+
+        with self.session_factory() as session:
+            original_run = session.get(DocumentRun, original_run_id)
+            self.assertIsNotNone(original_run)
+            self.assertEqual(original_run.status, DocumentRunStatus.FAILED)
+            self.assertEqual(original_run.stop_reason, "clean_retry_after_stale_run")
+
+        terminal = self._wait_for_run_terminal(retry_payload["run_id"])
+        self.assertEqual(terminal["status"], "succeeded")
+
     def test_export_download_bundles_multi_chapter_exports_as_zip(self) -> None:
         epub_path = self._write_epub_with_chapters(
             [
@@ -746,6 +1527,85 @@ class ApiWorkflowTests(unittest.TestCase):
 
         self.assertEqual(len([name for name in names if name.endswith(".html")]), 2)
         self.assertTrue(all(name.startswith(f"{document_id}-bilingual_html/") for name in names))
+
+    def test_refresh_epub_structure_repairs_legacy_page_number_titles_and_combined_book_title(self) -> None:
+        epub_path = self._write_epub_with_frontmatter_titlepage()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        with self.session_factory() as session:
+            document = session.get(Document, document_id)
+            self.assertIsNotNone(document)
+            document.title = "Agentic AI"
+            document.title_src = "Agentic AI"
+            document.metadata_json = {
+                "title": "Agentic AI",
+                "author": "Ken Huang",
+                "language": "en",
+            }
+            chapters = session.scalars(
+                select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal.asc())
+            ).all()
+            self.assertEqual(len(chapters), 2)
+            chapters[0].title_src = "xxxviii"
+            chapters[1].title_src = "20"
+            session.commit()
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session, export_root=self.app.state.export_root)
+            refresh = workflow.refresh_epub_structure(document_id)
+            session.commit()
+            summary = workflow.get_document_summary(document_id)
+
+        self.assertEqual(refresh.matched_chapter_count, 2)
+        self.assertEqual(refresh.skipped_chapter_count, 0)
+        self.assertEqual(summary.title_src, "Agentic AI: Theories and Practices")
+        self.assertEqual(
+            [chapter.title_src for chapter in summary.chapters[:2]],
+            ["Agentic AI", "1. The Genesis and Evolution of AI Agents"],
+        )
+
+    def test_merged_html_export_backfills_translated_document_title_and_uses_human_download_name(self) -> None:
+        epub_path = self._write_epub_with_frontmatter_titlepage()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "merged_html"},
+        )
+        self.assertEqual(export.status_code, 200)
+        export_data = export.json()
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session, export_root=self.app.state.export_root)
+            summary = workflow.get_document_summary(document_id)
+
+        self.assertEqual(summary.title_src, "Agentic AI: Theories and Practices")
+        self.assertEqual(summary.title_tgt, "ZH::Agentic AI：ZH::Theories and Practices")
+        alias_name = (
+            f"{safe_title_for_filename(summary.title_tgt, wrap_book_quotes=True)}-中文阅读稿.html"
+        )
+        alias_path = Path(export_data["file_path"]).with_name(alias_name)
+        self.assertTrue(alias_path.is_file())
+
+        download = self.client.get(
+            f"/v1/documents/{document_id}/exports/download",
+            params={"export_type": "merged_html"},
+        )
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download.headers["content-type"], "application/zip")
+        content_disposition = unquote(download.headers["content-disposition"])
+        self.assertIn(
+            f'{safe_title_for_filename(summary.title_tgt, wrap_book_quotes=True)}-整书译制包.zip',
+            content_disposition,
+        )
 
     def test_export_succeeds_with_empty_frontmatter_chapter(self) -> None:
         epub_path = self._write_epub_with_chapters(

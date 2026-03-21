@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.document_titles import (
+    compose_document_title,
+    document_display_title,
+    document_source_title,
+    safe_title_for_filename,
+)
 from book_agent.domain.enums import (
     ActionActorType,
     ActionStatus,
@@ -30,6 +36,20 @@ from book_agent.domain.enums import (
     TargetSegmentStatus,
 )
 from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
+from book_agent.domain.structure.pdf import (
+    _expanded_code_candidate_lines,
+    _looks_like_code,
+    _looks_like_code_continuation_line,
+    _looks_like_code_docstring_line,
+    _looks_like_embedded_code_line,
+    _looks_like_labeled_prose_line,
+    _looks_like_prose_line_group,
+    _looks_like_shell_command_line,
+    _looks_like_shell_command_continuation_line,
+    _looks_like_sentence_prose_line,
+    _looks_like_splitworthy_single_line_code_fragment,
+    _looks_like_structured_data_line,
+)
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.infra.repositories.export import ChapterExportBundle, DocumentExportBundle, ExportRepository
 from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
@@ -58,11 +78,17 @@ def _excerpt_text(text: str, *, limit: int = 220) -> str:
 
 
 def _normalize_render_text(text: str | None) -> str:
-    return re.sub(r"\s+", " ", (text or "")).strip()
+    sanitized = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text or "")
+    return re.sub(r"\s+", " ", sanitized).strip()
 
 
 def _normalize_signature_text(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip().casefold()
+
+
+def _leading_whitespace_width(text: str) -> int:
+    expanded = (text or "").replace("\t", "    ")
+    return len(expanded) - len(expanded.lstrip(" "))
 
 
 def _looks_like_metadata_filename(value: str) -> bool:
@@ -79,6 +105,14 @@ def _display_author_value(author: str | None) -> str | None:
     if not normalized or _looks_like_metadata_filename(normalized):
         return None
     return normalized
+
+
+def _document_export_label(export_type: ExportType) -> str:
+    if export_type == ExportType.MERGED_HTML:
+        return "中文阅读稿"
+    if export_type == ExportType.MERGED_MARKDOWN:
+        return "中文阅读稿-Markdown"
+    return export_type.value
 
 
 def _pdf_profile_payload(document) -> dict[str, object]:
@@ -144,7 +178,7 @@ _CODE_ASSIGNMENT_PATTERN = re.compile(
 _OCR_TOLERANT_CODE_ASSIGNMENT_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_ ]{0,80}\s*=\s*.+$"
 )
-_MAIN_CHAPTER_TITLE_PATTERN = re.compile(r"^\s*chapter\s+(\d+)\b", re.IGNORECASE)
+_MAIN_CHAPTER_TITLE_PATTERN = re.compile(r"^\s*chapter\s+(\d+)(?=\b|_)", re.IGNORECASE)
 _APPENDIX_TITLE_PATTERN = re.compile(r"^\s*appendix\b", re.IGNORECASE)
 _FIGURE_CAPTION_PATTERN = re.compile(r"^\s*(?:fig(?:ure)?\.?|image|diagram|chart)\b", re.IGNORECASE)
 _ACADEMIC_CITATION_PATTERN = re.compile(r"\[[^\]]+\d{4}[^\]]*\]")
@@ -157,6 +191,20 @@ _LEADING_SECTION_NUMBER_PATTERN = re.compile(
     r"^(?:(?:\d+(?:\.\d+)*)|[ivxlcdm]+)[.):\-]?\s+",
     re.IGNORECASE,
 )
+_LIST_MARKER_PATTERN = re.compile(r"^[\s\u200b\ufeff]*(?:[-*+•●▪◦○◯])[\s\u200b\ufeff]+")
+_ORDERED_LIST_MARKER_PATTERN = re.compile(r"^[\s\u200b\ufeff]*(?:\[\d+\]|\d+[.)])[\s\u200b\ufeff]+")
+_UNORDERED_LIST_LINE_PATTERN = re.compile(
+    r"^(?P<indent>[\s\u200b\ufeff]*)(?P<marker>[-*+•●▪◦○◯])[\s\u200b\ufeff]+(?P<body>.+)$"
+)
+_ORDERED_LIST_LINE_PATTERN = re.compile(
+    r"^(?P<indent>[\s\u200b\ufeff]*)(?P<marker>\[\d+\]|\d+[.)])[\s\u200b\ufeff]+(?P<body>.+)$"
+)
+_CJK_CHAR_PATTERN = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+_REFERENCE_ENTRY_MARKER_PATTERN = re.compile(r"^[\s\u200b\ufeff]*\d+[.)][\s\u200b\ufeff]+")
+_REFERENCE_LOCATOR_PATTERN = re.compile(r"(?:https?://|doi\.org/|arxiv:)\S+", re.IGNORECASE)
+_URL_ONLY_PATTERN = re.compile(r"^[\s\u200b\ufeff]*https?://\S+[\s\u200b\ufeff]*$", re.IGNORECASE)
+_REFERENCE_TARGET_ENTRY_PATTERN = re.compile(r"\d+[.)]\s+.*?(?=(?:\s+\d+[.)]\s+)|$)")
+_REFERENCE_LOCATOR_CONTINUATION_PATTERN = re.compile(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _HEADING_CONTINUATION_START_WORDS = {
     "and",
     "as",
@@ -255,10 +303,20 @@ _PROSE_ARTIFACT_STOPWORDS = {
 _FRONTMATTER_TITLES = {
     "acknowledgment",
     "acknowledgements",
+    "dedication",
     "foreword",
     "preface",
     "prologue",
     "introduction",
+}
+_FRONTMATTER_TITLE_TRANSLATIONS = {
+    "acknowledgment": "致谢",
+    "acknowledgements": "致谢",
+    "dedication": "致谢",
+    "foreword": "前言",
+    "preface": "前言",
+    "prologue": "序章",
+    "introduction": "介绍",
 }
 _PURE_CHAPTER_LABEL_PATTERN = re.compile(r"^\s*chapter\s+\d+[.)]?\s*$", re.IGNORECASE)
 _CHAPTER_LOWERCASE_TAIL_PATTERN = re.compile(r"^\s*chapter\s+\d+[.):]?\s+[a-z]", re.IGNORECASE)
@@ -269,6 +327,7 @@ _CJK_APPENDIX_TITLE_PATTERN = re.compile(r"^\s*附录\s*[A-Za-z一二三四五�
 _BOOK_STRUCTURAL_HEADING_TITLES = {
     "acknowledgment",
     "acknowledgements",
+    "dedication",
     "foreword",
     "preface",
     "introduction",
@@ -283,6 +342,7 @@ _BOOK_STRUCTURAL_HEADING_TITLES = {
 }
 _BOOK_ALLOWED_REFERENCE_HEADINGS = {
     "references",
+    "参考文献",
     "conclusion",
     "key takeaways",
     "overview",
@@ -439,15 +499,15 @@ class ExportService:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.MERGED_HTML)
+        self._sync_document_title_tgt(bundle)
         output_dir = self.output_root / bundle.document.id
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / "merged-document.html"
         manifest_path = output_dir / "merged-document.manifest.json"
         asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
-        file_path.write_text(
-            self._build_merged_document_html(bundle, asset_path_by_block_id),
-            encoding="utf-8",
-        )
+        merged_html = self._build_merged_document_html(bundle, asset_path_by_block_id)
+        file_path.write_text(merged_html, encoding="utf-8")
+        self._write_document_export_alias(output_dir, bundle.document, ExportType.MERGED_HTML, merged_html)
         manifest_path.write_text(
             json.dumps(self._build_merged_document_manifest(bundle, file_path), ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -462,15 +522,15 @@ class ExportService:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.MERGED_MARKDOWN)
+        self._sync_document_title_tgt(bundle)
         output_dir = self.output_root / bundle.document.id
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / "merged-document.md"
         manifest_path = output_dir / "merged-document.markdown.manifest.json"
         asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
-        file_path.write_text(
-            self._build_merged_document_markdown(bundle, asset_path_by_block_id),
-            encoding="utf-8",
-        )
+        merged_markdown = self._build_merged_document_markdown(bundle, asset_path_by_block_id)
+        file_path.write_text(merged_markdown, encoding="utf-8")
+        self._write_document_export_alias(output_dir, bundle.document, ExportType.MERGED_MARKDOWN, merged_markdown)
         manifest_path.write_text(
             json.dumps(
                 self._build_merged_document_manifest(
@@ -488,6 +548,91 @@ class ExportService:
         self._apply_document_export_status_updates(bundle, ExportType.MERGED_MARKDOWN)
         self.repository.session.flush()
         return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+
+    def _sync_document_title_tgt(self, bundle: DocumentExportBundle) -> None:
+        current_title_tgt = _normalize_render_text(bundle.document.title_tgt)
+        if current_title_tgt:
+            return
+        derived_title_tgt = self._derive_document_title_tgt(bundle)
+        if not derived_title_tgt:
+            return
+        if _normalize_render_text(derived_title_tgt).casefold() == _normalize_render_text(
+            document_source_title(bundle.document)
+        ).casefold():
+            return
+        metadata = dict(bundle.document.metadata_json or {})
+        metadata["document_title_tgt"] = derived_title_tgt
+        metadata["document_title_tgt_resolution_source"] = "translated_frontmatter_heading"
+        document_title_metadata = dict(metadata.get("document_title") or {})
+        document_title_metadata.setdefault("title", document_source_title(bundle.document) or bundle.document.title)
+        document_title_metadata.setdefault("src", document_source_title(bundle.document) or bundle.document.title_src)
+        document_title_metadata["tgt"] = derived_title_tgt
+        document_title_metadata.setdefault("resolution_source", "translated_frontmatter_heading")
+        metadata["document_title"] = document_title_metadata
+        bundle.document.title_tgt = derived_title_tgt
+        bundle.document.metadata_json = metadata
+        bundle.document.updated_at = _utcnow()
+        self.repository.session.merge(bundle.document)
+
+    def _derive_document_title_tgt(self, bundle: DocumentExportBundle) -> str | None:
+        if bundle.document.source_type != SourceType.EPUB:
+            return None
+        metadata = dict(bundle.document.metadata_json or {})
+        source_title = _normalize_render_text(metadata.get("title") or bundle.document.title or bundle.document.title_src)
+        source_subtitle = _normalize_render_text(metadata.get("subtitle"))
+        if not source_title:
+            return None
+
+        title_target: str | None = None
+        subtitle_target: str | None = None
+        for chapter_bundle in bundle.chapters[:2]:
+            render_blocks = self._render_blocks_for_chapter(chapter_bundle)
+            for render_block in render_blocks:
+                if render_block.block_type != BlockType.HEADING.value:
+                    continue
+                source_heading = _normalize_render_text(render_block.source_text)
+                target_heading = _normalize_render_text(render_block.target_text)
+                if not source_heading or not target_heading:
+                    continue
+                if self._looks_like_prose_title_text(
+                    target_heading,
+                    source_heading_text=source_heading,
+                    fallback_title=source_title,
+                ):
+                    continue
+                if title_target is None and source_heading.casefold() == source_title.casefold():
+                    title_target = target_heading
+                    continue
+                if (
+                    subtitle_target is None
+                    and source_subtitle
+                    and source_heading.casefold() == source_subtitle.casefold()
+                ):
+                    subtitle_target = target_heading
+            if title_target and (subtitle_target or not source_subtitle):
+                break
+
+        if title_target is None:
+            return None
+        return compose_document_title(title_target, subtitle_target, separator="：")
+
+    def _write_document_export_alias(
+        self,
+        output_dir: Path,
+        document,
+        export_type: ExportType,
+        content: str,
+    ) -> None:
+        suffix = ".html" if export_type == ExportType.MERGED_HTML else ".md"
+        alias_path = output_dir / (
+            f"{safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)}"
+            f"-{_document_export_label(export_type)}{suffix}"
+        )
+        for candidate in output_dir.glob(f"《*》-{_document_export_label(export_type)}{suffix}"):
+            if candidate == alias_path:
+                continue
+            candidate.unlink(missing_ok=True)
+        alias_path.write_text(content, encoding="utf-8")
 
     def assert_chapter_exportable(self, chapter_id: str, export_type: ExportType) -> None:
         bundle = self.repository.load_chapter_bundle(chapter_id)
@@ -1003,12 +1148,208 @@ class ExportService:
 
     def _sentence_target_map(self, bundle: ChapterExportBundle) -> dict[str, list[str]]:
         target_map = self._target_map(bundle)
-        sentence_targets: dict[str, list[str]] = {}
+        run_rank_map = self._translation_run_rank_map(bundle)
+        sentence_target_candidates: dict[str, list[str]] = {}
         for edge in bundle.alignment_edges:
             if edge.target_segment_id not in target_map:
                 continue
-            sentence_targets.setdefault(edge.sentence_id, []).append(edge.target_segment_id)
+            sentence_target_candidates.setdefault(edge.sentence_id, []).append(edge.target_segment_id)
+        sentence_targets: dict[str, list[str]] = {}
+        for sentence_id, candidate_ids in sentence_target_candidates.items():
+            preferred_ids = self._preferred_target_ids_for_sentence(
+                candidate_ids,
+                target_map=target_map,
+                run_rank_map=run_rank_map,
+            )
+            if preferred_ids:
+                sentence_targets[sentence_id] = preferred_ids
         return sentence_targets
+
+    def _translation_run_rank_map(self, bundle: ChapterExportBundle) -> dict[str, tuple[datetime, int, int]]:
+        packet_priority = {
+            "translate": 0,
+            "review": 1,
+            "retranslate": 2,
+        }
+        packet_type_by_id = {
+            packet.id: str(packet.packet_type or "").strip().casefold()
+            for packet in bundle.packets
+        }
+        rank_map: dict[str, tuple[datetime, int, int]] = {}
+        for run in bundle.translation_runs:
+            run_timestamp = run.updated_at or run.created_at or datetime.min.replace(tzinfo=timezone.utc)
+            if run_timestamp.tzinfo is None:
+                run_timestamp = run_timestamp.replace(tzinfo=timezone.utc)
+            rank_map[run.id] = (
+                run_timestamp,
+                packet_priority.get(packet_type_by_id.get(run.packet_id, ""), 0),
+                int(getattr(run, "attempt", 0) or 0),
+            )
+        return rank_map
+
+    def _preferred_target_ids_for_sentence(
+        self,
+        candidate_ids: list[str],
+        *,
+        target_map: dict[str, object],
+        run_rank_map: dict[str, tuple[datetime, int, int]],
+    ) -> list[str]:
+        ordered_candidates: list[str] = []
+        seen_target_ids: set[str] = set()
+        for candidate_id in candidate_ids:
+            if candidate_id not in target_map or candidate_id in seen_target_ids:
+                continue
+            seen_target_ids.add(candidate_id)
+            ordered_candidates.append(candidate_id)
+        if len(ordered_candidates) < 2:
+            return ordered_candidates
+
+        best_run_id: str | None = None
+        best_rank: tuple[datetime, int, int] | None = None
+        for candidate_id in ordered_candidates:
+            run_id = str(getattr(target_map[candidate_id], "translation_run_id", "") or "")
+            rank = run_rank_map.get(run_id)
+            if rank is None:
+                rank = (datetime.min.replace(tzinfo=timezone.utc), 0, 0)
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best_run_id = run_id
+
+        if not best_run_id:
+            return ordered_candidates
+        return [
+            candidate_id
+            for candidate_id in ordered_candidates
+            if str(getattr(target_map[candidate_id], "translation_run_id", "") or "") == best_run_id
+        ]
+
+    def _normalize_pdf_body_render_texts(
+        self,
+        *,
+        document,
+        block_type: BlockType | None,
+        render_mode: str,
+        source_text: str,
+        block_sentences: list[object],
+        sentence_targets: dict[str, list[str]],
+        target_ids: list[str],
+        target_map: dict[str, object],
+        source_metadata: dict[str, object],
+    ) -> tuple[str, list[str], str | None]:
+        if not _is_pdf_document(document) or render_mode != "zh_primary_with_optional_source":
+            return source_text, target_ids, None
+        if block_type == BlockType.HEADING:
+            normalized_source_text = self._join_sentence_source_texts(block_sentences) or source_text
+            if normalized_source_text != source_text:
+                source_metadata["recovery_flags"] = list(
+                    dict.fromkeys(
+                        [
+                            *list(source_metadata.get("recovery_flags") or []),
+                            "export_pdf_source_soft_wrap_normalized",
+                        ]
+                    )
+                )
+            return normalized_source_text, target_ids, None
+        if block_type not in {BlockType.PARAGRAPH, BlockType.QUOTE} or not block_sentences:
+            return source_text, target_ids, None
+
+        grouped_sentences = self._group_block_sentences_by_target_id(
+            block_sentences,
+            sentence_targets=sentence_targets,
+            target_map=target_map,
+        )
+        normalized_source_text = self._join_sentence_source_texts(block_sentences) or source_text
+        normalized_target_text: str | None = None
+        normalized_target_ids = target_ids
+
+        if self._should_restore_pdf_paragraph_breaks(grouped_sentences):
+            source_paragraphs = [
+                self._join_sentence_source_texts(group_sentences)
+                for _target_id, group_sentences in grouped_sentences
+                if group_sentences
+            ]
+            paragraph_target_ids: list[str] = []
+            paragraph_target_texts: list[str] = []
+            for target_id, _group_sentences in grouped_sentences:
+                if not target_id or target_id not in target_map or target_id in paragraph_target_ids:
+                    continue
+                paragraph_target_ids.append(target_id)
+                paragraph_target_texts.append(str(getattr(target_map[target_id], "text_zh", "") or "").strip())
+            source_paragraphs = [paragraph for paragraph in source_paragraphs if paragraph]
+            paragraph_target_texts = [paragraph for paragraph in paragraph_target_texts if paragraph]
+            if len(source_paragraphs) >= 2:
+                normalized_source_text = "\n\n".join(source_paragraphs)
+            if len(paragraph_target_texts) >= 2:
+                normalized_target_text = "\n\n".join(paragraph_target_texts)
+                normalized_target_ids = paragraph_target_ids
+            source_metadata["recovery_flags"] = list(
+                dict.fromkeys(
+                    [
+                        *list(source_metadata.get("recovery_flags") or []),
+                        "export_pdf_paragraph_breaks_restored",
+                    ]
+                )
+            )
+
+        if normalized_source_text != source_text and "export_pdf_paragraph_breaks_restored" not in list(
+            source_metadata.get("recovery_flags") or []
+        ):
+            source_metadata["recovery_flags"] = list(
+                dict.fromkeys(
+                    [
+                        *list(source_metadata.get("recovery_flags") or []),
+                        "export_pdf_source_soft_wrap_normalized",
+                    ]
+                )
+            )
+        return normalized_source_text, normalized_target_ids, normalized_target_text
+
+    def _group_block_sentences_by_target_id(
+        self,
+        block_sentences: list[object],
+        *,
+        sentence_targets: dict[str, list[str]],
+        target_map: dict[str, object],
+    ) -> list[tuple[str | None, list[object]]]:
+        groups: list[tuple[str | None, list[object]]] = []
+        current_target_id: str | None = None
+        current_sentences: list[object] = []
+
+        for sentence in block_sentences:
+            candidate_ids = [target_id for target_id in sentence_targets.get(sentence.id, []) if target_id in target_map]
+            primary_target_id = candidate_ids[0] if candidate_ids else None
+            if current_sentences and primary_target_id != current_target_id:
+                groups.append((current_target_id, current_sentences))
+                current_sentences = [sentence]
+                current_target_id = primary_target_id
+                continue
+            if not current_sentences:
+                current_target_id = primary_target_id
+            current_sentences.append(sentence)
+
+        if current_sentences:
+            groups.append((current_target_id, current_sentences))
+        return groups
+
+    def _should_restore_pdf_paragraph_breaks(
+        self,
+        grouped_sentences: list[tuple[str | None, list[object]]],
+    ) -> bool:
+        if len(grouped_sentences) < 2:
+            return False
+        multi_sentence_group_count = sum(1 for _target_id, sentences in grouped_sentences if len(sentences) > 1)
+        if multi_sentence_group_count >= 2:
+            return True
+        if multi_sentence_group_count >= 1 and any(len(sentences) == 1 for _target_id, sentences in grouped_sentences):
+            return True
+        return False
+
+    def _join_sentence_source_texts(self, sentences: list[object]) -> str:
+        parts = [str(getattr(sentence, "source_text", "") or "").strip() for sentence in sentences]
+        cleaned = [part for part in parts if part]
+        if not cleaned:
+            return ""
+        return self._inline_join_target_text(cleaned)
 
     def _build_export_misalignment_evidence(self, bundle: ChapterExportBundle) -> ExportMisalignmentEvidence:
         active_target_map = self._target_map(bundle)
@@ -1036,8 +1377,21 @@ class ExportService:
             for target_ids in rendered_targets_by_sentence.values()
             for target_id in target_ids
         }
+        preferred_run_ids = {
+            str(getattr(active_target_map[target_id], "translation_run_id", "") or "")
+            for target_id in rendered_target_ids
+            if target_id in active_target_map
+        }
+        orphan_candidate_target_ids = [
+            target_segment_id
+            for target_segment_id, target_segment in active_target_map.items()
+            if not preferred_run_ids
+            or str(getattr(target_segment, "translation_run_id", "") or "") in preferred_run_ids
+        ]
         orphan_target_segment_ids = sorted(
-            target_segment_id for target_segment_id in active_target_map if target_segment_id not in rendered_target_ids
+            target_segment_id
+            for target_segment_id in orphan_candidate_target_ids
+            if target_segment_id not in rendered_target_ids
         )
 
         return ExportMisalignmentEvidence(
@@ -1156,6 +1510,13 @@ class ExportService:
         for packet in bundle.packets:
             packet_evidence = issues_by_packet.get(packet.id)
             if packet_evidence is None:
+                continue
+            has_blocking_packet_anomaly = bool(
+                packet_evidence["missing_target_sentence_ids"]
+                or packet_evidence["sentence_ids_with_only_inactive_targets"]
+                or packet_evidence["orphan_target_segment_ids"]
+            )
+            if not has_blocking_packet_anomaly:
                 continue
             representative_sentence_id = (
                 packet_evidence["missing_target_sentence_ids"][:1]
@@ -1766,7 +2127,7 @@ class ExportService:
             self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
             for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
         )
-        title = html.escape(bundle.document.title or bundle.document.id)
+        title = html.escape(document_display_title(bundle.document) or bundle.document.id)
         author_value = _display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
         author_html = f"<div class='meta'>{author}</div>" if author else ""
@@ -1811,7 +2172,7 @@ class ExportService:
             ".chapter-head h2{margin:10px 0 0;font-family:var(--font-display);font-size:clamp(28px,3vw,40px);line-height:1.02;color:#17313a;}"
             ".chapter-head .source-title{margin-top:8px;color:var(--muted);font-family:var(--font-ui);font-size:14px;}"
             ".block{margin:22px 0;}"
-            ".block .zh{font-size:19px;color:#16202a;max-width:36em;text-wrap:pretty;}"
+            ".block .zh{font-size:19px;color:#16202a;max-width:min(100%,52em);text-wrap:pretty;}"
             ".heading .zh{font-family:var(--font-display);font-size:28px;line-height:1.12;color:#17313a;}"
             ".paragraph .zh,.list_item .zh,.quote .zh{hyphens:auto;}"
             ".block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}"
@@ -1871,7 +2232,7 @@ class ExportService:
         visible_chapters = self._visible_merged_chapters(bundle)
         render_summary = self._merged_render_summary(visible_chapters)
         usage_summary = self._translation_usage_summary_from_runs([run for chapter in bundle.chapters for run in chapter.translation_runs])
-        title = (bundle.document.title or bundle.document.id or "Merged Reading Edition").strip()
+        title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
         author = _display_author_value(bundle.document.author)
         chapter_count = render_summary["chapter_count"]
         protected_count = render_summary["expected_source_only_block_count"]
@@ -1964,7 +2325,7 @@ class ExportService:
                 return "\n\n".join(part for part in parts if part)
             artifact_text = source_text
             if block.artifact_kind == "code":
-                artifact_text = self._normalize_markdown_code_artifact_text(source_text)
+                artifact_text = self._normalize_markdown_code_artifact_text(source_text, block=block)
             parts = [self._markdown_blockquote(notice)] if notice else []
             parts.append(
                 self._markdown_fenced_block(
@@ -2017,8 +2378,9 @@ class ExportService:
         if block.block_type == BlockType.HEADING.value:
             heading_text = target_text or source_text
             return f"### {heading_text}".strip()
+        list_markdown = self._markdown_list_text(target_text or source_text)
         if block.block_type == BlockType.QUOTE.value:
-            parts = [self._markdown_blockquote(target_text or source_text)]
+            parts = [list_markdown or self._markdown_blockquote(target_text or source_text)]
         elif block.block_type == BlockType.LIST_ITEM.value:
             list_text = target_text or source_text
             marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
@@ -2026,17 +2388,51 @@ class ExportService:
         elif block.block_type == BlockType.CAPTION.value:
             parts = [f"*{target_text or source_text}*"]
         else:
-            parts = [target_text or source_text]
+            parts = [list_markdown or (target_text or source_text)]
 
         if source_text and target_text and source_text != target_text:
             parts.append(self._markdown_blockquote(source_text, label="Source"))
         return "\n\n".join(part for part in parts if part)
 
-    def _normalize_markdown_code_artifact_text(self, text: str) -> str:
+    def _normalize_markdown_code_artifact_text(
+        self,
+        text: str,
+        *,
+        block: MergedRenderBlock | None = None,
+    ) -> str:
+        return self._normalize_code_artifact_text(text, block=block)
+
+    def _normalize_code_artifact_text(
+        self,
+        text: str,
+        *,
+        block: MergedRenderBlock | None = None,
+    ) -> str:
         normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-        if self._looks_like_code_artifact_text(normalized):
+        if self._should_reflow_code_artifact_text(normalized):
             normalized = self._reflow_code_artifact_text(normalized)
+        elif block is not None and self._should_preserve_code_artifact_layout(block, normalized):
+            return normalized.rstrip("\n")
         return normalized.rstrip("\n")
+
+    def _should_preserve_markdown_code_artifact_layout(
+        self,
+        block: MergedRenderBlock,
+        text: str,
+    ) -> bool:
+        return self._should_preserve_code_artifact_layout(block, text)
+
+    def _should_preserve_code_artifact_layout(
+        self,
+        block: MergedRenderBlock,
+        text: str,
+    ) -> bool:
+        recovery_flags = {str(flag) for flag in block.source_metadata.get("recovery_flags") or []}
+        if self._should_reflow_code_artifact_text(text):
+            return False
+        if {"cross_page_repaired", "export_refresh_split_code_restored"} & recovery_flags:
+            return True
+        return "export_code_blocks_merged" in recovery_flags and len(text.splitlines()) >= 8
 
     def _markdown_blockquote(self, text: str, *, label: str | None = None) -> str:
         normalized = (text or "").strip()
@@ -2048,6 +2444,25 @@ class ExportService:
         for line in normalized.splitlines() if normalized else []:
             lines.append(f"> {line}" if line else ">")
         return "\n".join(lines) if lines else f"> {label}"
+
+    def _markdown_list_text(self, text: str) -> str | None:
+        raw_lines = [line.rstrip() for line in str(text or "").splitlines() if line.strip()]
+        if len(raw_lines) < 2:
+            raw_lines = self._split_inline_list_target_lines(text, preserve_leading_ws=True)
+        layouts = self._list_line_layouts(text)
+        if len(layouts) < 2 or len(raw_lines) != len(layouts):
+            return None
+        markdown_lines: list[str] = []
+        for (level, _source_line), raw_line in zip(layouts, raw_lines):
+            match = _UNORDERED_LIST_LINE_PATTERN.match(raw_line) or _ORDERED_LIST_LINE_PATTERN.match(raw_line)
+            if match is None:
+                return None
+            body = str(match.group("body") or "").strip()
+            if not body:
+                return None
+            prefix = "1. " if _ORDERED_LIST_LINE_PATTERN.match(raw_line) else "- "
+            markdown_lines.append(f"{'   ' * max(level, 0)}{prefix}{body}")
+        return "\n".join(markdown_lines)
 
     def _markdown_fenced_block(self, text: str, *, language: str = "") -> str:
         content = (text or "").rstrip("\n")
@@ -2166,7 +2581,9 @@ class ExportService:
             )
         manifest = {
             "document_id": bundle.document.id,
-            "title": bundle.document.title,
+            "title": document_display_title(bundle.document),
+            "title_src": document_source_title(bundle.document),
+            "title_tgt": bundle.document.title_tgt,
             "author": _display_author_value(bundle.document.author),
             "export_type": export_type.value,
             "output_path": str(output_path),
@@ -2299,10 +2716,7 @@ class ExportService:
         seen_exact_signatures: set[str] = set()
         for chapter_bundle in bundle.chapters:
             render_blocks = self._render_blocks_for_chapter(chapter_bundle)
-            title_text = next(
-                (block.target_text for block in render_blocks if block.block_type == BlockType.HEADING.value and block.target_text),
-                None,
-            ) or chapter_bundle.chapter.title_src
+            title_text = self._resolved_chapter_title_text(chapter_bundle, render_blocks)
             if not title_text and not render_blocks:
                 continue
 
@@ -2393,6 +2807,83 @@ class ExportService:
             )
             for index, group in enumerate(grouped)
         ]
+
+    def _resolved_chapter_title_text(
+        self,
+        chapter_bundle: ChapterExportBundle,
+        render_blocks: list[MergedRenderBlock],
+    ) -> str | None:
+        fallback_title = next(
+            (
+                str(candidate).strip()
+                for candidate in (
+                    chapter_bundle.chapter.title_tgt,
+                    chapter_bundle.chapter.title_src,
+                    chapter_bundle.chapter.id,
+                )
+                if str(candidate or "").strip()
+            ),
+            None,
+        )
+        if _is_pdf_document(chapter_bundle.document):
+            fallback_title = self._localized_structural_title_fallback(fallback_title)
+        first_content_block = next(
+            (
+                block
+                for block in render_blocks
+                if _normalize_render_text(block.target_text or block.source_text)
+            ),
+            None,
+        )
+        if first_content_block is None:
+            return fallback_title
+        if first_content_block.block_type != BlockType.HEADING.value:
+            return fallback_title
+
+        heading_target = str(first_content_block.target_text or "").strip()
+        if not heading_target:
+            return fallback_title
+        if self._looks_like_prose_title_text(
+            heading_target,
+            source_heading_text=first_content_block.source_text,
+            fallback_title=fallback_title,
+        ):
+            return fallback_title
+        return heading_target
+
+    def _localized_structural_title_fallback(self, title_text: str | None) -> str | None:
+        normalized = _normalize_render_text(title_text)
+        if not normalized:
+            return None
+        return _FRONTMATTER_TITLE_TRANSLATIONS.get(normalized.casefold(), normalized)
+
+    def _looks_like_prose_title_text(
+        self,
+        title_text: str | None,
+        *,
+        source_heading_text: str | None = None,
+        fallback_title: str | None = None,
+    ) -> bool:
+        normalized = _normalize_render_text(title_text)
+        if not normalized:
+            return False
+        sentence_stop_count = sum(normalized.count(marker) for marker in (".", "!", "?", "。", "！", "？"))
+        clause_break_count = sum(normalized.count(marker) for marker in (",", "，", ";", "；", ":", "："))
+        english_word_count = len(re.findall(r"[A-Za-z][A-Za-z'-]*", normalized))
+        cjk_char_count = len(re.findall(r"[\u4e00-\u9fff]", normalized))
+        reference_length = max(
+            len(_normalize_render_text(source_heading_text or "")),
+            len(_normalize_render_text(fallback_title or "")),
+        )
+        if sentence_stop_count >= 2:
+            return True
+        if cjk_char_count >= 52 and clause_break_count >= 2:
+            return True
+        if english_word_count >= 18 and clause_break_count >= 2:
+            return True
+        if reference_length and len(normalized) >= max(48, reference_length * 4) and clause_break_count >= 2:
+            return True
+        return False
 
     def _render_blocks_for_chapter(self, bundle: ChapterExportBundle) -> list[MergedRenderBlock]:
         target_map = self._target_map(bundle)
@@ -2526,11 +3017,26 @@ class ExportService:
                 render_mode = "image_anchor_with_translated_caption"
                 render_source_text = str(source_metadata.get("linked_caption_text") or "")
 
+            normalized_target_text_override: str | None = None
+            render_source_text, target_ids, normalized_target_text_override = self._normalize_pdf_body_render_texts(
+                document=bundle.document,
+                block_type=effective_block_type,
+                render_mode=render_mode,
+                source_text=render_source_text,
+                block_sentences=block_sentences,
+                sentence_targets=sentence_targets,
+                target_ids=target_ids,
+                target_map=target_map,
+                source_metadata=source_metadata,
+            )
             target_text = self._join_block_target_text(
                 [target_map[target_id].text_zh for target_id in target_ids],
                 block_type=target_block_type,
                 render_mode=render_mode,
+                source_text=render_source_text,
             )
+            if normalized_target_text_override:
+                target_text = normalized_target_text_override
             repair_target_text = str(source_metadata.get("repair_target_text") or "").strip()
             if repair_target_text:
                 target_text = repair_target_text
@@ -2585,7 +3091,11 @@ class ExportService:
                 )
                 render_blocks.pop()
                 continue
-            if len(render_blocks) >= 2 and self._should_merge_adjacent_code_blocks(render_blocks[-2], render_blocks[-1]):
+            if (
+                len(render_blocks) >= 2
+                and not self._has_refresh_split_render_fragments(render_blocks[-2], render_blocks[-1])
+                and self._should_merge_adjacent_code_blocks(render_blocks[-2], render_blocks[-1])
+            ):
                 render_blocks[-2] = self._merge_adjacent_code_render_blocks(render_blocks[-2], render_blocks[-1])
                 render_blocks.pop()
         if _is_academic_paper_document(bundle.document):
@@ -2608,6 +3118,12 @@ class ExportService:
                     seen_target_ids.add(target_id)
                     target_ids.append(target_id)
         return target_ids
+
+    def _has_refresh_split_render_fragments(self, *blocks: MergedRenderBlock) -> bool:
+        for block in blocks:
+            if isinstance(block.source_metadata.get("refresh_split_render_fragments"), list):
+                return True
+        return False
 
     def _render_mode_for_block(
         self,
@@ -2720,7 +3236,7 @@ class ExportService:
         if not match:
             return None
         remainder = stripped[match.end():]
-        normalized_remainder = remainder.lstrip(" .:-)\u2013\u2014")
+        normalized_remainder = remainder.lstrip(" .:_-/\\)\u2013\u2014")
         if normalized_remainder and not normalized_remainder[:1].isupper():
             return None
         try:
@@ -2793,7 +3309,11 @@ class ExportService:
         effective_block_type = block_type or block.block_type
         if effective_block_type not in {BlockType.CODE, BlockType.TABLE, BlockType.PARAGRAPH}:
             return False
+        if effective_block_type == BlockType.CODE:
+            return False
         effective_source_text = source_text if source_text is not None else block.source_text
+        if self._looks_like_mixed_code_prose_artifact_text(effective_source_text):
+            return False
         if not self._looks_like_prose_artifact_text(
             effective_source_text,
             academic_paper=_is_academic_paper_document(document),
@@ -2809,6 +3329,12 @@ class ExportService:
         if not lines:
             return False
         normalized = " ".join(lines)
+        if self._looks_like_reference_listing_text(text):
+            return True
+        if self._looks_like_mixed_code_prose_artifact_text(text):
+            return False
+        if self._looks_like_wrapped_prose_artifact_text(text):
+            return True
         if self._looks_like_reference_literal(normalized):
             return False
         if self._looks_like_figure_caption(normalized):
@@ -2838,9 +3364,43 @@ class ExportService:
             return True
         return stopword_hits >= max(4, len(tokens) // 8) and (sentence_punctuation >= 1 or len(lines) >= 2)
 
+    def _looks_like_mixed_code_prose_artifact_text(self, text: str) -> bool:
+        raw_lines = _expanded_code_candidate_lines(text or "")
+        if len(raw_lines) < 2:
+            return False
+        if not _looks_like_splitworthy_single_line_code_fragment(raw_lines[0]):
+            return False
+        trailing_lines = raw_lines[1:]
+        return bool(trailing_lines) and _looks_like_prose_line_group(trailing_lines)
+
+    def _looks_like_wrapped_prose_artifact_text(self, text: str) -> bool:
+        lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+        if len(lines) < 3:
+            return False
+        if any(_looks_like_shell_command_line(line) for line in lines[:6]):
+            return False
+        if any(
+            _CODE_BLOCK_KEYWORD_PATTERN.match(line)
+            or _CODE_ASSIGNMENT_PATTERN.match(line)
+            or _OCR_TOLERANT_CODE_ASSIGNMENT_PATTERN.match(line)
+            or line.startswith(("#", "@"))
+            for line in lines[:12]
+        ):
+            return False
+        normalized = " ".join(lines)
+        tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", normalized.casefold())
+        if len(tokens) < 24:
+            return False
+        stopword_hits = sum(1 for token in tokens if token in _PROSE_ARTIFACT_STOPWORDS)
+        sentence_like_lines = sum(1 for line in lines if len(line.split()) >= 6)
+        sentence_punctuation = len(re.findall(r"[.!?](?:[\"'\)\]\u201d\u2019])?(?:\s|$)", normalized))
+        if stopword_hits < max(6, len(tokens) // 8):
+            return False
+        return sentence_punctuation >= 2 or sentence_like_lines >= 4
+
     def _looks_like_codeish_line_for_artifact_rejection(self, line: str) -> bool:
         stripped = (line or "").strip()
-        if not stripped or stripped.startswith(("•", "-", "*")):
+        if not stripped or _LIST_MARKER_PATTERN.match(stripped) or _ORDERED_LIST_MARKER_PATTERN.match(stripped):
             return False
         if self._looks_like_strong_codeish_line_for_artifact_rejection(stripped):
             return True
@@ -2852,7 +3412,7 @@ class ExportService:
 
     def _looks_like_strong_codeish_line_for_artifact_rejection(self, line: str) -> bool:
         stripped = (line or "").strip()
-        if not stripped or stripped.startswith(("•", "-", "*")):
+        if not stripped or _LIST_MARKER_PATTERN.match(stripped) or _ORDERED_LIST_MARKER_PATTERN.match(stripped):
             return False
         if _CODE_BLOCK_KEYWORD_PATTERN.match(stripped):
             return True
@@ -2875,6 +3435,27 @@ class ExportService:
             return False
         return self._looks_like_prose_artifact_text(text)
 
+    def _looks_like_reference_listing_text(self, text: str) -> bool:
+        normalized = str(text or "").strip()
+        if not normalized:
+            return False
+        lines = self._split_reference_listing_lines(normalized)
+        if len(lines) < 2:
+            return False
+        numbered_entry_count = len(_REFERENCE_ENTRY_MARKER_PATTERN.findall(normalized))
+        locator_count = len(_REFERENCE_LOCATOR_PATTERN.findall(normalized))
+        if numbered_entry_count >= 2 and locator_count >= 1:
+            return True
+        numbered_lines = sum(1 for line in lines if _REFERENCE_ENTRY_MARKER_PATTERN.match(line))
+        locator_lines = sum(
+            1 for line in lines if _URL_ONLY_PATTERN.match(line) or _REFERENCE_LOCATOR_PATTERN.search(line)
+        )
+        if numbered_lines >= 1 and locator_lines >= 2:
+            return True
+        return locator_lines >= 1 and numbered_lines >= 1 and bool(
+            lines and (_URL_ONLY_PATTERN.match(lines[0]) or _REFERENCE_LOCATOR_PATTERN.search(lines[0]))
+        )
+
     def _normalize_academic_paper_render_blocks(
         self,
         bundle: ChapterExportBundle,
@@ -2894,9 +3475,7 @@ class ExportService:
     ) -> list[MergedRenderBlock]:
         repaired_blocks: list[MergedRenderBlock] = []
         for index, block in enumerate(render_blocks):
-            repaired_block = self._repair_book_pdf_render_block(bundle, index, block)
-            if repaired_block is not None:
-                repaired_blocks.append(repaired_block)
+            repaired_blocks.extend(self._repair_book_pdf_render_blocks(bundle, index, block))
 
         normalized: list[MergedRenderBlock] = []
         index = 0
@@ -2915,36 +3494,384 @@ class ExportService:
                 index += 3
             else:
                 index += 1
-            if normalized and self._should_merge_adjacent_code_blocks(normalized[-1], current):
+            if (
+                normalized
+                and not self._has_refresh_split_render_fragments(normalized[-1], current)
+                and self._should_merge_adjacent_code_blocks(normalized[-1], current)
+            ):
                 normalized[-1] = self._merge_adjacent_code_render_blocks(normalized[-1], current)
                 continue
             if normalized and self._should_merge_adjacent_book_paragraph_fragments(normalized[-1], current):
                 normalized[-1] = self._merge_adjacent_book_paragraph_fragments(normalized[-1], current)
                 continue
             normalized.append(current)
+        if any(
+            str(block.source_metadata.get("pdf_page_family") or "").strip().casefold() == "references"
+            for block in normalized
+        ):
+            normalized = self._normalize_reference_listing_render_blocks(normalized)
         return normalized
 
-    def _repair_book_pdf_render_block(
+    def _repair_book_pdf_render_blocks(
         self,
         bundle: ChapterExportBundle,
         index: int,
         block: MergedRenderBlock,
-    ) -> MergedRenderBlock | None:
+    ) -> list[MergedRenderBlock]:
         if block.block_type == BlockType.HEADING.value and self._should_drop_book_heading_label(bundle, index, block):
-            return None
+            return []
         if self._should_clear_suspicious_short_source_target_text(block):
-            return self._drop_render_block_target_text(block, flag="export_book_short_source_target_cleared")
+            block = self._drop_render_block_target_text(block, flag="export_book_short_source_target_cleared")
         if self._should_promote_book_block_to_code(block):
-            return self._replace_render_block_as_code(block, flag="export_book_code_promoted")
-        if self._should_demote_book_code_block_to_paragraph(block):
-            return self._replace_render_block_as_paragraph(
+            block = self._replace_render_block_as_code(block, flag="export_book_code_promoted")
+        elif self._should_demote_book_code_block_to_paragraph(block):
+            block = self._replace_render_block_as_paragraph(
                 block,
                 flag="export_book_code_demoted",
                 drop_target_text=self._should_drop_demoted_book_code_target_text(block),
             )
-        if block.block_type == BlockType.HEADING.value and self._should_demote_book_heading_to_paragraph(bundle, index, block):
-            return self._replace_render_block_as_paragraph(block, flag="export_book_heading_demoted")
-        return block
+        elif self._should_demote_book_heading_with_prose_target(bundle, block):
+            block = self._replace_render_block_as_paragraph(
+                block,
+                flag="export_book_heading_target_demoted",
+            )
+        elif (
+            block.block_type == BlockType.HEADING.value
+            and self._should_demote_book_heading_to_paragraph(bundle, index, block)
+        ):
+            block = self._replace_render_block_as_paragraph(block, flag="export_book_heading_demoted")
+        block = self._repair_collapsed_list_target_text(block)
+        split_blocks = self._split_mixed_book_code_prose_render_block(block)
+        if len(split_blocks) != 1 or split_blocks[0].block_id != block.block_id:
+            return split_blocks
+        return self._append_refreshed_split_render_fragments(split_blocks[0])
+
+    def _split_mixed_book_code_prose_render_block(
+        self,
+        block: MergedRenderBlock,
+    ) -> list[MergedRenderBlock]:
+        if block.render_mode != "source_artifact_full_width" or block.artifact_kind != "code":
+            return [block]
+        raw_lines = _expanded_code_candidate_lines(block.source_text or "")
+        if len(raw_lines) < 2:
+            return [block]
+
+        first_code_index: int | None = None
+        last_code_index: int | None = None
+        code_line_count = 0
+        for index, line in enumerate(raw_lines):
+            if (
+                _looks_like_embedded_code_line(line)
+                or _looks_like_code_docstring_line(line)
+                or _looks_like_code_continuation_line(line, raw_lines[:index])
+            ):
+                if first_code_index is None:
+                    first_code_index = index
+                last_code_index = index
+                code_line_count += 1
+
+        if first_code_index is None or last_code_index is None or code_line_count < 2:
+            if not (
+                first_code_index == 0
+                and last_code_index == 0
+                and len(raw_lines) >= 2
+                and _looks_like_splitworthy_single_line_code_fragment(raw_lines[0])
+            ):
+                return [block]
+
+        leading_lines = raw_lines[:first_code_index]
+        code_lines = raw_lines[first_code_index : last_code_index + 1]
+        trailing_lines = raw_lines[last_code_index + 1 :]
+        if leading_lines and not _looks_like_prose_line_group(leading_lines):
+            return [block]
+        if trailing_lines and not _looks_like_prose_line_group(trailing_lines):
+            return [block]
+        if not (leading_lines or trailing_lines):
+            return [block]
+        single_line_code_ok = len(code_lines) == 1 and _looks_like_splitworthy_single_line_code_fragment(code_lines[0])
+        if not _looks_like_code("\n".join(code_lines), len(code_lines)) and not single_line_code_ok:
+            return [block]
+
+        def _derived_metadata(role: str, split_kind: str) -> dict[str, object]:
+            metadata = dict(block.source_metadata)
+            recovery_flags = list(metadata.get("recovery_flags") or [])
+            metadata["recovery_flags"] = list(
+                dict.fromkeys([*recovery_flags, "export_mixed_code_prose_split", split_kind])
+            )
+            metadata["pdf_block_role"] = role
+            metadata["pdf_mixed_code_prose_split"] = split_kind
+            return metadata
+
+        fragments: list[MergedRenderBlock] = []
+        if leading_lines:
+            fragments.append(
+                replace(
+                    block,
+                    block_id=f"{block.block_id}::leading-prose",
+                    block_type=BlockType.PARAGRAPH.value,
+                    render_mode="zh_primary_with_optional_source",
+                    artifact_kind=None,
+                    source_text="\n".join(leading_lines),
+                    target_text=None,
+                    source_metadata=_derived_metadata("body", "leading_prose_prefix"),
+                    is_expected_source_only=False,
+                    notice=None,
+                )
+            )
+        fragments.append(
+            replace(
+                block,
+                source_text="\n".join(code_lines),
+                source_metadata=_derived_metadata("code_like", "embedded_code_span"),
+            )
+        )
+        if trailing_lines:
+            fragments.append(
+                replace(
+                    block,
+                    block_id=f"{block.block_id}::trailing-prose",
+                    block_type=BlockType.PARAGRAPH.value,
+                    render_mode="zh_primary_with_optional_source",
+                    artifact_kind=None,
+                    source_text="\n".join(trailing_lines),
+                    target_text=None,
+                    source_metadata=_derived_metadata("body", "trailing_prose_suffix"),
+                    is_expected_source_only=False,
+                    notice=None,
+                )
+            )
+        return fragments
+
+    def _restore_bad_refresh_split_render_block(
+        self,
+        block: MergedRenderBlock,
+        raw_fragments: list[object],
+    ) -> list[MergedRenderBlock] | None:
+        if block.render_mode != "source_artifact_full_width" or block.artifact_kind != "code":
+            return None
+        if not raw_fragments or not isinstance(raw_fragments[0], dict):
+            return None
+
+        first_fragment = raw_fragments[0]
+        fragment_source = str(first_fragment.get("source_text") or "")
+        if not fragment_source.strip():
+            return None
+
+        if self._should_restore_labeled_prose_refresh_split(block, first_fragment):
+            return [self._restore_labeled_prose_refresh_split(block, first_fragment)]
+
+        if not self._should_restore_code_refresh_split(block, first_fragment):
+            return None
+
+        restored_block = self._restore_code_refresh_split(block, first_fragment)
+        resplit_restored = self._split_mixed_book_code_prose_render_block(restored_block)
+        if len(raw_fragments) == 1:
+            if len(resplit_restored) != 1 or resplit_restored[0].block_id != restored_block.block_id:
+                return resplit_restored
+            return [restored_block]
+
+        restored_metadata = dict(restored_block.source_metadata)
+        restored_metadata["refresh_split_render_fragments"] = list(raw_fragments[1:])
+        refreshed_block = replace(restored_block, source_metadata=restored_metadata)
+        resplit_refreshed = self._split_mixed_book_code_prose_render_block(refreshed_block)
+        if len(resplit_refreshed) != 1 or resplit_refreshed[0].block_id != refreshed_block.block_id:
+            return resplit_refreshed
+        return self._append_refreshed_split_render_fragments(refreshed_block)
+
+    def _should_restore_labeled_prose_refresh_split(
+        self,
+        block: MergedRenderBlock,
+        fragment: dict[str, object],
+    ) -> bool:
+        if not _looks_like_labeled_prose_line(block.source_text or ""):
+            return False
+        raw_block_type = str(fragment.get("block_type") or BlockType.PARAGRAPH.value).strip().casefold()
+        if raw_block_type != BlockType.PARAGRAPH.value:
+            return False
+        fragment_source = str(fragment.get("source_text") or "")
+        fragment_lines = _expanded_code_candidate_lines(fragment_source)
+        return bool(fragment_lines) and _looks_like_prose_line_group(fragment_lines)
+
+    def _restore_labeled_prose_refresh_split(
+        self,
+        block: MergedRenderBlock,
+        fragment: dict[str, object],
+    ) -> MergedRenderBlock:
+        source_metadata = dict(block.source_metadata)
+        recovery_flags = list(source_metadata.get("recovery_flags") or [])
+        source_metadata["recovery_flags"] = list(
+            dict.fromkeys([*recovery_flags, "export_refresh_split_labeled_prose_restored"])
+        )
+        source_metadata["pdf_block_role"] = "body"
+        source_metadata.pop("refresh_split_render_fragments", None)
+        return replace(
+            block,
+            block_type=BlockType.PARAGRAPH.value,
+            render_mode="zh_primary_with_optional_source",
+            artifact_kind=None,
+            title=None,
+            source_text="\n".join(
+                segment
+                for segment in [
+                    (block.source_text or "").rstrip("\n"),
+                    str(fragment.get("source_text") or "").lstrip("\n"),
+                ]
+                if segment
+            ),
+            source_metadata=source_metadata,
+            is_expected_source_only=False,
+            notice=None,
+        )
+
+    def _should_restore_code_refresh_split(
+        self,
+        block: MergedRenderBlock,
+        fragment: dict[str, object],
+    ) -> bool:
+        fragment_source = str(fragment.get("source_text") or "")
+        fragment_lines = _expanded_code_candidate_lines(fragment_source)
+        if not fragment_lines:
+            return False
+        previous_lines = _expanded_code_candidate_lines(block.source_text or "")
+        if not previous_lines:
+            return False
+        first_line = fragment_lines[0]
+        if not (
+            _looks_like_embedded_code_line(first_line)
+            or _looks_like_code_docstring_line(first_line)
+            or _looks_like_code_continuation_line(first_line, previous_lines)
+        ):
+            return False
+        merged_source = "\n".join(
+            segment
+            for segment in [(block.source_text or "").rstrip("\n"), fragment_source.lstrip("\n")]
+            if segment
+        )
+        merged_lines = _expanded_code_candidate_lines(merged_source)
+        return _looks_like_code(merged_source, max(2, len(merged_lines)))
+
+    def _restore_code_refresh_split(
+        self,
+        block: MergedRenderBlock,
+        fragment: dict[str, object],
+    ) -> MergedRenderBlock:
+        source_metadata = dict(block.source_metadata)
+        recovery_flags = list(source_metadata.get("recovery_flags") or [])
+        source_metadata["recovery_flags"] = list(
+            dict.fromkeys([*recovery_flags, "export_refresh_split_code_restored"])
+        )
+        source_metadata["pdf_block_role"] = "code_like"
+        source_metadata.pop("refresh_split_render_fragments", None)
+        return replace(
+            block,
+            source_text="\n".join(
+                segment
+                for segment in [
+                    (block.source_text or "").rstrip("\n"),
+                    str(fragment.get("source_text") or "").lstrip("\n"),
+                ]
+                if segment
+            ),
+            source_metadata=source_metadata,
+            notice="代码保持原样",
+        )
+
+    def _append_refreshed_split_render_fragments(
+        self,
+        block: MergedRenderBlock,
+    ) -> list[MergedRenderBlock]:
+        raw_fragments = block.source_metadata.get("refresh_split_render_fragments")
+        if not isinstance(raw_fragments, list):
+            return [block]
+        restored_blocks = self._restore_bad_refresh_split_render_block(block, raw_fragments)
+        if restored_blocks is not None:
+            return restored_blocks
+
+        rendered: list[MergedRenderBlock] = [block]
+        for index, fragment in enumerate(raw_fragments):
+            if not isinstance(fragment, dict):
+                continue
+            source_text = str(fragment.get("source_text") or "")
+            if not source_text.strip():
+                continue
+            raw_block_type = str(fragment.get("block_type") or BlockType.PARAGRAPH.value).strip().casefold()
+            try:
+                fragment_block_type = BlockType(raw_block_type)
+            except ValueError:
+                fragment_block_type = BlockType.PARAGRAPH
+            fragment_metadata = dict(fragment.get("source_metadata") or {})
+            recovery_flags = list(fragment_metadata.get("recovery_flags") or [])
+            fragment_metadata["recovery_flags"] = list(
+                dict.fromkeys([*recovery_flags, "export_refresh_split_render_fragment"])
+            )
+            target_text = str(fragment.get("target_text") or "").strip() or None
+            if target_text is None:
+                target_text = self._infer_refresh_split_fragment_target_text(
+                    block,
+                    fragment,
+                    fragment_block_type=fragment_block_type,
+                )
+
+            render_mode = "zh_primary_with_optional_source"
+            artifact_kind = None
+            is_expected_source_only = False
+            notice = None
+            if fragment_block_type == BlockType.CODE:
+                render_mode = "source_artifact_full_width"
+                artifact_kind = "code"
+                is_expected_source_only = True
+                notice = "代码保持原样"
+
+            fragment_block = replace(
+                block,
+                block_id=f"{block.block_id}::refresh-split::{index}",
+                block_type=fragment_block_type.value,
+                render_mode=render_mode,
+                artifact_kind=artifact_kind,
+                title=None,
+                source_text=source_text,
+                target_text=target_text,
+                source_metadata=fragment_metadata,
+                source_sentence_ids=[],
+                target_segment_ids=[],
+                is_expected_source_only=is_expected_source_only,
+                notice=notice,
+            )
+            split_blocks = self._split_mixed_book_code_prose_render_block(fragment_block)
+            if len(split_blocks) != 1 or split_blocks[0].block_id != fragment_block.block_id:
+                rendered.extend(split_blocks)
+            else:
+                rendered.append(fragment_block)
+        return rendered
+
+    def _infer_refresh_split_fragment_target_text(
+        self,
+        parent_block: MergedRenderBlock,
+        fragment: dict[str, object],
+        *,
+        fragment_block_type: BlockType,
+    ) -> str | None:
+        if fragment_block_type != BlockType.PARAGRAPH:
+            return None
+        repair_target = str(fragment.get("repair_target_text") or "").strip()
+        if repair_target:
+            return repair_target
+        parent_target = str(parent_block.target_text or "").strip()
+        if not parent_target or not _CJK_CHAR_PATTERN.search(parent_target):
+            return None
+        parent_source = str(parent_block.source_text or "").strip()
+        fragment_source = str(fragment.get("source_text") or "").strip()
+        if not parent_source or not fragment_source:
+            return None
+        if not _looks_like_prose_line_group(_expanded_code_candidate_lines(fragment_source)):
+            return None
+        if not _looks_like_shell_command_line(parent_source.splitlines()[0]):
+            return None
+        match = _CJK_CHAR_PATTERN.search(parent_target)
+        if match is None or match.start() <= 0:
+            return None
+        candidate = parent_target[match.start() :].strip()
+        return candidate or None
 
     def _should_drop_book_heading_label(
         self,
@@ -2992,10 +3919,104 @@ class ExportService:
             return False
         return True
 
+    def _repair_collapsed_list_target_text(self, block: MergedRenderBlock) -> MergedRenderBlock:
+        if block.block_type not in {BlockType.PARAGRAPH.value, BlockType.QUOTE.value}:
+            return block
+        page_family = str(block.source_metadata.get("pdf_page_family") or "").strip().casefold()
+        if page_family == "references":
+            return block
+        source_text = str(block.source_text or "")
+        source_layouts = self._list_line_layouts(source_text)
+        if len(source_layouts) < 2:
+            return block
+        target_text = str(block.target_text or "").strip()
+        if not target_text:
+            return block
+
+        target_lines = [line.rstrip() for line in target_text.splitlines() if line.strip()]
+        repaired_lines = (
+            target_lines
+            if len(target_lines) >= len(source_layouts)
+            else self._split_inline_list_target_lines(target_text)
+        )
+        if len(repaired_lines) < len(source_layouts):
+            return block
+        repaired_lines = self._apply_list_line_layouts(source_layouts, repaired_lines)
+
+        repaired_target_text = "\n".join(repaired_lines)
+        if repaired_target_text == target_text:
+            return block
+
+        source_metadata = dict(block.source_metadata)
+        recovery_flags = list(source_metadata.get("recovery_flags") or [])
+        source_metadata["recovery_flags"] = list(
+            dict.fromkeys([*recovery_flags, "export_book_list_target_layout_restored"])
+        )
+        return replace(block, target_text=repaired_target_text, source_metadata=source_metadata)
+
+    def _list_line_layouts(self, text: str) -> list[tuple[int, str]]:
+        raw_lines = [line for line in str(text or "").splitlines() if line.strip()]
+        if len(raw_lines) < 2:
+            raw_lines = self._split_inline_list_target_lines(text, preserve_leading_ws=True)
+        layouts: list[tuple[int, str]] = []
+        for raw_line in raw_lines:
+            match = _UNORDERED_LIST_LINE_PATTERN.match(raw_line) or _ORDERED_LIST_LINE_PATTERN.match(raw_line)
+            if match is None:
+                continue
+            layouts.append(
+                (
+                    self._infer_list_indent_level(
+                        str(match.group("indent") or ""),
+                        str(match.group("marker") or ""),
+                    ),
+                    raw_line.strip(),
+                )
+            )
+        return layouts
+
+    def _infer_list_indent_level(self, leading_ws: str, marker: str) -> int:
+        indent_width = _leading_whitespace_width(re.sub(r"[\u200b\ufeff]", "", leading_ws))
+        if indent_width >= 3:
+            return max(1, indent_width // 3)
+        if marker in {"○", "◯", "◦"}:
+            return 1
+        return 0
+
+    def _apply_list_line_layouts(
+        self,
+        source_layouts: list[tuple[int, str]],
+        target_lines: list[str],
+    ) -> list[str]:
+        if len(target_lines) != len(source_layouts):
+            return [line.strip() for line in target_lines if line.strip()]
+        repaired: list[str] = []
+        for (level, _source_line), target_line in zip(source_layouts, target_lines):
+            stripped_target = target_line.strip()
+            if not stripped_target:
+                continue
+            repaired.append(f"{'   ' * max(level, 0)}{stripped_target}")
+        return repaired
+
+    def _split_inline_list_target_lines(self, text: str, *, preserve_leading_ws: bool = False) -> list[str]:
+        normalized = str(text or "").strip()
+        if not normalized:
+            return []
+        prepared = re.sub(
+            r"(?<!^)\s*(?=(?:[-*+•●▪◦○◯]|\d+[.)])(?:[\s\u200b\ufeff]*|$))",
+            "\n",
+            normalized,
+        )
+        if preserve_leading_ws:
+            return [line.rstrip() for line in prepared.splitlines() if line.strip()]
+        return [line.strip() for line in prepared.splitlines() if line.strip()]
+
     def _should_promote_book_block_to_code(self, block: MergedRenderBlock) -> bool:
         if block.render_mode == "source_artifact_full_width" and block.artifact_kind == "code":
             return False
         if block.block_type not in {BlockType.HEADING.value, BlockType.PARAGRAPH.value, BlockType.TABLE.value}:
+            return False
+        page_family = str(block.source_metadata.get("pdf_page_family") or "body").strip().casefold()
+        if page_family == "references":
             return False
         normalized = _normalize_render_text(block.source_text)
         if not normalized or self._looks_like_prose_artifact_text(normalized, academic_paper=False):
@@ -3009,6 +4030,9 @@ class ExportService:
     def _should_demote_book_code_block_to_paragraph(self, block: MergedRenderBlock) -> bool:
         if block.render_mode != "source_artifact_full_width" or block.artifact_kind != "code":
             return False
+        page_family = str(block.source_metadata.get("pdf_page_family") or "body").strip().casefold()
+        if page_family == "references" and self._looks_like_reference_listing_text(block.source_text or ""):
+            return True
         normalized = _normalize_render_text(block.source_text)
         if not normalized:
             return False
@@ -3066,6 +4090,22 @@ class ExportService:
         if re.search(r"[.!?](?:[\"'\)\]\u201d\u2019])?$", normalized) and token_count >= 8:
             return True
         return False
+
+    def _should_demote_book_heading_with_prose_target(
+        self,
+        bundle: ChapterExportBundle,
+        block: MergedRenderBlock,
+    ) -> bool:
+        if block.block_type != BlockType.HEADING.value:
+            return False
+        target_text = _normalize_render_text(block.target_text)
+        if not target_text:
+            return False
+        return self._looks_like_prose_title_text(
+            target_text,
+            source_heading_text=block.source_text,
+            fallback_title=bundle.chapter.title_src,
+        )
 
     def _replace_render_block_as_paragraph(
         self,
@@ -3406,15 +4446,15 @@ class ExportService:
             merged_metadata["source_bbox_json"] = {"regions": [*previous_regions, *current_regions]}
         merged_metadata["source_page_end"] = self._block_page_end(current)
         merged_metadata["pdf_block_role"] = "code_like"
-        merged_metadata["recovery_flags"] = list(
-            dict.fromkeys(
-                [
-                    *list(previous.source_metadata.get("recovery_flags") or []),
-                    *list(current.source_metadata.get("recovery_flags") or []),
-                    "export_code_blocks_merged",
-                ]
-            )
-        )
+        merged_source_text, deduped = self._merge_code_text_fragments(previous.source_text, current.source_text)
+        recovery_flags = [
+            *list(previous.source_metadata.get("recovery_flags") or []),
+            *list(current.source_metadata.get("recovery_flags") or []),
+            "export_code_blocks_merged",
+        ]
+        if deduped:
+            recovery_flags.append("export_code_overlap_deduped")
+        merged_metadata["recovery_flags"] = list(dict.fromkeys(recovery_flags))
         merged_target = previous.target_text
         if current.target_text:
             merged_target = (
@@ -3428,9 +4468,7 @@ class ExportService:
             render_mode="source_artifact_full_width",
             artifact_kind="code",
             title=None,
-            source_text="\n".join(
-                segment for segment in [previous.source_text.rstrip("\n"), current.source_text.lstrip("\n")] if segment
-            ),
+            source_text=merged_source_text,
             target_text=merged_target,
             source_metadata=merged_metadata,
             source_sentence_ids=list(dict.fromkeys([*previous.source_sentence_ids, *current.source_sentence_ids])),
@@ -3438,14 +4476,57 @@ class ExportService:
             notice="代码保持原样",
         )
 
+    def _merge_code_text_fragments(self, previous_text: str, current_text: str) -> tuple[str, bool]:
+        previous_clean = (previous_text or "").rstrip("\n")
+        current_clean = (current_text or "").lstrip("\n")
+        if not previous_clean:
+            return current_clean, False
+        if not current_clean:
+            return previous_clean, False
+
+        previous_lines = previous_clean.splitlines()
+        current_lines = current_clean.splitlines()
+        if self._code_line_sequence_is_prefix(previous_lines, current_lines):
+            return current_clean, True
+        if self._code_line_sequence_is_prefix(current_lines, previous_lines):
+            return previous_clean, True
+
+        overlap = self._code_line_overlap_size(previous_lines, current_lines)
+        if overlap > 0:
+            merged_lines = [*previous_lines, *current_lines[overlap:]]
+            return "\n".join(merged_lines), True
+        return "\n".join([previous_clean, current_clean]), False
+
+    def _code_line_sequence_is_prefix(self, prefix_lines: list[str], candidate_lines: list[str]) -> bool:
+        if not prefix_lines or len(prefix_lines) > len(candidate_lines):
+            return False
+        if len(prefix_lines) < 4:
+            return False
+        normalized_prefix = [line.strip() for line in prefix_lines]
+        normalized_candidate = [line.strip() for line in candidate_lines[: len(prefix_lines)]]
+        return normalized_prefix == normalized_candidate
+
+    def _code_line_overlap_size(self, previous_lines: list[str], current_lines: list[str]) -> int:
+        max_overlap = min(len(previous_lines), len(current_lines), 36)
+        for overlap in range(max_overlap, 2, -1):
+            previous_suffix = [line.strip() for line in previous_lines[-overlap:]]
+            current_prefix = [line.strip() for line in current_lines[:overlap]]
+            if previous_suffix == current_prefix:
+                return overlap
+        return 0
+
     def _should_merge_adjacent_code_blocks(self, previous: MergedRenderBlock, current: MergedRenderBlock) -> bool:
         if previous.artifact_kind != "code" or current.artifact_kind != "code":
             return False
         if previous.render_mode != "source_artifact_full_width" or current.render_mode != "source_artifact_full_width":
             return False
-        previous_page = self._block_page_number(previous)
-        current_page = self._block_page_number(current)
-        if previous_page is not None and current_page is not None and current_page - previous_page > 1:
+        previous_page_end = self._block_page_end(previous)
+        current_page_start = self._block_page_number(current)
+        if (
+            previous_page_end is not None
+            and current_page_start is not None
+            and current_page_start - previous_page_end > 1
+        ):
             return False
         return True
 
@@ -3671,6 +4752,230 @@ class ExportService:
             target_segment_ids=list(dict.fromkeys([*previous.target_segment_ids, *current.target_segment_ids])),
         )
 
+    def _normalize_reference_listing_render_blocks(
+        self,
+        blocks: list[MergedRenderBlock],
+    ) -> list[MergedRenderBlock]:
+        normalized: list[MergedRenderBlock] = []
+        pending: list[MergedRenderBlock] = []
+        in_reference_section = False
+
+        def _flush_pending() -> None:
+            nonlocal pending
+            if pending:
+                normalized.extend(self._expand_reference_listing_render_blocks(pending))
+                pending = []
+
+        for block in blocks:
+            page_family = str(block.source_metadata.get("pdf_page_family") or "").strip().casefold()
+            if page_family != "references":
+                _flush_pending()
+                in_reference_section = False
+                normalized.append(block)
+                continue
+            heading_text = _normalize_render_text(block.target_text or block.source_text).casefold()
+            if block.block_type == BlockType.HEADING.value and heading_text in _BOOK_ALLOWED_REFERENCE_HEADINGS:
+                _flush_pending()
+                in_reference_section = True
+                normalized.append(block)
+                continue
+            if in_reference_section and self._is_reference_listing_render_block(block):
+                pending.append(block)
+                continue
+            _flush_pending()
+            normalized.append(block)
+
+        _flush_pending()
+        return normalized
+
+    def _is_reference_listing_render_block(self, block: MergedRenderBlock) -> bool:
+        source_text = str(block.source_text or "").strip()
+        target_text = str(block.target_text or "").strip()
+        if not source_text and not target_text:
+            return False
+        if block.artifact_kind == "reference":
+            return True
+        if _URL_ONLY_PATTERN.match(source_text):
+            return True
+        if _REFERENCE_ENTRY_MARKER_PATTERN.match(source_text):
+            return True
+        if self._looks_like_reference_listing_text(source_text):
+            return True
+        if _REFERENCE_LOCATOR_PATTERN.search(source_text) and (
+            _REFERENCE_ENTRY_MARKER_PATTERN.search(source_text) or _URL_ONLY_PATTERN.match(source_text)
+        ):
+            return True
+        return bool(target_text and _REFERENCE_ENTRY_MARKER_PATTERN.search(target_text))
+
+    def _split_reference_listing_lines(self, text: str) -> list[str]:
+        normalized = str(text or "")
+        if not normalized.strip():
+            return []
+        prepared = re.sub(
+            r"(?<!^)(?<!\n)\s*(?=(?:\d+[.)])[\s\u200b\ufeff]+)",
+            "\n",
+            normalized,
+        )
+        prepared = re.sub(
+            r"(?<=\S)\s+(?=(?:https?://|doi\.org/|arxiv:))",
+            "\n",
+            prepared,
+            flags=re.IGNORECASE,
+        )
+        prepared = re.sub(
+            r"(?<![\s(])(?=(?:https?://|doi\.org/|arxiv:))",
+            "\n",
+            prepared,
+            flags=re.IGNORECASE,
+        )
+        raw_lines = [line.strip() for line in prepared.splitlines() if line.strip()]
+        merged_lines: list[str] = []
+        for line in raw_lines:
+            if merged_lines and self._should_merge_reference_locator_continuation(merged_lines[-1], line):
+                merged_lines[-1] = merged_lines[-1].rstrip() + line.lstrip()
+                continue
+            if merged_lines and self._should_merge_reference_title_continuation(merged_lines[-1], line):
+                separator = "" if merged_lines[-1].endswith("-") else " "
+                merged_lines[-1] = merged_lines[-1].rstrip("-") + separator + line.lstrip()
+                continue
+            merged_lines.append(line)
+        return merged_lines
+
+    def _should_merge_reference_locator_continuation(self, previous_line: str, current_line: str) -> bool:
+        previous = previous_line.strip()
+        current = current_line.strip()
+        if not previous or not current:
+            return False
+        if _REFERENCE_ENTRY_MARKER_PATTERN.match(current):
+            return False
+        if not (_URL_ONLY_PATTERN.match(previous) or _REFERENCE_LOCATOR_PATTERN.search(previous)):
+            return False
+        if _URL_ONLY_PATTERN.match(current):
+            return True
+        return bool(
+            _REFERENCE_LOCATOR_CONTINUATION_PATTERN.fullmatch(current)
+            and " " not in current
+            and not current.endswith((":", "："))
+        )
+
+    def _should_merge_reference_title_continuation(self, previous_line: str, current_line: str) -> bool:
+        previous = previous_line.strip()
+        current = current_line.strip()
+        if not previous or not current:
+            return False
+        if _REFERENCE_ENTRY_MARKER_PATTERN.match(current):
+            return False
+        if _URL_ONLY_PATTERN.match(current) or _REFERENCE_LOCATOR_PATTERN.search(current):
+            return False
+        if _URL_ONLY_PATTERN.match(previous) or _REFERENCE_LOCATOR_PATTERN.search(previous):
+            return False
+        return True
+
+    def _extract_numbered_reference_target_lines(self, text: str) -> list[str]:
+        lines = self._split_reference_listing_lines(text)
+        if not lines:
+            return []
+        entries: list[str] = []
+        current_lines: list[str] = []
+        for line in lines:
+            if _REFERENCE_ENTRY_MARKER_PATTERN.match(line):
+                if current_lines:
+                    entries.append(" ".join(current_lines).strip())
+                current_lines = [line]
+                continue
+            if current_lines and not (_URL_ONLY_PATTERN.match(line) or _REFERENCE_LOCATOR_PATTERN.search(line)):
+                current_lines.append(line)
+                continue
+            if current_lines:
+                entries.append(" ".join(current_lines).strip())
+            current_lines = []
+        if current_lines:
+            entries.append(" ".join(current_lines).strip())
+        return entries
+
+    def _expand_reference_listing_render_blocks(
+        self,
+        blocks: list[MergedRenderBlock],
+    ) -> list[MergedRenderBlock]:
+        line_pairs: list[tuple[str, str, MergedRenderBlock]] = []
+        for block in blocks:
+            source_lines = self._split_reference_listing_lines(block.source_text or "")
+            target_queue = self._extract_numbered_reference_target_lines(block.target_text or "")
+            for source_line in source_lines:
+                if _REFERENCE_ENTRY_MARKER_PATTERN.match(source_line):
+                    target_line = target_queue.pop(0) if target_queue else source_line
+                elif _URL_ONLY_PATTERN.match(source_line):
+                    target_line = source_line
+                else:
+                    target_line = target_queue.pop(0) if target_queue else source_line
+                line_pairs.append((source_line, target_line, block))
+
+        grouped_entries: list[list[tuple[str, str, MergedRenderBlock]]] = []
+        current_entry: list[tuple[str, str, MergedRenderBlock]] = []
+        for pair in line_pairs:
+            source_line = pair[0]
+            if _REFERENCE_ENTRY_MARKER_PATTERN.match(source_line):
+                if current_entry:
+                    grouped_entries.append(current_entry)
+                current_entry = [pair]
+                continue
+            if current_entry:
+                current_entry.append(pair)
+            else:
+                grouped_entries.append([pair])
+        if current_entry:
+            grouped_entries.append(current_entry)
+
+        normalized_blocks: list[MergedRenderBlock] = []
+        fragment_index = 0
+        for entry in grouped_entries:
+            title_pairs = [pair for pair in entry if not _URL_ONLY_PATTERN.match(pair[0])]
+            locator_pairs = [pair for pair in entry if _URL_ONLY_PATTERN.match(pair[0])]
+            if title_pairs:
+                base_block = title_pairs[0][2]
+                source_metadata = dict(base_block.source_metadata)
+                recovery_flags = list(source_metadata.get("recovery_flags") or [])
+                source_metadata["recovery_flags"] = list(
+                    dict.fromkeys([*recovery_flags, "export_reference_listing_normalized"])
+                )
+                normalized_blocks.append(
+                    replace(
+                        base_block,
+                        block_id=f"{base_block.block_id}::reference-entry::{fragment_index}",
+                        block_type=BlockType.PARAGRAPH.value,
+                        render_mode="zh_primary_with_optional_source",
+                        artifact_kind=None,
+                        title=None,
+                        source_text="\n".join(pair[0] for pair in title_pairs),
+                        target_text="\n".join(pair[1] for pair in title_pairs),
+                        source_metadata=source_metadata,
+                        notice=None,
+                    )
+                )
+                fragment_index += 1
+            for source_line, _, base_block in locator_pairs:
+                source_metadata = dict(base_block.source_metadata)
+                recovery_flags = list(source_metadata.get("recovery_flags") or [])
+                source_metadata["recovery_flags"] = list(
+                    dict.fromkeys([*recovery_flags, "export_reference_listing_normalized"])
+                )
+                normalized_blocks.append(
+                    replace(
+                        base_block,
+                        block_id=f"{base_block.block_id}::reference-locator::{fragment_index}",
+                        block_type=BlockType.PARAGRAPH.value,
+                        render_mode="zh_primary_with_optional_source",
+                        artifact_kind=None,
+                        title=None,
+                        source_text=source_line,
+                        target_text=source_line,
+                        source_metadata=source_metadata,
+                        notice=None,
+                    )
+                )
+                fragment_index += 1
+        return normalized_blocks or blocks
+
     def _source_only_notice(self, block, artifact_kind: str | None, render_mode: str) -> str | None:
         if render_mode == "source_artifact_full_width":
             if (block.source_span_json or {}).get("pdf_page_family") == "backmatter":
@@ -3700,13 +5005,107 @@ class ExportService:
         *,
         block_type: BlockType | None = None,
         render_mode: str | None = None,
+        source_text: str | None = None,
     ) -> str:
         cleaned = [text.strip() for text in target_texts if text and text.strip()]
         if not cleaned:
             return ""
+        structured_join = self._structured_target_text_join(
+            cleaned,
+            block_type=block_type,
+            render_mode=render_mode,
+            source_text=source_text,
+        )
+        if structured_join is not None:
+            return structured_join
         if self._should_inline_join_target_text(block_type, render_mode):
             return self._inline_join_target_text(cleaned)
         return "\n".join(cleaned)
+
+    def _structured_target_text_join(
+        self,
+        target_texts: list[str],
+        *,
+        block_type: BlockType | None = None,
+        render_mode: str | None = None,
+        source_text: str | None = None,
+    ) -> str | None:
+        if len(target_texts) < 2:
+            return None
+        if render_mode in {
+            "source_artifact_full_width",
+            "translated_wrapper_with_preserved_artifact",
+            "reference_preserve_with_translated_label",
+        }:
+            return None
+        if self._should_preserve_list_segment_breaks(target_texts, source_text):
+            return "\n".join(target_texts)
+        return self._join_reference_target_segments(target_texts, block_type=block_type, source_text=source_text)
+
+    def _should_preserve_list_segment_breaks(
+        self,
+        target_texts: list[str],
+        source_text: str | None,
+    ) -> bool:
+        target_marker_count = sum(
+            1
+            for text in target_texts
+            if _LIST_MARKER_PATTERN.match(text) or _ORDERED_LIST_MARKER_PATTERN.match(text)
+        )
+        if target_marker_count >= 2 and not any(_URL_ONLY_PATTERN.match(text) for text in target_texts):
+            return True
+        source_lines = [line.strip() for line in str(source_text or "").splitlines() if line.strip()]
+        if len(source_lines) < 2:
+            return False
+        marker_lines = sum(
+            1
+            for line in source_lines
+            if _LIST_MARKER_PATTERN.match(line) or _ORDERED_LIST_MARKER_PATTERN.match(line)
+        )
+        return marker_lines >= 2 and not any(_URL_ONLY_PATTERN.match(line) for line in source_lines)
+
+    def _join_reference_target_segments(
+        self,
+        target_texts: list[str],
+        *,
+        block_type: BlockType | None = None,
+        source_text: str | None = None,
+    ) -> str | None:
+        del block_type
+        numbered_entries = sum(1 for text in target_texts if _REFERENCE_ENTRY_MARKER_PATTERN.match(text))
+        locator_entries = sum(
+            1 for text in target_texts if _URL_ONLY_PATTERN.match(text) or _REFERENCE_LOCATOR_PATTERN.search(text)
+        )
+        source_reference_like = self._looks_like_reference_listing_text(source_text or "")
+        if numbered_entries < 2 and not source_reference_like:
+            return None
+        if locator_entries < 1 and not source_reference_like:
+            return None
+        blocks: list[str] = []
+        current_lines: list[str] = []
+        for text in target_texts:
+            stripped = text.strip()
+            if not stripped:
+                continue
+            if _REFERENCE_ENTRY_MARKER_PATTERN.match(stripped):
+                if current_lines:
+                    blocks.append("\n".join(current_lines))
+                current_lines = [stripped]
+                continue
+            if current_lines and (
+                _URL_ONLY_PATTERN.match(stripped)
+                or current_lines[-1].endswith((":", "："))
+            ):
+                current_lines.append(stripped)
+                continue
+            if current_lines:
+                blocks.append("\n".join(current_lines))
+            current_lines = [stripped]
+        if current_lines:
+            blocks.append("\n".join(current_lines))
+        if len(blocks) < 2:
+            return None
+        return "\n\n".join(blocks)
 
     def _should_inline_join_target_text(
         self,
@@ -3779,7 +5178,7 @@ class ExportService:
                     f"{note}<div class='artifact-body'>{body}</div></section>"
                 )
             body = (
-                f"<pre><code>{self._format_preformatted_text(block.source_text)}</code></pre>"
+                f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
                 if block.artifact_kind == "code"
                 else f"<div class='artifact-body'>{source_html}</div>"
             )
@@ -3863,18 +5262,75 @@ class ExportService:
         )
 
     def _format_inline_text(self, text: str) -> str:
-        escaped = html.escape(text or "")
-        return re.sub(
-            r"(&lt;/?[A-Za-z][^&]*?&gt;)",
-            r"<code class='inline-token'>\1</code>",
-            escaped,
-        ).replace("\n", "<br/>")
+        formatted_lines: list[str] = []
+        for raw_line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            expanded_line = raw_line.replace("\t", "    ")
+            leading_spaces = _leading_whitespace_width(expanded_line)
+            escaped_line = html.escape(expanded_line[leading_spaces:])
+            escaped_line = re.sub(
+                r"(&lt;/?[A-Za-z][^&]*?&gt;)",
+                r"<code class='inline-token'>\1</code>",
+                escaped_line,
+            )
+            if leading_spaces:
+                escaped_line = ("&nbsp;" * leading_spaces) + escaped_line
+            formatted_lines.append(escaped_line)
+        return "<br/>".join(formatted_lines)
 
-    def _format_preformatted_text(self, text: str) -> str:
-        normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-        if self._looks_like_code_artifact_text(normalized):
-            normalized = self._reflow_code_artifact_text(normalized)
-        return html.escape(normalized)
+    def _format_preformatted_text(
+        self,
+        text: str,
+        *,
+        block: MergedRenderBlock | None = None,
+    ) -> str:
+        return html.escape(self._normalize_code_artifact_text(text, block=block))
+
+    def _should_reflow_code_artifact_text(self, text: str) -> bool:
+        if not self._looks_like_code_artifact_text(text):
+            return False
+        raw_lines = [line.expandtabs(4).rstrip() for line in str(text or "").split("\n")]
+        nonempty_lines = [line for line in raw_lines if line.strip()]
+        if len(nonempty_lines) < 2:
+            return False
+        if any(line[:1] in {" ", "\t"} for line in nonempty_lines):
+            return False
+        if self._looks_like_stable_structured_code_layout(nonempty_lines):
+            return False
+        if any(len(line) >= 110 for line in nonempty_lines):
+            return True
+        if any(
+            self._should_join_wrapped_code_line(nonempty_lines[index], nonempty_lines[index + 1])
+            for index in range(len(nonempty_lines) - 1)
+        ):
+            return True
+        for index, line in enumerate(nonempty_lines[:-1]):
+            stripped = line.strip()
+            if self._opens_python_block(stripped) and not nonempty_lines[index + 1].startswith((" ", "\t")):
+                return True
+        return False
+
+    def _looks_like_stable_structured_code_layout(self, lines: list[str]) -> bool:
+        stripped_lines = [line.strip() for line in lines if line.strip()]
+        if len(stripped_lines) < 3:
+            return False
+        if any(
+            _CODE_BLOCK_KEYWORD_PATTERN.match(line)
+            or _CODE_ASSIGNMENT_PATTERN.match(line)
+            or _OCR_TOLERANT_CODE_ASSIGNMENT_PATTERN.match(line)
+            or line.startswith(("#", "@"))
+            or re.match(r"^(?:async def |def |class |if |for |while |try:|with |except |finally:|return\b|await\b)", line)
+            for line in stripped_lines
+        ):
+            return False
+        structured_line_count = sum(
+            1
+            for line in stripped_lines
+            if _looks_like_structured_data_line(line) or re.fullmatch(r"[\[\]\{\}][,]?", line)
+        )
+        brace_only_line_count = sum(1 for line in stripped_lines if re.fullmatch(r"[\[\]\{\}][,]?", line))
+        if brace_only_line_count >= 2 and structured_line_count >= 3:
+            return True
+        return structured_line_count >= max(3, len(stripped_lines) - 1)
 
     def _render_structured_table_html(self, text: str) -> str | None:
         parsed_rows = self._parse_structured_table_rows(text)
@@ -3896,8 +5352,12 @@ class ExportService:
         )
 
     def _looks_like_code_artifact_text(self, text: str, *, academic_paper: bool = False) -> bool:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        lines = [line.strip() for line in _expanded_code_candidate_lines(text) if line.strip()]
         if len(lines) < 2:
+            return False
+        if self._looks_like_reference_listing_text(text):
+            return False
+        if self._looks_like_wrapped_prose_artifact_text(text):
             return False
         if academic_paper and (
             self._looks_like_academic_frontmatter_text(text)
@@ -3907,12 +5367,27 @@ class ExportService:
         prose_sentence_lines = sum(
             1
             for line in lines[:24]
-            if len(line.split()) >= 6 and re.search(r"[.!?](?:[\"'\)\]\u201d\u2019])?$", line)
+            if _looks_like_sentence_prose_line(line)
         )
         comment_lines = sum(1 for line in lines[:24] if line.startswith(("#", "//")))
         score = 0
         strong_cues = 0
+        shell_command_active = False
         for line in lines[:24]:
+            if _looks_like_shell_command_line(line):
+                score += 3
+                strong_cues += 1
+                shell_command_active = True
+                continue
+            if shell_command_active and _looks_like_shell_command_continuation_line(line):
+                score += 2
+                strong_cues += 1
+                continue
+            shell_command_active = False
+            if _looks_like_structured_data_line(line):
+                score += 2
+                strong_cues += 1
+                continue
             if _CODE_BLOCK_KEYWORD_PATTERN.match(line):
                 score += 3
                 strong_cues += 1
@@ -3945,7 +5420,11 @@ class ExportService:
             return False
         if self._looks_like_book_structural_heading_text(normalized):
             return False
-        if re.match(r"^\s*(?:[-*+•]|\d+[.)])\s+", normalized):
+        if self._looks_like_structured_output_intro_prose_line(normalized):
+            return False
+        if _looks_like_shell_command_line(normalized):
+            return True
+        if _LIST_MARKER_PATTERN.match(normalized) or _ORDERED_LIST_MARKER_PATTERN.match(normalized):
             alpha_tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", normalized)
             if len(alpha_tokens) >= 4:
                 return False
@@ -3961,31 +5440,72 @@ class ExportService:
             return len(normalized.split()) <= 28
         return False
 
+    def _looks_like_structured_output_intro_prose_line(self, text: str) -> bool:
+        normalized = _normalize_render_text(text)
+        if not normalized:
+            return False
+        if not normalized.endswith((":", "：")):
+            return False
+        if any(token in normalized for token in ("{", "}", "[", "]", "=", "->", "=>", "::")):
+            return False
+        tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", normalized.casefold())
+        if len(tokens) < 8:
+            return False
+        stopword_hits = sum(1 for token in tokens if token in _PROSE_ARTIFACT_STOPWORDS)
+        if stopword_hits < max(3, len(tokens) // 5):
+            return False
+        lowered = normalized.casefold()
+        if not any(marker in lowered for marker in ("json", "xml", "yaml", "csv", "structured output")):
+            return False
+        return any(
+            marker in lowered
+            for marker in (
+                "for example",
+                "for instance",
+                "formatted as",
+                "represented as",
+                "returned as",
+                "output from",
+                "output could",
+                "could be",
+            )
+        )
+
     def _reflow_code_artifact_text(self, text: str) -> str:
         raw_lines = [line.expandtabs(4).rstrip() for line in text.split("\n")]
-        coalesced_lines = self._coalesce_wrapped_code_lines(raw_lines)
+        expanded_lines = self._expand_inline_call_argument_lines(raw_lines)
+        coalesced_lines = self._coalesce_wrapped_code_lines(expanded_lines)
+        coalesced_lines = self._expand_inline_call_argument_lines(coalesced_lines)
         if any(line[:1] in {" ", "\t"} for line in coalesced_lines if line.strip()):
             return "\n".join(coalesced_lines).strip("\n")
 
         formatted_lines: list[str] = []
         indent_level = 0
         continuation_depth = 0
+        pending_terminal_dedent = 0
         for raw_line in coalesced_lines:
             stripped = raw_line.strip()
             if not stripped:
                 if formatted_lines and formatted_lines[-1] != "":
                     formatted_lines.append("")
                 continue
+            if pending_terminal_dedent and not self._is_dedent_before_code_line(stripped):
+                indent_level = max(indent_level - pending_terminal_dedent, 0)
+                pending_terminal_dedent = 0
             if self._is_dedent_before_code_line(stripped):
                 indent_level = max(indent_level - 1, 0)
             if self._is_top_level_code_reset(stripped):
                 indent_level = 0
                 continuation_depth = 0
-            effective_indent = indent_level + min(continuation_depth, 1)
+            effective_indent = indent_level + min(continuation_depth, 2)
+            if re.fullmatch(r"[\]\)\}][,]?", stripped):
+                effective_indent = max(effective_indent - 1, 0)
             formatted_lines.append(f"{'    ' * max(effective_indent, 0)}{stripped}")
             continuation_depth = self._continuation_depth_after_code_line(stripped, continuation_depth)
             if self._opens_python_block(stripped):
                 indent_level += 1
+            if self._is_terminal_code_statement(stripped):
+                pending_terminal_dedent = max(pending_terminal_dedent, 1)
         return "\n".join(formatted_lines).strip("\n")
 
     def _coalesce_wrapped_code_lines(self, lines: list[str]) -> list[str]:
@@ -3995,26 +5515,108 @@ class ExportService:
                 if merged and merged[-1] != "":
                     merged.append("")
                 continue
-            if merged and self._should_join_wrapped_code_line(merged[-1], raw_line):
+            quote_char, triple = self._code_string_state("\n".join(merged))
+            if merged and self._should_join_wrapped_code_line(
+                merged[-1],
+                raw_line,
+                quote_char=quote_char,
+                triple_quoted=triple,
+            ):
                 merged[-1] = self._join_code_line_fragments(merged[-1], raw_line)
                 continue
             merged.append(raw_line)
         return merged
 
-    def _should_join_wrapped_code_line(self, previous: str, current: str) -> bool:
+    def _expand_inline_call_argument_lines(self, lines: list[str]) -> list[str]:
+        expanded: list[str] = []
+        for raw_line in lines:
+            pending = [raw_line]
+            while pending:
+                current_line = pending.pop(0)
+                stripped = current_line.strip()
+                if stripped == "---" and expanded and expanded[-1].strip().startswith("# ---"):
+                    expanded[-1] = f"{expanded[-1].rstrip()} ---"
+                    continue
+                split_lines = self._split_inline_call_argument_line(current_line)
+                if split_lines is None:
+                    split_lines = self._split_inline_keyword_argument_tail_line(current_line)
+                if split_lines is None:
+                    expanded.append(current_line)
+                    continue
+                pending = list(split_lines) + pending
+        return expanded
+
+    def _split_inline_call_argument_line(self, line: str) -> list[str] | None:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            return None
+        match = re.match(
+            r"^(?P<head>.*\()\s+(?P<tail>[A-Za-z_][A-Za-z0-9_]*\s*=.+)$",
+            stripped,
+        )
+        if match is None:
+            return None
+        head = match.group("head").rstrip()
+        tail = match.group("tail").lstrip()
+        if not head or not tail:
+            return None
+        leading = line[: len(line) - len(line.lstrip())]
+        return [f"{leading}{head}", f"{leading}{tail}"]
+
+    def _split_inline_keyword_argument_tail_line(self, line: str) -> list[str] | None:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            return None
+        match = re.match(
+            r"^(?P<head>.+?,)\s+(?P<tail>[A-Za-z_][A-Za-z0-9_]*\s*=.+)$",
+            stripped,
+        )
+        if match is None:
+            return None
+        head = match.group("head").rstrip()
+        tail = match.group("tail").lstrip()
+        if "=" not in head and '"""' not in head and "'''" not in head:
+            return None
+        leading = line[: len(line) - len(line.lstrip())]
+        return [f"{leading}{head}", f"{leading}{tail}"]
+
+    def _looks_like_call_keyword_argument_line(self, stripped: str) -> bool:
+        return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*=\s*.+,?$", stripped))
+
+    def _should_join_wrapped_code_line(
+        self,
+        previous: str,
+        current: str,
+        *,
+        quote_char: str | None = None,
+        triple_quoted: bool = False,
+    ) -> bool:
         prev = previous.rstrip()
         curr = current.lstrip()
         if not prev or not curr:
             return False
         if self._opens_python_block(prev.strip()):
             return False
-        if curr.startswith((")", "]", "}", ".", ",", ";")):
+        if quote_char is not None and self._should_join_open_string_line(
+            prev.strip(),
+            curr.strip(),
+            quote_char=quote_char,
+            triple_quoted=triple_quoted,
+        ):
             return True
-        if prev.endswith(("\\", "(", "[", "{", ",", "+", "|", "=")):
+        if self._should_join_wrapped_comment_line(prev.strip(), curr.strip()):
             return True
-        if self._has_unterminated_quote(prev):
+        if self._should_join_wrapped_inline_comment_line(prev.strip(), curr.strip()):
             return True
-        if self._delimiter_balance(prev) > 0:
+        if curr.startswith("#"):
+            return False
+        if self._looks_like_call_keyword_argument_line(prev.strip()) and self._looks_like_call_keyword_argument_line(
+            curr.strip()
+        ):
+            return False
+        if curr.startswith((".", ",", ";")):
+            return True
+        if prev.endswith(("\\", ",", "+", "|", "=")):
             return True
         return False
 
@@ -4023,14 +5625,119 @@ class ExportService:
         curr = current.lstrip()
         if not prev or not curr:
             return prev + curr
-        if prev.endswith(("(", "[", "{")) or curr.startswith((")", "]", "}", ".", ",", ";")):
+        if prev.endswith(("(", "[", "{")) or curr.startswith((".", ",", ";")):
             return f"{prev}{curr}"
         return f"{prev} {curr}"
 
     def _has_unterminated_quote(self, line: str) -> bool:
-        escaped_double = len(re.findall(r'(?<!\\)"', line))
-        escaped_single = len(re.findall(r"(?<!\\)'", line))
-        return (escaped_double % 2 == 1) or (escaped_single % 2 == 1)
+        quote_char, _triple_quoted = self._code_string_state(line)
+        return quote_char is not None
+
+    def _code_string_state(self, text: str) -> tuple[str | None, bool]:
+        quote_char: str | None = None
+        triple_quoted = False
+        escaped = False
+        index = 0
+        while index < len(text):
+            char = text[index]
+            if escaped:
+                escaped = False
+                index += 1
+                continue
+            if not triple_quoted and quote_char is not None and char == "\\":
+                escaped = True
+                index += 1
+                continue
+            if quote_char is None:
+                if text.startswith('"""', index) or text.startswith("'''", index):
+                    quote_char = text[index]
+                    triple_quoted = True
+                    index += 3
+                    continue
+                if char in {'"', "'"}:
+                    if self._is_word_internal_apostrophe(text, index, char):
+                        index += 1
+                        continue
+                    quote_char = char
+                    triple_quoted = False
+                index += 1
+                continue
+            if triple_quoted:
+                if text.startswith(quote_char * 3, index):
+                    quote_char = None
+                    triple_quoted = False
+                    index += 3
+                    continue
+                index += 1
+                continue
+            if char == quote_char:
+                if self._is_word_internal_apostrophe(text, index, char):
+                    index += 1
+                    continue
+                quote_char = None
+            index += 1
+        return quote_char, triple_quoted
+
+    def _is_word_internal_apostrophe(self, text: str, index: int, quote_char: str) -> bool:
+        if quote_char != "'":
+            return False
+        if index <= 0 or index >= len(text) - 1:
+            return False
+        return text[index - 1].isalnum() and text[index + 1].isalnum()
+
+    def _should_join_wrapped_comment_line(self, previous: str, current: str) -> bool:
+        if not previous.startswith("#"):
+            return False
+        if current.startswith("#"):
+            return False
+        if _looks_like_structured_data_line(current):
+            return False
+        if _looks_like_embedded_code_line(current):
+            return False
+        if _CODE_BLOCK_KEYWORD_PATTERN.match(current) or _CODE_ASSIGNMENT_PATTERN.match(current):
+            return False
+        return True
+
+    def _should_join_wrapped_inline_comment_line(self, previous: str, current: str) -> bool:
+        if "#" not in previous or previous.startswith("#"):
+            return False
+        if current.startswith("#"):
+            return False
+        if _looks_like_structured_data_line(current):
+            return False
+        if _looks_like_embedded_code_line(current):
+            return False
+        if _CODE_BLOCK_KEYWORD_PATTERN.match(current) or _CODE_ASSIGNMENT_PATTERN.match(current):
+            return False
+        return True
+
+    def _should_join_open_string_line(
+        self,
+        previous: str,
+        current: str,
+        *,
+        quote_char: str,
+        triple_quoted: bool,
+    ) -> bool:
+        if not previous or not current:
+            return False
+        if not triple_quoted:
+            return True
+        if previous.endswith(quote_char * 3) and previous.strip() == quote_char * 3:
+            return False
+        if current.strip() == quote_char * 3:
+            return False
+        if _LIST_MARKER_PATTERN.match(current) or _ORDERED_LIST_MARKER_PATTERN.match(current):
+            return False
+        if _looks_like_code_docstring_line(current):
+            return False
+        if _looks_like_embedded_code_line(current) and not current.startswith(("(", "{", "[", '"', "'")):
+            return False
+        if previous.endswith(_TERMINAL_PUNCTUATION) and current[:1].isupper():
+            return False
+        if previous.endswith(",") or current[:1].islower():
+            return True
+        return len(previous) >= 72
 
     def _delimiter_balance(self, line: str) -> int:
         return sum(line.count(token) for token in "([{") - sum(line.count(token) for token in ")]}")
@@ -4042,7 +5749,7 @@ class ExportService:
     def _is_top_level_code_reset(self, stripped: str) -> bool:
         lowered = stripped.lower()
         return (
-            lowered.startswith(("async def ", "def ", "class ", "from ", "import ", "@"))
+            lowered.startswith(("async def ", "def ", "class ", "from ", "import ", "@", "if __name__"))
             or stripped.startswith("# ---")
         )
 
@@ -4058,7 +5765,13 @@ class ExportService:
         next_depth = max(0, current_depth + self._delimiter_balance(stripped))
         if stripped.endswith("\\"):
             next_depth = max(next_depth, 1)
-        return min(next_depth, 2)
+        return min(next_depth, 8)
+
+    def _is_terminal_code_statement(self, stripped: str) -> bool:
+        if self._delimiter_balance(stripped) > 0 or self._has_unterminated_quote(stripped):
+            return False
+        lowered = stripped.lower()
+        return bool(re.match(r"^(?:return|raise|break|continue|pass)\b(?!\s*:)", lowered))
 
     def _looks_like_reference_literal(self, text: str) -> bool:
         normalized = (text or "").strip()
@@ -4079,14 +5792,11 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
         render_blocks = self._render_blocks_for_chapter(bundle)
-        chapter_title_target = next(
-            (block.target_text for block in render_blocks if block.block_type == BlockType.HEADING.value and block.target_text),
-            None,
-        )
+        chapter_title_target = self._resolved_chapter_title_text(bundle, render_blocks)
         title_text = chapter_title_target or bundle.chapter.title_src or bundle.chapter.id
         source_title = (
             f"<div class='source-title'>{html.escape(bundle.chapter.title_src)}</div>"
-            if chapter_title_target and bundle.chapter.title_src
+            if chapter_title_target and bundle.chapter.title_src and chapter_title_target != bundle.chapter.title_src
             else ""
         )
         blocks_html = "".join(
@@ -4109,7 +5819,7 @@ class ExportService:
             ".source-title{margin-top:10px;font-family:var(--font-ui);font-size:14px;color:var(--muted);}"
             ".chapter{padding:28px 30px;background:var(--card);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow);}"
             ".block{margin:22px 0;}"
-            ".block .zh{font-size:19px;color:#16202a;max-width:36em;text-wrap:pretty;}"
+            ".block .zh{font-size:19px;color:#16202a;max-width:min(100%,52em);text-wrap:pretty;}"
             ".heading .zh{font-family:var(--font-display);font-size:28px;line-height:1.12;color:#17313a;}"
             ".paragraph .zh,.list_item .zh,.quote .zh{hyphens:auto;}"
             ".block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}"

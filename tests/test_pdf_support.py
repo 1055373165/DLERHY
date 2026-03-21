@@ -54,6 +54,7 @@ from book_agent.domain.structure.pdf import (
     _infer_appendix_subheading_title,
     _infer_intro_page_title,
     _looks_like_code,
+    _looks_like_code_continuation_line,
     _looks_like_reference_entry,
     _looks_like_table,
 )
@@ -1914,6 +1915,20 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
 
         self.assertTrue(_looks_like_code(text, 1))
 
+    def test_looks_like_code_detects_multiline_json_object(self) -> None:
+        text = (
+            "{\n"
+            '"trends": [\n'
+            "{\n"
+            '"trend_name": "AI-Powered Personalization",\n'
+            '"supporting_data": "73% of consumers prefer to do business with brands that use personal information "\n'
+            "}\n"
+            "]\n"
+            "}"
+        )
+
+        self.assertTrue(_looks_like_code(text, 1))
+
     def test_recovery_splits_code_like_block_with_inline_trailing_prose(self) -> None:
         service = PdfStructureRecoveryService()
         block = _RecoveredBlock(
@@ -1948,6 +1963,552 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         self.assertEqual(repaired[1].role, "body")
         self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
         self.assertIn("Those embeddings for your tool catalog", repaired[1].text)
+
+    def test_recovery_splits_json_code_block_with_inline_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "{\n"
+                '"trends": [\n'
+                "{\n"
+                '"trend_name": "AI-Powered Personalization",\n'
+                '"supporting_data": "73% of consumers prefer to do business with brands that use personal information "\n'
+                "}\n"
+                "]\n"
+                "} This structured format ensures that the data is machine-readable and can be "
+                "precisely parsed."
+            ),
+            page_start=99,
+            page_end=99,
+            bbox_regions=[{"page_number": 99, "bbox": [72.0, 320.0, 540.0, 420.0]}],
+            reading_order_index=19,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/99",
+            anchor="p99-b19",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn('"trend_name": "AI-Powered Personalization"', repaired[0].text)
+        self.assertNotIn("This structured format ensures", repaired[0].text)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertIn("This structured format ensures that the data is machine-readable", repaired[1].text)
+
+    def test_recovery_splits_single_line_json_code_block_with_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                '{"trends": [{"trend_name": "AI-Powered Personalization", '
+                '"supporting_data": "73% of consumers prefer personalized experiences."}]} '
+                "This structured format ensures that the data is machine-readable and can be precisely parsed."
+            ),
+            page_start=100,
+            page_end=100,
+            bbox_regions=[{"page_number": 100, "bbox": [72.0, 320.0, 540.0, 420.0]}],
+            reading_order_index=20,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/100",
+            anchor="p100-b20",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertNotIn("This structured format ensures", repaired[0].text)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertIn("This structured format ensures that the data is machine-readable", repaired[1].text)
+
+    def test_recovery_keeps_bare_function_call_inside_code_prefix_before_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                'print("\\n" + "="*30 + " FINAL RESULT " + "="*30)\n'
+                'print("\\nFinal refined code after the reflection process:\\n")\n'
+                "print(current_code)\n"
+                'if __name__ == "__main__":\n'
+                "run_reflection_loop()\n"
+                "The code begins by setting up the environment, loading API keys, and initializing a language model."
+            ),
+            page_start=100,
+            page_end=100,
+            bbox_regions=[{"page_number": 100, "bbox": [72.0, 320.0, 540.0, 430.0]}],
+            reading_order_index=21,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/100",
+            anchor="p100-b21",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn("run_reflection_loop()", repaired[0].text)
+        self.assertNotIn("The code begins by setting up", repaired[0].text)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("The code begins by setting up"))
+
+    def test_recovery_keeps_zero_width_bare_function_call_inside_code_prefix_before_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                'blog_creation_crew = Crew(\n'
+                '    agents=[researcher, writer],\n'
+                ")\n"
+                'if __name__ == "__main__":\n'
+                "main()\u200b\n"
+                "We will now delve into further examples within the Google ADK framework."
+            ),
+            page_start=101,
+            page_end=101,
+            bbox_regions=[{"page_number": 101, "bbox": [72.0, 320.0, 540.0, 430.0]}],
+            reading_order_index=22,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/101",
+            anchor="p101-b22",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn('if __name__ == "__main__":', repaired[0].text)
+        self.assertIn("main()", repaired[0].text)
+        self.assertNotIn("We will now delve into further examples", repaired[0].text)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("We will now delve into further examples"))
+
+    def test_recovery_keeps_import_and_wrapped_comment_continuations_inside_code_block(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "from langchain_core.runnables import RunnablePassthrough,\n"
+                "RunnableBranch\n"
+                "# --- Define Coordinator Router Chain (equivalent to ADK\n"
+                "coordinator's instruction) ---\n"
+                "coordinator_router_prompt = ChatPromptTemplate.from_messages([\n"
+                '("system", "Analyze the user request.")\n'
+                '("user", "{request}")\n'
+                "])"
+            ),
+            page_start=101,
+            page_end=103,
+            bbox_regions=[{"page_number": 101, "bbox": [72.0, 320.0, 540.0, 430.0]}],
+            reading_order_index=22,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/101",
+            anchor="p101-b22",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 1)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn("RunnableBranch", repaired[0].text)
+        self.assertIn("coordinator's instruction) ---", repaired[0].text)
+
+    def test_recovery_treats_wrapped_shell_command_as_code(self) -> None:
+        command_text = (
+            "pip install langchain langgraph google-cloud-aiplatform\n"
+            "langchain-google-genai google-adk deprecated pydantic"
+        )
+
+        self.assertTrue(_looks_like_code(command_text, 2))
+
+    def test_shell_command_continuation_does_not_absorb_wrapped_explanatory_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "pip install langchain langchain-community langchain-openai langgraph\n"
+                "Note that langchain-openai can be substituted with the appropriate package for a different\n"
+                "model provider. Subsequently, the execution environment must be configured."
+            ),
+            page_start=103,
+            page_end=103,
+            bbox_regions=[{"page_number": 103, "bbox": [72.0, 320.0, 540.0, 410.0]}],
+            reading_order_index=25,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/103",
+            anchor="p103-b25",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertEqual(repaired[0].text, "pip install langchain langchain-community langchain-openai langgraph")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("Note that langchain-openai"))
+
+    def test_code_continuation_recognizes_pipe_operator_after_parenthesized_assignment(self) -> None:
+        self.assertTrue(
+            _looks_like_code_continuation_line(
+                "| prompt_transform",
+                [
+                    "full_chain = (",
+                    '{"specifications": extraction_chain}',
+                ],
+            )
+        )
+
+    def test_recovery_splits_operator_led_code_fragment_before_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "| prompt_transform\n"
+                "| llm\n"
+                "| StrOutputParser()\n"
+                ")\n"
+                'print("\\n--- Final JSON Output ---")\n'
+                "print(final_result)\n"
+                "This Python code demonstrates how to use the LangChain library to process text."
+            ),
+            page_start=102,
+            page_end=103,
+            bbox_regions=[{"page_number": 102, "bbox": [72.0, 320.0, 540.0, 430.0]}],
+            reading_order_index=24,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/102",
+            anchor="p102-b24",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn("| prompt_transform", repaired[0].text)
+        self.assertIn("print(final_result)", repaired[0].text)
+        self.assertNotIn("This Python code demonstrates", repaired[0].text)
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("This Python code demonstrates"))
+
+    def test_recovery_splits_trailing_prose_after_code_when_comments_contain_apostrophes(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "# The StrOutputParser() converts the LLM's message output to a simple\n"
+                "string.\n"
+                "extraction_chain = prompt_extract | llm | StrOutputParser()\n"
+                "# The full chain passes the output of the extraction chain into the\n"
+                "'specifications'\n"
+                "# variable for the transformation prompt.\n"
+                "full_chain = (\n"
+                '{"specifications": extraction_chain}\n'
+                "| prompt_transform\n"
+                "| llm\n"
+                "| StrOutputParser()\n"
+                ")\n"
+                'print("\\n--- Final JSON Output ---")\n'
+                "print(final_result) This Python code demonstrates how to use the LangChain library to process text.\n"
+                "It utilizes two separate prompts and then prints the final result."
+            ),
+            page_start=102,
+            page_end=103,
+            bbox_regions=[{"page_number": 102, "bbox": [72.0, 320.0, 540.0, 430.0]}],
+            reading_order_index=24,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/102",
+            anchor="p102-b24-apostrophe",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertIn("print(final_result)", repaired[0].text)
+        self.assertNotIn("This Python code demonstrates", repaired[0].text)
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("This Python code demonstrates"))
+
+    def test_recovery_merges_cross_page_code_continuations_when_next_page_starts_with_code_arguments(self) -> None:
+        service = PdfStructureRecoveryService()
+        previous = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text="# Researcher 3: Carbon Capture\nresearcher_agent_3 = LlmAgent(",
+            page_start=56,
+            page_end=56,
+            bbox_regions=[{"page_number": 56, "bbox": [72.0, 620.0, 548.0, 736.0]}],
+            reading_order_index=40,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p56-b40",
+        )
+        current = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                'name="CarbonCaptureResearcher",\n'
+                "model=GEMINI_MODEL,\n"
+                'instruction="""You are an AI Research Assistant specializing in climate solutions.'
+            ),
+            page_start=57,
+            page_end=57,
+            bbox_regions=[{"page_number": 57, "bbox": [72.0, 92.0, 548.0, 228.0]}],
+            reading_order_index=1,
+            parse_confidence=0.91,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p57-b1",
+        )
+        pages = [
+            PdfPage(page_number=56, width=595.0, height=842.0, blocks=[], image_blocks=[]),
+            PdfPage(page_number=57, width=595.0, height=842.0, blocks=[], image_blocks=[]),
+        ]
+
+        merged = service._merge_cross_page_code_continuations([previous, current], pages)
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].page_end, 57)
+        self.assertIn("researcher_agent_3 = LlmAgent(", merged[0].text)
+        self.assertIn('name="CarbonCaptureResearcher",', merged[0].text)
+        self.assertIn("cross_page_code_continuation_merged", merged[0].flags)
+
+    def test_recovery_merges_cross_page_code_continuations_across_footer_separators(self) -> None:
+        service = PdfStructureRecoveryService()
+        previous = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                '# --- 3. Define the Merger Agent (Runs *after* the parallel agents)\n'
+                'instruction="""You are an AI Assistant responsible for combining research findings.\n'
+                "Do NOT add"
+            ),
+            page_start=56,
+            page_end=57,
+            bbox_regions=[
+                {"page_number": 56, "bbox": [72.0, 620.0, 548.0, 736.0]},
+                {"page_number": 57, "bbox": [72.0, 80.0, 548.0, 120.0]},
+            ],
+            reading_order_index=40,
+            parse_confidence=0.92,
+            flags=["cross_page_repaired"],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p56-b40",
+        )
+        footer_page_56 = _RecoveredBlock(
+            role="footer",
+            block_type=BlockType.PARAGRAPH,
+            text="10",
+            page_start=56,
+            page_end=56,
+            bbox_regions=[{"page_number": 56, "bbox": [500.0, 780.0, 540.0, 820.0]}],
+            reading_order_index=41,
+            parse_confidence=0.99,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "footer"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p56-footer",
+        )
+        footer_page_57 = _RecoveredBlock(
+            role="footer",
+            block_type=BlockType.PARAGRAPH,
+            text="11",
+            page_start=57,
+            page_end=57,
+            bbox_regions=[{"page_number": 57, "bbox": [500.0, 780.0, 540.0, 820.0]}],
+            reading_order_index=1,
+            parse_confidence=0.99,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "footer"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p57-footer",
+        )
+        current = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "any external knowledge, facts, or details not present in these specific summaries.\n"
+                '""",\n'
+                "description=\"Combines research findings.\")"
+            ),
+            page_start=58,
+            page_end=58,
+            bbox_regions=[{"page_number": 58, "bbox": [72.0, 92.0, 548.0, 228.0]}],
+            reading_order_index=1,
+            parse_confidence=0.91,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/56",
+            anchor="p58-b1",
+        )
+        pages = [
+            PdfPage(page_number=56, width=595.0, height=842.0, blocks=[], image_blocks=[]),
+            PdfPage(page_number=57, width=595.0, height=842.0, blocks=[], image_blocks=[]),
+            PdfPage(page_number=58, width=595.0, height=842.0, blocks=[], image_blocks=[]),
+        ]
+
+        merged = service._merge_cross_page_code_continuations(
+            [previous, footer_page_56, footer_page_57, current],
+            pages,
+        )
+
+        self.assertEqual(len(merged), 3)
+        self.assertEqual(merged[0].block_type, BlockType.CODE)
+        self.assertEqual(merged[0].page_end, 58)
+        self.assertIn("Do NOT add", merged[0].text)
+        self.assertIn("any external knowledge, facts, or details not present", merged[0].text)
+        self.assertIn('description="Combines research findings."', merged[0].text)
+        self.assertIn("cross_page_code_continuation_merged", merged[0].flags)
+
+    def test_code_continuation_recognizes_opening_quoted_string_after_call_prefix(self) -> None:
+        self.assertTrue(
+            _looks_like_code_continuation_line(
+                '"Extract the technical specifications from the following',
+                ["prompt_extract = ChatPromptTemplate.from_template("],
+            )
+        )
+
+    def test_recovery_does_not_split_labeled_prose_prefix_as_code(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "What: Agentic systems must often respond to a wide variety of inputs and situations\n"
+                "that cannot be handled by a single, linear process. A simple sequential workflow lacks\n"
+                "the ability to make decisions based on context."
+            ),
+            page_start=104,
+            page_end=104,
+            bbox_regions=[{"page_number": 104, "bbox": [72.0, 320.0, 540.0, 410.0]}],
+            reading_order_index=23,
+            parse_confidence=0.93,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/104",
+            anchor="p104-b23",
+        )
+
+        repaired = service._split_mixed_code_prose_blocks([block])
+
+        self.assertEqual(len(repaired), 1)
+        self.assertEqual(repaired[0].role, "code_like")
+        self.assertEqual(repaired[0].block_type, BlockType.CODE)
+        self.assertEqual(repaired[0].text, block.text)
+
+    def test_recovery_merges_same_anchor_code_continuations_before_splitting_trailing_prose(self) -> None:
+        service = PdfStructureRecoveryService()
+        prefix = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "{\n"
+                '"trends": [\n'
+                "{\n"
+                '"trend_name": "AI-Powered Personalization",\n'
+                '"supporting_data": "73% of consumers prefer to do business with'
+            ),
+            page_start=101,
+            page_end=101,
+            bbox_regions=[{"page_number": 101, "bbox": [72.0, 320.0, 540.0, 370.0]}],
+            reading_order_index=21,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/101",
+            anchor="p101-b21",
+        )
+        continuation = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                'brands that use personal information to make their shopping\n'
+                'experiences more relevant."\n'
+                "},\n"
+                "{\n"
+                '"trend_name": "Sustainable and Ethical Brands",\n'
+                '"supporting_data": "Sales of products with ESG-related claims."\n'
+                "}\n"
+                "]\n"
+                "}\n"
+                "This structured format ensures that the data is machine-readable and can be precisely parsed."
+            ),
+            page_start=101,
+            page_end=101,
+            bbox_regions=[{"page_number": 101, "bbox": [72.0, 372.0, 540.0, 430.0]}],
+            reading_order_index=22,
+            parse_confidence=0.88,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=10.0,
+            source_path="pdf://page/101",
+            anchor="p101-b21",
+        )
+
+        merged = service._merge_same_anchor_code_continuations([prefix, continuation])
+        repaired = service._split_mixed_code_prose_blocks(merged)
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].anchor, "p101-b21")
+        self.assertEqual(repaired[1].anchor, "p101-b21-trailing-prose")
+        self.assertIn('"trend_name": "Sustainable and Ethical Brands"', repaired[0].text)
+        self.assertNotIn("This structured format ensures", repaired[0].text)
+        self.assertIn("This structured format ensures that the data is machine-readable", repaired[1].text)
 
     def test_recovery_promotes_docstring_body_adjacent_to_code(self) -> None:
         service = PdfStructureRecoveryService()
@@ -4689,6 +5250,147 @@ class PdfProfilerTests(unittest.TestCase):
         self.assertEqual(result.chapters[1].metadata["pdf_section_family"], "body")
         self.assertEqual(result.chapters[2].metadata["pdf_section_family"], "body")
 
+    def test_bootstrap_pipeline_resolves_document_book_title_from_source_filename_for_outlined_book(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = (
+                Path(tmpdir)
+                / "Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems (Antonio Gulli) (z-library.sk, 1lib.sk, z-lib.sk).pdf"
+            )
+            _write_pdf(
+                pdf_path,
+                [
+                    [
+                        _text_command(72, 724, 22, "Dedication"),
+                        _text_command(72, 670, 12, "A short dedication page."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Foreword"),
+                        _text_command(72, 670, 12, "A short foreword page."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Chapter 1 Durable Products"),
+                        _text_command(72, 670, 12, "The first body chapter starts here."),
+                    ],
+                ],
+                title="",
+                author="Test Author",
+                outline_entries=[
+                    (1, "Dedication", 1),
+                    (1, "Foreword", 2),
+                    (1, "Chapter 1 Durable Products", 3),
+                ],
+            )
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        expected_title = "Agentic Design Patterns A Hands-On Guide to Building Intelligent Systems"
+        self.assertEqual(result.document.title, expected_title)
+        self.assertEqual(result.document.title_src, expected_title)
+        self.assertIsNone(result.document.title_tgt)
+        self.assertEqual(result.document.metadata_json["document_title"]["src"], expected_title)
+        self.assertEqual(result.document.metadata_json["document_title"]["resolution_source"], "source_filename")
+
+    def test_outlined_book_parser_collapses_auxiliary_top_level_outline_entries_into_neighboring_chapters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "outlined-book-outline-collapse.pdf"
+            _write_pdf(
+                pdf_path,
+                [
+                    [
+                        _text_command(72, 724, 22, "Dedication"),
+                        _text_command(72, 670, 12, "Dedication page."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Foreword"),
+                        _text_command(72, 670, 12, "Foreword page."),
+                    ],
+                    [
+                        _text_command(72, 724, 20, "A Thought Leader's Perspective: Power and Responsibility"),
+                        _text_command(72, 670, 12, "This should stay inside the foreword."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Introduction"),
+                        _text_command(72, 670, 12, "Introduction page."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Chapter 1 Durable Products"),
+                        _text_command(72, 670, 12, "Main chapter content."),
+                    ],
+                    [
+                        _text_command(72, 724, 20, "Key Takeaways"),
+                        _text_command(72, 670, 12, "This should stay inside chapter 1."),
+                    ],
+                    [
+                        _text_command(72, 724, 20, "Conclusion"),
+                        _text_command(72, 670, 12, "This should stay inside chapter 1."),
+                    ],
+                    [
+                        _text_command(72, 724, 20, "References"),
+                        _text_command(72, 670, 12, "This should stay inside chapter 1."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Chapter 2 Learning Systems"),
+                        _text_command(72, 670, 12, "Second main chapter."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Appendix A Metrics"),
+                        _text_command(72, 670, 12, "Appendix content."),
+                    ],
+                    [
+                        _text_command(72, 724, 22, "Glossary"),
+                        _text_command(72, 670, 12, "Glossary content."),
+                    ],
+                ],
+                title="",
+                author="Test Author",
+                outline_entries=[
+                    (1, "Dedication", 1),
+                    (1, "Foreword", 2),
+                    (1, "A Thought Leader's Perspective: Power and Responsibility", 3),
+                    (1, "Introduction", 4),
+                    (1, "Chapter 1 Durable Products", 5),
+                    (1, "Key Takeaways", 6),
+                    (1, "Conclusion", 7),
+                    (1, "References", 8),
+                    (1, "Chapter 2 Learning Systems", 9),
+                    (1, "Appendix A Metrics", 10),
+                    (1, "Glossary", 11),
+                ],
+            )
+
+            parser = PDFParser(extractor=BasicPdfTextExtractor(), profiler=PdfFileProfiler(BasicPdfTextExtractor()))
+            profile_payload = parser.profiler.profile(pdf_path).to_dict()
+            profile_payload["recovery_lane"] = "outlined_book"
+            parsed = parser.parse(pdf_path, profile=profile_payload)
+
+        self.assertEqual(
+            [chapter.title for chapter in parsed.chapters],
+            [
+                "Dedication",
+                "Foreword",
+                "Introduction",
+                "Chapter 1 Durable Products",
+                "Chapter 2 Learning Systems",
+                "Appendix A Metrics",
+                "Glossary",
+            ],
+        )
+        self.assertEqual(
+            [chapter.metadata["source_page_start"] for chapter in parsed.chapters],
+            [1, 2, 4, 5, 9, 10, 11],
+        )
+        self.assertEqual(parsed.chapters[1].metadata["source_page_end"], 3)
+        self.assertEqual(parsed.chapters[3].metadata["source_page_end"], 8)
+        chapter_one_heading_texts = [
+            block.text
+            for block in parsed.chapters[3].blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
+        self.assertEqual(
+            chapter_one_heading_texts,
+            ["Chapter 1 Durable Products", "Key Takeaways", "Conclusion", "References"],
+        )
+
 
 class PdfApiWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -5707,6 +6409,247 @@ class PdfReviewTests(unittest.TestCase):
             bundle.document.metadata_json["pdf_structure_refresh"]["invalidated_block_count"],
             1,
         )
+
+    def test_pdf_structure_refresh_persists_split_trailing_prose_fragments_on_code_blocks(self) -> None:
+        class _OldStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Prompting Chapter",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-002",
+                            href="pdf://page/1",
+                            title="Prompting Chapter",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.CODE.value,
+                                    text=(
+                                        "{\n"
+                                        '"trends": [\n'
+                                        '{"trend_name": "AI-Powered Personalization"}\n'
+                                        "]\n"
+                                        "} This structured format ensures that the data is machine-readable."
+                                    ),
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-b1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "code_like",
+                                    },
+                                    parse_confidence=0.91,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _NewStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Prompting Chapter",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-002",
+                            href="pdf://page/1",
+                            title="Prompting Chapter",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.CODE.value,
+                                    text='{\n"trends": [\n{"trend_name": "AI-Powered Personalization"}\n]\n}',
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-b1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "code_like",
+                                    },
+                                    parse_confidence=0.95,
+                                ),
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text="This structured format ensures that the data is machine-readable.",
+                                    source_path="pdf://page/1",
+                                    ordinal=2,
+                                    anchor="p1-b1-trailing-prose",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                        "pdf_mixed_code_prose_split": "trailing_prose_suffix",
+                                        "pdf_split_source_anchor_base": "pdf://page/1#p1-b1",
+                                    },
+                                    parse_confidence=0.95,
+                                ),
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "structure-refresh-split-fragment.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4\n")
+            now = datetime.now(timezone.utc)
+            document = Document(
+                id="90909090-9090-4090-8090-909090909090",
+                source_type=SourceType.PDF_TEXT,
+                file_fingerprint="fingerprint-structure-refresh-split-fragment",
+                source_path=str(pdf_path),
+                status=DocumentStatus.INGESTED,
+                metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "medium"}},
+                created_at=now,
+                updated_at=now,
+            )
+            parse_artifacts = ParseService(pdf_parser=_OldStubPdfParser()).parse(document, str(pdf_path))
+            artifacts = BootstrapArtifacts(
+                document=parse_artifacts.document,
+                chapters=parse_artifacts.chapters,
+                blocks=parse_artifacts.blocks,
+                sentences=[],
+                job_runs=[parse_artifacts.job_run],
+            )
+
+            with self.session_factory() as session:
+                BootstrapRepository(session).save(artifacts)
+                session.commit()
+
+                refresh_artifacts = PdfStructureRefreshService(
+                    session,
+                    BootstrapRepository(session),
+                    parse_service=ParseService(pdf_parser=_NewStubPdfParser()),
+                ).refresh_document(parse_artifacts.document.id, chapter_ids=[parse_artifacts.chapters[0].id])
+                session.commit()
+
+                bundle = BootstrapRepository(session).load_document_bundle(parse_artifacts.document.id)
+                code_block = bundle.chapters[0].blocks[0]
+
+        self.assertEqual(refresh_artifacts.refreshed_block_count, 1)
+        self.assertEqual(code_block.block_type, BlockType.CODE)
+        self.assertNotIn("This structured format ensures", code_block.source_text)
+        fragments = list(code_block.source_span_json.get("refresh_split_render_fragments") or [])
+        self.assertEqual(len(fragments), 1)
+        self.assertEqual(fragments[0]["split_kind"], "trailing_prose_suffix")
+        self.assertIn("This structured format ensures", fragments[0]["source_text"])
+
+    def test_pdf_structure_refresh_updates_stale_code_block_to_refreshed_paragraph_text(self) -> None:
+        class _OldStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Parallelization",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-003",
+                            href="pdf://page/1",
+                            title="Parallelization",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.CODE.value,
+                                    text="What: Many agentic workflows involve multiple sub-tasks that must be completed to",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-b1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.91,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _NewStubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Parallelization",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-003",
+                            href="pdf://page/1",
+                            title="Parallelization",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.PARAGRAPH.value,
+                                    text=(
+                                        "What: Many agentic workflows involve multiple sub-tasks that must be completed to\n"
+                                        "achieve a final goal. A purely sequential execution is often inefficient and slow."
+                                    ),
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-b1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "pdf_block_role": "body",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "structure-refresh-demote-code.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4\n")
+            now = datetime.now(timezone.utc)
+            document = Document(
+                id="91919191-9191-4191-8191-919191919191",
+                source_type=SourceType.PDF_TEXT,
+                file_fingerprint="fingerprint-structure-refresh-demote-code",
+                source_path=str(pdf_path),
+                status=DocumentStatus.INGESTED,
+                metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "medium"}},
+                created_at=now,
+                updated_at=now,
+            )
+            parse_artifacts = ParseService(pdf_parser=_OldStubPdfParser()).parse(document, str(pdf_path))
+            artifacts = BootstrapArtifacts(
+                document=parse_artifacts.document,
+                chapters=parse_artifacts.chapters,
+                blocks=parse_artifacts.blocks,
+                sentences=[],
+                job_runs=[parse_artifacts.job_run],
+            )
+
+            with self.session_factory() as session:
+                BootstrapRepository(session).save(artifacts)
+                session.commit()
+
+                refresh_artifacts = PdfStructureRefreshService(
+                    session,
+                    BootstrapRepository(session),
+                    parse_service=ParseService(pdf_parser=_NewStubPdfParser()),
+                ).refresh_document(parse_artifacts.document.id, chapter_ids=[parse_artifacts.chapters[0].id])
+                session.commit()
+
+                bundle = BootstrapRepository(session).load_document_bundle(parse_artifacts.document.id)
+                refreshed_block = bundle.chapters[0].blocks[0]
+
+        self.assertEqual(refresh_artifacts.refreshed_block_count, 1)
+        self.assertEqual(refreshed_block.block_type, BlockType.PARAGRAPH)
+        self.assertIn("achieve a final goal", refreshed_block.source_text)
+        self.assertEqual(refreshed_block.protected_policy, ProtectedPolicy.TRANSLATE)
 
     def test_reparse_chapter_followup_refreshes_structure_and_resolves_artifact_group_issue(self) -> None:
         class _OldStubPdfParser:

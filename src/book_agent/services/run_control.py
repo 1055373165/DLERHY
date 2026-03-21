@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
@@ -11,6 +11,9 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+_STALE_FAILED_STAGE_RETRY_AFTER = timedelta(minutes=3)
 
 
 class RunControlTransitionError(ValueError):
@@ -297,9 +300,19 @@ class RunControlService:
             DocumentRunStatus.CANCELLED,
             DocumentRunStatus.PAUSED,
         }:
-            raise RunControlTransitionError(
-                "Only failed, cancelled, or paused runs can be retried from history."
+            if not self._is_stale_failed_stage_run(run_id):
+                raise RunControlTransitionError(
+                    "Only failed, cancelled, paused, or stale failed-stage runs can be retried from history."
+                )
+            self.fail_run_system(
+                run_id,
+                stop_reason="clean_retry_after_stale_run",
+                detail_json={
+                    "source": "run-control.retry",
+                    "recovered_from_stale_failed_stage": True,
+                },
             )
+            previous_run = self.repository.get_run(run_id)
 
         previous_budget = self.repository.get_budget_for_run(run_id)
         retry_summary = self.create_run(
@@ -336,6 +349,46 @@ class RunControlService:
                 "retry_of_run_id": run_id,
             },
         )
+
+    def _is_stale_failed_stage_run(self, run_id: str) -> bool:
+        summary = self.get_run_summary(run_id)
+        if summary.status not in {
+            DocumentRunStatus.RUNNING.value,
+            DocumentRunStatus.QUEUED.value,
+            DocumentRunStatus.DRAINING.value,
+        }:
+            return False
+        if self._first_failed_pipeline_stage(summary.status_detail_json) is None:
+            return False
+
+        freshest_signal = (
+            self._parse_iso_datetime(summary.worker_leases.latest_heartbeat_at)
+            or self._parse_iso_datetime(summary.updated_at)
+        )
+        if freshest_signal is None:
+            return False
+        return (_utcnow() - freshest_signal) >= _STALE_FAILED_STAGE_RETRY_AFTER
+
+    def _first_failed_pipeline_stage(self, status_detail_json: dict[str, Any] | None) -> str | None:
+        pipeline = status_detail_json.get("pipeline") if isinstance(status_detail_json, dict) else None
+        stages = pipeline.get("stages") if isinstance(pipeline, dict) else None
+        if not isinstance(stages, dict):
+            return None
+        for stage_name, stage_detail in stages.items():
+            if isinstance(stage_detail, dict) and stage_detail.get("status") in {"failed", "cancelled"}:
+                return stage_name
+        return None
+
+    def _parse_iso_datetime(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def drain_run(
         self,

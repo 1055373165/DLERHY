@@ -14,7 +14,7 @@ def build_translation_worker(settings: Settings) -> TranslationWorker:
         if not settings.translation_openai_api_key:
             raise ValueError(
                 "Missing OpenAI-compatible provider credentials. "
-                "Set BOOK_AGENT_TRANSLATION_OPENAI_API_KEY before using "
+                "Set OPENAI_API_KEY in the project-root .env before using "
                 "the 'openai_compatible' translation backend."
             )
         client = OpenAICompatibleTranslationClient(

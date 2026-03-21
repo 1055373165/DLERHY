@@ -1,8 +1,23 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ROOT_DIR = Path(__file__).resolve().parents[3]
+
+
+class _SanitizedEnvSettingsSource:
+    def __init__(self, delegate: Any):
+        self._delegate = delegate
+
+    def __call__(self) -> dict[str, Any]:
+        payload = dict(self._delegate())
+        payload.pop("translation_openai_api_key", None)
+        payload.pop("BOOK_AGENT_TRANSLATION_OPENAI_API_KEY", None)
+        payload.pop("OPENAI_API_KEY", None)
+        return payload
 
 
 class Settings(BaseSettings):
@@ -14,13 +29,13 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="sqlite+pysqlite:///./artifacts/book-agent.db",
     )
-    docs_dir: Path = Path("/Users/smy/project/book-agent/docs")
+    docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
     upload_root: Path = Path("artifacts/uploads")
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"
     translation_prompt_version: str = "p0.echo.v1"
-    translation_prompt_profile: str = "role-style-v2"
+    translation_prompt_profile: str = "role-style-faithful-v6"
     translation_timeout_seconds: int = 60
     translation_max_retries: int = 1
     translation_retry_backoff_seconds: float = 1.5
@@ -44,11 +59,27 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="BOOK_AGENT_",
-        env_file=".env",
+        env_file=ROOT_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: Any,
+        env_settings: Any,
+        dotenv_settings: Any,
+        file_secret_settings: Any,
+    ) -> tuple[Any, ...]:
+        return (
+            init_settings,
+            _SanitizedEnvSettingsSource(env_settings),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
 
 @lru_cache(maxsize=1)

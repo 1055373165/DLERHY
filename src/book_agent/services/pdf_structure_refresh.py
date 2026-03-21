@@ -39,6 +39,8 @@ def _clone_document(document: Document) -> Document:
         file_fingerprint=document.file_fingerprint,
         source_path=document.source_path,
         title=document.title,
+        title_src=document.title_src,
+        title_tgt=document.title_tgt,
         author=document.author,
         src_lang=document.src_lang,
         tgt_lang=document.tgt_lang,
@@ -129,6 +131,13 @@ class PdfStructureRefreshService:
             for block in parse_artifacts.blocks
             if isinstance(block.source_anchor, str) and block.source_anchor.strip()
         }
+        refreshed_split_fragments_by_base_anchor: dict[str, list[Block]] = {}
+        for refreshed_block in parse_artifacts.blocks:
+            refreshed_metadata = dict(refreshed_block.source_span_json or {})
+            split_anchor_base = refreshed_metadata.get("pdf_split_source_anchor_base")
+            if not isinstance(split_anchor_base, str) or not split_anchor_base.strip():
+                continue
+            refreshed_split_fragments_by_base_anchor.setdefault(split_anchor_base.strip(), []).append(refreshed_block)
         refreshed_blocks_by_page: dict[int, list[Any]] = {}
         for refreshed_block in parse_artifacts.blocks:
             source_span = dict(refreshed_block.source_span_json or {})
@@ -179,25 +188,20 @@ class PdfStructureRefreshService:
                 existing_block_id_by_source_anchor,
             )
             refreshed_block_type = BlockType(refreshed_block.block_type)
-            if refreshed_block_type in {
-                BlockType.TABLE,
-                BlockType.CAPTION,
-                BlockType.EQUATION,
-                BlockType.IMAGE,
-                BlockType.FIGURE,
-            }:
-                existing_block.block_type = refreshed_block_type
-                existing_block.source_text = refreshed_block.source_text
-                existing_block.normalized_text = " ".join(str(refreshed_block.source_text or "").split())
-                existing_block.protected_policy = protected_policy_for_block(
-                    refreshed_block_type.value,
-                    refreshed_block.source_span_json,
-                )
+            existing_block.block_type = refreshed_block_type
+            existing_block.source_text = refreshed_block.source_text
+            existing_block.normalized_text = " ".join(str(refreshed_block.source_text or "").split())
+            existing_block.protected_policy = protected_policy_for_block(
+                refreshed_block_type.value,
+                refreshed_block.source_span_json,
+            )
             existing_block.parse_confidence = refreshed_block.parse_confidence
             existing_block.status = ArtifactStatus.ACTIVE
+            refreshed_split_fragments = refreshed_split_fragments_by_base_anchor.get(source_anchor, [])
             existing_block.source_span_json = self._merge_preserved_block_metadata(
                 existing_block.source_span_json,
                 refreshed_source_span,
+                refreshed_split_fragments=refreshed_split_fragments,
             )
             existing_block.updated_at = now
             self.session.merge(existing_block)
@@ -239,6 +243,8 @@ class PdfStructureRefreshService:
             invalidated_block_ids.append(existing_block.id)
 
         document.title = working_document.title or document.title
+        document.title_src = working_document.title_src or document.title_src
+        document.title_tgt = working_document.title_tgt or document.title_tgt
         document.author = working_document.author or document.author
         document.src_lang = working_document.src_lang or document.src_lang
         document.metadata_json = {
@@ -280,13 +286,68 @@ class PdfStructureRefreshService:
         self,
         existing_metadata: dict[str, Any] | None,
         refreshed_metadata: dict[str, Any],
+        *,
+        refreshed_split_fragments: list[Block] | None = None,
     ) -> dict[str, Any]:
         preserved = {
             key: value
             for key, value in dict(existing_metadata or {}).items()
             if key.startswith("repair_")
         }
-        return {**preserved, **refreshed_metadata}
+        merged = {**preserved, **refreshed_metadata}
+        split_render_fragments = self._merge_preserved_split_render_fragments(
+            existing_metadata,
+            refreshed_split_fragments or [],
+        )
+        if split_render_fragments:
+            merged["refresh_split_render_fragments"] = split_render_fragments
+        else:
+            merged.pop("refresh_split_render_fragments", None)
+        return merged
+
+    def _merge_preserved_split_render_fragments(
+        self,
+        existing_metadata: dict[str, Any] | None,
+        refreshed_split_fragments: list[Block],
+    ) -> list[dict[str, Any]]:
+        existing_fragments = list(dict(existing_metadata or {}).get("refresh_split_render_fragments") or [])
+        preserved_by_signature: dict[tuple[str, str], dict[str, Any]] = {}
+        for fragment in existing_fragments:
+            if not isinstance(fragment, dict):
+                continue
+            split_kind = str(fragment.get("split_kind") or "").strip()
+            source_text = str(fragment.get("source_text") or "").strip()
+            if not split_kind or not source_text:
+                continue
+            preserved_by_signature[(split_kind, source_text)] = fragment
+
+        merged_fragments: list[dict[str, Any]] = []
+        for block in refreshed_split_fragments:
+            metadata = dict(block.source_span_json or {})
+            split_kind = str(metadata.get("pdf_mixed_code_prose_split") or "").strip()
+            source_text = str(block.source_text or "").strip()
+            if not split_kind or not source_text:
+                continue
+            fragment_payload = {
+                "split_kind": split_kind,
+                "block_type": block.block_type.value,
+                "source_anchor": block.source_anchor,
+                "source_text": block.source_text,
+                "source_metadata": metadata,
+            }
+            preserved_fragment = preserved_by_signature.get((split_kind, source_text))
+            if preserved_fragment is not None:
+                for key in (
+                    "target_text",
+                    "repair_generated_at",
+                    "repair_worker_name",
+                    "repair_prompt_version",
+                ):
+                    value = preserved_fragment.get(key)
+                    if isinstance(value, str) and value.strip():
+                        fragment_payload[key] = value
+            merged_fragments.append(fragment_payload)
+        return merged_fragments
 
     def _remap_block_source_span(
         self,

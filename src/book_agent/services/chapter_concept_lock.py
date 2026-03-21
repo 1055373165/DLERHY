@@ -11,6 +11,7 @@ from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, Term
 from book_agent.domain.models import Chapter, MemorySnapshot
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.domain.models.translation import TermEntry
+from book_agent.services.term_normalization import normalize_term_rendering
 
 
 def _copy_content(snapshot: MemorySnapshot | None, chapter: Chapter) -> dict[str, Any]:
@@ -75,7 +76,7 @@ class ChapterConceptLockService:
             raise ValueError(f"Unknown chapter_id: {chapter_id}")
 
         source_term = source_term.strip()
-        canonical_zh = canonical_zh.strip()
+        canonical_zh = normalize_term_rendering(source_term, canonical_zh.strip())
         if not source_term:
             raise ValueError("source_term must not be empty")
         if not canonical_zh:

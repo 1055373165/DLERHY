@@ -11,6 +11,7 @@ from book_agent.infra.db.base import Base
 from book_agent.infra.db.legacy_backfill import backfill_legacy_history
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
+from book_agent.infra.db.sqlite_schema_backfill import ensure_sqlite_schema_compat
 from book_agent.workers.factory import build_translation_worker
 
 
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     engine = build_engine(database_url=settings.database_url)
     if engine.dialect.name == "sqlite":
         Base.metadata.create_all(engine)
+        ensure_sqlite_schema_compat(settings.database_url)
         backfill_legacy_history(settings.database_url)
     app.state.session_factory = build_session_factory(engine=engine)
     app.state.export_root = str(settings.export_root)

@@ -29,10 +29,11 @@ Long-document translation agent for translating English books into high-quality 
 
 ## Current Runtime Notes
 
-- The runtime now exposes a modern operator-facing frontend entry at `/`, so the project no longer ships as API-only.
+- The runtime now exposes a user-facing translation studio at `/`, so the project no longer ships as API-only.
 - The homepage is intentionally served by FastAPI itself rather than a separate SPA, which keeps the product surface tightly aligned with the existing workflow, run-control, review, and export contracts.
-- The homepage now also includes a lightweight control workspace with document bootstrap/load actions, a run console, and a chapter worklist board backed by the existing `/v1` APIs.
-- The same control workspace now supports chapter drill-down, owner assignment operations, and run-event auto-refresh, so the UI can be used as a real ops console rather than a static overview.
+- The homepage is now organized around a user task flow: upload an English EPUB/PDF, start a `translate_full` run, watch progress, and download merged Chinese or bilingual exports when ready.
+- The same homepage also includes document history, recent run visibility, and direct export download actions, so previously processed books can be reopened without leaving the page.
+- Advanced worklist / owner-assignment APIs remain available under `/v1`, but they are no longer the primary homepage experience.
 - Default translation backend is `echo`, which preserves the full persistence and QA path without calling an external model.
 - The runtime now exposes the same workflow through FastAPI and a local CLI.
 - A provider-specific `openai_compatible` translation client is now wired behind the worker factory.
@@ -93,7 +94,6 @@ Provider-backed worker with structured JSON transport:
 ```bash
 BOOK_AGENT_TRANSLATION_BACKEND=openai_compatible
 BOOK_AGENT_TRANSLATION_MODEL=gpt-5-mini
-BOOK_AGENT_TRANSLATION_OPENAI_API_KEY=<your_api_key>
 BOOK_AGENT_TRANSLATION_OPENAI_BASE_URL=https://api.openai.com/v1/responses
 BOOK_AGENT_TRANSLATION_TIMEOUT_SECONDS=60
 BOOK_AGENT_TRANSLATION_MAX_RETRIES=2
@@ -102,7 +102,8 @@ BOOK_AGENT_TRANSLATION_RETRY_BACKOFF_SECONDS=2.0
 
 Notes:
 
-- Standard aliases `OPENAI_API_KEY` and `OPENAI_BASE_URL` are also accepted, so local shells and existing OpenAI tooling can be reused without renaming variables.
+- The backend now reads the provider key from the project-root `.env` file only. Put `OPENAI_API_KEY=<your_api_key>` in `/Users/smy/project/book-agent/.env`; shell environment variables are intentionally ignored for the key.
+- `OPENAI_BASE_URL` / `BOOK_AGENT_TRANSLATION_OPENAI_BASE_URL` can still come from `.env` or the environment when you need to switch providers.
 - The provider adapter is wired through the same `LLMTranslationWorker` contract used by the rest of the pipeline.
 - When `base_url` points at a provider root such as `https://api.deepseek.com`, the client now automatically uses `chat/completions`; the default OpenAI path still uses `/v1/responses`.
 - Default test coverage validates payload construction and structured response parsing without performing a live API call.
@@ -152,11 +153,9 @@ book-agent --database-url sqlite+pysqlite:///./local.db execute-action --action-
 
 API notes:
 
-- `GET /` serves the operator-facing frontend homepage and links directly into the live API surfaces.
-- The same homepage now acts as a lightweight operator console for document, run, and chapter queue operations; it is still intentionally thinner than a full review workstation.
-- The operator homepage now also exposes owner-aware queue filters plus explicit document/run/worklist live refresh state, so operators can see whether the surface is fresh, stale, or actively syncing without leaving the page.
-- The same operator homepage now also exposes owner workload drill-down and lightweight balancing hints, turning the owner lane from a static summary into a directly usable triage surface.
-- The owner surface now also emits clickable routing alerts for breached owner load, unassigned immediate queue pressure, and simple rebalance candidates, again without introducing a separate reporting API.
+- `GET /` serves the user-facing translation studio homepage and links directly into the live API surfaces.
+- The same homepage now exposes upload, current document summary, run progress, export download, and history search on top of the existing `/v1` APIs.
+- Advanced operational APIs such as worklist, owner assignment, and run control remain directly available under `/v1`, even though the homepage now prioritizes the end-user upload-to-download flow.
 - `POST /v1/documents/{document_id}/export` accepts `{"auto_execute_followup_on_gate": true, "max_auto_followup_attempts": 3}` for opt-in export-time repair.
 - Successful auto-repaired exports return `auto_followup_requested`, `auto_followup_attempt_count`, `auto_followup_attempt_limit`, and `auto_followup_executions`.
 - When auto-repair stops at the safety cap, export gate failures still return HTTP `409`, but now include `auto_followup_attempt_count`, `auto_followup_attempt_limit`, `auto_followup_stop_reason`, and any already executed auto-followup summaries.
@@ -191,6 +190,26 @@ API notes:
 - `GET /v1/runs/{run_id}/events` returns newest-first run audit events with pagination metadata.
 - `POST /v1/runs/{run_id}/pause|resume|drain|cancel` applies validated run-level state transitions and appends ordered run audit events with operator metadata.
 - Real-book translate runs now execute through the same run-control objects, rather than a standalone batch loop.
+
+## Local Service Control
+
+Use the unified service script to manage the local runtime:
+
+```bash
+./service.sh           # Toggle: start if stopped, stop if running
+./service.sh start     # Start services
+./service.sh stop      # Stop services
+./service.sh restart   # Restart services
+./service.sh status    # Show current status
+./service.sh start postgres
+./service.sh start --reload
+```
+
+Notes:
+
+- `start.sh` and `stop.sh` are still available as compatibility wrappers, but they now delegate to `./service.sh`.
+- The current Web UI is served directly by FastAPI, so there is no standalone frontend process by default.
+- If a separate frontend dev server is introduced later, set `BOOK_AGENT_FRONTEND_CMD` to let `./service.sh` manage it together with the backend.
 
 ## Docker
 

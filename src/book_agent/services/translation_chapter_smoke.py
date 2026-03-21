@@ -51,7 +51,7 @@ class TranslationChapterSmokeOptions:
     include_paragraph_intent: bool = True
     include_literalism_guardrails: bool = True
     prompt_layout: str = "paragraph-led"
-    prompt_profile: str = "role-style-v2"
+    prompt_profile: str = "role-style-faithful-v6"
     explicit_packet_ids: tuple[str, ...] = ()
 
 

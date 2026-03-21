@@ -13,6 +13,7 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
+from book_agent.services.term_normalization import normalize_concept_payload
 from book_agent.workers.contracts import (
     CompiledTranslationContext,
     TranslationUsage,
@@ -491,10 +492,11 @@ class TranslationService:
         for concept in existing_concepts:
             if not isinstance(concept, dict):
                 continue
-            key = str(concept.get("source_term") or "").strip().lower()
+            normalized_concept = normalize_concept_payload(concept)
+            key = str(normalized_concept.get("source_term") or "").strip().lower()
             if not key:
                 continue
-            concept_map[key] = dict(concept)
+            concept_map[key] = normalized_concept
 
         for source_term in self._extract_concept_candidates(source_sentences):
             key = source_term.lower()

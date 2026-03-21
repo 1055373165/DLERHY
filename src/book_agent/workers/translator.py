@@ -250,6 +250,9 @@ PromptLayout = Literal["paragraph-led", "sentence-led"]
 PromptProfile = Literal[
     "current",
     "role-style-v2",
+    "role-style-faithful-v4",
+    "role-style-faithful-v5",
+    "role-style-faithful-v6",
     "role-style-memory-v2",
     "role-style-brief-v3",
     "material-aware-v1",
@@ -584,6 +587,11 @@ def build_translation_prompt_request(
                 "- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet."
             )
             contract_lines[4] = "- Use the current sentences as the primary translation ledger and keep paragraph context coherent."
+    if literalism_guardrail_lines:
+        contract_lines.insert(
+            2,
+            "- If Source-Aware Literalism Guardrails are present, follow them over generic smoothing: keep the source's level of concreteness and do not rewrite concrete imagery into abstract service or slogan-like Chinese.",
+        )
 
     style_lines: list[str] = []
     memory_handling_lines: list[str] = []
@@ -597,7 +605,14 @@ def build_translation_prompt_request(
             material=translation_material,
             minimal=minimal_material_prompt,
         )
-    elif not compact_prompt and prompt_profile in {"role-style-v2", "role-style-memory-v2", "role-style-brief-v3"}:
+    elif not compact_prompt and prompt_profile in {
+        "role-style-v2",
+        "role-style-faithful-v4",
+        "role-style-faithful-v5",
+        "role-style-faithful-v6",
+        "role-style-memory-v2",
+        "role-style-brief-v3",
+    }:
         style_lines = [
             "- Write like a polished Chinese technical translator, not a sentence-by-sentence converter.",
             "- Prefer established Chinese technical phrasing and avoid literal calques of English abstract noun chains.",
@@ -630,7 +645,18 @@ def build_translation_prompt_request(
             style_title = "Material-Specific Style Target:"
         _extend_section(sections, style_title, style_lines)
     if (
-        (not compact_prompt and prompt_profile in {"role-style-v2", "role-style-memory-v2", "role-style-brief-v3"})
+        (
+            not compact_prompt
+            and prompt_profile
+            in {
+                "role-style-v2",
+                "role-style-faithful-v4",
+                "role-style-faithful-v5",
+                "role-style-faithful-v6",
+                "role-style-memory-v2",
+                "role-style-brief-v3",
+            }
+        )
         or prompt_profile in {"material-aware-v1", "material-aware-minimal-v1"}
     ):
         _extend_section(sections, "Section-Level Scaffolding:", section_scaffolding_lines)
@@ -708,6 +734,35 @@ def build_translation_prompt_request(
             "You are a senior technical translator and localizer for English-to-Chinese books, papers, and business documents. "
             "Produce accurate, professional, publication-grade Chinese that preserves structure and terminology consistency. "
             "Prefer natural Chinese technical prose over literal sentence mirroring, while keeping alignment coverage complete."
+        )
+    elif prompt_profile == "role-style-faithful-v4":
+        system_prompt = (
+            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
+            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
+            "Write in native, publication-ready Chinese that matches how a strong Chinese technical book would actually read: natural and precise, never translationese, but also never promotional, chatty, or over-interpreted. "
+            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
+            "Alignment coverage must remain complete."
+        )
+    elif prompt_profile == "role-style-faithful-v5":
+        system_prompt = (
+            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
+            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
+            "Keep concrete imagery concrete: when the source uses everyday metaphors or domestic imagery, render them in equally vivid, plain Chinese instead of recasting them into abstract service, product, or management language. "
+            "Write in native, publication-ready Chinese that reads like a strong Chinese technical book: natural, precise, and plain when the source is plain. "
+            "Avoid translationese, but also avoid promotional, chatty, interpretive, or over-packaged prose. Prefer concrete verbs and adjectives over abstract noun-heavy phrasing. "
+            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
+            "Alignment coverage must remain complete."
+        )
+    elif prompt_profile == "role-style-faithful-v6":
+        system_prompt = (
+            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
+            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
+            "Keep concrete imagery concrete: when the source uses everyday metaphors or domestic imagery, render them in equally vivid, plain Chinese instead of recasting them into service, marketing, or management language. "
+            "Write in native, publication-ready Chinese that reads like a strong Chinese technical book: natural, precise, and plain when the source is plain. "
+            "Prefer everyday concrete wording over elevated substitutes, and keep food, objects, actions, preferences, and care on the same concrete level as the source rather than upgrading them into menu, service, or abstract-value language. "
+            "Avoid translationese and avoid abstract noun-heavy wrap-ups; do not turn a simple ending into a slogan about consistency, care, or service unless the source itself clearly does so. "
+            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
+            "Alignment coverage must remain complete."
         )
     elif prompt_profile == "role-style-brief-v3":
         system_prompt = (
@@ -795,7 +850,7 @@ class LLMTranslationWorker:
         *,
         model_name: str,
         prompt_version: str = "p0.llm.v1",
-        prompt_profile: PromptProfile = "role-style-v2",
+        prompt_profile: PromptProfile = "role-style-faithful-v6",
         runtime_config: dict[str, Any] | None = None,
     ):
         self.client = client

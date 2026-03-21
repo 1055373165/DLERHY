@@ -10,7 +10,9 @@ from sqlalchemy import case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.document_titles import document_display_title, document_source_title
 from book_agent.domain.enums import (
+    ActionType,
     ActorType,
     DocumentRunStatus,
     DocumentStatus,
@@ -41,6 +43,7 @@ from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExe
 from book_agent.services.bootstrap import BootstrapArtifacts
 from book_agent.services.chapter_concept_autolock import ChapterConceptAutoLockService, build_default_concept_resolver
 from book_agent.services.export import ExportArtifacts, ExportGateError, ExportService
+from book_agent.services.epub_structure_refresh import EpubStructureRefreshArtifacts, EpubStructureRefreshService
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshArtifacts, PdfStructureRefreshService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
@@ -96,6 +99,8 @@ class DocumentSummary:
     source_type: str
     status: str
     title: str | None
+    title_src: str | None
+    title_tgt: str | None
     author: str | None
     pdf_profile: dict[str, Any] | None
     pdf_page_evidence: dict[str, Any] | None
@@ -119,6 +124,8 @@ class DocumentHistoryEntry:
     source_type: str
     status: str
     title: str | None
+    title_src: str | None
+    title_tgt: str | None
     author: str | None
     source_path: str | None
     created_at: str
@@ -131,6 +138,9 @@ class DocumentHistoryEntry:
     chapter_bilingual_export_count: int
     latest_run_id: str | None
     latest_run_status: str | None
+    latest_run_current_stage: str | None
+    latest_run_completed_work_item_count: int | None
+    latest_run_total_work_item_count: int | None
 
 
 @dataclass(slots=True)
@@ -164,6 +174,34 @@ def _display_author_value(author: str | None) -> str | None:
     return normalized
 
 
+def _history_run_progress(run: DocumentRun | None) -> tuple[str | None, int | None, int | None]:
+    if run is None:
+        return None, None, None
+    detail = dict(run.status_detail_json or {})
+    pipeline = dict(detail.get("pipeline") or {})
+    stages = dict(pipeline.get("stages") or {})
+    translate = dict(stages.get("translate") or {})
+    counters = dict(detail.get("control_counters") or {})
+    current_stage = pipeline.get("current_stage")
+
+    completed_raw = counters.get("completed_work_item_count")
+    total_raw = translate.get("total_packet_count", counters.get("seeded_work_item_count"))
+
+    try:
+        completed = int(completed_raw) if completed_raw is not None else None
+    except (TypeError, ValueError):
+        completed = None
+    try:
+        total = int(total_raw) if total_raw is not None else None
+    except (TypeError, ValueError):
+        total = None
+    return (
+        str(current_stage) if current_stage is not None else None,
+        completed,
+        total,
+    )
+
+
 @dataclass(slots=True)
 class ChapterReviewResult:
     chapter_id: str
@@ -191,6 +229,33 @@ class DocumentReviewResult:
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list["ReviewAutoFollowupExecution"] | None = None
+
+
+@dataclass(slots=True)
+class DocumentBlockerRepairExecution:
+    action_id: str
+    issue_id: str
+    issue_type: str
+    action_type: str
+    rerun_scope_type: str
+    rerun_scope_ids: list[str]
+    followup_executed: bool
+    rerun_packet_ids: list[str]
+    rerun_translation_run_ids: list[str]
+    issue_resolved: bool | None
+
+
+@dataclass(slots=True)
+class DocumentBlockerRepairResult:
+    document_id: str
+    blocking_issue_count_before: int
+    blocking_issue_count_after: int
+    requested: bool
+    applied: bool
+    round_count: int
+    round_limit: int
+    executions: list[DocumentBlockerRepairExecution]
+    stop_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -705,6 +770,10 @@ class DocumentWorkflowService:
             session,
             self.bootstrap_repository,
         )
+        self.epub_structure_refresh_service = EpubStructureRefreshService(
+            session,
+            self.bootstrap_repository,
+        )
         self.rerun_service = RerunService(
             self.ops_repository,
             self.translation_service,
@@ -729,6 +798,14 @@ class DocumentWorkflowService:
         chapter_ids: list[str] | None = None,
     ) -> PdfStructureRefreshArtifacts:
         return self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+
+    def refresh_epub_structure(
+        self,
+        document_id: str,
+        *,
+        chapter_ids: list[str] | None = None,
+    ) -> EpubStructureRefreshArtifacts:
+        return self.epub_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
 
     def get_document_summary(self, document_id: str) -> DocumentSummary:
         bundle = self.bootstrap_repository.load_document_bundle(document_id)
@@ -771,7 +848,9 @@ class DocumentWorkflowService:
             document_id=bundle.document.id,
             source_type=bundle.document.source_type.value,
             status=bundle.document.status.value,
-            title=bundle.document.title,
+            title=document_display_title(bundle.document),
+            title_src=document_source_title(bundle.document),
+            title_tgt=(bundle.document.title_tgt or None),
             author=_display_author_value(bundle.document.author),
             pdf_profile=bundle.document.metadata_json.get("pdf_profile"),
             pdf_page_evidence=bundle.document.metadata_json.get("pdf_page_evidence"),
@@ -812,6 +891,8 @@ class DocumentWorkflowService:
                 or_(
                     Document.id.ilike(like_pattern),
                     Document.title.ilike(like_pattern),
+                    Document.title_src.ilike(like_pattern),
+                    Document.title_tgt.ilike(like_pattern),
                     Document.author.ilike(like_pattern),
                     Document.source_path.ilike(like_pattern),
                 )
@@ -825,31 +906,35 @@ class DocumentWorkflowService:
         latest_runs = self._latest_run_map(document_ids)
         merged_export_status, chapter_export_counts = self._document_export_history_maps(document_ids)
 
-        entries = [
-            DocumentHistoryEntry(
-                document_id=document.id,
-                source_type=document.source_type.value,
-                status=document.status.value,
-                title=document.title,
-                author=_display_author_value(document.author),
-                source_path=document.source_path,
-                created_at=document.created_at.isoformat(),
-                updated_at=document.updated_at.isoformat(),
-                chapter_count=chapter_counts.get(document.id, 0),
-                sentence_count=sentence_counts.get(document.id, 0),
-                packet_count=packet_counts.get(document.id, 0),
-                merged_export_ready=bool(merged_export_status.get(document.id, {}).get("ready")),
-                latest_merged_export_at=merged_export_status.get(document.id, {}).get("latest_export_at"),
-                chapter_bilingual_export_count=chapter_export_counts.get(document.id, 0),
-                latest_run_id=(latest_runs.get(document.id).id if latest_runs.get(document.id) is not None else None),
-                latest_run_status=(
-                    latest_runs.get(document.id).status.value
-                    if latest_runs.get(document.id) is not None
-                    else None
-                ),
+        entries: list[DocumentHistoryEntry] = []
+        for document in documents:
+            latest_run = latest_runs.get(document.id)
+            current_stage, completed_work_item_count, total_work_item_count = _history_run_progress(latest_run)
+            entries.append(
+                DocumentHistoryEntry(
+                    document_id=document.id,
+                    source_type=document.source_type.value,
+                    status=document.status.value,
+                    title=document_display_title(document),
+                    title_src=document_source_title(document),
+                    title_tgt=(document.title_tgt or None),
+                    author=_display_author_value(document.author),
+                    source_path=document.source_path,
+                    created_at=document.created_at.isoformat(),
+                    updated_at=document.updated_at.isoformat(),
+                    chapter_count=chapter_counts.get(document.id, 0),
+                    sentence_count=sentence_counts.get(document.id, 0),
+                    packet_count=packet_counts.get(document.id, 0),
+                    merged_export_ready=bool(merged_export_status.get(document.id, {}).get("ready")),
+                    latest_merged_export_at=merged_export_status.get(document.id, {}).get("latest_export_at"),
+                    chapter_bilingual_export_count=chapter_export_counts.get(document.id, 0),
+                    latest_run_id=(latest_run.id if latest_run is not None else None),
+                    latest_run_status=(latest_run.status.value if latest_run is not None else None),
+                    latest_run_current_stage=current_stage,
+                    latest_run_completed_work_item_count=completed_work_item_count,
+                    latest_run_total_work_item_count=total_work_item_count,
+                )
             )
-            for document in documents
-        ]
         if latest_run_status is not None:
             entries = [
                 entry for entry in entries if entry.latest_run_status == latest_run_status.value
@@ -1183,6 +1268,220 @@ class DocumentWorkflowService:
             auto_execute_packet_followups=auto_execute_packet_followups,
             max_auto_followup_attempts=max_auto_followup_attempts,
         )
+
+    def repair_document_blockers_until_exportable(
+        self,
+        document_id: str,
+        *,
+        max_rounds: int = 4,
+        max_actions_per_round: int = 64,
+    ) -> DocumentBlockerRepairResult:
+        round_limit = max(1, int(max_rounds))
+        action_limit = max(1, int(max_actions_per_round))
+        attempted_action_ids: set[str] = set()
+        executions: list[DocumentBlockerRepairExecution] = []
+
+        blocking_issues = self._list_document_active_blocking_issues(document_id)
+        blocking_issue_count_before = len(blocking_issues)
+        if blocking_issue_count_before == 0:
+            return DocumentBlockerRepairResult(
+                document_id=document_id,
+                blocking_issue_count_before=0,
+                blocking_issue_count_after=0,
+                requested=False,
+                applied=False,
+                round_count=0,
+                round_limit=round_limit,
+                executions=[],
+            )
+
+        stop_reason: str | None = None
+        round_count = 0
+
+        while round_count < round_limit:
+            blocking_issues = self._list_document_active_blocking_issues(document_id)
+            if not blocking_issues:
+                break
+            candidate_actions = self._document_blocker_candidate_actions(
+                issues=blocking_issues,
+                attempted_action_ids=attempted_action_ids,
+            )
+            if not candidate_actions:
+                stop_reason = "no_new_actions"
+                break
+
+            round_count += 1
+            for action in candidate_actions[:action_limit]:
+                issue = next((item for item in blocking_issues if item.id == action.issue_id), None)
+                attempted_action_ids.add(action.id)
+                result = self.execute_action(action.id, run_followup=True)
+                rerun_execution = result.rerun_execution
+                executions.append(
+                    DocumentBlockerRepairExecution(
+                        action_id=action.id,
+                        issue_id=action.issue_id,
+                        issue_type=(issue.issue_type if issue is not None else "unknown"),
+                        action_type=action.action_type.value,
+                        rerun_scope_type=result.action_execution.rerun_plan.scope_type.value,
+                        rerun_scope_ids=result.action_execution.rerun_plan.scope_ids,
+                        followup_executed=rerun_execution is not None,
+                        rerun_packet_ids=(
+                            rerun_execution.translated_packet_ids if rerun_execution is not None else []
+                        ),
+                        rerun_translation_run_ids=(
+                            rerun_execution.translation_run_ids if rerun_execution is not None else []
+                        ),
+                        issue_resolved=(
+                            rerun_execution.issue_resolved if rerun_execution is not None else None
+                        ),
+                    )
+                )
+
+        blocking_issue_count_after = len(self._list_document_active_blocking_issues(document_id))
+        if blocking_issue_count_after > 0 and stop_reason is None and round_count >= round_limit:
+            stop_reason = "max_rounds_reached"
+
+        return DocumentBlockerRepairResult(
+            document_id=document_id,
+            blocking_issue_count_before=blocking_issue_count_before,
+            blocking_issue_count_after=blocking_issue_count_after,
+            requested=True,
+            applied=bool(executions),
+            round_count=round_count,
+            round_limit=round_limit,
+            executions=executions,
+            stop_reason=stop_reason,
+        )
+
+    def _list_document_active_blocking_issues(self, document_id: str) -> list[ReviewIssue]:
+        return list(
+            self.session.scalars(
+                select(ReviewIssue)
+                .where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.blocking.is_(True),
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                )
+                .order_by(ReviewIssue.created_at.asc(), ReviewIssue.id.asc())
+            ).all()
+        )
+
+    def _document_blocker_candidate_actions(
+        self,
+        *,
+        issues: list[ReviewIssue],
+        attempted_action_ids: set[str],
+    ) -> list[IssueAction]:
+        if not issues:
+            return []
+
+        issue_by_id = {issue.id: issue for issue in issues}
+        actions = self.export_repository.list_planned_issue_actions(list(issue_by_id))
+        chapter_ordinals = self._chapter_ordinal_map(
+            [issue.chapter_id for issue in issues if issue.chapter_id]
+        )
+
+        def _action_scope_rank(action: IssueAction) -> int:
+            if action.scope_type == JobScopeType.DOCUMENT:
+                return 0
+            if action.scope_type == JobScopeType.CHAPTER:
+                return 1
+            if action.scope_type == JobScopeType.PACKET:
+                return 2
+            return 3
+
+        def _action_priority(action: IssueAction) -> int:
+            return {
+                ActionType.REPARSE_DOCUMENT: 0,
+                ActionType.REPARSE_CHAPTER: 1,
+                ActionType.RESEGMENT_CHAPTER: 2,
+                ActionType.REALIGN_ONLY: 3,
+                ActionType.REBUILD_PACKET_THEN_RERUN: 4,
+                ActionType.RERUN_PACKET: 5,
+                ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED: 6,
+                ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED: 7,
+                ActionType.REBUILD_CHAPTER_BRIEF: 8,
+                ActionType.REEXPORT_ONLY: 9,
+                ActionType.EDIT_TARGET_ONLY: 10,
+                ActionType.MANUAL_FINALIZE: 11,
+            }.get(action.action_type, 99)
+
+        def _issue_priority(issue: ReviewIssue) -> int:
+            return {
+                "MISORDERING": 0,
+                "STRUCTURE_POLLUTION": 1,
+                "ALIGNMENT_FAILURE": 2,
+                "OMISSION": 3,
+                "CONTEXT_FAILURE": 4,
+                "TERM_CONFLICT": 5,
+                "UNLOCKED_KEY_CONCEPT": 6,
+                "STYLE_DRIFT": 7,
+            }.get(issue.issue_type, 20)
+
+        ordered_actions = sorted(
+            (
+                action
+                for action in actions
+                if action.id not in attempted_action_ids and action.issue_id in issue_by_id
+            ),
+            key=lambda action: (
+                _action_scope_rank(action),
+                _action_priority(action),
+                _issue_priority(issue_by_id[action.issue_id]),
+                chapter_ordinals.get(issue_by_id[action.issue_id].chapter_id or "", 10**9),
+                str(action.scope_id or ""),
+                action.id,
+            ),
+        )
+
+        selected: list[IssueAction] = []
+        reserved_document = False
+        reserved_chapter_ids: set[str] = set()
+        reserved_packet_ids: set[str] = set()
+        reserved_sentence_ids: set[str] = set()
+
+        for action in ordered_actions:
+            if reserved_document:
+                break
+            issue = issue_by_id[action.issue_id]
+            rerun_plan = build_rerun_plan(issue, action)
+            scope_ids = [scope_id for scope_id in rerun_plan.scope_ids if scope_id]
+            if rerun_plan.scope_type == JobScopeType.DOCUMENT:
+                selected = [action]
+                reserved_document = True
+                break
+            if rerun_plan.scope_type == JobScopeType.CHAPTER:
+                chapter_id = scope_ids[0] if scope_ids else (issue.chapter_id or "")
+                if not chapter_id or chapter_id in reserved_chapter_ids:
+                    continue
+                selected.append(action)
+                reserved_chapter_ids.add(chapter_id)
+                continue
+            if rerun_plan.scope_type == JobScopeType.PACKET:
+                if issue.chapter_id and issue.chapter_id in reserved_chapter_ids:
+                    continue
+                if not scope_ids or any(packet_id in reserved_packet_ids for packet_id in scope_ids):
+                    continue
+                selected.append(action)
+                reserved_packet_ids.update(scope_ids)
+                continue
+            if rerun_plan.scope_type == JobScopeType.SENTENCE:
+                sentence_id = scope_ids[0] if scope_ids else (issue.sentence_id or "")
+                if not sentence_id or sentence_id in reserved_sentence_ids:
+                    continue
+                selected.append(action)
+                reserved_sentence_ids.add(sentence_id)
+                continue
+        return selected
+
+    def _chapter_ordinal_map(self, chapter_ids: list[str]) -> dict[str, int]:
+        normalized_ids = sorted({chapter_id for chapter_id in chapter_ids if chapter_id})
+        if not normalized_ids:
+            return {}
+        rows = self.session.execute(
+            select(Chapter.id, Chapter.ordinal).where(Chapter.id.in_(normalized_ids))
+        ).all()
+        return {str(chapter_id): int(ordinal or 0) for chapter_id, ordinal in rows}
 
     def _apply_review_auto_followups(
         self,

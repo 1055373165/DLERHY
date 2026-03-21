@@ -16,3 +16,6 @@ htmlcov/
 book_agent.db
 .server.pid
 artifacts/
+.gstack/
+./artifacts/book_agent.db
+./artifacts/book-agent.db

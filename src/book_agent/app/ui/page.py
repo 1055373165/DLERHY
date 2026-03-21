@@ -1,1076 +1,1179 @@
+# ruff: noqa: E501
+
 from __future__ import annotations
+
+import json
+from html import escape
 
 
 def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> str:
     docs_href = f"{api_prefix}/docs"
     openapi_href = f"{api_prefix}/openapi.json"
     health_href = f"{api_prefix}/health"
-    return f"""<!DOCTYPE html>
+    boot_payload = json.dumps(
+        {
+            "appName": app_name,
+            "appVersion": app_version,
+            "apiPrefix": api_prefix,
+            "docsHref": docs_href,
+            "openapiHref": openapi_href,
+            "healthHref": health_href,
+        },
+        ensure_ascii=False,
+    )
+    template = """<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
-    <title>{app_name}</title>
     <meta
       name="description"
-      content="Operator-facing cockpit for EPUB ingest, translation, QA, reruns, export, and run control."
+      content="面向真实书籍翻译生产流程的工作台：上传英文 EPUB / PDF，追踪整书 translate、review 与 export，并直接下载中文阅读稿。"
+    />
+    <title>__APP_NAME__</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
     />
     <style>
-      :root {{
-        --paper: #f7f2e8;
-        --paper-strong: #efe6d3;
-        --ink: #16232b;
-        --ink-soft: #4e5f67;
-        --teal: #0f6b62;
-        --teal-strong: #0a4d49;
-        --gold: #cb8f2f;
-        --mist: rgba(255, 255, 255, 0.72);
-        --line: rgba(22, 35, 43, 0.12);
-        --shadow-frame: 0 24px 80px rgba(13, 33, 35, 0.12);
-        --shadow-surface: 0 10px 24px rgba(22, 35, 43, 0.04);
-        --shadow-surface-hover: 0 14px 30px rgba(22, 35, 43, 0.08);
-        --shadow-emphasis: 0 12px 28px rgba(15, 107, 98, 0.2);
-        --shadow-emphasis-strong: 0 14px 30px rgba(15, 107, 98, 0.26);
-        --shadow-gold: 0 12px 28px rgba(201, 143, 47, 0.2);
-        --shadow-selected: 0 12px 28px rgba(15, 107, 98, 0.12);
-        --focus-ring: 0 0 0 4px rgba(15, 107, 98, 0.12);
-        --motion-fast: 160ms ease;
-        --motion-medium: 200ms cubic-bezier(0.22, 1, 0.36, 1);
-        --radius-xl: 28px;
-        --radius-lg: 22px;
+      :root {
+        color-scheme: light;
+        --bg: #eef2f6;
+        --bg-strong: #dde5eb;
+        --surface: rgba(251, 253, 255, 0.94);
+        --surface-strong: rgba(255, 255, 255, 0.98);
+        --surface-muted: rgba(243, 247, 250, 0.94);
+        --ink: #12202d;
+        --ink-soft: #53606c;
+        --ink-faint: #77838e;
+        --teal: #14394b;
+        --teal-strong: #0d2a3a;
+        --teal-soft: rgba(20, 57, 75, 0.08);
+        --copper: #8c6b42;
+        --copper-soft: rgba(140, 107, 66, 0.1);
+        --success: #176a5a;
+        --success-soft: rgba(23, 106, 90, 0.1);
+        --warning: #8a6426;
+        --warning-soft: rgba(138, 100, 38, 0.12);
+        --danger: #a04747;
+        --danger-soft: rgba(160, 71, 71, 0.12);
+        --line: rgba(18, 32, 45, 0.1);
+        --line-strong: rgba(18, 32, 45, 0.16);
+        --shadow-page: 0 24px 72px rgba(13, 32, 47, 0.09);
+        --shadow-surface: 0 14px 28px rgba(13, 32, 47, 0.05);
+        --shadow-hover: 0 18px 34px rgba(13, 32, 47, 0.1);
+        --radius-page: 32px;
+        --radius-xl: 24px;
+        --radius-lg: 20px;
         --radius-md: 16px;
         --radius-sm: 12px;
-        --mono: "JetBrains Mono", "SF Mono", "Roboto Mono", monospace;
-        --serif: "Crimson Pro", "Palatino Linotype", "Georgia", serif;
-        --sans: "DM Sans", "Avenir Next", "Segoe UI", sans-serif;
-      }}
+        --sans: "Manrope", "Inter", "Segoe UI", sans-serif;
+        --mono: "JetBrains Mono", "SFMono-Regular", monospace;
+        --fast: 160ms ease;
+        --smooth: 240ms cubic-bezier(0.2, 1, 0.36, 1);
+      }
 
-      * {{
+      * {
         box-sizing: border-box;
-      }}
+      }
 
-      html {{
+      html {
         scroll-behavior: smooth;
-      }}
+      }
 
-      body {{
+      body {
         margin: 0;
-        color: var(--ink);
+        min-height: 100vh;
         background:
-          radial-gradient(circle at top left, rgba(203, 143, 47, 0.14), transparent 28%),
-          radial-gradient(circle at top right, rgba(15, 107, 98, 0.18), transparent 32%),
-          linear-gradient(180deg, #fbf8f1 0%, var(--paper) 40%, #f4ecdf 100%);
+          radial-gradient(circle at top left, rgba(20, 57, 75, 0.1), transparent 24%),
+          radial-gradient(circle at 82% 0%, rgba(140, 107, 66, 0.08), transparent 16%),
+          linear-gradient(180deg, #f7f9fb 0%, #edf2f5 44%, #e6edf1 100%);
+        color: var(--ink);
         font-family: var(--sans);
-      }}
+      }
 
-      a {{
+      a {
         color: inherit;
         text-decoration: none;
-      }}
+      }
 
-      a:focus-visible,
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      a,
+      input,
+      select {
+        transition:
+          transform var(--fast),
+          background var(--fast),
+          border-color var(--fast),
+          box-shadow var(--fast),
+          color var(--fast);
+      }
+
       button:focus-visible,
-      .table-button:focus-visible {{
-        outline: 2px solid rgba(15, 107, 98, 0.32);
+      input:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 2px solid rgba(23, 71, 84, 0.34);
         outline-offset: 2px;
-      }}
+      }
 
-      .page-shell {{
-        min-height: 100vh;
-        padding: 20px;
-      }}
+      .page-shell {
+        padding: 16px;
+      }
 
-      .frame {{
+      .workspace {
         position: relative;
-        overflow: hidden;
-        max-width: 1440px;
+        max-width: 1680px;
         margin: 0 auto;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.38));
-        border: 1px solid rgba(255, 255, 255, 0.7);
-        border-radius: 36px;
-        box-shadow: var(--shadow-frame);
-        backdrop-filter: blur(20px);
-      }}
+        padding: 26px 28px 28px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: var(--radius-page);
+        background: linear-gradient(180deg, rgba(252, 253, 254, 0.96), rgba(245, 248, 250, 0.93));
+        box-shadow: var(--shadow-page);
+        overflow: visible;
+      }
 
-      .frame::before {{
+      .workspace::before {
         content: "";
         position: absolute;
         inset: 0;
         pointer-events: none;
         background:
-          linear-gradient(120deg, rgba(255, 255, 255, 0.45), transparent 34%),
-          radial-gradient(circle at 78% 16%, rgba(203, 143, 47, 0.18), transparent 22%);
-      }}
+          linear-gradient(125deg, rgba(255, 255, 255, 0.26), transparent 34%),
+          radial-gradient(circle at 78% 20%, rgba(20, 57, 75, 0.05), transparent 18%);
+      }
 
-      .nav {{
+      .masthead {
         position: sticky;
         top: 0;
-        z-index: 10;
+        z-index: 20;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
-        gap: 18px;
-        padding: 16px 28px;
-        background: linear-gradient(180deg, rgba(251, 248, 241, 0.95), rgba(251, 248, 241, 0.82));
-        backdrop-filter: blur(18px);
-        border-bottom: 1px solid rgba(22, 35, 43, 0.06);
-      }}
-
-      .brand {{
-        display: grid;
-        gap: 1px;
-      }}
-
-      .brand-kicker {{
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.16em;
-        color: var(--teal);
-        font-weight: 700;
-      }}
-
-      .brand-name {{
-        font-family: var(--serif);
-        font-size: 26px;
-        line-height: 1;
-        letter-spacing: -0.02em;
-        font-weight: 600;
-      }}
-
-      .brand-note {{
-        color: var(--ink-soft);
-        font-size: 13px;
-      }}
-
-      .nav-links {{
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: flex-end;
-      }}
-
-      .nav-pill {{
-        padding: 8px 12px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.58);
-        font-size: 13px;
-        color: var(--ink-soft);
-      }}
-
-      .nav-pill.primary {{
-        background: var(--teal);
-        border-color: var(--teal);
-        color: white;
-        box-shadow: var(--shadow-emphasis);
-      }}
-
-      .hero {{
-        display: grid;
-        grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
         gap: 22px;
-        padding: 30px 28px 14px;
-      }}
+        padding: 2px 0 22px;
+        margin-bottom: 26px;
+        border-bottom: 1px solid rgba(18, 32, 45, 0.08);
+        background: linear-gradient(180deg, rgba(252, 253, 254, 0.92), rgba(252, 253, 254, 0.78));
+        backdrop-filter: blur(10px);
+      }
 
-      .hero-panel,
-      .hero-aside,
-      .section-card,
-      .stat-card,
-      .cap-card,
-      .signal-card,
-      .surface-card {{
-        position: relative;
-        background: var(--mist);
-        border: 1px solid rgba(255, 255, 255, 0.72);
-        border-radius: var(--radius-xl);
-        backdrop-filter: blur(14px);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .hero-panel {{
-        padding: 28px;
+      .brand-cluster {
         display: grid;
-        gap: 18px;
-        position: relative;
-        overflow: hidden;
-      }}
+        gap: 6px;
+      }
 
-      .hero-kicker {{
+      .brand-kicker {
+        color: var(--teal);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .brand-title {
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 0.94;
+      }
+
+      .brand-copy {
+        color: var(--ink-soft);
+        font-size: 15px;
+        line-height: 1.55;
+        max-width: 62ch;
+      }
+
+      .masthead-tools {
+        display: grid;
+        justify-items: end;
+        gap: 12px;
+      }
+
+      .utility-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .utility-link,
+      .status-chip {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        width: fit-content;
-        padding: 6px 12px;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 14px;
         border-radius: 999px;
-        background: rgba(15, 107, 98, 0.07);
-        border: 1px solid rgba(15, 107, 98, 0.12);
-        color: var(--teal-strong);
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        font-size: 10px;
-      }}
-
-      .hero-title {{
-        margin: 0;
-        font-family: var(--serif);
-        font-size: clamp(30px, 3.2vw, 44px);
-        line-height: 1.06;
-        letter-spacing: -0.025em;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink-soft);
+        font-size: 13px;
         font-weight: 600;
-      }}
+      }
 
-      .hero-copy {{
-        max-width: 52ch;
+      .utility-link:hover,
+      .action-button:hover,
+      .history-item:hover,
+      .asset-card:hover,
+      .phase-card:hover,
+      .chapter-row:hover,
+      .event-card:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-hover);
+      }
+
+      .utility-link.primary {
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--teal) 0%, var(--teal-strong) 100%);
+        color: #f8fbfd;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--warning);
+        box-shadow: 0 0 0 4px rgba(154, 106, 46, 0.14);
+      }
+
+      .status-dot.live {
+        background: var(--success);
+        box-shadow: 0 0 0 4px rgba(31, 107, 89, 0.14);
+      }
+
+      .status-dot.error {
+        background: var(--danger);
+        box-shadow: 0 0 0 4px rgba(157, 74, 66, 0.16);
+      }
+
+      .status-dot.loading {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(0.86);
+          opacity: 0.72;
+        }
+      }
+
+      .intro-band {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1.24fr) minmax(360px, 0.76fr);
+        gap: 18px;
+        align-items: stretch;
+        margin-bottom: 28px;
+      }
+
+      .intro-copy,
+      .intro-board,
+      .surface,
+      .subsurface {
+        position: relative;
+        border-radius: var(--radius-xl);
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        box-shadow: var(--shadow-surface);
+      }
+
+      .intro-copy {
+        overflow: hidden;
+        padding: 30px 32px 30px;
+        background:
+          linear-gradient(140deg, rgba(249, 252, 254, 0.96), rgba(242, 247, 249, 0.92));
+      }
+
+      .intro-copy::after {
+        content: "";
+        position: absolute;
+        right: -62px;
+        bottom: -72px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(20, 57, 75, 0.08), transparent 70%);
+        pointer-events: none;
+      }
+
+      .intro-label,
+      .section-kicker,
+      .subsurface-label,
+      .mini-overline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--teal);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .intro-title {
+        max-width: 12ch;
+        margin: 18px 0 16px;
+        font-size: clamp(42px, 5vw, 66px);
+        font-weight: 800;
+        letter-spacing: -0.065em;
+        line-height: 0.93;
+      }
+
+      .intro-text {
+        max-width: 62ch;
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 17px;
+        line-height: 1.72;
+      }
+
+      .intro-points {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .intro-point {
+        min-height: 126px;
+        padding: 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.72);
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .intro-point strong {
+        font-size: 17px;
+        line-height: 1.22;
+      }
+
+      .intro-point span {
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .intro-board {
+        padding: 22px;
+        background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(244, 248, 250, 0.92));
+        display: grid;
+        gap: 14px;
+        align-content: start;
+      }
+
+      .board-callout {
+        padding: 16px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+      }
+
+      .board-title {
+        margin: 6px 0 0;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 1;
+      }
+
+      .board-copy {
+        margin: 10px 0 0;
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .board-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .board-list-item {
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+      }
+
+      .board-list-item strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .board-list-item span,
+      .mono-copy {
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .mono,
+      .mono-copy {
+        font-family: var(--mono);
+      }
+
+      .content-stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .history-surface {
+        position: relative;
+      }
+
+      .surface {
+        padding: 26px;
+        background: var(--surface);
+        backdrop-filter: blur(10px);
+      }
+
+      .subsurface {
+        padding: 20px;
+        background: var(--surface-muted);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .section-title {
+        margin: 8px 0 6px;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: -0.055em;
+        line-height: 1.02;
+      }
+
+      .section-copy {
+        max-width: 64ch;
+        margin: 0;
         color: var(--ink-soft);
         font-size: 15px;
         line-height: 1.62;
-      }}
+      }
 
-      .hero-actions {{
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        width: fit-content;
-        padding: 8px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.42);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .cta {{
+      .section-aside {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 10px;
-        min-height: 44px;
+        gap: 8px;
         padding: 10px 14px;
         border-radius: 999px;
-        font-size: 13px;
-        font-weight: 700;
-        border: 1px solid var(--line);
-        transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
-      }}
-
-      .cta:hover {{
-        transform: translateY(-1px);
-      }}
-
-      .cta-primary {{
-        background: linear-gradient(135deg, var(--teal) 0%, #0d5956 100%);
-        color: white;
-        border-color: transparent;
-        box-shadow: var(--shadow-emphasis);
-      }}
-
-      .cta-secondary {{
-        background: rgba(255, 255, 255, 0.78);
-        color: var(--ink);
-      }}
-
-      .cta-primary:hover {{
-        box-shadow: var(--shadow-emphasis-strong);
-      }}
-
-      .cta-secondary:hover {{
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .hero-stats {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-      }}
-
-      .stat-card {{
-        padding: 14px;
-        display: grid;
-        gap: 6px;
-        border-left: 3px solid transparent;
-        border-image: linear-gradient(180deg, var(--teal), rgba(15, 107, 98, 0.15)) 1;
-      }}
-
-      .stat-label {{
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.84);
         color: var(--ink-soft);
-      }}
-
-      .stat-value {{
-        font-family: var(--serif);
-        font-size: 26px;
-        line-height: 1;
+        font-size: 12px;
         font-weight: 600;
-      }}
+        text-align: right;
+      }
 
-      .stat-note {{
-        font-size: 12px;
-        line-height: 1.45;
-        color: var(--ink-soft);
-      }}
-
-      .hero-aside {{
-        padding: 16px;
+      .intake-layout {
         display: grid;
-        gap: 12px;
-        align-content: start;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 230, 211, 0.55));
-        border-left: 3px solid rgba(15, 107, 98, 0.12);
-      }}
+        grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+        gap: 20px;
+      }
 
-      .aside-header {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }}
-
-      .aside-title {{
-        margin: 0;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--ink-soft);
-      }}
-
-      .aside-kpi {{
-        margin: 4px 0 0;
-        font-family: var(--serif);
-        font-size: 24px;
-        line-height: 1;
-      }}
-
-      .health-badge {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.8);
-        border: 1px solid var(--line);
-        font-size: 12px;
-        color: var(--ink-soft);
-      }}
-
-      .health-dot {{
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #b28d58;
-        box-shadow: 0 0 0 4px rgba(178, 141, 88, 0.16);
-      }}
-
-      .health-dot.ok {{
-        background: var(--teal);
-        box-shadow: 0 0 0 4px rgba(15, 107, 98, 0.16);
-      }}
-
-      .signal-stack {{
-        display: grid;
-        gap: 8px;
-      }}
-
-      .signal-card {{
-        padding: 10px 12px;
-        display: grid;
-        gap: 4px;
-      }}
-
-      .signal-label {{
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: var(--ink-soft);
-      }}
-
-      .signal-value {{
-        font-size: 14px;
-        font-weight: 700;
-      }}
-
-      .signal-note {{
-        font-size: 12px;
-        line-height: 1.45;
-        color: var(--ink-soft);
-      }}
-
-      .signal-pill-row {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }}
-
-      .signal-pill {{
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        color: var(--ink-soft);
-        font-size: 11px;
-        font-weight: 700;
-      }}
-
-      .main-grid {{
-        display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
-        gap: 22px;
-        padding: 22px 28px 30px;
-      }}
-
-      .stack {{
-        display: grid;
-        gap: 18px;
-      }}
-
-      .section-card {{
-        padding: 24px;
-      }}
-
-      .section-title {{
-        margin: 0 0 10px;
-        font-family: var(--serif);
-        font-size: 28px;
-        line-height: 1.1;
-        letter-spacing: -0.03em;
-        font-weight: 600;
-        position: relative;
-        padding-bottom: 12px;
-      }}
-
-      .section-title::after {{
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 48px;
-        height: 2px;
-        background: linear-gradient(90deg, var(--teal), var(--gold));
-        border-radius: 2px;
-      }}
-
-      .section-copy {{
-        margin: 6px 0 0;
-        color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.62;
-      }}
-
-      .briefing-section {{
-        padding: 0;
-        overflow: hidden;
-      }}
-
-      .briefing-summary {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 16px 20px;
-        cursor: pointer;
-        list-style: none;
-      }}
-
-      .briefing-summary::-webkit-details-marker {{
-        display: none;
-      }}
-
-      .briefing-summary:focus-visible {{
-        outline: 2px solid rgba(15, 107, 98, 0.32);
-        outline-offset: -2px;
-      }}
-
-      .briefing-summary-copy {{
-        min-width: 0;
-        display: grid;
-        gap: 5px;
-      }}
-
-      .briefing-summary .section-title {{
-        margin: 0;
-        padding: 0;
-        font-size: 22px;
-      }}
-
-      .briefing-summary .section-title::after {{
-        display: none;
-      }}
-
-      .briefing-meta {{
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.45;
-      }}
-
-      .briefing-toggle {{
-        width: 36px;
-        height: 36px;
-        border-radius: 999px;
-        flex-shrink: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.68);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .briefing-toggle::before {{
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-right: 2px solid var(--ink-soft);
-        border-bottom: 2px solid var(--ink-soft);
-        transform: rotate(45deg);
-        margin-top: -3px;
-        transition: transform var(--motion-fast), margin-top var(--motion-fast);
-      }}
-
-      .briefing-section[open] .briefing-summary {{
-        padding-bottom: 14px;
-        border-bottom: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .briefing-section[open] .briefing-toggle::before {{
-        transform: rotate(225deg);
-        margin-top: 3px;
-      }}
-
-      .briefing-body {{
-        padding: 0 20px 20px;
-      }}
-
-      .briefing-section.compact-section .briefing-summary {{
-        padding: 14px 18px;
-      }}
-
-      .briefing-section.compact-section .briefing-body {{
-        padding: 0 18px 18px;
-      }}
-
-      .briefing-section.compact-section .briefing-summary .section-title {{
-        font-size: 20px;
-      }}
-
-      .workflow {{
-        margin-top: 16px;
-        display: grid;
-        gap: 10px;
-      }}
-
-      .workflow-step {{
-        display: grid;
-        grid-template-columns: 48px minmax(0, 1fr);
-        gap: 12px;
-        align-items: start;
-        padding: 14px;
-        border-radius: var(--radius-md);
-        background: rgba(255, 255, 255, 0.54);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .workflow-index {{
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        display: grid;
-        place-items: center;
-        background: linear-gradient(135deg, rgba(15, 107, 98, 0.12), rgba(203, 143, 47, 0.14));
-        color: var(--teal-strong);
-        font-family: var(--serif);
-        font-size: 22px;
-        flex-shrink: 0;
-      }}
-
-      .workflow-label {{
-        font-size: 16px;
-        font-weight: 700;
-      }}
-
-      .workflow-body {{
-        margin-top: 4px;
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.55;
-      }}
-
-      .cap-grid,
-      .surface-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 20px;
-      }}
-
-      .section-card.compact-section {{
-        padding: 20px;
-      }}
-
-      .compact-section .section-title {{
-        margin-bottom: 8px;
-        font-size: 25px;
-        padding-bottom: 10px;
-      }}
-
-      .compact-section .section-copy {{
-        font-size: 13px;
-        line-height: 1.52;
-      }}
-
-      .surface-grid.compact-grid,
-      .cap-grid.compact-grid {{
-        gap: 10px;
-        margin-top: 14px;
-      }}
-
-      .cap-card,
-      .surface-card {{
-        padding: 18px;
-        min-height: 170px;
-      }}
-
-      .compact-grid .cap-card,
-      .compact-grid .surface-card {{
-        padding: 14px;
-        min-height: 0;
-      }}
-
-      .cap-kicker,
-      .surface-kicker {{
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--teal);
-        font-weight: 700;
-      }}
-
-      .cap-title,
-      .surface-title {{
-        margin: 10px 0 8px;
-        font-size: 18px;
-        line-height: 1.25;
-        font-weight: 700;
-      }}
-
-      .compact-grid .cap-title,
-      .compact-grid .surface-title {{
-        margin: 8px 0 6px;
-        font-size: 16px;
-        line-height: 1.2;
-      }}
-
-      .cap-body,
-      .surface-body {{
-        color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.7;
-      }}
-
-      .compact-grid .cap-body,
-      .compact-grid .surface-body {{
-        font-size: 13px;
-        line-height: 1.5;
-      }}
-
-      .signal-matrix {{
-        display: grid;
-        gap: 12px;
-        margin-top: 20px;
-      }}
-
-      .signal-matrix.compact-matrix {{
-        gap: 10px;
-        margin-top: 14px;
-      }}
-
-      .mini-list {{
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        display: grid;
-        gap: 10px;
-      }}
-
-      .mini-list.compact-list {{
-        gap: 8px;
-      }}
-
-      .mini-list li {{
-        display: grid;
-        gap: 4px;
-        padding: 12px 14px;
-        border-radius: var(--radius-sm);
-        background: rgba(255, 255, 255, 0.52);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .compact-list li {{
-        gap: 3px;
-        padding: 10px 12px;
-      }}
-
-      .mini-list strong {{
-        font-size: 14px;
-      }}
-
-      .compact-list strong {{
-        font-size: 13px;
-      }}
-
-      .mini-list span {{
-        font-size: 13px;
-        line-height: 1.6;
-        color: var(--ink-soft);
-      }}
-
-      .compact-list span {{
-        font-size: 12px;
-        line-height: 1.45;
-      }}
-
-      .api-shell {{
-        margin-top: 18px;
-        padding: 18px;
+      .dropzone-panel {
+        padding: 22px;
         border-radius: var(--radius-lg);
-        background: linear-gradient(180deg, rgba(22, 35, 43, 0.96), rgba(14, 26, 31, 0.96));
-        color: #ebf1ee;
-      }}
+        border: 1px dashed rgba(23, 71, 84, 0.24);
+        background:
+          linear-gradient(180deg, rgba(246, 251, 253, 0.96), rgba(251, 253, 255, 0.92));
+      }
 
-      .api-shell.compact-shell {{
-        margin-top: 14px;
-        padding: 14px;
-      }}
-
-      .api-row {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 10px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      }}
-
-      .compact-shell .api-row {{
-        gap: 10px;
-        padding: 8px 0;
-      }}
-
-      .api-row:last-child {{
-        border-bottom: none;
-      }}
-
-      .api-method {{
-        display: inline-flex;
-        min-width: 60px;
-        justify-content: center;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(203, 143, 47, 0.18);
-        color: #f5d9a8;
-        font-size: 12px;
-        font-family: var(--mono);
-        font-weight: 700;
-        text-transform: uppercase;
-      }}
-
-      .compact-shell .api-method {{
-        min-width: 54px;
-        padding: 5px 8px;
-        font-size: 11px;
-      }}
-
-      .api-path {{
-        flex: 1;
-        font-family: var(--mono);
-        font-size: 13px;
-        color: #d8e4de;
-      }}
-
-      .compact-shell .api-path {{
-        font-size: 12px;
-      }}
-
-      .api-copy {{
-        color: #97aea4;
-        font-size: 13px;
-      }}
-
-      .compact-shell .api-copy {{
-        font-size: 12px;
-        line-height: 1.4;
-      }}
-
-      .footer {{
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-start;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 28px 22px;
-        color: var(--ink-soft);
-        font-size: 12px;
-        border-top: 1px solid var(--line);
-        margin: 0 28px;
-      }}
-
-      .footer-pill {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.58);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .footer code {{
-        font-family: var(--mono);
-        font-size: 12px;
-      }}
-
-      .control-deck {{
-        padding: 8px 28px 28px;
-      }}
-
-      .refresh-strip {{
+      .dropzone {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 14px;
-        margin-bottom: 18px;
-      }}
+      }
 
-      .refresh-card {{
-        padding: 14px 16px;
-        border-radius: 18px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 242, 232, 0.62));
-        border: 1px solid rgba(255, 255, 255, 0.78);
-        display: grid;
-        gap: 8px;
-        box-shadow: var(--shadow-surface);
-      }}
+      .dropzone[data-dragging="true"] {
+        transform: translateY(-1px);
+      }
 
-      .refresh-head {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }}
-
-      .refresh-kicker {{
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: var(--ink-soft);
-        font-weight: 700;
-      }}
-
-      .refresh-state {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        font-weight: 700;
-      }}
-
-      .status-dot {{
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #b28d58;
-        box-shadow: 0 0 0 4px rgba(178, 141, 88, 0.14);
-      }}
-
-      .status-dot.live {{
-        background: var(--teal);
-        box-shadow: 0 0 0 4px rgba(15, 107, 98, 0.18);
-      }}
-
-      .status-dot.refreshing {{
-        background: var(--gold);
-        box-shadow: 0 0 0 4px rgba(203, 143, 47, 0.18);
-        animation: pulse 1.4s ease-in-out infinite;
-      }}
-
-      .status-dot.stale {{
-        background: #a84f4f;
-        box-shadow: 0 0 0 4px rgba(168, 79, 79, 0.14);
-      }}
-
-      @keyframes pulse {{
-        0%, 100% {{
-          transform: scale(1);
-          opacity: 1;
-        }}
-        50% {{
-          transform: scale(1.12);
-          opacity: 0.72;
-        }}
-      }}
-
-      .refresh-meta {{
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.45;
-      }}
-
-      .workspace-shell {{
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 24px;
-      }}
-
-      .workspace-card {{
-        position: relative;
-        overflow: hidden;
-        padding: 20px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 242, 230, 0.6));
-        border: 1px solid rgba(255, 255, 255, 0.78);
-        border-radius: var(--radius-xl);
-        backdrop-filter: blur(16px);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .workspace-card.full-width {{
-        grid-column: 1 / -1;
-      }}
-
-      .workspace-header {{
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: start;
-        gap: 14px 18px;
-        margin-bottom: 14px;
-      }}
-
-      .workspace-header-text {{
-        max-width: 68ch;
-      }}
-
-      .workspace-kicker {{
-        margin: 0 0 6px;
-        color: var(--teal);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }}
-
-      .workspace-title {{
-        margin: 0;
-        font-family: var(--serif);
+      .dropzone-title {
         font-size: 26px;
+        font-weight: 800;
         line-height: 1.08;
         letter-spacing: -0.03em;
-        font-weight: 600;
-      }}
+      }
 
-      .workspace-copy {{
-        margin: 8px 0 0;
+      .dropzone-copy {
         color: var(--ink-soft);
-        font-size: 14px;
-        line-height: 1.6;
-      }}
+        font-size: 15px;
+        line-height: 1.65;
+      }
 
-      .control-chip {{
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .tag {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 11px;
+        min-height: 34px;
+        padding: 8px 12px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.8);
-        border: 1px solid var(--line);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.82);
         color: var(--ink-soft);
         font-size: 12px;
-        white-space: nowrap;
-      }}
+        font-weight: 700;
+      }
 
-      .workspace-card.run-console .panel:first-of-type .field-grid {{
-        align-items: end;
-      }}
-
-      .workspace-card.run-console .panel:first-of-type .button-row {{
-        margin-top: 8px;
-      }}
-
-      .workspace-card.run-console .result-shell {{
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }}
-
-      .workspace-grid {{
-        display: grid;
-        grid-template-columns: repeat(12, minmax(0, 1fr));
-        gap: 16px;
-      }}
-
-      .panel {{
-        grid-column: span 12;
+      .dropzone-file {
         padding: 16px;
-        border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.52);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.68);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        display: grid;
+        gap: 4px;
+      }
 
-      .panel.half {{
-        grid-column: span 6;
-      }}
+      .dropzone-file strong {
+        font-size: 16px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
 
-      .panel.third {{
-        grid-column: span 4;
-      }}
-
-      .panel-title {{
-        margin: 0;
-        font-size: 17px;
-        line-height: 1.2;
-      }}
-
-      .panel-copy {{
-        margin: 8px 0 0;
+      .dropzone-file span {
         color: var(--ink-soft);
         font-size: 13px;
         line-height: 1.55;
-      }}
+      }
 
-      .form-grid {{
-        display: grid;
-        gap: 12px;
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .action-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 46px;
+        padding: 12px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .action-button.primary {
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--teal) 0%, var(--teal-strong) 100%);
+        color: #f7fbfd;
+        box-shadow: 0 16px 30px rgba(18, 55, 66, 0.18);
+      }
+
+      .action-button.secondary {
+        background: rgba(255, 255, 255, 0.86);
+      }
+
+      .action-button.gold {
+        background: linear-gradient(135deg, #a77a43 0%, #8c6638 100%);
+        border-color: transparent;
+        color: #fcfbf9;
+      }
+
+      .action-button.ghost {
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .action-button.small {
+        min-height: 38px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .action-button:disabled {
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+        opacity: 0.48;
+      }
+
+      .banner {
         margin-top: 14px;
-      }}
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.74);
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.55;
+      }
 
-      .form-grid.dense-form {{
-        gap: 10px;
-        margin-top: 12px;
-      }}
+      .banner.success {
+        background: var(--success-soft);
+        border-color: rgba(31, 107, 89, 0.18);
+        color: var(--success);
+      }
 
-      .field-grid {{
+      .banner.warning {
+        background: var(--warning-soft);
+        border-color: rgba(154, 106, 46, 0.18);
+        color: var(--warning);
+      }
+
+      .banner.error {
+        background: var(--danger-soft);
+        border-color: rgba(157, 74, 66, 0.18);
+        color: var(--danger);
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        border: 1px dashed rgba(20, 32, 40, 0.18);
+        background: rgba(255, 255, 255, 0.68);
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .book-stack {
         display: grid;
-        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .book-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .book-title {
+        margin: 0;
+        font-size: 38px;
+        font-weight: 800;
+        letter-spacing: -0.06em;
+        line-height: 0.98;
+      }
+
+      .book-meta,
+      .book-note,
+      .phase-copy,
+      .asset-note,
+      .history-copy,
+      .event-copy,
+      .chapter-copy,
+      .metric-note,
+      .table-note,
+      .filter-help {
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.58;
+        overflow-wrap: anywhere;
+      }
+
+      .book-brief {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .path-block {
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.68);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        overflow-wrap: anywhere;
+      }
+
+      .metric-grid,
+      .summary-grid,
+      .snapshot-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
-      }}
+      }
 
-      .field-grid.dense-grid {{
+      .metric-card,
+      .summary-card,
+      .snapshot-card {
+        min-height: 110px;
+        padding: 16px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .metric-label,
+      .summary-label,
+      .snapshot-label,
+      .asset-label,
+      .chapter-label,
+      .history-label {
+        color: var(--ink-faint);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .metric-value,
+      .summary-value,
+      .snapshot-value {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 0.98;
+      }
+
+      .operations-stack {
+        display: grid;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .support-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .run-console,
+      .delivery-column,
+      .history-shell {
+        display: grid;
+        gap: 14px;
+      }
+
+      .delivery-column {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .phase-rail {
+        display: grid;
+        gap: 12px;
+      }
+
+      .phase-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: start;
+        padding: 16px 18px;
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.76);
+      }
+
+      .phase-card.current {
+        background: linear-gradient(180deg, rgba(245, 250, 252, 0.98), rgba(252, 253, 255, 0.92));
+        border-color: rgba(23, 71, 84, 0.22);
+      }
+
+      .phase-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: rgba(23, 71, 84, 0.08);
+        color: var(--teal);
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .phase-title {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+
+      .status-badge.pending,
+      .status-badge.queued {
+        background: rgba(255, 255, 255, 0.9);
+        border-color: rgba(20, 32, 40, 0.08);
+        color: var(--ink-soft);
+      }
+
+      .run-action-strip {
+        margin-top: 14px;
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.72);
+        display: grid;
         gap: 10px;
-      }}
+      }
 
-      .field {{
+      .run-action-strip[hidden] {
+        display: none;
+      }
+
+      .run-action-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--ink);
+      }
+
+      .run-action-copy {
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .status-badge.running,
+      .status-badge.draining {
+        background: var(--teal-soft);
+        border-color: rgba(23, 71, 84, 0.18);
+        color: var(--teal);
+      }
+
+      .status-badge.paused,
+      .status-badge.warning {
+        background: var(--warning-soft);
+        border-color: rgba(154, 106, 46, 0.18);
+        color: var(--warning);
+      }
+
+      .status-badge.succeeded,
+      .status-badge.active,
+      .status-badge.exported,
+      .status-badge.partially_exported {
+        background: var(--success-soft);
+        border-color: rgba(31, 107, 89, 0.18);
+        color: var(--success);
+      }
+
+      .status-badge.failed,
+      .status-badge.cancelled,
+      .status-badge.retryable_failed {
+        background: var(--danger-soft);
+        border-color: rgba(157, 74, 66, 0.18);
+        color: var(--danger);
+      }
+
+      .delivery-column {
+        align-content: start;
+      }
+
+      .subsurface-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .subsurface-title {
+        margin: 8px 0 0;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1.08;
+      }
+
+      .asset-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .asset-card {
+        padding: 16px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        display: grid;
+        gap: 10px;
+      }
+
+      .asset-title {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.22;
+      }
+
+      .asset-meta {
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .attention-shell {
+        display: grid;
+        gap: 12px;
+      }
+
+      .attention-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .attention-card {
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        display: grid;
+        gap: 6px;
+      }
+
+      .attention-card strong {
+        font-size: 15px;
+        line-height: 1.4;
+      }
+
+      .table-shell {
+        overflow: auto;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(20, 32, 40, 0.08);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--ink-faint);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      td {
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .chapter-list,
+      .event-list,
+      .history-list,
+      .history-stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .chapter-row,
+      .event-card,
+      .history-item {
+        min-width: 0;
+        padding: 18px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .chapter-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+      }
+
+      .chapter-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: rgba(23, 71, 84, 0.08);
+        color: var(--teal);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .chapter-title {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .event-card {
         display: grid;
         gap: 8px;
-      }}
+      }
 
-      .dense-form .field,
-      .filter-toolbar.compact .field {{
+      .event-head,
+      .history-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .event-title,
+      .history-title {
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1.32;
+        letter-spacing: -0.02em;
+        overflow-wrap: anywhere;
+      }
+
+      .history-item {
+        display: grid;
+        gap: 12px;
+      }
+
+      .history-stack {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .history-progress {
+        display: grid;
+        gap: 8px;
+      }
+
+      .history-path {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(244, 247, 249, 0.96);
+        border: 1px solid rgba(18, 32, 45, 0.08);
+        color: var(--ink-faint);
+        font-size: 12px;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+      }
+
+      .meter {
+        position: relative;
+        width: 100%;
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(20, 32, 40, 0.08);
+      }
+
+      .meter span {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        border-radius: inherit;
+        background: linear-gradient(135deg, var(--teal) 0%, #2d6978 100%);
+      }
+
+      .filter-stack {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
         gap: 6px;
-      }}
+      }
 
-      .visually-hidden {{
+      .field label {
+        color: var(--ink-faint);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .field input,
+      .field select {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(20, 32, 40, 0.12);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink);
+      }
+
+      .field.search-field {
+        grid-column: 1 / -1;
+      }
+
+      .footer-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 28px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(20, 32, 40, 0.08);
+      }
+
+      .footer-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(20, 32, 40, 0.08);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .sr-only {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -1078,4766 +1181,2198 @@ def build_homepage_html(*, app_name: str, app_version: str, api_prefix: str) -> 
         margin: -1px;
         overflow: hidden;
         clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
         border: 0;
-      }}
-
-      .field.span-12 {{
-        grid-column: span 12;
-      }}
-
-      .field.span-8 {{
-        grid-column: span 8;
-      }}
-
-      .field.span-6 {{
-        grid-column: span 6;
-      }}
-
-      .field.span-4 {{
-        grid-column: span 4;
-      }}
-
-      .field.span-3 {{
-        grid-column: span 3;
-      }}
-
-      .field label {{
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--ink-soft);
-      }}
-
-      .dense-form .field label,
-      .filter-toolbar.compact .field label {{
-        font-size: 11px;
-        letter-spacing: 0.06em;
-      }}
-
-      .field input,
-      .field select,
-      .field textarea {{
-        width: 100%;
-        border: 1px solid rgba(22, 35, 43, 0.14);
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.9);
-        color: var(--ink);
-        padding: 12px 14px;
-        font: inherit;
-        outline: none;
-        transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
-      }}
-
-      .field textarea {{
-        min-height: 112px;
-        resize: vertical;
-      }}
-
-      .dense-form .field input,
-      .dense-form .field select,
-      .dense-form .field textarea,
-      .filter-toolbar.compact .field input,
-      .filter-toolbar.compact .field select,
-      .filter-toolbar.compact .field textarea {{
-        min-height: 44px;
-        padding: 10px 12px;
-        font-size: 14px;
-      }}
-
-      .dense-form .field textarea {{
-        min-height: 96px;
-      }}
-
-      .field input:focus,
-      .field select:focus,
-      .field textarea:focus {{
-        border-color: rgba(15, 107, 98, 0.36);
-        box-shadow: var(--focus-ring);
-      }}
-
-      .field-hint {{
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.6;
-      }}
-
-      .dense-form .field-hint {{
-        font-size: 11px;
-        line-height: 1.45;
-      }}
-
-      .file-picker {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px;
-        border: 1px solid rgba(22, 35, 43, 0.14);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.9);
-        transition: border-color var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
-      }}
-
-      .dense-form .file-picker {{
-        gap: 12px;
-        padding: 12px 14px;
-        border-radius: 16px;
-      }}
-
-      .file-picker:focus-within {{
-        border-color: rgba(15, 107, 98, 0.36);
-        box-shadow: var(--focus-ring);
-      }}
-
-      .file-picker[data-has-file="true"] {{
-        border-color: rgba(15, 107, 98, 0.24);
-        background: rgba(237, 248, 246, 0.92);
-      }}
-
-      .file-picker-copy {{
-        min-width: 0;
-        display: grid;
-        gap: 4px;
-      }}
-
-      .file-picker-title {{
-        font-size: 15px;
-        font-weight: 700;
-      }}
-
-      .dense-form .file-picker-title {{
-        font-size: 14px;
-      }}
-
-      .file-picker-note {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.6;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }}
-
-      .dense-form .file-picker-note {{
-        font-size: 12px;
-        line-height: 1.45;
-      }}
-
-      .button-row {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 10px;
-      }}
-
-      .action-toolbar {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.46);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .action-toolbar.primary-strip {{
-        margin-top: 12px;
-      }}
-
-      .button {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        border: 1px solid rgba(22, 35, 43, 0.12);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.86);
-        color: var(--ink);
-        padding: 12px 16px;
-        font: inherit;
-        font-size: 14px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
-      }}
-
-      .button.dense {{
-        min-height: 44px;
-        padding: 10px 14px;
-        font-size: 13px;
-      }}
-
-      .button:hover {{
-        transform: translateY(-1px);
-      }}
-
-      .button.primary {{
-        background: linear-gradient(135deg, var(--teal) 0%, #0d5956 100%);
-        color: white;
-        border-color: transparent;
-        box-shadow: var(--shadow-emphasis);
-      }}
-
-      .button.gold {{
-        background: linear-gradient(135deg, #c88d2f 0%, #a9721e 100%);
-        color: white;
-        border-color: transparent;
-        box-shadow: var(--shadow-gold);
-      }}
-
-      .button.ghost {{
-        background: rgba(255, 255, 255, 0.52);
-      }}
-
-      .button:disabled {{
-        cursor: not-allowed;
-        opacity: 0.55;
-        transform: none;
-        box-shadow: none;
-      }}
-
-      .status-banner {{
-        margin-top: 14px;
-        padding: 10px 12px;
-        border-radius: 14px;
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        background: rgba(255, 255, 255, 0.68);
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.5;
-      }}
-
-      .control-strip {{
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px 12px;
-        align-items: center;
-      }}
-
-      .control-strip .status-banner {{
-        margin-top: 0;
-        padding: 9px 11px;
-        font-size: 12px;
-        line-height: 1.45;
-      }}
-
-      .status-banner.error {{
-        border-color: rgba(151, 61, 61, 0.22);
-        background: rgba(171, 71, 63, 0.08);
-        color: #7e312b;
-      }}
-
-      .status-banner.success {{
-        border-color: rgba(15, 107, 98, 0.22);
-        background: rgba(15, 107, 98, 0.08);
-        color: #0c5750;
-      }}
-
-      .kpi-grid {{
-        margin-top: 14px;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-      }}
-
-      .kpi-grid.mini-kpis {{
-        margin-top: 10px;
-        gap: 8px;
-      }}
-
-      .kpi-card {{
-        padding: 14px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-      }}
-
-      .kpi-card.mini-kpi {{
-        padding: 10px 12px;
-        border-radius: 14px;
-      }}
-
-      .kpi-label {{
-        color: var(--ink-soft);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }}
-
-      .kpi-value {{
-        margin-top: 6px;
-        font-family: var(--serif);
-        font-size: 28px;
-        line-height: 1;
-      }}
-
-      .mini-kpi .kpi-value {{
-        margin-top: 4px;
-        font-size: 22px;
-      }}
-
-      .kpi-note {{
-        margin-top: 6px;
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.55;
-      }}
-
-      .mini-kpi .kpi-note {{
-        margin-top: 4px;
-        font-size: 11px;
-        line-height: 1.4;
-      }}
-
-      .result-shell {{
-        margin-top: 14px;
-        display: grid;
-        gap: 14px;
-      }}
-
-      .result-shell.history-split {{
-        grid-template-columns: minmax(0, 1fr);
-        align-items: stretch;
-      }}
-
-      .result-shell.overview-split {{
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-items: start;
-      }}
-
-      .result-shell.workspace-overview-stack {{
-        grid-template-columns: minmax(0, 1fr);
-        align-items: stretch;
-      }}
-
-      .worklist-board-shell {{
-        display: grid;
-        grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.92fr);
-        gap: 14px;
-        margin-top: 14px;
-        align-items: start;
-      }}
-
-      .worklist-primary,
-      .worklist-sidebar {{
-        min-width: 0;
-        display: grid;
-        gap: 14px;
-      }}
-
-      .worklist-primary > .queue-grid {{
-        margin-top: 0;
-      }}
-
-      .owner-insights-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }}
-
-      .result-card {{
-        min-width: 0;
-        padding: 14px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.6);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .result-card.compact-card {{
-        padding: 12px;
-      }}
-
-      .history-detail-card {{
-        position: static;
-        width: 100%;
-      }}
-
-      .chapter-detail-card {{
-        position: sticky;
-        top: 92px;
-      }}
-
-      .result-head {{
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        align-items: flex-start;
-        margin-bottom: 10px;
-      }}
-
-      .result-title {{
-        margin: 0;
-        font-size: 17px;
-      }}
-
-      .result-meta {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.6;
-        overflow-wrap: anywhere;
-      }}
-
-      .compact-card .result-head {{
-        margin-bottom: 8px;
-      }}
-
-      .compact-card .result-title {{
-        font-size: 16px;
-      }}
-
-      .compact-card .result-meta {{
-        font-size: 12px;
-        line-height: 1.5;
-      }}
-
-      .compact-card .kpi-grid {{
-        gap: 10px;
-      }}
-
-      .compact-card .kpi-card {{
-        padding: 12px;
-      }}
-
-      .pill-row {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 8px;
-      }}
-
-      .pill {{
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border-radius: 999px;
-        padding: 7px 10px;
-        background: rgba(15, 107, 98, 0.08);
-        border: 1px solid rgba(15, 107, 98, 0.12);
-        color: var(--teal-strong);
-        font-size: 12px;
-        font-weight: 700;
-      }}
-
-      .pill.warn {{
-        background: rgba(201, 143, 47, 0.12);
-        border-color: rgba(201, 143, 47, 0.16);
-        color: #8a6318;
-      }}
-
-      .pill.soft {{
-        background: rgba(22, 35, 43, 0.06);
-        border-color: rgba(22, 35, 43, 0.08);
-        color: var(--ink-soft);
-      }}
-
-      .data-table {{
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 10px;
-      }}
-
-      .data-table th,
-      .data-table td {{
-        padding: 10px 8px;
-        border-bottom: 1px solid rgba(22, 35, 43, 0.08);
-        text-align: left;
-        vertical-align: top;
-        font-size: 13px;
-        overflow-wrap: anywhere;
-      }}
-
-      .data-table th {{
-        color: var(--ink-soft);
-        font-weight: 700;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }}
-
-      .data-table.compact th,
-      .data-table.compact td {{
-        padding: 8px 6px;
-        font-size: 12px;
-      }}
-
-      .data-table.dense-table th,
-      .data-table.dense-table td {{
-        padding: 7px 6px;
-        font-size: 12px;
-        line-height: 1.4;
-      }}
-
-      .data-table.dense-table th {{
-        font-size: 10px;
-        letter-spacing: 0.06em;
-      }}
-
-      .table-scroll {{
-        margin-top: 10px;
-        max-height: 320px;
-        overflow: auto;
-      }}
-
-      .table-scroll.compact {{
-        max-height: 260px;
-      }}
-
-      .table-scroll.dense-scroll {{
-        max-height: 240px;
-      }}
-
-      .history-table-shell {{
-        margin-top: 10px;
-        max-height: none;
-        overflow-x: auto;
-        overflow-y: visible;
-      }}
-
-      .data-table.history-table,
-      .data-table.history-detail-table {{
-        table-layout: fixed;
-      }}
-
-      .data-table.history-table th:nth-child(1) {{
-        width: 28%;
-      }}
-
-      .data-table.history-table th:nth-child(2),
-      .data-table.history-table th:nth-child(3) {{
-        width: 7%;
-      }}
-
-      .data-table.history-table th:nth-child(4) {{
-        width: 11%;
-      }}
-
-      .data-table.history-table th:nth-child(5) {{
-        width: 14%;
-      }}
-
-      .data-table.history-table th:nth-child(6) {{
-        width: 33%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(1) {{
-        width: 8%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(2) {{
-        width: 32%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(3) {{
-        width: 12%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(4) {{
-        width: 10%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(5) {{
-        width: 16%;
-      }}
-
-      .data-table.history-detail-table th:nth-child(6) {{
-        width: 22%;
-      }}
-
-      .table-action-group {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: flex-start;
-        min-width: 0;
-      }}
-
-      .table-action-group.dense-actions {{
-        gap: 6px;
-      }}
-
-      .table-action-group .button {{
-        flex: 0 1 auto;
-        min-width: 0;
-        max-width: 100%;
-        white-space: normal;
-        text-align: center;
-        line-height: 1.3;
-      }}
-
-      .table-action-group .button.dense {{
-        min-height: 40px;
-        padding: 9px 12px;
-      }}
-
-      .table-action-group.dense-actions .button.dense {{
-        padding: 8px 10px;
-        font-size: 12px;
-      }}
-
-      .queue-grid {{
-        display: grid;
-        gap: 12px;
-        margin-top: 14px;
-      }}
-
-      .queue-item {{
-        padding: 14px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.62);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .queue-item.clickable {{
-        cursor: pointer;
-        transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast);
-      }}
-
-      .queue-item.clickable:hover {{
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-surface-hover);
-      }}
-
-      .queue-item.is-active {{
-        border-color: rgba(15, 107, 98, 0.28);
-        box-shadow: var(--focus-ring);
-      }}
-
-      .queue-head {{
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-      }}
-
-      .queue-rank {{
-        width: 36px;
-        height: 36px;
-        display: grid;
-        place-items: center;
-        border-radius: 12px;
-        background: linear-gradient(135deg, rgba(15, 107, 98, 0.16), rgba(203, 143, 47, 0.16));
-        font-family: var(--serif);
-        font-size: 20px;
-      }}
-
-      .queue-title {{
-        margin: 0;
-        font-size: 16px;
-      }}
-
-      .queue-meta {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.65;
-      }}
-
-      .table-button {{
-        appearance: none;
-        border: none;
-        background: transparent;
-        padding: 0;
-        color: var(--teal-strong);
-        font: inherit;
-        font-weight: 700;
-        text-align: left;
-        cursor: pointer;
-      }}
-
-      .table-button:hover {{
-        text-decoration: underline;
-      }}
-
-      .detail-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 14px;
-      }}
-
-      .detail-grid.summary-grid {{
-        gap: 10px;
-        margin-top: 12px;
-      }}
-
-      .definition-grid {{
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px 12px;
-      }}
-
-      .definition-grid.run-definitions {{
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }}
-
-      .definition-item {{
-        min-width: 0;
-        display: grid;
-        gap: 3px;
-        padding: 8px 0;
-      }}
-
-      .definition-item.full {{
-        grid-column: 1 / -1;
-      }}
-
-      .definition-term {{
-        color: var(--ink-soft);
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        font-weight: 700;
-      }}
-
-      .definition-desc {{
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-      }}
-
-      .compact-definitions .definition-desc {{
-        font-size: 12px;
-        line-height: 1.35;
-      }}
-
-      .detail-block {{
-        padding: 14px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.56);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .detail-block.compact-block {{
-        padding: 12px;
-      }}
-
-      .detail-block.full {{
-        grid-column: 1 / -1;
-      }}
-
-      .detail-label {{
-        color: var(--ink-soft);
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        font-weight: 700;
-      }}
-
-      .detail-value {{
-        margin-top: 6px;
-        font-size: 15px;
-        line-height: 1.65;
-      }}
-
-      .compact-block .detail-value {{
-        margin-top: 4px;
-        font-size: 13px;
-        line-height: 1.5;
-        overflow-wrap: anywhere;
-      }}
-
-      .assignment-inline {{
-        display: grid;
-        gap: 12px;
-        margin-top: 14px;
-      }}
-
-      .assignment-inline .field-grid {{
-        margin: 0;
-      }}
-
-      .filter-toolbar {{
-        margin-top: 16px;
-        padding: 16px;
-        border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.48);
-        border: 1px solid rgba(22, 35, 43, 0.08);
-        display: grid;
-        gap: 14px;
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .filter-toolbar.compact {{
-        margin-top: 12px;
-        padding: 12px;
-        gap: 8px;
-      }}
-
-      .filter-toolbar.compact .field-grid {{
-        gap: 10px;
-        align-items: end;
-      }}
-
-      .filter-toolbar.compact .button-row {{
-        margin-top: 2px;
-        gap: 8px;
-      }}
-
-      .panel.compact-panel {{
-        padding: 14px;
-      }}
-
-      .panel.compact-panel .filter-toolbar {{
-        margin-top: 12px;
-        padding: 12px;
-        gap: 8px;
-      }}
-
-      .panel.compact-panel .button-row:first-child {{
-        margin-top: 0;
-      }}
-
-      .panel.compact-panel .filter-summary {{
-        margin-top: 10px;
-        font-size: 12px;
-        line-height: 1.5;
-      }}
-
-      .compact-summary {{
-        margin-top: 10px;
-        font-size: 12px;
-        line-height: 1.5;
-      }}
-
-      .filter-summary {{
-        margin-top: 12px;
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.6;
-      }}
-
-      .owner-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 14px;
-      }}
-
-      .alert-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 14px;
-      }}
-
-      .alert-card {{
-        padding: 16px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(22, 35, 43, 0.1);
-        background: rgba(255, 255, 255, 0.72);
-        display: grid;
-        gap: 8px;
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .alert-card.warn {{
-        background: rgba(252, 245, 230, 0.94);
-        border-color: rgba(201, 143, 47, 0.24);
-      }}
-
-      .alert-card.danger {{
-        background: rgba(250, 236, 234, 0.94);
-        border-color: rgba(168, 79, 79, 0.24);
-      }}
-
-      .alert-card.success {{
-        background: rgba(236, 248, 245, 0.94);
-        border-color: rgba(15, 107, 98, 0.24);
-      }}
-
-      .alert-title {{
-        font-size: 15px;
-        font-weight: 700;
-      }}
-
-      .alert-body {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.65;
-      }}
-
-      .owner-card {{
-        width: 100%;
-        text-align: left;
-        padding: 16px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(22, 35, 43, 0.1);
-        background: rgba(255, 255, 255, 0.72);
-        display: grid;
-        gap: 8px;
-        cursor: pointer;
-        box-shadow: var(--shadow-surface);
-        transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast);
-      }}
-
-      .owner-card:hover {{
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-surface-hover);
-      }}
-
-      .owner-card.is-active {{
-        border-color: rgba(15, 107, 98, 0.44);
-        box-shadow: var(--shadow-selected);
-        background: rgba(237, 248, 246, 0.94);
-      }}
-
-      .owner-card-head {{
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-      }}
-
-      .owner-card-title {{
-        font-size: 16px;
-        font-weight: 700;
-      }}
-
-      .owner-card-meta {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        line-height: 1.6;
-      }}
-
-      .toggle-row {{
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px;
-        margin-top: 14px;
-      }}
-
-      .toggle-row.compact-toggle {{
-        margin-top: 0;
-        gap: 8px;
-        justify-content: flex-end;
-      }}
-
-      .toggle-button[data-active="true"] {{
-        background: rgba(15, 107, 98, 0.12);
-        border-color: rgba(15, 107, 98, 0.2);
-        color: var(--teal-strong);
-      }}
-
-      .subtle-note {{
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.65;
-      }}
-
-      .compact-toggle .subtle-note {{
-        max-width: 34ch;
-        font-size: 11px;
-        line-height: 1.45;
-      }}
-
-      .log-shell {{
-        margin-top: 14px;
-        padding: 14px;
-        border-radius: 18px;
-        background: linear-gradient(180deg, rgba(22, 35, 43, 0.97), rgba(16, 28, 33, 0.97));
-        color: #d9e6df;
-        font-family: var(--mono);
-        font-size: 12px;
-        line-height: 1.7;
-        max-height: 340px;
-        overflow: auto;
-      }}
-
-      .log-line {{
-        padding-bottom: 8px;
-        margin-bottom: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      }}
-
-      .placeholder {{
-        padding: 14px;
-        border-radius: 16px;
-        border: 1px dashed rgba(22, 35, 43, 0.16);
-        color: var(--ink-soft);
-        background: rgba(255, 255, 255, 0.42);
-        font-size: 13px;
-        line-height: 1.55;
-      }}
-
-      .placeholder.compact {{
-        padding: 12px;
-        font-size: 12px;
-        line-height: 1.45;
-        min-height: 72px;
-      }}
-
-      @media (max-width: 1120px) {{
-        .refresh-strip,
-        .hero,
-        .main-grid {{
+      }
+
+      @media (max-width: 1040px) {
+        .intro-band,
+        .intake-layout,
+        .support-grid,
+        .metric-grid,
+        .summary-grid,
+        .snapshot-grid {
           grid-template-columns: 1fr;
-        }}
+        }
 
-        .workspace-shell {{
+        .delivery-column,
+        .history-stack,
+        .field-grid {
           grid-template-columns: 1fr;
-        }}
+        }
 
-        .workspace-card.run-console .result-shell {{
+        .intro-points {
           grid-template-columns: 1fr;
-        }}
+        }
 
-        .result-shell.history-split {{
-          grid-template-columns: 1fr;
-        }}
-
-        .result-shell.overview-split {{
-          grid-template-columns: 1fr;
-        }}
-
-        .definition-grid,
-        .definition-grid.run-definitions {{
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }}
-
-        .worklist-board-shell,
-        .owner-insights-grid {{
-          grid-template-columns: 1fr;
-        }}
-
-        .history-detail-card {{
+        .masthead {
           position: static;
-        }}
+          flex-direction: column;
+        }
 
-        .chapter-detail-card {{
-          position: static;
-        }}
+        .masthead-tools {
+          justify-items: stretch;
+          width: 100%;
+        }
 
-        .panel.half,
-        .panel.third {{
-          grid-column: span 12;
-        }}
-      }}
+        .utility-row {
+          justify-content: flex-start;
+        }
+      }
 
-      @media (max-width: 820px) {{
-        .page-shell {{
-          padding: 12px;
-        }}
+      @media (max-width: 720px) {
+        .page-shell {
+          padding: 10px;
+        }
 
-        .frame {{
+        .workspace {
+          padding: 14px;
           border-radius: 24px;
-        }}
+        }
 
-        .nav,
-        .hero,
-        .main-grid,
-        .footer {{
-          padding-left: 18px;
-          padding-right: 18px;
-        }}
-
-        .hero-title {{
-          font-size: clamp(32px, 13vw, 46px);
-        }}
-
-        .hero-stats,
-        .cap-grid,
-        .surface-grid,
-        .kpi-grid {{
-          grid-template-columns: 1fr;
-        }}
-
-        .nav {{
-          align-items: flex-start;
-          flex-direction: column;
-        }}
-
-        .nav-links {{
-          justify-content: flex-start;
-        }}
-
-        .control-deck {{
-          padding-left: 18px;
-          padding-right: 18px;
-        }}
-
-        .workspace-card {{
+        .intro-copy,
+        .surface {
           padding: 18px;
-        }}
+        }
 
-        .workspace-header {{
+        .section-head,
+        .book-head,
+        .history-head,
+        .event-head,
+        .chapter-row {
           grid-template-columns: 1fr;
-        }}
+          display: grid;
+        }
 
-        .control-strip {{
-          grid-template-columns: 1fr;
-        }}
+        .section-title {
+          font-size: 28px;
+        }
 
-        .toggle-row.compact-toggle {{
-          justify-content: flex-start;
-        }}
-
-        .compact-toggle .subtle-note {{
+        .intro-title,
+        .book-title {
           max-width: none;
-        }}
+          font-size: 38px;
+        }
 
-        .field.span-8,
-        .field.span-6,
-        .field.span-4,
-        .field.span-3 {{
-          grid-column: span 12;
-        }}
-
-        .file-picker {{
-          align-items: stretch;
-          flex-direction: column;
-        }}
-
-        .detail-grid {{
+        .button-row,
+        .utility-row,
+        .field-grid,
+        .delivery-column,
+        .history-stack {
           grid-template-columns: 1fr;
-        }}
+          display: grid;
+        }
 
-        .definition-grid,
-        .definition-grid.run-definitions {{
-          grid-template-columns: 1fr;
-        }}
+        .action-button {
+          width: 100%;
+        }
+      }
 
-        .owner-grid {{
-          grid-template-columns: 1fr;
-        }}
-
-        .alert-grid {{
-          grid-template-columns: 1fr;
-        }}
-
-        .data-table.history-table,
-        .data-table.history-detail-table {{
-          min-width: 720px;
-          table-layout: auto;
-        }}
-      }}
-
-      @keyframes fadeSlideUp {{
-        from {{
-          opacity: 0;
-          transform: translateY(28px);
-        }}
-        to {{
-          opacity: 1;
-          transform: translateY(0);
-        }}
-      }}
-
-      @keyframes fadeIn {{
-        from {{ opacity: 0; }}
-        to {{ opacity: 1; }}
-      }}
-
-      @keyframes gentlePulse {{
-        0%, 100% {{ opacity: 0.07; }}
-        50% {{ opacity: 0.12; }}
-      }}
-
-      .hero-panel {{
-        animation: fadeSlideUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-      }}
-
-      .hero-aside {{
-        animation: fadeSlideUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
-      }}
-
-      .main-grid .stack:first-child > .section-card:nth-child(1) {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
-      }}
-
-      .main-grid .stack:first-child > .section-card:nth-child(2) {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
-      }}
-
-      .main-grid .stack:last-child > .section-card:nth-child(1) {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
-      }}
-
-      .main-grid .stack:last-child > .section-card:nth-child(2) {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.30s both;
-      }}
-
-      .main-grid .stack:last-child > .section-card:nth-child(3) {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.38s both;
-      }}
-
-      .workspace-card {{
-        animation: fadeSlideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
-      }}
-
-      .hero-illustration {{
-        position: absolute;
-        right: -20px;
-        bottom: 0;
-        width: 320px;
-        height: 280px;
-        color: var(--teal);
-        opacity: 0.07;
-        pointer-events: none;
-        animation: gentlePulse 8s ease-in-out infinite;
-      }}
-
-      .workflow-step {{
-        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
-      }}
-
-      .workflow-step:hover {{
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-surface-hover);
-      }}
-
-      .cap-card,
-      .surface-card {{
-        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
-      }}
-
-      .cap-card:hover,
-      .surface-card:hover {{
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-surface-hover);
-      }}
-
-      .stat-card {{
-        transition: transform var(--motion-medium), box-shadow var(--motion-medium);
-      }}
-
-      .stat-card:hover {{
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-surface-hover);
-      }}
-
-      .nav-pill {{
-        transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
-      }}
-
-      .nav-pill:hover {{
-        transform: translateY(-1px);
-        background: rgba(255, 255, 255, 0.82);
-        box-shadow: var(--shadow-surface);
-      }}
-
-      .nav-pill.primary:hover {{
-        background: var(--teal-strong);
-        box-shadow: var(--shadow-emphasis-strong);
-      }}
-
-      .workspace-title {{
-        position: relative;
-        padding-bottom: 16px;
-      }}
-
-      .workspace-title::after {{
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 48px;
-        height: 2px;
-        background: linear-gradient(90deg, var(--teal), var(--gold));
-        border-radius: 2px;
-      }}
-
-      .hero-copy {{
-        max-width: 52ch;
-      }}
-
-      @media (prefers-reduced-motion: reduce) {{
-        html {{
-          scroll-behavior: auto;
-        }}
-
+      @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
-        *::after {{
+        *::after {
           animation-duration: 0.01ms !important;
           animation-iteration-count: 1 !important;
           transition-duration: 0.01ms !important;
-        }}
-
-        .workflow-step:hover,
-        .cap-card:hover,
-        .surface-card:hover,
-        .stat-card:hover,
-        .button:hover,
-        .cta:hover,
-        .nav-pill:hover,
-        .queue-item.clickable:hover,
-        .owner-card:hover {{
-          transform: none;
-        }}
-      }}
-
-      @media print {{
-        body {{
-          background: white;
-        }}
-
-        .page-shell {{
-          padding: 0;
-        }}
-
-        .frame {{
-          box-shadow: none;
-          border: none;
-          background: white;
-        }}
-
-        .nav,
-        .hero-aside,
-        .footer {{
-          display: none;
-        }}
-
-        .hero,
-        .main-grid {{
-          display: block;
-          padding: 0;
-        }}
-
-        .section-card,
-        .hero-panel {{
-          break-inside: avoid;
-          border: 1px solid #ddd;
-          margin-bottom: 16px;
-        }}
-      }}
+          scroll-behavior: auto !important;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="page-shell">
-      <div class="frame">
-        <header class="nav" id="top">
-          <div class="brand">
-            <span class="brand-kicker">Book Translation Control Room</span>
-            <span class="brand-name">{app_name}</span>
-            <span class="brand-note">Version {app_version} · EPUB-first · export-aware · run-visible</span>
+      <div class="workspace">
+        <header class="masthead">
+          <div class="brand-cluster">
+            <span class="brand-kicker">Book Agent Pressroom</span>
+            <div class="brand-title">整书译制工作台</div>
+            <div class="brand-copy">
+              把一本英文书，从原稿推进到中文交付。上传 PDF / EPUB，启动整书 translate_full，
+              随时看清它卡在哪一环、为什么还不能导出、现在已经能拿走什么。
+            </div>
           </div>
-          <nav class="nav-links" aria-label="Primary">
-            <a class="nav-pill" href="#workflow">Workflow</a>
-            <a class="nav-pill" href="#workspace">Workspace</a>
-            <a class="nav-pill" href="#surfaces">Surfaces</a>
-            <a class="nav-pill" href="#api">API</a>
-            <a class="nav-pill primary" href="{docs_href}">API Docs</a>
-          </nav>
+          <div class="masthead-tools">
+            <div class="status-chip">
+              <span id="health-dot" class="status-dot loading"></span>
+              <span id="health-label">检查服务中</span>
+            </div>
+            <div class="utility-row">
+              <a class="utility-link" href="#workspace">开始新书</a>
+              <a class="utility-link" href="#pipeline">查看运行</a>
+              <a class="utility-link" href="#history">书库历史</a>
+              <a class="utility-link primary" href="__DOCS_HREF__">API Docs</a>
+            </div>
+          </div>
         </header>
 
-        <section class="hero">
-          <article class="hero-panel">
-            <svg class="hero-illustration" viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M200 55 C160 50 80 60 50 80 L50 250 C80 235 160 228 200 258 C240 228 320 235 350 250 L350 80 C320 60 240 50 200 55Z" stroke="currentColor" stroke-width="1.5"/>
-              <line x1="200" y1="55" x2="200" y2="258" stroke="currentColor" stroke-width="1"/>
-              <line x1="78" y1="108" x2="175" y2="103" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
-              <line x1="78" y1="128" x2="162" y2="124" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
-              <line x1="78" y1="148" x2="170" y2="145" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
-              <line x1="78" y1="168" x2="152" y2="166" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.35"/>
-              <line x1="78" y1="188" x2="166" y2="186" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.3"/>
-              <line x1="78" y1="208" x2="158" y2="207" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.25"/>
-              <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M225 103 L262 103" stroke-width="1.8" opacity="0.55"/>
-                <path d="M243 93 L243 116" stroke-width="1.5" opacity="0.45"/>
-                <path d="M280 98 L312 98" stroke-width="1.8" opacity="0.45"/>
-                <path d="M296 88 L296 112" stroke-width="1.5" opacity="0.4"/>
-                <path d="M282 112 L314 112" stroke-width="1.2" opacity="0.35"/>
-                <path d="M225 140 L260 140" stroke-width="1.8" opacity="0.45"/>
-                <path d="M232 130 L232 155" stroke-width="1.5" opacity="0.4"/>
-                <path d="M250 130 L250 155" stroke-width="1.2" opacity="0.35"/>
-                <path d="M278 135 L318 135" stroke-width="1.8" opacity="0.4"/>
-                <path d="M298 125 L298 150" stroke-width="1.5" opacity="0.35"/>
-                <path d="M225 175 L258 175" stroke-width="1.5" opacity="0.35"/>
-                <path d="M242 165 L242 190" stroke-width="1.2" opacity="0.3"/>
-                <path d="M275 172 L310 172" stroke-width="1.5" opacity="0.3"/>
-                <path d="M292 162 L292 186" stroke-width="1.2" opacity="0.25"/>
-              </g>
-              <path d="M178 220 Q200 208 222 220" stroke="currentColor" stroke-width="0.8" opacity="0.2" stroke-dasharray="4 4"/>
-              <path d="M173 236 Q200 222 227 236" stroke="currentColor" stroke-width="0.8" opacity="0.15" stroke-dasharray="4 4"/>
-            </svg>
-            <div class="hero-kicker">Long-document translation, with traceable control</div>
-            <h1 class="hero-title">A publishing-grade cockpit for book translation that stays inspectable.</h1>
-            <p class="hero-copy">
-              book-agent turns ingest, packetized translation, review, reruns, and export
-              into one operator surface. Each stage leaves durable state, so you can inspect,
-              resume, and repair a book without losing provenance.
+        <section class="intro-band">
+          <article class="intro-copy">
+            <span class="intro-label">Publishing-grade workflow</span>
+            <h1 class="intro-title">让整书翻译，像一条可靠的出版流程。</h1>
+            <p class="intro-text">
+              这里不是接口演示页，而是给真实使用者的工作台。你能在同一张桌面上完成新书导入、阶段判断、
+              review 风险识别、导出下载和历史回看，而不是在零散状态里猜测系统到底进行了什么。
             </p>
-            <div class="hero-actions">
-              <a class="cta cta-primary" href="{docs_href}">API Docs</a>
-              <a class="cta cta-secondary" href="#workspace">Workspace</a>
-            </div>
-            <div class="hero-stats">
-              <div class="stat-card">
-                <div class="stat-label">Core Contract</div>
-                <div class="stat-value">Sentence</div>
-                <div class="stat-note">Coverage, alignment, provenance, and reruns resolve to the sentence ledger.</div>
+            <div class="intro-points">
+              <div class="intro-point">
+                <strong>当前书籍永远在中心位</strong>
+                <span>先看现在这本书到哪一步，再决定继续跑、等待导出，还是回头处理阻塞。</span>
               </div>
-              <div class="stat-card">
-                <div class="stat-label">Execution Window</div>
-                <div class="stat-value">Packet</div>
-                <div class="stat-note">Packetized translation keeps context without blowing up prompt history.</div>
+              <div class="intro-point">
+                <strong>阶段信息比原始数字更重要</strong>
+                <span>把 translate / review / export 解释成用户能判断下一步的状态，而不是纯技术字段。</span>
               </div>
-              <div class="stat-card">
-                <div class="stat-label">Control Surface</div>
-                <div class="stat-value">Run Plane</div>
-                <div class="stat-note">Pause, drain, budgets, leases, recovery, and export telemetry stay first-class.</div>
+              <div class="intro-point">
+                <strong>历史资产像书库，而不是日志表</strong>
+                <span>随时回看过去处理过的书，立刻知道哪本可下载、哪本还在跑、哪本仍被 review gate 挡住。</span>
               </div>
             </div>
           </article>
 
-          <aside class="hero-aside" aria-label="System pulse">
-            <div class="aside-header">
-              <div>
-                <p class="aside-title">System Pulse</p>
-                <p class="aside-kpi" id="health-state">Checking…</p>
-              </div>
-              <div class="health-badge">
-                <span class="health-dot" id="health-dot"></span>
-                <span id="health-caption">Waiting for API</span>
-              </div>
+          <aside class="intro-board">
+            <div class="board-callout">
+              <span class="mini-overline">当前页面定位</span>
+              <div class="board-title">Production Translation Desk</div>
+              <p class="board-copy">
+                Version __APP_VERSION__ · translation-studio<br />
+                当前主路径：上传书籍 → 启动整书转换 → 监控状态 → 下载导出结果
+              </p>
             </div>
-            <div class="signal-stack">
-              <div class="signal-card">
-                <div class="signal-label">Primary Runway</div>
-                <div class="signal-value">EPUB → packets → QA → merged HTML</div>
+            <div class="board-list">
+              <div class="board-list-item">
+                <strong>你先需要知道什么</strong>
+                <span>当前书籍是谁、最新 run 状态是什么、现在为什么还不能导出。</span>
               </div>
-              <div class="signal-card">
-                <div class="signal-label">Current Strength</div>
-                <div class="signal-value">Artifact-aware bilingual export</div>
+              <div class="board-list-item">
+                <strong>你不该被迫理解什么</strong>
+                <span>零散的 API 名称、work item 细节或导出内部机制。</span>
               </div>
-              <div class="signal-card">
-                <div class="signal-label">Operator Promise</div>
-                <div class="signal-value">Queryable state, no silent failures</div>
+              <div class="board-list-item">
+                <strong>系统出口</strong>
+                <span class="mono">health → __HEALTH_HREF__</span><br />
+                <span class="mono">openapi → __OPENAPI_HREF__</span>
               </div>
-            </div>
-            <div class="signal-pill-row" aria-label="System traits">
-              <span class="signal-pill">Operator-first UI</span>
-              <span class="signal-pill">Artifact-aware rendering</span>
-              <span class="signal-pill">Review + run telemetry</span>
             </div>
           </aside>
         </section>
 
-        <main class="main-grid">
-          <div class="stack">
-            <details class="section-card briefing-section" id="workflow">
-              <summary class="briefing-summary">
-                <div class="briefing-summary-copy">
-                  <h2 class="section-title">Operational Workflow</h2>
-                  <div class="briefing-meta">Staged pipeline, durable state, and traceable export surfaces.</div>
-                </div>
-                <span class="briefing-toggle" aria-hidden="true"></span>
-              </summary>
-              <div class="briefing-body">
-                <p class="section-copy">
-                  The pipeline is staged and durable by design, so each phase can be resumed,
-                  audited, or repaired without replaying the whole book.
-                </p>
-                <div class="workflow">
-                  <div class="workflow-step">
-                    <div class="workflow-index">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
-                    </div>
-                    <div>
-                      <div class="workflow-label">Ingest and structure recovery</div>
-                      <div class="workflow-body">EPUB chapters, blocks, headings, figures, tables, code, references, and frontmatter are normalized into stable block objects instead of being flattened into anonymous text.</div>
-                    </div>
-                  </div>
-                  <div class="workflow-step">
-                    <div class="workflow-index">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                    </div>
-                    <div>
-                      <div class="workflow-label">Sentence ledger and context packetization</div>
-                      <div class="workflow-body">Every source sentence receives a durable identifier, while translation executes inside bounded packets enriched by book profile, chapter brief, and term/entity memory snapshots.</div>
-                    </div>
-                  </div>
-                  <div class="workflow-step">
-                    <div class="workflow-index">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><circle cx="18" cy="18" r="3"/><path d="M22 22l-1.5-1.5"/><path d="m14 18 1-1"/></svg>
-                    </div>
-                    <div>
-                      <div class="workflow-label">Translation, provenance, and repair loops</div>
-                      <div class="workflow-body">Worker outputs become target segments, alignments, translation runs, and rerunnable evidence. Actions can rebuild packets, rebuild chapter briefs, realign, or target reruns without restarting the book.</div>
-                    </div>
-                  </div>
-                  <div class="workflow-step">
-                    <div class="workflow-index">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
-                    </div>
-                    <div>
-                      <div class="workflow-label">Export surfaces for readers and operators</div>
-                      <div class="workflow-body">Review packages, chapter-level bilingual exports, merged reading HTML, export manifests, worklists, and run dashboards all expose the same underlying traceable state.</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </details>
-
-            <details class="section-card compact-section briefing-section" id="surfaces">
-              <summary class="briefing-summary">
-                <div class="briefing-summary-copy">
-                  <h2 class="section-title">What The Frontend Surfaces</h2>
-                  <div class="briefing-meta">Document, run, review, and reader planes in one operator vocabulary.</div>
-                </div>
-                <span class="briefing-toggle" aria-hidden="true"></span>
-              </summary>
-              <div class="briefing-body">
-                <p class="section-copy">
-                  This entry stays operator-facing on purpose: a credible control room that
-                  matches the existing FastAPI runtime without inventing a second vocabulary.
-                </p>
-                <div class="surface-grid compact-grid">
-                  <article class="surface-card">
-                    <div class="surface-kicker">Document Plane</div>
-                    <h3 class="surface-title">Bootstrap, translate, review, export</h3>
-                    <p class="surface-body">The homepage uses the same nouns as the runtime, so later UI growth can stay truthful to the backend contract.</p>
-                  </article>
-                  <article class="surface-card">
-                    <div class="surface-kicker">Run Plane</div>
-                    <h3 class="surface-title">Pause, resume, drain, budget control</h3>
-                    <p class="surface-body">Long-running book jobs are durable now, and the UI can expand into a fuller run console without a parallel product vocabulary.</p>
-                  </article>
-                  <article class="surface-card">
-                    <div class="surface-kicker">Review Plane</div>
-                    <h3 class="surface-title">Issues, actions, chapter worklists</h3>
-                    <p class="surface-body">Issue hotspots, queue pressure, owner routing, and export anomalies already exist as APIs; this page turns them into one operator surface.</p>
-                  </article>
-                  <article class="surface-card">
-                    <div class="surface-kicker">Reader Plane</div>
-                    <h3 class="surface-title">Merged reading export with preserved artifacts</h3>
-                    <p class="surface-body">Code, equations, tables, literal tags, and references stay preserved as source-side artifacts, which matters for technical books.</p>
-                  </article>
-                </div>
-              </div>
-            </details>
-          </div>
-
-          <div class="stack">
-            <details class="section-card compact-section briefing-section">
-              <summary class="briefing-summary">
-                <div class="briefing-summary-copy">
-                  <h2 class="section-title">Capability Spine</h2>
-                  <div class="briefing-meta">Parsing, translation, quality gating, and long-run operations.</div>
-                </div>
-                <span class="briefing-toggle" aria-hidden="true"></span>
-              </summary>
-              <div class="briefing-body">
-                <p class="section-copy">
-                  The UI is intentionally small, but it should still feel like the front door
-                  to a serious internal product rather than a decorative wrapper.
-                </p>
-                <div class="cap-grid compact-grid">
-                  <article class="cap-card">
-                    <div class="cap-kicker">Parsing</div>
-                    <h3 class="cap-title">Structure-aware EPUB ingestion</h3>
-                    <p class="cap-body">Preserves headings, code, figures, tables, formulas, references, and frontmatter for differentiated downstream decisions.</p>
-                  </article>
-                  <article class="cap-card">
-                    <div class="cap-kicker">Translation</div>
-                    <h3 class="cap-title">LLM-driven packets with traceable alignment</h3>
-                    <p class="cap-body">Each packet run emits target segments, alignment suggestions, provenance, usage telemetry, and rerunnable repair evidence.</p>
-                  </article>
-                  <article class="cap-card">
-                    <div class="cap-kicker">Quality</div>
-                    <h3 class="cap-title">Gated review with targeted recovery</h3>
-                    <p class="cap-body">Coverage, duplication, alignment failure, format pollution, export anomalies, and chapter worklists all feed one repair loop.</p>
-                  </article>
-                  <article class="cap-card">
-                    <div class="cap-kicker">Operations</div>
-                    <h3 class="cap-title">Long-run control and budget awareness</h3>
-                    <p class="cap-body">Durable runs, leases, audit trails, export followup, owner assignment, and SLA-aware worklists keep the system operable at book scale.</p>
-                  </article>
-                </div>
-              </div>
-            </details>
-
-            <details class="section-card compact-section briefing-section">
-              <summary class="briefing-summary">
-                <div class="briefing-summary-copy">
-                  <h2 class="section-title">Signals To Watch</h2>
-                  <div class="briefing-meta">Run stability, chapter pressure, and export truthfulness.</div>
-                </div>
-                <span class="briefing-toggle" aria-hidden="true"></span>
-              </summary>
-              <div class="briefing-body">
-                <p class="section-copy">
-                  These are the high-value state surfaces future UI modules should grow around,
-                  even before the project needs a full SPA shell.
-                </p>
-                <div class="signal-matrix compact-matrix">
-                  <ul class="mini-list compact-list">
-                    <li>
-                      <strong>Run stability</strong>
-                      <span>Budgets, run state, and worker lease recovery keep multi-hour translation away from fragile shell sessions.</span>
-                    </li>
-                    <li>
-                      <strong>Chapter pressure</strong>
-                      <span>Issue hotspots, queueing, owner assignment, and SLA signals show where review or targeted repair should go next.</span>
-                    </li>
-                    <li>
-                      <strong>Export truthfulness</strong>
-                      <span>Merged export rendering must separate expected source-only artifacts from actual missing translation, especially in technical books.</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </details>
-
-            <details class="section-card compact-section briefing-section" id="api">
-              <summary class="briefing-summary">
-                <div class="briefing-summary-copy">
-                  <h2 class="section-title">API Quick Access</h2>
-                  <div class="briefing-meta">Health, bootstrap, export, worklist, and durable run endpoints.</div>
-                </div>
-                <span class="briefing-toggle" aria-hidden="true"></span>
-              </summary>
-              <div class="briefing-body">
-                <p class="section-copy">
-                  The homepage stays close to the backend contract. These are the surfaces most
-                  likely to matter as the operator tool grows into a richer product.
-                </p>
-                <div class="api-shell compact-shell">
-                  <div class="api-row">
-                    <span class="api-method">GET</span>
-                    <span class="api-path">{health_href}</span>
-                    <span class="api-copy">Health and deploy sanity check</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">POST</span>
-                    <span class="api-path">{api_prefix}/documents/bootstrap</span>
-                    <span class="api-copy">Bootstrap from a server-visible local path</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">POST</span>
-                    <span class="api-path">{api_prefix}/documents/bootstrap-upload</span>
-                    <span class="api-copy">Upload EPUB or PDF directly from the browser</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">POST</span>
-                    <span class="api-path">{api_prefix}/documents/{{document_id}}/translate</span>
-                    <span class="api-copy">Run translation packets through the active backend</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">GET</span>
-                    <span class="api-path">{api_prefix}/documents/{{document_id}}/exports</span>
-                    <span class="api-copy">Usage, issue, and export dashboard data</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">GET</span>
-                    <span class="api-path">{api_prefix}/documents/{{document_id}}/exports/download</span>
-                    <span class="api-copy">Download the latest export bundle with save flow</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">GET</span>
-                    <span class="api-path">{api_prefix}/documents/{{document_id}}/chapters/worklist</span>
-                    <span class="api-copy">Chapter queue, SLA state, and owner workload</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">POST</span>
-                    <span class="api-path">{api_prefix}/runs</span>
-                    <span class="api-copy">Create and control a durable book job</span>
-                  </div>
-                  <div class="api-row">
-                    <span class="api-method">GET</span>
-                    <span class="api-path">{openapi_href}</span>
-                    <span class="api-copy">OpenAPI schema for tool or UI expansion</span>
-                  </div>
-                </div>
-              </div>
-            </details>
-          </div>
-        </main>
-
-        <section class="control-deck" id="workspace">
-          <div class="refresh-strip">
-            <div class="refresh-card">
-              <div class="refresh-head">
-                <span class="refresh-kicker">Document Sync</span>
-                <div class="refresh-state">
-                  <span class="status-dot" id="document-live-dot"></span>
-                  <span id="document-live-state">Idle</span>
-                </div>
-              </div>
-              <div class="refresh-meta" id="document-live-meta">Load a document to start sync tracking.</div>
-            </div>
-            <div class="refresh-card">
-              <div class="refresh-head">
-                <span class="refresh-kicker">Run Sync</span>
-                <div class="refresh-state">
-                  <span class="status-dot" id="run-live-dot"></span>
-                  <span id="run-live-state">Idle</span>
-                </div>
-              </div>
-              <div class="refresh-meta" id="run-live-meta">Create or load a run to track control-plane freshness.</div>
-            </div>
-            <div class="refresh-card">
-              <div class="refresh-head">
-                <span class="refresh-kicker">Worklist Sync</span>
-                <div class="refresh-state">
-                  <span class="status-dot" id="worklist-live-dot"></span>
-                  <span id="worklist-live-state">Idle</span>
-                </div>
-              </div>
-              <div class="refresh-meta" id="worklist-live-meta">Worklist freshness follows document polling.</div>
-            </div>
-          </div>
-          <div class="workspace-shell">
-            <section class="workspace-card">
-              <div class="workspace-header">
-                <div class="workspace-header-text">
-                  <p class="workspace-kicker">Document Workspace</p>
-                  <h2 class="workspace-title">Bootstrap, inspect, translate, review, and export from one surface.</h2>
-                  <p class="workspace-copy">
-                    This operator surface gives you the live document lifecycle without hiding
-                    the backend contract, but with a layout that stays readable under real use.
+        <div class="content-stack">
+            <section class="surface" id="workspace">
+              <div class="section-head">
+                <div>
+                  <div class="section-kicker">Ingest</div>
+                  <h2 class="section-title">新建书籍任务</h2>
+                  <p class="section-copy">
+                    上传英文 EPUB / PDF 后，系统会先完成导入与结构解析。页面会自动载入这本书，并在同一视图里继续后续阶段。
                   </p>
                 </div>
-                <div class="control-chip">EPUB + text PDF · packet-aware · export-gated</div>
+                <div class="section-aside">不复用旧布局 · 直接重写主工作台结构</div>
               </div>
 
-              <div class="workspace-grid">
-                <div class="panel half">
-                  <h3 class="panel-title">Bootstrap a document</h3>
-                  <p class="panel-copy">Choose a local EPUB or low-risk text PDF from your device and immediately lock the created document into the workspace.</p>
-                  <form class="form-grid dense-form" id="bootstrap-form">
-                    <div class="field-grid dense-grid">
-                      <div class="field span-12">
-                        <label for="source-file">Source file</label>
-                        <input
-                          id="source-file"
-                          name="source_file"
-                          type="file"
-                          accept=".epub,.pdf,application/epub+zip,application/pdf"
-                          class="visually-hidden"
-                        />
-                        <div class="file-picker" id="source-file-picker" data-has-file="false" role="button" tabindex="0">
-                          <div class="file-picker-copy">
-                            <div class="file-picker-title">Choose an EPUB or PDF</div>
-                            <div class="file-picker-note" id="source-file-name">No file selected yet.</div>
-                          </div>
-                          <button class="button ghost dense" type="button" id="choose-source-file">Open file picker</button>
-                        </div>
-                        <div class="field-hint">Upload a local EPUB or text PDF directly from your device. P1-A still rejects OCR-required PDFs, but short academic papers can enter a medium-risk recovery lane instead of being hard-rejected.</div>
-                      </div>
+              <div class="intake-layout">
+                <article class="dropzone-panel">
+                  <div id="file-dropzone" class="dropzone" data-dragging="false">
+                    <input
+                      id="source-file"
+                      class="sr-only"
+                      type="file"
+                      accept=".epub,.pdf,application/epub+zip,application/pdf"
+                    />
+                    <div class="dropzone-title">拖入书籍文件，或点击选择</div>
+                    <div class="dropzone-copy">
+                      推荐直接上传英文原稿。文件会通过 <span class="mono">bootstrap-upload</span> 写入服务端上传目录，
+                      完成 document 建立、章节切分和 packet 准备。
                     </div>
-                    <div class="action-toolbar">
-                      <button class="button primary dense" type="submit">Bootstrap document</button>
+                    <div class="tag-row">
+                      <span class="tag">英文 EPUB</span>
+                      <span class="tag">英文 PDF</span>
+                      <span class="tag">高保真结构解析</span>
+                      <span class="tag">直接进入整书流水线</span>
                     </div>
-                  </form>
-                </div>
-
-                <div class="panel half">
-                  <h3 class="panel-title">Operate an existing document</h3>
-                  <p class="panel-copy">Load a document, then run translate, review, or export without leaving the workspace. Export now opens a save flow instead of dumping server paths into the UI.</p>
-                  <form class="form-grid dense-form" id="document-form">
-                    <div class="field-grid dense-grid">
-                      <div class="field span-12">
-                        <label for="document-id">Document ID</label>
-                        <input id="document-id" name="document_id" type="text" placeholder="Paste a document UUID" />
-                      </div>
-                      <div class="field span-6">
-                        <label for="export-type">Export type</label>
-                        <select id="export-type" name="export_type">
-                          <option value="merged_html">merged_html</option>
-                          <option value="merged_markdown">merged_markdown</option>
-                          <option value="bilingual_html">bilingual_html</option>
-                          <option value="review_package">review_package</option>
-                        </select>
-                      </div>
-                      <div class="field span-6">
-                        <label for="auto-followup">Export gate auto-followup</label>
-                        <select id="auto-followup" name="auto_followup">
-                          <option value="false">disabled</option>
-                          <option value="true">enabled</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div class="action-toolbar primary-strip">
-                      <button class="button ghost dense" type="button" id="load-document">Load summary</button>
-                      <button class="button dense" type="button" id="translate-document">Translate</button>
-                      <button class="button dense" type="button" id="review-document">Review</button>
-                      <button class="button gold dense" type="button" id="export-document">Export & save</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-
-              <div class="control-strip">
-                <div class="status-banner" id="document-status-banner">No document loaded yet. Upload a new EPUB/PDF or paste an existing document id.</div>
-                <div class="toggle-row compact-toggle">
-                  <button class="button ghost dense toggle-button" type="button" id="toggle-document-polling" data-active="true">Auto-refresh document: on</button>
-                  <span class="subtle-note" id="document-polling-note">Refreshes summary, exports, and worklist for the current document.</span>
-                </div>
-              </div>
-
-              <div class="kpi-grid mini-kpis" id="document-kpis">
-                <div class="kpi-card mini-kpi">
-                  <div class="kpi-label">Document</div>
-                  <div class="kpi-value">—</div>
-                  <div class="kpi-note">Title and status will appear here after a load.</div>
-                </div>
-                <div class="kpi-card mini-kpi">
-                  <div class="kpi-label">Chapters</div>
-                  <div class="kpi-value">—</div>
-                  <div class="kpi-note">Recovered structural chapter count.</div>
-                </div>
-                <div class="kpi-card mini-kpi">
-                  <div class="kpi-label">Sentences</div>
-                  <div class="kpi-value">—</div>
-                  <div class="kpi-note">Sentence ledger count for coverage and alignment.</div>
-                </div>
-                <div class="kpi-card mini-kpi">
-                  <div class="kpi-label">Open Issues</div>
-                  <div class="kpi-value">—</div>
-                  <div class="kpi-note">Live open review pressure for the whole document.</div>
-                </div>
-              </div>
-
-              <div class="result-shell workspace-overview-stack">
-                <div class="result-card compact-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Document summary</h3>
-                      <div class="result-meta">Document contract, chapter counts, and current lifecycle status.</div>
-                    </div>
-                  </div>
-                  <div id="document-summary-shell" class="placeholder compact">Load a document to see title, author, chapter progression, and stored quality summaries.</div>
-                </div>
-
-                <div class="result-card compact-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Export and usage dashboard</h3>
-                      <div class="result-meta">Export history, usage totals, issue hotspots, and auto-followup evidence.</div>
-                    </div>
-                  </div>
-                  <div id="export-dashboard-shell" class="placeholder compact">Once a document is loaded, this panel will show export history, issue pressure, and translation usage signals.</div>
-                </div>
-              </div>
-
-              <div class="result-shell history-split" style="margin-top:14px;">
-                <div class="result-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Analysis history</h3>
-                      <div class="result-meta">Local records with direct load, merged download, latest run access, and fast filtering.</div>
-                    </div>
-                  </div>
-                  <form class="filter-toolbar compact dense-toolbar" id="history-filter-form">
-                    <div class="field-grid dense-grid">
-                      <div class="field span-12">
-                        <label for="history-search">Search</label>
-                        <input
-                          id="history-search"
-                          type="text"
-                          placeholder="Search title, author, path, or document id"
-                        />
-                      </div>
-                      <div class="field span-3">
-                        <label for="history-source-type">Source type</label>
-                        <select id="history-source-type">
-                          <option value="">All source types</option>
-                          <option value="epub">EPUB</option>
-                          <option value="pdf_text">PDF text</option>
-                          <option value="pdf_scan">PDF scan</option>
-                        </select>
-                      </div>
-                      <div class="field span-3">
-                        <label for="history-status">Document status</label>
-                        <select id="history-status">
-                          <option value="">All document states</option>
-                          <option value="ingested">ingested</option>
-                          <option value="parsed">parsed</option>
-                          <option value="active">active</option>
-                          <option value="partially_exported">partially_exported</option>
-                          <option value="exported">exported</option>
-                          <option value="failed">failed</option>
-                        </select>
-                      </div>
-                      <div class="field span-3">
-                        <label for="history-run-status">Latest run</label>
-                        <select id="history-run-status">
-                          <option value="">All run states</option>
-                          <option value="queued">queued</option>
-                          <option value="running">running</option>
-                          <option value="paused">paused</option>
-                          <option value="draining">draining</option>
-                          <option value="succeeded">succeeded</option>
-                          <option value="failed">failed</option>
-                          <option value="cancelled">cancelled</option>
-                        </select>
-                      </div>
-                      <div class="field span-3">
-                        <label for="history-merged-ready">Merged export</label>
-                        <select id="history-merged-ready">
-                          <option value="">All</option>
-                          <option value="true">Ready</option>
-                          <option value="false">Not ready</option>
-                        </select>
-                      </div>
+                    <div class="dropzone-file">
+                      <strong id="selected-file-name">还没有选中文件</strong>
+                      <span id="selected-file-note">支持拖拽上传，也可以手动选择一本书开始。</span>
                     </div>
                     <div class="button-row">
-                      <button class="button primary dense" type="submit" id="apply-history-filters">Apply history filters</button>
-                      <button class="button ghost dense" type="button" id="clear-history-filters">Clear</button>
-                      <button class="button ghost dense" type="button" id="backfill-history">Import legacy history</button>
+                      <button id="pick-file" class="action-button secondary" type="button">选择书籍文件</button>
+                      <button id="upload-file" class="action-button primary" type="button">上传并解析</button>
                     </div>
-                  </form>
-                  <div class="filter-summary compact-summary" id="history-filter-summary">
-                    Showing the latest analysis records with no extra filters.
                   </div>
-                  <div id="document-history-shell" class="placeholder">Local history records will appear here after the workspace loads.</div>
-                </div>
-                <div class="result-card history-detail-card">
-                  <div class="result-head">
+                  <div id="upload-banner" class="banner">上传完成后，这里会提示解析结果，并自动把当前书籍放到当前工作区。</div>
+                </article>
+
+                <article class="subsurface">
+                  <div class="subsurface-head">
                     <div>
-                      <h3 class="result-title">History detail</h3>
-                      <div class="result-meta">Inspect chapter exports, download chapter HTML with assets, or pull the full archive without re-running analysis.</div>
+                      <div class="subsurface-label">Current Book</div>
+                      <div class="subsurface-title">当前书籍</div>
                     </div>
+                    <div class="section-aside">自动记住上次查看的 document</div>
                   </div>
-                  <div id="document-history-detail-shell" class="placeholder">Select a history record to inspect archive and chapter downloads.</div>
-                </div>
+                  <div id="document-shell" class="empty-state">
+                    先上传一本英文书。解析成功后，这里会告诉你当前书籍是谁、最新 run 到了哪一环、为什么还不能导出，以及下一步应该怎么做。
+                  </div>
+                </article>
               </div>
             </section>
 
-            <section class="workspace-card run-console">
-              <div class="workspace-header">
-                <div class="workspace-header-text">
-                  <p class="workspace-kicker">Run Console</p>
-                  <h2 class="workspace-title">Control long jobs without dropping to shell scripts.</h2>
-                  <p class="workspace-copy">
-                    Create a `translate_full` run, inspect the latest summary, and apply
-                    pause or drain through the same durable control plane your jobs already use.
+            <section class="surface" id="pipeline">
+              <div class="section-head">
+                <div>
+                  <div class="section-kicker">Run Flow</div>
+                  <h2 class="section-title">运行总览</h2>
+                  <p class="section-copy">
+                    整书转换是长任务。这里不只告诉你 run 是否存在，还会把阶段、工作量、阻塞原因和交付就绪度放在同一屏里。
                   </p>
                 </div>
-                <div class="control-chip">Durable runs · leases · budget guardrails</div>
+                <div class="section-aside">translate_full · review / repair / export 全链路可见</div>
               </div>
 
-              <div class="panel">
-                <h3 class="panel-title">Create or attach a run</h3>
-                <form class="form-grid dense-form" id="run-form">
-                  <div class="field-grid dense-grid">
-                    <div class="field span-12">
-                      <label for="run-document-id">Document ID for new run</label>
-                      <input id="run-document-id" name="run_document_id" type="text" placeholder="Uses current document id when left empty" />
-                    </div>
-                    <div class="field span-6">
-                      <label for="run-max-cost">Max total cost (USD)</label>
-                      <input id="run-max-cost" name="max_total_cost_usd" type="number" step="0.01" min="0" placeholder="0.50" />
-                    </div>
-                    <div class="field span-6">
-                      <label for="run-max-workers">Max parallel workers</label>
-                      <input id="run-max-workers" name="max_parallel_workers" type="number" min="1" placeholder="4" />
-                    </div>
-                    <div class="field span-12">
-                      <label for="run-id">Run ID</label>
-                      <input id="run-id" name="run_id" type="text" placeholder="Paste a run UUID to inspect or control it" />
-                    </div>
-                  </div>
-                  <div class="action-toolbar primary-strip">
-                    <button class="button primary dense" type="button" id="create-run">Create full run</button>
-                    <button class="button ghost dense" type="button" id="load-run">Load run</button>
-                  </div>
-                </form>
-                <div class="action-toolbar">
-                  <button class="button dense" type="button" id="pause-run">Pause</button>
-                  <button class="button dense" type="button" id="resume-run">Resume</button>
-                  <button class="button dense" type="button" id="drain-run">Drain</button>
-                  <button class="button gold dense" type="button" id="cancel-run">Cancel</button>
-                </div>
-              </div>
-
-              <div class="control-strip">
-                <div class="status-banner" id="run-status-banner">No run loaded yet. Create one from the current document or paste a run id.</div>
-                <div class="toggle-row compact-toggle">
-                  <button class="button ghost dense toggle-button" type="button" id="toggle-run-polling" data-active="true">Auto-refresh run: on</button>
-                  <span class="subtle-note" id="run-polling-note">Refreshes summary and newest events while this page stays open.</span>
-                </div>
-              </div>
-
-              <div class="result-shell overview-split">
-                <div class="result-card compact-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Run summary</h3>
-                      <div class="result-meta">Status, budgets, work items, leases, and latest control-plane signals.</div>
-                    </div>
-                  </div>
-                  <div id="run-summary-shell" class="placeholder compact">Run summary appears here after create or load.</div>
-                </div>
-
-                <div class="result-card compact-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Run events</h3>
-                      <div class="result-meta">Newest-first audit stream for pause, resume, guardrail stops, and execution changes.</div>
-                    </div>
-                  </div>
-                  <div id="run-events-shell" class="placeholder compact">Recent run events appear here after load.</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="workspace-card full-width worklist-board">
-              <div class="workspace-header">
-                <div class="workspace-header-text">
-                  <p class="workspace-kicker">Chapter Worklist Board</p>
-                  <h2 class="workspace-title">See which chapters actually need attention next.</h2>
-                  <p class="workspace-copy">
-                    This board uses the live chapter worklist contract, surfacing queue rank,
-                    issue driver, SLA state, owner readiness, and assignment in one triage view.
-                  </p>
-                </div>
-                <div class="control-chip">Queue rank · SLA pressure · owner-ready</div>
-              </div>
-
-              <div class="panel compact-panel">
-                <div class="button-row">
-                  <button class="button ghost dense" type="button" id="refresh-worklist">Refresh worklist</button>
-                  <button class="button ghost dense" type="button" id="open-current-exports">Refresh export dashboard</button>
-                </div>
-                <form class="filter-toolbar compact dense-toolbar" id="worklist-filter-form">
-                  <div class="field-grid dense-grid">
-                    <div class="field span-3">
-                      <label for="filter-queue-priority">Queue priority</label>
-                      <select id="filter-queue-priority">
-                        <option value="">All priorities</option>
-                        <option value="immediate">Immediate</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                      </select>
-                    </div>
-                    <div class="field span-3">
-                      <label for="filter-sla-status">SLA status</label>
-                      <select id="filter-sla-status">
-                        <option value="">All SLA states</option>
-                        <option value="breached">Breached</option>
-                        <option value="due_soon">Due soon</option>
-                        <option value="on_track">On track</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
-                    <div class="field span-3">
-                      <label for="filter-owner-ready">Owner ready</label>
-                      <select id="filter-owner-ready">
-                        <option value="">All</option>
-                        <option value="true">Owner-ready</option>
-                        <option value="false">Not owner-ready</option>
-                      </select>
-                    </div>
-                    <div class="field span-3">
-                      <label for="filter-assigned">Assignment</label>
-                      <select id="filter-assigned">
-                        <option value="">All</option>
-                        <option value="true">Assigned</option>
-                        <option value="false">Unassigned</option>
-                      </select>
-                    </div>
-                    <div class="field span-8">
-                      <label for="filter-owner-name">Assigned owner</label>
-                      <input id="filter-owner-name" type="text" placeholder="Click an owner card or type owner name" />
-                    </div>
-                  </div>
+              <div class="operations-stack">
+                <div class="run-console">
                   <div class="button-row">
-                    <button class="button primary dense" type="submit" id="apply-worklist-filters">Apply filters</button>
-                    <button class="button ghost dense" type="button" id="clear-worklist-filters">Clear filters</button>
+                    <button id="start-run" class="action-button primary" type="button">开始整书转换</button>
+                    <button id="refresh-current" class="action-button ghost" type="button">刷新当前状态</button>
                   </div>
-                </form>
-                <div class="filter-summary compact-summary" id="worklist-filter-summary">
-                  Showing the live actionable queue with no extra filters.
-                </div>
-              </div>
-
-              <div class="worklist-board-shell">
-                <div class="worklist-primary">
-                  <div class="status-banner" id="worklist-status-banner">Load a document to inspect chapter queue pressure and owner-ready chapters.</div>
-                  <div id="worklist-shell" class="queue-grid">
-                    <div class="placeholder">Load a document to populate the chapter board from <code>{api_prefix}/documents/&lt;document_id&gt;/chapters/worklist</code>.</div>
-                  </div>
+                  <div id="run-banner" class="banner">当前还没有活跃的整书 run。上传书籍后即可开始。</div>
+                  <div id="run-summary" class="summary-grid"></div>
+                  <div id="run-actions" class="run-action-strip" hidden></div>
+                  <div id="pipeline-steps" class="phase-rail"></div>
                 </div>
 
-                <div class="worklist-sidebar">
-                  <div class="owner-insights-grid">
-                    <div class="result-card">
-                      <div class="result-head">
-                        <div>
-                          <h3 class="result-title">Owner workload lane</h3>
-                          <div class="result-meta">Assigned workload derived from the same queue contract.</div>
-                        </div>
-                      </div>
-                      <div id="owner-workload-shell" class="placeholder">Owner workload appears here after the chapter worklist loads.</div>
-                    </div>
-                    <div class="result-card">
-                      <div class="result-head">
-                        <div>
-                          <h3 class="result-title">Owner alerts and routing cues</h3>
-                          <div class="result-meta">Turn current workload pressure into quick routing decisions.</div>
-                        </div>
-                      </div>
-                      <div id="owner-alert-shell" class="placeholder">Owner alerts appear here when assignment pressure shows up.</div>
-                    </div>
-                  </div>
-
-                  <div class="result-card">
-                    <div class="result-head">
+                <div class="delivery-column" id="results">
+                  <article class="subsurface">
+                    <div class="subsurface-head">
                       <div>
-                        <h3 class="result-title">Owner drill-down and balancing hints</h3>
-                        <div class="result-meta">Focus one owner and inspect simple rebalance suggestions.</div>
+                        <div class="subsurface-label">Deliverables</div>
+                        <div class="subsurface-title">交付资产</div>
                       </div>
                     </div>
-                    <div id="owner-detail-shell" class="placeholder">Select an owner to focus queue and workload hints.</div>
-                  </div>
+                    <div id="download-shell" class="asset-grid"></div>
+                  </article>
 
-                  <div class="result-card chapter-detail-card">
-                  <div class="result-head">
-                    <div>
-                      <h3 class="result-title">Chapter detail drawer</h3>
-                      <div class="result-meta">Click a chapter row or queue card to inspect issue families, recent actions, and assignment history.</div>
-                    </div>
-                  </div>
-                  <div id="chapter-detail-shell" class="placeholder">Select a chapter to open operator detail.</div>
-                  <form class="assignment-inline dense-form" id="assignment-form" hidden>
-                    <div class="field-grid dense-grid">
-                      <div class="field span-6">
-                        <label for="assignment-owner">Owner name</label>
-                        <input id="assignment-owner" type="text" placeholder="ops-alice" />
-                      </div>
-                      <div class="field span-6">
-                        <label for="assignment-actor">Assigned by</label>
-                        <input id="assignment-actor" type="text" value="ui-operator" />
-                      </div>
-                      <div class="field span-12">
-                        <label for="assignment-note">Note</label>
-                        <input id="assignment-note" type="text" placeholder="Optional routing note for this chapter." />
+                  <article class="subsurface">
+                    <div class="subsurface-head">
+                      <div>
+                        <div class="subsurface-label">Review Gate</div>
+                        <div class="subsurface-title">复核与阻塞</div>
                       </div>
                     </div>
-                    <div class="button-row">
-                      <button class="button primary dense" type="submit" id="assign-owner">Assign owner</button>
-                      <button class="button ghost dense" type="button" id="clear-owner">Clear assignment</button>
+                    <div id="attention-shell" class="empty-state">
+                      载入当前书籍后，这里会解释为什么现在能导出，或者为什么仍被 review gate 挡住。
                     </div>
-                  </form>
-                  </div>
+                  </article>
+
+                  <article class="subsurface">
+                    <div class="subsurface-head">
+                      <div>
+                        <div class="subsurface-label">Export Snapshot</div>
+                        <div class="subsurface-title">导出快照</div>
+                      </div>
+                    </div>
+                    <div id="export-dashboard-shell" class="empty-state">
+                      当前还没有导出快照。进入导出阶段后，这里会展示最近产物、成本和导出历史。
+                    </div>
+                  </article>
                 </div>
               </div>
             </section>
-          </div>
-        </section>
 
-        <footer class="footer">
-          <span class="footer-pill">Operator-facing technical-book control room</span>
-          <span class="footer-pill">Entry + workspace + run console + worklist</span>
-          <span class="footer-pill"><code>{health_href}</code></span>
+            <div class="support-grid">
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <div class="section-kicker">Operational Detail</div>
+                  <h2 class="section-title">章节注意区</h2>
+                  <p class="section-copy">
+                    真正影响体验的不是“章节总数”，而是哪些章节需要关注、哪些章节已经可直接下载，以及哪些章节仍然承受 issue 压力。
+                  </p>
+                </div>
+                <div class="section-aside">先处理最值得关注的章节</div>
+              </div>
+
+              <div id="chapter-shell" class="empty-state">
+                当前没有已载入书籍。文档到位后，这里会优先列出需要关注或可直接下载双语导出的章节。
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <div class="section-kicker">Recent Activity</div>
+                  <h2 class="section-title">最近运行记录</h2>
+                  <p class="section-copy">
+                    如果一条书籍任务没有继续推进，这里应该成为你判断它是正常运行、暂停、失败还是已进入导出的第一现场。
+                  </p>
+                </div>
+                <div class="section-aside">按最近事件理解系统刚刚做了什么</div>
+              </div>
+              <div id="event-shell" class="empty-state">
+                当前没有可展示的运行事件。启动整书转换后，这里会显示最近的 run 审计时间线。
+              </div>
+            </section>
+            </div>
+
+            <section class="surface history-surface" id="history">
+              <div class="section-head">
+                <div>
+                  <div class="section-kicker">Library</div>
+                  <h2 class="section-title">书库历史</h2>
+                  <p class="section-copy">
+                    这是次级信息区，但不能牺牲可读性。它会全宽铺开，方便回看长标题、长路径和真实的阶段说明，不再挤在右侧窄栏里。
+                  </p>
+                </div>
+                <div class="section-aside">次要信息下沉到底部，避免干扰当前工作流</div>
+              </div>
+
+              <form id="history-form" class="filter-stack">
+                <div class="field search-field">
+                  <label for="history-query">搜索</label>
+                  <input
+                    id="history-query"
+                    name="query"
+                    type="search"
+                    placeholder="搜索标题、作者、路径或 document id"
+                  />
+                  <div class="filter-help">支持按书名、作者、源路径和 document id 回找。</div>
+                </div>
+                <div class="field-grid">
+                  <div class="field">
+                    <label for="history-status">文档状态</label>
+                    <select id="history-status" name="status">
+                      <option value="">全部状态</option>
+                      <option value="active">已入库</option>
+                      <option value="partially_exported">部分可下载</option>
+                      <option value="exported">可下载</option>
+                      <option value="failed">失败</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="history-run-status">最近运行</label>
+                    <select id="history-run-status" name="latest_run_status">
+                      <option value="">全部运行状态</option>
+                      <option value="queued">已排队</option>
+                      <option value="running">进行中</option>
+                      <option value="paused">已暂停</option>
+                      <option value="failed">失败</option>
+                      <option value="cancelled">已取消</option>
+                      <option value="succeeded">已完成</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="history-merged-ready">中文阅读稿</label>
+                    <select id="history-merged-ready" name="merged_export_ready">
+                      <option value="">全部</option>
+                      <option value="true">已生成</option>
+                      <option value="false">未生成</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>&nbsp;</label>
+                    <button id="apply-history" class="action-button gold" type="submit">刷新书库视图</button>
+                  </div>
+                </div>
+              </form>
+
+              <div id="history-banner" class="banner">历史列表会自动加载。你也可以随时变更筛选条件，继续打开任意一本书。</div>
+              <div id="history-shell" class="history-stack"></div>
+            </section>
+        </div>
+
+        <footer class="footer-bar">
+          <div class="footer-pill">__APP_NAME__</div>
+          <a class="footer-pill" href="__DOCS_HREF__">API 文档</a>
+          <a class="footer-pill" href="__OPENAPI_HREF__">OpenAPI</a>
+          <a class="footer-pill" href="__HEALTH_HREF__">健康检查</a>
         </footer>
       </div>
     </div>
+
     <script>
-      (function() {{
-        const apiPrefix = "{api_prefix}";
-        const healthUrl = "{health_href}";
-        const storageKeys = {{
-          documentId: "book-agent.currentDocumentId",
-          runId: "book-agent.currentRunId",
-        }};
+      window.__BOOK_AGENT_BOOT__ = __BOOT_PAYLOAD__;
+    </script>
+    <script>
+      (function () {
+        const boot = window.__BOOK_AGENT_BOOT__;
+        const apiPrefix = boot.apiPrefix;
+        const STORAGE_KEY_DOCUMENT = "book-agent.current-document-id";
+        const PIPELINE_STEPS = [
+          {
+            key: "bootstrap",
+            label: "文档解析",
+            description: "导入源文件、识别结构、切章节并准备 packet。",
+          },
+          {
+            key: "translate",
+            label: "全文翻译",
+            description: "逐 packet 产出中文译文，并持续写回运行进度。",
+          },
+          {
+            key: "review",
+            label: "自动复核",
+            description: "执行 review 与 follow-up，清理会阻塞导出的质量问题。",
+          },
+          {
+            key: "bilingual_html",
+            label: "双语章节导出",
+            description: "生成逐章双语 HTML，方便精校和对照阅读。",
+          },
+          {
+            key: "merged_html",
+            label: "中文阅读稿导出",
+            description: "输出整书中文阅读包，进入最终可交付状态。",
+          },
+        ];
+        const STALE_FAILED_STAGE_RETRY_MS = 3 * 60 * 1000;
+        const DELIVERY_ASSETS = [
+          {
+            key: "merged_html",
+            title: "中文阅读包",
+            label: "Primary Delivery",
+            buttonText: "下载中文阅读包",
+            tone: "primary",
+          },
+          {
+            key: "bilingual_html",
+            title: "双语章节包",
+            label: "Editing Pack",
+            buttonText: "下载双语章节包",
+            tone: "ghost",
+          },
+          {
+            key: "review_package",
+            title: "Review Package",
+            label: "Diagnostic Pack",
+            buttonText: "下载 Review Package",
+            tone: "secondary",
+          },
+        ];
+        const STATUS_LABELS = {
+          pending: "待执行",
+          queued: "已排队",
+          running: "进行中",
+          draining: "收尾中",
+          succeeded: "已完成",
+          failed: "失败",
+          retryable_failed: "待重试",
+          paused: "已暂停",
+          cancelled: "已取消",
+          active: "已入库",
+          partially_exported: "部分可下载",
+          exported: "可下载",
+        };
 
-        const state = {{
-          currentDocumentId: window.localStorage.getItem(storageKeys.documentId) || "",
-          currentRunId: window.localStorage.getItem(storageKeys.runId) || "",
-          selectedChapterId: "",
-          selectedHistoryDocumentId: "",
-          autoPipeline: {{
-            runId: "",
-            documentId: "",
-            autoDownloadOnSuccess: false,
-            completionHandled: false,
-          }},
-          documentPollingEnabled: true,
-          documentPollHandle: null,
-          documentPollInFlight: false,
-          runPollingEnabled: true,
-          runPollHandle: null,
-          runPollInFlight: false,
-          worklistRefreshInFlight: false,
-          lastRefreshedAt: {{
-            document: null,
-            run: null,
-            worklist: null,
-          }},
-          historyFilters: {{
-            query: "",
-            sourceType: "",
-            status: "",
-            latestRunStatus: "",
-            mergedExportReady: "",
-          }},
-          worklistFilters: {{
-            queuePriority: "",
-            slaStatus: "",
-            ownerReady: "",
-            assigned: "",
-            assignedOwnerName: "",
-          }},
-        }};
+        const state = {
+          selectedFile: null,
+          currentDocument: null,
+          currentRun: null,
+          currentRunEvents: [],
+          currentExportDashboard: null,
+          historyEntries: [],
+          historyMeta: null,
+          pollTimer: null,
+          pollInFlight: false,
+          restoringContext: false,
+        };
 
-        const els = {{
-          healthState: document.getElementById("health-state"),
+        const els = {
           healthDot: document.getElementById("health-dot"),
-          healthCaption: document.getElementById("health-caption"),
+          healthLabel: document.getElementById("health-label"),
+          fileDropzone: document.getElementById("file-dropzone"),
           sourceFile: document.getElementById("source-file"),
-          sourceFilePicker: document.getElementById("source-file-picker"),
-          sourceFileName: document.getElementById("source-file-name"),
-          chooseSourceFile: document.getElementById("choose-source-file"),
-          documentId: document.getElementById("document-id"),
-          exportType: document.getElementById("export-type"),
-          autoFollowup: document.getElementById("auto-followup"),
-          bootstrapForm: document.getElementById("bootstrap-form"),
-          loadDocument: document.getElementById("load-document"),
-          translateDocument: document.getElementById("translate-document"),
-          reviewDocument: document.getElementById("review-document"),
-          exportDocument: document.getElementById("export-document"),
-          documentBanner: document.getElementById("document-status-banner"),
-          toggleDocumentPolling: document.getElementById("toggle-document-polling"),
-          documentPollingNote: document.getElementById("document-polling-note"),
-          documentLiveDot: document.getElementById("document-live-dot"),
-          documentLiveState: document.getElementById("document-live-state"),
-          documentLiveMeta: document.getElementById("document-live-meta"),
-          documentKpis: document.getElementById("document-kpis"),
-          documentSummary: document.getElementById("document-summary-shell"),
-          exportDashboard: document.getElementById("export-dashboard-shell"),
-          historyFilterForm: document.getElementById("history-filter-form"),
-          historySearch: document.getElementById("history-search"),
-          historySourceType: document.getElementById("history-source-type"),
+          pickFile: document.getElementById("pick-file"),
+          uploadFile: document.getElementById("upload-file"),
+          selectedFileName: document.getElementById("selected-file-name"),
+          selectedFileNote: document.getElementById("selected-file-note"),
+          uploadBanner: document.getElementById("upload-banner"),
+          documentShell: document.getElementById("document-shell"),
+          startRun: document.getElementById("start-run"),
+          refreshCurrent: document.getElementById("refresh-current"),
+          runBanner: document.getElementById("run-banner"),
+          runSummary: document.getElementById("run-summary"),
+          runActions: document.getElementById("run-actions"),
+          pipelineSteps: document.getElementById("pipeline-steps"),
+          downloadShell: document.getElementById("download-shell"),
+          attentionShell: document.getElementById("attention-shell"),
+          exportDashboardShell: document.getElementById("export-dashboard-shell"),
+          chapterShell: document.getElementById("chapter-shell"),
+          eventShell: document.getElementById("event-shell"),
+          historyForm: document.getElementById("history-form"),
+          historyQuery: document.getElementById("history-query"),
           historyStatus: document.getElementById("history-status"),
           historyRunStatus: document.getElementById("history-run-status"),
           historyMergedReady: document.getElementById("history-merged-ready"),
-          applyHistoryFilters: document.getElementById("apply-history-filters"),
-          clearHistoryFilters: document.getElementById("clear-history-filters"),
-          backfillHistory: document.getElementById("backfill-history"),
-          historyFilterSummary: document.getElementById("history-filter-summary"),
-          documentHistory: document.getElementById("document-history-shell"),
-          documentHistoryDetail: document.getElementById("document-history-detail-shell"),
-          runDocumentId: document.getElementById("run-document-id"),
-          runId: document.getElementById("run-id"),
-          runMaxCost: document.getElementById("run-max-cost"),
-          runMaxWorkers: document.getElementById("run-max-workers"),
-          createRun: document.getElementById("create-run"),
-          loadRun: document.getElementById("load-run"),
-          pauseRun: document.getElementById("pause-run"),
-          resumeRun: document.getElementById("resume-run"),
-          drainRun: document.getElementById("drain-run"),
-          cancelRun: document.getElementById("cancel-run"),
-          runBanner: document.getElementById("run-status-banner"),
-          toggleRunPolling: document.getElementById("toggle-run-polling"),
-          runPollingNote: document.getElementById("run-polling-note"),
-          runLiveDot: document.getElementById("run-live-dot"),
-          runLiveState: document.getElementById("run-live-state"),
-          runLiveMeta: document.getElementById("run-live-meta"),
-          runSummary: document.getElementById("run-summary-shell"),
-          runEvents: document.getElementById("run-events-shell"),
-          refreshWorklist: document.getElementById("refresh-worklist"),
-          openCurrentExports: document.getElementById("open-current-exports"),
-          worklistLiveDot: document.getElementById("worklist-live-dot"),
-          worklistLiveState: document.getElementById("worklist-live-state"),
-          worklistLiveMeta: document.getElementById("worklist-live-meta"),
-          worklistFilterForm: document.getElementById("worklist-filter-form"),
-          worklistFilterSummary: document.getElementById("worklist-filter-summary"),
-          filterQueuePriority: document.getElementById("filter-queue-priority"),
-          filterSlaStatus: document.getElementById("filter-sla-status"),
-          filterOwnerReady: document.getElementById("filter-owner-ready"),
-          filterAssigned: document.getElementById("filter-assigned"),
-          filterOwnerName: document.getElementById("filter-owner-name"),
-          applyWorklistFilters: document.getElementById("apply-worklist-filters"),
-          clearWorklistFilters: document.getElementById("clear-worklist-filters"),
-          worklistBanner: document.getElementById("worklist-status-banner"),
-          worklist: document.getElementById("worklist-shell"),
-          ownerWorkload: document.getElementById("owner-workload-shell"),
-          ownerAlert: document.getElementById("owner-alert-shell"),
-          ownerDetail: document.getElementById("owner-detail-shell"),
-          chapterDetail: document.getElementById("chapter-detail-shell"),
-          assignmentForm: document.getElementById("assignment-form"),
-          assignmentOwner: document.getElementById("assignment-owner"),
-          assignmentActor: document.getElementById("assignment-actor"),
-          assignmentNote: document.getElementById("assignment-note"),
-          assignOwner: document.getElementById("assign-owner"),
-          clearOwner: document.getElementById("clear-owner"),
-        }};
+          historyBanner: document.getElementById("history-banner"),
+          historyShell: document.getElementById("history-shell"),
+        };
 
-        function escapeHtml(value) {{
+        function escapeHtml(value) {
           return String(value ?? "")
             .replaceAll("&", "&amp;")
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;")
             .replaceAll('"', "&quot;")
             .replaceAll("'", "&#39;");
-        }}
+        }
 
-        function formatNumber(value) {{
-          if (value === null || value === undefined || Number.isNaN(Number(value))) {{
-            return "—";
-          }}
+        function formatNumber(value) {
+          if (value === null || value === undefined || Number.isNaN(Number(value))) {
+            return "0";
+          }
           return new Intl.NumberFormat("zh-CN").format(Number(value));
-        }}
+        }
 
-        function formatMoney(value) {{
-          if (value === null || value === undefined || Number.isNaN(Number(value))) {{
+        function formatMoney(value) {
+          if (value === null || value === undefined || Number.isNaN(Number(value))) {
+            return "$0.000";
+          }
+          return "$" + Number(value).toFixed(3);
+        }
+
+        function formatDate(value) {
+          if (!value) {
             return "—";
-          }}
-          return "$" + Number(value).toFixed(4);
-        }}
+          }
+          try {
+            return new Intl.DateTimeFormat("zh-CN", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date(value));
+          } catch (_error) {
+            return String(value);
+          }
+        }
 
-        function formatDecimal(value, digits = 2) {{
-          if (value === null || value === undefined || Number.isNaN(Number(value))) {{
+        function shorten(value, keep = 8) {
+          if (!value) {
             return "—";
-          }}
-          return Number(value).toFixed(digits);
-        }}
+          }
+          const text = String(value);
+          return text.length <= keep * 2 + 1
+            ? text
+            : text.slice(0, keep) + "…" + text.slice(-keep);
+        }
 
-        function formatDate(value) {{
-          if (!value) {{
-            return "—";
-          }}
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) {{
-            return escapeHtml(value);
-          }}
-          return date.toLocaleString("zh-CN", {{
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          }});
-        }}
+        function statusLabel(status) {
+          if (!status) {
+            return "未开始";
+          }
+          return STATUS_LABELS[status] || status;
+        }
 
-        function formatRelativeTime(value) {{
-          if (!value) {{
-            return "not synced yet";
-          }}
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) {{
-            return "timestamp unavailable";
-          }}
-          const deltaMs = Date.now() - date.getTime();
-          const deltaSeconds = Math.max(0, Math.round(deltaMs / 1000));
-          if (deltaSeconds < 60) {{
-            return deltaSeconds + "s ago";
-          }}
-          const deltaMinutes = Math.round(deltaSeconds / 60);
-          if (deltaMinutes < 60) {{
-            return deltaMinutes + "m ago";
-          }}
-          return formatDate(value);
-        }}
+        function sourceLabel(value) {
+          const mapping = {
+            epub: "EPUB",
+            pdf_text: "PDF（文本）",
+            pdf_scan: "PDF（扫描）",
+            pdf_mixed: "PDF（混合）",
+          };
+          return mapping[value] || value || "未识别";
+        }
 
-        function toBooleanOrNull(value) {{
-          if (value === "true") {{
-            return true;
-          }}
-          if (value === "false") {{
-            return false;
-          }}
+        function exportLabel(value) {
+          const mapping = {
+            bilingual_html: "双语章节 HTML",
+            merged_html: "中文阅读稿 HTML",
+            merged_markdown: "中文阅读稿 Markdown",
+            review_package: "Review Package",
+          };
+          return mapping[value] || value || "导出";
+        }
+
+        function pipelineStageLabel(stage) {
+          const labels = {
+            bootstrap: "文档解析",
+            translate: "全文翻译",
+            review: "自动复核",
+            bilingual_html: "双语章节导出",
+            merged_html: "中文阅读稿导出",
+            completed: "全部完成",
+          };
+          return labels[stage] || stage || "等待开始";
+        }
+
+        function preferredTitle(entity) {
+          return entity?.title_tgt || entity?.title || entity?.title_src || "未命名书籍";
+        }
+
+        function currentRunId() {
+          if (state.currentRun?.run_id) {
+            return state.currentRun.run_id;
+          }
+          if (state.currentDocument?.latest_run_id) {
+            return state.currentDocument.latest_run_id;
+          }
           return null;
-        }}
+        }
 
-        function setRefreshInFlight(scope, active) {{
-          if (scope === "document") {{
-            state.documentPollInFlight = active;
-          }} else if (scope === "run") {{
-            state.runPollInFlight = active;
-          }} else if (scope === "worklist") {{
-            state.worklistRefreshInFlight = active;
-          }}
-          updateLiveStatusUi();
-        }}
+        function currentPipelineDetail() {
+          return state.currentRun?.status_detail_json?.pipeline || {};
+        }
 
-        function markRefreshed(scope) {{
-          state.lastRefreshedAt[scope] = new Date().toISOString();
-          updateLiveStatusUi();
-        }}
+        function currentStageKey() {
+          return currentPipelineDetail().current_stage || null;
+        }
 
-        function getRefreshModel(scope) {{
-          const lastRefreshedAt = state.lastRefreshedAt[scope];
-          const inFlight =
-            scope === "document"
-              ? state.documentPollInFlight
-              : scope === "run"
-                ? state.runPollInFlight
-                : state.worklistRefreshInFlight;
-          const pollingEnabled = scope === "run" ? state.runPollingEnabled : state.documentPollingEnabled;
-          const hasSubject =
-            scope === "run"
-              ? Boolean(state.currentRunId || els.runId.value.trim())
-              : Boolean(state.currentDocumentId || els.documentId.value.trim());
+        function stageDetail(stageKey) {
+          return currentPipelineDetail().stages?.[stageKey] || null;
+        }
 
-          if (!hasSubject) {{
-            return {{
-              label: "Idle",
-              meta:
-                scope === "run"
-                  ? "Create or load a run to start monitoring."
-                  : "Load a document to start monitoring.",
-              dotClass: "status-dot",
-            }};
-          }}
+        function stageStatus(stageKey) {
+          if (stageKey === "bootstrap") {
+            if (!state.currentDocument) {
+              return "pending";
+            }
+            return state.currentDocument.status === "failed" ? "failed" : "succeeded";
+          }
+          const detail = stageDetail(stageKey);
+          if (detail?.status) {
+            return detail.status;
+          }
+          if (!state.currentRun) {
+            return "pending";
+          }
+          if (
+            state.currentRun.status === "succeeded" &&
+            ["translate", "review", "bilingual_html", "merged_html"].includes(stageKey)
+          ) {
+            return "succeeded";
+          }
+          return "pending";
+        }
 
-          if (inFlight) {{
-            return {{
-              label: "Refreshing",
-              meta: "Loading a fresh snapshot now.",
-              dotClass: "status-dot refreshing",
-            }};
-          }}
+        function failedPipelineStage() {
+          for (const step of PIPELINE_STEPS) {
+            const status = stageStatus(step.key);
+            if (status === "failed" || status === "cancelled") {
+              return { key: step.key, status: status, detail: stageDetail(step.key) };
+            }
+          }
+          return null;
+        }
 
-          if (!lastRefreshedAt) {{
-            return {{
-              label: "Waiting",
-              meta: "Waiting for the first successful refresh.",
-              dotClass: "status-dot",
-            }};
-          }}
+        function failedStageRetryEligible() {
+          const run = state.currentRun;
+          const failedStage = failedPipelineStage();
+          if (!run || !failedStage) {
+            return false;
+          }
+          if (["failed", "cancelled", "paused"].includes(run.status || "")) {
+            return true;
+          }
+          const freshestSignal = run.worker_leases?.latest_heartbeat_at || run.updated_at;
+          if (!freshestSignal) {
+            return false;
+          }
+          const freshestAt = new Date(freshestSignal).getTime();
+          if (Number.isNaN(freshestAt)) {
+            return false;
+          }
+          return (Date.now() - freshestAt) >= STALE_FAILED_STAGE_RETRY_MS;
+        }
 
-          const ageMs = Date.now() - new Date(lastRefreshedAt).getTime();
-          const staleAfterMs = scope === "run" ? 45000 : 90000;
-          if (ageMs > staleAfterMs) {{
-            return {{
-              label: "Stale",
-              meta: "Last refreshed " + formatRelativeTime(lastRefreshedAt) + ".",
-              dotClass: "status-dot stale",
-            }};
-          }}
+        function readErrorMessage(payload, fallback) {
+          if (!payload) {
+            return fallback;
+          }
+          if (typeof payload.detail === "string") {
+            return payload.detail;
+          }
+          if (typeof payload.message === "string") {
+            return payload.message;
+          }
+          return fallback;
+        }
 
-          return {{
-            label: pollingEnabled ? "Live" : "Manual",
-            meta:
-              "Last refreshed " +
-              formatRelativeTime(lastRefreshedAt) +
-              (pollingEnabled ? " with auto-refresh enabled." : " while auto-refresh is paused."),
-            dotClass: "status-dot live",
-          }};
-        }}
-
-        function updateLiveStatusUi() {{
-          const documentModel = getRefreshModel("document");
-          els.documentLiveState.textContent = documentModel.label;
-          els.documentLiveMeta.textContent = documentModel.meta;
-          els.documentLiveDot.className = documentModel.dotClass;
-
-          const runModel = getRefreshModel("run");
-          els.runLiveState.textContent = runModel.label;
-          els.runLiveMeta.textContent = runModel.meta;
-          els.runLiveDot.className = runModel.dotClass;
-
-          const worklistModel = getRefreshModel("worklist");
-          els.worklistLiveState.textContent = worklistModel.label;
-          els.worklistLiveMeta.textContent = worklistModel.meta;
-          els.worklistLiveDot.className = worklistModel.dotClass;
-        }}
-
-        function setBanner(element, message, kind) {{
-          if (!element) {{
-            return;
-          }}
+        function setBanner(element, message, tone) {
+          element.className = tone ? "banner " + tone : "banner";
           element.textContent = message;
-          element.className = kind ? "status-banner " + kind : "status-banner";
-        }}
+        }
 
-        function setButtonLoading(button, loading, label) {{
-          if (!button) {{
-            return;
-          }}
-          if (!button.dataset.originalLabel) {{
-            button.dataset.originalLabel = button.textContent;
-          }}
+        function setButtonLoading(button, loading, loadingText) {
+          if (!button.dataset.originalText) {
+            button.dataset.originalText = button.textContent;
+          }
           button.disabled = loading;
-          button.textContent = loading ? label : button.dataset.originalLabel;
-        }}
+          button.textContent = loading ? loadingText : button.dataset.originalText;
+        }
 
-        function getSelectedSourceFile() {{
-          return els.sourceFile.files && els.sourceFile.files[0] ? els.sourceFile.files[0] : null;
-        }}
+        function delay(ms) {
+          return new Promise((resolve) => window.setTimeout(resolve, ms));
+        }
 
-        function syncSelectedSourceFileUi() {{
-          const file = getSelectedSourceFile();
-          els.sourceFilePicker.dataset.hasFile = file ? "true" : "false";
-          els.sourceFileName.textContent = file
-            ? file.name + " · " + formatNumber(file.size) + " bytes"
-            : "No file selected yet.";
-        }}
-
-        function clearSelectedSourceFile() {{
-          els.sourceFile.value = "";
-          syncSelectedSourceFileUi();
-        }}
-
-        function setDocumentId(documentId) {{
-          state.currentDocumentId = documentId || "";
-          window.localStorage.setItem(storageKeys.documentId, state.currentDocumentId);
-          els.documentId.value = state.currentDocumentId;
-          if (!els.runDocumentId.value) {{
-            els.runDocumentId.value = state.currentDocumentId;
-          }}
-        }}
-
-        function setRunId(runId) {{
-          state.currentRunId = runId || "";
-          window.localStorage.setItem(storageKeys.runId, state.currentRunId);
-          els.runId.value = state.currentRunId;
-        }}
-
-        function setSelectedChapterId(chapterId) {{
-          state.selectedChapterId = chapterId || "";
-        }}
-
-        function syncRunPollingUi() {{
-          els.toggleRunPolling.dataset.active = state.runPollingEnabled ? "true" : "false";
-          els.toggleRunPolling.textContent = state.runPollingEnabled
-            ? "Auto-refresh run: on"
-            : "Auto-refresh run: off";
-          els.runPollingNote.textContent = state.runPollingEnabled
-            ? "Refreshes the loaded run summary and newest events every few seconds."
-            : "Auto-refresh is paused. Use Load run for a fresh snapshot.";
-        }}
-
-        function syncDocumentPollingUi() {{
-          els.toggleDocumentPolling.dataset.active = state.documentPollingEnabled ? "true" : "false";
-          els.toggleDocumentPolling.textContent = state.documentPollingEnabled
-            ? "Auto-refresh document: on"
-            : "Auto-refresh document: off";
-          els.documentPollingNote.textContent = state.documentPollingEnabled
-            ? "Refreshes document summary, exports, and worklist for the current document."
-            : "Document auto-refresh is paused. Use the refresh controls manually.";
-        }}
-
-        function syncHistoryFilterForm() {{
-          els.historySearch.value = state.historyFilters.query;
-          els.historySourceType.value = state.historyFilters.sourceType;
-          els.historyStatus.value = state.historyFilters.status;
-          els.historyRunStatus.value = state.historyFilters.latestRunStatus;
-          els.historyMergedReady.value = state.historyFilters.mergedExportReady;
-        }}
-
-        function buildHistoryQuery() {{
-          const params = new URLSearchParams();
-          params.set("limit", "12");
-          params.set("offset", "0");
-          if (state.historyFilters.query) {{
-            params.set("query", state.historyFilters.query);
-          }}
-          if (state.historyFilters.sourceType) {{
-            params.set("source_type", state.historyFilters.sourceType);
-          }}
-          if (state.historyFilters.status) {{
-            params.set("status", state.historyFilters.status);
-          }}
-          if (state.historyFilters.latestRunStatus) {{
-            params.set("latest_run_status", state.historyFilters.latestRunStatus);
-          }}
-          if (state.historyFilters.mergedExportReady) {{
-            params.set("merged_export_ready", state.historyFilters.mergedExportReady);
-          }}
-          return apiPrefix + "/documents/history?" + params.toString();
-        }}
-
-        function canRetryHistoryRun(status) {{
-          return status === "failed" || status === "cancelled";
-        }}
-
-        function renderHistoryFilterSummary(page) {{
-          const active = [];
-          if (state.historyFilters.query) {{
-            active.push('query="' + state.historyFilters.query + '"');
-          }}
-          if (state.historyFilters.sourceType) {{
-            active.push("source=" + state.historyFilters.sourceType);
-          }}
-          if (state.historyFilters.status) {{
-            active.push("status=" + state.historyFilters.status);
-          }}
-          if (state.historyFilters.latestRunStatus) {{
-            active.push("run=" + state.historyFilters.latestRunStatus);
-          }}
-          if (state.historyFilters.mergedExportReady) {{
-            active.push("merged=" + (state.historyFilters.mergedExportReady === "true" ? "ready" : "missing"));
-          }}
-          if (!active.length) {{
-            els.historyFilterSummary.textContent =
-              "Showing the latest analysis records with no extra filters.";
-            return;
-          }}
-          els.historyFilterSummary.textContent =
-            "Showing " + formatNumber(page.total_count) + " matching records with filters: " + active.join(" · ");
-        }}
-
-        function syncWorklistFilterForm() {{
-          els.filterQueuePriority.value = state.worklistFilters.queuePriority;
-          els.filterSlaStatus.value = state.worklistFilters.slaStatus;
-          els.filterOwnerReady.value = state.worklistFilters.ownerReady;
-          els.filterAssigned.value = state.worklistFilters.assigned;
-          els.filterOwnerName.value = state.worklistFilters.assignedOwnerName;
-        }}
-
-        function buildWorklistQuery(documentId) {{
-          const params = new URLSearchParams();
-          params.set("limit", "8");
-          params.set("offset", "0");
-          if (state.worklistFilters.queuePriority) {{
-            params.set("queue_priority", state.worklistFilters.queuePriority);
-          }}
-          if (state.worklistFilters.slaStatus) {{
-            params.set("sla_status", state.worklistFilters.slaStatus);
-          }}
-          if (state.worklistFilters.ownerReady) {{
-            params.set("owner_ready", state.worklistFilters.ownerReady);
-          }}
-          if (state.worklistFilters.assigned) {{
-            params.set("assigned", state.worklistFilters.assigned);
-          }}
-          if (state.worklistFilters.assignedOwnerName) {{
-            params.set("assigned_owner_name", state.worklistFilters.assignedOwnerName);
-          }}
-          return apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/chapters/worklist?" + params.toString();
-        }}
-
-        function renderWorklistFilterSummary(worklist) {{
-          const active = [];
-          if (worklist.applied_queue_priority_filter) {{
-            active.push("priority=" + worklist.applied_queue_priority_filter);
-          }}
-          if (worklist.applied_sla_status_filter) {{
-            active.push("sla=" + worklist.applied_sla_status_filter);
-          }}
-          if (worklist.applied_owner_ready_filter !== null && worklist.applied_owner_ready_filter !== undefined) {{
-            active.push("owner-ready=" + (worklist.applied_owner_ready_filter ? "yes" : "no"));
-          }}
-          if (worklist.applied_assigned_filter !== null && worklist.applied_assigned_filter !== undefined) {{
-            active.push("assigned=" + (worklist.applied_assigned_filter ? "yes" : "no"));
-          }}
-          if (worklist.applied_assigned_owner_filter) {{
-            active.push("owner=" + worklist.applied_assigned_owner_filter);
-          }}
-
-          if (!active.length) {{
-            els.worklistFilterSummary.textContent =
-              "Showing the live actionable queue with no extra filters. " +
-              formatNumber(worklist.worklist_count) +
-              " total actionable chapters, " +
-              formatNumber(worklist.owner_ready_count) +
-              " owner-ready.";
-            return;
-          }}
-
-          els.worklistFilterSummary.textContent =
-            "Filters active: " +
-            active.join(" · ") +
-            ". Showing " +
-            formatNumber(worklist.filtered_worklist_count) +
-            " of " +
-            formatNumber(worklist.worklist_count) +
-            " actionable chapters.";
-        }}
-
-        function clearChapterDetail() {{
-          setSelectedChapterId("");
-          els.assignmentForm.hidden = true;
-          els.chapterDetail.innerHTML =
-            '<div class="placeholder">Select a chapter to open operator detail.</div>';
-        }}
-
-        async function fetchJson(url, options) {{
-          const response = await fetch(url, {{
-            method: options?.method || "GET",
-            headers: {{
-              "Accept": "application/json",
-              ...(options?.body ? {{ "Content-Type": "application/json" }} : {{}}),
-            }},
-            body: options?.body ? JSON.stringify(options.body) : undefined,
-          }});
-
-          const raw = await response.text();
-          const payload = raw ? (() => {{
-            try {{
-              return JSON.parse(raw);
-            }} catch (_error) {{
-              return raw;
-            }}
-          }})() : null;
-
-          if (!response.ok) {{
-            const detail = payload && typeof payload === "object" ? payload.detail || JSON.stringify(payload) : payload || ("HTTP " + response.status);
-            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
-          }}
+        async function fetchJson(url, options) {
+          const response = await fetch(url, options);
+          const isJson = (response.headers.get("content-type") || "").includes("application/json");
+          const payload = isJson ? await response.json() : null;
+          if (!response.ok) {
+            throw new Error(readErrorMessage(payload, "请求失败：" + response.status));
+          }
           return payload;
-        }}
+        }
 
-        async function fetchMultipartJson(url, formData) {{
-          const response = await fetch(url, {{
-            method: "POST",
-            headers: {{
-              "Accept": "application/json",
-            }},
-            body: formData,
-          }});
+        async function fetchBinary(url) {
+          const response = await fetch(url);
+          if (!response.ok) {
+            let detail = "下载失败：" + response.status;
+            try {
+              const payload = await response.json();
+              detail = readErrorMessage(payload, detail);
+            } catch (_error) {
+              // ignore
+            }
+            throw new Error(detail);
+          }
+          return response;
+        }
 
-          const raw = await response.text();
-          const payload = raw ? (() => {{
-            try {{
-              return JSON.parse(raw);
-            }} catch (_error) {{
-              return raw;
-            }}
-          }})() : null;
+        function filenameFromDisposition(headerValue, fallbackName) {
+          if (!headerValue) {
+            return fallbackName;
+          }
+          const utf8Match = headerValue.match(/filename\\*=UTF-8''([^;]+)/i);
+          if (utf8Match) {
+            try {
+              return decodeURIComponent(utf8Match[1]);
+            } catch (_error) {
+              return utf8Match[1];
+            }
+          }
+          const plainMatch = headerValue.match(/filename="?([^"]+)"?/i);
+          if (plainMatch) {
+            return plainMatch[1];
+          }
+          return fallbackName;
+        }
 
-          if (!response.ok) {{
-            const detail = payload && typeof payload === "object" ? payload.detail || JSON.stringify(payload) : payload || ("HTTP " + response.status);
-            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
-          }}
-          return payload;
-        }}
-
-        function parseContentDispositionFilename(header) {{
-          if (!header) {{
-            return "";
-          }}
-          const utfMatch = header.match(/filename\\*=UTF-8''([^;]+)/i);
-          if (utfMatch && utfMatch[1]) {{
-            return decodeURIComponent(utfMatch[1]);
-          }}
-          const plainMatch = header.match(/filename="?([^"]+)"?/i);
-          return plainMatch && plainMatch[1] ? plainMatch[1] : "";
-        }}
-
-        async function fetchBlob(url, options) {{
-          const response = await fetch(url, {{
-            method: options?.method || "GET",
-            headers: {{
-              "Accept": "*/*",
-            }},
-          }});
-
-          if (!response.ok) {{
-            const raw = await response.text();
-            let payload = raw;
-            try {{
-              payload = raw ? JSON.parse(raw) : raw;
-            }} catch (_error) {{
-              payload = raw;
-            }}
-            const detail = payload && typeof payload === "object" ? payload.detail || JSON.stringify(payload) : payload || ("HTTP " + response.status);
-            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
-          }}
-
-          return {{
-            blob: await response.blob(),
-            filename: parseContentDispositionFilename(response.headers.get("content-disposition")),
-            contentType: response.headers.get("content-type") || "application/octet-stream",
-          }};
-        }}
-
-        function buildSavePickerTypes(filename, contentType) {{
-          if (!filename || !filename.includes(".") || !contentType || contentType === "application/octet-stream") {{
-            return [];
-          }}
-          const extension = "." + filename.split(".").pop().toLowerCase();
-          return [
-            {{
-              description: "Book Agent export",
-              accept: {{
-                [contentType]: [extension],
-              }},
-            }},
-          ];
-        }}
-
-        async function saveBlob(blob, filename, contentType) {{
-          const suggestedName = filename || "book-agent-export";
-          if (window.showSaveFilePicker) {{
-            const pickerOptions = {{
-              suggestedName,
-              excludeAcceptAllOption: false,
-              types: buildSavePickerTypes(suggestedName, contentType),
-            }};
-            if (!pickerOptions.types.length) {{
-              delete pickerOptions.types;
-            }}
-            const handle = await window.showSaveFilePicker(pickerOptions);
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            return suggestedName;
-          }}
-
+        async function saveResponse(response, fallbackName) {
+          const blob = await response.blob();
+          const filename = filenameFromDisposition(
+            response.headers.get("content-disposition"),
+            fallbackName
+          );
           const objectUrl = URL.createObjectURL(blob);
           const anchor = document.createElement("a");
           anchor.href = objectUrl;
-          anchor.download = suggestedName;
+          anchor.download = filename;
           document.body.appendChild(anchor);
           anchor.click();
           anchor.remove();
-          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-          return suggestedName;
-        }}
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
+          return filename;
+        }
 
-        async function downloadCurrentExport(documentId, exportType) {{
-          const params = new URLSearchParams({{ export_type: exportType }});
-          const download = await fetchBlob(
-            apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/exports/download?" + params.toString()
-          );
-          return saveBlob(download.blob, download.filename, download.contentType);
-        }}
+        function safeStorageSet(key, value) {
+          try {
+            window.localStorage.setItem(key, value);
+          } catch (_error) {
+            // ignore
+          }
+        }
 
-        async function downloadChapterExport(documentId, chapterId, exportType = "bilingual_html") {{
-          const params = new URLSearchParams({{ export_type: exportType }});
-          const download = await fetchBlob(
-            apiPrefix
-              + "/documents/"
-              + encodeURIComponent(documentId)
-              + "/chapters/"
-              + encodeURIComponent(chapterId)
-              + "/exports/download?"
-              + params.toString()
-          );
-          return saveBlob(download.blob, download.filename, download.contentType);
-        }}
+        function safeStorageRemove(key) {
+          try {
+            window.localStorage.removeItem(key);
+          } catch (_error) {
+            // ignore
+          }
+        }
 
-        async function fetchDocumentSummary(documentId) {{
-          return fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId));
-        }}
+        function safeStorageGet(key) {
+          try {
+            return window.localStorage.getItem(key);
+          } catch (_error) {
+            return null;
+          }
+        }
 
-        function renderDocumentKpis(summary) {{
-          els.documentKpis.innerHTML = [
-            {{
-              label: "Document",
-              value: summary.title || "Untitled",
-              note: (summary.author || "Unknown author") + " · " + summary.status,
-            }},
-            {{
-              label: "Chapters",
-              value: formatNumber(summary.chapter_count),
-              note: "Recovered chapter nodes in the document contract.",
-            }},
-            {{
-              label: "Sentences",
-              value: formatNumber(summary.sentence_count),
-              note: "Sentence-ledger count used for coverage and alignment.",
-            }},
-            {{
-              label: "Open Issues",
-              value: formatNumber(summary.open_issue_count),
-              note: "Current open review pressure across all chapters.",
-            }},
-          ].map((item) => `
-            <div class="kpi-card mini-kpi">
-              <div class="kpi-label">${{escapeHtml(item.label)}}</div>
-              <div class="kpi-value">${{escapeHtml(item.value)}}</div>
-              <div class="kpi-note">${{escapeHtml(item.note)}}</div>
-            </div>
-          `).join("");
-        }}
-
-        function renderChapterPdfImageSummary(imageSummary) {{
-          if (!imageSummary) {{
-            return "—";
-          }}
-          const headline = escapeHtml(
-            String(imageSummary.image_count || 0)
-            + " imgs across "
-            + String(imageSummary.page_count || 0)
-            + " pages"
-          );
-          const annotation = imageSummary.uncaptioned_image_count
-            ? `<div class="mini-meta"><span class="pill warn">uncaptioned ${{formatNumber(imageSummary.uncaptioned_image_count)}}</span></div>`
-            : imageSummary.caption_linked_count
-              ? `<div class="mini-meta">linked=${{formatNumber(imageSummary.caption_linked_count)}}</div>`
-              : imageSummary.stored_asset_count
-                ? `<div class="mini-meta">stored=${{formatNumber(imageSummary.stored_asset_count)}}</div>`
-                : "";
-          return headline + annotation;
-        }}
-
-        function renderDocumentSummary(summary) {{
-          const chapters = (summary.chapters || []).slice(0, 8).map((chapter) => `
-            <tr>
-              <td>
-                <button
-                  class="table-button"
-                  type="button"
-                  data-chapter-id="${{escapeHtml(chapter.chapter_id)}}"
-                  data-chapter-source="summary"
-                >
-                  #${{escapeHtml(chapter.ordinal)}}
-                </button>
-              </td>
-              <td>
-                <button
-                  class="table-button"
-                  type="button"
-                  data-chapter-id="${{escapeHtml(chapter.chapter_id)}}"
-                  data-chapter-source="summary"
-                >
-                  ${{escapeHtml(chapter.title_src || "Untitled chapter")}}
-                </button>
-              </td>
-              <td>${{escapeHtml(chapter.status)}}</td>
-              <td>
-                ${{
-                  escapeHtml(chapter.risk_level || "none")
-                }}
-                <div class="mini-meta">
-                  conf=${{formatDecimal(chapter.parse_confidence)}}${{
-                    chapter.structure_flags?.length ? " · " + escapeHtml(chapter.structure_flags.join(", ")) : ""
-                  }}
-                </div>
-              </td>
-              <td>${{formatNumber(chapter.sentence_count)}}</td>
-              <td>${{formatNumber(chapter.packet_count)}}</td>
-              <td>${{renderChapterPdfImageSummary(chapter.pdf_image_summary)}}</td>
-              <td>${{formatNumber(chapter.open_issue_count)}}</td>
-              <td>
-                ${{
-                  chapter.bilingual_export_ready
-                    ? `<button class="button ghost" type="button" data-chapter-download="${{escapeHtml(chapter.chapter_id)}}">Download chapter</button>`
-                    : '<span class="subtle-note">Not exported yet</span>'
-                }}
-              </td>
-            </tr>
-          `).join("");
-
-          els.documentSummary.innerHTML = `
-            <div class="result-head">
-              <div>
-                <h3 class="result-title">${{escapeHtml(summary.title || "Untitled document")}}</h3>
-                <div class="result-meta">
-                  ${{
-                    escapeHtml(summary.author || "Unknown author")
-                  }} · ${{
-                    escapeHtml(summary.source_type)
-                  }} · ${{
-                    escapeHtml(summary.status)
-                  }}${{
-                    summary.latest_run_status ? " · latest run=" + escapeHtml(summary.latest_run_status) : ""
-                  }}
-                </div>
-              </div>
-            </div>
-            <div class="button-row" style="margin-bottom:10px;">
-              ${{
-                summary.merged_export_ready
-                  ? `<button class="button gold" type="button" data-document-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
-                  : `<span class="subtle-note">The analysis archive becomes downloadable automatically after the full pipeline succeeds.</span>`
-              }}
-              ${{
-                summary.latest_run_id
-                  ? `<button class="button ghost" type="button" data-load-run-id="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
-                  : ""
-              }}
-            </div>
-            <div class="pill-row">
-              <span class="pill">chapters: ${{formatNumber(summary.chapter_count)}}</span>
-              <span class="pill">blocks: ${{formatNumber(summary.block_count)}}</span>
-              <span class="pill">sentences: ${{formatNumber(summary.sentence_count)}}</span>
-              <span class="pill soft">chapter exports: ${{formatNumber(summary.chapter_bilingual_export_count)}}</span>
-              ${{
-                summary.pdf_profile
-                  ? `<span class="pill soft">${{escapeHtml(summary.pdf_profile.pdf_kind || "pdf")}} · risk=${{escapeHtml(summary.pdf_profile.layout_risk || "unknown")}}</span>`
-                  : ""
-              }}
-              ${{
-                summary.pdf_image_summary
-                  ? `<span class="pill soft">pdf images: ${{formatNumber(summary.pdf_image_summary.image_count)}} on ${{formatNumber(summary.pdf_image_summary.page_count)}} pages</span>`
-                  : ""
-              }}
-              ${{
-                summary.pdf_image_summary?.stored_asset_count
-                  ? `<span class="pill soft">stored image assets: ${{formatNumber(summary.pdf_image_summary.stored_asset_count)}}</span>`
-                  : ""
-              }}
-              ${{
-                summary.pdf_image_summary?.caption_linked_count
-                  ? `<span class="pill soft">captions linked: ${{formatNumber(summary.pdf_image_summary.caption_linked_count)}}</span>`
-                  : ""
-              }}
-              ${{
-                summary.pdf_image_summary?.uncaptioned_image_count
-                  ? `<span class="pill warn">uncaptioned images: ${{formatNumber(summary.pdf_image_summary.uncaptioned_image_count)}}</span>`
-                  : ""
-              }}
-              ${{
-                summary.latest_merged_export_at
-                  ? `<span class="pill soft">merged: ${{formatDate(summary.latest_merged_export_at)}}</span>`
-                  : ""
-              }}
-              <span class="pill warn">open issues: ${{formatNumber(summary.open_issue_count)}}</span>
-            </div>
-            <dl class="definition-grid compact-definitions">
-              <div class="definition-item">
-                <dt class="definition-term">Document ID</dt>
-                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Latest Run</dt>
-                <dd class="definition-desc">${{summary.latest_run_id ? `<code>${{escapeHtml(summary.latest_run_id)}}</code>` : "No run recorded yet"}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Merged Export</dt>
-                <dd class="definition-desc">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">PDF Profile</dt>
-                <dd class="definition-desc">${{summary.pdf_profile ? escapeHtml((summary.pdf_profile.pdf_kind || "pdf") + " · risk=" + (summary.pdf_profile.layout_risk || "unknown")) : "Not a PDF document"}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">PDF Images</dt>
-                <dd class="definition-desc">${{
-                  summary.pdf_image_summary
-                    ? escapeHtml(
-                        String(summary.pdf_image_summary.image_count || 0)
-                        + " images across "
-                        + String(summary.pdf_image_summary.page_count || 0)
-                        + " pages"
-                        + (
-                          summary.pdf_image_summary.stored_asset_count
-                            ? " · stored assets=" + String(summary.pdf_image_summary.stored_asset_count)
-                            : ""
-                        )
-                        + (
-                          summary.pdf_image_summary.caption_linked_count
-                            ? " · captions linked=" + String(summary.pdf_image_summary.caption_linked_count)
-                            : ""
-                        )
-                        + (
-                          summary.pdf_image_summary.uncaptioned_image_count
-                            ? " · uncaptioned=" + String(summary.pdf_image_summary.uncaptioned_image_count)
-                            : ""
-                        )
-                      )
-                    : "No PDF image artifacts recorded"
-                }}</dd>
-              </div>
-            </dl>
-            <div class="table-scroll compact dense-scroll">
-              <table class="data-table compact dense-table">
-                <thead>
-                  <tr>
-                    <th>Chapter</th>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Risk</th>
-                    <th>Sentences</th>
-                    <th>Packets</th>
-                    <th>PDF Images</th>
-                    <th>Open Issues</th>
-                    <th>Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${{
-                    chapters || `<tr><td colspan="9">No chapter records found.</td></tr>`
-                  }}
-                </tbody>
-              </table>
-            </div>
-          `;
-        }}
-
-        function renderExportDashboard(dashboard) {{
-          const hotspotMarkup = (dashboard.issue_hotspots || []).slice(0, 5).map((entry) => `
-            <span class="pill warn">${{escapeHtml(entry.issue_type)}} / ${{escapeHtml(entry.root_cause_layer)}} · open ${{formatNumber(entry.open_issue_count)}}</span>
-          `).join("");
-          const recordMarkup = (dashboard.records || []).slice(0, 5).map((record) => `
-            <tr>
-              <td>${{escapeHtml(record.export_type)}}</td>
-              <td>${{escapeHtml(record.status)}}</td>
-              <td>${{formatDate(record.updated_at)}}</td>
-              <td>${{formatMoney(record.translation_usage_summary?.total_cost_usd)}}</td>
-              <td>${{formatNumber(record.export_auto_followup_summary?.executed_event_count || 0)}}</td>
-            </tr>
-          `).join("");
-
-          els.exportDashboard.innerHTML = `
-            <div class="pill-row">
-              <span class="pill">exports: ${{formatNumber(dashboard.export_count)}}</span>
-              <span class="pill">successful: ${{formatNumber(dashboard.successful_export_count)}}</span>
-              <span class="pill">auto-followup executed: ${{formatNumber(dashboard.total_auto_followup_executed_count)}}</span>
-              <span class="pill soft">latest export: ${{formatDate(dashboard.latest_export_at)}}</span>
-            </div>
-            <div class="pill-row" style="margin-top:12px;">
-              <span class="pill">usage cost: ${{formatMoney(dashboard.translation_usage_summary?.total_cost_usd)}}</span>
-              <span class="pill">token in: ${{formatNumber(dashboard.translation_usage_summary?.total_token_in)}}</span>
-              <span class="pill">token out: ${{formatNumber(dashboard.translation_usage_summary?.total_token_out)}}</span>
-              <span class="pill soft">avg latency: ${{formatNumber(dashboard.translation_usage_summary?.avg_latency_ms)}} ms</span>
-            </div>
-            <div class="result-shell overview-split">
-              <div class="result-card compact-card">
-                <div class="result-head">
-                  <div>
-                    <h3 class="result-title">Issue hotspots</h3>
-                    <div class="result-meta">Current live review pressure grouped by issue family.</div>
-                  </div>
-                </div>
-                <div class="pill-row">
-                  ${{
-                    hotspotMarkup || '<span class="pill soft">No live issue hotspots.</span>'
-                  }}
-                </div>
-              </div>
-              <div class="result-card compact-card">
-                <div class="result-head">
-                  <div>
-                    <h3 class="result-title">Recent exports</h3>
-                    <div class="result-meta">Latest export records with usage and follow-up hints.</div>
-                  </div>
-                </div>
-                <div class="table-scroll compact dense-scroll">
-                  <table class="data-table compact dense-table">
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Updated</th>
-                        <th>Cost</th>
-                        <th>Auto-Followup</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${{
-                        recordMarkup || `<tr><td colspan="5">No export records yet.</td></tr>`
-                      }}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          `;
-        }}
-
-        function renderDocumentHistory(page) {{
-          renderHistoryFilterSummary(page);
-          const rows = (page.entries || []).map((entry) => `
-            <tr>
-              <td>
-                <button class="table-button" type="button" data-history-select-doc="${{escapeHtml(entry.document_id)}}">
-                  ${{escapeHtml(entry.title || "Untitled document")}}
-                </button>
-                <div class="mini-meta">${{escapeHtml(entry.source_type)}} · ${{escapeHtml(entry.status)}}</div>
-              </td>
-              <td>${{formatNumber(entry.chapter_count)}}</td>
-              <td>${{formatNumber(entry.chapter_bilingual_export_count)}}</td>
-              <td>${{entry.latest_run_status ? escapeHtml(entry.latest_run_status) : "—"}}</td>
-              <td>${{formatDate(entry.updated_at)}}</td>
-              <td>
-                <div class="table-action-group dense-actions">
-                  <button class="button ghost dense" type="button" data-history-select-doc="${{escapeHtml(entry.document_id)}}">Inspect</button>
-                  <button class="button ghost dense" type="button" data-history-load-doc="${{escapeHtml(entry.document_id)}}">Load</button>
-                  ${{
-                    entry.latest_run_id
-                      ? `<button class="button ghost dense" type="button" data-history-load-run="${{escapeHtml(entry.latest_run_id)}}">Run</button>`
-                      : ""
-                  }}
-                  ${{
-                    entry.latest_run_id && canRetryHistoryRun(entry.latest_run_status)
-                      ? `<button class="button dense" type="button" data-history-retry-run="${{escapeHtml(entry.latest_run_id)}}" data-history-retry-document="${{escapeHtml(entry.document_id)}}">Retry run</button>`
-                      : ""
-                  }}
-                  ${{
-                    entry.merged_export_ready
-                      ? `<button class="button gold dense" type="button" data-history-download-merged="${{escapeHtml(entry.document_id)}}">Archive</button>`
-                      : ""
-                  }}
-                </div>
-              </td>
-            </tr>
-          `).join("");
-
-          els.documentHistory.innerHTML = `
-            <div class="pill-row">
-              <span class="pill">${{state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady ? "matching records" : "records"}}: ${{formatNumber(page.total_count)}}</span>
-              <span class="pill soft">showing: ${{formatNumber(page.record_count)}}</span>
-            </div>
-            <div class="table-scroll history-table-shell dense-scroll">
-              <table class="data-table history-table dense-table">
-                <thead>
-                  <tr>
-                    <th>Document</th>
-                    <th>Chapters</th>
-                    <th>Chapter Exports</th>
-                    <th>Latest Run</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${{
-                    rows || `<tr><td colspan="6">${{state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady ? "No analysis history matched the current filters." : "No analysis history yet. Bootstrap a document to create the first record."}}</td></tr>`
-                  }}
-                </tbody>
-              </table>
-            </div>
-          `;
-        }}
-
-        function renderHistoryDetail(summary) {{
-          state.selectedHistoryDocumentId = summary.document_id;
-          const chapterRows = (summary.chapters || []).map((chapter) => `
-            <tr>
-              <td>#${{escapeHtml(chapter.ordinal)}}</td>
-              <td>${{escapeHtml(chapter.title_src || "Untitled chapter")}}</td>
-              <td>${{escapeHtml(chapter.status)}}</td>
-              <td>${{formatNumber(chapter.packet_count)}}</td>
-              <td>${{renderChapterPdfImageSummary(chapter.pdf_image_summary)}}</td>
-              <td>${{chapter.bilingual_export_ready ? formatDate(chapter.latest_bilingual_export_at) : "—"}}</td>
-              <td>
-                ${{
-                  chapter.bilingual_export_ready
-                    ? `<div class="table-action-group dense-actions"><button class="button ghost dense" type="button" data-history-chapter-download="${{escapeHtml(chapter.chapter_id)}}" data-history-document-id="${{escapeHtml(summary.document_id)}}">Download chapter</button></div>`
-                    : '<span class="subtle-note">Not exported yet</span>'
-                }}
-              </td>
-            </tr>
-          `).join("");
-
-          els.documentHistoryDetail.innerHTML = `
-            <div class="result-head">
-              <div>
-                <h3 class="result-title">${{escapeHtml(summary.title || "Untitled document")}}</h3>
-                <div class="result-meta">
-                  ${{
-                    escapeHtml(summary.author || "Unknown author")
-                  }} · ${{
-                    escapeHtml(summary.source_type)
-                  }} · ${{
-                    escapeHtml(summary.status)
-                  }}
-                </div>
-              </div>
-            </div>
-            <div class="button-row" style="margin-bottom:12px;">
-              <button class="button ghost dense" type="button" data-history-load-doc="${{escapeHtml(summary.document_id)}}">Load into workspace</button>
-              ${{
-                summary.latest_run_id
-                  ? `<button class="button ghost dense" type="button" data-history-load-run="${{escapeHtml(summary.latest_run_id)}}">Open latest run</button>`
-                  : ""
-              }}
-              ${{
-                summary.latest_run_id && canRetryHistoryRun(summary.latest_run_status)
-                  ? `<button class="button dense" type="button" data-history-retry-run="${{escapeHtml(summary.latest_run_id)}}" data-history-retry-document="${{escapeHtml(summary.document_id)}}">Retry run</button>`
-                  : ""
-              }}
-              ${{
-                summary.merged_export_ready
-                  ? `<button class="button gold dense" type="button" data-history-download-merged="${{escapeHtml(summary.document_id)}}">Download archive</button>`
-                  : '<span class="subtle-note">The analysis archive is not available for this record yet.</span>'
-              }}
-            </div>
-            <dl class="definition-grid compact-definitions">
-              <div class="definition-item">
-                <dt class="definition-term">Document ID</dt>
-                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Chapters</dt>
-                <dd class="definition-desc">${{formatNumber(summary.chapter_count)}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Chapter Exports</dt>
-                <dd class="definition-desc">${{formatNumber(summary.chapter_bilingual_export_count)}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Latest Run</dt>
-                <dd class="definition-desc">${{summary.latest_run_status ? escapeHtml(summary.latest_run_status) : "—"}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">PDF Images</dt>
-                <dd class="definition-desc">${{
-                  summary.pdf_image_summary
-                    ? escapeHtml(
-                        String(summary.pdf_image_summary.image_count || 0)
-                        + " images across "
-                        + String(summary.pdf_image_summary.page_count || 0)
-                        + " pages"
-                        + (
-                          summary.pdf_image_summary.caption_linked_count
-                            ? " · captions linked=" + String(summary.pdf_image_summary.caption_linked_count)
-                            : ""
-                        )
-                        + (
-                          summary.pdf_image_summary.uncaptioned_image_count
-                            ? " · uncaptioned=" + String(summary.pdf_image_summary.uncaptioned_image_count)
-                            : ""
-                        )
-                      )
-                    : "No PDF image artifacts recorded"
-                }}</dd>
-              </div>
-              <div class="definition-item full">
-                <dt class="definition-term">Merged Export</dt>
-                <dd class="definition-desc">${{summary.latest_merged_export_at ? formatDate(summary.latest_merged_export_at) : "Not exported yet"}}</dd>
-              </div>
-            </dl>
-            <div class="table-scroll history-table-shell dense-scroll">
-              <table class="data-table history-detail-table dense-table">
-                <thead>
-                  <tr>
-                    <th>Chapter</th>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Packets</th>
-                    <th>PDF Images</th>
-                    <th>Latest Export</th>
-                    <th>Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${{
-                    chapterRows || `<tr><td colspan="7">This record has no chapter rows.</td></tr>`
-                  }}
-                </tbody>
-              </table>
-            </div>
-          `;
-        }}
-
-        function renderOwnerWorkload(worklist) {{
-          const owners = worklist.owner_workload_summary || [];
-          const highlights = worklist.owner_workload_highlights || {{}};
-          const cards = owners.slice(0, 6).map((owner) => `
-            <button
-              class="owner-card${{state.worklistFilters.assignedOwnerName === owner.owner_name ? " is-active" : ""}}"
-              type="button"
-              data-owner-filter="${{escapeHtml(owner.owner_name)}}"
-            >
-              <div class="owner-card-head">
-                <span class="owner-card-title">${{escapeHtml(owner.owner_name)}}</span>
-                <span class="pill soft">${{formatNumber(owner.assigned_chapter_count)}} chapters</span>
-              </div>
-              <div class="owner-card-meta">
-                immediate=${{formatNumber(owner.immediate_count)}} · breached=${{formatNumber(owner.breached_count)}} · blocking=${{formatNumber(owner.total_active_blocking_issue_count)}}
-              </div>
-              <div class="owner-card-meta">
-                owner-ready=${{formatNumber(owner.owner_ready_count)}} · oldest=${{formatDate(owner.oldest_active_issue_at)}}
-              </div>
-              <div class="subtle-note">Click to filter the queue to this owner.</div>
-            </button>
-          `).join("");
-          const highlightMarkup = [
-            ["Top loaded", highlights.top_loaded_owner],
-            ["Top breached", highlights.top_breached_owner],
-            ["Top blocking", highlights.top_blocking_owner],
-            ["Top immediate", highlights.top_immediate_owner],
-          ].map(([label, entry]) => `
-            <span class="pill${{entry ? "" : " soft"}}">${{escapeHtml(label)}}: ${{entry ? escapeHtml(entry.owner_name) : "—"}}</span>
-          `).join("");
-
-          els.ownerWorkload.innerHTML = `
-            <div class="pill-row">
-              ${{
-                highlightMarkup || '<span class="pill soft">No owner workload highlights yet.</span>'
-              }}
-            </div>
-            <div class="owner-grid">
-              ${{
-                cards || '<div class="placeholder" style="grid-column:1/-1;">No assigned owner workload yet. Chapters are unassigned or currently quiet.</div>'
-              }}
-            </div>
-          `;
-
-          const selectedOwnerName =
-            state.worklistFilters.assignedOwnerName ||
-            highlights.top_loaded_owner?.owner_name ||
-            owners[0]?.owner_name ||
-            "";
-          const selectedOwner = owners.find((owner) => owner.owner_name === selectedOwnerName) || null;
-          const secondOwner = owners.find((owner) => owner.owner_name !== selectedOwnerName) || null;
-          const entries = worklist.entries || [];
-          const currentOwnerEntries = selectedOwnerName
-            ? entries.filter((entry) => entry.assigned_owner_name === selectedOwnerName)
-            : [];
-          const unassignedImmediateCount = entries.filter(
-            (entry) => !entry.is_assigned && entry.queue_priority === "immediate"
-          ).length;
-          const unassignedHighCount = entries.filter(
-            (entry) => !entry.is_assigned && entry.queue_priority === "high"
-          ).length;
-
-          const alerts = [];
-          if (highlights.top_breached_owner) {{
-            alerts.push(`
-              <div class="alert-card danger">
-                <div class="alert-title">Breached owner workload</div>
-                <div class="alert-body">${{escapeHtml(highlights.top_breached_owner.owner_name)}} currently owns ${{
-                  formatNumber(highlights.top_breached_owner.breached_count)
-                }} breached chapter(s).</div>
-                <div class="button-row">
-                  <button class="button ghost" type="button" data-owner-filter="${{escapeHtml(highlights.top_breached_owner.owner_name)}}">Focus owner</button>
-                  <button class="button ghost" type="button" data-worklist-preset="breached">Show breached queue</button>
-                </div>
-              </div>
-            `);
-          }}
-          if (unassignedImmediateCount > 0) {{
-            alerts.push(`
-              <div class="alert-card warn">
-                <div class="alert-title">Unassigned immediate queue</div>
-                <div class="alert-body">${{formatNumber(unassignedImmediateCount)}} immediate chapter(s) are still unassigned in the visible queue.</div>
-                <div class="button-row">
-                  <button class="button ghost" type="button" data-worklist-preset="unassigned-immediate">Focus unassigned immediate</button>
-                </div>
-              </div>
-            `);
-          }}
-          if (selectedOwner && secondOwner && selectedOwner.assigned_chapter_count - secondOwner.assigned_chapter_count >= 2) {{
-            alerts.push(`
-              <div class="alert-card warn">
-                <div class="alert-title">Rebalance suggested</div>
-                <div class="alert-body">${{escapeHtml(selectedOwner.owner_name)}} carries ${{
-                  formatNumber(selectedOwner.assigned_chapter_count)
-                }} chapter(s), versus ${{
-                  formatNumber(secondOwner.assigned_chapter_count)
-                }} for ${{
-                  escapeHtml(secondOwner.owner_name)
-                }}.</div>
-                <div class="button-row">
-                  <button class="button ghost" type="button" data-owner-filter="${{escapeHtml(selectedOwner.owner_name)}}">Review loaded owner</button>
-                  <button class="button ghost" type="button" data-owner-filter="${{escapeHtml(secondOwner.owner_name)}}">Inspect lighter owner</button>
-                </div>
-              </div>
-            `);
-          }}
-          if (!alerts.length) {{
-            alerts.push(`
-              <div class="alert-card success">
-                <div class="alert-title">No urgent owner alert</div>
-                <div class="alert-body">Current visible queue does not show breached owner load, obvious owner imbalance, or unassigned immediate pressure.</div>
-              </div>
-            `);
-          }}
-
-          els.ownerAlert.innerHTML = `<div class="alert-grid">${{alerts.join("")}}</div>`;
-
-          const hints = [];
-          if (selectedOwner && secondOwner && selectedOwner.assigned_chapter_count - secondOwner.assigned_chapter_count >= 2) {{
-            hints.push(
-              `<li><strong>Rebalance candidate</strong><span>${{escapeHtml(selectedOwner.owner_name)}} currently carries ${{
-                formatNumber(selectedOwner.assigned_chapter_count)
-              }} chapters versus ${{
-                formatNumber(secondOwner.assigned_chapter_count)
-              }} for the next-loaded owner.</span></li>`
-            );
-          }}
-          if (selectedOwner && selectedOwner.breached_count > 0) {{
-            hints.push(
-              `<li><strong>SLA breach concentration</strong><span>${{escapeHtml(selectedOwner.owner_name)}} is currently carrying ${{
-                formatNumber(selectedOwner.breached_count)
-              }} breached chapter(s).</span></li>`
-            );
-          }}
-          if (unassignedImmediateCount > 0 || unassignedHighCount > 0) {{
-            hints.push(
-              `<li><strong>Unassigned queue pressure</strong><span>There are ${{
-                formatNumber(unassignedImmediateCount)
-              }} unassigned immediate chapter(s) and ${{
-                formatNumber(unassignedHighCount)
-              }} unassigned high-priority chapter(s) visible in the current queue.</span></li>`
-            );
-          }}
-
-          if (!selectedOwner) {{
-            els.ownerDetail.innerHTML =
-              '<div class="placeholder">No assigned owners yet. This panel fills once chapters are assigned.</div>';
+        function rememberCurrentDocument(documentId) {
+          if (!documentId) {
+            safeStorageRemove(STORAGE_KEY_DOCUMENT);
             return;
-          }}
+          }
+          safeStorageSet(STORAGE_KEY_DOCUMENT, documentId);
+        }
 
-          const focusedChapters = currentOwnerEntries.slice(0, 5).map((entry) => `
-            <li>
-              <strong>#${{escapeHtml(entry.ordinal)}} · ${{escapeHtml(entry.title_src || "Untitled chapter")}}</strong>
-              <span>priority=${{escapeHtml(entry.queue_priority)}} · sla=${{escapeHtml(entry.sla_status)}} · open=${{formatNumber(entry.open_issue_count)}} · blocking=${{formatNumber(entry.active_blocking_issue_count)}}</span>
-            </li>
-          `).join("");
+        function currentTranslateProgress() {
+          const translateDetail = stageDetail("translate");
+          const total = Number(
+            translateDetail?.total_packet_count ??
+              state.currentDocument?.packet_count ??
+              state.currentRun?.work_items?.stage_counts?.translate ??
+              0
+          );
+          const completed = Number(
+            state.currentRun?.status_detail_json?.control_counters?.completed_work_item_count ?? 0
+          );
+          return {
+            total: total,
+            completed: completed,
+            ratio: total > 0 ? Math.max(0, Math.min(1, completed / total)) : 0,
+          };
+        }
 
-          els.ownerDetail.innerHTML = `
-            <div class="pill-row">
-              <span class="pill">focus: ${{escapeHtml(selectedOwner.owner_name)}}</span>
-              <span class="pill soft">assigned=${{formatNumber(selectedOwner.assigned_chapter_count)}}</span>
-              <span class="pill warn">breached=${{formatNumber(selectedOwner.breached_count)}}</span>
-              <span class="pill soft">blocking=${{formatNumber(selectedOwner.total_active_blocking_issue_count)}}</span>
-              <button class="button ghost" type="button" data-clear-owner-filter="true">Clear owner focus</button>
+        function blockingIssueCount() {
+          const hotspots = state.currentExportDashboard?.issue_hotspots || [];
+          return hotspots.reduce((total, entry) => total + Number(entry.blocking_issue_count || 0), 0);
+        }
+
+        function nextMilestoneText() {
+          const summary = state.currentDocument;
+          const dashboard = state.currentExportDashboard;
+          if (!summary) {
+            return "先上传一本英文书，才能进入整书工作流。";
+          }
+          if (summary.merged_export_ready) {
+            return "中文阅读包已经准备好，可以直接下载保存。";
+          }
+          const stage = currentStageKey();
+          if (!summary.latest_run_id) {
+            return "解析已经完成，下一步是启动整书转换。";
+          }
+          if (stage === "translate") {
+            return "系统仍在全文翻译阶段，尚未进入 review 和导出。";
+          }
+          if (stage === "review") {
+            const blockers = blockingIssueCount();
+            return blockers > 0
+              ? "仍有 review blocker 未清理，所以整书导出不会开始。"
+              : "review 已在进行，系统准备进入导出阶段。";
+          }
+          if (stage === "bilingual_html") {
+            return "双语章节导出正在生成，中文阅读稿还需要再走一段。";
+          }
+          if (stage === "merged_html") {
+            return "整书中文阅读稿正在导出，接近最终交付。";
+          }
+          if (summary.chapter_bilingual_export_count > 0) {
+            return "双语章节包已经可用，整书中文阅读包还在等待最终导出。";
+          }
+          if (dashboard?.successful_export_count > 0) {
+            return "部分导出已完成，等待整书中文阅读包就绪。";
+          }
+          if (summary.latest_run_status === "failed" || summary.latest_run_status === "cancelled") {
+            return "上次整书运行中断，可以直接重试。";
+          }
+          if (summary.latest_run_status === "paused") {
+            return "上次整书运行已暂停，可以继续。";
+          }
+          return "当前还没有可下载结果，系统会继续推进后续阶段。";
+        }
+
+        function documentBadgeMeta() {
+          const summary = state.currentDocument;
+          if (!summary) {
+            return { tone: "pending", label: "等待书籍" };
+          }
+          if (summary.merged_export_ready) {
+            return { tone: "succeeded", label: "可下载" };
+          }
+          const runStatus = state.currentRun?.status || summary.latest_run_status;
+          const stage = currentStageKey();
+          if (stage === "translate" && ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "翻译已暂停" : runStatus === "queued" ? "待翻译" : "翻译中",
+            };
+          }
+          if (stage === "review" && ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "复核已暂停" : runStatus === "queued" ? "待复核" : "复核中",
+            };
+          }
+          if (["bilingual_html", "merged_html"].includes(stage || "") &&
+            ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "导出已暂停" : runStatus === "queued" ? "待导出" : "导出中",
+            };
+          }
+          if (runStatus === "failed" || runStatus === "cancelled") {
+            return { tone: "failed", label: statusLabel(runStatus) };
+          }
+          if (!summary.latest_run_id) {
+            return { tone: "active", label: "已解析" };
+          }
+          return { tone: "active", label: statusLabel(summary.status) };
+        }
+
+        function runPrimaryAction() {
+          const run = state.currentRun;
+          const summary = state.currentDocument;
+          const latestStatus = run?.status || summary?.latest_run_status || null;
+          const runId = run?.run_id || summary?.latest_run_id || null;
+          const failedStage = failedPipelineStage();
+          if (!summary) {
+            return { mode: "disabled", label: "先上传并解析书籍", disabled: true };
+          }
+          if (failedStage && runId) {
+            if (["failed", "cancelled", "paused"].includes(latestStatus || "") || failedStageRetryEligible()) {
+              return { mode: "retry", label: "重试上次转换", disabled: false, runId: runId, failedStage: failedStage.key };
+            }
+            return {
+              mode: "recover",
+              label: "刷新并准备重试",
+              disabled: false,
+              runId: runId,
+              failedStage: failedStage.key,
+            };
+          }
+          if (latestStatus === "running" || latestStatus === "draining") {
+            return { mode: "disabled", label: "整书转换进行中", disabled: true };
+          }
+          if ((latestStatus === "queued" || latestStatus === "paused") && runId) {
+            return { mode: "resume", label: "继续当前转换", disabled: false, runId: runId };
+          }
+          if ((latestStatus === "failed" || latestStatus === "cancelled") && runId) {
+            return { mode: "retry", label: "重试上次转换", disabled: false, runId: runId };
+          }
+          return {
+            mode: "create",
+            label: latestStatus === "succeeded" ? "重新运行整书转换" : "开始整书转换",
+            disabled: false,
+          };
+        }
+
+        function historyBadgeMeta(entry) {
+          if (entry.merged_export_ready) {
+            return { tone: "succeeded", label: "可下载" };
+          }
+          const runStatus = entry.latest_run_status || null;
+          const stage = entry.latest_run_current_stage || null;
+          if (stage === "translate" && ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "翻译已暂停" : runStatus === "queued" ? "待翻译" : "翻译中",
+            };
+          }
+          if (stage === "review" && ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "复核已暂停" : runStatus === "queued" ? "待复核" : "复核中",
+            };
+          }
+          if (["bilingual_html", "merged_html"].includes(stage || "") &&
+            ["queued", "running", "draining", "paused"].includes(runStatus)) {
+            return {
+              tone: runStatus === "paused" ? "paused" : runStatus === "queued" ? "pending" : "running",
+              label: runStatus === "paused" ? "导出已暂停" : runStatus === "queued" ? "待导出" : "导出中",
+            };
+          }
+          if (entry.chapter_bilingual_export_count > 0) {
+            return { tone: "succeeded", label: "部分可下载" };
+          }
+          if (runStatus === "failed" || runStatus === "cancelled") {
+            return { tone: "failed", label: statusLabel(runStatus) };
+          }
+          if (!entry.latest_run_id) {
+            return { tone: "active", label: "已入库" };
+          }
+          return { tone: "active", label: statusLabel(entry.status) };
+        }
+
+        function historyProgress(entry) {
+          const total = Number(entry.latest_run_total_work_item_count || entry.packet_count || 0);
+          const completed = Number(entry.latest_run_completed_work_item_count || 0);
+          if (entry.merged_export_ready) {
+            return { ratio: 1, text: "中文阅读包已经可直接下载。" };
+          }
+          if (entry.latest_run_current_stage === "translate" && total > 0) {
+            return {
+              ratio: Math.max(0, Math.min(1, completed / total)),
+              text:
+                "全文翻译阶段 · 已完成 " +
+                formatNumber(completed) +
+                " / " +
+                formatNumber(total) +
+                " 个 packet",
+            };
+          }
+          if (entry.latest_run_current_stage === "review") {
+            return { ratio: 0.76, text: "自动复核阶段 · 等待清理 blocker 后再进入导出。" };
+          }
+          if (entry.latest_run_current_stage === "bilingual_html") {
+            return { ratio: 0.88, text: "双语章节包正在生成，整书中文阅读包尚未完成。" };
+          }
+          if (entry.latest_run_current_stage === "merged_html") {
+            return { ratio: 0.96, text: "整书中文阅读稿正在导出，接近最终完成。" };
+          }
+          if (entry.chapter_bilingual_export_count > 0) {
+            return { ratio: 0.82, text: "双语章节包已可用，中文阅读包仍待生成。" };
+          }
+          if (!entry.latest_run_id) {
+            return { ratio: 0.15, text: "书籍已入库，尚未启动整书转换。" };
+          }
+          if (entry.latest_run_status === "failed" || entry.latest_run_status === "cancelled") {
+            return { ratio: 0.36, text: "上次运行中断，可以打开这本书后继续处理或重试。" };
+          }
+          if (entry.latest_run_status === "paused") {
+            return { ratio: 0.42, text: "上次运行已暂停，打开这本书后可以继续。" };
+          }
+          return { ratio: 0.28, text: "当前处于处理中，可以打开这本书查看详情。" };
+        }
+
+        function pipelineMeta(stepKey) {
+          if (stepKey === "bootstrap" && state.currentDocument) {
+            return "已准备 " + formatNumber(state.currentDocument.packet_count) + " 个 packet";
+          }
+          const detail = stageDetail(stepKey);
+          if (!detail) {
+            return "等待进入该阶段";
+          }
+          if (stepKey === "translate") {
+            const progress = currentTranslateProgress();
+            const inflight =
+              Number(state.currentRun?.work_items?.status_counts?.running || 0) +
+              Number(state.currentRun?.work_items?.status_counts?.leased || 0);
+            const inflightText = inflight > 0 ? " · 进行中 " + formatNumber(inflight) : "";
+            return (
+              "已完成 " +
+              formatNumber(progress.completed) +
+              " / " +
+              formatNumber(progress.total) +
+              " 个 packet" +
+              inflightText
+            );
+          }
+          if (stepKey === "review") {
+            return (
+              "issues " +
+              formatNumber(detail.total_issue_count ?? 0) +
+              " · actions " +
+              formatNumber(detail.total_action_count ?? 0)
+            );
+          }
+          if (stepKey === "bilingual_html" || stepKey === "merged_html") {
+            const exportCount = detail.chapter_export_count ?? 0;
+            return exportCount > 0
+              ? "导出记录 " + formatNumber(exportCount) + " 个章节结果"
+              : "等待生成导出资产";
+          }
+          return detail.updated_at ? "最近更新 " + formatDate(detail.updated_at) : "等待进入该阶段";
+        }
+
+        function renderDocumentShell() {
+          const summary = state.currentDocument;
+          if (!summary) {
+            els.documentShell.className = "empty-state";
+            els.documentShell.innerHTML =
+              "先上传一本英文书。解析成功后，这里会告诉你当前书籍是谁、最新 run 到了哪一环、为什么还不能导出，以及下一步应该怎么做。";
+            return;
+          }
+
+          const badge = documentBadgeMeta();
+          const pathHtml = summary.source_path
+            ? `
+              <div class="path-block">
+                <div class="metric-label">源文件路径</div>
+                <div class="mono-copy">${escapeHtml(summary.source_path)}</div>
+              </div>
+            `
+            : "";
+          els.documentShell.className = "book-stack";
+          els.documentShell.innerHTML = `
+            <div class="book-head">
+              <div>
+                <div class="section-kicker">Current book dossier</div>
+                <h3 class="book-title">${escapeHtml(preferredTitle(summary))}</h3>
+                <div class="book-meta">
+                  ${escapeHtml(summary.author || "作者待识别")} ·
+                  ${escapeHtml(sourceLabel(summary.source_type))} ·
+                  文档状态 ${escapeHtml(statusLabel(summary.status))}
+                </div>
+              </div>
+              <span class="status-badge ${escapeHtml(badge.tone)}">${escapeHtml(badge.label)}</span>
             </div>
-            <div class="detail-grid">
-              <div class="detail-block">
-                <div class="detail-label">Focused owner workload</div>
-                <div class="detail-value">${{escapeHtml(selectedOwner.owner_name)}} owns ${{
-                  formatNumber(selectedOwner.assigned_chapter_count)
-                }} chapter(s), with ${{
-                  formatNumber(selectedOwner.immediate_count)
-                }} immediate and ${{
-                  formatNumber(selectedOwner.high_count)
-                }} high-priority items.</div>
+            <p class="book-brief">${escapeHtml(nextMilestoneText())}</p>
+            <div class="tag-row">
+              <span class="tag">document ${escapeHtml(shorten(summary.document_id, 6))}</span>
+              <span class="tag">最近运行 ${escapeHtml(statusLabel(summary.latest_run_status || "pending"))}</span>
+              <span class="tag">packet ${formatNumber(summary.packet_count)}</span>
+              <span class="tag">open issues ${formatNumber(summary.open_issue_count)}</span>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-card">
+                <div class="metric-label">章节</div>
+                <div class="metric-value">${formatNumber(summary.chapter_count)}</div>
+                <div class="metric-note">已完成章节级拆分</div>
               </div>
-              <div class="detail-block">
-                <div class="detail-label">Pressure profile</div>
-                <div class="detail-value">open=${{formatNumber(selectedOwner.total_open_issue_count)}} · owner-ready=${{formatNumber(selectedOwner.owner_ready_count)}} · oldest=${{formatDate(selectedOwner.oldest_active_issue_at)}}</div>
+              <div class="metric-card">
+                <div class="metric-label">句子</div>
+                <div class="metric-value">${formatNumber(summary.sentence_count)}</div>
+                <div class="metric-note">翻译和 review 的底层计量单位</div>
               </div>
-              <div class="detail-block full">
-                <div class="detail-label">Balancing hints</div>
-                <ul class="mini-list">
-                  ${{
-                    hints.join("") || `<li><strong>Balanced for now</strong><span>No obvious owner imbalance or unassigned urgent pressure is visible in the current queue window.</span></li>`
-                  }}
-                </ul>
+              <div class="metric-card">
+                <div class="metric-label">双语导出</div>
+                <div class="metric-value">${formatNumber(summary.chapter_bilingual_export_count)}</div>
+                <div class="metric-note">可直接用于人工精校的章节结果</div>
               </div>
-              <div class="detail-block full">
-                <div class="detail-label">Visible chapters for focused owner</div>
-                <ul class="mini-list">
-                  ${{
-                    focusedChapters || `<li><strong>No visible chapters</strong><span>The current queue filters do not expose chapter rows for this owner yet.</span></li>`
-                  }}
-                </ul>
+              <div class="metric-card">
+                <div class="metric-label">阅读稿</div>
+                <div class="metric-value">${summary.merged_export_ready ? "已就绪" : "未生成"}</div>
+                <div class="metric-note">${escapeHtml(summary.latest_merged_export_at ? "更新于 " + formatDate(summary.latest_merged_export_at) : "等待最终导出")}</div>
               </div>
+            </div>
+            ${pathHtml}
+          `;
+        }
+
+        function renderPipeline() {
+          const action = runPrimaryAction();
+          const failedStage = failedPipelineStage();
+          els.startRun.textContent = action.label;
+          els.startRun.disabled = action.disabled;
+
+          els.pipelineSteps.innerHTML = PIPELINE_STEPS.map((step, index) => {
+            const status = stageStatus(step.key);
+            const isCurrent = currentStageKey() === step.key;
+            const errorMessage = stageDetail(step.key)?.error_message
+              ? `<div class="phase-copy">错误：${escapeHtml(stageDetail(step.key).error_message)}</div>`
+              : "";
+            return `
+              <article class="phase-card ${isCurrent ? "current" : ""}">
+                <div class="phase-index">${index + 1}</div>
+                <div>
+                  <div class="phase-title">${escapeHtml(step.label)}</div>
+                  <div class="phase-copy">${escapeHtml(step.description)}</div>
+                  <div class="phase-copy">${escapeHtml(pipelineMeta(step.key))}</div>
+                  ${errorMessage}
+                </div>
+                <span class="status-badge ${escapeHtml(status)}">${escapeHtml(statusLabel(status))}</span>
+              </article>
+            `;
+          }).join("");
+
+          const run = state.currentRun;
+          if (!run) {
+            els.runSummary.innerHTML = "";
+            els.runActions.hidden = true;
+            els.runActions.innerHTML = "";
+            setBanner(els.runBanner, "当前还没有活跃的整书 run。上传书籍后即可开始。", "warning");
+            return;
+          }
+
+          const currentStage = currentStageKey() || "waiting";
+          const progress = currentTranslateProgress();
+          const tone = failedStage
+            ? "error"
+            : run.status === "succeeded"
+            ? "success"
+            : run.status === "failed" || run.status === "cancelled"
+              ? "error"
+              : run.status === "paused"
+                ? "warning"
+                : "warning";
+          const bannerMessage = failedStage && !["failed", "cancelled", "paused"].includes(run.status || "")
+            ? "当前 run " +
+              shorten(run.run_id, 6) +
+              " 仍显示为“" +
+              statusLabel(run.status) +
+              "”，但阶段“" +
+              pipelineStageLabel(failedStage.key) +
+              "”已经失败。请先刷新状态，随后可直接重试。"
+            : "当前 run " +
+              shorten(run.run_id, 6) +
+              " 处于“" +
+              statusLabel(run.status) +
+              "”状态，当前阶段：" +
+              pipelineStageLabel(currentStage);
+          setBanner(
+            els.runBanner,
+            bannerMessage,
+            tone
+          );
+
+          els.runSummary.innerHTML = `
+            <div class="summary-card">
+              <div class="summary-label">当前阶段</div>
+              <div class="summary-value">${escapeHtml(pipelineStageLabel(currentStage))}</div>
+              <div class="metric-note">status ${escapeHtml(statusLabel(failedStage?.status || run.status))}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Run ID</div>
+              <div class="summary-value mono">${escapeHtml(shorten(run.run_id, 6))}</div>
+              <div class="metric-note">created ${escapeHtml(formatDate(run.created_at))}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">全文翻译</div>
+              <div class="summary-value">${formatNumber(progress.completed)} / ${formatNumber(progress.total)}</div>
+              <div class="metric-note">packet progress</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">最近更新</div>
+              <div class="summary-value">${escapeHtml(formatDate(run.updated_at))}</div>
+              <div class="metric-note">worker leases ${formatNumber(run.worker_leases?.total_count || 0)}</div>
             </div>
           `;
-        }}
 
-        function renderWorklist(worklist) {{
-          renderWorklistFilterSummary(worklist);
-          const entries = worklist.entries || [];
-          if (!entries.length) {{
-            els.worklist.innerHTML = '<div class="placeholder">No actionable chapter pressure right now. The document is either clean or still pre-review.</div>';
-          }} else {{
-            els.worklist.innerHTML = entries.slice(0, 8).map((entry) => `
-              <article
-                class="queue-item clickable${{state.selectedChapterId === entry.chapter_id ? " is-active" : ""}}"
-                data-chapter-id="${{escapeHtml(entry.chapter_id)}}"
-              >
-                <div class="queue-head">
-                  <div style="display:flex; gap:12px;">
-                    <div class="queue-rank">${{escapeHtml(entry.queue_rank)}}</div>
-                    <div>
-                      <h3 class="queue-title">#${{escapeHtml(entry.ordinal)}} · ${{escapeHtml(entry.title_src || "Untitled chapter")}}</h3>
-                      <div class="queue-meta">
-                        priority=${{escapeHtml(entry.queue_priority)}} · driver=${{escapeHtml(entry.queue_driver)}} ·
-                        status=${{escapeHtml(entry.chapter_status)}} · heat=${{escapeHtml(entry.heat_level)}}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="pill-row">
-                    <span class="pill warn">open ${{formatNumber(entry.open_issue_count)}}</span>
-                    <span class="pill warn">blocking ${{formatNumber(entry.active_blocking_issue_count)}}</span>
-                  </div>
-                </div>
-                <div class="pill-row">
-                  <span class="pill">SLA ${{escapeHtml(entry.sla_status)}}</span>
-                  <span class="pill soft">age ${{formatNumber(entry.age_hours)}}h</span>
-                  <span class="pill soft">owner-ready: ${{entry.owner_ready ? "yes" : "no"}}</span>
-                  <span class="pill soft">assigned: ${{entry.assigned_owner_name ? escapeHtml(entry.assigned_owner_name) : "unassigned"}}</span>
-                </div>
-                <div class="queue-meta" style="margin-top:10px;">
-                  dominant issue: ${{escapeHtml(entry.dominant_issue_type || "n/a")}} / ${{escapeHtml(entry.dominant_root_cause_layer || "n/a")}} ·
-                  regression=${{escapeHtml(entry.regression_hint)}} · flapping=${{entry.flapping_hint ? "true" : "false"}}
+          if (action.mode === "retry" || action.mode === "recover" || action.mode === "resume") {
+            const staleRetry = action.mode === "retry" &&
+              failedStage &&
+              !["failed", "cancelled", "paused"].includes(run.status || "") &&
+              failedStageRetryEligible();
+            const title = action.mode === "resume"
+              ? "这条整书运行目前是暂停态"
+              : staleRetry
+                ? "这条整书运行已经卡成 stale failed-stage，可直接重试"
+              : action.mode === "retry"
+                ? "修好配置后，可以直接重试这条整书运行"
+                : "检测到阶段失败，先刷新状态再进入重试";
+            const copy = action.mode === "resume"
+              ? "继续后会沿用当前 run 继续往下跑，不会新建 document。"
+              : staleRetry
+                ? "点击后系统会先把旧 run 收敛为 `clean_retry_after_stale_run`，然后立即创建一条新的 lineage run。"
+              : action.mode === "retry"
+                ? "点击后会创建一条新的 lineage run，并沿用这本书和上一次的运行预算。"
+                : "当前阶段已经失败，但 run 总状态还没完全收敛。你现在点击后，页面会先同步最新状态；一旦 run 进入 failed / cancelled / paused，就会立刻发起重试。";
+            const buttonClass = action.mode === "resume" ? "action-button secondary" : "action-button gold";
+            const buttonLabel = action.mode === "resume" ? "继续当前转换" : action.label;
+            els.runActions.hidden = false;
+            els.runActions.innerHTML = `
+              <div class="run-action-title">${escapeHtml(title)}</div>
+              <div class="run-action-copy">${escapeHtml(copy)}</div>
+              <div class="button-row">
+                <button id="retry-run-inline" class="${escapeHtml(buttonClass)}" type="button">
+                  ${escapeHtml(buttonLabel)}
+                </button>
+              </div>
+            `;
+            document.getElementById("retry-run-inline")?.addEventListener("click", startOrResumeRun);
+          } else {
+            els.runActions.hidden = true;
+            els.runActions.innerHTML = "";
+          }
+        }
+
+        function downloadReady(key) {
+          const summary = state.currentDocument;
+          const dashboard = state.currentExportDashboard;
+          if (!summary) {
+            return false;
+          }
+          if (key === "merged_html") {
+            return Boolean(summary.merged_export_ready);
+          }
+          if (key === "bilingual_html") {
+            return Number(summary.chapter_bilingual_export_count || 0) > 0;
+          }
+          return Boolean(dashboard?.records?.some((record) => record.export_type === key && record.status === "succeeded"));
+        }
+
+        function assetAvailabilityText(key) {
+          const summary = state.currentDocument;
+          if (!summary) {
+            return "请先载入当前书籍。";
+          }
+          if (downloadReady(key)) {
+            return "已可直接下载";
+          }
+          const stage = currentStageKey();
+          if (key === "merged_html") {
+            if (stage === "translate") {
+              return "全文翻译尚未完成，整书阅读包还不会生成。";
+            }
+            if (stage === "review") {
+              return "review 未完成，整书阅读包仍被 gate 挡住。";
+            }
+            if (stage === "merged_html") {
+              return "整书阅读包正在导出。";
+            }
+          }
+          if (key === "bilingual_html") {
+            if (stage === "translate" || stage === "review") {
+              return "双语章节包会在 review 之后生成。";
+            }
+            if (stage === "bilingual_html") {
+              return "双语章节包正在导出。";
+            }
+          }
+          if (key === "review_package") {
+            return "当 review 产物存在时，这里会开放下载。";
+          }
+          return "尚未生成";
+        }
+
+        function renderDownloads() {
+          const documentId = state.currentDocument?.document_id;
+          els.downloadShell.innerHTML = DELIVERY_ASSETS.map((asset) => {
+            const ready = documentId ? downloadReady(asset.key) : false;
+            const buttonClass = asset.tone === "primary"
+              ? "action-button primary"
+              : asset.tone === "secondary"
+                ? "action-button secondary"
+                : "action-button ghost";
+            return `
+              <article class="asset-card">
+                <div class="asset-label">${escapeHtml(asset.label)}</div>
+                <div class="asset-title">${escapeHtml(asset.title)}</div>
+                <div class="asset-note">${escapeHtml(assetAvailabilityText(asset.key))}</div>
+                <div class="button-row">
+                  <button
+                    class="${escapeHtml(buttonClass)}"
+                    type="button"
+                    data-action="download-export"
+                    data-export-type="${escapeHtml(asset.key)}"
+                    ${ready && documentId ? "" : "disabled"}
+                  >
+                    ${escapeHtml(asset.buttonText)}
+                  </button>
                 </div>
               </article>
-            `).join("");
-          }}
-          renderOwnerWorkload(worklist);
-        }}
+            `;
+          }).join("");
 
-        function renderChapterDetail(detail) {{
-          setSelectedChapterId(detail.chapter_id);
-          const familyBreakdown = (detail.issue_family_breakdown || []).slice(0, 6).map((entry) => `
+          const dashboard = state.currentExportDashboard;
+          if (!state.currentDocument) {
+            els.exportDashboardShell.className = "empty-state";
+            els.exportDashboardShell.innerHTML = "当前还没有导出快照。进入导出阶段后，这里会展示最近产物、成本和导出历史。";
+            return;
+          }
+          if (!dashboard) {
+            els.exportDashboardShell.className = "empty-state";
+            els.exportDashboardShell.innerHTML = "还没有拿到导出 dashboard。点击“刷新当前状态”后会重新同步。";
+            return;
+          }
+
+          const records = (dashboard.records || []).slice(0, 5);
+          const rows = records.map((record) => `
             <tr>
-              <td>${{escapeHtml(entry.issue_type)}}</td>
-              <td>${{escapeHtml(entry.root_cause_layer)}}</td>
-              <td>${{formatNumber(entry.open_issue_count)}}</td>
-              <td>${{formatNumber(entry.active_blocking_issue_count)}}</td>
+              <td>${escapeHtml(exportLabel(record.export_type))}</td>
+              <td>${escapeHtml(statusLabel(record.status))}</td>
+              <td>${escapeHtml(formatDate(record.created_at))}</td>
             </tr>
           `).join("");
-          const recentIssues = (detail.recent_issues || []).slice(0, 5).map((issue) => `
-            <li>
-              <strong>${{escapeHtml(issue.issue_type)}} · ${{escapeHtml(issue.status)}}</strong>
-              <span>severity=${{escapeHtml(issue.severity)}} · blocking=${{issue.blocking ? "true" : "false"}} · detector=${{escapeHtml(issue.detector)}} · created=${{formatDate(issue.created_at)}}</span>
-            </li>
-          `).join("");
-          const recentActions = (detail.recent_actions || []).slice(0, 5).map((action) => `
-            <li>
-              <strong>${{escapeHtml(action.action_type)}} · ${{escapeHtml(action.status)}}</strong>
-              <span>issue=${{escapeHtml(action.issue_type)}} · scope=${{escapeHtml(action.scope_type)}} · created=${{formatDate(action.created_at)}}</span>
-              ${{
-                action.status === "planned"
-                  ? `<span><button class="button ghost" type="button" data-action-id="${{escapeHtml(action.action_id)}}" data-execute-action="true">Execute action</button></span>`
-                  : ""
-              }}
-            </li>
-          `).join("");
-          const assignmentHistory = (detail.assignment_history || []).slice(0, 6).map((event) => `
-            <li>
-              <strong>${{escapeHtml(event.event_type)}}</strong>
-              <span>owner=${{escapeHtml(event.owner_name || "—")}} · by=${{escapeHtml(event.performed_by || "—")}} · at=${{formatDate(event.created_at)}}</span>
-            </li>
-          `).join("");
 
-          els.chapterDetail.innerHTML = `
-            <div class="result-head">
-              <div>
-                <h3 class="result-title">#${{escapeHtml(detail.ordinal)}} · ${{escapeHtml(detail.title_src || "Untitled chapter")}}</h3>
-                <div class="result-meta">
-                  chapter_id=${{escapeHtml(detail.chapter_id)}} · status=${{escapeHtml(detail.chapter_status)}} · packets=${{formatNumber(detail.packet_count)}} · translated=${{formatNumber(detail.translated_packet_count)}}
-                </div>
+          els.exportDashboardShell.className = "";
+          els.exportDashboardShell.innerHTML = `
+            <div class="snapshot-grid">
+              <div class="snapshot-card">
+                <div class="snapshot-label">导出总数</div>
+                <div class="snapshot-value">${formatNumber(dashboard.export_count || 0)}</div>
+                <div class="metric-note">successful ${formatNumber(dashboard.successful_export_count || 0)}</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">最近导出</div>
+                <div class="snapshot-value">${escapeHtml(formatDate(dashboard.latest_export_at))}</div>
+                <div class="metric-note">适合直接下载保存</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">翻译运行数</div>
+                <div class="snapshot-value">${formatNumber(dashboard.translation_usage_summary?.run_count || 0)}</div>
+                <div class="metric-note">token in ${formatNumber(dashboard.translation_usage_summary?.total_token_in || 0)}</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">Provider 成本</div>
+                <div class="snapshot-value">${escapeHtml(formatMoney(dashboard.translation_usage_summary?.total_cost_usd || 0))}</div>
+                <div class="metric-note">累计到当前导出快照</div>
               </div>
             </div>
-            <div class="pill-row">
-              <span class="pill">open ${{formatNumber(detail.current_open_issue_count)}}</span>
-              <span class="pill warn">blocking ${{formatNumber(detail.current_active_blocking_issue_count)}}</span>
-              <span class="pill soft">assignment: ${{detail.assignment?.owner_name ? escapeHtml(detail.assignment.owner_name) : "unassigned"}}</span>
-            </div>
-            <div class="detail-grid">
-              <div class="detail-block">
-                <div class="detail-label">Queue driver</div>
-                <div class="detail-value">${{escapeHtml(detail.queue_entry?.queue_driver || "—")}}</div>
-              </div>
-              <div class="detail-block">
-                <div class="detail-label">SLA / Age</div>
-                <div class="detail-value">${{escapeHtml(detail.queue_entry?.sla_status || "unknown")}} · ${{formatNumber(detail.queue_entry?.age_hours)}}h</div>
-              </div>
-              <div class="detail-block">
-                <div class="detail-label">Owner-ready</div>
-                <div class="detail-value">${{detail.queue_entry?.owner_ready ? "yes" : "no"}}${{detail.queue_entry?.owner_ready_reason ? " · " + escapeHtml(detail.queue_entry.owner_ready_reason) : ""}}</div>
-              </div>
-              <div class="detail-block">
-                <div class="detail-label">Quality summary</div>
-                <div class="detail-value">
-                  coverage=${{detail.quality_summary?.coverage_ok ? "ok" : "check"}} ·
-                  alignment=${{detail.quality_summary?.alignment_ok ? "ok" : "check"}} ·
-                  format=${{detail.quality_summary?.format_ok ? "ok" : "check"}}
-                </div>
-              </div>
-              <div class="detail-block full">
-                <div class="detail-label">Issue family breakdown</div>
-                <table class="data-table dense-table">
-                  <thead>
-                    <tr>
-                      <th>Issue</th>
-                      <th>Layer</th>
-                      <th>Open</th>
-                      <th>Blocking</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${{
-                      familyBreakdown || `<tr><td colspan="4">No active issue families.</td></tr>`
-                    }}
-                  </tbody>
-                </table>
-              </div>
-              <div class="detail-block">
-                <div class="detail-label">Recent issues</div>
-                <ul class="mini-list">
-                  ${{
-                    recentIssues || `<li><strong>No recent issues</strong><span>The chapter is currently quiet.</span></li>`
-                  }}
-                </ul>
-              </div>
-              <div class="detail-block">
-                <div class="detail-label">Recent actions</div>
-                <ul class="mini-list">
-                  ${{
-                    recentActions || `<li><strong>No recent actions</strong><span>No repair or rerun actions recorded yet.</span></li>`
-                  }}
-                </ul>
-              </div>
-              <div class="detail-block full">
-                <div class="detail-label">Assignment history</div>
-                <ul class="mini-list">
-                  ${{
-                    assignmentHistory || `<li><strong>No assignment history</strong><span>This chapter has not been assigned yet.</span></li>`
-                  }}
-                </ul>
-              </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>导出类型</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows || '<tr><td colspan="3">暂无导出记录</td></tr>'}
+                </tbody>
+              </table>
             </div>
           `;
-          els.assignmentForm.hidden = false;
-          els.assignmentOwner.value = detail.assignment?.owner_name || "";
-          els.assignmentNote.value = detail.assignment?.note || "";
-        }}
+        }
 
-        function renderRunSummary(summary) {{
-          const pipeline = summary.status_detail_json?.pipeline || {{}};
-          const pipelineStages = Object.entries(pipeline.stages || {{}})
-            .filter(([stageKey]) => stageKey !== "pipeline")
-            .map(([stageKey, stageValue]) => `
-              <span class="pill soft">${{escapeHtml(stageKey)}}: ${{escapeHtml(stageValue?.status || "pending")}}</span>
-            `)
-            .join("");
-          els.runSummary.innerHTML = `
-            <div class="pill-row">
-              <span class="pill">status: ${{escapeHtml(summary.status)}}</span>
-              <span class="pill">type: ${{escapeHtml(summary.run_type)}}</span>
-              <span class="pill soft">backend: ${{escapeHtml(summary.backend || "default")}}</span>
-              <span class="pill soft">model: ${{escapeHtml(summary.model_name || "default")}}</span>
-              ${{
-                pipeline.current_stage
-                  ? `<span class="pill soft">current stage: ${{escapeHtml(pipeline.current_stage)}}</span>`
-                  : ""
-              }}
+        function renderAttention() {
+          const summary = state.currentDocument;
+          const dashboard = state.currentExportDashboard;
+          if (!summary) {
+            els.attentionShell.className = "empty-state";
+            els.attentionShell.innerHTML = "载入当前书籍后，这里会解释为什么现在能导出，或者为什么仍被 review gate 挡住。";
+            return;
+          }
+          if (summary.merged_export_ready) {
+            els.attentionShell.className = "attention-shell";
+            els.attentionShell.innerHTML = `
+              <div class="attention-card">
+                <strong>整书交付已完成</strong>
+                <div class="asset-note">中文阅读包已经生成，当前不再有导出阻塞。</div>
+              </div>
+            `;
+            return;
+          }
+          if (!dashboard) {
+            els.attentionShell.className = "empty-state";
+            els.attentionShell.innerHTML = "还没有同步到 review / export dashboard，先点击“刷新当前状态”查看阻塞解释。";
+            return;
+          }
+
+          const topBlocking = dashboard.issue_chapter_highlights?.top_blocking_chapter || null;
+          const topOpen = dashboard.issue_chapter_highlights?.top_open_chapter || null;
+          const hotspots = (dashboard.issue_hotspots || []).slice(0, 3);
+          const blockers = blockingIssueCount();
+          const why = summary.latest_run_status === "failed"
+            ? "上一次整书运行失败，所以导出不会继续推进。"
+            : blockers > 0
+              ? "当前仍有 blocking review issue 未清理，所以系统不会放行整书导出。"
+              : nextMilestoneText();
+          const hotspotHtml = hotspots.length
+            ? hotspots.map((entry) => `
+                <div class="attention-card">
+                  <strong>${escapeHtml(entry.issue_type)} · ${escapeHtml(entry.root_cause_layer || "unknown")}</strong>
+                  <div class="asset-note">
+                    issue ${formatNumber(entry.issue_count)} · open ${formatNumber(entry.open_issue_count)} · blocking ${formatNumber(entry.blocking_issue_count)}
+                  </div>
+                </div>
+              `).join("")
+            : `
+              <div class="attention-card">
+                <strong>暂未看到明显热点</strong>
+                <div class="asset-note">系统还没有积累出足够的 issue hotspot 数据。</div>
+              </div>
+            `;
+
+          els.attentionShell.className = "attention-shell";
+          els.attentionShell.innerHTML = `
+            <div class="attention-card">
+              <strong>${escapeHtml(why)}</strong>
+              <div class="asset-note">blocking issue ${formatNumber(blockers)} · latest stage ${escapeHtml(pipelineStageLabel(currentStageKey()))}</div>
             </div>
-            <div class="pill-row" style="margin-top:12px;">
-              ${{
-                pipelineStages || '<span class="pill soft">Pipeline stages will appear once the run records stage progress.</span>'
-              }}
-            </div>
-            <div class="kpi-grid mini-kpis" style="margin-top:10px;">
-              <div class="kpi-card mini-kpi">
-                <div class="kpi-label">Work Items</div>
-                <div class="kpi-value">${{formatNumber(summary.work_items.total_count)}}</div>
-                <div class="kpi-note">Queued and processed items under this run.</div>
+            <div class="snapshot-grid">
+              <div class="snapshot-card">
+                <div class="snapshot-label">阻塞问题</div>
+                <div class="snapshot-value">${formatNumber(blockers)}</div>
+                <div class="metric-note">当前 export gate 关注的 blocker 数</div>
               </div>
-              <div class="kpi-card mini-kpi">
-                <div class="kpi-label">Worker Leases</div>
-                <div class="kpi-value">${{formatNumber(summary.worker_leases.total_count)}}</div>
-                <div class="kpi-note">Latest heartbeat: ${{formatDate(summary.worker_leases.latest_heartbeat_at)}}</div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">最重章节</div>
+                <div class="snapshot-value">${escapeHtml(topBlocking ? String(topBlocking.ordinal) : "—")}</div>
+                <div class="metric-note">${escapeHtml(topBlocking ? (topBlocking.title_src || "未命名章节") : "暂无")}</div>
               </div>
-              <div class="kpi-card mini-kpi">
-                <div class="kpi-label">Events</div>
-                <div class="kpi-value">${{formatNumber(summary.events.event_count)}}</div>
-                <div class="kpi-note">Latest event: ${{formatDate(summary.events.latest_event_at)}}</div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">开放问题最多</div>
+                <div class="snapshot-value">${escapeHtml(topOpen ? String(topOpen.ordinal) : "—")}</div>
+                <div class="metric-note">${escapeHtml(topOpen ? (topOpen.title_src || "未命名章节") : "暂无")}</div>
               </div>
-              <div class="kpi-card mini-kpi">
-                <div class="kpi-label">Budget</div>
-                <div class="kpi-value">${{formatMoney(summary.budget?.max_total_cost_usd)}}</div>
-                <div class="kpi-note">Parallel workers: ${{formatNumber(summary.budget?.max_parallel_workers)}}</div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">最近成本</div>
+                <div class="snapshot-value">${escapeHtml(formatMoney(dashboard.translation_usage_summary?.total_cost_usd || 0))}</div>
+                <div class="metric-note">provider cost</div>
               </div>
             </div>
-            <dl class="definition-grid run-definitions compact-definitions">
-              <div class="definition-item">
-                <dt class="definition-term">Run ID</dt>
-                <dd class="definition-desc"><code>${{escapeHtml(summary.run_id)}}</code></dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Document ID</dt>
-                <dd class="definition-desc"><code>${{escapeHtml(summary.document_id)}}</code></dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Requested By</dt>
-                <dd class="definition-desc">${{escapeHtml(summary.requested_by || "—")}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Created</dt>
-                <dd class="definition-desc">${{formatDate(summary.created_at)}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Started</dt>
-                <dd class="definition-desc">${{formatDate(summary.started_at)}}</dd>
-              </div>
-              <div class="definition-item">
-                <dt class="definition-term">Finished</dt>
-                <dd class="definition-desc">${{formatDate(summary.finished_at)}}</dd>
-              </div>
-              <div class="definition-item full">
-                <dt class="definition-term">Stop Reason</dt>
-                <dd class="definition-desc">${{escapeHtml(summary.stop_reason || "—")}}</dd>
-              </div>
-            </dl>
+            <div class="attention-list">${hotspotHtml}</div>
           `;
-        }}
+        }
 
-        function renderRunEvents(page) {{
-          const entries = page.entries || [];
-          if (!entries.length) {{
-            els.runEvents.innerHTML = '<div class="placeholder compact">No run events recorded yet.</div>';
+        function renderChapters() {
+          const summary = state.currentDocument;
+          if (!summary) {
+            els.chapterShell.className = "empty-state";
+            els.chapterShell.innerHTML = "当前没有已载入书籍。文档到位后，这里会优先列出需要关注或可直接下载双语导出的章节。";
             return;
-          }}
-          const rows = entries.map((entry) => `
-            <div class="log-line">
-              <div><strong>${{escapeHtml(entry.event_type)}}</strong> · ${{formatDate(entry.created_at)}}</div>
-              <div style="color:#9eb2a8;">actor=${{escapeHtml(entry.actor_type)}}${{entry.actor_id ? " / " + escapeHtml(entry.actor_id) : ""}}</div>
-              <div style="margin-top:4px; white-space:pre-wrap;">${{escapeHtml(JSON.stringify(entry.payload_json || {{}}, null, 2))}}</div>
+          }
+
+          const chapters = summary.chapters || [];
+          if (!chapters.length) {
+            els.chapterShell.className = "empty-state";
+            els.chapterShell.innerHTML = "当前书籍还没有章节明细。";
+            return;
+          }
+
+          const exportedCount = chapters.filter((chapter) => chapter.bilingual_export_ready).length;
+          const issueCount = chapters.filter((chapter) => Number(chapter.open_issue_count || 0) > 0).length;
+          const focusChapters = [...chapters]
+            .sort((left, right) => {
+              const issueDelta = Number(right.open_issue_count || 0) - Number(left.open_issue_count || 0);
+              if (issueDelta !== 0) {
+                return issueDelta;
+              }
+              return Number(left.ordinal || 0) - Number(right.ordinal || 0);
+            })
+            .slice(0, 8);
+
+          els.chapterShell.className = "chapter-list";
+          els.chapterShell.innerHTML = `
+            <div class="snapshot-grid">
+              <div class="snapshot-card">
+                <div class="snapshot-label">章节总数</div>
+                <div class="snapshot-value">${formatNumber(chapters.length)}</div>
+                <div class="metric-note">当前书籍的章节级概览</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">已有双语导出</div>
+                <div class="snapshot-value">${formatNumber(exportedCount)}</div>
+                <div class="metric-note">章节级双语资产已可下载</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">待关注章节</div>
+                <div class="snapshot-value">${formatNumber(issueCount)}</div>
+                <div class="metric-note">当前仍有 open issue 的章节数量</div>
+              </div>
+              <div class="snapshot-card">
+                <div class="snapshot-label">当前排序</div>
+                <div class="snapshot-value">Top 8</div>
+                <div class="metric-note">按 open issue 优先，其次按章节序号</div>
+              </div>
             </div>
+            ${focusChapters.map((chapter) => `
+              <article class="chapter-row">
+                <div class="chapter-index">${formatNumber(chapter.ordinal)}</div>
+                <div>
+                  <div class="chapter-title">${escapeHtml(chapter.title_src || "未命名章节")}</div>
+                  <div class="chapter-copy">
+                    状态 ${escapeHtml(statusLabel(chapter.status))} ·
+                    packet ${formatNumber(chapter.packet_count || 0)} ·
+                    open issue ${formatNumber(chapter.open_issue_count || 0)}
+                  </div>
+                </div>
+                <div class="button-row">
+                  <button
+                    class="action-button small ghost"
+                    type="button"
+                    data-action="download-chapter"
+                    data-chapter-id="${escapeHtml(chapter.chapter_id)}"
+                    ${chapter.bilingual_export_ready ? "" : "disabled"}
+                  >
+                    ${chapter.bilingual_export_ready ? "下载双语章节" : "等待导出"}
+                  </button>
+                </div>
+              </article>
+            `).join("")}
+          `;
+        }
+
+        function eventTitle(entry) {
+          const mapping = {
+            "run.created": "创建 run",
+            "run.started": "启动 run",
+            "run.resumed": "继续 run",
+            "run.paused": "暂停 run",
+            "run.retry_requested": "请求重试",
+            "run.cancelled": "取消 run",
+            "run.succeeded": "run 完成",
+            "run.failed": "run 失败",
+          };
+          return mapping[entry.event_type] || entry.event_type;
+        }
+
+        function renderEvents() {
+          const events = state.currentRunEvents || [];
+          if (!state.currentRun) {
+            els.eventShell.className = "empty-state";
+            els.eventShell.innerHTML = "当前没有可展示的运行事件。启动整书转换后，这里会显示最近的 run 审计时间线。";
+            return;
+          }
+          if (!events.length) {
+            els.eventShell.className = "empty-state";
+            els.eventShell.innerHTML = "当前 run 已存在，但还没有可展示的审计事件。";
+            return;
+          }
+
+          els.eventShell.className = "event-list";
+          els.eventShell.innerHTML = events.map((entry) => `
+            <article class="event-card">
+              <div class="event-head">
+                <div>
+                  <div class="event-title">${escapeHtml(eventTitle(entry))}</div>
+                  <div class="event-copy">${escapeHtml(entry.event_type)} · ${escapeHtml(formatDate(entry.created_at))}</div>
+                </div>
+                <span class="tag">${escapeHtml(entry.actor_type || "system")}</span>
+              </div>
+              <div class="event-copy">
+                event ${escapeHtml(shorten(entry.event_id, 6))}
+                ${entry.work_item_id ? " · work item " + escapeHtml(shorten(entry.work_item_id, 6)) : ""}
+              </div>
+            </article>
           `).join("");
-          els.runEvents.innerHTML = `<div class="log-shell">${{rows}}</div>`;
-        }}
+        }
 
-        async function refreshDocument(documentId, options = {{}}) {{
-          const id = (documentId || state.currentDocumentId || els.documentId.value).trim();
-          if (!id) {{
-            setBanner(els.documentBanner, "Please provide a document id first.", "error");
+        function renderHistory() {
+          const entries = state.historyEntries || [];
+          if (!entries.length) {
+            els.historyShell.className = "empty-state";
+            els.historyShell.innerHTML = "当前筛选条件下没有命中的历史书籍。可以调整条件后重新查询。";
             return;
-          }}
-          setRefreshInFlight("document", true);
-          try {{
-            const summary = await fetchDocumentSummary(id);
-            setDocumentId(summary.document_id);
-            if (!options.silent) {{
-              setBanner(els.documentBanner, "Document loaded: " + (summary.title || summary.document_id), "success");
-            }}
-            renderDocumentKpis(summary);
-            renderDocumentSummary(summary);
-            if (state.selectedHistoryDocumentId && state.selectedHistoryDocumentId === summary.document_id) {{
-              renderHistoryDetail(summary);
-            }}
-            await Promise.all([
-              refreshExportDashboard(summary.document_id, {{ silent: options.silent }}),
-              refreshWorklist(summary.document_id, {{ silent: options.silent }}),
-            ]);
-            if (state.selectedChapterId) {{
-              try {{
-                await loadChapterDetail(state.selectedChapterId, {{ silent: true }});
-              }} catch (_error) {{
-                clearChapterDetail();
-              }}
-            }}
-            markRefreshed("document");
-          }} finally {{
-            setRefreshInFlight("document", false);
-          }}
-        }}
+          }
 
-        async function refreshExportDashboard(documentId, _options = {{}}) {{
-          const dashboard = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/exports?limit=5&offset=0");
-          renderExportDashboard(dashboard);
-        }}
+          els.historyShell.className = "history-stack";
+          els.historyShell.innerHTML = entries.map((entry) => {
+            const badge = historyBadgeMeta(entry);
+            const progress = historyProgress(entry);
+            const ratioPercent = Math.round(progress.ratio * 100);
+            const canRetry = Boolean(entry.latest_run_id) && ["failed", "cancelled"].includes(entry.latest_run_status || "");
+            return `
+              <article class="history-item">
+                <div class="history-head">
+                  <div>
+                    <div class="history-label">${escapeHtml(sourceLabel(entry.source_type))}</div>
+                    <div class="history-title">${escapeHtml(preferredTitle(entry))}</div>
+                    <div class="history-copy">
+                      ${escapeHtml(entry.author || "作者待识别")} ·
+                      文档状态 ${escapeHtml(statusLabel(entry.status))}
+                    </div>
+                  </div>
+                  <span class="status-badge ${escapeHtml(badge.tone)}">${escapeHtml(badge.label)}</span>
+                </div>
+                <div class="tag-row">
+                  <span class="tag">document ${escapeHtml(shorten(entry.document_id, 6))}</span>
+                  <span class="tag">章节 ${formatNumber(entry.chapter_count)}</span>
+                  <span class="tag">句子 ${formatNumber(entry.sentence_count)}</span>
+                  <span class="tag">阅读稿 ${entry.merged_export_ready ? "已生成" : "未生成"}</span>
+                </div>
+                <div class="history-progress">
+                  <div class="meter"><span style="width: ${ratioPercent}%;"></span></div>
+                  <div class="history-copy">${escapeHtml(progress.text)}</div>
+                </div>
+                <div class="history-copy">更新于 ${escapeHtml(formatDate(entry.updated_at))}</div>
+                ${entry.source_path ? `<div class="history-path mono">${escapeHtml(entry.source_path)}</div>` : ""}
+                <div class="button-row">
+                  <button
+                    class="action-button ghost small"
+                    type="button"
+                    data-action="open-history"
+                    data-document-id="${escapeHtml(entry.document_id)}"
+                  >
+                    打开这本书
+                  </button>
+                  <button
+                    class="action-button small"
+                    type="button"
+                    data-action="download-history-merged"
+                    data-document-id="${escapeHtml(entry.document_id)}"
+                    ${entry.merged_export_ready ? "" : "disabled"}
+                  >
+                    下载中文阅读包
+                  </button>
+                  <button
+                    class="action-button gold small"
+                    type="button"
+                    data-action="retry-history-run"
+                    data-document-id="${escapeHtml(entry.document_id)}"
+                    data-run-id="${escapeHtml(entry.latest_run_id || "")}"
+                    ${canRetry ? "" : "disabled"}
+                  >
+                    重试转换
+                  </button>
+                </div>
+              </article>
+            `;
+          }).join("");
+        }
 
-        async function refreshDocumentHistory(options = {{}}) {{
-          const page = await fetchJson(buildHistoryQuery());
-          renderDocumentHistory(page);
-          if (state.selectedHistoryDocumentId) {{
-            const stillExists = (page.entries || []).some((entry) => entry.document_id === state.selectedHistoryDocumentId);
-            if (stillExists) {{
-              try {{
-                const summary = await fetchDocumentSummary(state.selectedHistoryDocumentId);
-                renderHistoryDetail(summary);
-              }} catch (_error) {{
-                els.documentHistoryDetail.innerHTML =
-                  '<div class="placeholder">Selected history record is no longer available.</div>';
-                state.selectedHistoryDocumentId = "";
-              }}
-            }} else {{
-              els.documentHistoryDetail.innerHTML =
-                (state.historyFilters.query || state.historyFilters.sourceType || state.historyFilters.status || state.historyFilters.latestRunStatus || state.historyFilters.mergedExportReady)
-                  ? '<div class="placeholder">The selected history record is hidden by current filters. Clear or adjust them to inspect it again.</div>'
-                  : '<div class="placeholder">Select a history record to inspect merged export and chapter downloads.</div>';
-              state.selectedHistoryDocumentId = "";
-            }}
-          }}
-          if (!options.silent) {{
-            markRefreshed("document");
-          }}
-        }}
+        function renderAll() {
+          renderDocumentShell();
+          renderPipeline();
+          renderDownloads();
+          renderAttention();
+          renderChapters();
+          renderEvents();
+          renderHistory();
+        }
 
-        async function loadHistoryDetail(documentId, options = {{}}) {{
-          const summary = await fetchDocumentSummary(documentId);
-          renderHistoryDetail(summary);
-          if (!options.silent) {{
-            setBanner(els.documentBanner, "History detail loaded for " + (summary.title || summary.document_id) + ".", "success");
-          }}
-        }}
+        async function refreshHealth() {
+          try {
+            await fetchJson(boot.healthHref);
+            els.healthDot.className = "status-dot live";
+            els.healthLabel.textContent = "服务正常";
+          } catch (_error) {
+            els.healthDot.className = "status-dot error";
+            els.healthLabel.textContent = "服务异常";
+          }
+        }
 
-        async function refreshWorklist(documentId, options = {{}}) {{
-          setRefreshInFlight("worklist", true);
-          try {{
-            const worklist = await fetchJson(buildWorklistQuery(documentId));
-            if (!options.silent) {{
-              setBanner(
-                els.worklistBanner,
-                "Worklist loaded: " + formatNumber(worklist.filtered_worklist_count) + " filtered chapters, " + formatNumber(worklist.owner_ready_count) + " owner-ready.",
-                "success",
-              );
-            }}
-            renderWorklist(worklist);
-            markRefreshed("worklist");
-          }} finally {{
-            setRefreshInFlight("worklist", false);
-          }}
-        }}
-
-        function startDocumentPolling() {{
-          if (state.documentPollHandle) {{
-            window.clearInterval(state.documentPollHandle);
-          }}
-          state.documentPollHandle = window.setInterval(async function() {{
-            if (!state.documentPollingEnabled || !state.currentDocumentId || state.documentPollInFlight || document.hidden) {{
-              return;
-            }}
-            state.documentPollInFlight = true;
-            try {{
-              await refreshDocument(state.currentDocumentId, {{ silent: true }});
-            }} catch (_error) {{
-              // keep auto-refresh quiet; manual actions remain explicit
-            }} finally {{
-              state.documentPollInFlight = false;
-            }}
-          }}, 12000);
-        }}
-
-        function stopDocumentPolling() {{
-          if (state.documentPollHandle) {{
-            window.clearInterval(state.documentPollHandle);
-            state.documentPollHandle = null;
-          }}
-        }}
-
-        async function loadChapterDetail(chapterId, options = {{}}) {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId || !chapterId) {{
+        function updateSelectedFile(file) {
+          state.selectedFile = file || null;
+          if (!file) {
+            els.selectedFileName.textContent = "还没有选中文件";
+            els.selectedFileNote.textContent = "支持拖拽上传，也可以手动选择一本书开始。";
             return;
-          }}
-          const detail = await fetchJson(
-            apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/chapters/" + encodeURIComponent(chapterId) + "/worklist"
-          );
-          renderChapterDetail(detail);
-          if (!options.silent) {{
-            setBanner(els.worklistBanner, "Loaded chapter detail for #" + detail.ordinal + ".", "success");
-          }}
-        }}
+          }
+          els.selectedFileName.textContent = file.name;
+          els.selectedFileNote.textContent =
+            "文件大小 " +
+            formatNumber(Math.max(1, Math.round(file.size / 1024))) +
+            " KB，准备上传并解析。";
+        }
 
-        async function executeChapterAction(actionId) {{
-          if (!actionId) {{
+        async function uploadSelectedFile() {
+          if (!state.selectedFile) {
+            setBanner(els.uploadBanner, "请先选择一个 EPUB 或 PDF 文件。", "error");
             return;
-          }}
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          const chapterId = state.selectedChapterId;
-          setBanner(els.worklistBanner, "Executing action " + actionId + " with follow-up rerun/review…", "success");
-          try {{
-            const result = await fetchJson(
-              apiPrefix + "/actions/" + encodeURIComponent(actionId) + "/execute?run_followup=true",
-              {{
-                method: "POST",
-              }}
-            );
+          }
+          const formData = new FormData();
+          formData.append("source_file", state.selectedFile);
+          setButtonLoading(els.uploadFile, true, "上传中…");
+          try {
+            const summary = await fetchJson(apiPrefix + "/documents/bootstrap-upload", {
+              method: "POST",
+              body: formData,
+            });
+            state.currentDocument = summary;
+            state.currentRun = null;
+            state.currentRunEvents = [];
+            state.currentExportDashboard = null;
+            rememberCurrentDocument(summary.document_id);
+            renderAll();
             setBanner(
-              els.worklistBanner,
-              "Action executed: " + result.action_id + " · issue_resolved=" + (result.issue_resolved === null ? "n/a" : String(result.issue_resolved)),
-              "success",
-            );
-            if (documentId) {{
-              await Promise.all([
-                refreshDocument(documentId),
-                chapterId ? loadChapterDetail(chapterId, {{ silent: true }}) : Promise.resolve(),
-              ]);
-            }}
-          }} catch (error) {{
-            setBanner(els.worklistBanner, error.message, "error");
-          }}
-        }}
-
-        function startRunPolling() {{
-          if (state.runPollHandle) {{
-            window.clearInterval(state.runPollHandle);
-          }}
-          state.runPollHandle = window.setInterval(async function() {{
-            if (!state.runPollingEnabled || !state.currentRunId || state.runPollInFlight || document.hidden) {{
-              return;
-            }}
-            state.runPollInFlight = true;
-            try {{
-              await refreshRun(state.currentRunId, {{ silent: true }});
-            }} catch (_error) {{
-              // keep polling silent; explicit failures are still visible on manual load/control
-            }} finally {{
-              state.runPollInFlight = false;
-            }}
-          }}, 7000);
-        }}
-
-        function stopRunPolling() {{
-          if (state.runPollHandle) {{
-            window.clearInterval(state.runPollHandle);
-            state.runPollHandle = null;
-          }}
-        }}
-
-        async function refreshRun(runId, options = {{}}) {{
-          const id = (runId || state.currentRunId || els.runId.value).trim();
-          if (!id) {{
-            setBanner(els.runBanner, "Please provide a run id first.", "error");
-            return;
-          }}
-          setRefreshInFlight("run", true);
-          try {{
-            const summary = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(id));
-            const events = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(id) + "/events?limit=10&offset=0");
-            setRunId(summary.run_id);
-            if (!options.silent) {{
-              setBanner(els.runBanner, "Run loaded: " + summary.status + " · " + summary.run_id, "success");
-            }}
-            renderRunSummary(summary);
-            renderRunEvents(events);
-            await handleAutoPipelineSummary(summary);
-            markRefreshed("run");
-          }} finally {{
-            setRefreshInFlight("run", false);
-          }}
-        }}
-
-        async function assignChapterOwner(event) {{
-          event.preventDefault();
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          const chapterId = state.selectedChapterId;
-          if (!documentId || !chapterId) {{
-            setBanner(els.worklistBanner, "Select a chapter before assigning an owner.", "error");
-            return;
-          }}
-          const ownerName = els.assignmentOwner.value.trim();
-          const assignedBy = els.assignmentActor.value.trim() || "ui-operator";
-          if (!ownerName) {{
-            setBanner(els.worklistBanner, "Owner name cannot be empty.", "error");
-            return;
-          }}
-          setButtonLoading(els.assignOwner, true, "Assigning…");
-          try {{
-            await fetchJson(
-              apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/chapters/" + encodeURIComponent(chapterId) + "/worklist/assignment",
-              {{
-                method: "PUT",
-                body: {{
-                  owner_name: ownerName,
-                  assigned_by: assignedBy,
-                  note: els.assignmentNote.value.trim() || null,
-                }},
-              }}
-            );
-            setBanner(els.worklistBanner, "Owner assigned to selected chapter.", "success");
-            await Promise.all([
-              refreshWorklist(documentId),
-              loadChapterDetail(chapterId, {{ silent: true }}),
-            ]);
-          }} catch (error) {{
-            setBanner(els.worklistBanner, error.message, "error");
-          }} finally {{
-            setButtonLoading(els.assignOwner, false, "Assigning…");
-          }}
-        }}
-
-        async function clearChapterOwner() {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          const chapterId = state.selectedChapterId;
-          if (!documentId || !chapterId) {{
-            setBanner(els.worklistBanner, "Select a chapter before clearing assignment.", "error");
-            return;
-          }}
-          setButtonLoading(els.clearOwner, true, "Clearing…");
-          try {{
-            await fetchJson(
-              apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/chapters/" + encodeURIComponent(chapterId) + "/worklist/assignment/clear",
-              {{
-                method: "POST",
-                body: {{
-                  cleared_by: els.assignmentActor.value.trim() || "ui-operator",
-                  note: els.assignmentNote.value.trim() || null,
-                }},
-              }}
-            );
-            setBanner(els.worklistBanner, "Assignment cleared for selected chapter.", "success");
-            await Promise.all([
-              refreshWorklist(documentId),
-              loadChapterDetail(chapterId, {{ silent: true }}),
-            ]);
-          }} catch (error) {{
-            setBanner(els.worklistBanner, error.message, "error");
-          }} finally {{
-            setButtonLoading(els.clearOwner, false, "Clearing…");
-          }}
-        }}
-
-        async function applyWorklistFilters(event) {{
-          if (event) {{
-            event.preventDefault();
-          }}
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.worklistBanner, "Load a document before applying queue filters.", "error");
-            return;
-          }}
-          state.worklistFilters.queuePriority = els.filterQueuePriority.value;
-          state.worklistFilters.slaStatus = els.filterSlaStatus.value;
-          state.worklistFilters.ownerReady = els.filterOwnerReady.value;
-          state.worklistFilters.assigned = els.filterAssigned.value;
-          state.worklistFilters.assignedOwnerName = els.filterOwnerName.value.trim();
-          syncWorklistFilterForm();
-          await refreshWorklist(documentId);
-        }}
-
-        async function clearWorklistFilters() {{
-          state.worklistFilters = {{
-            queuePriority: "",
-            slaStatus: "",
-            ownerReady: "",
-            assigned: "",
-            assignedOwnerName: "",
-          }};
-          syncWorklistFilterForm();
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            return;
-          }}
-          await refreshWorklist(documentId);
-        }}
-
-        async function applyHistoryFilters(event) {{
-          if (event) {{
-            event.preventDefault();
-          }}
-          state.historyFilters.query = els.historySearch.value.trim();
-          state.historyFilters.sourceType = els.historySourceType.value;
-          state.historyFilters.status = els.historyStatus.value;
-          state.historyFilters.latestRunStatus = els.historyRunStatus.value;
-          state.historyFilters.mergedExportReady = els.historyMergedReady.value;
-          syncHistoryFilterForm();
-          await refreshDocumentHistory();
-        }}
-
-        async function clearHistoryFilters() {{
-          state.historyFilters = {{
-            query: "",
-            sourceType: "",
-            status: "",
-            latestRunStatus: "",
-            mergedExportReady: "",
-          }};
-          syncHistoryFilterForm();
-          await refreshDocumentHistory();
-        }}
-
-        async function importLegacyHistory() {{
-          const result = await fetchJson(apiPrefix + "/documents/history/backfill", {{
-            method: "POST",
-          }});
-          await refreshDocumentHistory({{ silent: true }});
-          const importedCount = result?.imported_document_count || 0;
-          setBanner(
-            els.documentBanner,
-            importedCount
-              ? "Imported " + formatNumber(importedCount) + " legacy history record" + (importedCount === 1 ? "." : "s.")
-              : "No new legacy history records were found.",
-            importedCount ? "success" : "info",
-          );
-        }}
-
-        async function applyWorklistPreset(preset) {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.worklistBanner, "Load a document before applying queue presets.", "error");
-            return;
-          }}
-          if (preset === "breached") {{
-            state.worklistFilters.slaStatus = "breached";
-            state.worklistFilters.queuePriority = "";
-            state.worklistFilters.ownerReady = "";
-            state.worklistFilters.assigned = "";
-            state.worklistFilters.assignedOwnerName = "";
-          }} else if (preset === "unassigned-immediate") {{
-            state.worklistFilters.queuePriority = "immediate";
-            state.worklistFilters.assigned = "false";
-            state.worklistFilters.slaStatus = "";
-            state.worklistFilters.ownerReady = "";
-            state.worklistFilters.assignedOwnerName = "";
-          }}
-          syncWorklistFilterForm();
-          await refreshWorklist(documentId);
-        }}
-
-        function trackAutoPipeline(runId, documentId, autoDownloadOnSuccess) {{
-          state.autoPipeline = {{
-            runId,
-            documentId,
-            autoDownloadOnSuccess,
-            completionHandled: false,
-          }};
-        }}
-
-        async function createRunForDocument(documentId, options = {{}}) {{
-          const budget = {{}};
-          if (els.runMaxCost.value) {{
-            budget.max_total_cost_usd = Number(els.runMaxCost.value);
-          }}
-          if (els.runMaxWorkers.value) {{
-            budget.max_parallel_workers = Number(els.runMaxWorkers.value);
-          }}
-          const payload = {{
-            document_id: documentId,
-            run_type: "translate_full",
-            requested_by: "ui-operator",
-            priority: 100,
-            status_detail_json: {{
-              source: options.source || "homepage-workspace",
-              pipeline: {{
-                current_stage: "translate",
-                stages: {{
-                  translate: {{
-                    status: "pending",
-                  }},
-                  review: {{
-                    status: "pending",
-                  }},
-                  bilingual_html: {{
-                    status: "pending",
-                  }},
-                  merged_html: {{
-                    status: "pending",
-                  }},
-                }},
-              }},
-            }},
-          }};
-          if (Object.keys(budget).length) {{
-            payload.budget = budget;
-          }}
-          const created = await fetchJson(apiPrefix + "/runs", {{
-            method: "POST",
-            body: payload,
-          }});
-          const started = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(created.run_id) + "/resume", {{
-            method: "POST",
-            body: {{
-              actor_id: "ui-operator",
-              note: options.note || "Start full translation pipeline from workspace",
-              detail_json: {{
-                source: options.source || "homepage-workspace",
-              }},
-            }},
-          }});
-          setRunId(started.run_id);
-          renderRunSummary(started);
-          renderRunEvents({{ entries: [], event_count: 0 }});
-          markRefreshed("run");
-          return started;
-        }}
-
-        async function retryRun(runId, options = {{}}) {{
-          if (!runId) {{
-            return;
-          }}
-          const retried = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(runId) + "/retry", {{
-            method: "POST",
-            body: {{
-              actor_id: "ui-operator",
-              note: options.note || "Retry full translation pipeline from history",
-              detail_json: {{
-                source: options.source || "homepage-history",
-              }},
-            }},
-          }});
-          setRunId(retried.run_id);
-          if (options.documentId) {{
-            els.runDocumentId.value = options.documentId;
-          }}
-          trackAutoPipeline(retried.run_id, retried.document_id, false);
-          renderRunSummary(retried);
-          renderRunEvents({{ entries: [], event_count: 0 }});
-          markRefreshed("run");
-          return retried;
-        }}
-
-        async function handleAutoPipelineSummary(summary) {{
-          if (!state.autoPipeline.runId || state.autoPipeline.runId !== summary.run_id || state.autoPipeline.completionHandled) {{
-            return;
-          }}
-          if (summary.status === "succeeded") {{
-            state.autoPipeline.completionHandled = true;
-            await Promise.all([
-              refreshDocument(summary.document_id, {{ silent: true }}),
-              refreshDocumentHistory({{ silent: true }}),
-            ]);
-            if (!state.autoPipeline.autoDownloadOnSuccess) {{
-              setBanner(els.runBanner, "Full pipeline completed for " + summary.document_id + ".", "success");
-              return;
-            }}
-            try {{
-              const savedName = await downloadCurrentExport(summary.document_id, "merged_html");
-              setBanner(els.documentBanner, "Full pipeline completed. Analysis archive saved as " + savedName + ".", "success");
-            }} catch (downloadError) {{
-              if (downloadError && downloadError.name === "AbortError") {{
-                setBanner(els.documentBanner, "Full pipeline completed, but merged HTML save was cancelled.", "success");
-              }} else {{
-                setBanner(els.documentBanner, "Run finished, but merged HTML download failed: " + downloadError.message, "error");
-              }}
-            }}
-            return;
-          }}
-          if (["failed", "paused", "cancelled"].includes(summary.status)) {{
-            state.autoPipeline.completionHandled = true;
-            await refreshDocumentHistory({{ silent: true }});
-            setBanner(
-              els.runBanner,
-              "Full pipeline stopped: " + summary.status + (summary.stop_reason ? " · " + summary.stop_reason : ""),
-              summary.status === "paused" ? "success" : "error",
-            );
-          }}
-        }}
-
-        async function bootstrapDocument(event) {{
-          event.preventDefault();
-          const sourceFile = getSelectedSourceFile();
-          if (!sourceFile) {{
-            setBanner(els.documentBanner, "Choose an EPUB or PDF to bootstrap.", "error");
-            return;
-          }}
-          const submitButton = event.submitter || els.bootstrapForm.querySelector("button[type=submit]");
-          setButtonLoading(submitButton, true, "Uploading…");
-          try {{
-            const formData = new FormData();
-            formData.append("source_file", sourceFile);
-            const summary = await fetchMultipartJson(apiPrefix + "/documents/bootstrap-upload", formData);
-            setDocumentId(summary.document_id);
-            els.runDocumentId.value = summary.document_id;
-            clearSelectedSourceFile();
-            const runSummary = await createRunForDocument(summary.document_id, {{
-              source: "homepage-bootstrap-auto",
-              note: "Start after bootstrap upload",
-            }});
-            trackAutoPipeline(runSummary.run_id, summary.document_id, true);
-            setBanner(
-              els.documentBanner,
-              "Bootstrap completed for " + (summary.title || summary.document_id) + " and the full pipeline is now running from " + sourceFile.name + ".",
+              els.uploadBanner,
+              "上传成功，已解析《" + (preferredTitle(summary) || state.selectedFile.name) + "》。现在可以启动整书转换。",
               "success"
             );
-            renderDocumentKpis(summary);
-            renderDocumentSummary(summary);
-            await Promise.all([
-              refreshExportDashboard(summary.document_id),
-              refreshWorklist(summary.document_id),
-              refreshDocumentHistory({{ silent: true }}),
-            ]);
-          }} catch (error) {{
-            setBanner(els.documentBanner, error.message, "error");
-          }} finally {{
-            setButtonLoading(submitButton, false, "Uploading…");
-          }}
-        }}
+            await refreshHistory().catch(() => undefined);
+            await loadDocumentWithRetry(summary.document_id, {
+              attempts: 6,
+              delayMs: 250,
+              silent: true,
+            });
+            document.getElementById("pipeline").scrollIntoView({ behavior: "smooth", block: "start" });
+          } catch (error) {
+            setBanner(els.uploadBanner, error.message, "error");
+          } finally {
+            setButtonLoading(els.uploadFile, false, "上传中…");
+          }
+        }
 
-        async function runDocumentAction(action) {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.documentBanner, "Load or bootstrap a document before running actions.", "error");
+        async function loadRun(runId) {
+          if (!runId) {
+            state.currentRun = null;
+            state.currentRunEvents = [];
             return;
-          }}
-          const buttonMap = {{
-            translate: els.translateDocument,
-            review: els.reviewDocument,
-            export: els.exportDocument,
-          }};
-          const button = buttonMap[action];
-          setButtonLoading(button, true, action === "export" ? "Exporting…" : "Running…");
-          try {{
-            let response;
-            if (action === "translate") {{
-              response = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/translate", {{
-                method: "POST",
-                body: {{ packet_ids: [] }},
-              }});
-              setBanner(els.documentBanner, "Translate completed: " + formatNumber(response.translated_packet_count) + " packets translated.", "success");
-            }} else if (action === "review") {{
-              response = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/review", {{
-                method: "POST",
-              }});
-              setBanner(els.documentBanner, "Review completed: " + formatNumber(response.total_issue_count) + " issues, " + formatNumber(response.total_action_count) + " actions.", "success");
-            }} else {{
-              response = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/export", {{
-                method: "POST",
-                body: {{
-                  export_type: els.exportType.value,
-                  auto_execute_followup_on_gate: els.autoFollowup.value === "true",
-                  max_auto_followup_attempts: 2,
-                }},
-              }});
-              try {{
-                const savedName = await downloadCurrentExport(documentId, els.exportType.value);
-                setBanner(els.documentBanner, "Export completed and saved as " + savedName + ".", "success");
-              }} catch (downloadError) {{
-                if (downloadError && downloadError.name === "AbortError") {{
-                  setBanner(els.documentBanner, "Export completed, but local save was cancelled.", "success");
-                }} else {{
-                  throw downloadError;
-                }}
-              }}
-            }}
-            await refreshDocument(documentId);
-          }} catch (error) {{
-            setBanner(els.documentBanner, error.message, "error");
-            if (action === "export") {{
-              try {{
-                await Promise.all([
-                  refreshExportDashboard(documentId),
-                  refreshWorklist(documentId),
-                ]);
-              }} catch (_secondary) {{
-                // no-op: banner already shows the gate error
-              }}
-            }}
-          }} finally {{
-            setButtonLoading(button, false, action === "export" ? "Exporting…" : "Running…");
-          }}
-        }}
+          }
+          const [run, events] = await Promise.all([
+            fetchJson(apiPrefix + "/runs/" + encodeURIComponent(runId)),
+            fetchJson(apiPrefix + "/runs/" + encodeURIComponent(runId) + "/events?limit=8&offset=0"),
+          ]);
+          state.currentRun = run;
+          state.currentRunEvents = events.entries || [];
+        }
 
-        async function createRun() {{
-          const documentId = (els.runDocumentId.value || state.currentDocumentId).trim();
-          if (!documentId) {{
-            setBanner(els.runBanner, "Provide a document id or load a document before creating a run.", "error");
+        async function loadDocument(documentId) {
+          const summary = await fetchJson(apiPrefix + "/documents/" + encodeURIComponent(documentId));
+          state.currentDocument = summary;
+          state.currentRun = null;
+          state.currentRunEvents = [];
+          state.currentExportDashboard = null;
+          rememberCurrentDocument(documentId);
+
+          const tasks = [
+            fetchJson(
+              apiPrefix + "/documents/" + encodeURIComponent(documentId) + "/exports?limit=5&offset=0"
+            ).catch(() => null),
+          ];
+          if (summary.latest_run_id) {
+            tasks.push(loadRun(summary.latest_run_id).catch(() => null));
+          }
+          const results = await Promise.all(tasks);
+          state.currentExportDashboard = results[0];
+          renderAll();
+          ensurePolling();
+        }
+
+        async function loadDocumentWithRetry(documentId, options) {
+          const attempts = Math.max(1, options?.attempts || 1);
+          const delayMs = Math.max(0, options?.delayMs || 0);
+          const silent = Boolean(options?.silent);
+          let lastError = null;
+          for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+              await loadDocument(documentId);
+              return true;
+            } catch (error) {
+              lastError = error;
+              const isRetryableNotFound =
+                typeof error.message === "string" && error.message.includes("Document not found");
+              if (!isRetryableNotFound || attempt === attempts - 1) {
+                if (!silent) {
+                  throw error;
+                }
+                return false;
+              }
+              await delay(delayMs);
+            }
+          }
+          if (!silent && lastError) {
+            throw lastError;
+          }
+          return false;
+        }
+
+        async function syncCurrentDocument() {
+          if (!state.currentDocument?.document_id) {
             return;
-          }}
-          setButtonLoading(els.createRun, true, "Creating…");
-          try {{
-            const summary = await createRunForDocument(documentId, {{
-              source: "homepage-run-console",
-              note: "Start full pipeline from run console",
-            }});
-            setRunId(summary.run_id);
-            trackAutoPipeline(summary.run_id, documentId, false);
-            setBanner(els.runBanner, "Run created and started: " + summary.run_id, "success");
-            renderRunSummary(summary);
-            renderRunEvents({{ entries: [], event_count: 0 }});
-            markRefreshed("run");
-          }} catch (error) {{
+          }
+          if (state.pollInFlight) {
+            return;
+          }
+          state.pollInFlight = true;
+          try {
+            await loadDocument(state.currentDocument.document_id);
+          } catch (_error) {
+            // keep last successful frame during polling
+          } finally {
+            state.pollInFlight = false;
+          }
+        }
+
+        function shouldPoll() {
+          const status = state.currentRun?.status || state.currentDocument?.latest_run_status || null;
+          return Boolean(state.currentDocument) && ["queued", "running", "draining", "paused"].includes(status);
+        }
+
+        function ensurePolling() {
+          if (state.pollTimer) {
+            clearInterval(state.pollTimer);
+            state.pollTimer = null;
+          }
+          if (!shouldPoll()) {
+            return;
+          }
+          state.pollTimer = setInterval(syncCurrentDocument, 2500);
+        }
+
+        async function startOrResumeRun() {
+          const action = runPrimaryAction();
+          if (action.disabled) {
+            return;
+          }
+          setButtonLoading(els.startRun, true, "处理中…");
+          try {
+            if (action.mode === "create") {
+              const created = await fetchJson(apiPrefix + "/runs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  document_id: state.currentDocument.document_id,
+                  run_type: "translate_full",
+                  requested_by: "web-ui",
+                  status_detail_json: {
+                    source: "web-ui",
+                    surface: "translation-studio",
+                  },
+                }),
+              });
+              state.currentRun = created;
+              state.currentRun = await fetchJson(
+                apiPrefix + "/runs/" + encodeURIComponent(created.run_id) + "/resume",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    actor_id: "web-ui",
+                    note: "start from production translation desk",
+                  }),
+                }
+              );
+            } else if (action.mode === "recover") {
+              await loadDocument(state.currentDocument.document_id);
+              const refreshedAction = runPrimaryAction();
+              if (refreshedAction.mode !== "retry" && refreshedAction.mode !== "resume") {
+                throw new Error(
+                  "阶段失败已经被识别到，但这条 run 还没有收敛成可恢复状态。请再点一次“刷新当前状态”，或等待几秒后重试。"
+                );
+              }
+              if (refreshedAction.mode === "resume") {
+                state.currentRun = await fetchJson(
+                  apiPrefix + "/runs/" + encodeURIComponent(refreshedAction.runId) + "/resume",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      actor_id: "web-ui",
+                      note: "resume after failed-stage refresh from production translation desk",
+                    }),
+                  }
+                );
+              } else {
+                state.currentRun = await fetchJson(
+                  apiPrefix + "/runs/" + encodeURIComponent(refreshedAction.runId) + "/retry",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      actor_id: "web-ui",
+                      note: "retry after failed-stage refresh from production translation desk",
+                    }),
+                  }
+                );
+              }
+            } else if (action.mode === "resume") {
+              state.currentRun = await fetchJson(
+                apiPrefix + "/runs/" + encodeURIComponent(action.runId) + "/resume",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    actor_id: "web-ui",
+                    note: "resume from production translation desk",
+                  }),
+                }
+              );
+            } else if (action.mode === "retry") {
+              state.currentRun = await fetchJson(
+                apiPrefix + "/runs/" + encodeURIComponent(action.runId) + "/retry",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    actor_id: "web-ui",
+                    note: "retry from production translation desk",
+                  }),
+                }
+              );
+            }
+            await loadDocumentWithRetry(state.currentDocument.document_id, {
+              attempts: 4,
+              delayMs: 200,
+              silent: true,
+            });
+            setBanner(els.runBanner, "后台整书转换已启动，页面会自动同步翻译、review 和导出进度。", "success");
+          } catch (error) {
             setBanner(els.runBanner, error.message, "error");
-          }} finally {{
-            setButtonLoading(els.createRun, false, "Creating…");
-          }}
-        }}
+          } finally {
+            setButtonLoading(els.startRun, false, "处理中…");
+            renderPipeline();
+          }
+        }
 
-        async function controlRun(action) {{
-          const runId = (state.currentRunId || els.runId.value).trim();
-          if (!runId) {{
-            setBanner(els.runBanner, "Load a run before applying control actions.", "error");
-            return;
-          }}
-          const buttonMap = {{
-            pause: els.pauseRun,
-            resume: els.resumeRun,
-            drain: els.drainRun,
-            cancel: els.cancelRun,
-          }};
-          const button = buttonMap[action];
-          setButtonLoading(button, true, "Applying…");
-          try {{
-            const summary = await fetchJson(apiPrefix + "/runs/" + encodeURIComponent(runId) + "/" + action, {{
-              method: "POST",
-              body: {{
-                actor_id: "ui-operator",
-                note: "Triggered from homepage run console",
-                detail_json: {{ source: "homepage-run-console" }},
-              }},
-            }});
-            setRunId(summary.run_id);
-            setBanner(els.runBanner, "Run " + action + " applied: " + summary.status, "success");
-            renderRunSummary(summary);
-            markRefreshed("run");
-            await refreshRun(summary.run_id);
-          }} catch (error) {{
-            setBanner(els.runBanner, error.message, "error");
-          }} finally {{
-            setButtonLoading(button, false, "Applying…");
-          }}
-        }}
-
-        async function checkHealth() {{
-          try {{
-            const payload = await fetchJson(healthUrl);
-            els.healthState.textContent = "Online";
-            els.healthCaption.textContent = payload.status || "ok";
-            els.healthDot.classList.add("ok");
-          }} catch (error) {{
-            els.healthState.textContent = "Degraded";
-            els.healthCaption.textContent = "Health check unavailable";
-            console.warn("Health check failed", error);
-          }}
-        }}
-
-        els.chooseSourceFile.addEventListener("click", function() {{
-          els.sourceFile.click();
-        }});
-        els.sourceFilePicker.addEventListener("click", function(event) {{
-          if (event.target.closest("button")) {{
-            return;
-          }}
-          els.sourceFile.click();
-        }});
-        els.sourceFilePicker.addEventListener("keydown", function(event) {{
-          if (event.key !== "Enter" && event.key !== " ") {{
-            return;
-          }}
-          event.preventDefault();
-          els.sourceFile.click();
-        }});
-        els.sourceFile.addEventListener("change", syncSelectedSourceFileUi);
-        els.bootstrapForm.addEventListener("submit", bootstrapDocument);
-        els.loadDocument.addEventListener("click", function() {{
-          refreshDocument().catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.translateDocument.addEventListener("click", function() {{
-          runDocumentAction("translate");
-        }});
-        els.reviewDocument.addEventListener("click", function() {{
-          runDocumentAction("review");
-        }});
-        els.exportDocument.addEventListener("click", function() {{
-          runDocumentAction("export");
-        }});
-        els.historyFilterForm.addEventListener("submit", function(event) {{
-          applyHistoryFilters(event).catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.clearHistoryFilters.addEventListener("click", function() {{
-          clearHistoryFilters().catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.backfillHistory.addEventListener("click", function() {{
-          importLegacyHistory().catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.documentSummary.addEventListener("click", function(event) {{
-          const mergedButton = event.target.closest("[data-document-download-merged]");
-          if (mergedButton) {{
-            downloadCurrentExport(mergedButton.dataset.documentDownloadMerged, "merged_html")
-              .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
-              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
-            return;
-          }}
-          const runButton = event.target.closest("[data-load-run-id]");
-          if (runButton) {{
-            setRunId(runButton.dataset.loadRunId || "");
-            refreshRun(runButton.dataset.loadRunId).catch((error) => setBanner(els.runBanner, error.message, "error"));
-            return;
-          }}
-          const chapterDownloadButton = event.target.closest("[data-chapter-download]");
-          if (chapterDownloadButton) {{
-            const documentId = (state.currentDocumentId || els.documentId.value).trim();
-            downloadChapterExport(documentId, chapterDownloadButton.dataset.chapterDownload)
-              .then((savedName) => setBanner(els.documentBanner, "Chapter export saved as " + savedName + ".", "success"))
-              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
-            return;
-          }}
-          const button = event.target.closest("[data-chapter-id]");
-          if (!button) {{
-            return;
-          }}
-          loadChapterDetail(button.dataset.chapterId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.documentHistory.addEventListener("click", function(event) {{
-          const inspectButton = event.target.closest("[data-history-select-doc]");
-          if (inspectButton) {{
-            loadHistoryDetail(inspectButton.dataset.historySelectDoc).catch((error) =>
-              setBanner(els.documentBanner, error.message, "error")
-            );
-            return;
-          }}
-          const loadDocButton = event.target.closest("[data-history-load-doc]");
-          if (loadDocButton) {{
-            setDocumentId(loadDocButton.dataset.historyLoadDoc || "");
-            refreshDocument(loadDocButton.dataset.historyLoadDoc).catch((error) => setBanner(els.documentBanner, error.message, "error"));
-            return;
-          }}
-          const loadRunButton = event.target.closest("[data-history-load-run]");
-          if (loadRunButton) {{
-            setRunId(loadRunButton.dataset.historyLoadRun || "");
-            refreshRun(loadRunButton.dataset.historyLoadRun).catch((error) => setBanner(els.runBanner, error.message, "error"));
-            return;
-          }}
-          const retryButton = event.target.closest("[data-history-retry-run]");
-          if (retryButton) {{
-            retryRun(retryButton.dataset.historyRetryRun, {{
-              documentId: retryButton.dataset.historyRetryDocument,
-              source: "homepage-history-list",
-              note: "Retry latest failed run from analysis history",
-            }})
-              .then((summary) => {{
-                setBanner(els.runBanner, "Retry run started: " + summary.run_id, "success");
-                refreshDocumentHistory({{ silent: true }}).catch(() => undefined);
-              }})
-              .catch((error) => setBanner(els.runBanner, error.message, "error"));
-            return;
-          }}
-          const mergedButton = event.target.closest("[data-history-download-merged]");
-          if (!mergedButton) {{
-            return;
-          }}
-          downloadCurrentExport(mergedButton.dataset.historyDownloadMerged, "merged_html")
-            .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
-            .catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.documentHistoryDetail.addEventListener("click", function(event) {{
-          const chapterButton = event.target.closest("[data-history-chapter-download]");
-          if (chapterButton) {{
-            downloadChapterExport(
-              chapterButton.dataset.historyDocumentId,
-              chapterButton.dataset.historyChapterDownload
-            )
-              .then((savedName) => setBanner(els.documentBanner, "Chapter export saved as " + savedName + ".", "success"))
-              .catch((error) => setBanner(els.documentBanner, error.message, "error"));
-            return;
-          }}
-          const loadDocButton = event.target.closest("[data-history-load-doc]");
-          if (loadDocButton) {{
-            setDocumentId(loadDocButton.dataset.historyLoadDoc || "");
-            refreshDocument(loadDocButton.dataset.historyLoadDoc).catch((error) => setBanner(els.documentBanner, error.message, "error"));
-            return;
-          }}
-          const loadRunButton = event.target.closest("[data-history-load-run]");
-          if (loadRunButton) {{
-            setRunId(loadRunButton.dataset.historyLoadRun || "");
-            refreshRun(loadRunButton.dataset.historyLoadRun).catch((error) => setBanner(els.runBanner, error.message, "error"));
-            return;
-          }}
-          const retryButton = event.target.closest("[data-history-retry-run]");
-          if (retryButton) {{
-            retryRun(retryButton.dataset.historyRetryRun, {{
-              documentId: retryButton.dataset.historyRetryDocument,
-              source: "homepage-history-detail",
-              note: "Retry latest failed run from history detail",
-            }})
-              .then((summary) => {{
-                setBanner(els.runBanner, "Retry run started: " + summary.run_id, "success");
-                refreshDocumentHistory({{ silent: true }}).catch(() => undefined);
-              }})
-              .catch((error) => setBanner(els.runBanner, error.message, "error"));
-            return;
-          }}
-          const mergedButton = event.target.closest("[data-history-download-merged]");
-          if (!mergedButton) {{
-            return;
-          }}
-          downloadCurrentExport(mergedButton.dataset.historyDownloadMerged, "merged_html")
-            .then((savedName) => setBanner(els.documentBanner, "Analysis archive saved as " + savedName + ".", "success"))
-            .catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.createRun.addEventListener("click", createRun);
-        els.loadRun.addEventListener("click", function() {{
-          refreshRun().catch((error) => setBanner(els.runBanner, error.message, "error"));
-        }});
-        els.pauseRun.addEventListener("click", function() {{ controlRun("pause"); }});
-        els.resumeRun.addEventListener("click", function() {{ controlRun("resume"); }});
-        els.drainRun.addEventListener("click", function() {{ controlRun("drain"); }});
-        els.cancelRun.addEventListener("click", function() {{ controlRun("cancel"); }});
-        els.toggleDocumentPolling.addEventListener("click", function() {{
-          state.documentPollingEnabled = !state.documentPollingEnabled;
-          syncDocumentPollingUi();
-          if (state.documentPollingEnabled) {{
-            startDocumentPolling();
-          }} else {{
-            stopDocumentPolling();
-          }}
-        }});
-        els.toggleRunPolling.addEventListener("click", function() {{
-          state.runPollingEnabled = !state.runPollingEnabled;
-          syncRunPollingUi();
-          if (state.runPollingEnabled) {{
-            startRunPolling();
-          }} else {{
-            stopRunPolling();
-          }}
-        }});
-        els.refreshWorklist.addEventListener("click", function() {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.worklistBanner, "Load a document before refreshing the worklist.", "error");
-            return;
-          }}
-          refreshWorklist(documentId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.openCurrentExports.addEventListener("click", function() {{
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.documentBanner, "Load a document before refreshing exports.", "error");
-            return;
-          }}
-          refreshExportDashboard(documentId).catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }});
-        els.worklist.addEventListener("click", function(event) {{
-          const card = event.target.closest("[data-chapter-id]");
-          if (!card) {{
-            return;
-          }}
-          loadChapterDetail(card.dataset.chapterId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.ownerWorkload.addEventListener("click", function(event) {{
-          const ownerButton = event.target.closest("[data-owner-filter]");
-          if (!ownerButton) {{
-            return;
-          }}
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          if (!documentId) {{
-            setBanner(els.worklistBanner, "Load a document before filtering by owner.", "error");
-            return;
-          }}
-          state.worklistFilters.assigned = "true";
-          state.worklistFilters.assignedOwnerName = ownerButton.dataset.ownerFilter || "";
-          syncWorklistFilterForm();
-          refreshWorklist(documentId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.ownerAlert.addEventListener("click", function(event) {{
-          const ownerButton = event.target.closest("[data-owner-filter]");
-          if (ownerButton) {{
-            const documentId = (state.currentDocumentId || els.documentId.value).trim();
-            if (!documentId) {{
-              setBanner(els.worklistBanner, "Load a document before filtering by owner.", "error");
-              return;
-            }}
-            state.worklistFilters.assigned = "true";
-            state.worklistFilters.assignedOwnerName = ownerButton.dataset.ownerFilter || "";
-            syncWorklistFilterForm();
-            refreshWorklist(documentId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-            return;
-          }}
-          const presetButton = event.target.closest("[data-worklist-preset]");
-          if (!presetButton) {{
-            return;
-          }}
-          applyWorklistPreset(presetButton.dataset.worklistPreset).catch((error) =>
-            setBanner(els.worklistBanner, error.message, "error")
+        async function downloadDocumentExport(documentId, exportType) {
+          const response = await fetchBinary(
+            apiPrefix +
+              "/documents/" +
+              encodeURIComponent(documentId) +
+              "/exports/download?export_type=" +
+              encodeURIComponent(exportType)
           );
-        }});
-        els.ownerDetail.addEventListener("click", function(event) {{
-          const clearButton = event.target.closest("[data-clear-owner-filter]");
-          if (!clearButton) {{
-            return;
-          }}
-          const documentId = (state.currentDocumentId || els.documentId.value).trim();
-          state.worklistFilters.assignedOwnerName = "";
-          if (state.worklistFilters.assigned === "true" && !els.filterAssigned.value) {{
-            state.worklistFilters.assigned = "";
-          }}
-          syncWorklistFilterForm();
-          if (!documentId) {{
-            return;
-          }}
-          refreshWorklist(documentId).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.chapterDetail.addEventListener("click", function(event) {{
-          const button = event.target.closest("[data-execute-action]");
-          if (!button) {{
-            return;
-          }}
-          executeChapterAction(button.dataset.actionId);
-        }});
-        els.worklistFilterForm.addEventListener("submit", function(event) {{
-          applyWorklistFilters(event).catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.clearWorklistFilters.addEventListener("click", function() {{
-          clearWorklistFilters().catch((error) => setBanner(els.worklistBanner, error.message, "error"));
-        }});
-        els.assignmentForm.addEventListener("submit", assignChapterOwner);
-        els.clearOwner.addEventListener("click", clearChapterOwner);
+          return saveResponse(response, "book-agent-" + exportType + ".zip");
+        }
 
-        els.documentId.value = state.currentDocumentId;
-        els.runDocumentId.value = state.currentDocumentId;
-        els.runId.value = state.currentRunId;
-        syncSelectedSourceFileUi();
-        syncDocumentPollingUi();
-        syncRunPollingUi();
-        syncHistoryFilterForm();
-        syncWorklistFilterForm();
-        updateLiveStatusUi();
-        startDocumentPolling();
-        startRunPolling();
-        window.setInterval(updateLiveStatusUi, 5000);
+        async function downloadChapterExport(documentId, chapterId) {
+          const response = await fetchBinary(
+            apiPrefix +
+              "/documents/" +
+              encodeURIComponent(documentId) +
+              "/chapters/" +
+              encodeURIComponent(chapterId) +
+              "/exports/download?export_type=bilingual_html"
+          );
+          return saveResponse(response, chapterId + "-bilingual_html.zip");
+        }
 
-        checkHealth();
-        refreshDocumentHistory({{ silent: true }}).catch((error) => console.warn("History refresh failed", error));
-        if (state.currentDocumentId) {{
-          refreshDocument(state.currentDocumentId).catch((error) => setBanner(els.documentBanner, error.message, "error"));
-        }}
-        if (state.currentRunId) {{
-          refreshRun(state.currentRunId).catch((error) => setBanner(els.runBanner, error.message, "error"));
-        }}
-      }})();
+        async function refreshHistory() {
+          const params = new URLSearchParams();
+          params.set("limit", "12");
+          params.set("offset", "0");
+          if (els.historyQuery.value.trim()) {
+            params.set("query", els.historyQuery.value.trim());
+          }
+          if (els.historyStatus.value) {
+            params.set("status", els.historyStatus.value);
+          }
+          if (els.historyRunStatus.value) {
+            params.set("latest_run_status", els.historyRunStatus.value);
+          }
+          if (els.historyMergedReady.value) {
+            params.set("merged_export_ready", els.historyMergedReady.value);
+          }
+          try {
+            const payload = await fetchJson(apiPrefix + "/documents/history?" + params.toString());
+            state.historyEntries = payload.entries || [];
+            state.historyMeta = payload;
+            setBanner(
+              els.historyBanner,
+              "共找到 " + formatNumber(payload.total_count || 0) + " 本书，本页显示 " + formatNumber(payload.record_count || 0) + " 本。",
+              "success"
+            );
+            renderHistory();
+          } catch (error) {
+            state.historyEntries = [];
+            setBanner(els.historyBanner, error.message, "error");
+            renderHistory();
+          }
+        }
+
+        async function restoreCurrentContext() {
+          if (state.restoringContext) {
+            return;
+          }
+          state.restoringContext = true;
+          try {
+            const storedDocumentId = safeStorageGet(STORAGE_KEY_DOCUMENT);
+            if (storedDocumentId) {
+              const restored = await loadDocumentWithRetry(storedDocumentId, {
+                attempts: 2,
+                delayMs: 150,
+                silent: true,
+              });
+              if (restored) {
+                setBanner(els.uploadBanner, "已恢复上次查看的书籍上下文。", "success");
+                return;
+              }
+              safeStorageRemove(STORAGE_KEY_DOCUMENT);
+            }
+
+            const activeEntry = state.historyEntries.find((entry) =>
+              ["queued", "running", "draining", "paused"].includes(entry.latest_run_status || "")
+            );
+            if (activeEntry) {
+              const restored = await loadDocumentWithRetry(activeEntry.document_id, {
+                attempts: 2,
+                delayMs: 150,
+                silent: true,
+              });
+              if (restored) {
+                setBanner(els.historyBanner, "已自动打开当前仍在处理中的书籍。", "success");
+              }
+            }
+          } finally {
+            state.restoringContext = false;
+          }
+        }
+
+        function closestActionTarget(event) {
+          return event.target.closest("[data-action]");
+        }
+
+        async function handleActionClick(event) {
+          const target = closestActionTarget(event);
+          if (!target) {
+            return;
+          }
+          const action = target.dataset.action;
+          try {
+            if (action === "download-export") {
+              const documentId = state.currentDocument?.document_id;
+              if (!documentId) {
+                throw new Error("请先载入当前书籍。");
+              }
+              target.disabled = true;
+              const filename = await downloadDocumentExport(documentId, target.dataset.exportType);
+              setBanner(els.runBanner, "已开始下载：" + filename, "success");
+            }
+            if (action === "download-chapter") {
+              const documentId = state.currentDocument?.document_id;
+              if (!documentId) {
+                throw new Error("请先载入当前书籍。");
+              }
+              target.disabled = true;
+              const filename = await downloadChapterExport(documentId, target.dataset.chapterId);
+              setBanner(els.runBanner, "已开始下载章节文件：" + filename, "success");
+            }
+            if (action === "open-history") {
+              await loadDocument(target.dataset.documentId);
+              setBanner(els.historyBanner, "已打开这本书，并同步到当前工作台。", "success");
+              document.getElementById("workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+            if (action === "download-history-merged") {
+              target.disabled = true;
+              const filename = await downloadDocumentExport(target.dataset.documentId, "merged_html");
+              setBanner(els.historyBanner, "已开始下载：" + filename, "success");
+            }
+            if (action === "retry-history-run") {
+              target.disabled = true;
+              const retried = await fetchJson(
+                apiPrefix + "/runs/" + encodeURIComponent(target.dataset.runId) + "/retry",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    actor_id: "web-ui",
+                    note: "retry from history card in production translation desk",
+                  }),
+                }
+              );
+              await loadDocumentWithRetry(target.dataset.documentId, {
+                attempts: 4,
+                delayMs: 200,
+                silent: true,
+              });
+              setBanner(els.historyBanner, "已创建新的 retry run：" + shorten(retried.run_id, 6), "success");
+            }
+          } catch (error) {
+            const destination = action.startsWith("download-history") || action === "open-history"
+              || action === "retry-history-run"
+              ? els.historyBanner
+              : els.runBanner;
+            setBanner(destination, error.message, "error");
+          } finally {
+            if (target instanceof HTMLButtonElement) {
+              target.disabled = false;
+            }
+          }
+        }
+
+        function handleDroppedFiles(files) {
+          if (!files || !files.length) {
+            return;
+          }
+          updateSelectedFile(files[0]);
+        }
+
+        function wireDropzone() {
+          ["dragenter", "dragover"].forEach((eventName) => {
+            els.fileDropzone.addEventListener(eventName, (event) => {
+              event.preventDefault();
+              els.fileDropzone.dataset.dragging = "true";
+            });
+          });
+          ["dragleave", "drop"].forEach((eventName) => {
+            els.fileDropzone.addEventListener(eventName, (event) => {
+              event.preventDefault();
+              els.fileDropzone.dataset.dragging = "false";
+            });
+          });
+          els.fileDropzone.addEventListener("drop", (event) => {
+            handleDroppedFiles(event.dataTransfer?.files);
+          });
+          els.fileDropzone.addEventListener("click", (event) => {
+            if (event.target.closest("button")) {
+              return;
+            }
+            els.sourceFile.click();
+          });
+        }
+
+        function wireEvents() {
+          els.pickFile.addEventListener("click", () => els.sourceFile.click());
+          els.sourceFile.addEventListener("change", () => {
+            handleDroppedFiles(els.sourceFile.files);
+          });
+          els.uploadFile.addEventListener("click", uploadSelectedFile);
+          els.startRun.addEventListener("click", startOrResumeRun);
+          els.refreshCurrent.addEventListener("click", syncCurrentDocument);
+          els.historyForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            refreshHistory();
+          });
+          document.body.addEventListener("click", handleActionClick);
+          wireDropzone();
+        }
+
+        async function initialize() {
+          wireEvents();
+          renderAll();
+          await Promise.all([refreshHealth(), refreshHistory()]);
+          await restoreCurrentContext();
+        }
+
+        initialize();
+      })();
     </script>
   </body>
 </html>
 """
+    replacements = {
+        "__APP_NAME__": escape(app_name),
+        "__APP_VERSION__": escape(app_version),
+        "__DOCS_HREF__": escape(docs_href),
+        "__OPENAPI_HREF__": escape(openapi_href),
+        "__HEALTH_HREF__": escape(health_href),
+        "__BOOT_PAYLOAD__": boot_payload,
+    }
+    for marker, value in replacements.items():
+        template = template.replace(marker, value)
+    return template

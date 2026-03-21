@@ -46,6 +46,19 @@ class ProseArtifactRepairResult:
     failed_candidates: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class MixedCodeProseFragmentRepairResult:
+    document_id: str
+    fragment_count: int
+    repaired_fragment_count: int
+    repaired_block_ids: list[str]
+    skipped_block_ids: list[str]
+    token_in: int = 0
+    token_out: int = 0
+    total_cost_usd: float = 0.0
+    failed_fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
 class PdfProseArtifactRepairService:
     def __init__(
         self,
@@ -248,6 +261,149 @@ class PdfProseArtifactRepairService:
             failed_candidates=failed_candidates,
         )
 
+    def repair_mixed_code_prose_fragments(
+        self,
+        document_id: str,
+        *,
+        chapter_ids: list[str] | None = None,
+        progress_callback: Callable[[int, int, str, int, str, str | None], None] | None = None,
+    ) -> MixedCodeProseFragmentRepairResult:
+        bundle = self.bootstrap_repository.load_document_bundle(document_id)
+        selected_chapter_ids = set(chapter_ids or [chapter_bundle.chapter.id for chapter_bundle in bundle.chapters])
+        chapter_by_id = {chapter_bundle.chapter.id: chapter_bundle for chapter_bundle in bundle.chapters}
+        candidate_fragments: list[tuple[str, str, int, dict[str, Any]]] = []
+        for chapter_bundle in bundle.chapters:
+            if chapter_bundle.chapter.id not in selected_chapter_ids:
+                continue
+            for block in chapter_bundle.blocks:
+                metadata = dict(block.source_span_json or {})
+                fragment_list = metadata.get("refresh_split_render_fragments")
+                if not isinstance(fragment_list, list):
+                    continue
+                for fragment_index, fragment in enumerate(fragment_list):
+                    if not isinstance(fragment, dict):
+                        continue
+                    if str(fragment.get("block_type") or "").strip().casefold() != BlockType.PARAGRAPH.value:
+                        continue
+                    source_text = str(fragment.get("source_text") or "").strip()
+                    if not source_text:
+                        continue
+                    candidate_fragments.append((chapter_bundle.chapter.id, block.id, fragment_index, fragment))
+
+        repaired_block_ids: list[str] = []
+        skipped_block_ids: list[str] = []
+        token_in = 0
+        token_out = 0
+        total_cost_usd = 0.0
+        failed_fragments: list[dict[str, Any]] = []
+        repaired_fragment_count = 0
+        now = _utcnow()
+
+        total = len(candidate_fragments)
+        for index, (chapter_id, block_id, fragment_index, fragment) in enumerate(candidate_fragments, start=1):
+            chapter_bundle = chapter_by_id.get(chapter_id)
+            if chapter_bundle is None:
+                skipped_block_ids.append(block_id)
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "skipped", "chapter_bundle_missing")
+                continue
+            block = next((candidate for candidate in chapter_bundle.blocks if candidate.id == block_id), None)
+            if block is None:
+                skipped_block_ids.append(block_id)
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "skipped", "block_missing")
+                continue
+            if str(fragment.get("target_text") or "").strip():
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "skipped", "already_repaired")
+                continue
+            source_text = str(fragment.get("source_text") or "").strip()
+            if not source_text:
+                skipped_block_ids.append(block_id)
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "skipped", "empty_source_text")
+                continue
+
+            try:
+                if bundle.book_profile is None:
+                    raise ValueError(f"Book profile missing for document {document_id}")
+                target_text, usage = self._translate_merged_chain(
+                    document=bundle.document,
+                    chapter=chapter_bundle.chapter,
+                    chapter_blocks=chapter_bundle.blocks,
+                    chapter_sentences=chapter_bundle.sentences,
+                    book_profile=bundle.book_profile,
+                    memory_snapshots=bundle.memory_snapshots,
+                    lead_block=block,
+                    continuation_blocks=[],
+                    force_paragraph_current=True,
+                    source_text_override=source_text,
+                )
+                if not target_text.strip():
+                    skipped_block_ids.append(block.id)
+                    if progress_callback is not None:
+                        progress_callback(index, total, block_id, fragment_index, "skipped", "empty_translation")
+                    continue
+
+                block_metadata = dict(block.source_span_json or {})
+                fragment_list = list(block_metadata.get("refresh_split_render_fragments") or [])
+                if fragment_index >= len(fragment_list) or not isinstance(fragment_list[fragment_index], dict):
+                    skipped_block_ids.append(block.id)
+                    if progress_callback is not None:
+                        progress_callback(index, total, block_id, fragment_index, "skipped", "fragment_missing")
+                    continue
+                refreshed_fragment = dict(fragment_list[fragment_index])
+                refreshed_fragment.update(
+                    {
+                        "target_text": target_text,
+                        "repair_generated_at": now.isoformat(),
+                        "repair_worker_name": self.worker.metadata().worker_name,
+                        "repair_prompt_version": self.worker.metadata().prompt_version,
+                    }
+                )
+                fragment_list[fragment_index] = refreshed_fragment
+                recovery_flags = list(block_metadata.get("recovery_flags") or [])
+                block_metadata["recovery_flags"] = list(
+                    dict.fromkeys([*recovery_flags, "persisted_mixed_code_prose_fragment_repaired"])
+                )
+                block_metadata["refresh_split_render_fragments"] = fragment_list
+                block.source_span_json = block_metadata
+                block.updated_at = now
+                self.session.merge(block)
+
+                repaired_block_ids.append(block.id)
+                repaired_fragment_count += 1
+                token_in += int(getattr(usage, "token_in", 0) or 0)
+                token_out += int(getattr(usage, "token_out", 0) or 0)
+                total_cost_usd += float(getattr(usage, "cost_usd", 0.0) or 0.0)
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "repaired", None)
+            except Exception as exc:
+                failed_fragments.append(
+                    {
+                        "chapter_id": chapter_id,
+                        "block_id": block_id,
+                        "fragment_index": fragment_index,
+                        "error": str(exc),
+                    }
+                )
+                skipped_block_ids.append(block_id)
+                if progress_callback is not None:
+                    progress_callback(index, total, block_id, fragment_index, "failed", str(exc))
+
+        self.session.flush()
+        return MixedCodeProseFragmentRepairResult(
+            document_id=document_id,
+            fragment_count=len(candidate_fragments),
+            repaired_fragment_count=repaired_fragment_count,
+            repaired_block_ids=sorted(set(repaired_block_ids)),
+            skipped_block_ids=sorted(set(skipped_block_ids)),
+            token_in=token_in,
+            token_out=token_out,
+            total_cost_usd=round(total_cost_usd, 6),
+            failed_fragments=failed_fragments,
+        )
+
     def _repair_skip_ids(self, bundle) -> set[str]:
         skipped: set[str] = set()
         for chapter_bundle in bundle.chapters:
@@ -359,6 +515,7 @@ class PdfProseArtifactRepairService:
         lead_block: Block,
         continuation_blocks: list[Block],
         force_paragraph_current: bool = False,
+        source_text_override: str | None = None,
     ) -> tuple[str, Any]:
         if book_profile is None:
             raise ValueError(f"Book profile missing for document {document.id}")
@@ -368,7 +525,7 @@ class PdfProseArtifactRepairService:
         if chapter_brief is None or termbase_snapshot is None or entity_snapshot is None:
             raise ValueError(f"Repair prerequisites missing for chapter {chapter.id}")
 
-        merged_source_text = self._merge_text_chain([lead_block, *continuation_blocks])
+        merged_source_text = source_text_override or self._merge_text_chain([lead_block, *continuation_blocks])
         temporary_sentences = self._build_temporary_sentences(
             document=document,
             chapter=chapter,

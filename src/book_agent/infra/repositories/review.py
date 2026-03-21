@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ArtifactStatus, IssueStatus, MemoryScopeType, MemoryStatus, SnapshotType, TermStatus
@@ -68,6 +68,14 @@ class ReviewRepository:
             select(TermEntry).where(
                 TermEntry.document_id == chapter.document_id,
                 TermEntry.status == TermStatus.ACTIVE,
+                or_(
+                    TermEntry.scope_type == MemoryScopeType.GLOBAL,
+                    (
+                        TermEntry.scope_type == MemoryScopeType.CHAPTER
+                    ) & (
+                        TermEntry.scope_id == chapter_id
+                    ),
+                ),
             )
         ).all()
         chapter_brief = self.session.scalar(

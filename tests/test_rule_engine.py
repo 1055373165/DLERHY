@@ -140,7 +140,7 @@ class RuleEngineTests(unittest.TestCase):
 
         self.assertEqual(len(plan.concept_overrides), 1)
         self.assertEqual(plan.concept_overrides[0].source_term, "agentic AI")
-        self.assertEqual(plan.concept_overrides[0].canonical_zh, "智能体式AI")
+        self.assertEqual(plan.concept_overrides[0].canonical_zh, "智能体AI")
         self.assertEqual(plan.concept_overrides[0].status, "locked")
 
     def test_build_rerun_plan_includes_style_hint_for_style_drift(self) -> None:

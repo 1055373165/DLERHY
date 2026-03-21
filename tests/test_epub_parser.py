@@ -159,6 +159,47 @@ WELCOME_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+FRONTMATTER_FILTER_CONTENT_OPF = """<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Build an AI Agent</dc:title>
+    <dc:creator>Test Author</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />
+    <item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml" />
+    <item id="welcome" href="welcome.xhtml" media-type="application/xhtml+xml" />
+    <item id="brief" href="brief-table-of-contents.html" media-type="application/xhtml+xml" />
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml" />
+  </manifest>
+  <spine>
+    <itemref idref="titlepage" />
+    <itemref idref="welcome" />
+    <itemref idref="brief" />
+    <itemref idref="chap1" />
+  </spine>
+</package>
+"""
+
+TITLEPAGE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+  </body>
+</html>
+"""
+
+BRIEF_CONTENTS_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>Brief contents</h1>
+    <p>PART 1: BUILDING YOUR FIRST LLM AGENT</p>
+    <p>1 What is an AI agent?</p>
+    <p>2 The brain of AI agents: LLMs</p>
+  </body>
+</html>
+"""
+
 
 class EPUBParserTests(unittest.TestCase):
     def test_parse_minimal_epub(self) -> None:
@@ -290,6 +331,100 @@ class EPUBParserTests(unittest.TestCase):
         self.assertEqual(parsed.chapters[0].title, "Welcome")
         self.assertEqual(parsed.chapters[1].href, "OEBPS/chapter1.xhtml")
         self.assertEqual(parsed.chapters[1].title, "Chapter One")
+
+    def test_parse_epub_skips_empty_titlepage_and_toc_like_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample-frontmatter-filter.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", FRONTMATTER_FILTER_CONTENT_OPF)
+                archive.writestr(
+                    "OEBPS/nav.xhtml",
+                    NAV_XHTML.replace("chapter1.xhtml", "welcome.xhtml").replace("Chapter One", "Welcome"),
+                )
+                archive.writestr("OEBPS/titlepage.xhtml", TITLEPAGE_XHTML)
+                archive.writestr("OEBPS/welcome.xhtml", WELCOME_XHTML)
+                archive.writestr("OEBPS/brief-table-of-contents.html", BRIEF_CONTENTS_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+
+            parsed = EPUBParser().parse(epub_path)
+
+        self.assertEqual([chapter.href for chapter in parsed.chapters], ["OEBPS/welcome.xhtml", "OEBPS/chapter1.xhtml"])
+        self.assertEqual([chapter.title for chapter in parsed.chapters], ["Welcome", "Chapter One"])
+
+    def test_parse_epub_ignores_page_list_nav_pollution_and_preserves_subtitle_metadata(self) -> None:
+        content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title id="pub-title">Agentic AI</dc:title>
+    <meta refines="#pub-title" property="title-type">main</meta>
+    <dc:title id="pub-subtitle">Theories and Practices</dc:title>
+    <meta refines="#pub-subtitle" property="title-type">subtitle</meta>
+    <dc:creator>Ken Huang</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="navigation.xhtml" media-type="application/xhtml+xml" properties="nav" />
+    <item id="frontmatter" href="frontmatter.xhtml" media-type="application/xhtml+xml" />
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml" />
+  </manifest>
+  <spine>
+    <itemref idref="frontmatter" />
+    <itemref idref="chap1" />
+  </spine>
+</package>
+"""
+        navigation_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="frontmatter.xhtml">Front Matter</a></li>
+        <li><a href="chapter1.xhtml">1. The Genesis and Evolution of AI Agents</a></li>
+      </ol>
+    </nav>
+    <nav epub:type="page-list">
+      <ol>
+        <li><a href="frontmatter.xhtml#PBxxxviii">xxxviii</a></li>
+        <li><a href="chapter1.xhtml#PB20">20</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>
+"""
+        frontmatter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>Agentic AI</h1>
+    <h2>Theories and Practices</h2>
+  </body>
+</html>
+"""
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">1. The Genesis and Evolution of AI Agents</h1>
+    <p>Origins matter.</p>
+  </body>
+</html>
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample-page-list.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", content_opf)
+                archive.writestr("OEBPS/navigation.xhtml", navigation_xhtml)
+                archive.writestr("OEBPS/frontmatter.xhtml", frontmatter_xhtml)
+                archive.writestr("OEBPS/chapter1.xhtml", chapter_xhtml)
+
+            parsed = EPUBParser().parse(epub_path)
+
+        self.assertEqual(parsed.title, "Agentic AI")
+        self.assertEqual(parsed.metadata["subtitle"], "Theories and Practices")
+        self.assertEqual(parsed.metadata["document_title_src"], "Agentic AI: Theories and Practices")
+        self.assertEqual([chapter.title for chapter in parsed.chapters], ["Agentic AI", "1. The Genesis and Evolution of AI Agents"])
 
 
 if __name__ == "__main__":

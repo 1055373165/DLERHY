@@ -5,6 +5,10 @@ import re
 
 from book_agent.domain.models import MemorySnapshot
 from book_agent.services.style_drift import STYLE_DRIFT_RULES, source_aware_literalism_guardrail_lines
+from book_agent.services.term_normalization import (
+    normalize_concept_candidate,
+    normalize_relevant_term,
+)
 from book_agent.workers.contracts import (
     CompiledTranslationContext,
     ConceptCandidate,
@@ -19,6 +23,7 @@ MAX_CHAPTER_MEMORY_TRANSLATIONS = 4
 PROMOTED_PARAGRAPH_INTENTS = frozenset({"definition", "evidence"})
 MAX_CONTEXT_SOURCE_BLOCKS_PER_SIDE = 1
 MAX_CONTEXT_SOURCE_CHARS_PER_SIDE = 320
+MAX_PREVIOUS_TRANSLATED_BLOCKS = 2
 MAX_CONTEXT_BRIEF_CHARS = 220
 MAX_SECTION_BRIEF_CHARS = 160
 SHORT_CONTEXT_CURRENT_CHARS = 220
@@ -307,6 +312,34 @@ def _trim_source_context(
     return prev_blocks, next_blocks
 
 
+def _should_keep_previous_translated_blocks(packet: ContextPacket) -> bool:
+    current_text = _packet_current_text(packet)
+    current_len = len(current_text)
+    current_block_type = packet.current_blocks[0].block_type if packet.current_blocks else ""
+    if current_block_type != "paragraph":
+        return True
+    if current_len <= VERY_SHORT_CONTEXT_CURRENT_CHARS:
+        return True
+    if _starts_with_context_bridge(current_text):
+        return True
+    if _ends_like_continuation(current_text):
+        return True
+    if _requires_chapter_brief_despite_previous_translations(current_text):
+        return True
+    return False
+
+
+def _select_previous_translated_blocks(
+    packet: ContextPacket,
+    blocks: list[TranslatedContextBlock],
+) -> list[TranslatedContextBlock]:
+    if not blocks:
+        return []
+    if not _should_keep_previous_translated_blocks(packet):
+        return []
+    return blocks[-MAX_PREVIOUS_TRANSLATED_BLOCKS:]
+
+
 def _compress_chapter_brief(brief: str) -> str:
     normalized = _normalize_text(brief)
     if len(normalized) <= MAX_CONTEXT_BRIEF_CHARS:
@@ -486,14 +519,16 @@ def _memory_concepts(snapshot: MemorySnapshot | None) -> list[ConceptCandidate]:
         if not source_term:
             continue
         concepts.append(
-            ConceptCandidate(
-                source_term=source_term,
-                canonical_zh=str(item.get("canonical_zh")) if item.get("canonical_zh") else None,
-                status=str(item.get("status") or "candidate"),
-                confidence=float(item.get("confidence")) if item.get("confidence") is not None else None,
-                first_seen_packet_id=str(item.get("first_seen_packet_id")) if item.get("first_seen_packet_id") else None,
-                last_seen_packet_id=str(item.get("last_seen_packet_id")) if item.get("last_seen_packet_id") else None,
-                times_seen=int(item.get("times_seen") or 1),
+            normalize_concept_candidate(
+                ConceptCandidate(
+                    source_term=source_term,
+                    canonical_zh=str(item.get("canonical_zh")) if item.get("canonical_zh") else None,
+                    status=str(item.get("status") or "candidate"),
+                    confidence=float(item.get("confidence")) if item.get("confidence") is not None else None,
+                    first_seen_packet_id=str(item.get("first_seen_packet_id")) if item.get("first_seen_packet_id") else None,
+                    last_seen_packet_id=str(item.get("last_seen_packet_id")) if item.get("last_seen_packet_id") else None,
+                    times_seen=int(item.get("times_seen") or 1),
+                )
             )
         )
     return concepts
@@ -529,15 +564,17 @@ def _merge_relevant_terms(
     for term in base:
         if not term.source_term:
             continue
-        merged[term.source_term.casefold()] = term
+        merged[term.source_term.casefold()] = normalize_relevant_term(term)
 
     for concept in concepts:
         if not concept.source_term or not concept.canonical_zh:
             continue
-        merged[concept.source_term.casefold()] = RelevantTerm(
-            source_term=concept.source_term,
-            target_term=concept.canonical_zh,
-            lock_level="locked",
+        merged[concept.source_term.casefold()] = normalize_relevant_term(
+            RelevantTerm(
+                source_term=concept.source_term,
+                target_term=concept.canonical_zh,
+                lock_level="locked",
+            )
         )
 
     ordered = list(merged.values())
@@ -830,6 +867,7 @@ class ChapterContextCompiler:
         )
         merged_previous = _dedupe_translated_blocks([*memory_blocks, *packet.prev_translated_blocks])
         sanitized_previous = _sanitize_previous_translated_blocks(merged_previous, merged_terms)
+        selected_previous = _select_previous_translated_blocks(packet, sanitized_previous)
         compiled_brief = _preferred_chapter_brief(
             packet,
             chapter_memory_snapshot,
@@ -840,7 +878,7 @@ class ChapterContextCompiler:
         compiled_packet = packet
         has_previous_translation_context = (
             compile_options.prefer_previous_translations_over_source_context
-            and bool(sanitized_previous)
+            and bool(selected_previous)
         )
         if compile_options.trim_source_context:
             trimmed_prev_blocks, trimmed_next_blocks = _trim_source_context(
@@ -862,7 +900,7 @@ class ChapterContextCompiler:
                 compiled_packet.model_copy(update={"chapter_brief": compiled_brief}),
                 prev_blocks=trimmed_prev_blocks,
                 next_blocks=trimmed_next_blocks,
-                previous_translated_blocks=sanitized_previous if has_previous_translation_context else [],
+                previous_translated_blocks=selected_previous if has_previous_translation_context else [],
             )
         merged_style_constraints = dict(packet.style_constraints)
         if compiled_brief and prompt_brief is None:
@@ -892,7 +930,7 @@ class ChapterContextCompiler:
                 "discourse_bridge": discourse_bridge,
                 "chapter_concepts": merged_concepts,
                 "relevant_terms": merged_terms,
-                "prev_translated_blocks": sanitized_previous,
+                "prev_translated_blocks": selected_previous,
                 "style_constraints": merged_style_constraints,
             }
         )
@@ -904,6 +942,7 @@ class ChapterContextCompiler:
                 "chapter_memory_available": chapter_memory_snapshot is not None,
                 "trimmed_prev_block_count": len(trimmed_prev_blocks),
                 "trimmed_next_block_count": len(trimmed_next_blocks),
+                "selected_prev_translated_block_count": len(selected_previous),
                 "section_brief_present": bool(section_brief),
                 "discourse_bridge_present": discourse_bridge is not None,
             },
