@@ -4849,6 +4849,86 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
         self.assertEqual(artifacts.document.title, "OCR Sample")
         self.assertEqual(artifacts.blocks[0].source_text, "Scanned text recovered through OCR.")
 
+    def test_parse_service_routes_pdf_mixed_documents_to_ocr_parser(self) -> None:
+        class _UnexpectedPdfParser:
+            def parse(self, _file_path, profile=None):
+                raise AssertionError("text PDF parser should not be used for pdf_mixed")
+
+        class _StubOcrPdfParser:
+            def __init__(self):
+                self.called = False
+                self.profile = None
+
+            def parse(self, _file_path, profile=None):
+                self.called = True
+                self.profile = profile
+                return ParsedDocument(
+                    title="Mixed Sample",
+                    author="OCR Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-mixed-chapter-001",
+                            href="pdf://page/1",
+                            title="Mixed Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.CODE.value,
+                                    text="def plan():\n    return 'ok'",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 120.0, 520.0, 220.0]}
+                                            ]
+                                        },
+                                        "pdf_block_role": "code",
+                                        "protected_artifact": True,
+                                    },
+                                    parse_confidence=0.79,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={"pdf_extractor": "surya_ocr", "pdf_kind": "mixed_pdf"},
+                )
+
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="99999999-9999-4999-8999-111111111111",
+            source_type=SourceType.PDF_MIXED,
+            file_fingerprint="fingerprint-mixed-route-test",
+            source_path="mixed-sample.pdf",
+            status=DocumentStatus.INGESTED,
+            metadata_json={
+                "pdf_profile": {
+                    "pdf_kind": "mixed_pdf",
+                    "layout_risk": "medium",
+                    "ocr_required": True,
+                    "protected_artifacts_detected": True,
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        ocr_parser = _StubOcrPdfParser()
+
+        artifacts = ParseService(
+            pdf_parser=_UnexpectedPdfParser(),
+            ocr_pdf_parser=ocr_parser,
+        ).parse(document, "mixed-sample.pdf")
+
+        self.assertTrue(ocr_parser.called)
+        self.assertEqual(ocr_parser.profile["pdf_kind"], "mixed_pdf")
+        self.assertEqual(artifacts.document.status, DocumentStatus.PARSED)
+        self.assertEqual(artifacts.document.title, "Mixed Sample")
+        self.assertEqual(artifacts.blocks[0].source_text, "def plan():\n    return 'ok'")
+        self.assertTrue(artifacts.blocks[0].source_span_json["protected_artifact"])
+
 
 class PdfProfilerTests(unittest.TestCase):
     def test_profiler_flags_fragmented_half_width_pages_as_high_risk(self) -> None:
