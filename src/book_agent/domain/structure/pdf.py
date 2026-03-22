@@ -57,6 +57,7 @@ _CODE_IMPORT_LINE_PATTERN = re.compile(
 )
 _CODE_CONTROL_LINE_PATTERN = re.compile(
     r"^(?:"
+    # Python
     r"async\s+def\b.+:"
     r"|def\b.+:"
     r"|class\b.+:"
@@ -75,6 +76,51 @@ _CODE_CONTROL_LINE_PATTERN = re.compile(
     r"|for\b.+\bin\b.+:"
     r"|while\b.+:"
     r"|with\b.+:"
+    # JavaScript/TypeScript
+    r"|(?:export\s+)?(?:default\s+)?(?:async\s+)?function\b.+"
+    r"|(?:const|let|var)\s+[A-Za-z_]\w*\s*="
+    r"|export\s+(?:default\s+)?(?:class|interface|type|enum|const|function)\b.+"
+    # Go
+    r"|func\b.+"
+    r"|go\s+func\b.+"
+    r"|select\s*\{"
+    r"|case\b.+:"
+    r"|defer\b.+"
+    # Rust
+    r"|(?:pub\s+)?fn\b.+"
+    r"|(?:pub\s+)?struct\b.+"
+    r"|(?:pub\s+)?enum\b.+"
+    r"|(?:pub\s+)?trait\b.+"
+    r"|(?:pub\s+)?mod\b.+"
+    r"|impl\b.+"
+    r"|match\b.+"
+    r"|let\s+(?:mut\s+)?[A-Za-z_]\w*\s*[:=].+"
+    # Java/C#/Kotlin
+    r"|(?:public|private|protected|internal)\s+(?:static\s+)?(?:final\s+)?(?:class|interface|enum|void|abstract|record)\b.+"
+    r"|(?:public|private|protected|internal)\s+(?:static\s+)?(?:final\s+)?\w+\s+\w+\s*\(.+"
+    r"|switch\b.+"
+    r"|(?:data\s+)?class\b.+\{"
+    # C/C++
+    r"|(?:int|void|char|double|float|bool|auto)\s+\w+\s*\(.+"
+    r"|struct\s+\w+\s*\{"
+    r"|typedef\b.+"
+    r"|template\s*<.+"
+    r"|namespace\s+\w+.+"
+    r"|#define\b.+"
+    r"|#ifdef\b.+"
+    r"|#ifndef\b.+"
+    r"|#endif\b.*"
+    # Ruby
+    r"|module\s+\w+.+"
+    r"|begin\b.*"
+    r"|rescue\b.*"
+    r"|ensure\b.*"
+    # Swift
+    r"|guard\b.+"
+    r"|(?:@\w+\s+)?(?:public\s+)?func\b.+"
+    # PHP
+    r"|(?:public|private|protected)\s+function\b.+"
+    r"|namespace\s+\w+.+"
     r")$",
     re.IGNORECASE,
 )
@@ -1971,7 +2017,7 @@ def _looks_like_embedded_code_line(text: str) -> bool:
         return True
     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)\s*$", normalized):
         return True
-    if re.match(r"^(?:print|await|yield|return)\(", normalized):
+    if re.match(r"^(?:print|println|printf|fmt\.Print|console\.log|System\.out|await|yield|return)\(", normalized):
         return True
     return False
 

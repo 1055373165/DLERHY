@@ -112,29 +112,36 @@ def _normalize_preformatted_text(text: str) -> str:
 
 
 def _extract_rich_text(element: ET.Element) -> str:
-    """Walk *element* tree preserving inline ``<code>`` as backtick-wrapped text."""
+    """Walk *element* tree preserving inline ``<code>``, bold, and italic as markdown."""
     parts: list[str] = []
 
-    def _walk(el: ET.Element, inside_code: bool = False) -> None:
-        local = _local_name(el.tag)
-        entering_code = not inside_code and local == "code"
+    _INLINE_MARKERS: dict[str, tuple[str, str]] = {
+        "code": ("`", "`"),
+        "b": ("**", "**"),
+        "strong": ("**", "**"),
+        "i": ("*", "*"),
+        "em": ("*", "*"),
+    }
 
-        if entering_code:
-            # Collect all nested text inside <code> as plain text, wrap in backticks.
+    def _walk(el: ET.Element) -> None:
+        local = _local_name(el.tag)
+        markers = _INLINE_MARKERS.get(local)
+
+        if markers:
+            # Collect all nested text inside this inline element.
             inner = "".join(el.itertext())
             if inner.strip():
-                parts.append(f"`{inner}`")
-            # Skip children — already consumed via itertext().
-            # But still handle tail text of this element.
+                parts.append(f"{markers[0]}{inner}{markers[1]}")
+            # Handle tail text (text after the closing tag).
             if el.tail:
                 parts.append(el.tail)
             return
 
-        # Not a <code> element — emit own text, then recurse into children.
+        # Not an inline-marked element — emit own text, then recurse children.
         if el.text:
             parts.append(el.text)
         for child in el:
-            _walk(child, inside_code)
+            _walk(child)
         if el.tail:
             parts.append(el.tail)
 

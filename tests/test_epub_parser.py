@@ -466,5 +466,35 @@ class EPUBParserTests(unittest.TestCase):
         self.assertEqual([chapter.title for chapter in parsed.chapters], ["Agentic AI", "1. The Genesis and Evolution of AI Agents"])
 
 
+    def test_extract_rich_text_preserves_inline_formatting(self) -> None:
+        """Verify bold, italic, and code inline elements are preserved as markdown."""
+        from xml.etree.ElementTree import fromstring
+        from book_agent.domain.structure.epub import _extract_rich_text
+
+        # Bold
+        el = fromstring("<p>This is <b>bold</b> text</p>")
+        self.assertEqual(_extract_rich_text(el), "This is **bold** text")
+
+        # Strong (alias for bold)
+        el = fromstring("<p>This is <strong>strong</strong> text</p>")
+        self.assertEqual(_extract_rich_text(el), "This is **strong** text")
+
+        # Italic
+        el = fromstring("<p>This is <i>italic</i> text</p>")
+        self.assertEqual(_extract_rich_text(el), "This is *italic* text")
+
+        # Em (alias for italic)
+        el = fromstring("<p>This is <em>emphasized</em> text</p>")
+        self.assertEqual(_extract_rich_text(el), "This is *emphasized* text")
+
+        # Code (unchanged behavior)
+        el = fromstring("<p>Use the <code>function()</code> method</p>")
+        self.assertEqual(_extract_rich_text(el), "Use the `function()` method")
+
+        # Mixed
+        el = fromstring("<p>A <b>bold</b> and <code>code</code> and <i>italic</i> mix</p>")
+        self.assertEqual(_extract_rich_text(el), "A **bold** and `code` and *italic* mix")
+
+
 if __name__ == "__main__":
     unittest.main()
