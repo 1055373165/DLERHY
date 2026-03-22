@@ -1765,6 +1765,28 @@ def _has_monospace_font(font_names: frozenset[str]) -> bool:
     return any(_MONOSPACE_FONT_PATTERNS.search(name) for name in font_names)
 
 
+_LIST_BULLET_PATTERN = re.compile(
+    r"^(?:"
+    r"[-•●◦▪▸►‣⁃∙◆◇○]\s+"                      # bullet chars
+    r"|\d{1,3}[.)]\s+"                            # numbered: 1. or 1)
+    r"|[a-z][.)]\s+"                               # lettered: a. or a)
+    r"|[ivxlcdm]+[.)]\s+"                          # roman: i. ii. iii.
+    r"|(?:step|item)\s+\d+[.:]\s+"                 # Step 1: / Item 2.
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_list_item(text: str, line_count: int) -> bool:
+    """Return True if text starts with a list bullet/number pattern."""
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    if line_count > 8:
+        return False
+    return bool(_LIST_BULLET_PATTERN.match(normalized))
+
+
 def _looks_like_code(text: str, line_count: int) -> bool:
     normalized_lines = _expanded_code_candidate_lines(text)
     effective_line_count = max(line_count, len(normalized_lines))
