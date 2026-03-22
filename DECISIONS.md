@@ -513,3 +513,17 @@
 - 推翻条件：如果后续 EPUB refresh 链路稳定落库 `DocumentImage`，且导出能统一只依赖持久化图片记录，可再收缩这条 fallback。
 - 影响范围：`src/book_agent/services/export.py`、`tests/test_persistence_and_review.py`、真实导出目录 `artifacts/exports/cf32d839...`
 - 探针验证：已通过（新增 malformed XHTML EPUB 资产恢复回归，且真实文档重导后恢复 44 个图片文件与 44 个 `<img>` 标签）。
+
+## ADR-037：Final export 必须通过 deterministic layout validation，且结构失败要升级为显式 `REPARSE_CHAPTER`
+- 状态：已验证（Phase 1 收口完成）
+- 日期：2026-03-22
+- 背景：在 Multi-Agent Phase 1 的后段，review gate 已经能阻止语义和对齐问题，但 heading 跳级、缺失图片资产、孤儿脚注、不可渲染表格这类结构问题仍可能在 export 时才暴露。如果这些问题只是 warning，最终交付物就会在“控制面看起来通过了”的情况下静默损坏。
+- 候选方案：
+  - 保持现状，只让 review gate 决定是否允许 export
+  - 在 export 时输出 best-effort warning，但仍继续生成成品
+  - 为 export 增加 deterministic layout gate，并把结构失败映射为阻断 issue + `REPARSE_CHAPTER`
+- 最终决定：采用第三种。`layout_validate.py` 负责对 heading / figure / footnote / table 做 deterministic preflight 校验；`export.py` 在 gate 失败时会落库 `LAYOUT_VALIDATION_FAILURE`，并生成显式 `REPARSE_CHAPTER` followup action。这样 export 不再只是“最后一步渲染”，而是 Phase 1 的最终结构验收口。
+- 代价与妥协：首版 layout gate 是窄而硬的规则集，只覆盖能稳定判定的结构损坏，不试图做智能修复，也不覆盖 publication-grade 排版美化；这意味着它更像“交付保险丝”，不是“自动排版代理”。
+- 推翻条件：如果未来 parse/layout recovery 已能在更早阶段稳定消化这些结构问题，export gate 可以缩小规则面，但不应退回“静默容忍结构损坏”的模式。
+- 影响范围：`src/book_agent/services/layout_validate.py`、`src/book_agent/services/export.py`、`tests/test_layout_validate.py`、`tests/test_export_layout_gate.py`、`docs/multi-agent-final-implementation-plan.md`
+- 探针验证：已通过（layout gate focused 回归通过；Phase 1 收口回归也已通过：`ApiWorkflowTests.test_translate_full_run_executes_review_and_exports_in_background`、`PdfBootstrapPipelineTests.test_bootstrap_pipeline_supports_low_risk_text_pdf`、`BasicPdfOutlineRecoveryTests.test_parse_service_routes_pdf_mixed_documents_to_ocr_parser`、`PdfDocumentImagePersistenceTests.test_export_merges_linked_pdf_image_caption_into_single_render_block`）。

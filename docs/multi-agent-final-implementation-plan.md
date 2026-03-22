@@ -1,8 +1,8 @@
 # Multi-Agent Translation Final Implementation Plan
 
-Last Updated: 2026-03-19
-Status: locked-mvp-scope
-Owner: repo-aligned implementation draft
+Last Updated: 2026-03-22
+Status: phase-1-complete
+Owner: repo-aligned implementation baseline
 
 Related docs:
 
@@ -11,6 +11,29 @@ Related docs:
 - [chapter-local-translation-memory-design.md](chapter-local-translation-memory-design.md)
 - [orchestrator-state-machine.md](orchestrator-state-machine.md)
 - [pdf-ocr-layout-refactoring-plan.md](pdf-ocr-layout-refactoring-plan.md)
+
+## 0. Completion Snapshot
+
+Phase 1 is now closed on the locked MVP boundary.
+
+Delivered control-plane changes:
+
+- explicit `MemoryService + CompiledTranslationContext`
+- chapter-lane packet serialization with packet runtime sub-state
+- deterministic review routing with repeated-failure stop rules and manual hold escalation
+- export-time layout validation that blocks final artifacts and routes structure failures to explicit followup actions
+
+Acceptance evidence used for closure:
+
+- `tests.test_api_workflow.ApiWorkflowTests.test_translate_full_run_executes_review_and_exports_in_background`
+- `tests.test_pdf_support.PdfBootstrapPipelineTests.test_bootstrap_pipeline_supports_low_risk_text_pdf`
+- `tests.test_pdf_support.BasicPdfOutlineRecoveryTests.test_parse_service_routes_pdf_mixed_documents_to_ocr_parser`
+- `tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_export_merges_linked_pdf_image_caption_into_single_render_block`
+
+Boundary note:
+
+- `PDF_MIXED` is accepted in Phase 1 at the control-plane and protected-artifact routing layer.
+- It is not yet a claim of publication-grade OCR/layout fidelity for complex scanned documents.
 
 ## 1. Scope Freeze
 
@@ -501,7 +524,7 @@ Output:
 - `tests/test_memory_service.py`
 - `tests/test_layout_validate.py`
 
-### 9.3 Docs to update after Phase 1 code lands
+### 9.3 Supporting docs to align opportunistically after Phase 1
 
 - `docs/orchestrator-state-machine.md`
 - `docs/chapter-local-translation-memory-design.md`
@@ -697,18 +720,29 @@ Every workstream must land with both focused tests and at least one control-plan
 - `tests/test_pdf_support.py`
 - `tests/test_postgres_workflow_integration.py`
 
-### 17.3 New tests to add
+### 17.3 Tests added or expanded during Phase 1
 
 - `tests/test_memory_service.py`
 - `tests/test_layout_validate.py`
-- `tests/test_chapter_lane_serialization.py`
-- `tests/test_compiled_translation_context.py`
+- `tests/test_export_layout_gate.py`
+- `tests/test_run_execution.py`
+- `tests/test_translation_worker_abstraction.py`
 
 ### 17.4 Minimum regression corpus
 
-- one EPUB chapter with headings, footnotes, and code
-- one text PDF chapter with figure/caption linkage
-- one mixed PDF chapter with protected artifacts
+Phase 1 closure uses the following regression set:
+
+- `tests.test_api_workflow.ApiWorkflowTests.test_translate_full_run_executes_review_and_exports_in_background`
+- `tests.test_pdf_support.PdfBootstrapPipelineTests.test_bootstrap_pipeline_supports_low_risk_text_pdf`
+- `tests.test_pdf_support.BasicPdfOutlineRecoveryTests.test_parse_service_routes_pdf_mixed_documents_to_ocr_parser`
+- `tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_export_merges_linked_pdf_image_caption_into_single_render_block`
+
+This corpus proves four things at once:
+
+- `EPUB` can still traverse bootstrap -> translate_full -> review -> export end to end.
+- `PDF_TEXT` still supports low-risk bootstrap recovery on the shared control plane.
+- `PDF_MIXED` is still routed through the OCR/mixed lane while preserving protected-artifact intent.
+- PDF figure/caption provenance still survives into export-time render blocks.
 
 The point of the corpus is not breadth. The point is to prove that the control plane remains stable while we change it.
 
@@ -758,3 +792,4 @@ Phase 1 is done when:
 - rerun actions are stable and bounded
 - export is blocked by deterministic review and layout validation
 - the regression corpus passes without relying on manual state repair
+- the evidence in Section 0 and Section 17.4 remains reproducible

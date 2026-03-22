@@ -2454,7 +2454,10 @@ class ExportService:
             ".back-top{display:inline-flex;margin-top:16px;font-family:var(--font-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}"
             "@media (max-width: 980px){.page-shell{grid-template-columns:1fr;padding:18px 14px 40px;}.sidebar{position:relative;top:auto;order:-1;}.hero{padding:26px 22px;}.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}"
             "@media print{body{background:#fff;}.page-shell{display:block;max-width:none;padding:0;}.sidebar{display:none;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;break-inside:avoid;}.artifact{box-shadow:none;}}"
-            "</style></head><body>"
+            ".math-block{margin:16px 0;text-align:center;}.math-block.equation-text pre{display:inline-block;text-align:left;}"
+            "</style>"
+            "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
+            "</head><body>"
             "<div class='page-shell'>"
             "<aside class='sidebar'>"
             "<div class='sidebar-kicker'>Reading Map</div>"
@@ -2474,6 +2477,12 @@ class ExportService:
             f"{chapters_html}"
             "</main>"
             "</div>"
+            "<script src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'></script>"
+            "<script>"
+            "document.querySelectorAll('.katex-source').forEach(el => {"
+            "try { katex.render(el.textContent, el, {displayMode: true, throwOnError: false}); } catch(e) {}"
+            "});"
+            "</script>"
             "</body></html>"
         )
 
@@ -2576,6 +2585,10 @@ class ExportService:
                     normalized_source_caption = re.sub(r"\s+", " ", source_text).strip()
                     parts.append(f"*{normalized_source_caption}*")
                 return "\n\n".join(part for part in parts if part)
+            if block.artifact_kind == "equation":
+                parts = [self._markdown_blockquote(notice)] if notice else []
+                parts.append(self._render_math_markdown(source_text))
+                return "\n\n".join(part for part in parts if part)
             artifact_text = source_text
             if block.artifact_kind == "code":
                 artifact_text = self._normalize_markdown_code_artifact_text(source_text, block=block)
@@ -2592,18 +2605,21 @@ class ExportService:
             parts = [target_text] if target_text else []
             if notice:
                 parts.append(self._markdown_blockquote(notice))
-            markdown_table = (
-                self._markdown_table_from_source_text(source_text)
-                if block.artifact_kind == "table"
-                else None
-            )
-            parts.append(
-                markdown_table
-                or self._markdown_fenced_block(
-                    source_text,
-                    language=self._markdown_language_for_artifact(block.artifact_kind, source_text),
+            if block.artifact_kind == "equation":
+                parts.append(self._render_math_markdown(source_text))
+            else:
+                markdown_table = (
+                    self._markdown_table_from_source_text(source_text)
+                    if block.artifact_kind == "table"
+                    else None
                 )
-            )
+                parts.append(
+                    markdown_table
+                    or self._markdown_fenced_block(
+                        source_text,
+                        language=self._markdown_language_for_artifact(block.artifact_kind, source_text),
+                    )
+                )
             return "\n\n".join(part for part in parts if part)
 
         if block.render_mode == "image_anchor_with_translated_caption":
@@ -5740,22 +5756,26 @@ class ExportService:
                     f"<section class='block artifact {html.escape(block.block_type)}'>"
                     f"{note}<div class='artifact-body'>{body}</div></section>"
                 )
-            body = (
-                f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
-                if block.artifact_kind == "code"
-                else f"<div class='artifact-body'>{source_html}</div>"
-            )
+            if block.artifact_kind == "equation":
+                body = self._render_math_html(block.source_text)
+            elif block.artifact_kind == "code":
+                body = f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
+            else:
+                body = f"<div class='artifact-body'>{source_html}</div>"
             note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
             return f"<section class='block artifact {html.escape(block.block_type)}'>{note}{body}</section>"
         if block.render_mode == "translated_wrapper_with_preserved_artifact":
             note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
             translated = f"<div class='zh'>{target_html}</div>" if block.target_text else ""
-            table_html = self._render_structured_table_html(block.source_text) if block.artifact_kind == "table" else None
-            body = (
-                f"<div class='artifact-body artifact-table-body'>{table_html}</div>"
-                if table_html is not None
-                else f"<div class='artifact-body'>{source_html}</div>"
-            )
+            if block.artifact_kind == "equation":
+                body = self._render_math_html(block.source_text)
+            else:
+                table_html = self._render_structured_table_html(block.source_text) if block.artifact_kind == "table" else None
+                body = (
+                    f"<div class='artifact-body artifact-table-body'>{table_html}</div>"
+                    if table_html is not None
+                    else f"<div class='artifact-body'>{source_html}</div>"
+                )
             return (
                 f"<section class='block artifact {html.escape(block.block_type)}'>"
                 f"{translated}{note}{body}</section>"
@@ -5930,6 +5950,35 @@ class ExportService:
             "</table>"
             "</div>"
         )
+
+    def _render_math_html(self, text: str) -> str:
+        """Wrap equation text in KaTeX-compatible HTML containers."""
+        stripped = text.strip()
+        if not stripped:
+            return ""
+        # Detect if it's already LaTeX-formatted
+        is_latex = any(marker in stripped for marker in ("\\frac", "\\sum", "\\int", "\\sqrt", "\\begin", "\\end", "\\alpha", "\\beta", "\\gamma", "\\theta", "\\sigma", "\\pi", "\\mu", "\\lambda", "\\delta", "\\epsilon", "\\omega", "\\partial", "\\nabla", "\\infty", "\\text", "\\mathbb", "\\mathrm", "\\left", "\\right", "\\cdot", "\\times", "\\leq", "\\geq", "\\neq", "\\approx", "\\in", "\\notin", "\\subset", "\\cup", "\\cap", "^{", "_{"))
+        if is_latex:
+            # Wrap in display math delimiters for KaTeX
+            content = html.escape(stripped)
+            return (
+                f"<div class='math-block katex-display'>"
+                f"<span class='katex-source'>{content}</span>"
+                f"</div>"
+            )
+        # Not LaTeX — render as preformatted equation
+        content = html.escape(stripped)
+        return f"<div class='math-block equation-text'><pre>{content}</pre></div>"
+
+    def _render_math_markdown(self, text: str) -> str:
+        """Format equation text for markdown output with $$ delimiters."""
+        stripped = text.strip()
+        if not stripped:
+            return ""
+        is_latex = any(marker in stripped for marker in ("\\frac", "\\sum", "\\int", "\\sqrt", "\\begin", "\\end", "\\alpha", "\\beta", "^{", "_{"))
+        if is_latex:
+            return f"$$\n{stripped}\n$$"
+        return f"```\n{stripped}\n```"
 
     def _looks_like_code_artifact_text(self, text: str, *, academic_paper: bool = False) -> bool:
         lines = [line.strip() for line in _expanded_code_candidate_lines(text) if line.strip()]
@@ -6477,7 +6526,10 @@ class ExportService:
             ".empty-state{font-family:var(--font-ui);font-size:14px;color:var(--muted);padding:18px 0;}"
             "@media (max-width: 860px){.page{padding:18px 12px 36px;}.hero,.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}"
             "@media print{body{background:#fff;}.page{max-width:none;padding:0;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;}.artifact{box-shadow:none;}}"
-            "</style></head><body>"
+            ".math-block{margin:16px 0;text-align:center;}.math-block.equation-text pre{display:inline-block;text-align:left;}"
+            "</style>"
+            "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
+            "</head><body>"
             "<main class='page'>"
             "<header class='hero'>"
             "<div class='hero-kicker'>Chapter Export</div>"
@@ -6488,6 +6540,12 @@ class ExportService:
             f"{blocks_html}"
             "</section>"
             "</main>"
+            "<script src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'></script>"
+            "<script>"
+            "document.querySelectorAll('.katex-source').forEach(el => {"
+            "try { katex.render(el.textContent, el, {displayMode: true, throwOnError: false}); } catch(e) {}"
+            "});"
+            "</script>"
             "</body></html>"
         )
 

@@ -10,8 +10,8 @@
 ## 全局指标
 - 总阶段数：10
 - 总 MDU 数：50
-- 已完成 MDU：49
-- 整体完成度：98%
+- 已完成 MDU：50
+- 整体完成度：100%
 - 最大拆解深度：3 层
 
 ## 阶段总览
@@ -26,7 +26,7 @@
 | 阶段 7：Memory Service 与 Compiled Context | 已完成 | 3 | 3 | 100% |
 | 阶段 8：Chapter-Lane Packet Control | 已完成 | 3 | 3 | 100% |
 | 阶段 9：Deterministic Review Gate Cleanup | 已完成 | 3 | 3 | 100% |
-| 阶段 10：Layout Validation 与 Phase 1 验收 | 进行中 | 3 | 2 | 67% |
+| 阶段 10：Layout Validation 与 Phase 1 验收 | 已完成 | 3 | 3 | 100% |
 
 ## 近期运行修复
 - 2026-03-21：翻译器已将“consistency and care over time”类抽象服务化跑偏下沉为新的 `source-aware literalism` 规则，并在 user prompt contract 中明确“Source-Aware Guardrails 优先于泛化润色”。真实 `deepseek-chat` 复测表明，这层约束能把样本尾句从“长期服务中提供连贯性和关怀”拉回到“长期稳定、周到地照应你”的更具体、更像中文技术书的表达。
@@ -252,7 +252,7 @@
 
 ### 阶段 10：Layout Validation 与 Phase 1 验收
 #### 任务 10.1：在 export 前增加 layout gate，并完成 Phase 1 回归收口
-- 状态：进行中
+- 状态：已完成
 - 子任务：
   - [x] 新增 `layout_validate.py`
   - [x] 将 export 变为 review + layout 双 gate
@@ -260,13 +260,13 @@
 - 最小开发单元：
   - [x] MDU-10.1.1：新增 `src/book_agent/services/layout_validate.py`，实现 heading / figure / footnote / table 的 preflight 结构校验 [依赖：MDU-9.1.3]
   - [x] MDU-10.1.2：将 `export.py` 接入 layout validation gate，并把失败映射为显式阻断 issue [依赖：MDU-10.1.1]
-  - [ ] MDU-10.1.3：跑通 EPUB + text PDF + mixed PDF 最小回归语料，更新 `docs/multi-agent-final-implementation-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 1 收口 [依赖：MDU-10.1.2]
+  - [x] MDU-10.1.3：跑通 EPUB + text PDF + mixed PDF 最小回归语料，更新 `docs/multi-agent-final-implementation-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 1 收口 [依赖：MDU-10.1.2]
 
 ## 当前位置
-- 当前阶段：阶段 10：Layout Validation 与 Phase 1 验收
-- 当前任务：任务 10.1：在 export 前增加 layout gate，并完成 Phase 1 回归收口
-- 当前最小开发单元：MDU-10.1.3：跑通 EPUB + text PDF + mixed PDF 最小回归语料，更新 `docs/multi-agent-final-implementation-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 1 收口
-- 整体完成度：98%
+- 当前阶段：无（Phase 1 已收口）
+- 当前任务：无（等待 Phase 2 或新目标）
+- 当前最小开发单元：无
+- 整体完成度：100%
 
 ## 变更记录
 | 时间 | 类型 | 描述 | 影响范围 |
@@ -294,6 +294,7 @@
 | 2026-03-22 | 验证 | 已补 workflow 级 stop-rule 回归：review auto followup、document blocker repair、export auto followup 三条链路都已验证 repeated-failure 后会进入 `manual_hold_required`，同时复跑正常 review/export followup 成功路径，确认未误伤可恢复链路；Phase 9 因此收口完成并切到 `MDU-10.1.1` | workflow / review gate / export gate / autopilot progress |
 | 2026-03-22 | 实现 | 已新增 `layout_validate.py`，将 layout gate 的首版规则收敛为 heading / figure / footnote / table 的 deterministic preflight 校验，并补独立单测覆盖合法/非法结构样本；当前执行已推进到 `MDU-10.1.2` | export preflight / layout validation / autopilot progress |
 | 2026-03-22 | 实现 | 已将 `layout_validate` 接入 `export.py` 的 `_enforce_gate(...)`：final export 现会同步落库 `LAYOUT_VALIDATION_FAILURE` 阻断 issue，并生成 `REPARSE_CHAPTER` followup action；同时补 gate 级回归，确认问题修复后 issue 会自动 resolved，当前执行已推进到 `MDU-10.1.3` | export gate / issue routing / layout validation / autopilot progress |
+| 2026-03-22 | 验证 | 已跑通 Phase 1 最小回归语料：EPUB 端到端 `translate_full`、低风险 `PDF_TEXT` bootstrap、`PDF_MIXED` OCR/mixed 路由与 PDF figure/caption export provenance；并同步更新实施稿、ADR 与进度面，Phase 1 正式收口 | multi-agent Phase 1 验收 / 文档治理 / autopilot progress |
 | 2026-03-20 | 验证 | 首页入口回归与 `bootstrap-upload + translate_full` API 主路径回归已通过，确认产品化界面未破坏现有后端工作流 | 前端入口 / API 工作流 |
 | 2026-03-21 | 修复 | 修复 Web 上传后立刻读取 document 的偶发 404：`bootstrap` / `bootstrap-upload` 现会在响应前显式提交事务，前端对新 document 同步增加短重试，并补 `test_bootstrap_upload_document_is_immediately_readable` 回归 | Web 产品入口 / API 一致性 |
 | 2026-03-21 | 修复 | history API 已补最新 run 阶段与进度字段，历史卡片改为“已入库/翻译中/复核中/可下载”等用户态文案，并在翻译阶段显示实时 packet 进度 | Web 产品入口 / 历史查询体验 |
