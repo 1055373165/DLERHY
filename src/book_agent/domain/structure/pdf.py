@@ -41,7 +41,20 @@ _EQUATION_CAPTION_PATTERN = re.compile(
 )
 _FOOTNOTE_PATTERN = re.compile(r"^(?:\d+|[*\u2020\u2021])(?:[.)]|\s)")
 _PAGE_NUMBER_PATTERN = re.compile(r"^(?:page\s+)?(?:\d+|[ivxlcdm]+)$", re.IGNORECASE)
-_CODE_IMPORT_LINE_PATTERN = re.compile(r"^(?:from\s+\S+\s+import\b.+|import\s+\S+.+)$", re.IGNORECASE)
+_CODE_IMPORT_LINE_PATTERN = re.compile(
+    r"^(?:"
+    r"from\s+\S+\s+import\b.+"           # Python from-import
+    r"|import\s+\S+.+"                     # Python/Java/Kotlin/Swift import
+    r"|use\s+\S+.+"                        # Rust use / PHP use
+    r"|#include\s*[<\"].+[>\"]"            # C/C++ #include
+    r"|require(?:_relative|_once)?\s*[\s(].+" # Ruby require / PHP require
+    r"|using\s+\S+.+"                      # C# using
+    r"|include\s+\S+.+"                    # Ruby include / PHP include
+    r"|package\s+\S+"                      # Go/Java/Kotlin package
+    r"|module\s+\S+"                       # Rust/Ruby module
+    r")$",
+    re.IGNORECASE,
+)
 _CODE_CONTROL_LINE_PATTERN = re.compile(
     r"^(?:"
     r"async\s+def\b.+:"
