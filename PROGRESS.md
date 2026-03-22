@@ -2,17 +2,22 @@
 
 ## 项目信息
 - 项目名称：Book Agent 产品化与 Multi-Agent 升级
-- 一句话目标：在现有 Book Agent Web 译制台基础上，将翻译主链路升级为 deterministic multi-agent control plane，Phase 1 交付 EPUB / PDF_TEXT / PDF_MIXED 的 merged markdown 与 bilingual HTML。
+- 一句话目标：在现有 Book Agent Web 译制台基础上，维持 deterministic multi-agent control plane 与已收口 lane 成果，并推进高风险 PDF 页 OCR / layout assist hardening 的首轮实现。
 - 创建时间：2026-03-20
-- 最后更新：2026-03-22
+- 最后更新：2026-03-23
 - 协议版本：v2
 
 ## 全局指标
-- 总阶段数：10
-- 总 MDU 数：50
-- 已完成 MDU：50
-- 整体完成度：100%
+- 总阶段数：21
+- 总 MDU 数：82
+- 已完成 MDU：79
+- 整体完成度：96%
 - 最大拆解深度：3 层
+- 当前模式：`resume`
+- 当前 wave：`wave-1-phase-4-core`
+- 当前 active lanes：`lane-ocr-layout-assist-core (ready-to-claim)`
+- 当前 blocked lanes：无
+- 当前 integration gate：`phase-4 core implementation wave open / first claim pending`
 
 ## 阶段总览
 | 阶段 | 状态 | MDU 数 | 已完成 | 完成度 |
@@ -27,6 +32,17 @@
 | 阶段 8：Chapter-Lane Packet Control | 已完成 | 3 | 3 | 100% |
 | 阶段 9：Deterministic Review Gate Cleanup | 已完成 | 3 | 3 | 100% |
 | 阶段 10：Layout Validation 与 Phase 1 验收 | 已完成 | 3 | 3 | 100% |
+| 阶段 11：Phase 2 目标锁定与执行基线 | 已完成 | 3 | 3 | 100% |
+| 阶段 12：PDF_SCAN OCR Bootstrap 与结构恢复 | 已完成 | 3 | 3 | 100% |
+| 阶段 13：PDF_SCAN 端到端验收与交付闭环 | 已完成 | 3 | 3 | 100% |
+| 阶段 14：Phase 3 Parallel-Autopilot 基线与状态工件 | 已完成 | 3 | 3 | 100% |
+| 阶段 15：Lane A - Rebuild EPUB/PDF 交付升级 | 已完成 | 3 | 3 | 100% |
+| 阶段 16：Lane B - `PDF_SCAN` 更大 Corpus 稳定性 | 已完成 | 3 | 3 | 100% |
+| 阶段 17：Lane C - Reviewer / Stylistic Intelligence | 已完成 | 3 | 3 | 100% |
+| 阶段 18：Phase 3 集成 Gate 与 Checkpoint | 已完成 | 2 | 2 | 100% |
+| 阶段 19：Phase 4 高风险 PDF OCR / Layout Assist 基线 | 已完成 | 3 | 3 | 100% |
+| 阶段 20：Phase 4 OCR / Layout Assist 实现阶段规划 | 已完成 | 3 | 3 | 100% |
+| 阶段 21：Phase 4 Lane Core - OCR / Layout Assist 实现 | 进行中 | 3 | 0 | 0% |
 
 ## 近期运行修复
 - 2026-03-21：翻译器已将“consistency and care over time”类抽象服务化跑偏下沉为新的 `source-aware literalism` 规则，并在 user prompt contract 中明确“Source-Aware Guardrails 优先于泛化润色”。真实 `deepseek-chat` 复测表明，这层约束能把样本尾句从“长期服务中提供连贯性和关怀”拉回到“长期稳定、周到地照应你”的更具体、更像中文技术书的表达。
@@ -256,21 +272,160 @@
 - 子任务：
   - [x] 新增 `layout_validate.py`
   - [x] 将 export 变为 review + layout 双 gate
-  - [ ] 跑完最小回归语料并更新文档快照
+  - [x] 跑完最小回归语料并更新文档快照
 - 最小开发单元：
   - [x] MDU-10.1.1：新增 `src/book_agent/services/layout_validate.py`，实现 heading / figure / footnote / table 的 preflight 结构校验 [依赖：MDU-9.1.3]
   - [x] MDU-10.1.2：将 `export.py` 接入 layout validation gate，并把失败映射为显式阻断 issue [依赖：MDU-10.1.1]
   - [x] MDU-10.1.3：跑通 EPUB + text PDF + mixed PDF 最小回归语料，更新 `docs/multi-agent-final-implementation-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 1 收口 [依赖：MDU-10.1.2]
 
+### 阶段 11：Phase 2 目标锁定与执行基线
+#### 任务 11.1：锁定 `PDF_SCAN` 为 Phase 2 唯一主目标，并切换 autopilot 基线
+- 状态：已完成
+- 子任务：
+  - [x] 明确 Phase 2 优先做 `PDF_SCAN` productionization，而不是 rebuilt export 或 reviewer 自主重写
+  - [x] 输出 repo-aligned 的 `PDF_SCAN` 执行基线文档
+  - [x] 将 `PROGRESS.md` / `DECISIONS.md` 切换到 Phase 2 起点
+- 最小开发单元：
+  - [x] MDU-11.1.1：基于 Phase 1 deferred 列表锁定 `PDF_SCAN` 为最高优先级阶段目标 [依赖：MDU-10.1.3]
+  - [x] MDU-11.1.2：新增 `docs/phase-2-pdf-scan-plan.md`，固化 Phase 2 的目标、非目标、验收标准与执行顺序 [依赖：MDU-11.1.1]
+  - [x] MDU-11.1.3：同步 `DECISIONS.md` 与 `PROGRESS.md`，将 autopilot 当前起点推进到 scanned PDF 阶段 [依赖：MDU-11.1.2]
+
+### 阶段 12：PDF_SCAN OCR Bootstrap 与结构恢复
+#### 任务 12.1：打通 scanned PDF 的 OCR bootstrap 可观测性与 parse provenance
+- 状态：已完成
+- 子任务：
+  - [x] 审计当前 `PDF_SCAN` bootstrap / retry / resume 的真实边界
+  - [x] 将 OCR status/report 提升为可依赖的运行时信号
+  - [x] 验证 OCR 产物能稳定保留 page / bbox / block role / protected artifact 元数据
+- 最小开发单元：
+  - [x] MDU-12.1.1：选择代表性 scanned PDF 样本并审计当前 `PDF_SCAN` bootstrap 路径的真实阻塞点 [依赖：MDU-11.1.3]
+  - [x] MDU-12.1.2：收紧 OCR bootstrap 状态落盘与失败路由，避免 partial hidden state [依赖：MDU-12.1.1]
+  - [x] MDU-12.1.3：补 scanned parse/save 回归，证明结构元数据能进入 downstream control plane [依赖：MDU-12.1.2]
+
+### 阶段 13：PDF_SCAN 端到端验收与交付闭环
+#### 任务 13.1：让 scanned PDF 进入共享的 translate/review/export 主链路并完成验收
+- 状态：已完成
+- 子任务：
+  - [x] 为 scanned PDF 增加最小 control-plane 回归语料
+  - [x] 证明 review/export gate 在 scanned lane 上仍是 fail-closed
+  - [x] 更新文档快照并完成 Phase 2 收口
+- 最小开发单元：
+  - [x] MDU-13.1.1：新增 scanned PDF 的 bootstrap / chapter-bundle / export gate focused regression [依赖：MDU-12.1.3]
+  - [x] MDU-13.1.2：修复 scanned lane 上暴露的 review/export blocker，跑通最小端到端样本 [依赖：MDU-13.1.1]
+  - [x] MDU-13.1.3：更新 `docs/phase-2-pdf-scan-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 2 收口 [依赖：MDU-13.1.2]
+
+### 阶段 14：Phase 3 Parallel-Autopilot 基线与状态工件
+#### 任务 14.1：切换到 `parallel-autopilot` 并建立三 lane 执行基线
+- 状态：已完成
+- 子任务：
+  - [x] 将下一阶段锁定为 `resume` 模式下的 lane-aware 自动驾驶
+  - [x] 建立 `WORK_GRAPH.json` / `LANE_STATE.json` / `RUN_CONTEXT.md`
+  - [x] 用新的 Phase 3 基线重开 roadmap，并同步 ADR / PROGRESS
+- 最小开发单元：
+  - [x] MDU-14.1.1：使用 `parallel-autopilot` 锁定三目标 requirement、非目标与串行控制面边界 [依赖：MDU-13.1.3]
+  - [x] MDU-14.1.2：新增 `docs/phase-3-parallel-autopilot-plan.md`，并初始化 `WORK_GRAPH.json` 与 `LANE_STATE.json` [依赖：MDU-14.1.1]
+  - [x] MDU-14.1.3：同步 `DECISIONS.md`、`PROGRESS.md` 与 `RUN_CONTEXT.md`，将当前执行起点切到 `wave-1` [依赖：MDU-14.1.2]
+
+### 阶段 15：Lane A - Rebuild EPUB/PDF 交付升级
+#### 任务 15.1：在不破坏现有交付物的前提下建立 rebuilt EPUB/PDF 最小链路
+- 状态：已完成
+- 子任务：
+  - [x] 锁定 rebuilt export contract 与非目标
+  - [x] 打通最小 rebuilt EPUB/PDF 导出路径
+  - [x] 跑 rebuilt delivery focused regressions 并同步治理证据
+- 最小开发单元：
+  - [x] MDU-15.1.1：锁定 rebuilt EPUB/PDF artifact contract、出口 manifest 与非目标边界 [依赖：MDU-14.1.3]
+  - [x] MDU-15.1.2：实现最小 rebuilt EPUB/PDF path，并保持现有 `MERGED_MARKDOWN + BILINGUAL_HTML` 契约不退化 [依赖：MDU-15.1.1]
+  - [x] MDU-15.1.3：运行 rebuilt delivery focused regressions，并更新阶段证据 [依赖：MDU-15.1.2]
+
+### 阶段 16：Lane B - `PDF_SCAN` 更大 Corpus 稳定性
+#### 任务 16.1：将 scanned PDF 从最小样本扩到更大 corpus 的性能、稳定性与恢复能力
+- 状态：已完成
+- 子任务：
+  - [x] 锁定 larger-corpus scanned 样本与 telemetry baseline
+  - [x] 收紧 retry / resume / failure routing
+  - [x] 跑 larger-corpus 稳定性与性能验收
+- 最小开发单元：
+  - [x] MDU-16.1.1：锁定更大 scanned corpus 的代表样本、运行时 telemetry baseline 与恢复边界 [依赖：MDU-14.1.3]
+  - [x] MDU-16.1.2：收紧 larger-corpus `PDF_SCAN` 的 retry / resume / failure routing，并补 focused regressions [依赖：MDU-16.1.1]
+  - [x] MDU-16.1.3：运行 larger-corpus 稳定性与性能验收，更新治理证据 [依赖：MDU-16.1.2]
+
+### 阶段 17：Lane C - Reviewer / Stylistic Intelligence
+#### 任务 17.1：在不默认启用 reviewer 自主重写的前提下提升中文自然度
+- 状态：已完成
+- 子任务：
+  - [x] 锁定 reviewer naturalness contract 与评估边界
+  - [x] 实现 stylistic intelligence scaffold / guidance 路径
+  - [x] 跑中文自然度 focused regressions 并同步治理证据
+- 最小开发单元：
+  - [x] MDU-17.1.1：锁定 reviewer naturalness contract、评估指标与非目标边界 [依赖：MDU-14.1.3]
+  - [x] MDU-17.1.2：实现 stylistic intelligence scaffold，但不将 reviewer 切换为默认自由重写代理 [依赖：MDU-17.1.1]
+  - [x] MDU-17.1.3：运行中文自然度 focused regressions，并更新阶段证据 [依赖：MDU-17.1.2]
+
+### 阶段 18：Phase 3 集成 Gate 与 Checkpoint
+#### 任务 18.1：对三条 lane 执行串行集成与阶段验收
+- 状态：已完成
+- 子任务：
+  - [x] 执行三 lane integration gate
+  - [x] 更新文档快照并完成 Phase 3 checkpoint
+- 最小开发单元：
+  - [x] MDU-18.1.1：执行三 lane integration gate，清理 stale contract / blocker 并固化当前 merge 结论 [依赖：MDU-15.1.3, MDU-16.1.3, MDU-17.1.3]
+  - [x] MDU-18.1.2：更新 Phase 3 计划、ADR 与 PROGRESS，完成 checkpoint 收口 [依赖：MDU-18.1.1]
+
+### 阶段 19：Phase 4 高风险 PDF OCR / Layout Assist 基线
+#### 任务 19.1：锁定高风险 PDF OCR / layout assist 的默认方向与治理边界
+- 状态：已完成
+- 子任务：
+  - [x] 锁定 Phase 4 requirement、默认目标与 non-goals
+  - [x] 冻结高风险 OCR / layout assist baseline、risk buckets 与 fail-closed contract
+  - [x] 同步治理状态，并为后续 lane / wave 规划准备干净的起点
+- 最小开发单元：
+  - [x] MDU-19.1.1：锁定 Phase 4 requirement、默认目标与 non-goals [依赖：MDU-18.1.2]
+  - [x] MDU-19.1.2：冻结高风险 OCR / layout assist baseline、risk buckets 与 fail-closed contract [依赖：MDU-19.1.1]
+  - [x] MDU-19.1.3：同步 PROGRESS / ADR / WORK_GRAPH / LANE_STATE / RUN_CONTEXT，完成 Phase 4 kickoff 基线 [依赖：MDU-19.1.2]
+
+### 阶段 20：Phase 4 OCR / Layout Assist 实现阶段规划
+#### 任务 20.1：锁定高风险 OCR / layout assist 的首轮执行形态与实现入口
+- 状态：已完成
+- 子任务：
+  - [x] 锁定 implementation planning 的执行形态，并明确首轮实现不强拆 lane
+  - [x] 冻结首轮实现 lane 的 write set、contract tags 与 acceptance gate
+  - [x] 同步治理状态，并把控制面 handoff 到第一条真实实现入口
+- 最小开发单元：
+  - [x] MDU-20.1.1：锁定 implementation phase 的 execution shape、非目标与“单 lane 优先”结论 [依赖：MDU-19.1.3]
+  - [x] MDU-20.1.2：冻结 `lane-ocr-layout-assist-core` 的 write set、contract tags 与 acceptance gate [依赖：MDU-20.1.1]
+  - [x] MDU-20.1.3：同步 PROGRESS / ADR / WORK_GRAPH / LANE_STATE / RUN_CONTEXT，并 handoff 到首个真实实现入口 [依赖：MDU-20.1.2]
+
+### 阶段 21：Phase 4 Lane Core - OCR / Layout Assist 实现
+#### 任务 21.1：将高风险 OCR / layout assist contract 接入真实上游恢复路径
+- 状态：进行中
+- 子任务：
+  - [ ] 将 Bucket B / Bucket C 的 assist routing 与 provenance scaffold 接入真实执行路径
+  - [ ] 补 fail-closed fallback、structured re-entry 与 low-risk preservation focused regressions
+  - [ ] 运行 lane-core acceptance artifact，并同步治理证据
+- 最小开发单元：
+  - [ ] MDU-21.1.1：接入 Bucket B / Bucket C assist routing 与 provenance scaffold [依赖：MDU-20.1.3]
+  - [ ] MDU-21.1.2：补 fail-closed fallback、structured re-entry 与 low-risk preservation focused regressions [依赖：MDU-21.1.1]
+  - [ ] MDU-21.1.3：运行 lane-core acceptance artifact，并同步治理证据 [依赖：MDU-21.1.2]
+
 ## 当前位置
-- 当前阶段：无（Phase 1 已收口）
-- 当前任务：无（等待 Phase 2 或新目标）
-- 当前最小开发单元：无
-- 整体完成度：100%
+- 当前阶段：Phase 4 Lane Core - OCR / Layout Assist 实现
+- 当前任务：任务 21.1：将高风险 OCR / layout assist contract 接入真实上游恢复路径
+- 当前最小开发单元：MDU-21.1.1
+- 整体完成度：96%
 
 ## 变更记录
 | 时间 | 类型 | 描述 | 影响范围 |
 |------|------|------|----------|
+| 2026-03-23 | 治理 | 已完成 `MDU-20.1.3`：新增 `docs/phase-4-ocr-layout-assist-core-execution-plan.md`，并将控制面从 implementation planning handoff 到 `wave-1-phase-4-core / lane-ocr-layout-assist-core / MDU-21.1.1`；同时将“planning phase 收口后必须显式创建 ready lane 与下一执行入口，而不是只留下 frozen contract”回写进 `parallel-autopilot` state protocol | phase 4 implementation handoff / live-ready lane state / skill evolution |
+| 2026-03-23 | 治理 | 已完成 `MDU-20.1.2`：新增 `docs/phase-4-ocr-layout-assist-core-plan.md`，冻结 `lane-ocr-layout-assist-core` 的 primary write set、execution/acceptance contract 与 focused acceptance gate，并将控制面当前 claim 推进到 `MDU-20.1.3`；同时将“lane-aware planning 可以得出 single-lane-first 且下游模块先作为 consumer 而非 owner”补回 `parallel-autopilot` lane policy | phase 4 lane contract freeze / OCR-layout-assist execution contract / skill evolution |
+| 2026-03-23 | 治理 | 已完成 `MDU-20.1.1`：新增 `docs/phase-4-ocr-layout-assist-implementation-plan.md`，并将控制面从“同目标下等待实现规划”推进到“Phase 4 implementation planning 进行中”；同时将“lane-aware planning 可以得出‘当前先不拆 lane’的结论”回写进 `parallel-autopilot` lane policy，当前默认 claim 已切到 `MDU-20.1.2` | phase 4 implementation planning / single-lane-first decision / skill evolution |
+| 2026-03-23 | 治理 | 已完成 `MDU-19.1.3`：Phase 4 kickoff baseline 正式收口，`PROGRESS.md` / `DECISIONS.md` / `WORK_GRAPH.json` / `LANE_STATE.json` / `RUN_CONTEXT.md` 已统一切到“同目标下等待实现阶段规划”；同时将“kickoff-only phase 收口后应交棒给同目标下的 planning action，而不是泛化成等待新目标”回写进 `parallel-autopilot` state protocol | phase 4 kickoff closure / governance state / skill evolution |
+| 2026-03-23 | 治理 | 已完成 `MDU-19.1.2`：Phase 4 baseline 已冻结为 4 个风险桶与 fail-closed contract，并明确 Bucket B/C 才允许窄 assist、Bucket D 继续 blocking；同时将“风险敏感型文档智能工作在 requirement lock 后还必须补 baseline contract freeze”回写进 `parallel-autopilot` runtime protocol，当前串行 claim 已切到 `MDU-19.1.3` | phase 4 risk buckets / fail-closed contract / skill evolution |
+| 2026-03-23 | 治理 | 已完成 `MDU-19.1.1`：Phase 4 requirement lock 不再停留在方向级表述，而是补齐了 in-scope inputs、protected contracts、required outputs 和 ready-for-next-MDU gate；同时将“requirement lock 必须冻结输入范围/保护契约/下一步门槛”回写进 `parallel-autopilot` runtime protocol，当前串行 claim 已切到 `MDU-19.1.2` | phase 4 requirement lock / governance state / skill evolution |
+| 2026-03-23 | 治理 | 已重开 Phase 4 控制面：新增 `docs/phase-4-ocr-layout-assist-plan.md`，并将 `PROGRESS.md` / `DECISIONS.md` / `WORK_GRAPH.json` / `LANE_STATE.json` / `RUN_CONTEXT.md` 从“Phase 3 已完成”切到“Phase 4 高风险 PDF OCR / layout assist kickoff”；同时把“新 phase 重开前必须清空 stale `recommended_claim_order` 与旧 lane live state”回写进 `parallel-autopilot` state protocol | phase 4 kickoff / governance state / skill evolution |
+| 2026-03-22 | 治理 | 已完成 `MDU-18.1.2`：Phase 3 checkpoint 正式关闭，`PROGRESS.md` / `DECISIONS.md` / `WORK_GRAPH.json` / `LANE_STATE.json` / `RUN_CONTEXT.md` 已统一切到“等待下一阶段目标锁定”；同时将“phase 收口后必须显式清空 stale current wave/current MDU，并给出下一 control-plane 入口”回写进 `parallel-autopilot` state protocol | phase 3 checkpoint closure / roadmap snapshot / skill evolution |
+| 2026-03-22 | 验证 | 已完成 `MDU-18.1.1`：新增 `scripts/phase3_integration_gate.py` 与 `tests/test_phase3_integration_gate.py`，将 wave-1 三条 lane 的 acceptance matrix、contract coverage 与 cross-lane coherence regression 收敛成显式 integration gate 证据；同时将“phase integration gate 必须聚合 lane-local acceptance，并补至少一条 cross-lane regression”回写进 `parallel-autopilot` runtime protocol，当前串行 claim 已切到 `MDU-18.1.2` | phase 3 integration gate / checkpoint governance / skill evolution |
 | 2026-03-20 | 初始化 | 建立 autopilot 进度面，锁定“PDF 高保真中译生产化”主线 | 根目录治理 |
 | 2026-03-20 | 实现 | 运行时编译上下文已接入 `section_brief + discourse_bridge`，并正式进入 `role-style-v2` / material-aware prompt | 翻译主链路 |
 | 2026-03-20 | 实现 | `STYLE_DRIFT` 已开始携带 `prompt_guidance`，rerun plan 会注入更窄的 style guidance，新增 `profound sense of responsibility` 直译腔规则 | review / rerun / prompt |
@@ -295,6 +450,21 @@
 | 2026-03-22 | 实现 | 已新增 `layout_validate.py`，将 layout gate 的首版规则收敛为 heading / figure / footnote / table 的 deterministic preflight 校验，并补独立单测覆盖合法/非法结构样本；当前执行已推进到 `MDU-10.1.2` | export preflight / layout validation / autopilot progress |
 | 2026-03-22 | 实现 | 已将 `layout_validate` 接入 `export.py` 的 `_enforce_gate(...)`：final export 现会同步落库 `LAYOUT_VALIDATION_FAILURE` 阻断 issue，并生成 `REPARSE_CHAPTER` followup action；同时补 gate 级回归，确认问题修复后 issue 会自动 resolved，当前执行已推进到 `MDU-10.1.3` | export gate / issue routing / layout validation / autopilot progress |
 | 2026-03-22 | 验证 | 已跑通 Phase 1 最小回归语料：EPUB 端到端 `translate_full`、低风险 `PDF_TEXT` bootstrap、`PDF_MIXED` OCR/mixed 路由与 PDF figure/caption export provenance；并同步更新实施稿、ADR 与进度面，Phase 1 正式收口 | multi-agent Phase 1 验收 / 文档治理 / autopilot progress |
+| 2026-03-22 | 决策 | 已将 autopilot 继续推进到 Phase 2，并锁定 `PDF_SCAN` productionization 为唯一主目标；新增 `docs/phase-2-pdf-scan-plan.md`，同时把 `PROGRESS.md` 当前起点切到 `MDU-12.1.1` | scanned PDF Phase 2 kickoff / OCR 主链路 / autopilot progress |
+| 2026-03-22 | 审计 | 已选定 `deepseek-agentic-design-book-v11/v12` 作为 Phase 2 的代表 scanned corpus，并确认当前真实阻塞已从“缺少 OCR 主路径”转为“OCR/report 可观测性分散、temp OCR 产物不耐久、scanned title/frontmatter 结构仍会跑偏、历史 retry lineage schema 不齐” | scanned PDF Phase 2 审计 / OCR bootstrap / provenance |
+| 2026-03-22 | 实现 | `scripts/run_real_book_live.py` 现会把 OCR sidecar 摘要、OCR 进度、SQLite 表计数、work item/packet 状态计数一并持久化进 `report.json`，并在 bootstrap/resume 预检异常时 fail-closed 地写回错误阶段与结束状态；同时补了 reporting 回归，确保 `PDF_SCAN` 长启动与早失败不再依赖隐藏的 live sidecar 状态 | scanned PDF runtime reporting / OCR bootstrap / autopilot progress |
+| 2026-03-22 | 实现 | 已将 `PDF_SCAN` 接入与 `PDF_TEXT / PDF_MIXED` 相同的 chapter metadata 聚合，并新增 scanned bootstrap focused regression：验证 `page / bbox / pdf_block_role / protected_artifact` 会从 OCR parse 进入持久化 block、document image、chapter risk metadata 与 translation packet 映射，确保 protected code/image 不会误入翻译 packet | scanned PDF parse/save provenance / bootstrap pipeline / autopilot progress |
+| 2026-03-22 | 验证 | 已新增 scanned Phase 13 focused regressions：一条证明 scanned bootstrap 产物可进入共享 `translate -> review -> review_package export` 链路，并在 review package 中暴露 `pdf_page_evidence / pdf_image_evidence`；另一条证明 scanned final export 在结构坏掉时仍会 fail-closed，创建 `LAYOUT_VALIDATION_FAILURE + REPARSE_CHAPTER` | scanned PDF control-plane acceptance / export gate / autopilot progress |
+| 2026-03-22 | 修复 | 已为 `PDF_SCAN` 高风险章节增加一条极窄的 review advisory 豁口：仅当章节为单页、章节级 `parse_confidence >= 0.82`、高风险原因仅为 `ocr_scanned_page`、且 captioned artifact 同时具备 caption link 与 group context 时，`MISORDERING` 才降为低优先 advisory；同时新增最小 scanned workflow 回归，证明这类章节已可走通 `translate -> review -> bilingual_html export`，而 layout fail-closed 路径保持不变 | scanned PDF review gate / minimal end-to-end acceptance / autopilot progress |
+| 2026-03-22 | 治理 | 已完成 `MDU-13.1.3` 收口：同步更新 `docs/phase-2-pdf-scan-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，将 Phase 2 正式标记为完成；当前 roadmap 已收敛到 `59/59`、`100%` | scanned PDF Phase 2 closure / ADR / autopilot progress |
+| 2026-03-22 | 治理 | 已切换到新的 `parallel-autopilot` skill，并新增 `docs/phase-3-parallel-autopilot-plan.md`、`WORK_GRAPH.json`、`LANE_STATE.json` 与 `RUN_CONTEXT.md`；当前 roadmap 已从 Phase 2 closure 重开为 `wave-1` 三 lane 候选执行基线，默认首个 claim 为 `lane-pdf-scan-scale` / `MDU-16.1.1` | parallel-autopilot / phase 3 kickoff / lane-aware governance |
+| 2026-03-22 | 治理 | 已将“真实运行中遇到 bug 或不顺手，就反哺 `parallel-autopilot` skill 本体”固化进安装型 skill、reference protocol、发布版 skill-package 文档与 ADR；后续自动驾驶将把 skill 演化视为 bug-driven evolution 的一部分，而不是可选整理 | skill evolution / parallel-autopilot governance |
+| 2026-03-22 | 治理 | 已完成 `MDU-16.1.1`：新增 `docs/phase-3-pdf-scan-scale-plan.md`，将 larger-corpus scanned baseline 锁定为四层 corpus lineage，并明确新的 telemetry baseline 与 legacy report / DB schema drift 恢复边界；当前 lane `lane-pdf-scan-scale` 已推进到 `MDU-16.1.2` | phase 3 lane-b / larger-corpus scanned governance |
+| 2026-03-22 | 实现 | 已完成 `MDU-16.1.2`：新增共享 `real_book_live` reporting helper，并将 `run_real_book_live` / `watch_real_book_live` 同步升级为显式输出 `telemetry_generation / telemetry_compatibility / failure_taxonomy / recommended_recovery_action`；provider exhaustion、OCR failure、legacy report generation 均已补 focused regression，当前 lane `lane-pdf-scan-scale` 已推进到 `MDU-16.1.3` | phase 3 lane-b / scanned runtime reporting / retry-resume taxonomy |
+| 2026-03-22 | 实现 | 已完成 `MDU-16.1.3`：新增 `scripts/pdf_scan_corpus_acceptance.py` 与 `tests/test_pdf_scan_corpus_acceptance.py`，将四层 larger-corpus scanned lineage 固化为可执行 acceptance helper，冻结首版 full-book floor、repair throughput、readable rescue 与 lineage stability 阈值；`lane-pdf-scan-scale` 因此正式收口，串行 claim 切到 `lane-delivery-upgrade / MDU-15.1.1` | phase 3 lane-b / artifact-driven acceptance / lane transition |
+| 2026-03-22 | 治理 | 已完成 `MDU-15.1.1`：新增 `docs/phase-3-delivery-upgrade-plan.md`，锁定 rebuilt EPUB/PDF 的 additive artifact contract、source guard、canonical file naming、sidecar manifest 最小字段和 fail-closed 边界；同时将这一类“lane 首个 MDU 必须产出 lane-scoped contract doc”的真实痛点回写到 `parallel-autopilot` 的 state artifact protocol，当前执行已推进到 `MDU-15.1.2` | phase 3 lane-a / delivery artifact contract / skill evolution |
+| 2026-03-22 | 实现 | 已完成 `MDU-15.1.2`：在 `ExportType / ExportService / workflow / API` 打通最小 `rebuilt_epub / rebuilt_pdf` document-level 导出路径；`rebuilt_epub` 采用最小 EPUB spine rebuild，`rebuilt_pdf` 锁定为 `merged_html` substrate + fail-closed renderer；同时补齐 rebuilt focused regression，并用 preserved-contract regression 校正当前 merged export 的陈旧断言基线 | phase 3 lane-a / rebuilt delivery MVP / skill evolution |
+| 2026-03-22 | 验证 | 已完成 `MDU-15.1.3`：为 lane A 补齐 rebuilt delivery 的 positive-path、negative-path 与 download-contract 证据，新增 `rebuilt_epub` source guard、`rebuilt_pdf` renderer unavailable fail-closed 与 document-level PDF download 回归；同时将“带 source guard / fail-closed 边界的 lane 必须显式补负路径回归”回写进 `parallel-autopilot` runtime protocol，当前串行 claim 已切到 `lane-review-naturalness / MDU-17.1.1` | phase 3 lane-a closure / rebuilt delivery evidence / skill evolution |
 | 2026-03-20 | 验证 | 首页入口回归与 `bootstrap-upload + translate_full` API 主路径回归已通过，确认产品化界面未破坏现有后端工作流 | 前端入口 / API 工作流 |
 | 2026-03-21 | 修复 | 修复 Web 上传后立刻读取 document 的偶发 404：`bootstrap` / `bootstrap-upload` 现会在响应前显式提交事务，前端对新 document 同步增加短重试，并补 `test_bootstrap_upload_document_is_immediately_readable` 回归 | Web 产品入口 / API 一致性 |
 | 2026-03-21 | 修复 | history API 已补最新 run 阶段与进度字段，历史卡片改为“已入库/翻译中/复核中/可下载”等用户态文案，并在翻译阶段显示实时 packet 进度 | Web 产品入口 / 历史查询体验 |
@@ -338,3 +508,6 @@
 | 2026-03-22 | 验证 | 已对真实文档 `67283f52...` 从第 5 章到末章重跑 mixed-code prose repair + merged html/md re-export；Chapter 6/7/10/19 中原本泄漏到代码块后的英文正文已回填为中文，render residual 已收敛到仅剩 Glossary 的 2 个非章节块 | 真实 PDF 样本 / Chapter 5+ 跨页代码验收 |
 | 2026-03-22 | 修复 | EPUB merged export 现已为“非严格 XML 的章节 XHTML”补上 HTMLParser figure fallback：当 `ElementTree` 无法解析章节时，导出仍能从 `<figure>/<img>/<figcaption>` 里恢复图片路径，不再因为 `ParseError` 导致整章图片全部丢失 | EPUB exporter / image asset recovery / malformed XHTML fallback |
 | 2026-03-22 | 验证 | 已重导出真实 EPUB 文档 `cf32d839...`；`merged-document.html` 现在包含 44 个 `<img>` 标签，`artifacts/exports/cf32.../assets/` 下已实际落出 44 个图片文件，缺图问题已消除 | 真实 EPUB 样本 / merged HTML 图片验收 |
+| 2026-03-22 | 规划 | 已完成 `MDU-17.1.1`：新增 lane-C 独立 contract 文档，锁定 reviewer naturalness 的 benchmark families、allowed interventions、non-goals 与 naturalness-gate 边界；同时将“质量/智能类 lane 必须先冻结 benchmark、允许动作与保护契约，再进入 scaffold 实现”的经验回写进 `parallel-autopilot` lane policy，当前串行 claim 已切到 `lane-review-naturalness / MDU-17.1.2` | phase 3 lane-c contract lock / review-style contract / skill evolution |
+| 2026-03-22 | 实现 | 已完成 `MDU-17.1.2`：为 lane C 增加 additive `naturalness_summary`，将 `STYLE_DRIFT` 从 issue 散点提升为 chapter-level 可观察结果，并把命中的生硬译法片段注入 rerun hints；同时将“质量类 lane 的首个 scaffold 优先走 additive observability + packet guidance，不先冲 schema 迁移”回写进 `parallel-autopilot` lane policy，当前串行 claim 已切到 `lane-review-naturalness / MDU-17.1.3` | review / workflow / API review response / skill evolution |
+| 2026-03-22 | 验证 | 已完成 `MDU-17.1.3`：新增 `tests/test_review_naturalness_acceptance.py` 作为 lane-C dedicated acceptance artifact，锁定 literalism benchmark families、guided followup 收敛与 mixed priority 三类证据；同时将“质量类 lane 收口时必须把 frozen benchmarks 汇总成 dedicated acceptance regression，而不是散落在旧测试里”回写进 `parallel-autopilot` lane policy，当前串行 claim 已切到 `MDU-18.1.1` | phase 3 lane-c closure / review naturalness acceptance / skill evolution |

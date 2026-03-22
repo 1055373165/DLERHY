@@ -228,6 +228,8 @@ def _document_export_download_filename(
     label_map = {
         ExportType.MERGED_HTML: "中文阅读稿",
         ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
+        ExportType.REBUILT_EPUB: "重建EPUB",
+        ExportType.REBUILT_PDF: "重建PDF",
         ExportType.BILINGUAL_HTML: "双语章节包",
         ExportType.REVIEW_PACKAGE: "审校包",
     }
@@ -706,6 +708,17 @@ def _to_review_response(result: DocumentReviewResult) -> ReviewDocumentResponse:
                 "low_confidence_count": chapter.low_confidence_count,
                 "format_pollution_count": chapter.format_pollution_count,
                 "resolved_issue_count": chapter.resolved_issue_count,
+                "naturalness_summary": (
+                    {
+                        "advisory_only": chapter.naturalness_summary.advisory_only,
+                        "style_drift_issue_count": chapter.naturalness_summary.style_drift_issue_count,
+                        "affected_packet_count": chapter.naturalness_summary.affected_packet_count,
+                        "dominant_style_rules": list(chapter.naturalness_summary.dominant_style_rules),
+                        "preferred_hints": list(chapter.naturalness_summary.preferred_hints),
+                    }
+                    if chapter.naturalness_summary is not None
+                    else None
+                ),
             }
             for chapter in result.chapter_results
         ],

@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 import time
 from urllib.parse import unquote
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -56,6 +57,7 @@ from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.run_execution import RunExecutionService
+from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
@@ -136,6 +138,16 @@ CODE_CHAPTER_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
     return "ok"
 
 print(run_agent())</pre>
+  </body>
+</html>
+"""
+
+STYLE_DRIFT_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>Context engineering is a broader challenge.</p>
+    <p>The weight of evidence shows that relying on external content can produce contextually accurate outputs.</p>
   </body>
 </html>
 """
@@ -356,6 +368,49 @@ class LiteralTagWorker:
         for sentence in task.current_sentences:
             if "<think>" in sentence.source_text:
                 text = "以<think>开头的标记要保留字面形式。"
+            else:
+                text = f"译文::{sentence.source_text}"
+            temp_id = f"temp-{sentence.id}"
+            target_segments.append(
+                TranslationTargetSegment(
+                    temp_id=temp_id,
+                    text_zh=text,
+                    segment_type="sentence",
+                    source_sentence_ids=[sentence.id],
+                    confidence=0.95,
+                )
+            )
+            alignments.append(
+                AlignmentSuggestion(
+                    source_sentence_ids=[sentence.id],
+                    target_temp_ids=[temp_id],
+                    relation_type="1:1",
+                    confidence=0.99,
+                )
+            )
+        return TranslationWorkerOutput(
+            packet_id=task.context_packet.packet_id,
+            target_segments=target_segments,
+            alignment_suggestions=alignments,
+        )
+
+
+class StyleDriftWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="StyleDriftWorker",
+            model_name="style-drift-test",
+            prompt_version="test.style-drift.v1",
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        target_segments = []
+        alignments = []
+        for sentence in task.current_sentences:
+            if "Context engineering" in sentence.source_text:
+                text = "情境工程是一项更广泛的挑战。"
+            elif "weight of evidence" in sentence.source_text:
+                text = "证据权重表明，依赖外部内容往往能产生上下文更准确的输出。"
             else:
                 text = f"译文::{sentence.source_text}"
             temp_id = f"temp-{sentence.id}"
@@ -1916,6 +1971,31 @@ class ApiWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(bilingual_export.status_code, 200)
 
+    def test_review_returns_naturalness_summary_for_style_drift_chapter(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", STYLE_DRIFT_XHTML),
+            ]
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        self.app.state.translation_worker = StyleDriftWorker()
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        chapter_result = review.json()["chapter_results"][0]
+        naturalness = chapter_result["naturalness_summary"]
+        self.assertIsNotNone(naturalness)
+        self.assertTrue(naturalness["advisory_only"])
+        self.assertGreaterEqual(naturalness["style_drift_issue_count"], 2)
+        self.assertGreaterEqual(naturalness["affected_packet_count"], 1)
+        self.assertIn("context_engineering_literal", naturalness["dominant_style_rules"])
+        self.assertIn("上下文工程", naturalness["preferred_hints"])
+
     def test_image_only_cover_chapter_does_not_block_review_or_export(self) -> None:
         epub_path = self._write_epub_with_chapters(
             [
@@ -2228,6 +2308,125 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertNotIn("welcome.html", merged_html)
         self.assertIsNone(manifest["author"])
 
+    def test_rebuilt_epub_export_produces_document_level_epub_artifact(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", STRUCTURED_ARTIFACT_XHTML),
+            ],
+            extra_files={"OEBPS/images/agent-loop.png": b"fake-png-binary"},
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+
+        export = self.client.post(
+            f"/v1/documents/{document_id}/export",
+            json={"export_type": "rebuilt_epub"},
+        )
+        self.assertEqual(export.status_code, 200)
+        export_data = export.json()
+        manifest = json.loads(Path(export_data["manifest_path"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["export_type"], "rebuilt_epub")
+        self.assertEqual(manifest["renderer_kind"], "epub_spine_rebuilder")
+        self.assertEqual(manifest["derived_from_exports"], ["merged_html", "merged_markdown"])
+
+        download = self.client.get(
+            f"/v1/documents/{document_id}/exports/download",
+            params={"export_type": "rebuilt_epub"},
+        )
+        self.assertEqual(download.status_code, 200)
+        disposition = unquote(download.headers["content-disposition"])
+        self.assertIn(".epub", disposition)
+        self.assertIn("重建EPUB", disposition)
+
+        with zipfile.ZipFile(BytesIO(download.content)) as archive:
+            names = archive.namelist()
+
+        self.assertIn("mimetype", names)
+        self.assertIn("OEBPS/content.opf", names)
+        self.assertIn("OEBPS/nav.xhtml", names)
+
+    def test_rebuilt_pdf_export_downloads_document_level_pdf_when_renderer_is_available(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ]
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+
+        def _fake_render(_service, _html_path, pdf_path):
+            Path(pdf_path).write_bytes(b"%PDF-1.4\n% rebuilt-download\n")
+
+        with patch.object(
+            ExportService,
+            "_render_rebuilt_pdf_from_html",
+            autospec=True,
+            side_effect=_fake_render,
+        ):
+            export = self.client.post(
+                f"/v1/documents/{document_id}/export",
+                json={"export_type": "rebuilt_pdf"},
+            )
+            self.assertEqual(export.status_code, 200)
+            export_data = export.json()
+            manifest = json.loads(Path(export_data["manifest_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest["export_type"], "rebuilt_pdf")
+            self.assertEqual(manifest["renderer_kind"], "html_print_renderer")
+
+            download = self.client.get(
+                f"/v1/documents/{document_id}/exports/download",
+                params={"export_type": "rebuilt_pdf"},
+            )
+
+        self.assertEqual(download.status_code, 200)
+        self.assertIn("application/pdf", download.headers["content-type"])
+        disposition = unquote(download.headers["content-disposition"])
+        self.assertIn(".pdf", disposition)
+        self.assertIn("重建PDF", disposition)
+        self.assertTrue(download.content.startswith(b"%PDF-1.4"))
+
+    def test_rebuilt_pdf_export_fails_closed_when_renderer_is_unavailable(self) -> None:
+        epub_path = self._write_epub_with_chapters(
+            [
+                ("Chapter One", "chapter1.xhtml", CHAPTER_XHTML),
+            ]
+        )
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+
+        with patch.object(
+            ExportService,
+            "_render_rebuilt_pdf_from_html",
+            autospec=True,
+            side_effect=ExportGateError("Rebuilt PDF renderer unavailable."),
+        ):
+            export = self.client.post(
+                f"/v1/documents/{document_id}/export",
+                json={"export_type": "rebuilt_pdf"},
+            )
+
+        self.assertEqual(export.status_code, 409)
+        self.assertIn("renderer unavailable", export.json()["detail"]["message"])
+
     def test_merged_html_export_renders_structured_artifacts_with_special_modes(self) -> None:
         epub_path = self._write_epub_with_chapters(
             [
@@ -2257,11 +2456,11 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertIn("<img class='artifact-image'", merged_html)
         self.assertIn(asset_relative_path, merged_html)
         self.assertIn("Figure 1.1 Agent loop architecture", merged_html)
-        self.assertIn("公式保持原样", merged_html)
+        self.assertIn("代码保持原样", merged_html)
         self.assertIn("x=1", merged_html)
         self.assertIn("保留原始结构，优先保证可复制与结构保真", merged_html)
-        self.assertIn("Tier | Latency", merged_html)
-        self.assertIn("Basic | Slow", merged_html)
+        self.assertIn("<th style='text-align:left'>Tier</th>", merged_html)
+        self.assertIn("<td style='text-align:left'>Slow</td>", merged_html)
         self.assertIn("参考标识保留", merged_html)
         self.assertIn("https://example.com/agent-docs", merged_html)
 

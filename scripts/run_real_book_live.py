@@ -4,10 +4,11 @@ import argparse
 import concurrent.futures
 import json
 import os
+import sqlite3
 import threading
 import time
 import traceback
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,6 +35,12 @@ from book_agent.services.run_control import DocumentRunSummary, RunBudgetSummary
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.factory import build_translation_worker
+from scripts.real_book_live_reporting_common import (
+    CURRENT_TELEMETRY_GENERATION,
+    build_telemetry_compatibility,
+    classify_failure_taxonomy,
+    summarize_report_failure_taxonomy,
+)
 
 
 def _utcnow() -> datetime:
@@ -79,6 +86,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _write_report(report_path: Path, report: dict[str, Any]) -> None:
+    _enrich_report_runtime_snapshot(report, report_path=report_path)
     report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2, default=_json_default),
         encoding="utf-8",
@@ -87,6 +95,206 @@ def _write_report(report_path: Path, report: dict[str, Any]) -> None:
 
 def _ocr_status_path_for(report_path: Path) -> Path:
     return report_path.with_name(f"{report_path.stem}.ocr.json")
+
+
+def _read_optional_json(path: Path | None) -> dict[str, Any] | None:
+    if path is None or not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sqlite_path_from_url(database_url: str | None) -> Path | None:
+    if not database_url:
+        return None
+    prefix = "sqlite+pysqlite:///"
+    if not database_url.startswith(prefix):
+        return None
+    raw_path = database_url[len(prefix) :]
+    if not raw_path:
+        return None
+    if not raw_path.startswith("/"):
+        raw_path = "/" + raw_path
+    return Path(raw_path)
+
+
+def _table_counts(database_path: Path | None) -> dict[str, int]:
+    if database_path is None:
+        return {}
+    resolved = database_path.resolve()
+    if not resolved.exists():
+        return {}
+    tables = [
+        "documents",
+        "chapters",
+        "blocks",
+        "sentences",
+        "translation_packets",
+        "document_runs",
+        "work_items",
+        "document_images",
+    ]
+    counts: dict[str, int] = {}
+    with closing(sqlite3.connect(resolved)) as connection:
+        existing_tables = {
+            row[0]
+            for row in connection.execute("select name from sqlite_master where type='table'")
+        }
+        for table_name in tables:
+            if table_name not in existing_tables:
+                continue
+            counts[table_name] = int(connection.execute(f"select count(*) from {table_name}").fetchone()[0])
+    return counts
+
+
+def _status_counts(database_path: Path | None, *, table_name: str) -> dict[str, int]:
+    if database_path is None:
+        return {}
+    resolved = database_path.resolve()
+    if not resolved.exists():
+        return {}
+    with closing(sqlite3.connect(resolved)) as connection:
+        existing_tables = {
+            row[0]
+            for row in connection.execute("select name from sqlite_master where type='table'")
+        }
+        if table_name not in existing_tables:
+            return {}
+        rows = connection.execute(
+            f"select status, count(*) from {table_name} group by status order by status"
+        ).fetchall()
+    return {str(status): int(count) for status, count in rows if status is not None}
+
+
+def _parse_ocr_progress(ocr_status: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(ocr_status, dict):
+        return None
+    stderr_tail = str(ocr_status.get("stderr_tail") or "")
+    if not stderr_tail:
+        return None
+    current = total = None
+    for raw_line in reversed(stderr_tail.splitlines()):
+        if "/" not in raw_line:
+            continue
+        tokens = raw_line.replace("|", " ").split()
+        for token in tokens:
+            if "/" not in token:
+                continue
+            left, right = token.split("/", 1)
+            if left.isdigit() and right.isdigit():
+                current = int(left)
+                total = int(right)
+                break
+        if current is not None and total is not None:
+            break
+    if current is None or total is None or total <= 0:
+        return None
+    return {
+        "current": current,
+        "total": total,
+        "percent": round((current / total) * 100.0, 3),
+        "page_range": ocr_status.get("page_range"),
+        "state": ocr_status.get("state"),
+    }
+
+
+def _summarize_ocr_status(ocr_status: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(ocr_status, dict):
+        return None
+    return {
+        "state": ocr_status.get("state"),
+        "page_range": ocr_status.get("page_range"),
+        "pid": ocr_status.get("pid"),
+        "returncode": ocr_status.get("returncode"),
+        "started_at": ocr_status.get("started_at"),
+        "finished_at": ocr_status.get("finished_at"),
+        "last_updated_at": ocr_status.get("last_updated_at"),
+        "output_snapshot": ocr_status.get("output_snapshot"),
+        "stdout_tail": ocr_status.get("stdout_tail"),
+        "stderr_tail": ocr_status.get("stderr_tail"),
+    }
+
+
+def _infer_report_stage(
+    report: dict[str, Any],
+    *,
+    db_counts: dict[str, int],
+    ocr_status: dict[str, Any] | None,
+) -> str:
+    if report.get("finished_at"):
+        return "finished"
+    run_payload = report.get("run")
+    if isinstance(run_payload, dict) and run_payload.get("status") in {"succeeded", "failed", "paused", "cancelled"}:
+        return f"run_{run_payload['status']}"
+    if report.get("bootstrap_in_progress"):
+        if isinstance(ocr_status, dict):
+            ocr_state = str(ocr_status.get("state") or "").strip().lower()
+            if ocr_state == "failed":
+                return "bootstrap_ocr_failed"
+            if ocr_state == "succeeded":
+                return "bootstrap_ocr_succeeded_pre_persist"
+            if ocr_state in {"starting", "running"}:
+                return "bootstrap_ocr_running"
+        if db_counts.get("documents", 0) > 0:
+            return "bootstrap_persisting"
+        return "bootstrap_in_progress"
+    if report.get("resume_in_progress"):
+        return "resume_in_progress"
+    if report.get("translate"):
+        return "translate_in_progress"
+    if report.get("run_seed"):
+        return "run_seeded"
+    if report.get("document_summary_after_bootstrap"):
+        return "post_bootstrap_pre_run"
+    return "report_initialized"
+
+
+def _enrich_report_runtime_snapshot(report: dict[str, Any], *, report_path: Path) -> None:
+    report.setdefault("resume_from_run_id", None)
+    report.setdefault("resume_from_status", None)
+    report.setdefault("retry_from_run_id", None)
+    report.setdefault("retry_from_status", None)
+    database_path = _sqlite_path_from_url(report.get("database_url"))
+    ocr_status_path = None
+    raw_ocr_status_path = report.get("ocr_status_path")
+    if isinstance(raw_ocr_status_path, str) and raw_ocr_status_path.strip():
+        ocr_status_path = Path(raw_ocr_status_path)
+    elif report.get("source_path") and str(report.get("source_path")).lower().endswith(".pdf"):
+        ocr_status_path = _ocr_status_path_for(report_path)
+    ocr_status = _read_optional_json(ocr_status_path)
+    db_counts = _table_counts(database_path)
+
+    report["stage"] = _infer_report_stage(
+        report,
+        db_counts=db_counts,
+        ocr_status=ocr_status,
+    )
+    report["database_path"] = str(database_path.resolve()) if database_path is not None else None
+    report["db_counts"] = db_counts
+    report["work_item_status_counts"] = _status_counts(database_path, table_name="work_items")
+    report["translation_packet_status_counts"] = _status_counts(database_path, table_name="translation_packets")
+    report["ocr_status"] = _summarize_ocr_status(ocr_status)
+    report["ocr_progress"] = _parse_ocr_progress(ocr_status)
+    report["telemetry_generation"] = CURRENT_TELEMETRY_GENERATION
+
+    error_payload = report.get("error")
+    if isinstance(error_payload, dict):
+        error_taxonomy = classify_failure_taxonomy(
+            stage=str(error_payload.get("stage") or ""),
+            error_message=str(error_payload.get("message") or ""),
+            stop_reason=str(((report.get("run") or {}).get("stop_reason") or "")),
+        )
+        error_payload["failure_taxonomy"] = error_taxonomy
+        error_payload["recommended_recovery_action"] = (
+            str(error_taxonomy.get("recovery_action")) if isinstance(error_taxonomy, dict) else None
+        )
+
+    report["failure_taxonomy"] = summarize_report_failure_taxonomy(report)
+    report["recommended_recovery_action"] = (
+        str(report["failure_taxonomy"].get("recovery_action"))
+        if isinstance(report.get("failure_taxonomy"), dict)
+        else None
+    )
+    report["telemetry_compatibility"] = build_telemetry_compatibility(report)
 
 
 @contextmanager
@@ -172,8 +380,8 @@ def _is_retryable_exception(exc: Exception) -> bool:
 
 
 def _pause_reason_for_exception(exc: Exception) -> str | None:
-    message = str(exc).lower()
-    if "http 402" in message and "insufficient balance" in message:
+    taxonomy = classify_failure_taxonomy(stage="translate", error_message=str(exc))
+    if isinstance(taxonomy, dict) and taxonomy.get("reason_code") == "provider.insufficient_balance":
         return "provider.insufficient_balance"
     return None
 
@@ -431,6 +639,11 @@ def _execute_controlled_translate_work_item(
         heartbeat_thread.join(timeout=max(1, heartbeat_interval_seconds))
         retryable = _is_retryable_exception(exc)
         pause_reason = _pause_reason_for_exception(exc)
+        failure_taxonomy = classify_failure_taxonomy(
+            stage="translate",
+            error_message=str(exc),
+            stop_reason=pause_reason,
+        )
         error_detail = {
             "message": str(exc),
             "traceback": traceback.format_exc(limit=8),
@@ -472,6 +685,10 @@ def _execute_controlled_translate_work_item(
                 "error_class": exc.__class__.__name__,
                 "error_message": str(exc),
                 "stop_reason": pause_reason,
+                "failure_taxonomy": failure_taxonomy,
+                "recommended_recovery_action": (
+                    str(failure_taxonomy.get("recovery_action")) if isinstance(failure_taxonomy, dict) else None
+                ),
             }
         except Exception as completion_exc:
             return {
@@ -488,6 +705,10 @@ def _execute_controlled_translate_work_item(
                 "error_class": exc.__class__.__name__,
                 "error_message": str(exc),
                 "stop_reason": pause_reason,
+                "failure_taxonomy": failure_taxonomy,
+                "recommended_recovery_action": (
+                    str(failure_taxonomy.get("recovery_action")) if isinstance(failure_taxonomy, dict) else None
+                ),
                 "completion_error": str(completion_exc),
             }
 
@@ -529,6 +750,45 @@ def _refresh_retry_run_status_detail(
     repository.save_run(run)
 
 
+def _record_preflight_error(
+    *,
+    report: dict[str, Any],
+    report_path: Path,
+    started_at: datetime,
+    stage: str,
+    exc: Exception,
+) -> int:
+    report["error"] = {
+        "stage": stage,
+        "error_class": exc.__class__.__name__,
+        "message": str(exc),
+        "traceback": traceback.format_exc(limit=8),
+    }
+    if stage == "bootstrap":
+        report["bootstrap_in_progress"] = False
+        report["bootstrap_failed_at"] = _utcnow().isoformat()
+    if stage == "resume":
+        report["resume_in_progress"] = False
+        report["resume_failed_at"] = _utcnow().isoformat()
+    finished_at = _utcnow()
+    report["finished_at"] = finished_at.isoformat()
+    report["duration_seconds"] = round((finished_at - started_at).total_seconds(), 3)
+    _write_report(report_path, report)
+    print(
+        json.dumps(
+            {
+                "event": f"{stage}_failed",
+                "error_class": exc.__class__.__name__,
+                "error_message": str(exc),
+                "report_path": str(report_path.resolve()),
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -542,265 +802,147 @@ def main(argv: list[str] | None = None) -> int:
     Base.metadata.create_all(engine)
     session_factory = build_session_factory(engine=engine)
     settings = get_settings()
-
-    started_at = _utcnow()
-    report: dict[str, Any] = {
-        "started_at": started_at.isoformat(),
-        "source_path": str(Path(args.source_path).resolve()),
-        "database_url": args.database_url,
-        "export_root": str(export_root.resolve()),
-        "translation_backend": settings.translation_backend,
-        "translation_model": settings.translation_model,
-        "translate_batch_size": args.translate_batch_size,
-        "parallel_workers": args.parallel_workers,
-        "auto_review_followups": args.auto_review_followups,
-        "auto_followup_on_gate": args.auto_followup_on_gate,
-        "max_auto_followup_attempts": args.max_auto_followup_attempts,
-    }
-    ocr_environment: dict[str, str] = {}
-    if Path(args.source_path).suffix.lower() == ".pdf":
-        ocr_environment = {
-            "BOOK_AGENT_OCR_STATUS_PATH": str(_ocr_status_path_for(report_path).resolve()),
-            "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "15",
+    try:
+        started_at = _utcnow()
+        report: dict[str, Any] = {
+            "started_at": started_at.isoformat(),
+            "source_path": str(Path(args.source_path).resolve()),
+            "database_url": args.database_url,
+            "export_root": str(export_root.resolve()),
+            "translation_backend": settings.translation_backend,
+            "translation_model": settings.translation_model,
+            "translate_batch_size": args.translate_batch_size,
+            "parallel_workers": args.parallel_workers,
+            "auto_review_followups": args.auto_review_followups,
+            "auto_followup_on_gate": args.auto_followup_on_gate,
+            "max_auto_followup_attempts": args.max_auto_followup_attempts,
         }
-        report["ocr_status_path"] = ocr_environment["BOOK_AGENT_OCR_STATUS_PATH"]
-    if args.run_id is None:
-        report["bootstrap_in_progress"] = True
-    else:
-        report["resume_in_progress"] = True
-    _write_report(report_path, report)
-
-    if args.run_id is None:
-        with _temporary_environment(ocr_environment):
-            with session_scope(session_factory) as session:
-                service = _new_service(session, export_root=str(export_root))
-                bootstrap = service.bootstrap_epub(args.source_path)
-                report["bootstrap"] = asdict(bootstrap)
-                document_id = bootstrap.document_id
-                report["bootstrap_in_progress"] = False
-                report["bootstrap_finished_at"] = _utcnow().isoformat()
+        ocr_environment: dict[str, str] = {}
+        if Path(args.source_path).suffix.lower() == ".pdf":
+            ocr_environment = {
+                "BOOK_AGENT_OCR_STATUS_PATH": str(_ocr_status_path_for(report_path).resolve()),
+                "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "15",
+            }
+            report["ocr_status_path"] = ocr_environment["BOOK_AGENT_OCR_STATUS_PATH"]
+        if args.run_id is None:
+            report["bootstrap_in_progress"] = True
+        else:
+            report["resume_in_progress"] = True
         _write_report(report_path, report)
-    else:
+
+        if args.run_id is None:
+            try:
+                with _temporary_environment(ocr_environment):
+                    with session_scope(session_factory) as session:
+                        service = _new_service(session, export_root=str(export_root))
+                        bootstrap = service.bootstrap_epub(args.source_path)
+                        report["bootstrap"] = asdict(bootstrap)
+                        document_id = bootstrap.document_id
+                        report["bootstrap_in_progress"] = False
+                        report["bootstrap_finished_at"] = _utcnow().isoformat()
+                _write_report(report_path, report)
+            except Exception as exc:
+                return _record_preflight_error(
+                    report=report,
+                    report_path=report_path,
+                    started_at=started_at,
+                    stage="bootstrap",
+                    exc=exc,
+                )
+        else:
+            try:
+                with session_scope(session_factory) as session:
+                    run_control = _new_run_control_service(session)
+                    existing_run = run_control.get_run_summary(args.run_id)
+                    document_id = existing_run.document_id
+                    report["resume_from_run_id"] = args.run_id
+                    report["resume_from_status"] = existing_run.status
+                    if existing_run.status in {"failed", "cancelled"}:
+                        report["retry_from_run_id"] = args.run_id
+                        report["retry_from_status"] = existing_run.status
+                    report["resume_in_progress"] = False
+                    report["resume_ready_at"] = _utcnow().isoformat()
+                _write_report(report_path, report)
+            except Exception as exc:
+                return _record_preflight_error(
+                    report=report,
+                    report_path=report_path,
+                    started_at=started_at,
+                    stage="resume",
+                    exc=exc,
+                )
+
+        with session_scope(session_factory) as session:
+            service = _new_service(session, export_root=str(export_root))
+            summary = service.get_document_summary(document_id)
+            report["document_summary_after_bootstrap"] = asdict(summary)
+        _write_report(report_path, report)
+
+        with session_scope(session_factory) as session:
+            packet_ids = _load_packet_ids(session, document_id)
+            pending_packet_ids = _load_pending_packet_ids(session, document_id)
+
         with session_scope(session_factory) as session:
             run_control = _new_run_control_service(session)
-            existing_run = run_control.get_run_summary(args.run_id)
-            document_id = existing_run.document_id
-            report["resume_from_run_id"] = args.run_id
-            report["resume_from_status"] = existing_run.status
-            if existing_run.status in {"failed", "cancelled"}:
-                report["retry_from_run_id"] = args.run_id
-                report["retry_from_status"] = existing_run.status
-            report["resume_in_progress"] = False
-            report["resume_ready_at"] = _utcnow().isoformat()
-        _write_report(report_path, report)
-
-    with session_scope(session_factory) as session:
-        service = _new_service(session, export_root=str(export_root))
-        summary = service.get_document_summary(document_id)
-        report["document_summary_after_bootstrap"] = asdict(summary)
-    _write_report(report_path, report)
-
-    with session_scope(session_factory) as session:
-        packet_ids = _load_packet_ids(session, document_id)
-        pending_packet_ids = _load_pending_packet_ids(session, document_id)
-
-    with session_scope(session_factory) as session:
-        run_control = _new_run_control_service(session)
-        run_execution = _new_run_execution_service(session)
-        if args.run_id is None:
-            run_summary = run_control.create_run(
-                document_id=document_id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
-                requested_by=args.requested_by,
-                backend=settings.translation_backend,
-                model_name=settings.translation_model,
-                status_detail_json={
-                    "source_path": str(Path(args.source_path).resolve()),
-                    "report_path": str(report_path.resolve()),
-                    "export_root": str(export_root.resolve()),
-                },
-                budget=_build_run_budget(args),
-            )
-            run_summary = run_control.resume_run(
-                run_summary.run_id,
-                actor_id=args.requested_by,
-                note="start translate_full live run",
-            )
-        else:
-            run_summary = run_control.get_run_summary(args.run_id)
-            if run_summary.status in {"queued", "paused"}:
-                run_summary = run_control.resume_run(
-                    run_summary.run_id,
-                    actor_id=args.requested_by,
-                    note="resume translate_full live run",
-                )
-            elif run_summary.status in {"failed", "cancelled"}:
-                run_summary = run_control.retry_run(
-                    run_summary.run_id,
-                    actor_id=args.requested_by,
-                    note="retry translate_full live run",
-                    detail_json={
+            run_execution = _new_run_execution_service(session)
+            if args.run_id is None:
+                run_summary = run_control.create_run(
+                    document_id=document_id,
+                    run_type=DocumentRunType.TRANSLATE_FULL,
+                    requested_by=args.requested_by,
+                    backend=settings.translation_backend,
+                    model_name=settings.translation_model,
+                    status_detail_json={
                         "source_path": str(Path(args.source_path).resolve()),
                         "report_path": str(report_path.resolve()),
                         "export_root": str(export_root.resolve()),
                     },
+                    budget=_build_run_budget(args),
                 )
-                _refresh_retry_run_status_detail(
-                    session,
-                    run_id=run_summary.run_id,
-                    source_path=Path(args.source_path),
-                    report_path=report_path,
-                    export_root=export_root,
+                run_summary = run_control.resume_run(
+                    run_summary.run_id,
+                    actor_id=args.requested_by,
+                    note="start translate_full live run",
                 )
-        run_id = run_summary.run_id
-        seeded_work_item_ids = run_execution.seed_translate_work_items(
-            run_id=run_id,
-            packet_ids=pending_packet_ids,
-        )
-        run_summary = run_control.get_run_summary(run_id)
-        report["run_seed"] = {
-            "run_id": run_id,
-            "seeded_work_item_count": len(seeded_work_item_ids),
-            "pending_packet_count_initial": len(pending_packet_ids),
-            "source_run_id": args.run_id,
-        }
-    recent_results: list[dict[str, Any]] = []
-    _refresh_run_report(
-        report=report,
-        report_path=report_path,
-        run_summary=run_summary,
-        total_packet_count=len(packet_ids),
-        recent_results=recent_results,
-    )
-
-    effective_parallel_workers = max(1, args.parallel_workers)
-    if run_summary.budget and run_summary.budget.max_parallel_workers is not None:
-        effective_parallel_workers = max(1, min(effective_parallel_workers, run_summary.budget.max_parallel_workers))
-
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=effective_parallel_workers) as executor:
-            inflight: dict[concurrent.futures.Future, dict[str, Any]] = {}
-            last_housekeeping_at = 0.0
-            while True:
-                now_monotonic = time.monotonic()
-                if now_monotonic - last_housekeeping_at >= 2.0:
-                    with session_scope(session_factory) as session:
-                        run_control = _new_run_control_service(session)
-                        run_execution = _new_run_execution_service(session)
-                        reclaim_result = run_execution.reclaim_expired_leases(run_id=run_id)
-                        budget_result = run_execution.enforce_budget_guardrails(run_id=run_id)
-                        run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
-                        report["run_housekeeping"] = {
-                            "expired_lease_count": reclaim_result.expired_lease_count,
-                            "reclaimed_work_item_ids": reclaim_result.reclaimed_work_item_ids,
-                            "budget_exceeded": budget_result.budget_exceeded,
-                            "budget_stop_reason": budget_result.stop_reason,
-                        }
-                    _refresh_run_report(
-                        report=report,
+            else:
+                run_summary = run_control.get_run_summary(args.run_id)
+                if run_summary.status in {"queued", "paused"}:
+                    run_summary = run_control.resume_run(
+                        run_summary.run_id,
+                        actor_id=args.requested_by,
+                        note="resume translate_full live run",
+                    )
+                elif run_summary.status in {"failed", "cancelled"}:
+                    run_summary = run_control.retry_run(
+                        run_summary.run_id,
+                        actor_id=args.requested_by,
+                        note="retry translate_full live run",
+                        detail_json={
+                            "source_path": str(Path(args.source_path).resolve()),
+                            "report_path": str(report_path.resolve()),
+                            "export_root": str(export_root.resolve()),
+                        },
+                    )
+                    _refresh_retry_run_status_detail(
+                        session,
+                        run_id=run_summary.run_id,
+                        source_path=Path(args.source_path),
                         report_path=report_path,
-                        run_summary=run_summary,
-                        total_packet_count=len(packet_ids),
-                        recent_results=recent_results,
+                        export_root=export_root,
                     )
-                    last_housekeeping_at = now_monotonic
-
-                while len(inflight) < effective_parallel_workers:
-                    with session_scope(session_factory) as session:
-                        run_execution = _new_run_execution_service(session)
-                        claimed = run_execution.claim_next_translate_work_item(
-                            run_id=run_id,
-                            worker_name="real-book-live.translate",
-                            worker_instance_id=f"real-book-live:{uuid4()}",
-                            lease_seconds=args.lease_seconds,
-                        )
-                    if claimed is None:
-                        break
-                    future = executor.submit(
-                        _execute_controlled_translate_work_item,
-                        session_factory=session_factory,
-                        export_root=str(export_root),
-                        claimed_work_item=claimed,
-                        lease_seconds=args.lease_seconds,
-                        heartbeat_interval_seconds=args.heartbeat_interval_seconds,
-                    )
-                    inflight[future] = {
-                        "work_item_id": claimed.work_item_id,
-                        "packet_id": claimed.scope_id,
-                        "attempt": claimed.attempt,
-                    }
-
-                if not inflight:
-                    with session_scope(session_factory) as session:
-                        run_execution = _new_run_execution_service(session)
-                        run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
-                    _refresh_run_report(
-                        report=report,
-                        report_path=report_path,
-                        run_summary=run_summary,
-                        total_packet_count=len(packet_ids),
-                        recent_results=recent_results,
-                    )
-                    if run_summary.status in {"succeeded", "failed", "paused", "cancelled"}:
-                        break
-                    time.sleep(1.0)
-                    continue
-
-                done, _ = concurrent.futures.wait(
-                    inflight.keys(),
-                    timeout=1.0,
-                    return_when=concurrent.futures.FIRST_COMPLETED,
-                )
-                if not done:
-                    continue
-
-                for future in done:
-                    inflight_meta = inflight.pop(future)
-                    result = future.result()
-                    recent_results.append(result)
-                    with session_scope(session_factory) as session:
-                        run_execution = _new_run_execution_service(session)
-                        run_execution.enforce_budget_guardrails(run_id=run_id)
-                        run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
-                    _refresh_run_report(
-                        report=report,
-                        report_path=report_path,
-                        run_summary=run_summary,
-                        total_packet_count=len(packet_ids),
-                        recent_results=recent_results,
-                    )
-                    print(
-                        json.dumps(
-                            {
-                                "event": "work_item_completed",
-                                "run_id": run_id,
-                                "work_item_id": inflight_meta["work_item_id"],
-                                "packet_id": inflight_meta["packet_id"],
-                                "status": result["status"],
-                                "translated_packet_count": report["translate"]["translated_packet_count"],
-                                "remaining_packet_count": report["translate"]["remaining_packet_count"],
-                                "run_status": run_summary.status,
-                            },
-                            ensure_ascii=False,
-                        ),
-                        flush=True,
-                    )
-
-                    if run_summary.status in {"failed", "paused", "cancelled", "succeeded"} and not inflight:
-                        break
-
-                if run_summary.status in {"failed", "paused", "cancelled", "succeeded"} and not inflight:
-                    break
-    except KeyboardInterrupt:
-        with session_scope(session_factory) as session:
-            run_control = _new_run_control_service(session)
-            run_summary = run_control.pause_run_system(
-                run_id,
-                stop_reason="operator.keyboard_interrupt",
-                detail_json={"requested_by": args.requested_by},
+            run_id = run_summary.run_id
+            seeded_work_item_ids = run_execution.seed_translate_work_items(
+                run_id=run_id,
+                packet_ids=pending_packet_ids,
             )
-        report["interrupted"] = True
-        report["interrupted_at"] = _utcnow().isoformat()
+            run_summary = run_control.get_run_summary(run_id)
+            report["run_seed"] = {
+                "run_id": run_id,
+                "seeded_work_item_count": len(seeded_work_item_ids),
+                "pending_packet_count_initial": len(pending_packet_ids),
+                "source_run_id": args.run_id,
+            }
+        recent_results: list[dict[str, Any]] = []
         _refresh_run_report(
             report=report,
             report_path=report_path,
@@ -808,114 +950,260 @@ def main(argv: list[str] | None = None) -> int:
             total_packet_count=len(packet_ids),
             recent_results=recent_results,
         )
-        print(
-            json.dumps(
-                {
-                    "event": "translate_interrupted",
-                    "run_id": run_id,
-                    "translated_packet_count": report["translate"]["translated_packet_count"],
-                    "total_packet_count": len(packet_ids),
-                },
-                ensure_ascii=False,
-            ),
-            flush=True,
+
+        effective_parallel_workers = max(1, args.parallel_workers)
+        if run_summary.budget and run_summary.budget.max_parallel_workers is not None:
+            effective_parallel_workers = max(
+                1,
+                min(effective_parallel_workers, run_summary.budget.max_parallel_workers),
+            )
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=effective_parallel_workers) as executor:
+                inflight: dict[concurrent.futures.Future, dict[str, Any]] = {}
+                last_housekeeping_at = 0.0
+                while True:
+                    now_monotonic = time.monotonic()
+                    if now_monotonic - last_housekeeping_at >= 2.0:
+                        with session_scope(session_factory) as session:
+                            run_control = _new_run_control_service(session)
+                            run_execution = _new_run_execution_service(session)
+                            reclaim_result = run_execution.reclaim_expired_leases(run_id=run_id)
+                            budget_result = run_execution.enforce_budget_guardrails(run_id=run_id)
+                            run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
+                            report["run_housekeeping"] = {
+                                "expired_lease_count": reclaim_result.expired_lease_count,
+                                "reclaimed_work_item_ids": reclaim_result.reclaimed_work_item_ids,
+                                "budget_exceeded": budget_result.budget_exceeded,
+                                "budget_stop_reason": budget_result.stop_reason,
+                            }
+                        _refresh_run_report(
+                            report=report,
+                            report_path=report_path,
+                            run_summary=run_summary,
+                            total_packet_count=len(packet_ids),
+                            recent_results=recent_results,
+                        )
+                        last_housekeeping_at = now_monotonic
+
+                    while len(inflight) < effective_parallel_workers:
+                        with session_scope(session_factory) as session:
+                            run_execution = _new_run_execution_service(session)
+                            claimed = run_execution.claim_next_translate_work_item(
+                                run_id=run_id,
+                                worker_name="real-book-live.translate",
+                                worker_instance_id=f"real-book-live:{uuid4()}",
+                                lease_seconds=args.lease_seconds,
+                            )
+                        if claimed is None:
+                            break
+                        future = executor.submit(
+                            _execute_controlled_translate_work_item,
+                            session_factory=session_factory,
+                            export_root=str(export_root),
+                            claimed_work_item=claimed,
+                            lease_seconds=args.lease_seconds,
+                            heartbeat_interval_seconds=args.heartbeat_interval_seconds,
+                        )
+                        inflight[future] = {
+                            "work_item_id": claimed.work_item_id,
+                            "packet_id": claimed.scope_id,
+                            "attempt": claimed.attempt,
+                        }
+
+                    if not inflight:
+                        with session_scope(session_factory) as session:
+                            run_execution = _new_run_execution_service(session)
+                            run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
+                        _refresh_run_report(
+                            report=report,
+                            report_path=report_path,
+                            run_summary=run_summary,
+                            total_packet_count=len(packet_ids),
+                            recent_results=recent_results,
+                        )
+                        if run_summary.status in {"succeeded", "failed", "paused", "cancelled"}:
+                            break
+                        time.sleep(1.0)
+                        continue
+
+                    done, _ = concurrent.futures.wait(
+                        inflight.keys(),
+                        timeout=1.0,
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    if not done:
+                        continue
+
+                    for future in done:
+                        inflight_meta = inflight.pop(future)
+                        result = future.result()
+                        recent_results.append(result)
+                        with session_scope(session_factory) as session:
+                            run_execution = _new_run_execution_service(session)
+                            run_execution.enforce_budget_guardrails(run_id=run_id)
+                            run_summary = run_execution.reconcile_run_terminal_state(run_id=run_id)
+                        _refresh_run_report(
+                            report=report,
+                            report_path=report_path,
+                            run_summary=run_summary,
+                            total_packet_count=len(packet_ids),
+                            recent_results=recent_results,
+                        )
+                        print(
+                            json.dumps(
+                                {
+                                    "event": "work_item_completed",
+                                    "run_id": run_id,
+                                    "work_item_id": inflight_meta["work_item_id"],
+                                    "packet_id": inflight_meta["packet_id"],
+                                    "status": result["status"],
+                                    "translated_packet_count": report["translate"]["translated_packet_count"],
+                                    "remaining_packet_count": report["translate"]["remaining_packet_count"],
+                                    "run_status": run_summary.status,
+                                },
+                                ensure_ascii=False,
+                            ),
+                            flush=True,
+                        )
+
+                        if run_summary.status in {"failed", "paused", "cancelled", "succeeded"} and not inflight:
+                            break
+
+                    if run_summary.status in {"failed", "paused", "cancelled", "succeeded"} and not inflight:
+                        break
+        except KeyboardInterrupt:
+            with session_scope(session_factory) as session:
+                run_control = _new_run_control_service(session)
+                run_summary = run_control.pause_run_system(
+                    run_id,
+                    stop_reason="operator.keyboard_interrupt",
+                    detail_json={"requested_by": args.requested_by},
+                )
+            report["interrupted"] = True
+            report["interrupted_at"] = _utcnow().isoformat()
+            _refresh_run_report(
+                report=report,
+                report_path=report_path,
+                run_summary=run_summary,
+                total_packet_count=len(packet_ids),
+                recent_results=recent_results,
+            )
+            print(
+                json.dumps(
+                    {
+                        "event": "translate_interrupted",
+                        "run_id": run_id,
+                        "translated_packet_count": report["translate"]["translated_packet_count"],
+                        "total_packet_count": len(packet_ids),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            return 130
+
+        with session_scope(session_factory) as session:
+            run_control = _new_run_control_service(session)
+            final_run_summary = run_control.get_run_summary(run_id)
+        _refresh_run_report(
+            report=report,
+            report_path=report_path,
+            run_summary=final_run_summary,
+            total_packet_count=len(packet_ids),
+            recent_results=recent_results,
         )
-        return 130
 
-    with session_scope(session_factory) as session:
-        run_control = _new_run_control_service(session)
-        final_run_summary = run_control.get_run_summary(run_id)
-    _refresh_run_report(
-        report=report,
-        report_path=report_path,
-        run_summary=final_run_summary,
-        total_packet_count=len(packet_ids),
-        recent_results=recent_results,
-    )
+        if final_run_summary.status != "succeeded":
+            finished_at = _utcnow()
+            report["finished_at"] = finished_at.isoformat()
+            report["duration_seconds"] = round((finished_at - started_at).total_seconds(), 3)
+            _write_report(report_path, report)
+            print(
+                json.dumps(
+                    {
+                        "event": "translate_run_stopped",
+                        "run_id": run_id,
+                        "run_status": final_run_summary.status,
+                        "stop_reason": final_run_summary.stop_reason,
+                        "report_path": str(report_path.resolve()),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            return 0 if final_run_summary.status == "paused" else 1
 
-    if final_run_summary.status != "succeeded":
+        with session_scope(session_factory) as session:
+            service = _new_service(session, export_root=str(export_root))
+            review = service.review_document(
+                document_id,
+                auto_execute_packet_followups=args.auto_review_followups,
+                max_auto_followup_attempts=args.max_auto_followup_attempts,
+            )
+            report["review"] = asdict(review)
+        _write_report(report_path, report)
+
+        with session_scope(session_factory) as session:
+            service = _new_service(session, export_root=str(export_root))
+            review_export = service.export_document(document_id, ExportType.REVIEW_PACKAGE)
+            report["review_package_export"] = asdict(review_export)
+        _write_report(report_path, report)
+
+        if not args.skip_final_export:
+            try:
+                with session_scope(session_factory) as session:
+                    service = _new_service(session, export_root=str(export_root))
+                    final_export = service.export_document(
+                        document_id,
+                        ExportType.BILINGUAL_HTML,
+                        auto_execute_followup_on_gate=args.auto_followup_on_gate,
+                        max_auto_followup_attempts=args.max_auto_followup_attempts,
+                    )
+                    report["bilingual_export"] = asdict(final_export)
+                    _write_report(report_path, report)
+            except ExportGateError as exc:
+                report["bilingual_export_error"] = {
+                    "message": str(exc),
+                    "detail": exc.to_http_detail(),
+                }
+                _write_report(report_path, report)
+
+            try:
+                with session_scope(session_factory) as session:
+                    service = _new_service(session, export_root=str(export_root))
+                    merged_export = service.export_document(
+                        document_id,
+                        ExportType.MERGED_HTML,
+                    )
+                    report["merged_export"] = asdict(merged_export)
+                    _write_report(report_path, report)
+            except ExportGateError as exc:
+                report["merged_export_error"] = {
+                    "message": str(exc),
+                    "detail": exc.to_http_detail(),
+                }
+                _write_report(report_path, report)
+
+        with session_scope(session_factory) as session:
+            service = _new_service(session, export_root=str(export_root))
+            final_summary = service.get_document_summary(document_id)
+            report["document_summary_final"] = asdict(final_summary)
+            report["translation_samples"] = _summarize_samples(session, document_id, limit=args.sample_count)
+
         finished_at = _utcnow()
         report["finished_at"] = finished_at.isoformat()
         report["duration_seconds"] = round((finished_at - started_at).total_seconds(), 3)
         _write_report(report_path, report)
         print(
             json.dumps(
-                {
-                    "event": "translate_run_stopped",
-                    "run_id": run_id,
-                    "run_status": final_run_summary.status,
-                    "stop_reason": final_run_summary.stop_reason,
-                    "report_path": str(report_path.resolve()),
-                },
+                {"report_path": str(report_path.resolve()), "document_id": document_id},
                 ensure_ascii=False,
-            ),
-            flush=True,
+            )
         )
-        return 0 if final_run_summary.status == "paused" else 1
-
-    with session_scope(session_factory) as session:
-        service = _new_service(session, export_root=str(export_root))
-        review = service.review_document(
-            document_id,
-            auto_execute_packet_followups=args.auto_review_followups,
-            max_auto_followup_attempts=args.max_auto_followup_attempts,
-        )
-        report["review"] = asdict(review)
-    _write_report(report_path, report)
-
-    with session_scope(session_factory) as session:
-        service = _new_service(session, export_root=str(export_root))
-        review_export = service.export_document(document_id, ExportType.REVIEW_PACKAGE)
-        report["review_package_export"] = asdict(review_export)
-    _write_report(report_path, report)
-
-    if not args.skip_final_export:
-        try:
-            with session_scope(session_factory) as session:
-                service = _new_service(session, export_root=str(export_root))
-                final_export = service.export_document(
-                    document_id,
-                    ExportType.BILINGUAL_HTML,
-                    auto_execute_followup_on_gate=args.auto_followup_on_gate,
-                    max_auto_followup_attempts=args.max_auto_followup_attempts,
-                )
-                report["bilingual_export"] = asdict(final_export)
-                _write_report(report_path, report)
-        except ExportGateError as exc:
-            report["bilingual_export_error"] = {
-                "message": str(exc),
-                "detail": exc.to_http_detail(),
-            }
-            _write_report(report_path, report)
-
-        try:
-            with session_scope(session_factory) as session:
-                service = _new_service(session, export_root=str(export_root))
-                merged_export = service.export_document(
-                    document_id,
-                    ExportType.MERGED_HTML,
-                )
-                report["merged_export"] = asdict(merged_export)
-                _write_report(report_path, report)
-        except ExportGateError as exc:
-            report["merged_export_error"] = {
-                "message": str(exc),
-                "detail": exc.to_http_detail(),
-            }
-            _write_report(report_path, report)
-
-    with session_scope(session_factory) as session:
-        service = _new_service(session, export_root=str(export_root))
-        final_summary = service.get_document_summary(document_id)
-        report["document_summary_final"] = asdict(final_summary)
-        report["translation_samples"] = _summarize_samples(session, document_id, limit=args.sample_count)
-
-    finished_at = _utcnow()
-    report["finished_at"] = finished_at.isoformat()
-    report["duration_seconds"] = round((finished_at - started_at).total_seconds(), 3)
-    _write_report(report_path, report)
-    print(json.dumps({"report_path": str(report_path.resolve()), "document_id": document_id}, ensure_ascii=False))
-    return 0
+        return 0
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":

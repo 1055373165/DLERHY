@@ -17,6 +17,7 @@ from book_agent.domain.enums import (
     JobScopeType,
     LockLevel,
     RootCauseLayer,
+    SourceType,
     TargetSegmentStatus,
     SentenceStatus,
     Severity,
@@ -79,6 +80,16 @@ class ChapterQualitySummary:
     blocking_issue_count: int
     low_confidence_count: int
     format_pollution_count: int
+    naturalness_summary: "NaturalnessSummary | None" = None
+
+
+@dataclass(slots=True)
+class NaturalnessSummary:
+    advisory_only: bool
+    style_drift_issue_count: int
+    affected_packet_count: int
+    dominant_style_rules: list[str]
+    preferred_hints: list[str]
 
 
 @dataclass(slots=True)
@@ -155,6 +166,39 @@ class ReviewService:
         if not matching:
             return None
         return max(matching, key=_severity_rank)
+
+    def _build_naturalness_summary(self, issues: list[ReviewIssue]) -> NaturalnessSummary | None:
+        style_issues = [issue for issue in issues if issue.issue_type == "STYLE_DRIFT"]
+        if not style_issues:
+            return None
+
+        rule_counts: dict[str, int] = {}
+        hint_counts: dict[str, int] = {}
+        packet_ids = {issue.packet_id for issue in style_issues if issue.packet_id}
+
+        for issue in style_issues:
+            evidence = issue.evidence_json or {}
+            style_rule = str(evidence.get("style_rule") or "").strip()
+            preferred_hint = str(evidence.get("preferred_hint") or "").strip()
+            if style_rule:
+                rule_counts[style_rule] = rule_counts.get(style_rule, 0) + 1
+            if preferred_hint:
+                hint_counts[preferred_hint] = hint_counts.get(preferred_hint, 0) + 1
+
+        dominant_style_rules = [
+            key for key, _ in sorted(rule_counts.items(), key=lambda item: (-item[1], item[0]))
+        ][:3]
+        preferred_hints = [
+            key for key, _ in sorted(hint_counts.items(), key=lambda item: (-item[1], item[0]))
+        ][:3]
+
+        return NaturalnessSummary(
+            advisory_only=all(not issue.blocking for issue in style_issues),
+            style_drift_issue_count=len(style_issues),
+            affected_packet_count=len(packet_ids),
+            dominant_style_rules=dominant_style_rules,
+            preferred_hints=preferred_hints,
+        )
 
     def _build_review_artifacts(self, bundle: ChapterReviewBundle) -> ReviewArtifacts:
         now = _utcnow()
@@ -310,6 +354,7 @@ class ReviewService:
             blocking_issue_count=sum(1 for issue in issues if issue.blocking),
             low_confidence_count=sum(1 for issue in issues if issue.issue_type == "LOW_CONFIDENCE"),
             format_pollution_count=sum(1 for issue in issues if issue.issue_type == "FORMAT_POLLUTION"),
+            naturalness_summary=self._build_naturalness_summary(issues),
         )
         return ReviewArtifacts(
             issues=issues,
@@ -1027,13 +1072,34 @@ class ReviewService:
         local_high_layout_risk_pages: list[int],
         chapter_page_evidence: list[dict[str, Any]],
     ) -> dict[str, object]:
+        pdf_profile = (bundle.document.metadata_json or {}).get("pdf_profile")
+        recovery_lane = None
+        if isinstance(pdf_profile, dict) and pdf_profile.get("recovery_lane"):
+            recovery_lane = str(pdf_profile["recovery_lane"])
         default = {
             "severity": Severity.HIGH if layout_risk == "medium" else Severity.CRITICAL,
             "blocking": True,
             "emit_issue": True,
-            "recovery_lane": None,
+            "recovery_lane": recovery_lane,
             "reason": "default_blocking_layout_risk",
         }
+
+        if layout_risk == "high" and self._pdf_scan_single_page_locally_anchored_is_advisory(
+            bundle=bundle,
+            parse_confidence=parse_confidence,
+            local_suspicious_pages=local_suspicious_pages,
+            local_layout_risk_pages=local_layout_risk_pages,
+            local_high_layout_risk_pages=local_high_layout_risk_pages,
+            chapter_page_evidence=chapter_page_evidence,
+        ):
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "pdf_scan_single_page_locally_anchored_advisory",
+            }
+
         if layout_risk != "medium":
             return default
 
@@ -1042,14 +1108,9 @@ class ReviewService:
                 "severity": Severity.LOW,
                 "blocking": False,
                 "emit_issue": False,
-                "recovery_lane": None,
+                "recovery_lane": recovery_lane,
                 "reason": "no_local_layout_signals",
             }
-
-        pdf_profile = (bundle.document.metadata_json or {}).get("pdf_profile")
-        recovery_lane = None
-        if isinstance(pdf_profile, dict) and pdf_profile.get("recovery_lane"):
-            recovery_lane = str(pdf_profile["recovery_lane"])
 
         if recovery_lane == "outlined_book":
             if self._outlined_book_single_multi_column_is_advisory(
@@ -1111,6 +1172,69 @@ class ReviewService:
             "recovery_lane": recovery_lane,
             "reason": "academic_paper_medium_layout_advisory",
         }
+
+    def _pdf_scan_single_page_locally_anchored_is_advisory(
+        self,
+        *,
+        bundle: ChapterReviewBundle,
+        parse_confidence: float | None,
+        local_suspicious_pages: list[int],
+        local_layout_risk_pages: list[int],
+        local_high_layout_risk_pages: list[int],
+        chapter_page_evidence: list[dict[str, Any]],
+    ) -> bool:
+        if bundle.document.source_type != SourceType.PDF_SCAN:
+            return False
+        if parse_confidence is None or float(parse_confidence) < 0.82:
+            return False
+
+        local_page_numbers = {
+            int(page_number)
+            for page_number in [*local_suspicious_pages, *local_layout_risk_pages, *local_high_layout_risk_pages]
+            if isinstance(page_number, int)
+        }
+        if len(local_page_numbers) != 1 or len(chapter_page_evidence) != 1:
+            return False
+
+        page = chapter_page_evidence[0]
+        if not isinstance(page, dict):
+            return False
+        reasons = {
+            str(reason)
+            for reason in list(page.get("page_layout_reasons") or [])
+            if isinstance(reason, str)
+        }
+        if reasons and not reasons.issubset({"ocr_scanned_page"}):
+            return False
+
+        pdf_blocks = [
+            block
+            for block in bundle.blocks
+            if (block.source_span_json or {}).get("pdf_block_role")
+        ]
+        if not pdf_blocks:
+            return False
+
+        disallowed_roles = {"header", "footer", "footnote"}
+        if any(str((block.source_span_json or {}).get("pdf_block_role") or "") in disallowed_roles for block in pdf_blocks):
+            return False
+
+        artifact_group_context_ids = resolve_artifact_group_context_ids(pdf_blocks, academic_paper=False)
+        captioned_artifact_seen = False
+        for block in pdf_blocks:
+            metadata = block.source_span_json or {}
+            role = normalize_artifact_role(metadata.get("pdf_block_role"), block.block_type)
+            if role not in {"image", "table", "equation"}:
+                continue
+            captioned_artifact_seen = True
+            linked_caption_block_id = metadata.get("linked_caption_block_id")
+            linked_caption_text = metadata.get("linked_caption_text")
+            if not linked_caption_block_id and not (isinstance(linked_caption_text, str) and linked_caption_text.strip()):
+                return False
+            if not artifact_group_context_ids.get(block.id):
+                return False
+
+        return captioned_artifact_seen
 
     def _outlined_book_single_multi_column_is_advisory(
         self,

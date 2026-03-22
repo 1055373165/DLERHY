@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "mode": "new_run",
+  "locked_requirement": "Upgrade a command-driven autopilot workflow into a natural-language, lane-aware development skill.",
+  "nodes": [
+    {
+      "node_id": "mdu-1",
+      "phase_id": "phase-1",
+      "task_id": "task-1.1",
+      "title": "Lock requirement and non-goals",
+      "status": "done",
+      "depends_on": [],
+      "write_set": ["docs/specs/requirement"],
+      "contract_tags": [],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-2",
+      "phase_id": "phase-1",
+      "task_id": "task-1.2",
+      "title": "Generate ADR baseline",
+      "status": "ready",
+      "depends_on": ["mdu-1"],
+      "write_set": ["governance/decisions"],
+      "contract_tags": ["adr-baseline"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-3",
+      "phase_id": "phase-2",
+      "task_id": "task-2.1",
+      "title": "Draft work-graph schema",
+      "status": "ready",
+      "depends_on": ["mdu-2"],
+      "write_set": ["state/work-graph"],
+      "contract_tags": ["state-schema"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-4",
+      "phase_id": "phase-2",
+      "task_id": "task-2.2",
+      "title": "Draft lane-state schema",
+      "status": "ready",
+      "depends_on": ["mdu-2"],
+      "write_set": ["state/lane-state"],
+      "contract_tags": ["state-schema"],
+      "lane_candidate": true
+    }
+  ],
+  "edges": [
+    { "from": "mdu-1", "to": "mdu-2", "type": "depends_on" },
+    { "from": "mdu-2", "to": "mdu-3", "type": "depends_on" },
+    { "from": "mdu-2", "to": "mdu-4", "type": "depends_on" }
+  ],
+  "waves": [
+    {
+      "wave_id": "wave-1",
+      "lane_ids": ["lane-a", "lane-b"]
+    }
+  ],
+  "contracts": [
+    {
+      "tag": "state-schema",
+      "version": 1,
+      "owner_node_id": "mdu-3"
+    }
+  ],
+  "write_sets": [
+    {
+      "key": "state/work-graph",
+      "owner_node_ids": ["mdu-3"]
+    },
+    {
+      "key": "state/lane-state",
+      "owner_node_ids": ["mdu-4"]
+    }
+  ]
+}

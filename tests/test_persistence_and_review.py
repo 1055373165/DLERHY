@@ -227,6 +227,15 @@ CONSISTENCY_CARE_LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 </html>
 """
 
+AGENCY_AUTONOMY_LITERALISM_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1 id="ch1">Chapter One</h1>
+    <p>In practice, agency exists on a spectrum.</p>
+  </body>
+</html>
+"""
+
 MIXED_AUTO_FOLLOWUP_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
@@ -875,6 +884,8 @@ class LiteralismWorker:
                 text = "在生产环境中部署智能体系统需要一种深刻的责任感。"
             elif "provide consistency and care over time" in sentence.source_text:
                 text = "厨师的价值远不止准备一顿饭，因为他能凭借记忆和经验，在长期服务中提供连贯性和关怀。"
+            elif "agency exists on a spectrum" in sentence.source_text:
+                text = "实际上，自主性是一个连续谱系。"
             elif "what was known, when it was known" in sentence.source_text:
                 text = "记忆也是关于已知内容、获知时间及其对行动重要性的结构化记录。"
             elif "weight of evidence" in sentence.source_text:
@@ -950,6 +961,11 @@ class GuidanceAwareLiteralismWorker:
                     text = "厨师的价值不只在于做一顿饭，更在于他能凭借记忆和经验，长期稳定而周到地照应你。"
                 else:
                     text = "厨师的价值远不止准备一顿饭，因为他能凭借记忆和经验，在长期服务中提供连贯性和关怀。"
+            elif "agency exists on a spectrum" in source_text:
+                if "智能体性" in open_questions or "决策与行动能力" in open_questions:
+                    text = "实际上，智能体性是有连续谱系的。"
+                else:
+                    text = "实际上，自主性是一个连续谱系。"
             else:
                 text = f"译文::{source_text}"
             temp_id = f"temp-{sentence.id}"
@@ -2617,12 +2633,141 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertEqual(manifest["markdown_path"], str(markdown_path))
         self.assertIn("# Business Strategy Handbook", markdown_text)
         self.assertIn("## Reading Map", markdown_text)
-        self.assertIn("## Chapter 1: Chapter One", markdown_text)
+        self.assertIn("## Chapter 1:", markdown_text)
+        self.assertIn("_Source title: Chapter One_", markdown_text)
         self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
         self.assertIn("```python", markdown_text)
         self.assertIn('return "ok"', markdown_text)
-        self.assertIn("```text\nTier | Latency\nBasic | Slow", markdown_text)
+        self.assertIn("| Tier | Latency |", markdown_text)
+        self.assertIn("| Basic | Slow |", markdown_text)
         self.assertIn("https://example.com/agent-docs", markdown_text)
+
+    def test_workflow_exports_rebuilt_epub_with_manifest_and_assets(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", STRUCTURED_ARTIFACT_XHTML)],
+            extra_files={"OEBPS/images/agent-loop.png": b"fake-png-binary"},
+        )
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                workflow = DocumentWorkflowService(session, export_root=outdir)
+                workflow.translate_document(document_id)
+                with patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None):
+                    export = workflow.export_document(document_id, ExportType.REBUILT_EPUB)
+
+            epub_path = Path(export.file_path)
+            manifest_path = Path(export.manifest_path)
+            self.assertTrue(epub_path.exists())
+            self.assertTrue(manifest_path.exists())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+            with zipfile.ZipFile(epub_path) as archive:
+                names = archive.namelist()
+                nav_xhtml = archive.read("OEBPS/nav.xhtml").decode("utf-8")
+                chapter_xhtml = archive.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
+
+        self.assertIn("mimetype", names)
+        self.assertIn("META-INF/container.xml", names)
+        self.assertIn("OEBPS/content.opf", names)
+        self.assertIn("OEBPS/styles/book.css", names)
+        self.assertIn("OEBPS/text/chapter-001.xhtml", names)
+        self.assertIn("OEBPS/assets/OEBPS/images/agent-loop.png", names)
+        self.assertIn("Chapter One", nav_xhtml)
+        self.assertIn("Agent loop architecture", chapter_xhtml)
+        self.assertEqual(manifest["export_type"], "rebuilt_epub")
+        self.assertEqual(manifest["renderer_kind"], "epub_spine_rebuilder")
+        self.assertEqual(manifest["derived_from_exports"], ["merged_html", "merged_markdown"])
+        self.assertEqual(manifest["contract_version"], 1)
+        self.assertEqual(manifest["source_type"], "epub")
+        self.assertIn("single_document_level_output_only", manifest["expected_limitations"])
+
+    def test_export_service_rebuilt_epub_rejects_non_epub_source_document(self) -> None:
+        now = datetime.now(timezone.utc)
+        document = Document(
+            id="rebuilt-epub-guard-doc",
+            source_type=SourceType.PDF_TEXT,
+            file_fingerprint="fingerprint-rebuilt-epub-guard",
+            source_path="/tmp/guard.pdf",
+            title="Guard PDF",
+            status=DocumentStatus.ACTIVE,
+            metadata_json={},
+            created_at=now,
+            updated_at=now,
+        )
+        bundle = DocumentExportBundle(
+            document=document,
+            book_profile=None,
+            chapters=[],
+        )
+        repository = SimpleNamespace(load_document_bundle=lambda _document_id: bundle)
+        service = ExportService(repository, output_root="/tmp/book-agent-exports")
+
+        with self.assertRaises(ExportGateError) as exc_info:
+            service.export_document_rebuilt_epub(document.id)
+
+        self.assertIn("only available for EPUB source documents", str(exc_info.exception))
+
+    def test_workflow_exports_rebuilt_pdf_from_merged_html_substrate(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CHAPTER_XHTML)],
+        )
+
+        def _fake_render(_service, html_path: Path, pdf_path: Path) -> None:
+            self.assertTrue(Path(html_path).name.endswith(".html"))
+            pdf_path.write_bytes(b"%PDF-1.4\n% rebuilt\n")
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                workflow = DocumentWorkflowService(session, export_root=outdir)
+                workflow.translate_document(document_id)
+                with (
+                    patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None),
+                    patch.object(
+                        ExportService,
+                        "_render_rebuilt_pdf_from_html",
+                        autospec=True,
+                        side_effect=_fake_render,
+                    ) as render_mock,
+                ):
+                    export = workflow.export_document(document_id, ExportType.REBUILT_PDF)
+
+            pdf_path = Path(export.file_path)
+            manifest_path = Path(export.manifest_path)
+            self.assertTrue(pdf_path.exists())
+            self.assertTrue(manifest_path.exists())
+            self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF-1.4"))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        render_mock.assert_called_once()
+        self.assertEqual(manifest["export_type"], "rebuilt_pdf")
+        self.assertEqual(manifest["renderer_kind"], "html_print_renderer")
+        self.assertEqual(manifest["derived_from_exports"], ["merged_html", "merged_markdown"])
+        self.assertIn("not_page_faithful_to_source_pdf", manifest["expected_limitations"])
+        self.assertIn("merged_html", manifest["derived_export_artifacts"])
+        self.assertIn("merged_markdown", manifest["derived_export_artifacts"])
+
+    def test_workflow_rebuilt_pdf_fails_closed_when_renderer_unavailable(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", CHAPTER_XHTML)],
+        )
+
+        with tempfile.TemporaryDirectory() as outdir:
+            with self.session_factory() as session:
+                workflow = DocumentWorkflowService(session, export_root=outdir)
+                workflow.translate_document(document_id)
+                with (
+                    patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None),
+                    patch.object(
+                        ExportService,
+                        "_render_rebuilt_pdf_from_html",
+                        autospec=True,
+                        side_effect=ExportGateError("Rebuilt PDF renderer unavailable."),
+                    ),
+                ):
+                    with self.assertRaises(ExportGateError) as exc_info:
+                        workflow.export_document(document_id, ExportType.REBUILT_PDF)
+
+        self.assertIn("renderer unavailable", str(exc_info.exception))
 
     def test_workflow_exports_merged_markdown_from_legacy_db_without_document_images_table(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
@@ -2642,7 +2787,8 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertTrue(markdown_path.exists())
             markdown_text = markdown_path.read_text(encoding="utf-8")
 
-        self.assertIn("## Chapter 1: Chapter One", markdown_text)
+        self.assertIn("## Chapter 1:", markdown_text)
+        self.assertIn("_Source title: Chapter One_", markdown_text)
         self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
 
     def test_visible_merged_chapters_group_pdf_auxiliary_sections_under_real_top_level_titles(self) -> None:
@@ -8871,6 +9017,15 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 any("称之为情境工程的内容" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
             )
             self.assertTrue(any(issue.evidence_json.get("prompt_guidance") for issue in style_issues))
+            naturalness_summary = review_artifacts.summary.naturalness_summary
+            self.assertIsNotNone(naturalness_summary)
+            assert naturalness_summary is not None
+            self.assertTrue(naturalness_summary.advisory_only)
+            self.assertEqual(naturalness_summary.style_drift_issue_count, len(style_issues))
+            self.assertGreaterEqual(naturalness_summary.affected_packet_count, 1)
+            self.assertIn("context_engineering_literal", naturalness_summary.dominant_style_rules)
+            self.assertIn("上下文工程", naturalness_summary.preferred_hints)
+            self.assertIn("更符合上下文的输出", naturalness_summary.preferred_hints)
 
     def test_review_reports_knowledge_timeline_literalism_as_non_blocking_advisory(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
@@ -9003,6 +9158,37 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 )
             )
 
+    def test_review_reports_agency_autonomy_collapse_as_non_blocking_advisory(self) -> None:
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", AGENCY_AUTONOMY_LITERALISM_XHTML)]
+        )
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            packet_ids = [packet.id for packet in bundle.chapters[0].translation_packets]
+            service = TranslationService(TranslationRepository(session), worker=LiteralismWorker())
+            for packet_id in packet_ids:
+                service.execute_packet(packet_id)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            review_artifacts = ReviewService(ReviewRepository(session)).review_chapter(chapter_id)
+            style_issues = [issue for issue in review_artifacts.issues if issue.issue_type == "STYLE_DRIFT"]
+            self.assertTrue(style_issues)
+            self.assertTrue(all(issue.root_cause_layer.value == "packet" for issue in style_issues))
+            self.assertTrue(all(not issue.blocking for issue in style_issues))
+            self.assertTrue(
+                any(
+                    "不要把 agency 译成“自主性”" in str(issue.evidence_json.get("preferred_hint") or "")
+                    for issue in style_issues
+                )
+            )
+            self.assertTrue(
+                any("自主性" in str(issue.evidence_json.get("matched_target_excerpt") or "") for issue in style_issues)
+            )
+
     def test_packet_style_drift_action_rerun_uses_aggregated_hints_and_resolves_packet_issues(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
             [("Chapter One", "chapter1.xhtml", LITERALISM_XHTML)]
@@ -9042,6 +9228,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
             self.assertTrue(any("大量证据表明" in hint for hint in rerun_execution.rerun_plan.style_hints))
             self.assertTrue(any("更符合上下文的输出" in hint for hint in rerun_execution.rerun_plan.style_hints))
+            self.assertTrue(any("上下文更准确的输出" in hint for hint in rerun_execution.rerun_plan.style_hints))
             self.assertTrue(
                 any("Prefer natural Chinese evidential phrasing" in hint for hint in rerun_execution.rerun_plan.style_hints)
             )

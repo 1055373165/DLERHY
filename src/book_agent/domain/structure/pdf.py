@@ -17,16 +17,17 @@ from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, Parse
 
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _HEADING_PATTERN = re.compile(r"^(chapter|part|appendix)\b", re.IGNORECASE)
+_ARTIFACT_INDEX_PATTERN = r"(?:\(?\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?\)?|[A-Z])"
 _FIGURE_CAPTION_PATTERN = re.compile(
     r"^(?:figure|fig\.|image|diagram|chart)\s+"
-    r"(?:\(?\d+(?:\.\d+)*[A-Za-z]?\)?|[A-Z])"
-    r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
+    + _ARTIFACT_INDEX_PATTERN
+    + r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
     re.IGNORECASE,
 )
 _TABLE_CAPTION_PATTERN = re.compile(
     r"^(?:table)\s+"
-    r"(?:\(?\d+(?:\.\d+)*[A-Za-z]?\)?|[A-Z])"
-    r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
+    + _ARTIFACT_INDEX_PATTERN
+    + r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
     re.IGNORECASE,
 )
 _TABLE_HEADER_CUE_PATTERN = re.compile(
@@ -525,13 +526,28 @@ _BROKEN_REFERENCES_HEADING_PATTERN = re.compile(
 
 
 def _normalize_text(text: str) -> str:
-    sanitized = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text or "")
+    sanitized = re.sub(r"[\u00ad\u200b\u200c\u200d\u2060\ufeff]", "", text or "")
     return re.sub(r"\s+", " ", sanitized).strip()
 
 
 def _normalize_multiline_text(text: str) -> str:
     lines = [_normalize_text(line) for line in text.splitlines()]
-    return "\n".join(line for line in lines if line)
+    normalized_lines: list[str] = []
+    for line in lines:
+        if not line:
+            continue
+        if normalized_lines:
+            previous = normalized_lines[-1]
+            line_start = line[:1]
+            if line_start and (line_start.isalnum() or line_start == "("):
+                if previous.endswith("\u2010"):
+                    normalized_lines[-1] = previous[:-1] + line
+                    continue
+                if previous.endswith("-"):
+                    normalized_lines[-1] = previous + line
+                    continue
+        normalized_lines.append(line)
+    return "\n".join(normalized_lines)
 
 
 def _safe_mean(values: list[float]) -> float:
@@ -2282,6 +2298,35 @@ def _looks_like_flattened_table_text(text: str) -> bool:
     return False
 
 
+def _looks_like_numeric_table_fragment(lines: list[str]) -> bool:
+    nonempty_lines = [_normalize_text(line) for line in lines if _normalize_text(line)]
+    if len(nonempty_lines) < 6:
+        return False
+
+    numeric_only_lines = sum(
+        1 for line in nonempty_lines if re.fullmatch(r"\d+(?:\.\d+)?", line)
+    )
+    short_value_lines = sum(
+        1
+        for line in nonempty_lines
+        if len(line.split()) <= 8 and len(re.findall(r"\b\d+(?:\.\d+)?\b", line)) >= 1
+    )
+    label_like_lines = sum(
+        1
+        for line in nonempty_lines
+        if len(line.split()) <= 12 and bool(re.search(r"[A-Za-z]", line))
+    )
+    header_cue_lines = sum(
+        1 for line in nonempty_lines[:8] if _TABLE_HEADER_CUE_PATTERN.search(line)
+    )
+
+    if numeric_only_lines >= 4 and short_value_lines >= 6:
+        return True
+    if header_cue_lines >= 1 and short_value_lines >= 5 and label_like_lines >= 2:
+        return True
+    return False
+
+
 def _looks_like_equation(
     text: str,
     line_count: int,
@@ -2569,6 +2614,20 @@ class _PageLayoutAssessment:
     reasons: tuple[str, ...] = ()
 
 
+@dataclass(slots=True, frozen=True)
+class _PageAssistPlan:
+    bucket: str
+    status: str
+    scope: str
+    trigger_reasons: tuple[str, ...]
+    page_number: int
+    parse_confidence: float | None
+    page_layout_risk: str
+    page_layout_reasons: tuple[str, ...]
+    anchor_source_anchors: tuple[str, ...] = ()
+    region_candidates: tuple[dict[str, Any], ...] = ()
+
+
 def _assess_page_layout(
     page: "PdfPage",
     *,
@@ -2576,6 +2635,8 @@ def _assess_page_layout(
     document_title: str | None,
 ) -> _PageLayoutAssessment:
     reasons: list[str] = []
+    if profile.pdf_kind == "scanned_pdf":
+        reasons.append("ocr_scanned_page")
     if _page_has_multi_column_signature(page):
         reasons.append("multi_column")
     if _page_has_column_fragment_signature(page):
@@ -2586,7 +2647,7 @@ def _assess_page_layout(
     ):
         reasons.append("academic_first_page_asymmetric")
 
-    if "academic_first_page_asymmetric" in reasons:
+    if "ocr_scanned_page" in reasons or "academic_first_page_asymmetric" in reasons:
         risk = "high"
     elif reasons:
         risk = "medium"
@@ -5147,7 +5208,7 @@ class PdfStructureRecoveryService:
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
             return False
         lines = [line for line in block.text.splitlines() if _normalize_text(line)]
-        if not _looks_like_table(len(lines), lines):
+        if not (_looks_like_table(len(lines), lines) or _looks_like_numeric_table_fragment(lines)):
             return False
 
         page_number = block.page_start

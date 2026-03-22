@@ -291,7 +291,7 @@ class ParseService:
         parsed_chapter: ParsedChapter,
     ) -> tuple[dict[str, object], Severity | None]:
         metadata: dict[str, object] = {"href": parsed_chapter.href, **parsed_chapter.metadata}
-        if document.source_type not in {SourceType.PDF_TEXT, SourceType.PDF_MIXED}:
+        if document.source_type not in {SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN}:
             return metadata, None
 
         parse_confidences = [

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parallel Autopilot"
+  short_description: "Natural-language, lane-aware development orchestration"
+  default_prompt: "Use $parallel-autopilot to turn this requirement into a selectively parallel, stateful development workflow with ADRs, work-graph planning, lane scheduling, and rollback-aware governance."

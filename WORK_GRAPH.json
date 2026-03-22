@@ -1,0 +1,480 @@
+{
+  "version": 1,
+  "mode": "resume",
+  "locked_requirement": "在不修改 auto-pilot.md 工作流本体的前提下，使用 parallel-autopilot 继续接管 Book Agent 下一阶段研发，并将下一阶段默认锁定为高风险 PDF 页的双层 OCR / layout assist hardening。",
+  "nodes": [
+    {
+      "node_id": "mdu-14.1.1",
+      "phase_id": "phase-3-control-plane",
+      "task_id": "task-14.1",
+      "title": "Lock Phase 3 requirement and non-goals under parallel-autopilot",
+      "status": "done",
+      "depends_on": [],
+      "write_set": ["governance/requirement", "governance/non-goals"],
+      "contract_tags": [],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-14.1.2",
+      "phase_id": "phase-3-control-plane",
+      "task_id": "task-14.1",
+      "title": "Create phase-3 plan and initialize work graph plus lane state artifacts",
+      "status": "done",
+      "depends_on": ["mdu-14.1.1"],
+      "write_set": ["docs/phase-3-plan", "state/work-graph", "state/lane-state"],
+      "contract_tags": ["phase-3-baseline"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-14.1.3",
+      "phase_id": "phase-3-control-plane",
+      "task_id": "task-14.1",
+      "title": "Sync governance state for parallel-autopilot kickoff",
+      "status": "done",
+      "depends_on": ["mdu-14.1.2"],
+      "write_set": ["governance/progress", "governance/decisions", "state/run-context"],
+      "contract_tags": ["phase-3-baseline", "governance-state"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-15.1.1",
+      "phase_id": "phase-3-lane-a",
+      "task_id": "task-15.1",
+      "title": "Lock rebuilt EPUB/PDF artifact contract and non-goals",
+      "status": "done",
+      "depends_on": ["mdu-14.1.3"],
+      "write_set": ["services/export", "contracts/export-manifest", "docs/phase-3-delivery"],
+      "contract_tags": ["delivery-artifact-contract", "export-manifest"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-15.1.2",
+      "phase_id": "phase-3-lane-a",
+      "task_id": "task-15.1",
+      "title": "Implement minimum rebuilt EPUB/PDF path without breaking current delivery artifacts",
+      "status": "done",
+      "depends_on": ["mdu-15.1.1"],
+      "write_set": ["services/export", "services/layout-validate", "app/api", "tests/export"],
+      "contract_tags": ["delivery-artifact-contract"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-15.1.3",
+      "phase_id": "phase-3-lane-a",
+      "task_id": "task-15.1",
+      "title": "Run rebuilt-delivery regressions and sync governance evidence",
+      "status": "done",
+      "depends_on": ["mdu-15.1.2"],
+      "write_set": ["tests/export", "docs/phase-3-delivery", "governance/progress"],
+      "contract_tags": ["delivery-artifact-contract"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-16.1.1",
+      "phase_id": "phase-3-lane-b",
+      "task_id": "task-16.1",
+      "title": "Lock larger-corpus PDF_SCAN sample set and telemetry baseline",
+      "status": "done",
+      "depends_on": ["mdu-14.1.3"],
+      "write_set": ["docs/phase-3-scan-scale", "scripts/real-book-live", "state/runtime-reporting"],
+      "contract_tags": ["pdf-scan-runtime", "scan-corpus-acceptance"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-16.1.2",
+      "phase_id": "phase-3-lane-b",
+      "task_id": "task-16.1",
+      "title": "Tighten larger-corpus retry, resume, and failure routing",
+      "status": "done",
+      "depends_on": ["mdu-16.1.1"],
+      "write_set": ["services/bootstrap", "scripts/real-book-live", "tests/pdf-scan"],
+      "contract_tags": ["pdf-scan-runtime"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-16.1.3",
+      "phase_id": "phase-3-lane-b",
+      "task_id": "task-16.1",
+      "title": "Run larger-corpus stability and performance acceptance",
+      "status": "done",
+      "depends_on": ["mdu-16.1.2"],
+      "write_set": ["tests/pdf-scan", "docs/phase-3-scan-scale", "governance/progress"],
+      "contract_tags": ["pdf-scan-runtime", "scan-corpus-acceptance"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-17.1.1",
+      "phase_id": "phase-3-lane-c",
+      "task_id": "task-17.1",
+      "title": "Lock reviewer naturalness contract and evaluation boundary",
+      "status": "done",
+      "depends_on": ["mdu-14.1.3"],
+      "write_set": ["services/review", "contracts/review-style", "docs/phase-3-review-style"],
+      "contract_tags": ["review-style-contract", "naturalness-gate"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-17.1.2",
+      "phase_id": "phase-3-lane-c",
+      "task_id": "task-17.1",
+      "title": "Implement stylistic intelligence scaffolding without default freeform rewrite",
+      "status": "done",
+      "depends_on": ["mdu-17.1.1"],
+      "write_set": ["services/review", "services/workflows", "tests/review-style"],
+      "contract_tags": ["review-style-contract", "naturalness-gate"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-17.1.3",
+      "phase_id": "phase-3-lane-c",
+      "task_id": "task-17.1",
+      "title": "Run naturalness-focused regressions and sync governance evidence",
+      "status": "done",
+      "depends_on": ["mdu-17.1.2"],
+      "write_set": ["tests/review-style", "docs/phase-3-review-style", "governance/progress"],
+      "contract_tags": ["review-style-contract", "naturalness-gate"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-18.1.1",
+      "phase_id": "phase-3-integration",
+      "task_id": "task-18.1",
+      "title": "Run phase-3 integration gate across the three lanes",
+      "status": "done",
+      "depends_on": ["mdu-15.1.3", "mdu-16.1.3", "mdu-17.1.3"],
+      "write_set": ["governance/integration-gate", "governance/progress", "governance/decisions"],
+      "contract_tags": ["phase-3-checkpoint"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-18.1.2",
+      "phase_id": "phase-3-integration",
+      "task_id": "task-18.1",
+      "title": "Close phase-3 checkpoint and update roadmap snapshot",
+      "status": "done",
+      "depends_on": ["mdu-18.1.1"],
+      "write_set": ["governance/progress", "governance/decisions", "docs/phase-3-plan"],
+      "contract_tags": ["phase-3-checkpoint"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-19.1.1",
+      "phase_id": "phase-4-control-plane",
+      "task_id": "task-19.1",
+      "title": "Lock Phase 4 OCR/layout assist requirement, default objective, and non-goals",
+      "status": "done",
+      "depends_on": ["mdu-18.1.2"],
+      "write_set": ["governance/requirement", "docs/phase-4-plan"],
+      "contract_tags": ["phase-4-baseline"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-19.1.2",
+      "phase_id": "phase-4-control-plane",
+      "task_id": "task-19.1",
+      "title": "Freeze high-risk OCR/layout assist baseline, risk buckets, and fail-closed contract",
+      "status": "done",
+      "depends_on": ["mdu-19.1.1"],
+      "write_set": ["docs/phase-4-plan", "governance/decisions", "contracts/ocr-layout-assist"],
+      "contract_tags": ["phase-4-baseline", "ocr-layout-assist"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-19.1.3",
+      "phase_id": "phase-4-control-plane",
+      "task_id": "task-19.1",
+      "title": "Sync governance state and complete the Phase 4 kickoff baseline",
+      "status": "done",
+      "depends_on": ["mdu-19.1.2"],
+      "write_set": ["governance/progress", "governance/decisions", "state/run-context"],
+      "contract_tags": ["phase-4-baseline", "governance-state"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-20.1.1",
+      "phase_id": "phase-4-implementation-planning",
+      "task_id": "task-20.1",
+      "title": "Lock implementation phase execution shape and single-lane-first conclusion",
+      "status": "done",
+      "depends_on": ["mdu-19.1.3"],
+      "write_set": ["docs/phase-4-implementation-plan", "governance/requirement"],
+      "contract_tags": ["phase-4-implementation-plan"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-20.1.2",
+      "phase_id": "phase-4-implementation-planning",
+      "task_id": "task-20.1",
+      "title": "Freeze lane-ocr-layout-assist-core write set, contract tags, and acceptance gate",
+      "status": "done",
+      "depends_on": ["mdu-20.1.1"],
+      "write_set": ["services/bootstrap", "domain/structure/pdf", "domain/structure/ocr", "services/pdf_structure_refresh", "docs/phase-4-implementation-plan", "docs/phase-4-core-lane", "contracts/ocr-layout-assist-execution", "contracts/ocr-layout-assist-acceptance", "governance/decisions"],
+      "contract_tags": ["phase-4-implementation-plan", "ocr-layout-assist-execution", "ocr-layout-assist-acceptance"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-20.1.3",
+      "phase_id": "phase-4-implementation-planning",
+      "task_id": "task-20.1",
+      "title": "Sync governance state and hand off to the first real OCR/layout assist implementation entry",
+      "status": "done",
+      "depends_on": ["mdu-20.1.2"],
+      "write_set": ["governance/progress", "governance/decisions", "state/run-context", "state/work-graph"],
+      "contract_tags": ["phase-4-implementation-plan", "governance-state"],
+      "lane_candidate": false
+    },
+    {
+      "node_id": "mdu-21.1.1",
+      "phase_id": "phase-4-lane-core",
+      "task_id": "task-21.1",
+      "title": "Implement Bucket B/C assist routing and provenance scaffold in the upstream recovery path",
+      "status": "pending",
+      "depends_on": ["mdu-20.1.3"],
+      "write_set": ["services/bootstrap", "domain/structure/pdf", "domain/structure/ocr", "domain/structure/models", "services/pdf_structure_refresh"],
+      "contract_tags": ["ocr-layout-assist-execution"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-21.1.2",
+      "phase_id": "phase-4-lane-core",
+      "task_id": "task-21.1",
+      "title": "Add fail-closed fallback, structured re-entry, and low-risk preservation focused regressions",
+      "status": "pending",
+      "depends_on": ["mdu-21.1.1"],
+      "write_set": ["services/bootstrap", "domain/structure/pdf", "domain/structure/ocr", "tests/pdf-layout-assist-focused"],
+      "contract_tags": ["ocr-layout-assist-execution", "ocr-layout-assist-acceptance"],
+      "lane_candidate": true
+    },
+    {
+      "node_id": "mdu-21.1.3",
+      "phase_id": "phase-4-lane-core",
+      "task_id": "task-21.1",
+      "title": "Run lane-core acceptance artifact and sync governance evidence",
+      "status": "pending",
+      "depends_on": ["mdu-21.1.2"],
+      "write_set": ["tests/pdf-layout-assist-focused", "docs/phase-4-core-execution", "governance/progress", "governance/decisions"],
+      "contract_tags": ["ocr-layout-assist-acceptance"],
+      "lane_candidate": true
+    }
+  ],
+  "edges": [
+    { "from": "mdu-14.1.1", "to": "mdu-14.1.2", "type": "depends_on" },
+    { "from": "mdu-14.1.2", "to": "mdu-14.1.3", "type": "depends_on" },
+    { "from": "mdu-14.1.3", "to": "mdu-15.1.1", "type": "depends_on" },
+    { "from": "mdu-14.1.3", "to": "mdu-16.1.1", "type": "depends_on" },
+    { "from": "mdu-14.1.3", "to": "mdu-17.1.1", "type": "depends_on" },
+    { "from": "mdu-15.1.1", "to": "mdu-15.1.2", "type": "depends_on" },
+    { "from": "mdu-15.1.2", "to": "mdu-15.1.3", "type": "depends_on" },
+    { "from": "mdu-16.1.1", "to": "mdu-16.1.2", "type": "depends_on" },
+    { "from": "mdu-16.1.2", "to": "mdu-16.1.3", "type": "depends_on" },
+    { "from": "mdu-17.1.1", "to": "mdu-17.1.2", "type": "depends_on" },
+    { "from": "mdu-17.1.2", "to": "mdu-17.1.3", "type": "depends_on" },
+    { "from": "mdu-15.1.3", "to": "mdu-18.1.1", "type": "depends_on" },
+    { "from": "mdu-16.1.3", "to": "mdu-18.1.1", "type": "depends_on" },
+    { "from": "mdu-17.1.3", "to": "mdu-18.1.1", "type": "depends_on" },
+    { "from": "mdu-18.1.1", "to": "mdu-18.1.2", "type": "depends_on" },
+    { "from": "mdu-18.1.2", "to": "mdu-19.1.1", "type": "depends_on" },
+    { "from": "mdu-19.1.1", "to": "mdu-19.1.2", "type": "depends_on" },
+    { "from": "mdu-19.1.2", "to": "mdu-19.1.3", "type": "depends_on" },
+    { "from": "mdu-19.1.3", "to": "mdu-20.1.1", "type": "depends_on" },
+    { "from": "mdu-20.1.1", "to": "mdu-20.1.2", "type": "depends_on" },
+    { "from": "mdu-20.1.2", "to": "mdu-20.1.3", "type": "depends_on" },
+    { "from": "mdu-20.1.3", "to": "mdu-21.1.1", "type": "depends_on" },
+    { "from": "mdu-21.1.1", "to": "mdu-21.1.2", "type": "depends_on" },
+    { "from": "mdu-21.1.2", "to": "mdu-21.1.3", "type": "depends_on" }
+  ],
+  "waves": [
+    {
+      "wave_id": "wave-0",
+      "status": "done",
+      "lane_ids": []
+    },
+    {
+      "wave_id": "wave-1",
+      "status": "done",
+      "lane_ids": [
+        "lane-delivery-upgrade",
+        "lane-pdf-scan-scale",
+        "lane-review-naturalness"
+      ]
+    },
+    {
+      "wave_id": "wave-2",
+      "status": "done",
+      "lane_ids": ["lane-phase-3-integration"]
+    },
+    {
+      "wave_id": "wave-0-phase-4",
+      "status": "done",
+      "lane_ids": []
+    },
+    {
+      "wave_id": "wave-0-phase-4-implementation-planning",
+      "status": "done",
+      "lane_ids": []
+    },
+    {
+      "wave_id": "wave-1-phase-4-core",
+      "status": "in_progress",
+      "lane_ids": ["lane-ocr-layout-assist-core"]
+    }
+  ],
+  "contracts": [
+    {
+      "tag": "phase-3-baseline",
+      "version": 1,
+      "owner_node_id": "mdu-14.1.3"
+    },
+    {
+      "tag": "delivery-artifact-contract",
+      "version": 2,
+      "owner_node_id": "mdu-15.1.2"
+    },
+    {
+      "tag": "export-manifest",
+      "version": 2,
+      "owner_node_id": "mdu-15.1.2"
+    },
+    {
+      "tag": "pdf-scan-runtime",
+      "version": 1,
+      "owner_node_id": "mdu-16.1.1"
+    },
+    {
+      "tag": "scan-corpus-acceptance",
+      "version": 1,
+      "owner_node_id": "mdu-16.1.3"
+    },
+    {
+      "tag": "review-style-contract",
+      "version": 1,
+      "owner_node_id": "mdu-17.1.1"
+    },
+    {
+      "tag": "naturalness-gate",
+      "version": 1,
+      "owner_node_id": "mdu-17.1.1"
+    },
+    {
+      "tag": "phase-3-checkpoint",
+      "version": 2,
+      "owner_node_id": "mdu-18.1.2"
+    },
+    {
+      "tag": "phase-4-baseline",
+      "version": 1,
+      "owner_node_id": "mdu-19.1.1"
+    },
+    {
+      "tag": "ocr-layout-assist",
+      "version": 1,
+      "owner_node_id": "mdu-19.1.2"
+    },
+    {
+      "tag": "phase-4-implementation-plan",
+      "version": 1,
+      "owner_node_id": "mdu-20.1.1"
+    },
+    {
+      "tag": "ocr-layout-assist-execution",
+      "version": 1,
+      "owner_node_id": "mdu-20.1.2"
+    },
+    {
+      "tag": "ocr-layout-assist-acceptance",
+      "version": 1,
+      "owner_node_id": "mdu-20.1.2"
+    },
+    {
+      "tag": "phase-4-core-lane",
+      "version": 1,
+      "owner_node_id": "mdu-20.1.3"
+    }
+  ],
+  "write_sets": [
+    {
+      "key": "governance/requirement",
+      "owner_node_ids": ["mdu-14.1.1", "mdu-19.1.1", "mdu-20.1.1"]
+    },
+    {
+      "key": "state/work-graph",
+      "owner_node_ids": ["mdu-14.1.2", "mdu-20.1.3"]
+    },
+    {
+      "key": "state/lane-state",
+      "owner_node_ids": ["mdu-14.1.2", "mdu-20.1.3"]
+    },
+    {
+      "key": "governance/progress",
+      "owner_node_ids": ["mdu-14.1.3", "mdu-15.1.3", "mdu-16.1.3", "mdu-17.1.3", "mdu-18.1.1", "mdu-18.1.2", "mdu-19.1.3", "mdu-20.1.3", "mdu-21.1.3"]
+    },
+    {
+      "key": "governance/decisions",
+      "owner_node_ids": ["mdu-14.1.3", "mdu-18.1.1", "mdu-18.1.2", "mdu-19.1.2", "mdu-19.1.3", "mdu-20.1.2", "mdu-20.1.3"]
+    },
+    {
+      "key": "services/export",
+      "owner_node_ids": ["mdu-15.1.1", "mdu-15.1.2"]
+    },
+    {
+      "key": "services/bootstrap",
+      "owner_node_ids": ["mdu-16.1.2", "mdu-20.1.2"]
+    },
+    {
+      "key": "domain/structure/pdf",
+      "owner_node_ids": ["mdu-20.1.2"]
+    },
+    {
+      "key": "domain/structure/ocr",
+      "owner_node_ids": ["mdu-20.1.2"]
+    },
+    {
+      "key": "domain/structure/models",
+      "owner_node_ids": ["mdu-21.1.1"]
+    },
+    {
+      "key": "services/pdf_structure_refresh",
+      "owner_node_ids": ["mdu-20.1.2"]
+    },
+    {
+      "key": "services/review",
+      "owner_node_ids": ["mdu-17.1.1", "mdu-17.1.2"]
+    },
+    {
+      "key": "docs/phase-4-plan",
+      "owner_node_ids": ["mdu-19.1.1", "mdu-19.1.2"]
+    },
+    {
+      "key": "contracts/ocr-layout-assist",
+      "owner_node_ids": ["mdu-19.1.2"]
+    },
+    {
+      "key": "state/run-context",
+      "owner_node_ids": ["mdu-14.1.3", "mdu-19.1.3", "mdu-20.1.3"]
+    },
+    {
+      "key": "docs/phase-4-implementation-plan",
+      "owner_node_ids": ["mdu-20.1.1", "mdu-20.1.2"]
+    },
+    {
+      "key": "docs/phase-4-core-lane",
+      "owner_node_ids": ["mdu-20.1.2"]
+    },
+    {
+      "key": "docs/phase-4-core-execution",
+      "owner_node_ids": ["mdu-20.1.3", "mdu-21.1.3"]
+    },
+    {
+      "key": "tests/pdf-layout-assist-focused",
+      "owner_node_ids": ["mdu-21.1.2", "mdu-21.1.3"]
+    },
+    {
+      "key": "contracts/ocr-layout-assist-execution",
+      "owner_node_ids": ["mdu-20.1.2"]
+    },
+    {
+      "key": "contracts/ocr-layout-assist-acceptance",
+      "owner_node_ids": ["mdu-20.1.2"]
+    }
+  ]
+}

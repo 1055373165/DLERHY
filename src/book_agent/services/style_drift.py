@@ -16,6 +16,21 @@ class StyleDriftRule:
 
 STYLE_DRIFT_RULES = (
     StyleDriftRule(
+        pattern_id="agency_autonomy_collapse",
+        source_pattern=re.compile(
+            r"\bagency exists on a spectrum\b|\bagency\b.{0,120}\bautonom(?:y|ous)\b|\bautonom(?:y|ous)\b.{0,120}\bagency\b",
+            re.IGNORECASE,
+        ),
+        target_pattern=re.compile(r"(?:作为智能体的)?自主(?:性|能力|程度)"),
+        preferred_hint="保留 agency 与 autonomy 的区分：此处不要把 agency 译成“自主性”，可译为“智能体性”或明确写成“作为智能体所体现出的决策与行动能力”",
+        message="原文在区分 agency 与 autonomy。把 agency 直接压成“自主性”会抹掉作者关于 agent-ness / 决策与行动能力谱系的区分。",
+        prompt_guidance=(
+            "When 'agency' is contrasted with 'autonomy' or 'autonomous agents', keep the concepts distinct in Chinese. "
+            "Do not translate 'agency' here as '自主性'. Render it as agent-ness or an explicit paraphrase of agent-like "
+            "decision-and-action capacity, such as '智能体性' or '作为智能体所体现出的决策与行动能力', depending on context."
+        ),
+    ),
+    StyleDriftRule(
         pattern_id="agentic_ai_stiff_term",
         source_pattern=re.compile(r"\bagentic AI\b", re.IGNORECASE),
         target_pattern=re.compile(r"智能体式(?:AI|人工智能)"),

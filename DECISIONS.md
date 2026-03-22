@@ -527,3 +527,436 @@
 - 推翻条件：如果未来 parse/layout recovery 已能在更早阶段稳定消化这些结构问题，export gate 可以缩小规则面，但不应退回“静默容忍结构损坏”的模式。
 - 影响范围：`src/book_agent/services/layout_validate.py`、`src/book_agent/services/export.py`、`tests/test_layout_validate.py`、`tests/test_export_layout_gate.py`、`docs/multi-agent-final-implementation-plan.md`
 - 探针验证：已通过（layout gate focused 回归通过；Phase 1 收口回归也已通过：`ApiWorkflowTests.test_translate_full_run_executes_review_and_exports_in_background`、`PdfBootstrapPipelineTests.test_bootstrap_pipeline_supports_low_risk_text_pdf`、`BasicPdfOutlineRecoveryTests.test_parse_service_routes_pdf_mixed_documents_to_ocr_parser`、`PdfDocumentImagePersistenceTests.test_export_merges_linked_pdf_image_caption_into_single_render_block`）。
+
+## ADR-038：Phase 2 先做 `PDF_SCAN` 生产化，而不是先开 rebuilt export 或 reviewer 自主重写
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：Phase 1 已经在 `EPUB / PDF_TEXT / PDF_MIXED` 上收敛出稳定的 deterministic control plane。后续 deferred 项目里，`PDF_SCAN` 是最大的格式覆盖缺口；而 rebuilt EPUB/PDF、reviewer 本地重写、分布式 agent 则都会同时引入更高的结构、产品和运维复杂度。
+- 候选方案：
+  - 先做 rebuilt EPUB/PDF，让交付形态更“出版级”
+  - 先做 reviewer local rewrite / stylistic reviewer，继续提升中文自然度
+  - 先做 `PDF_SCAN` productionization，把扫描件纳入已验证的 control plane
+- 最终决定：采用第三种。Phase 2 的唯一主目标是把 `PDF_SCAN` 稳定接入现有 `bootstrap -> translate -> review -> export` 主链路，交付物仍然维持 `MERGED_MARKDOWN + BILINGUAL_HTML`。
+- 代价与妥协：短期内不会得到 rebuilt EPUB/PDF，也不会优先得到更“聪明”的 reviewer；但这换来的是一个更清晰的阶段边界，以及对真实格式覆盖率最直接的提升。
+- 推翻条件：如果 scanned PDF 的 OCR/runtime 成本被证明远高于预期，或当前样本显示 rebuilt export 才是更紧急的客户瓶颈，再重新评估 Phase 2 优先级。
+- 影响范围：`PROGRESS.md`、`docs/phase-2-pdf-scan-plan.md`、后续 OCR/bootstrap/review/export 工作流
+- 探针验证：不需要（这是 Phase 2 目标排序决策，当前基于 Phase 1 已完成边界和现有 deferred 列表做出的执行选择）。
+
+## ADR-039：`PDF_SCAN` 的高风险 review gate 保持默认阻断，但允许“单页高置信且锚点完整”的极窄 advisory 例外
+- 状态：已验证（Phase 2 收口完成）
+- 日期：2026-03-22
+- 背景：进入 `MDU-13.1.2` 后，最小 scanned workflow 已经证明 `PDF_SCAN` 可以完成 bootstrap、translate 和 review-package export，但 final `bilingual_html` export 仍被 review 阶段一条 blanket `MISORDERING` 阻断。问题不在 export，而在 review policy 对 `layout_risk=high` 的 scanned 章节默认一律升级为 blocking issue，导致“结构锚点已经足够完整的最小 scanned 样本”也无法走通共享终态。
+- 候选方案：
+  - 保持现状，让所有 `PDF_SCAN` high-risk 章节继续一律 blocking，接受最小样本也只能停在 review
+  - 对所有 `PDF_SCAN` high-risk 章节整体放宽为 advisory
+  - 保持默认阻断，只为“单页、章节级高置信、局部高风险原因单一、captioned artifact 锚点完整”的 scanned 章节开放极窄 advisory 例外
+- 最终决定：采用第三种。review gate 仍默认把 `PDF_SCAN` 的高风险结构风险视为阻断；只有当章节满足以下全部条件时，`MISORDERING` 才降为低优先 advisory：
+  - 章节在本地 evidence 视角下只有单页
+  - 章节级 `parse_confidence >= 0.82`
+  - 局部高风险原因仅为 `ocr_scanned_page`
+  - 页面中不存在 `header / footer / footnote` 角色
+  - 至少一个 captioned artifact 同时具备 caption link 和 recovered group-context anchors
+- 代价与妥协：这条例外刻意保持很窄，因此不会显著提升广义 scanned PDF 的通过率；但它足以让“结构已被局部证明稳定”的最小样本进入终态导出，用于完成 Phase 2 的真实主链路验收。
+- 推翻条件：如果后续更大 scanned corpus 证明这条例外过窄或过宽，就应基于新的 regression corpus 重新定义 scanned review policy，而不是继续累加临时豁口。
+- 影响范围：`src/book_agent/services/review.py`、`tests/test_pdf_support.py`、`PROGRESS.md`、`docs/phase-2-pdf-scan-plan.md`
+- 探针验证：已通过（定向回归已证明最小 scanned fixture 能走通 `translate -> review -> bilingual_html export`，同时 `review_package` 共享 chapter-bundle 路径和 final export 的 fail-closed layout gate 仍保持成立）。
+
+## ADR-040：Phase 3 改用 `parallel-autopilot` 开启三 lane 候选执行基线，而不是串行只选一个新目标
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：Phase 2 已在 `PDF_SCAN` 上完成最小端到端闭环，当前 roadmap 达到 `59/59` 并暂时清零。下一阶段同时存在三个真实且互相关联的 deferred 方向：rebuild EPUB/PDF、`PDF_SCAN` 扩到更大 corpus、reviewer/stylistic intelligence。若继续沿旧 autopilot 只串行挑一个目标，会丢失跨目标的依赖视野；若直接盲目三向并行，又会把 export contract、review contract 与共享治理状态同时撕开。
+- 候选方案：
+  - 延续旧 autopilot 的串行策略，只挑一个目标进入 Phase 3
+  - 三个目标直接并行落地，不先建立 lane/state/control-plane 基线
+  - 不修改 `auto-pilot.md` 本体，改用新的 `parallel-autopilot` skill，以“串行控制面 + 三条并行候选 lane”的方式重开 roadmap
+- 最终决定：采用第三种。Phase 3 的控制面保持串行，先完成 requirement lock、ADR freeze、work-graph generation、lane partitioning 和状态工件初始化，再把三个目标组织为以下 lane：
+  - `lane-delivery-upgrade`
+  - `lane-pdf-scan-scale`
+  - `lane-review-naturalness`
+  当前 MVP 仍不承诺真并发代码写入；并行只体现在 lane-aware 调度、依赖表达、阻塞传播和后续可升级性。默认首个 claim 顺序为 `lane-pdf-scan-scale -> lane-delivery-upgrade -> lane-review-naturalness`，这只是 kickoff 顺序，不是长期业务优先级。
+- 代价与妥协：roadmap 会从“全部完成”重新打开，整体完成度回落；同时新增 `WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md` 作为结构化状态真相，需要维护 Markdown 镜像与 JSON 真相的一致性。
+- 推翻条件：如果后续事实证明三条 lane 的写集和契约严重重叠，导致 lane-aware 模型只制造伪并行而没有调度价值，则应回退到单目标串行推进，而不是继续维持形式上的三 lane。
+- 影响范围：`PROGRESS.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`docs/phase-3-parallel-autopilot-plan.md`、后续 Phase 3 执行顺序
+- 探针验证：不需要（这是下一阶段的控制面与治理面决策；当前依据是 Phase 2 已完成、parallel-autopilot skill 的 MVP 边界，以及三个 deferred 目标的共享依赖分析）。
+
+## ADR-041：`parallel-autopilot` 必须从真实运行中的 bug 与痛点持续反哺 skill 本体
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：Phase 3 已切换到新的 `parallel-autopilot` skill。仅靠一次性设计规格无法覆盖真实运行中的摩擦点；如果每次遇到 bug、协议缺口、lane 歧义、状态表达不足或重复的人肉胶水步骤，都只做本次局部 workaround，而不回写 skill，本质上会让 autopilot 在每轮运行中重复踩同一类坑。
+- 候选方案：
+  - 把 skill 视为静态安装包，执行时只修当前项目问题
+  - 只有出现“明确 bug”时才更新 skill，普通不顺手和操作摩擦不纳入 evolution
+  - 将“真实运行中的 bug 与痛点”都纳入 bug-driven evolution，要求每次使用都在必要时补 skill 本体
+- 最终决定：采用第三种。`parallel-autopilot` 后续必须持续演化：每当真实使用中暴露出可复用的缺口，就要同时产出当前 run 修复、gap 分类以及对 skill 本体的可复用补丁。这里的触发源不仅包括实现 bug，也包括 intake protocol 不足、lane policy 歧义、state artifact 不足、merge/rollback 摩擦和 operator ergonomics 缺口。
+- 代价与妥协：skill 文档、reference protocol 和模板会更频繁更新，需要同步维护安装型 skill 与发布版 skill-package 文档；但这换来的是后续自动驾驶越来越顺手，而不是越来越依赖操作者记忆。
+- 推翻条件：如果未来 skill 已迁移到更正式的版本化发布管线，且 skill 演化不再应直接跟随单 repo 执行周期更新，再重新评估是否把 evolution 改为批次式版本发布。
+- 影响范围：`.agents/skills/parallel-autopilot/`、`docs/parallel-autopilot-skill-package.md`、后续所有 Phase 3+ 的自动驾驶执行习惯
+- 探针验证：不需要（这是技能治理原则；本次已通过直接补丁把该原则写回安装型 skill、reference protocol 与发布版文档）。
+
+## ADR-042：Phase 3 的 `lane-pdf-scan-scale` 以四层 corpus lineage 和代际兼容 telemetry 基线作为起点
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：Phase 3 已将 larger-corpus `PDF_SCAN` 设为一条独立 lane，但现有证据并不来自单一 run generation。历史全书样本 `v11 / v12` 提供 bootstrap 与 retry lineage，`v21 / v22 / v23` 提供 slice repair 与 merge lineage，`v28` 提供 readable rescue 终态。如果继续把这些样本混成一个“扫描书大样本”来谈，后续实现会把 telemetry 缺口、schema 缺口和 failure taxonomy 混在一起，导致 `MDU-16.1.2` 无法聚焦。
+- 候选方案：
+  - 只保留 `v11 / v12` 两个全书样本，其他 slice / rescue lineage 视为旁路历史
+  - 只保留最新的 readable rescue 样本，假设它已经代表 larger-corpus 完整终态
+  - 将 larger-corpus scanned baseline 分成四层：full-book bootstrap stress、retry/resume lineage、slice repair/merge lineage、readable rescue end-state，并显式接受 legacy report / DB schema drift
+- 最终决定：采用第三种。`lane-pdf-scan-scale` 从 `MDU-16.1.1` 开始，锁定以下基线：
+  - Tier A：`v11-full-run-chunked-pagecount`
+  - Tier B：`v12-retry-after-balance`
+  - Tier C：`v21-slice-1..4`、`v22-merged-slices`、`v23-final-prose-repair`
+  - Tier D：`v28-readable-rescue-titlefix`
+  同时锁定新的 telemetry baseline：新的 larger-corpus run 必须在 archived `report.json` 中稳定携带 `stage / ocr_status / ocr_progress / db_counts / work_item_status_counts / translation_packet_status_counts / error.* / retry-resume lineage`；而 `v11 / v12` 这类旧样本明确标记为 `legacy report generation`，只能作为 stress/recovery 参考，不能伪装成已经满足当前 telemetry 协议。
+- 代价与妥协：Phase 3 的 scanned lane 现在必须承认“不同代际工件负责不同生命周期证据”，不会再假装单一 artifact 家族能同时回答 bootstrap、retry、repair 和 readability 所有问题；这会让治理文档更复杂，但能避免后续实现再次误判 failure taxonomy。
+- 推翻条件：如果后续重新跑出一条满足当前 telemetry baseline、同时覆盖 full-book bootstrap 到 final readability 的新一代 scanned corpus，可以再收敛这条四层样本组，减少对 legacy lineage 的依赖。
+- 影响范围：`docs/phase-3-pdf-scan-scale-plan.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：已通过（当前已审计 `v11 / v12 / v21 / v23 / v28` 目录与报告/数据库证据，确认 full-book、retry、slice repair 和 readable rescue 分属不同 artifact generation；并确认 sampled DB lineage 仍存在历史 schema 缺口，如缺失 document title columns）。
+
+## ADR-043：Larger-corpus `PDF_SCAN` 运行时必须显式声明 telemetry generation、compatibility 和 failure taxonomy
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-16.1.1` 锁定了四层 scanned corpus lineage 后，一个新的执行痛点暴露得很清楚：Phase 2 前后的报告代际并不一致。`v11 / v12` 这类全书样本没有 `stage / db_counts / ocr_status / ocr_progress`，但仍是 larger-corpus baseline 的关键证据；与此同时，provider exhaustion、bootstrap OCR failure 和 repair timeout 也需要不同的恢复动作。如果继续把这些差异藏在 operator 心智里，`MDU-16.1.2` 之后的 larger-corpus 验收仍会反复误判“这是 OCR 问题还是 provider 问题、这是 legacy report 还是 current report”。
+- 候选方案：
+  - 保持现状，只在文档里说明 report 代际和失败类型差异
+  - 只在 `run_real_book_live.py` 写侧补字段，不管 watcher 和历史报告读取
+  - 引入共享 reporting helper，在 `run_real_book_live.py` 和 `watch_real_book_live.py` 同时显式声明 telemetry generation / compatibility，并统一输出 failure taxonomy 与 recovery action
+- 最终决定：采用第三种。自 `MDU-16.1.2` 起：
+  - 当前代运行报告显式声明 `telemetry_generation=current-runtime-report-v2`
+  - watcher 对无该字段的历史报告显式标记为 `legacy-report-generation`
+  - larger-corpus scanned 运行时统一输出：
+    - `telemetry_compatibility`
+    - `failure_taxonomy`
+    - `recommended_recovery_action`
+  - 当前最少明确的失败分桶为：
+    - `provider_exhaustion -> top_up_provider_balance_and_resume`
+    - `ocr_failure -> fix_ocr_runtime_and_rerun_bootstrap`
+    - `repair_timeout -> retry_repair_slice_or_reduce_repair_batch`
+- 代价与妥协：report schema 现在会显式扩展到 compatibility/taxonomy 层，live monitor 也不再是纯被动镜像；这增加了一点 reporting 代码，但换来的是 larger-corpus scanned 的恢复动作不再依赖人工猜测。
+- 推翻条件：如果后续 larger-corpus Phase 3 acceptance 证明 failure taxonomy 需要更多 family，或 reporting contract 迁移到正式 API schema，再重新评估是否将这些字段下沉到更稳定的 shared schema layer。
+- 影响范围：`scripts/real_book_live_reporting_common.py`、`scripts/run_real_book_live.py`、`scripts/watch_real_book_live.py`、`tests/test_real_book_live_reporting.py`、`docs/phase-3-pdf-scan-scale-plan.md`
+- 探针验证：已通过（focused regressions 已证明当前 report generation 会携带 `telemetry_generation`；bootstrap OCR failure 和 provider exhaustion 会被正确分桶；legacy report 会被 watcher 标记为 `legacy-report-generation`）。
+
+## ADR-044：Larger-corpus `PDF_SCAN` 的 lane closure 必须以 artifact-driven acceptance threshold 收口
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-16.1.1 / MDU-16.1.2` 已锁定 four-tier corpus lineage 与 telemetry / failure taxonomy，但 `lane-pdf-scan-scale` 仍停留在 narrative acceptance：我们知道应该验证 larger-corpus 的稳定性、恢复能力和 readable rescue，却没有把这些目标编译成可重复执行的 pass/fail 机制。这直接暴露了一个 Phase 3 运行痛点：lane closure 很容易只完成“文档解释”，而没有沉淀成可复用的 acceptance artifact。
+- 候选方案：
+  - 继续用治理文档记录 acceptance，默认由 operator 人工比对 locked corpus
+  - 只补一条 ad hoc 测试，验证某个 repair 样本，不覆盖完整 lineage
+  - 将 four-tier scanned lineage 编译成 artifact-driven acceptance helper，并冻结首版 threshold，后续 larger-corpus 回归统一复用
+- 最终决定：采用第三种。自 `MDU-16.1.3` 起，`lane-pdf-scan-scale` 的 closure 标准固定为一组可执行阈值，并由 `scripts/pdf_scan_corpus_acceptance.py` 和 `tests/test_pdf_scan_corpus_acceptance.py` 承载。首版 acceptance 至少要求：
+  - full-book bootstrap floor：`page_count >= 400`、`chapters >= 90`、`translation_packets >= 2000`、`translation_runs >= 2000`
+  - legacy full-book failure 仍被正确分类为 `provider_exhaustion`
+  - retry/resume lineage 显式保留 `resume_from_status=failed` 与 `retry_from_status=failed`
+  - representative slice repair 满足 `candidate_total >= 100`、`candidate_selected >= 30`、`repaired/selected >= 0.90`、`total_cost_usd <= 0.05`，且失败全部落在 `repair_timeout`
+  - final repair 满足 `repaired/selected == 1.0`、`failed_candidates == 0`、`total_cost_usd <= 0.01`
+  - readable rescue 的 markdown/html 及其 manifests 都存在
+  - `v11 / v21-slice-2 / v23 / v28` 的 `97 chapters / 2170 packets / 2171 runs` 结构计数保持稳定
+- 代价与妥协：这些 threshold 仍然是基于当前 locked corpus 的 first accepted baseline，不是对所有 scanned books 的永久 universal contract；但它们已经足够把 larger-corpus acceptance 从 narrative 计划推进到可重复执行的证据。
+- 推翻条件：如果后续出现新的 larger-corpus scanned lineage，证明这些阈值明显过宽、过窄，或遗漏了关键 failure family / readability 信号，应提升 `scan-corpus-acceptance` contract version，而不是让 operator 再次回到纯文档比对。
+- 影响范围：`scripts/pdf_scan_corpus_acceptance.py`、`tests/test_pdf_scan_corpus_acceptance.py`、`docs/phase-3-pdf-scan-scale-plan.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`PROGRESS.md`、`.agents/skills/parallel-autopilot/references/runtime-protocol.md`
+- 探针验证：已通过（focused acceptance regression 已在 locked corpus 上验证 full-book floor、retry/resume lineage、slice repair success ratio、final repair closure、readable rescue export existence 与 lineage structure stability；helper 输出与当前 artifact 事实一致）。
+
+## ADR-045：Lane A 的 rebuilt EPUB/PDF 必须采用 additive document-level contract，而不是重写现有 merged delivery contract
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：切到 `lane-delivery-upgrade` 后，最大的执行风险不是“做不出 rebuilt export”，而是过早把现有导出语义搅乱。当前系统已经稳定交付 `review_package / bilingual_html / merged_html / merged_markdown`，并且这些出口已被 workflow、API 下载与 fail-closed gate 依赖。如果 rebuilt EPUB/PDF 没有先锁定 additive contract、source guard 和 manifest schema，`MDU-15.1.2` 很容易一边实现一边重定义边界。
+- 候选方案：
+  - 直接在现有 merged export 上叠实现细节，边做边决定 rebuilt contract
+  - 将 rebuilt EPUB/PDF 视为现有 merged delivery 的替代物，允许改写当前 API / workflow 语义
+  - 先锁 lane-scoped contract：rebuilt artifact 作为 additive document-level export，现有 merged/bilingual/review contract 不变；然后再进入最小实现
+- 最终决定：采用第三种。自 `MDU-15.1.1` 起：
+  - rebuilt 输出被锁定为新的 **document-level additive export**
+  - 允许新增的 export type 是 `rebuilt_epub` 与 `rebuilt_pdf`
+  - `rebuilt_epub` 仅对 `source_type=epub` 开放
+  - `rebuilt_pdf` 首版允许统一使用 `merged_html` 作为渲染基底，但明确不承诺原始 PDF page-faithful rebuild
+  - rebuilt export 必须继续 obey fail-closed gate，不能绕过 `merged_html / merged_markdown` 的稳定性要求
+  - 两类 rebuilt export 都必须生成 sidecar manifest，并显式记录 `derived_from_exports`、`renderer_kind`、`expected_limitations`
+- 代价与妥协：这意味着 Lane A 的首版 rebuilt PDF 质量目标是“可读、章节顺序正确、结构不坏”，而不是出版级复刻；rebuilt EPUB 也只承诺最小 spine/nav/asset rebuild，而不是全量恢复原始 EPUB 的复杂 CSS/脚本行为。
+- 推翻条件：如果后续真实交付要求证明 rebuilt artifact 必须成为主交付面，或者必须达到 page-faithful / publication-grade 级别，则应升级 contract version 并重新定义 Lane A，而不是在当前 MVP 合约上继续堆临时例外。
+- 影响范围：`docs/phase-3-delivery-upgrade-plan.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`PROGRESS.md`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：不需要（这是 lane-A 的 contract lock 决策；当前已通过代码阅读确认现有 export/workflow/API 全部依赖 document-level merged delivery 语义，因此必须先锁 additive contract 再做实现）。
+
+## ADR-046：Lane A 首版 rebuilt delivery 必须从稳定 merged artifacts 派生，并同时保留一条旧交付面的守护回归
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：进入 `MDU-15.1.2` 后，真正的工程问题不是“如何凭空再造一个排版系统”，而是“如何在不破坏现有导出主链的情况下新增 rebuilt delivery”。如果 rebuilt EPUB/PDF 直接从 source parse / chapter export 分叉实现，最容易绕过当前 merged gate、复制一套独立渲染逻辑，并在实现完成后才发现把旧交付契约撞坏了。与此同时，本轮真实回归也暴露出另一类痛点：当新增能力与旧交付面相邻时，保守回归常会先撞上过期断言，而不是新 breakage。
+- 候选方案：
+  - 直接从 source bundle 各自重建 EPUB/PDF，不显式依赖 `merged_html / merged_markdown`
+  - 将 rebuilt 输出建立在现有 merged artifacts 之上，并把 preserved-contract regression 当作同一 MDU 的必做项
+  - 等未来有 publication-grade renderer 再做 rebuilt delivery，当前先不交付最小实现
+- 最终决定：采用第二种。自 `MDU-15.1.2` 起：
+  - `rebuilt_epub` 与 `rebuilt_pdf` 都是 **从当前稳定 merged artifacts 派生的 additive document-level export**
+  - `rebuilt_epub` 采用最小 EPUB spine rebuild，并复用当前 document bundle 的 visible chapters / translated render blocks / exported assets
+  - `rebuilt_pdf` 采用 `merged_html` 作为首版渲染 substrate，renderer 不可用时必须 fail-closed
+  - rebuilt sidecar manifest 必须显式记录：
+    - `contract_version`
+    - `renderer_kind`
+    - `derived_from_exports`
+    - `derived_export_artifacts`
+    - `expected_limitations`
+  - 任何实现 rebuilt delivery 的 MDU，都必须至少复跑一条相邻旧交付面的 preserved-contract regression；如果失败根因是陈旧断言而不是当前 breakage，应在同一 MDU 内归一化测试基线
+- 代价与妥协：首版 rebuilt delivery 明确偏“可交付最小产物”，不追求 publication-grade fidelity；同时 lane A 的实现 round 需要额外承担一小段旧回归基线清理工作，换来的是不把陈旧断言误当成新回归。
+- 推翻条件：若后续决定让 rebuilt artifact 成为新的主交付真相源，或引入独立的出版级排版/渲染栈，则需要升级 `delivery-artifact-contract` 与 `export-manifest` contract version，而不是继续沿当前派生式 MVP 叠补丁。
+- 影响范围：`src/book_agent/services/export.py`、`src/book_agent/services/workflows.py`、`src/book_agent/schemas/workflow.py`、`src/book_agent/app/api/routes/documents.py`、`tests/test_persistence_and_review.py`、`tests/test_api_workflow.py`、`.agents/skills/parallel-autopilot/references/runtime-protocol.md`
+- 探针验证：已通过（`rebuilt_epub` workflow/API focused regressions 与 `rebuilt_pdf` workflow regression 已通过；同时一条 `merged_html` 与两条 `merged_markdown` preserved-contract regressions 已复跑并完成陈旧断言归一化）。
+
+## ADR-047：带 source guard / fail-closed 边界的 lane closure 必须显式包含负路径证据
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-15.1.2` 完成后，lane A 的 happy path 已经成立，但这还不足以证明交付契约真正稳定。rebuild lane 的锁定边界里还明确写了两类容易被忽略的条件：`rebuilt_epub` 只允许 EPUB 源、`rebuilt_pdf` 在 renderer 不可用时必须 fail-closed。如果 lane closure 只跑正路径回归，很容易把“边界条件没被验证”误当成“契约已经稳定”。这也是本轮并行 autopilot 使用中暴露出来的一个真实 skill 缺口。
+- 候选方案：
+  - 继续把 lane closure 理解为“happy path 能跑通即可”
+  - 在具体 lane 文档里临时提醒需要补负路径，但不升级 skill protocol
+  - 将“带 source guard / fail-closed 边界的 lane 必须显式补至少一条负路径 regression”升级为并行 autopilot 的 runtime rule
+- 最终决定：采用第三种。自 `MDU-15.1.3` 起：
+  - 任何 lane 如果 contract 中出现 source guard、dependency unavailable、renderer unavailable、unsupported mode 或其他 fail-closed boundary
+  - 则 lane closure 除了正路径 evidence 和 preserved-contract regression 外，还必须至少补一条负路径 regression
+  - 若本轮负路径 regression 暴露的是“旧测试没有覆盖边界”，应在同一 MDU 内补齐，而不是留给下一阶段
+- 代价与妥协：lane closure 的 test 面会略微增大，但能显著减少“功能看似完成、边界其实没被证明”的假收口。
+- 推翻条件：如果后续 skill 进入更正式的自动 lane planner / verifier，并能从 contract metadata 自动合成负路径验证，再重新评估是否还需要在 runtime protocol 中用人工规则显式要求。
+- 影响范围：`.agents/skills/parallel-autopilot/references/runtime-protocol.md`、`docs/phase-3-delivery-upgrade-plan.md`、`tests/test_persistence_and_review.py`、`tests/test_api_workflow.py`、`PROGRESS.md`
+- 探针验证：已通过（lane A 现已具备 `rebuilt_epub` source guard regression、`rebuilt_pdf` renderer unavailable workflow/API regressions，以及 positive-path 和 preserved-contract regressions；因此可视为 wave-1 accepted lane）。
+
+## ADR-048：质量 / 智能类 lane 在实现 scaffold 前必须先冻结 benchmark、允许动作与保护契约
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：切到 `lane-review-naturalness` 后，一个新的执行痛点变得很明显：与 delivery / scan 这类 lane 不同，质量 / 智能类 lane 很容易在“提升自然度”这种高层目标下滑成自由发挥。如果没有先锁 benchmark families、允许 intervention 和保护契约，`MDU-17.1.2` 很容易从 packet-level source-aware guidance 漂移成 reviewer 自主重写、文风审美竞争，或者把纯 naturalness 问题悄悄升级为 blocking gate。
+- 候选方案：
+  - 直接进入 stylistic scaffold 实现，边做边讨论 naturalness 的定义
+  - 只在 Phase 3 总计划中保留一句“不要变成自由重写”，不额外写 lane-scoped contract
+  - 先为 `lane-review-naturalness` 冻结独立 contract：锁 benchmark、允许动作、非目标、blocking 边界，再进入实现
+- 最终决定：采用第三种。自 `MDU-17.1.1` 起：
+  - `review-style-contract` 升级为 v1，并由 `docs/phase-3-review-naturalness-plan.md` 承载 lane-scoped 真相
+  - `naturalness-gate` 升级为 v1，并冻结以下边界：
+    - 纯 `STYLE_DRIFT` 维持 packet-level non-blocking advisory
+    - 默认 action 仍为 `RERUN_PACKET`
+    - auto-followup 中 `TERM_CONFLICT` / `UNLOCKED_KEY_CONCEPT` 继续优先于 style drift
+  - 首版 frozen benchmark families 固定为：
+    - `LITERALISM_XHTML`
+    - `KNOWLEDGE_TIMELINE_LITERALISM_XHTML`
+    - `DURABLE_SUBSTRATE_LITERALISM_XHTML`
+    - `RESPONSIBILITY_LITERALISM_XHTML`
+    - `CONSISTENCY_CARE_LITERALISM_XHTML`
+    - `MIXED_AUTO_FOLLOWUP_XHTML`
+  - 首版允许的自动 intervention 仅限：
+    - source-aware `STYLE_DRIFT` detection
+    - packet-level advisory issue
+    - packet-scoped rerun guidance aggregation
+    - targeted rerun / followup execution
+    - rerun 后重新 review 验证
+  - 明确不允许：
+    - reviewer 默认自由重写
+    - chapter/document-level stylistic rewrite
+    - 纯 naturalness 默认 blocking
+    - 无 source-aware evidence 的大范围风格化润色
+- 代价与妥协：Lane C 首版会显得更保守，无法一步跳到“整章更像中文作者写的”；但这样能避免将自然度优化误做成无边界的 rewrite lane，并让后续 focused regressions 有稳定 benchmark。
+- 推翻条件：如果后续 `MDU-17.1.2 / MDU-17.1.3` 的证据表明，packet-scoped source-aware scaffold 无法带来可验证收益，且必须引入受控 reviewer patch path，届时应显式升级 `review-style-contract` / `naturalness-gate` version，而不是在当前 contract 上静默扩权。
+- 影响范围：`docs/phase-3-review-naturalness-plan.md`、`docs/phase-3-parallel-autopilot-plan.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`PROGRESS.md`、`.agents/skills/parallel-autopilot/references/lane-policy.md`
+- 探针验证：已通过（现有 focused regressions 已证明 `STYLE_DRIFT` 是 non-blocking packet advisory、默认 action 为 `RERUN_PACKET`、style rerun 会聚合 `preferred_hint + prompt_guidance`，且 mixed packet 中 term/concept followup 仍优先于 style drift）。
+
+## ADR-049：Lane C 首版 stylistic scaffold 必须先做 additive observability 与 packet guidance，而不是 schema 迁移或 reviewer 默认重写
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-17.1.1` 完成后，lane C 已经锁定了 benchmark、允许动作和 non-goals。进入 `MDU-17.1.2` 时，真正的工程取舍变成：第一步 scaffold 应该落在哪。继续停留在 issue 散点会让 `MDU-17.1.3` 缺少 chapter-level 可观察面；但如果一开始就做持久化 schema 扩展或 reviewer 自主重写，又会把本 lane 从 source-aware packet guidance 拉偏到更高风险的支线。
+- 候选方案：
+  - 直接给 reviewer 增加默认自由重写能力，让自然度提升立刻体现在 target 覆写上
+  - 为 naturalness 新增持久化 summary schema，再决定是否暴露给 workflow / API
+  - 先做 additive 的 chapter-level `naturalness_summary` 和更具体的 packet rerun hints，不改变 blocking 语义，也不引入新持久化 schema
+- 最终决定：采用第三种。自 `MDU-17.1.2` 起：
+  - review summary 新增 additive `naturalness_summary`
+  - 首版暴露字段固定为：
+    - `advisory_only`
+    - `style_drift_issue_count`
+    - `affected_packet_count`
+    - `dominant_style_rules`
+    - `preferred_hints`
+  - workflow / API review response 同步暴露该 summary
+  - `STYLE_DRIFT` rerun hints 除 `preferred_hint + prompt_guidance` 外，还显式包含命中的生硬译法片段，帮助 targeted rerun 知道“当前哪里发硬”
+  - 上述改动均为 additive scaffold：
+    - 不改变 `STYLE_DRIFT` 的 non-blocking advisory 语义
+    - 不改变 `TERM_CONFLICT` / `UNLOCKED_KEY_CONCEPT` 的优先级
+    - 不引入新的持久化 schema
+    - 不把 reviewer 变成默认自由重写代理
+- 代价与妥协：首版 scaffold 不会立刻让 document summary、历史列表或持久化质量总览拥有 naturalness 统计；但这换来了一个更稳的增量路径，可以先在 review/workflow/API 层证明价值，再决定是否值得下沉到存储层。
+- 推翻条件：如果后续 `MDU-17.1.3` 的 focused regressions 证明 additive summary 无法支撑 operator 判断，或必须跨会话稳定保留 naturalness 统计，才应考虑显式升级持久化 schema；如果需要 reviewer patch path，也必须另开 contract 升级，而不是在当前 scaffold 上静默扩权。
+- 影响范围：`src/book_agent/services/review.py`、`src/book_agent/orchestrator/rerun.py`、`src/book_agent/services/workflows.py`、`src/book_agent/schemas/workflow.py`、`src/book_agent/app/api/routes/documents.py`、`tests/test_rule_engine.py`、`tests/test_persistence_and_review.py`、`tests/test_api_workflow.py`、`docs/phase-3-review-naturalness-plan.md`、`PROGRESS.md`、`.agents/skills/parallel-autopilot/references/lane-policy.md`
+- 探针验证：已通过（focused regressions 已证明 review summary 会产出 `naturalness_summary`、API review response 会返回该字段、`STYLE_DRIFT` rerun hints 会携带命中的生硬译法片段，且原有 non-blocking / priority contract 未被破坏）。
+
+## ADR-050：质量类 lane 收口时必须将 frozen benchmarks 汇总成 dedicated acceptance artifact
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-17.1.2` 之后，lane C 虽然已经有了 benchmark、summary 和 rerun guidance，但真正的收口痛点依然存在：证明 naturalness lane 成立的断言仍然散落在多个旧测试里。这样做虽然能回归单点行为，却不利于后续 wave integration、phase checkpoint 和 skill 复用，因为操作者无法一眼看出“哪一组测试才是 lane C 的正式 acceptance artifact”。
+- 候选方案：
+  - 继续依赖分散在 `tests/test_persistence_and_review.py`、`tests/test_rule_engine.py`、`tests/test_api_workflow.py` 中的既有 focused asserts
+  - 为 lane C 新增一份 dedicated acceptance regression，把 frozen benchmarks、guided followup 收敛和 mixed priority 作为明确的收口证据
+  - 为 lane C 再引入单独脚本式 acceptance helper，即便当前需求只需要测试层证据
+- 最终决定：采用第二种。自 `MDU-17.1.3` 起：
+  - `lane-review-naturalness` 的正式 acceptance artifact 固定为 `tests/test_review_naturalness_acceptance.py`
+  - 首版 dedicated acceptance 必须显式覆盖：
+    - frozen literalism benchmark families 会稳定产出 `naturalness_summary`
+    - guided style followup 能在 locked contract 内收敛 literalism benchmark
+    - mixed benchmark 继续保持 `TERM_CONFLICT` 优先于 `STYLE_DRIFT`
+  - 旧 focused regressions 继续保留，但它们现在是 supporting evidence，不再是 lane closure 的唯一载体
+- 代价与妥协：新增了一份看似“重复”的 acceptance test 文件；但这换来了 lane-C 收口证据的集中化，后续 integration gate 和 checkpoint 不必再在多个旧文件里手工拼装证据。
+- 推翻条件：如果后续 Phase 4/其他项目证明质量类 lane 更适合脚本式 acceptance helper 或统一评测框架，再评估是否将 dedicated acceptance regression 提升为更通用的 helper；在那之前，不再接受把 lane closure 仅仅留在分散 old tests 里的做法。
+- 影响范围：`tests/test_review_naturalness_acceptance.py`、`docs/phase-3-review-naturalness-plan.md`、`docs/phase-3-parallel-autopilot-plan.md`、`PROGRESS.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`.agents/skills/parallel-autopilot/references/lane-policy.md`
+- 探针验证：已通过（dedicated acceptance regression 与既有 scaffold / API / rerun focused regressions 合跑通过，确认 literalism benchmarks、guided followup 收敛与 mixed priority 三类证据已集中化且未破坏既有 contract）。
+
+## ADR-051：Phase integration gate 必须将 lane-local acceptance 聚合成显式矩阵，并补至少一条 cross-lane coherence regression
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：Wave 1 三条 lane 都已 individually accepted，但进入 `MDU-18.1.1` 时暴露出一个新的串行控制面痛点：lane closure 证据虽然都存在，却分散在 lane 文档、helper 和 focused regressions 里。若 integration gate 只写“lane A/B/C 都完成了”，后续 resume、checkpoint 或 skill 复用都需要操作者重新手工回忆每条 lane 的 acceptance 入口，也无法证明这些 lane 在共享主链路上真的可以共存。
+- 候选方案：
+  - 继续依赖 lane 文档叙述，在 `PROGRESS.md` 中写一句“wave-1 all lanes accepted”
+  - 为 phase integration gate 新增一份显式 acceptance matrix，只聚合 lane-local canonical evidence
+  - 在第二种基础上，再补至少一条 cross-lane coherence regression，证明 integration gate 不只是“各自单独通过”
+- 最终决定：采用第三种。自 `MDU-18.1.1` 起：
+  - phase integration gate 必须产出一份显式 acceptance matrix
+  - matrix 至少记录：
+    - 每条 lane 的 canonical acceptance artifact 或 canonical test IDs
+    - 当前 gate 依赖的 contract tags
+    - lane doc / lane state / work graph 的一致性检查
+  - integration gate 还必须补至少一条 cross-lane coherence regression
+  - 当前 Phase 3 的首版 cross-lane coherence regression 固定为：
+    - `STYLE_DRIFT` 继续保持 non-blocking advisory 时，不会阻断 `merged_markdown / rebuilt_epub / rebuilt_pdf` 的 document-level 导出
+- 代价与妥协：治理面新增了一份 dedicated integration helper/test，看起来比只改 `PROGRESS.md` 更重；但它换来了可恢复、可复跑、可审计的 phase gate 证据，也避免把 lane 间兼容性继续留在操作者脑内。
+- 推翻条件：若后续 parallel-autopilot 演化出统一的 phase verifier 框架，可以把当前的 repo-local helper/test 升级成更通用的验证器；在那之前，不再接受“只有 lane-level proof、没有 explicit phase integration matrix”的 checkpoint 收口方式。
+- 影响范围：`scripts/phase3_integration_gate.py`、`tests/test_phase3_integration_gate.py`、`docs/phase-3-parallel-autopilot-plan.md`、`PROGRESS.md`、`DECISIONS.md`、`WORK_GRAPH.json`、`RUN_CONTEXT.md`、`.agents/skills/parallel-autopilot/references/runtime-protocol.md`
+- 探针验证：已通过（`tests.test_phase3_integration_gate` 已证明 lane-local acceptance matrix、contract coverage 与 cross-lane coherence regression 均成立；并与 `tests.test_pdf_scan_corpus_acceptance`、`tests.test_review_naturalness_acceptance` 合跑通过）。
+
+## ADR-052：Phase checkpoint 关闭后，状态工件必须显式切到“等待下一阶段目标锁定”
+- 状态：已决定
+- 日期：2026-03-22
+- 背景：`MDU-18.1.1` 完成后，虽然 integration gate 已有充分证据，但治理面仍残留一个 operator ergonomics / state model gap：如果只把 `mdu-18.1.2` 标成 done，而不显式处理 `current wave / current MDU / next action`，resume 时很容易把上一阶段最后一个 wave 误读成仍然活跃。并行 autopilot 在 phase 收口后的真实需求不是“默认继续 claim 下一个不存在的 MDU”，而是明确进入“等待新目标锁定”的静止态。
+- 候选方案：
+  - 只更新 `WORK_GRAPH.json` 节点状态，把“Phase 3 已完成”留给操作者自己推断
+  - 在 `PROGRESS.md` 里人工写一句“等待下一阶段目标锁定”，但不升级 skill 协议
+  - 将 phase completion handoff 升级为 state-artifact protocol：关闭 checkpoint 时必须显式清理 stale current wave/current MDU，并将 next action 指向新的 requirement lock
+- 最终决定：采用第三种。自 `MDU-18.1.2` 起：
+  - 若当前 phase 已完成且尚未锁定下一阶段目标：
+    - `PROGRESS.md` 必须显式显示“等待下一阶段目标锁定”
+    - `RUN_CONTEXT.md` 必须将下一默认动作改为新的 control-plane 入口，而不是上一个已完成的 MDU
+    - `LANE_STATE.json.current_wave_id` 允许为 `null`
+    - 不允许保留 stale active lane / current MDU
+  - 这条规则属于 state-artifact protocol，不再作为 operator 自觉行为
+- 代价与妥协：phase closure 的治理更新会略多一步，但能显著降低 resume 时的歧义和“上一阶段已结束却看起来还在跑”的假活跃状态。
+- 推翻条件：如果未来引入统一的 run-state schema，并由单一状态机自动生成 operator mirror，可再评估是否保留当前文档级 handoff 规则；在那之前，不再接受 phase 关闭后仍把旧 wave / old MDU 挂在当前态里。
+- 影响范围：`PROGRESS.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`docs/phase-3-parallel-autopilot-plan.md`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：已通过（`MDU-18.1.2` 完成后，Phase 3 已显式进入“等待下一阶段目标锁定”，不再残留 stale current wave/current MDU）。
+
+## ADR-053：Phase 4 默认锁定为高风险 PDF 页的双层 OCR / Layout Assist hardening
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：Phase 3 已完成，rebuild delivery、larger-corpus `PDF_SCAN` 与 reviewer naturalness 三条 lane 都已 individually accepted，并通过了 phase integration gate。继续在已关闭 lane 上做小修小补的边际收益已明显下降；当前更高杠杆的问题重新回到上游结构恢复，尤其是高风险 PDF 页和局部区域的 OCR / layout assist 边界。
+- 候选方案：
+  - 继续在 Phase 3 已关闭的三条 lane 上追加局部优化
+  - 直接把整页 VLM 解析拉成新的默认主链路
+  - 将下一阶段默认锁定为高风险 PDF 页的 OCR / layout assist hardening，并坚持“规则/几何优先，AI assist 仅用于高风险页/区域兜底”
+- 最终决定：采用第三种。自 Phase 4 起：
+  - 默认主目标切换为高风险 PDF 页的双层 OCR / layout assist hardening
+  - 控制面继续保持串行
+  - 新能力必须回流到现有 structured pipeline，而不是旁路生成新的平行主链路
+  - 在 requirement lock 与 baseline contract 完成前，不直接 claim OCR 实现型 lane
+- 代价与妥协：本轮只重开控制面并锁定默认方向，不立刻产出 OCR 实现收益；同时明确拒绝“整页 VLM 默认化”“publication-grade 表格/公式语义重建”“图内文本重绘”等高成本扩张目标。
+- 推翻条件：如果后续 `MDU-19.1.1 / MDU-19.1.2` 证明当前仓库的高风险问题并不集中在 OCR / layout assist，或者规则/几何优先的 fail-closed 路线无法带来合理收益，再重新评估下一阶段主目标。
+- 影响范围：`docs/phase-4-ocr-layout-assist-plan.md`、`PROGRESS.md`、`DECISIONS.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`RUN_CONTEXT.md`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：已通过（Phase 4 kickoff 基线已落盘，当前运行态已从“等待下一阶段目标锁定”切到“`MDU-19.1.1` 待执行”的显式控制面状态）。
+
+## ADR-054：Phase 4 采用风险分桶的双层 OCR / Layout Assist，并默认 fail-closed
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：`MDU-19.1.1` 完成后，Phase 4 的方向与范围已经明确，但仍缺一层足够硬的执行合同：什么风险允许进入 assist、什么风险只能保持 advisory、什么风险必须 blocking/fail-closed。如果不在实现前冻结这层合同，后续 OCR / layout assist 很容易从“高风险结构恢复”滑成“看到风险就让模型重做”，破坏当前 deterministic pipeline 的可解释性与可恢复性。
+- 候选方案：
+  - 保持 heuristic-only，不引入 assist 路由
+  - 直接把整页或整章高风险内容默认交给 assist 重建
+  - 采用风险分桶的双层 OCR / layout assist：规则/几何优先，仅对 Bucket B/C 允许窄 assist，对 Bucket D 保持 blocking / fail-closed
+- 最终决定：采用第三种。Phase 4 baseline 现已冻结为：
+  - `Bucket A = pass_through_low_risk`
+  - `Bucket B = localized_medium_risk`
+  - `Bucket C = single_page_scanned_anchorable_high_risk`
+  - `Bucket D = blocking_high_risk_or_low_confidence`
+  - assist 默认只允许在 Bucket B/C 中以 page-scoped 或 region-scoped 方式出现
+  - assist 不可用、超时、低置信或缺 provenance 时，必须 fail-closed 回退到当前 parser 结果，并保留显式风险证据
+- 代价与妥协：这会显著限制首版 assist 的覆盖面，特别是高风险多页或低置信 chapter 仍然不会自动放行；但这换来了更稳的控制面，不会为了局部恢复收益而污染低风险稳定路径。
+- 推翻条件：若后续真实实现和 focused regression 证明当前 4 桶划分无法覆盖主流高风险场景，或者 Bucket B/C 的窄 assist 价值不足，再评估是否扩桶、并桶或升级 routing；在那之前，不接受“看起来像高风险就默认整页 assist”的扩张。
+- 影响范围：`docs/phase-4-ocr-layout-assist-plan.md`、`PROGRESS.md`、`DECISIONS.md`、`WORK_GRAPH.json`、`RUN_CONTEXT.md`、`.agents/skills/parallel-autopilot/references/runtime-protocol.md`
+- 探针验证：已通过（Phase 4 文档已冻结 risk buckets、routing semantics 与 fail-closed contract，当前控制面已具备进入 `MDU-19.1.3` 的前置条件）。
+
+## ADR-055：Kickoff-only phase 收口后，应显式切到同目标下的实现规划，而不是回退成“等待下个目标”
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：`MDU-19.1.3` 收口时暴露出一个新的控制面细节：Phase 4 只是 baseline / kickoff phase，不是整个高风险 OCR / layout assist 目标的终点。如果按旧的“phase complete -> waiting for next goal lock”模板处理，会错误暗示当前目标已结束；而真实状态是“当前目标仍成立，只是下一步应进入实现阶段规划”。
+- 候选方案：
+  - 保持通用 idle 文案，统一写成“等待下一阶段目标锁定”
+  - 在 kickoff-only phase 关闭后，显式切到“同目标下的下一步 planning action”
+- 最终决定：采用第二种。以后遇到 baseline / kickoff-only phase 收口时：
+  - operator mirror 必须指向同一目标下的下一步 planning action
+  - 不应把状态误写成“等待新的目标”
+  - `current_wave_id` 可以继续为 `null`，直到真正的实现 wave 被创建
+- 代价与妥协：状态表达会比“已完成/未完成”多一层语义，但这能减少 resume 时的误判，也更符合 lane-aware control plane 的真实工作方式。
+- 推翻条件：如果未来引入统一的 phase-kind schema，并能自动从 phase type 推断 handoff 语义，再评估是否保留当前文字级规则；在那之前，不再接受 kickoff-only phase 收口后退回泛化 idle 态。
+- 影响范围：`PROGRESS.md`、`RUN_CONTEXT.md`、`docs/phase-4-ocr-layout-assist-plan.md`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：已通过（Phase 4 kickoff 收口后，当前状态已明确切到“等待高风险 OCR / layout assist 的实现阶段规划”，而不是模糊地等待新目标）。
+
+## ADR-056：高风险 OCR / Layout Assist 的首轮实现规划应先采用 single-lane-first，而不是强拆伪并行 lane
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：Phase 4 kickoff baseline 已冻结了输入范围、风险分桶和 fail-closed contract，但进入实现规划时暴露出一个新的并行 autopilot 痛点：如果为了维持“lane-aware”外观而过早把 OCR/layout assist 拆成多个 lane，会把同一条尚未稳定的契约链拆散到 `bootstrap / assist routing / provenance normalization / downstream re-entry` 多个共享写集上，结果不是并行提速，而是更早暴露 write-set 冲突、contract 漂移和 acceptance 失真。
+- 候选方案：
+  - 立即拆出多个 lane，例如 `scan lane`、`review lane`、`export lane`
+  - 在 implementation planning 阶段明确采用 single-lane-first，先冻结首轮 execution contract，再决定是否值得拆 lane
+- 最终决定：采用第二种。自 `MDU-20.1.1` 起：
+  - Phase 4 的首轮实现规划先不强拆多个 lane
+  - 推荐执行形态是 `Wave 0 = implementation planning`、`Wave 1 = lane-ocr-layout-assist-core`、`Wave 2 = focused acceptance / integration checkpoint`
+  - 只有在 `lane-ocr-layout-assist-core` 的 write set、contract tags 与 acceptance gate 冻结后，才允许继续评估后续 lane 拆分
+- 代价与妥协：这会让“并行 autopilot”在当前目标上表现得更克制，短期内仍是单 lane 优先；但它避免了伪并行带来的频繁重排，也更符合当前 OCR/layout assist 的共享契约现实。
+- 推翻条件：如果后续 `MDU-20.1.2` 证明 execution contract 已经稳定，且可以把写集干净切开，再重新评估是否将后续实现拆成多 lane；在那之前，不再接受为了保持并行外观而强造 lane。
+- 影响范围：`docs/phase-4-ocr-layout-assist-implementation-plan.md`、`PROGRESS.md`、`RUN_CONTEXT.md`、`WORK_GRAPH.json`、`.agents/skills/parallel-autopilot/references/lane-policy.md`
+- 探针验证：已通过（当前控制面已显式进入 Phase 4 implementation planning，且下一默认动作是冻结 `lane-ocr-layout-assist-core` 的 contract，而不是直接打开多个实现 lane）。
+
+## ADR-057：`lane-ocr-layout-assist-core` 首轮只拥有上游恢复写集，下游 review/export 先保持 consumer 身份
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：`MDU-20.1.2` 的关键问题不是“OCR assist 要不要做”，而是“第一条真实实现 lane 到底拥有哪里”。如果把 `review.py`、`export.py`、`layout_validate.py` 也一起纳入首轮 lane ownership，看起来像是更完整，但实际上会把上游结构恢复 contract 与下游 gate contract 混成一个共享写集，使首轮 focused evidence 失去可解释边界。
+- 候选方案：
+  - 将首轮 lane 扩成端到端 ownership，同时改上游恢复和下游 gate
+  - 将首轮 lane 收缩为上游 OCR / structure recovery ownership，下游 review/export 先只消费信号
+- 最终决定：采用第二种。自 `MDU-20.1.2` 起：
+  - `lane-ocr-layout-assist-core` 的 primary write set 冻结为：
+    - `services/bootstrap`
+    - `domain/structure/pdf`
+    - `domain/structure/ocr`
+    - `services/pdf_structure_refresh`
+    - focused regressions / lane-scoped docs
+  - 下游 `review.py`、`export.py`、`layout_validate.py` 当前保持 consumer 身份，不作为首轮 lane ownership
+  - 首轮 contract tag 明确拆成：
+    - `ocr-layout-assist-execution`
+    - `ocr-layout-assist-acceptance`
+  - acceptance gate 冻结为四类 focused evidence：
+    - `bucket-bc-routing`
+    - `fail-closed-fallback`
+    - `structured-reentry`
+    - `low-risk-preservation`
+- 代价与妥协：这会让首轮 lane 看起来更窄，短期内不会顺手优化下游 review/export 体验；但它换来了更清晰的 ownership boundary，也避免用“放宽下游 gate”掩盖上游恢复 contract 的问题。
+- 推翻条件：如果后续真实实现证明仅靠上游恢复写集无法把 assist 结果稳定回流到主链路，再重新评估是否开启新的下游 contract lane；在那之前，不再接受“上游恢复 + 下游 gate 一起改”作为首轮默认切法。
+- 影响范围：`docs/phase-4-ocr-layout-assist-core-plan.md`、`docs/phase-4-ocr-layout-assist-implementation-plan.md`、`PROGRESS.md`、`RUN_CONTEXT.md`、`WORK_GRAPH.json`、`.agents/skills/parallel-autopilot/references/lane-policy.md`
+- 探针验证：已通过（lane-scoped contract 已独立落盘，当前控制面下一默认动作已切到 `MDU-20.1.3`，且尚未错误打开 live lane）。
+
+## ADR-058：implementation planning 收口后，必须显式打开 ready-to-claim lane，而不是只留下 frozen contract
+- 状态：已决定
+- 日期：2026-03-23
+- 背景：`MDU-20.1.2` 完成后，contract 已冻结，但控制面仍存在一个新的手感问题：如果只把 planning doc 写完整，却不显式打开下一条 ready lane，resume 时仍会卡在“知道该做什么，但没有明确 claim 入口”的灰区。对 lane-aware autopilot 来说，planning 的终点不应只是 frozen contract，而应是一个可被 claim 的真实执行入口。
+- 候选方案：
+  - planning phase 完成后，只在文档里写“下一步进入实现”
+  - planning phase 完成后，显式创建 `wave / lane / current_mdu` 的 ready-to-claim 状态
+- 最终决定：采用第二种。自 `MDU-20.1.3` 起：
+  - Phase 4 打开 `wave-1-phase-4-core`
+  - `LANE_STATE.json` 显式创建 `lane-ocr-layout-assist-core`
+  - lane 状态为 `ready`
+  - `current_mdu` 指向 `MDU-21.1.1`
+  - `RUN_CONTEXT.md` 与 `PROGRESS.md` 不再停留在 planning，而是直接指向首个真实实现入口
+- 代价与妥协：状态面会比“planning complete”多一层 live-ready 语义，但它换来了更清晰的 resume 入口，也避免把下一轮 claim 继续留在 operator 脑内。
+- 推翻条件：如果未来引入统一 scheduler，可以自动从 frozen contract 生成 ready lane，再评估是否还需要文档级 handoff；在那之前，不再接受 planning 收口后没有 ready-to-claim lane 的半完成状态。
+- 影响范围：`docs/phase-4-ocr-layout-assist-core-execution-plan.md`、`PROGRESS.md`、`RUN_CONTEXT.md`、`WORK_GRAPH.json`、`LANE_STATE.json`、`.agents/skills/parallel-autopilot/references/state-artifacts.md`
+- 探针验证：已通过（当前状态已切到 `wave-1-phase-4-core / lane-ocr-layout-assist-core / MDU-21.1.1`，而不是继续停留在 planning idle 态）。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import mimetypes
 import posixpath
 import re
 import shutil
@@ -200,6 +201,10 @@ def _document_export_label(export_type: ExportType) -> str:
         return "中文阅读稿"
     if export_type == ExportType.MERGED_MARKDOWN:
         return "中文阅读稿-Markdown"
+    if export_type == ExportType.REBUILT_EPUB:
+        return "重建EPUB"
+    if export_type == ExportType.REBUILT_PDF:
+        return "重建PDF"
     return export_type.value
 
 
@@ -671,6 +676,85 @@ class ExportService:
         self.repository.session.flush()
         return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
 
+    def export_document_rebuilt_epub(self, document_id: str) -> ExportArtifacts:
+        initial_bundle = self.repository.load_document_bundle(document_id)
+        if initial_bundle.document.source_type != SourceType.EPUB:
+            raise ExportGateError(
+                "Rebuilt EPUB is only available for EPUB source documents.",
+            )
+        for chapter_bundle in initial_bundle.chapters:
+            self._enforce_gate(chapter_bundle, ExportType.REBUILT_EPUB)
+        upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
+        bundle = self.repository.load_document_bundle(document_id)
+        self._sync_document_title_tgt(bundle)
+        output_dir = self.output_root / bundle.document.id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
+        file_path = output_dir / "rebuilt-document.epub"
+        manifest_path = output_dir / "rebuilt-document.epub.manifest.json"
+        self._write_rebuilt_epub(bundle, file_path, asset_path_by_block_id)
+        manifest_path.write_text(
+            json.dumps(
+                self._build_rebuilt_document_manifest(
+                    bundle,
+                    file_path,
+                    export_type=ExportType.REBUILT_EPUB,
+                    renderer_kind="epub_spine_rebuilder",
+                    derived_from_exports=upstream_exports,
+                    expected_limitations=[
+                        "assets_reused_from_source_when_available",
+                        "no_in_image_text_rewrite",
+                        "single_document_level_output_only",
+                    ],
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        export = self._record_document_export(bundle, ExportType.REBUILT_EPUB, file_path, manifest_path)
+        self.repository.save_export(export)
+        self.repository.session.flush()
+        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+
+    def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
+        bundle = self.repository.load_document_bundle(document_id)
+        for chapter_bundle in bundle.chapters:
+            self._enforce_gate(chapter_bundle, ExportType.REBUILT_PDF)
+        upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
+        bundle = self.repository.load_document_bundle(document_id)
+        self._sync_document_title_tgt(bundle)
+        merged_html_artifacts = upstream_exports[ExportType.MERGED_HTML]
+        output_dir = self.output_root / bundle.document.id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_path = output_dir / "rebuilt-document.pdf"
+        manifest_path = output_dir / "rebuilt-document.pdf.manifest.json"
+        self._render_rebuilt_pdf_from_html(merged_html_artifacts.file_path, file_path)
+        manifest_path.write_text(
+            json.dumps(
+                self._build_rebuilt_document_manifest(
+                    bundle,
+                    file_path,
+                    export_type=ExportType.REBUILT_PDF,
+                    renderer_kind="html_print_renderer",
+                    derived_from_exports=upstream_exports,
+                    expected_limitations=[
+                        "not_page_faithful_to_source_pdf",
+                        "assets_reused_from_source_when_available",
+                        "no_in_image_text_rewrite",
+                        "single_document_level_output_only",
+                    ],
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        export = self._record_document_export(bundle, ExportType.REBUILT_PDF, file_path, manifest_path)
+        self.repository.save_export(export)
+        self.repository.session.flush()
+        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+
     def _sync_document_title_tgt(self, bundle: DocumentExportBundle) -> None:
         current_title_tgt = _normalize_render_text(bundle.document.title_tgt)
         if current_title_tgt:
@@ -755,6 +839,45 @@ class ExportService:
                 continue
             candidate.unlink(missing_ok=True)
         alias_path.write_text(content, encoding="utf-8")
+
+    def _manifest_path_from_export_record(self, export: Export) -> Path | None:
+        raw_path = str((export.input_version_bundle_json or {}).get("sidecar_manifest_path") or "").strip()
+        if not raw_path:
+            return None
+        manifest_path = Path(raw_path)
+        return manifest_path if manifest_path.exists() else None
+
+    def _ensure_upstream_document_export(
+        self,
+        document_id: str,
+        export_type: ExportType,
+    ) -> ExportArtifacts:
+        records = self.repository.list_document_exports_filtered(
+            document_id,
+            export_type=export_type,
+            status=ExportStatus.SUCCEEDED,
+            limit=1,
+        )
+        if records:
+            export_record = records[0]
+            file_path = Path(export_record.file_path)
+            if file_path.exists():
+                return ExportArtifacts(
+                    export_record=export_record,
+                    file_path=file_path,
+                    manifest_path=self._manifest_path_from_export_record(export_record),
+                )
+        if export_type == ExportType.MERGED_HTML:
+            return self.export_document_merged_html(document_id)
+        if export_type == ExportType.MERGED_MARKDOWN:
+            return self.export_document_merged_markdown(document_id)
+        raise ExportGateError(f"Unsupported rebuilt upstream export type: {export_type.value}")
+
+    def _ensure_rebuilt_upstream_exports(self, document_id: str) -> dict[ExportType, ExportArtifacts]:
+        return {
+            ExportType.MERGED_HTML: self._ensure_upstream_document_export(document_id, ExportType.MERGED_HTML),
+            ExportType.MERGED_MARKDOWN: self._ensure_upstream_document_export(document_id, ExportType.MERGED_MARKDOWN),
+        }
 
     def assert_chapter_exportable(self, chapter_id: str, export_type: ExportType) -> None:
         bundle = self.repository.load_chapter_bundle(chapter_id)
@@ -1089,7 +1212,13 @@ class ExportService:
             self._sync_export_alignment_issues(bundle)
             return
 
-        if export_type in {ExportType.BILINGUAL_HTML, ExportType.MERGED_HTML, ExportType.MERGED_MARKDOWN}:
+        if export_type in {
+            ExportType.BILINGUAL_HTML,
+            ExportType.MERGED_HTML,
+            ExportType.MERGED_MARKDOWN,
+            ExportType.REBUILT_EPUB,
+            ExportType.REBUILT_PDF,
+        }:
             if chapter_status not in {ChapterStatus.QA_CHECKED, ChapterStatus.APPROVED, ChapterStatus.EXPORTED}:
                 blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
                 raise ExportGateError(
@@ -2882,6 +3011,43 @@ class ExportService:
             manifest["html_path"] = str(output_path)
         elif export_type == ExportType.MERGED_MARKDOWN:
             manifest["markdown_path"] = str(output_path)
+        return manifest
+
+    def _build_rebuilt_document_manifest(
+        self,
+        bundle: DocumentExportBundle,
+        output_path: Path,
+        *,
+        export_type: ExportType,
+        renderer_kind: str,
+        derived_from_exports: dict[ExportType, ExportArtifacts],
+        expected_limitations: list[str],
+    ) -> dict[str, object]:
+        manifest = self._build_merged_document_manifest(bundle, output_path, export_type=export_type)
+        manifest.update(
+            {
+                "source_type": bundle.document.source_type.value,
+                "contract_version": 1,
+                "renderer_kind": renderer_kind,
+                "derived_from_exports": [kind.value for kind in derived_from_exports],
+                "derived_export_artifacts": {
+                    kind.value: {
+                        "file_path": str(artifacts.file_path),
+                        "manifest_path": (
+                            str(artifacts.manifest_path)
+                            if artifacts.manifest_path is not None
+                            else None
+                        ),
+                    }
+                    for kind, artifacts in derived_from_exports.items()
+                },
+                "expected_limitations": expected_limitations,
+            }
+        )
+        if export_type == ExportType.REBUILT_EPUB:
+            manifest["epub_path"] = str(output_path)
+        elif export_type == ExportType.REBUILT_PDF:
+            manifest["pdf_path"] = str(output_path)
         return manifest
 
     def _merged_render_summary(
@@ -6574,6 +6740,262 @@ class ExportService:
         merged_assets = dict(persisted_assets)
         merged_assets.update(exported_assets)
         return merged_assets
+
+    def _epub_relative_asset_path(self, asset_path: str) -> str:
+        normalized = PurePosixPath(asset_path)
+        if normalized.parts and normalized.parts[0] == "assets":
+            return PurePosixPath("..", *normalized.parts).as_posix()
+        return normalized.as_posix()
+
+    def _build_rebuilt_epub_stylesheet(self) -> str:
+        return (
+            "body{font-family:Georgia,'Times New Roman',serif;line-height:1.7;margin:0 auto;max-width:48rem;"
+            "padding:1.2rem;color:#1f2933;background:#fffdfa;}"
+            "h1,h2,h3{font-family:'Helvetica Neue','Arial',sans-serif;line-height:1.2;color:#17313a;}"
+            "h1{font-size:1.9rem;margin:0 0 0.8rem;}h2{font-size:1.45rem;margin:1.6rem 0 0.6rem;}"
+            "p{margin:0.8rem 0;}blockquote{margin:1rem 0;padding-left:1rem;border-left:0.25rem solid #9dc8cf;}"
+            "pre{white-space:pre-wrap;background:#f5f8fc;border:1px solid #dbe4ef;border-radius:0.5rem;padding:0.9rem;overflow-x:auto;}"
+            "code{font-family:'SFMono-Regular',Menlo,monospace;}figure{margin:1rem 0;}img{max-width:100%;height:auto;}"
+            ".chapter-meta,.source-note,.artifact-note,.caption{color:#5c6776;font-size:0.95rem;}"
+            ".artifact{margin:1rem 0;padding:0.9rem;border:1px solid #dbe4ef;border-radius:0.75rem;background:#fbfcfe;}"
+            ".source-note{margin-top:0.5rem;font-style:italic;}.toc ol{padding-left:1.2rem;}"
+            "table{border-collapse:collapse;width:100%;margin:1rem 0;}th,td{border:1px solid #dbe4ef;padding:0.45rem 0.6rem;text-align:left;}"
+            "thead th{background:#eef4fb;}"
+        )
+
+    def _render_block_rebuilt_epub_xhtml(
+        self,
+        block: MergedRenderBlock,
+        asset_path_by_block_id: dict[str, str] | None = None,
+    ) -> str:
+        source_html = self._format_inline_text(block.source_text)
+        target_html = self._format_inline_text(block.target_text or "")
+        notice = html.escape(str(block.notice or "").strip())
+        asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "").strip()
+        if asset_src:
+            asset_src = self._epub_relative_asset_path(asset_src)
+        image_alt_text = html.escape(str(block.source_metadata.get("image_alt") or block.source_text or "Embedded image"))
+
+        if block.render_mode == "source_artifact_full_width":
+            note_html = f"<div class='artifact-note'>{notice}</div>" if notice else ""
+            if asset_src and block.artifact_kind in {"image", "figure"}:
+                caption_html = ""
+                if block.source_text and block.source_text not in {"", "[Image]"}:
+                    caption_html = f"<figcaption class='caption'>{source_html}</figcaption>"
+                return (
+                    "<section class='artifact'>"
+                    f"{note_html}<figure><img src='{html.escape(asset_src)}' alt='{image_alt_text}' />{caption_html}</figure>"
+                    "</section>"
+                )
+            if block.artifact_kind == "equation":
+                body_html = f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
+            elif block.artifact_kind == "code":
+                body_html = (
+                    f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
+                )
+            elif block.artifact_kind == "table":
+                table_html = self._render_structured_table_html(block.source_text)
+                body_html = table_html or f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
+            else:
+                body_html = f"<div>{source_html}</div>"
+            return f"<section class='artifact'>{note_html}{body_html}</section>"
+
+        if block.render_mode == "translated_wrapper_with_preserved_artifact":
+            translated_html = f"<p>{target_html}</p>" if block.target_text else ""
+            note_html = f"<div class='artifact-note'>{notice}</div>" if notice else ""
+            if block.artifact_kind == "equation":
+                artifact_html = f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
+            elif block.artifact_kind == "table":
+                artifact_html = (
+                    self._render_structured_table_html(block.source_text)
+                    or f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
+                )
+            else:
+                artifact_html = f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
+            return f"<section class='artifact'>{translated_html}{note_html}{artifact_html}</section>"
+
+        if block.render_mode == "image_anchor_with_translated_caption":
+            figure_html = ""
+            if asset_src:
+                figure_html = f"<figure><img src='{html.escape(asset_src)}' alt='{image_alt_text}' /></figure>"
+            elif block.source_text:
+                figure_html = f"<div class='artifact-note'>{source_html}</div>"
+            caption_parts = []
+            if block.target_text:
+                caption_parts.append(f"<p>{target_html}</p>")
+            if notice:
+                caption_parts.append(f"<div class='artifact-note'>{notice}</div>")
+            if block.source_text and block.source_text != block.target_text:
+                caption_parts.append(f"<div class='source-note'>Source: {source_html}</div>")
+            return f"<section class='artifact'>{figure_html}{''.join(caption_parts)}</section>"
+
+        if block.render_mode == "reference_preserve_with_translated_label":
+            translated_html = f"<p>{target_html}</p>" if block.target_text and block.target_text != block.source_text else ""
+            return f"<section class='artifact'>{translated_html}<div>{source_html}</div></section>"
+
+        text_html = target_html or source_html
+        source_note = ""
+        if block.source_text and block.target_text and block.source_text != block.target_text:
+            source_note = f"<div class='source-note'>Source: {source_html}</div>"
+        if block.block_type == BlockType.HEADING.value:
+            return f"<h2>{text_html}</h2>"
+        if block.block_type == BlockType.QUOTE.value:
+            return f"<blockquote><p>{text_html}</p>{source_note}</blockquote>"
+        if block.block_type == BlockType.CAPTION.value:
+            return f"<p class='caption'>{text_html}</p>"
+        if block.block_type == BlockType.LIST_ITEM.value:
+            return f"<p>{text_html}</p>{source_note}"
+        return f"<p>{text_html}</p>{source_note}"
+
+    def _build_rebuilt_epub_chapter_xhtml(
+        self,
+        chapter_bundle: ChapterExportBundle,
+        *,
+        visible_ordinal: int,
+        title_text: str | None,
+        render_blocks: list[MergedRenderBlock],
+        asset_path_by_block_id: dict[str, str] | None = None,
+    ) -> str:
+        body = [
+            f"<h1>{html.escape(str(title_text or chapter_bundle.chapter.title_tgt or chapter_bundle.chapter.title_src or f'Chapter {visible_ordinal}'))}</h1>",
+        ]
+        if chapter_bundle.chapter.title_src and title_text and chapter_bundle.chapter.title_src != title_text:
+            body.append(f"<p class='chapter-meta'>Source title: {html.escape(chapter_bundle.chapter.title_src)}</p>")
+        for block in render_blocks:
+            rendered = self._render_block_rebuilt_epub_xhtml(block, asset_path_by_block_id)
+            if rendered:
+                body.append(rendered)
+        return (
+            "<?xml version='1.0' encoding='utf-8'?>"
+            "<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='zh-CN'>"
+            "<head>"
+            f"<title>{html.escape(str(title_text or chapter_bundle.chapter.title_src or f'Chapter {visible_ordinal}'))}</title>"
+            "<meta charset='utf-8' />"
+            "<link rel='stylesheet' type='text/css' href='../styles/book.css' />"
+            "</head>"
+            f"<body>{''.join(body)}</body>"
+            "</html>"
+        )
+
+    def _write_rebuilt_epub(
+        self,
+        bundle: DocumentExportBundle,
+        file_path: Path,
+        asset_path_by_block_id: dict[str, str] | None = None,
+    ) -> None:
+        visible_chapters = self._visible_merged_chapters(bundle)
+        if not visible_chapters:
+            raise ExportGateError("Rebuilt EPUB requires at least one visible chapter.")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        chapter_entries: list[tuple[str, str, str]] = []
+        for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
+            chapter_name = f"text/chapter-{visible_ordinal:03d}.xhtml"
+            chapter_entries.append(
+                (
+                    chapter_name,
+                    str(title_text or chapter_bundle.chapter.title_tgt or chapter_bundle.chapter.title_src or f"Chapter {visible_ordinal}"),
+                    self._build_rebuilt_epub_chapter_xhtml(
+                        chapter_bundle,
+                        visible_ordinal=visible_ordinal,
+                        title_text=title_text,
+                        render_blocks=render_blocks,
+                        asset_path_by_block_id=asset_path_by_block_id,
+                    ),
+                )
+            )
+
+        nav_items = "".join(
+            f"<li><a href='{html.escape(filename)}'>{html.escape(title)}</a></li>"
+            for filename, title, _content in chapter_entries
+        )
+        nav_xhtml = (
+            "<?xml version='1.0' encoding='utf-8'?>"
+            "<html xmlns='http://www.w3.org/1999/xhtml' xmlns:epub='http://www.idpf.org/2007/ops' xml:lang='zh-CN'>"
+            "<head><title>Contents</title><meta charset='utf-8' />"
+            "<link rel='stylesheet' type='text/css' href='styles/book.css' /></head>"
+            f"<body><nav epub:type='toc' class='toc'><h1>Contents</h1><ol>{nav_items}</ol></nav></body></html>"
+        )
+
+        metadata_title = html.escape(document_display_title(bundle.document) or bundle.document.id)
+        metadata_author = html.escape(_display_author_value(bundle.document.author) or "Unknown")
+        modified_at = _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        asset_root = file_path.parent / "assets"
+        asset_files = sorted(path for path in asset_root.rglob("*") if path.is_file()) if asset_root.exists() else []
+        manifest_items = [
+            ("nav", "nav.xhtml", "application/xhtml+xml", " properties='nav'"),
+            ("css", "styles/book.css", "text/css", ""),
+        ]
+        manifest_items.extend(
+            (f"chap-{index}", filename, "application/xhtml+xml", "")
+            for index, (filename, _title, _content) in enumerate(chapter_entries, start=1)
+        )
+        for index, asset_file in enumerate(asset_files, start=1):
+            relative_asset = asset_file.relative_to(asset_root).as_posix()
+            media_type = mimetypes.guess_type(asset_file.name)[0] or "application/octet-stream"
+            manifest_items.append((f"asset-{index}", f"assets/{relative_asset}", media_type, ""))
+
+        content_opf = (
+            "<?xml version='1.0' encoding='utf-8'?>"
+            "<package xmlns='http://www.idpf.org/2007/opf' unique-identifier='BookId' version='3.0' xml:lang='zh-CN'>"
+            "<metadata xmlns:dc='http://purl.org/dc/elements/1.1/'>"
+            f"<dc:identifier id='BookId'>{html.escape(bundle.document.id)}</dc:identifier>"
+            f"<dc:title>{metadata_title}</dc:title>"
+            f"<dc:creator>{metadata_author}</dc:creator>"
+            "<dc:language>zh-CN</dc:language>"
+            f"<meta property='dcterms:modified'>{modified_at}</meta>"
+            "</metadata>"
+            "<manifest>"
+            + "".join(
+                f"<item id='{item_id}' href='{html.escape(href)}' media-type='{html.escape(media_type)}'{properties} />"
+                for item_id, href, media_type, properties in manifest_items
+            )
+            + "</manifest>"
+            "<spine>"
+            + "".join(f"<itemref idref='chap-{index}' />" for index, _entry in enumerate(chapter_entries, start=1))
+            + "</spine>"
+            "</package>"
+        )
+        container_xml = (
+            "<?xml version='1.0' encoding='utf-8'?>"
+            "<container version='1.0' xmlns='urn:oasis:names:tc:opendocument:xmlns:container'>"
+            "<rootfiles><rootfile full-path='OEBPS/content.opf' media-type='application/oebps-package+xml' />"
+            "</rootfiles></container>"
+        )
+
+        with zipfile.ZipFile(file_path, mode="w") as archive:
+            archive.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            archive.writestr("META-INF/container.xml", container_xml, compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr("OEBPS/content.opf", content_opf, compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr("OEBPS/nav.xhtml", nav_xhtml, compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr("OEBPS/styles/book.css", self._build_rebuilt_epub_stylesheet(), compress_type=zipfile.ZIP_DEFLATED)
+            for filename, _title, content in chapter_entries:
+                archive.writestr(f"OEBPS/{filename}", content, compress_type=zipfile.ZIP_DEFLATED)
+            for asset_file in asset_files:
+                archive.write(asset_file, arcname=f"OEBPS/assets/{asset_file.relative_to(asset_root).as_posix()}")
+
+    def _render_rebuilt_pdf_from_html(self, html_path: Path, pdf_path: Path) -> None:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:  # pragma: no cover - exercised by runtime environment
+            raise ExportGateError("Rebuilt PDF renderer is unavailable because Playwright is not installed.") from exc
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    page = browser.new_page()
+                    page.emulate_media(media="print")
+                    page.goto(html_path.resolve().as_uri(), wait_until="load")
+                    page.pdf(path=str(pdf_path), print_background=True, format="A4")
+                finally:
+                    browser.close()
+        except ExportGateError:
+            raise
+        except Exception as exc:  # pragma: no cover - depends on local browser runtime
+            raise ExportGateError(
+                "Rebuilt PDF renderer is unavailable or failed to render the merged HTML substrate."
+            ) from exc
 
     def _export_epub_assets_for_chapter_bundle(
         self,

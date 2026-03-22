@@ -1153,6 +1153,38 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("大量证据表明", literalism)
         self.assertIn("更符合上下文的输出", literalism)
 
+    def test_context_compiler_infers_agency_autonomy_disambiguation_guardrail(self) -> None:
+        packet = ContextPacket(
+            packet_id="pkt-agency-autonomy",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-agency-autonomy",
+                    block_type="paragraph",
+                    sentence_ids=["s1", "s2", "s3"],
+                    text=(
+                        "As the popularity of the term 'agent' grows, its meaning has become diluted, often applied "
+                        "to systems lacking genuine autonomy. In practice, agency exists on a spectrum. "
+                        "True autonomous agents demonstrate meaningful decision making, context-driven reasoning, and adaptive behaviors."
+                    ),
+                )
+            ],
+            chapter_brief="This chapter defines autonomous agents and how to recognize them.",
+            style_constraints={"tone": "faithful-clear"},
+        )
+
+        compiled = ChapterContextCompiler().compile(packet, chapter_memory_snapshot=None)
+
+        literalism = str(compiled.style_constraints["literalism_guardrails"])
+        self.assertIn("Do not translate 'agency' here as '自主性'", literalism)
+        self.assertIn("智能体性", literalism)
+        self.assertIn("决策与行动能力", literalism)
+
     def test_context_compiler_infers_shift_and_vantage_literalism_guardrails(self) -> None:
         packet = ContextPacket(
             packet_id="pkt-shift-vantage",

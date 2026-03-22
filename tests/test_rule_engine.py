@@ -172,6 +172,7 @@ class RuleEngineTests(unittest.TestCase):
             evidence_json={
                 "style_rule": "contextually_accurate_outputs_literal",
                 "preferred_hint": "更符合上下文的输出",
+                "matched_target_excerpt": "上下文更准确的输出",
                 "prompt_guidance": (
                     "Prefer '更符合上下文的输出' or an equally natural Chinese expression, "
                     "not literal forms like '上下文更准确的输出'."
@@ -197,7 +198,7 @@ class RuleEngineTests(unittest.TestCase):
         plan = build_rerun_plan(issue, action)
 
         self.assertEqual(plan.concept_overrides, ())
-        self.assertEqual(len(plan.style_hints), 2)
+        self.assertEqual(len(plan.style_hints), 3)
         self.assertTrue(any("更符合上下文的输出" in hint for hint in plan.style_hints))
         self.assertTrue(any("contextually_accurate_outputs_literal" in hint for hint in plan.style_hints))
         self.assertTrue(any("上下文更准确的输出" in hint for hint in plan.style_hints))

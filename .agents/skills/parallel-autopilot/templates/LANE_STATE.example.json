@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "current_wave_id": "wave-1",
+  "lanes": [
+    {
+      "lane_id": "lane-a",
+      "objective": "Define work-graph schema",
+      "status": "ready",
+      "depends_on": [],
+      "candidate_mdus": ["mdu-3"],
+      "write_set": ["state/work-graph"],
+      "contract_tags": ["state-schema"],
+      "blocked_by": [],
+      "current_mdu": "mdu-3",
+      "checkpoint_ref": null
+    },
+    {
+      "lane_id": "lane-b",
+      "objective": "Define lane-state schema",
+      "status": "blocked",
+      "depends_on": [],
+      "candidate_mdus": ["mdu-4"],
+      "write_set": ["state/lane-state"],
+      "contract_tags": ["state-schema"],
+      "blocked_by": ["contract-version-freeze"],
+      "current_mdu": null,
+      "checkpoint_ref": null
+    }
+  ]
+}

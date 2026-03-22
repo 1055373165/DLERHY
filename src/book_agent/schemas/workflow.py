@@ -22,6 +22,14 @@ class StoredChapterQualitySummaryResponse(BaseSchema):
     format_pollution_count: int
 
 
+class NaturalnessSummaryResponse(BaseSchema):
+    advisory_only: bool
+    style_drift_issue_count: int
+    affected_packet_count: int
+    dominant_style_rules: list[str] = Field(default_factory=list)
+    preferred_hints: list[str] = Field(default_factory=list)
+
+
 class ChapterSummaryResponse(BaseSchema):
     chapter_id: str
     ordinal: int
@@ -125,6 +133,7 @@ class ChapterReviewResultResponse(BaseSchema):
     low_confidence_count: int
     format_pollution_count: int
     resolved_issue_count: int
+    naturalness_summary: NaturalnessSummaryResponse | None = None
 
 
 class ReviewDocumentResponse(BaseSchema):
@@ -135,7 +144,14 @@ class ReviewDocumentResponse(BaseSchema):
 
 
 class ExportDocumentRequest(BaseSchema):
-    export_type: Literal["review_package", "bilingual_html", "merged_html", "merged_markdown"]
+    export_type: Literal[
+        "review_package",
+        "bilingual_html",
+        "merged_html",
+        "merged_markdown",
+        "rebuilt_epub",
+        "rebuilt_pdf",
+    ]
     auto_execute_followup_on_gate: bool = False
     max_auto_followup_attempts: int = Field(default=3, ge=1)
 

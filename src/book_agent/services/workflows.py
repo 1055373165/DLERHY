@@ -48,7 +48,7 @@ from book_agent.services.pdf_structure_refresh import PdfStructureRefreshArtifac
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
-from book_agent.services.review import ReviewArtifacts, ReviewService
+from book_agent.services.review import NaturalnessSummary as ReviewNaturalnessSummary, ReviewArtifacts, ReviewService
 from book_agent.services.translation import TranslationExecutionArtifacts, TranslationService
 from book_agent.workers.translator import TranslationWorker
 
@@ -97,6 +97,15 @@ class StoredChapterQualitySummary:
     blocking_issue_count: int
     low_confidence_count: int
     format_pollution_count: int
+
+
+@dataclass(slots=True)
+class NaturalnessSummarySnapshot:
+    advisory_only: bool
+    style_drift_issue_count: int
+    affected_packet_count: int
+    dominant_style_rules: list[str]
+    preferred_hints: list[str]
 
 
 @dataclass(slots=True)
@@ -222,6 +231,7 @@ class ChapterReviewResult:
     low_confidence_count: int
     format_pollution_count: int
     resolved_issue_count: int
+    naturalness_summary: NaturalnessSummarySnapshot | None = None
 
 
 @dataclass(slots=True)
@@ -1243,6 +1253,7 @@ class DocumentWorkflowService:
                     low_confidence_count=artifacts.summary.low_confidence_count,
                     format_pollution_count=artifacts.summary.format_pollution_count,
                     resolved_issue_count=len(artifacts.resolved_issue_ids),
+                    naturalness_summary=self._to_naturalness_summary(artifacts.summary.naturalness_summary),
                 )
             )
 
@@ -2032,6 +2043,38 @@ class DocumentWorkflowService:
             )
         if export_type == ExportType.MERGED_MARKDOWN:
             artifacts = self.export_service.export_document_merged_markdown(document_id)
+            document = self.session.get(type(bundle.document), document_id) or bundle.document
+            return DocumentExportResult(
+                document_id=document_id,
+                export_type=export_type.value,
+                document_status=document.status.value,
+                file_path=str(artifacts.file_path),
+                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
+                chapter_results=results,
+                auto_followup_requested=auto_execute_followup_on_gate,
+                auto_followup_applied=bool(auto_followup_executions),
+                auto_followup_attempt_count=len(auto_followup_executions),
+                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
+                auto_followup_executions=auto_followup_executions,
+            )
+        if export_type == ExportType.REBUILT_EPUB:
+            artifacts = self.export_service.export_document_rebuilt_epub(document_id)
+            document = self.session.get(type(bundle.document), document_id) or bundle.document
+            return DocumentExportResult(
+                document_id=document_id,
+                export_type=export_type.value,
+                document_status=document.status.value,
+                file_path=str(artifacts.file_path),
+                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
+                chapter_results=results,
+                auto_followup_requested=auto_execute_followup_on_gate,
+                auto_followup_applied=bool(auto_followup_executions),
+                auto_followup_attempt_count=len(auto_followup_executions),
+                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
+                auto_followup_executions=auto_followup_executions,
+            )
+        if export_type == ExportType.REBUILT_PDF:
+            artifacts = self.export_service.export_document_rebuilt_pdf(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
             return DocumentExportResult(
                 document_id=document_id,
@@ -3951,6 +3994,20 @@ class DocumentWorkflowService:
             blocking_issue_count=summary.blocking_issue_count,
             low_confidence_count=summary.low_confidence_count,
             format_pollution_count=summary.format_pollution_count,
+        )
+
+    def _to_naturalness_summary(
+        self,
+        summary: ReviewNaturalnessSummary | None,
+    ) -> NaturalnessSummarySnapshot | None:
+        if summary is None:
+            return None
+        return NaturalnessSummarySnapshot(
+            advisory_only=summary.advisory_only,
+            style_drift_issue_count=summary.style_drift_issue_count,
+            affected_packet_count=summary.affected_packet_count,
+            dominant_style_rules=list(summary.dominant_style_rules),
+            preferred_hints=list(summary.preferred_hints),
         )
 
     def _record_export_auto_followup_execution(

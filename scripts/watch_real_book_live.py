@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.real_book_live_reporting_common import build_telemetry_compatibility, summarize_report_failure_taxonomy
+
 
 _OCR_PROGRESS_PATTERN = re.compile(
     r"(?P<label>[A-Za-z][A-Za-z ]+):\s+\d+%.*?\|\s*(?P<current>\d+)/(?P<total>\d+)",
@@ -425,6 +427,13 @@ def _build_monitor_snapshot(report: dict[str, Any], *, report_path: Path) -> dic
         "work_item_status_counts": _status_counts(database_path, table_name="work_items"),
         "translation_packet_status_counts": _status_counts(database_path, table_name="translation_packets"),
     }
+    snapshot["failure_taxonomy"] = summarize_report_failure_taxonomy(report)
+    snapshot["recommended_recovery_action"] = (
+        str(snapshot["failure_taxonomy"].get("recovery_action"))
+        if isinstance(snapshot.get("failure_taxonomy"), dict)
+        else None
+    )
+    snapshot["telemetry_compatibility"] = build_telemetry_compatibility(report)
     started_at = _report_started_at(report)
     if started_at is not None:
         snapshot["elapsed_seconds_since_start"] = round((_utcnow() - started_at).total_seconds(), 3)
