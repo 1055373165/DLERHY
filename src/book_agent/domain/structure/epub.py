@@ -775,4 +775,17 @@ class EPUBParser:
                     rows.append(" | ".join(cleaned_cells))
             if rows:
                 return "\n".join(rows), metadata
-        return _extract_rich_text(element), metadata
+        text = _extract_rich_text(element)
+        # Count inline format markers
+        inline_code_count = text.count('`') // 2  # backtick pairs
+        bold_count = text.count('**') // 2  # double-star pairs
+        italic_singles = text.count('*') - text.count('**') * 2
+        italic_count = italic_singles // 2 if italic_singles > 0 else 0
+        if inline_code_count or bold_count or italic_count:
+            metadata["has_inline_formatting"] = True
+            metadata["inline_format_counts"] = {
+                "code": inline_code_count,
+                "bold": bold_count,
+                "italic": italic_count,
+            }
+        return text, metadata

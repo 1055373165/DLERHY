@@ -426,6 +426,7 @@ def _material_contract_lines(
     common = [
         opening,
         "- Preserve logic, causality, constraints, and technical detail; do not add, omit, or soften meaning.",
+        "- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation.",
         "- Keep alignment coverage complete and use only the provided sentence aliases in source_sentence_ids and low_confidence_flags.sentence_id.",
         "- Return JSON that matches the provided response schema.",
     ]
@@ -565,6 +566,7 @@ def build_translation_prompt_request(
         contract_lines = [
             "- Translate the current paragraph into natural, publication-ready Chinese.",
             "- Preserve meaning, keep wording consistent within the packet, and maintain complete alignment coverage.",
+            "- Keep inline markdown formatting intact: `code`, **bold**, *italic* markers must wrap the corresponding translated content.",
             "- Use only the provided sentence aliases in source_sentence_ids and low_confidence_flags.sentence_id.",
             "- Return JSON that matches the provided response schema.",
         ]
@@ -578,6 +580,7 @@ def build_translation_prompt_request(
             "- Reuse the canonical Chinese rendering of any locked or previously established concept.",
             "- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.",
             "- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.",
+            "- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation.",
             "- Use the sentence ledger only for alignment, coverage, and low-confidence flags.",
             "- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.",
             "- Return JSON that matches the provided response schema.",

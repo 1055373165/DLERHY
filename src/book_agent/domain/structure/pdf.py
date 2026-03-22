@@ -3842,6 +3842,12 @@ class PdfStructureRecoveryService:
                         page_context=page_context,
                     )
                     metadata, flags = self._metadata_for_block(role, raw_block.text, page_context)
+                    # Font metadata enrichment
+                    metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
+                    if raw_block.font_names and _has_monospace_font(raw_block.font_names):
+                        metadata["has_monospace_font"] = True
+                        if role == "code_like":
+                            metadata["detected_by"] = "monospace_font"
                     recovered_block = _RecoveredBlock(
                         role=role,
                         block_type=self._block_type_for_role(role),
@@ -4449,6 +4455,12 @@ class PdfStructureRecoveryService:
             flags.append(f"page_family_{page_context.page_family}")
         if page_context.family_source not in {"body", "heading", "toc"}:
             flags.append(f"page_family_source_{page_context.family_source}")
+        # Format metadata enrichment
+        if role == "code_like":
+            metadata["detected_by"] = "text_heuristic"
+        if role == "list_item":
+            metadata["detected_by"] = "bullet_pattern"
+
         if role != "toc_entry":
             return metadata, flags
         toc_entry = page_context.toc_entries_by_text.get(text.casefold())
