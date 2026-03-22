@@ -111,6 +111,41 @@ def _normalize_preformatted_text(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
 
 
+def _extract_rich_text(element: ET.Element) -> str:
+    """Walk *element* tree preserving inline ``<code>`` as backtick-wrapped text."""
+    parts: list[str] = []
+
+    def _walk(el: ET.Element, inside_code: bool = False) -> None:
+        local = _local_name(el.tag)
+        entering_code = not inside_code and local == "code"
+
+        if entering_code:
+            # Collect all nested text inside <code> as plain text, wrap in backticks.
+            inner = "".join(el.itertext())
+            if inner.strip():
+                parts.append(f"`{inner}`")
+            # Skip children — already consumed via itertext().
+            # But still handle tail text of this element.
+            if el.tail:
+                parts.append(el.tail)
+            return
+
+        # Not a <code> element — emit own text, then recurse into children.
+        if el.text:
+            parts.append(el.text)
+        for child in el:
+            _walk(child, inside_code)
+        if el.tail:
+            parts.append(el.tail)
+
+    # Start with the root element but skip its tail (belongs to parent).
+    if element.text:
+        parts.append(element.text)
+    for child in element:
+        _walk(child)
+    return _normalize_text("".join(parts))
+
+
 def _looks_like_metadata_filename(value: str) -> bool:
     candidate = _normalize_text(value).casefold()
     if not candidate:
@@ -733,4 +768,4 @@ class EPUBParser:
                     rows.append(" | ".join(cleaned_cells))
             if rows:
                 return "\n".join(rows), metadata
-        return _normalize_text("".join(element.itertext())), metadata
+        return _extract_rich_text(element), metadata

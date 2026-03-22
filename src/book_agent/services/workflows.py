@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from sqlalchemy import case, distinct, func, or_, select
+from sqlalchemy import and_, case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from book_agent.core.ids import stable_id
@@ -59,6 +59,12 @@ def _utcnow() -> datetime:
 
 MAX_SAFE_UNLOCKED_CONCEPT_PACKET_FOLLOWUP = 3
 MAX_SAFE_STALE_CHAPTER_BRIEF_PACKET_FOLLOWUP = 3
+AUTO_FOLLOWUP_REPEAT_FAILURE_LIMIT = 2
+AUTO_FOLLOWUP_EXECUTION_AUDIT_ACTIONS = {
+    "review.auto_followup.executed",
+    "document.blocker_repair.executed",
+    "export.auto_followup.executed",
+}
 
 
 @dataclass(slots=True)
@@ -1309,10 +1315,29 @@ class DocumentWorkflowService:
             if not candidate_actions:
                 stop_reason = "no_new_actions"
                 break
+            issue_by_id = {issue.id: issue for issue in blocking_issues}
+            candidate_actions, blocked_actions = self._split_auto_followup_actions_by_manual_hold(
+                issue_by_id=issue_by_id,
+                actions=candidate_actions,
+            )
+            if not candidate_actions:
+                stop_reason = "manual_hold_required"
+                self._record_document_blocker_repair_stop(
+                    document_id=document_id,
+                    executions=executions,
+                    round_limit=round_limit,
+                    stop_reason=stop_reason,
+                    issue_ids=[action.issue_id for action in blocked_actions],
+                    followup_action_ids=[
+                        str(getattr(action, "id", None) or getattr(action, "action_id", None) or "")
+                        for action in blocked_actions
+                    ],
+                )
+                break
 
             round_count += 1
             for action in candidate_actions[:action_limit]:
-                issue = next((item for item in blocking_issues if item.id == action.issue_id), None)
+                issue = issue_by_id.get(action.issue_id)
                 attempted_action_ids.add(action.id)
                 result = self.execute_action(action.id, run_followup=True)
                 rerun_execution = result.rerun_execution
@@ -1335,6 +1360,14 @@ class DocumentWorkflowService:
                             rerun_execution.issue_resolved if rerun_execution is not None else None
                         ),
                     )
+                )
+                self._record_document_blocker_repair_execution(
+                    document_id=document_id,
+                    chapter_id=(issue.chapter_id if issue is not None else None),
+                    execution=executions[-1],
+                    attempt_index=len(executions),
+                    round_index=round_count,
+                    round_limit=round_limit,
                 )
 
         blocking_issue_count_after = len(self._list_document_active_blocking_issues(document_id))
@@ -1483,6 +1516,65 @@ class DocumentWorkflowService:
         ).all()
         return {str(chapter_id): int(ordinal or 0) for chapter_id, ordinal in rows}
 
+    def _split_auto_followup_actions_by_manual_hold(
+        self,
+        *,
+        issue_by_id: dict[str, ReviewIssue],
+        actions: list[Any],
+    ) -> tuple[list[Any], list[Any]]:
+        eligible: list[Any] = []
+        blocked: list[Any] = []
+        for action in actions:
+            issue_id = str(getattr(action, "issue_id", "") or "")
+            action_id = str(
+                getattr(action, "id", None)
+                or getattr(action, "action_id", None)
+                or ""
+            )
+            issue = issue_by_id.get(issue_id)
+            if issue is None or not action_id:
+                eligible.append(action)
+                continue
+            if self._auto_followup_failed_execution_count(issue=issue, action_id=action_id) >= AUTO_FOLLOWUP_REPEAT_FAILURE_LIMIT:
+                blocked.append(action)
+                continue
+            eligible.append(action)
+        return eligible, blocked
+
+    def _auto_followup_failed_execution_count(
+        self,
+        *,
+        issue: ReviewIssue,
+        action_id: str,
+    ) -> int:
+        scope_filters = [
+            and_(
+                AuditEvent.object_type == "document",
+                AuditEvent.object_id == issue.document_id,
+            ),
+        ]
+        if issue.chapter_id:
+            scope_filters.append(
+                and_(
+                    AuditEvent.object_type == "chapter",
+                    AuditEvent.object_id == issue.chapter_id,
+                )
+            )
+        events = self.session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.action.in_(sorted(AUTO_FOLLOWUP_EXECUTION_AUDIT_ACTIONS)),
+                or_(*scope_filters),
+            )
+        ).all()
+        failure_count = 0
+        for event in events:
+            payload = event.payload_json or {}
+            if str(payload.get("action_id") or "") != action_id:
+                continue
+            if payload.get("issue_resolved") is False:
+                failure_count += 1
+        return failure_count
+
     def _apply_review_auto_followups(
         self,
         *,
@@ -1501,6 +1593,23 @@ class DocumentWorkflowService:
                 attempted_action_ids=attempted_action_ids,
             )
             if not candidate_actions:
+                break
+            candidate_actions, blocked_actions = self._split_auto_followup_actions_by_manual_hold(
+                issue_by_id=issue_by_id,
+                actions=candidate_actions,
+            )
+            if not candidate_actions:
+                self._record_review_auto_followup_stop(
+                    chapter_id=chapter_id,
+                    executions=executions,
+                    attempt_limit=attempt_limit,
+                    stop_reason="manual_hold_required",
+                    issue_ids=[action.issue_id for action in blocked_actions],
+                    followup_action_ids=[
+                        str(getattr(action, "id", None) or getattr(action, "action_id", None) or "")
+                        for action in blocked_actions
+                    ],
+                )
                 break
             followup_action = candidate_actions[0]
             if len(executions) >= attempt_limit:
@@ -1550,6 +1659,12 @@ class DocumentWorkflowService:
                         result.rerun_execution.issue_resolved if result.rerun_execution else None
                     ),
                 )
+            )
+            self._record_review_auto_followup_execution(
+                chapter_id=chapter_id,
+                execution=executions[-1],
+                attempt_index=len(executions),
+                attempt_limit=attempt_limit,
             )
             if result.rerun_execution is not None and result.rerun_execution.review_artifacts is not None:
                 current_artifacts = result.rerun_execution.review_artifacts
@@ -1794,6 +1909,34 @@ class DocumentWorkflowService:
                         requested=True,
                         attempt_limit=max_auto_followup_attempts,
                         stop_reason="no_new_actions",
+                    ) from exc
+                issue_by_id = {
+                    issue.id: issue
+                    for issue in self.session.scalars(
+                        select(ReviewIssue).where(ReviewIssue.id.in_(exc.issue_ids))
+                    ).all()
+                }
+                candidate_actions, blocked_actions = self._split_auto_followup_actions_by_manual_hold(
+                    issue_by_id=issue_by_id,
+                    actions=candidate_actions,
+                )
+                if not candidate_actions:
+                    self._record_export_auto_followup_stop(
+                        chapter_id=exc.chapter_id,
+                        document_id=document_id,
+                        export_type=export_type,
+                        executions=auto_followup_executions,
+                        attempt_limit=max_auto_followup_attempts,
+                        stop_reason="manual_hold_required",
+                        issue_ids=exc.issue_ids,
+                        followup_action_ids=[action.action_id for action in blocked_actions],
+                    )
+                    raise self._with_auto_followup_telemetry(
+                        exc,
+                        auto_followup_executions,
+                        requested=True,
+                        attempt_limit=max_auto_followup_attempts,
+                        stop_reason="manual_hold_required",
                     ) from exc
                 remaining_attempt_budget = max(max_auto_followup_attempts - len(auto_followup_executions), 0)
                 if remaining_attempt_budget <= 0:
@@ -3632,6 +3775,164 @@ class DocumentWorkflowService:
             auto_followup_stop_reason=stop_reason,
             auto_followup_executions=[execution.to_export_gate_payload() for execution in executions],
         )
+
+    def _record_review_auto_followup_execution(
+        self,
+        *,
+        chapter_id: str,
+        execution: ReviewAutoFollowupExecution,
+        attempt_index: int,
+        attempt_limit: int,
+    ) -> None:
+        audit = AuditEvent(
+            id=stable_id(
+                "audit",
+                "chapter",
+                chapter_id,
+                "review.auto_followup.executed",
+                execution.action_id,
+                str(attempt_index),
+            ),
+            object_type="chapter",
+            object_id=chapter_id,
+            action="review.auto_followup.executed",
+            actor_type=ActorType.SYSTEM,
+            actor_id="document-review-workflow",
+            payload_json={
+                "attempt_index": attempt_index,
+                "attempt_limit": attempt_limit,
+                "issue_id": execution.issue_id,
+                "action_id": execution.action_id,
+                "issue_type": execution.issue_type,
+                "action_type": execution.action_type,
+                "rerun_scope_type": execution.rerun_scope_type,
+                "rerun_scope_ids": execution.rerun_scope_ids,
+                "followup_executed": execution.followup_executed,
+                "rerun_packet_ids": execution.rerun_packet_ids,
+                "rerun_translation_run_ids": execution.rerun_translation_run_ids,
+                "issue_resolved": execution.issue_resolved,
+            },
+            created_at=_utcnow(),
+        )
+        self.ops_repository.save_audits([audit])
+        self.session.flush()
+
+    def _record_review_auto_followup_stop(
+        self,
+        *,
+        chapter_id: str,
+        executions: list[ReviewAutoFollowupExecution],
+        attempt_limit: int,
+        stop_reason: str,
+        issue_ids: list[str],
+        followup_action_ids: list[str],
+    ) -> None:
+        audit = AuditEvent(
+            id=stable_id(
+                "audit",
+                "chapter",
+                chapter_id,
+                "review.auto_followup.stopped",
+                stop_reason,
+                str(len(executions)),
+            ),
+            object_type="chapter",
+            object_id=chapter_id,
+            action="review.auto_followup.stopped",
+            actor_type=ActorType.SYSTEM,
+            actor_id="document-review-workflow",
+            payload_json={
+                "stop_reason": stop_reason,
+                "attempt_count": len(executions),
+                "attempt_limit": attempt_limit,
+                "issue_ids": issue_ids,
+                "followup_action_ids": followup_action_ids,
+            },
+            created_at=_utcnow(),
+        )
+        self.ops_repository.save_audits([audit])
+        self.session.flush()
+
+    def _record_document_blocker_repair_execution(
+        self,
+        *,
+        document_id: str,
+        chapter_id: str | None,
+        execution: DocumentBlockerRepairExecution,
+        attempt_index: int,
+        round_index: int,
+        round_limit: int,
+    ) -> None:
+        audit = AuditEvent(
+            id=stable_id(
+                "audit",
+                "document",
+                document_id,
+                "document.blocker_repair.executed",
+                execution.action_id,
+                str(attempt_index),
+            ),
+            object_type="document",
+            object_id=document_id,
+            action="document.blocker_repair.executed",
+            actor_type=ActorType.SYSTEM,
+            actor_id="document-review-workflow",
+            payload_json={
+                "chapter_id": chapter_id,
+                "attempt_index": attempt_index,
+                "round_index": round_index,
+                "round_limit": round_limit,
+                "issue_id": execution.issue_id,
+                "action_id": execution.action_id,
+                "issue_type": execution.issue_type,
+                "action_type": execution.action_type,
+                "rerun_scope_type": execution.rerun_scope_type,
+                "rerun_scope_ids": execution.rerun_scope_ids,
+                "followup_executed": execution.followup_executed,
+                "rerun_packet_ids": execution.rerun_packet_ids,
+                "rerun_translation_run_ids": execution.rerun_translation_run_ids,
+                "issue_resolved": execution.issue_resolved,
+            },
+            created_at=_utcnow(),
+        )
+        self.ops_repository.save_audits([audit])
+        self.session.flush()
+
+    def _record_document_blocker_repair_stop(
+        self,
+        *,
+        document_id: str,
+        executions: list[DocumentBlockerRepairExecution],
+        round_limit: int,
+        stop_reason: str,
+        issue_ids: list[str],
+        followup_action_ids: list[str],
+    ) -> None:
+        audit = AuditEvent(
+            id=stable_id(
+                "audit",
+                "document",
+                document_id,
+                "document.blocker_repair.stopped",
+                stop_reason,
+                str(len(executions)),
+            ),
+            object_type="document",
+            object_id=document_id,
+            action="document.blocker_repair.stopped",
+            actor_type=ActorType.SYSTEM,
+            actor_id="document-review-workflow",
+            payload_json={
+                "stop_reason": stop_reason,
+                "attempt_count": len(executions),
+                "round_limit": round_limit,
+                "issue_ids": issue_ids,
+                "followup_action_ids": followup_action_ids,
+            },
+            created_at=_utcnow(),
+        )
+        self.ops_repository.save_audits([audit])
+        self.session.flush()
 
     def _to_stored_quality_summary(
         self,

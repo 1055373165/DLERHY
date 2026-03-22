@@ -10,8 +10,8 @@
 ## 全局指标
 - 总阶段数：10
 - 总 MDU 数：50
-- 已完成 MDU：45
-- 整体完成度：90%
+- 已完成 MDU：48
+- 整体完成度：96%
 - 最大拆解深度：3 层
 
 ## 阶段总览
@@ -25,8 +25,8 @@
 | 阶段 6：Multi-Agent 需求锁定与执行接管 | 已完成 | 3 | 3 | 100% |
 | 阶段 7：Memory Service 与 Compiled Context | 已完成 | 3 | 3 | 100% |
 | 阶段 8：Chapter-Lane Packet Control | 已完成 | 3 | 3 | 100% |
-| 阶段 9：Deterministic Review Gate Cleanup | 进行中 | 3 | 1 | 33% |
-| 阶段 10：Layout Validation 与 Phase 1 验收 | 未开始 | 3 | 0 | 0% |
+| 阶段 9：Deterministic Review Gate Cleanup | 已完成 | 3 | 3 | 100% |
+| 阶段 10：Layout Validation 与 Phase 1 验收 | 进行中 | 3 | 1 | 33% |
 
 ## 近期运行修复
 - 2026-03-21：翻译器已将“consistency and care over time”类抽象服务化跑偏下沉为新的 `source-aware literalism` 规则，并在 user prompt contract 中明确“Source-Aware Guardrails 优先于泛化润色”。真实 `deepseek-chat` 复测表明，这层约束能把样本尾句从“长期服务中提供连贯性和关怀”拉回到“长期稳定、周到地照应你”的更具体、更像中文技术书的表达。
@@ -240,33 +240,33 @@
 
 ### 阶段 9：Deterministic Review Gate Cleanup
 #### 任务 9.1：收紧 issue family、rerun stop rule 与 manual hold 升级
-- 状态：进行中
+- 状态：已完成
 - 子任务：
   - [x] 统一 review issue family 与 rerun action 映射
-  - [ ] 加入 repeated-failure stop rule
-  - [ ] 明确 manual hold 升级条件
+  - [x] 加入 repeated-failure stop rule
+  - [x] 明确 manual hold 升级条件
 - 最小开发单元：
   - [x] MDU-9.1.1：在 `review.py` / `rule_engine.py` 中收敛 deterministic issue family 和 action 映射 [依赖：MDU-8.1.3]
-  - [ ] MDU-9.1.2：在 rerun / run control 路径加入 repeated-failure stop rule 与 manual hold 升级逻辑 [依赖：MDU-9.1.1]
-  - [ ] MDU-9.1.3：补 issue routing 与 stop rule 回归，证明 rerun 不会同参无限循环 [依赖：MDU-9.1.2]
+  - [x] MDU-9.1.2：在 rerun / run control 路径加入 repeated-failure stop rule 与 manual hold 升级逻辑 [依赖：MDU-9.1.1]
+  - [x] MDU-9.1.3：补 issue routing 与 stop rule 回归，证明 rerun 不会同参无限循环 [依赖：MDU-9.1.2]
 
 ### 阶段 10：Layout Validation 与 Phase 1 验收
 #### 任务 10.1：在 export 前增加 layout gate，并完成 Phase 1 回归收口
-- 状态：未开始
+- 状态：进行中
 - 子任务：
-  - [ ] 新增 `layout_validate.py`
+  - [x] 新增 `layout_validate.py`
   - [ ] 将 export 变为 review + layout 双 gate
   - [ ] 跑完最小回归语料并更新文档快照
 - 最小开发单元：
-  - [ ] MDU-10.1.1：新增 `src/book_agent/services/layout_validate.py`，实现 heading / figure / footnote / table 的 preflight 结构校验 [依赖：MDU-9.1.3]
+  - [x] MDU-10.1.1：新增 `src/book_agent/services/layout_validate.py`，实现 heading / figure / footnote / table 的 preflight 结构校验 [依赖：MDU-9.1.3]
   - [ ] MDU-10.1.2：将 `export.py` 接入 layout validation gate，并把失败映射为显式阻断 issue [依赖：MDU-10.1.1]
   - [ ] MDU-10.1.3：跑通 EPUB + text PDF + mixed PDF 最小回归语料，更新 `docs/multi-agent-final-implementation-plan.md`、`DECISIONS.md` 与 `PROGRESS.md`，完成 Phase 1 收口 [依赖：MDU-10.1.2]
 
 ## 当前位置
-- 当前阶段：阶段 9：Deterministic Review Gate Cleanup
-- 当前任务：任务 9.1：收紧 issue family、rerun stop rule 与 manual hold 升级
-- 当前最小开发单元：MDU-9.1.2：在 rerun / run control 路径加入 repeated-failure stop rule 与 manual hold 升级逻辑
-- 整体完成度：90%
+- 当前阶段：阶段 10：Layout Validation 与 Phase 1 验收
+- 当前任务：任务 10.1：在 export 前增加 layout gate，并完成 Phase 1 回归收口
+- 当前最小开发单元：MDU-10.1.2：将 `export.py` 接入 layout validation gate，并把失败映射为显式阻断 issue
+- 整体完成度：96%
 
 ## 变更记录
 | 时间 | 类型 | 描述 | 影响范围 |
@@ -290,6 +290,9 @@
 | 2026-03-22 | 实现 | translate stage 已改为 frontier seeding：初次只 seed 每章 front packet，front packet 完成后才为该章补 seed 下一 packet；新增“只为未阻塞章节推进 frontier”回归，当前执行已推进到 `MDU-8.1.3` | run executor / chapter-lane control |
 | 2026-03-22 | 验证 | 已补 `retry/reclaim` 路径的 chapter serialization 回归：front packet 进入 `retryable_failed` 后，同章 follow-up packet 不会被 seed 或 claim，系统只会重试同一 front packet；Phase 8 因此收口完成，当前执行已切到 `MDU-9.1.1` | run executor / chapter-lane serialization |
 | 2026-03-22 | 实现 | 已将 `ALIGNMENT_FAILURE` 的 `REALIGN_ONLY / RERUN_PACKET` 决策收敛进 `rule_engine.resolve_action(...)`，`review.py` 不再保留分叉路由；同时校正“无 source sentence mapping 的 orphan target”集成预期为 `RERUN_PACKET` | review gate / action routing / alignment recovery |
+| 2026-03-22 | 实现 | 已在 `DocumentWorkflowService` 中加入基于 audit history 的 repeated-failure stop rule：review auto followup、document blocker repair、export auto followup 会在同一 action 连续失败达到阈值后停止自动 rerun，并以 `manual_hold_required` 留在人工处理队列 | workflow / rerun governance / manual hold escalation |
+| 2026-03-22 | 验证 | 已补 workflow 级 stop-rule 回归：review auto followup、document blocker repair、export auto followup 三条链路都已验证 repeated-failure 后会进入 `manual_hold_required`，同时复跑正常 review/export followup 成功路径，确认未误伤可恢复链路；Phase 9 因此收口完成并切到 `MDU-10.1.1` | workflow / review gate / export gate / autopilot progress |
+| 2026-03-22 | 实现 | 已新增 `layout_validate.py`，将 layout gate 的首版规则收敛为 heading / figure / footnote / table 的 deterministic preflight 校验，并补独立单测覆盖合法/非法结构样本；当前执行已推进到 `MDU-10.1.2` | export preflight / layout validation / autopilot progress |
 | 2026-03-20 | 验证 | 首页入口回归与 `bootstrap-upload + translate_full` API 主路径回归已通过，确认产品化界面未破坏现有后端工作流 | 前端入口 / API 工作流 |
 | 2026-03-21 | 修复 | 修复 Web 上传后立刻读取 document 的偶发 404：`bootstrap` / `bootstrap-upload` 现会在响应前显式提交事务，前端对新 document 同步增加短重试，并补 `test_bootstrap_upload_document_is_immediately_readable` 回归 | Web 产品入口 / API 一致性 |
 | 2026-03-21 | 修复 | history API 已补最新 run 阶段与进度字段，历史卡片改为“已入库/翻译中/复核中/可下载”等用户态文案，并在翻译阶段显示实时 packet 进度 | Web 产品入口 / 历史查询体验 |

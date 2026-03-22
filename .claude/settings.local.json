@@ -15,7 +15,10 @@
       "WebSearch",
       "Bash(ls:*)",
       "WebFetch(domain:github.com)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(/Users/smy/project/book-agent/.venv/bin/python -m pytest tests/test_epub_parser.py -x -q)",
+      "Bash(/Users/smy/project/book-agent/.venv/bin/python -c \"import book_agent\")",
+      "Bash(uv run:*)"
     ]
   }
 }

@@ -4,6 +4,7 @@ import html
 import json
 import shutil
 import tempfile
+from types import SimpleNamespace
 import unittest
 import zipfile
 from datetime import datetime, timezone
@@ -22,7 +23,7 @@ from book_agent.core.ids import stable_id
 from book_agent.core.config import Settings
 from book_agent.domain.enums import ActionActorType, ActionStatus, ActionType, ActorType, ArtifactStatus, BlockType, BookType, ChapterStatus, Detector, DocumentStatus, ExportType, IssueStatus, JobScopeType, LockLevel, MemoryScopeType, MemoryStatus, ProtectedPolicy, RelationType, RootCauseLayer, RunStatus, SegmentType, Severity, SnapshotType, SentenceStatus, SourceType, TargetSegmentStatus, TermStatus, TermType
 from book_agent.domain.enums import PacketStatus, PacketType
-from book_agent.domain.models import ArtifactInvalidation, Block, BookProfile, Chapter, ChapterQualitySummary, Document, Export, MemorySnapshot, Sentence, TermEntry
+from book_agent.domain.models import ArtifactInvalidation, AuditEvent, Block, BookProfile, Chapter, ChapterQualitySummary, Document, Export, MemorySnapshot, Sentence, TermEntry
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -45,7 +46,7 @@ from book_agent.services.chapter_concept_autolock import (
     build_default_concept_resolver,
 )
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.services.export import ExportGateError, ExportService, MergedRenderBlock
+from book_agent.services.export import ExportFollowupAction, ExportGateError, ExportService, MergedRenderBlock
 from book_agent.services.pdf_prose_artifact_repair import PdfProseArtifactRepairService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
@@ -10161,6 +10162,330 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertEqual(candidate_mock.call_count, 2)
             self.assertEqual(execute_mock.call_count, 1)
             self.assertEqual(len(executions), 1)
+
+    def test_review_auto_followups_stop_on_manual_hold_after_repeated_failed_attempts(self) -> None:
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session)
+            now = datetime.now(timezone.utc)
+            document_id = "11111111-1111-4111-8111-111111111111"
+            chapter_id = "22222222-2222-4222-8222-222222222222"
+            issue = ReviewIssue(
+                id="issue-style-manual-hold",
+                document_id=document_id,
+                chapter_id=chapter_id,
+                block_id=None,
+                sentence_id="33333333-3333-4333-8333-333333333333",
+                packet_id="44444444-4444-4444-8444-444444444444",
+                issue_type="STYLE_DRIFT",
+                root_cause_layer=RootCauseLayer.PACKET,
+                severity=Severity.MEDIUM,
+                blocking=False,
+                detector=Detector.RULE,
+                confidence=1.0,
+                evidence_json={"preferred_hint": "上下文工程"},
+                status=IssueStatus.OPEN,
+                created_at=now,
+                updated_at=now,
+            )
+            action = IssueAction(
+                id="action-style-manual-hold",
+                issue_id=issue.id,
+                action_type=ActionType.RERUN_PACKET,
+                scope_type=JobScopeType.PACKET,
+                scope_id=issue.packet_id,
+                status=ActionStatus.PLANNED,
+                reason_json={},
+                created_by=ActionActorType.SYSTEM,
+                created_at=now,
+                updated_at=now,
+            )
+            artifacts = ReviewArtifacts(
+                issues=[issue],
+                actions=[action],
+                rerun_plans=[],
+                summary=ReviewChapterQualitySummary(
+                    coverage_ok=True,
+                    alignment_ok=True,
+                    term_ok=True,
+                    format_ok=True,
+                    blocking_issue_count=0,
+                    low_confidence_count=0,
+                    format_pollution_count=0,
+                ),
+                resolved_issue_ids=[],
+            )
+            session.add_all(
+                [
+                    AuditEvent(
+                        id=stable_id("audit", "chapter", chapter_id, "review.auto_followup.executed", action.id, "1"),
+                        object_type="chapter",
+                        object_id=chapter_id,
+                        action="review.auto_followup.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-review-workflow",
+                        payload_json={"action_id": action.id, "issue_id": issue.id, "issue_resolved": False},
+                        created_at=now,
+                    ),
+                    AuditEvent(
+                        id=stable_id("audit", "chapter", chapter_id, "review.auto_followup.executed", action.id, "2"),
+                        object_type="chapter",
+                        object_id=chapter_id,
+                        action="review.auto_followup.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-review-workflow",
+                        payload_json={"action_id": action.id, "issue_id": issue.id, "issue_resolved": False},
+                        created_at=now,
+                    ),
+                ]
+            )
+            session.commit()
+
+            with patch.object(
+                workflow,
+                "_review_auto_followup_candidate_actions",
+                return_value=[action],
+            ) as candidate_mock, patch.object(workflow, "execute_action") as execute_mock:
+                result = workflow._apply_review_auto_followups(
+                    chapter_id=chapter_id,
+                    artifacts=artifacts,
+                    attempted_action_ids=set(),
+                    executions=[],
+                    attempt_limit=2,
+                )
+
+            self.assertIs(result, artifacts)
+            self.assertEqual(candidate_mock.call_count, 1)
+            execute_mock.assert_not_called()
+            stop_events = session.scalars(
+                select(AuditEvent).where(AuditEvent.action == "review.auto_followup.stopped")
+            ).all()
+            self.assertEqual(len(stop_events), 1)
+            self.assertEqual(stop_events[0].payload_json["stop_reason"], "manual_hold_required")
+            self.assertEqual(stop_events[0].payload_json["followup_action_ids"], [action.id])
+
+    def test_document_blocker_repair_stops_on_manual_hold_after_repeated_failed_attempts(self) -> None:
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session)
+            now = datetime.now(timezone.utc)
+            document_id = "55555555-5555-4555-8555-555555555555"
+            chapter_id = "66666666-6666-4666-8666-666666666666"
+            issue = ReviewIssue(
+                id="issue-blocker-manual-hold",
+                document_id=document_id,
+                chapter_id=chapter_id,
+                block_id=None,
+                sentence_id="77777777-7777-4777-8777-777777777777",
+                packet_id="88888888-8888-4888-8888-888888888888",
+                issue_type="ALIGNMENT_FAILURE",
+                root_cause_layer=RootCauseLayer.ALIGNMENT,
+                severity=Severity.HIGH,
+                blocking=True,
+                detector=Detector.RULE,
+                confidence=1.0,
+                evidence_json={"requires_packet_rerun": True},
+                status=IssueStatus.OPEN,
+                created_at=now,
+                updated_at=now,
+            )
+            action = IssueAction(
+                id="action-blocker-manual-hold",
+                issue_id=issue.id,
+                action_type=ActionType.RERUN_PACKET,
+                scope_type=JobScopeType.PACKET,
+                scope_id=issue.packet_id,
+                status=ActionStatus.PLANNED,
+                reason_json={},
+                created_by=ActionActorType.SYSTEM,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add_all(
+                [
+                    AuditEvent(
+                        id=stable_id("audit", "document", document_id, "document.blocker_repair.executed", action.id, "1"),
+                        object_type="document",
+                        object_id=document_id,
+                        action="document.blocker_repair.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-review-workflow",
+                        payload_json={"action_id": action.id, "issue_id": issue.id, "issue_resolved": False},
+                        created_at=now,
+                    ),
+                    AuditEvent(
+                        id=stable_id("audit", "document", document_id, "document.blocker_repair.executed", action.id, "2"),
+                        object_type="document",
+                        object_id=document_id,
+                        action="document.blocker_repair.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-review-workflow",
+                        payload_json={"action_id": action.id, "issue_id": issue.id, "issue_resolved": False},
+                        created_at=now,
+                    ),
+                ]
+            )
+            session.commit()
+
+            with patch.object(
+                workflow,
+                "_list_document_active_blocking_issues",
+                side_effect=[[issue], [issue], [issue]],
+            ), patch.object(
+                workflow,
+                "_document_blocker_candidate_actions",
+                return_value=[action],
+            ), patch.object(workflow, "execute_action") as execute_mock:
+                result = workflow.repair_document_blockers_until_exportable(
+                    document_id,
+                    max_rounds=2,
+                    max_actions_per_round=1,
+                )
+
+            execute_mock.assert_not_called()
+            self.assertEqual(result.blocking_issue_count_before, 1)
+            self.assertEqual(result.blocking_issue_count_after, 1)
+            self.assertFalse(result.applied)
+            self.assertEqual(result.round_count, 0)
+            self.assertEqual(result.stop_reason, "manual_hold_required")
+            stop_events = session.scalars(
+                select(AuditEvent).where(AuditEvent.action == "document.blocker_repair.stopped")
+            ).all()
+            self.assertEqual(len(stop_events), 1)
+            self.assertEqual(stop_events[0].payload_json["stop_reason"], "manual_hold_required")
+            self.assertEqual(stop_events[0].payload_json["followup_action_ids"], [action.id])
+
+    def test_export_auto_followup_stops_on_manual_hold_after_repeated_failed_attempts(self) -> None:
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session)
+            now = datetime.now(timezone.utc)
+            document_id = "99999999-9999-4999-8999-999999999999"
+            chapter_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            packet_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            document = Document(
+                id=document_id,
+                source_type=SourceType.EPUB,
+                file_fingerprint="fingerprint-export-manual-hold",
+                source_path="/tmp/export-manual-hold.epub",
+                title="Export Manual Hold",
+                status=DocumentStatus.ACTIVE,
+                metadata_json={},
+                created_at=now,
+                updated_at=now,
+            )
+            chapter = Chapter(
+                id=chapter_id,
+                document_id=document_id,
+                ordinal=1,
+                title_src="Chapter One",
+                title_tgt=None,
+                anchor_start=None,
+                anchor_end=None,
+                status=ChapterStatus.REVIEW_REQUIRED,
+                summary_version=None,
+                risk_level=None,
+                metadata_json={},
+                created_at=now,
+                updated_at=now,
+            )
+            issue = ReviewIssue(
+                id="dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                document_id=document_id,
+                chapter_id=chapter_id,
+                block_id=None,
+                sentence_id=None,
+                packet_id=None,
+                issue_type="CONTEXT_FAILURE",
+                root_cause_layer=RootCauseLayer.PACKET,
+                severity=Severity.HIGH,
+                blocking=True,
+                detector=Detector.RULE,
+                confidence=1.0,
+                evidence_json={"open_questions": "speaker_reference_ambiguous"},
+                status=IssueStatus.OPEN,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(document)
+            session.flush()
+            session.add(chapter)
+            session.flush()
+            session.add(issue)
+            session.add_all(
+                [
+                    AuditEvent(
+                        id=stable_id("audit", "chapter", chapter_id, "export.auto_followup.executed", "action-export-manual-hold", "1"),
+                        object_type="chapter",
+                        object_id=chapter_id,
+                        action="export.auto_followup.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-export-workflow",
+                        payload_json={
+                            "action_id": "action-export-manual-hold",
+                            "issue_id": issue.id,
+                            "issue_resolved": False,
+                        },
+                        created_at=now,
+                    ),
+                    AuditEvent(
+                        id=stable_id("audit", "chapter", chapter_id, "export.auto_followup.executed", "action-export-manual-hold", "2"),
+                        object_type="chapter",
+                        object_id=chapter_id,
+                        action="export.auto_followup.executed",
+                        actor_type=ActorType.SYSTEM,
+                        actor_id="document-export-workflow",
+                        payload_json={
+                            "action_id": "action-export-manual-hold",
+                            "issue_id": issue.id,
+                            "issue_resolved": False,
+                        },
+                        created_at=now,
+                    ),
+                ]
+            )
+            session.commit()
+
+            followup_action = ExportFollowupAction(
+                action_id="action-export-manual-hold",
+                issue_id=issue.id,
+                action_type=ActionType.REBUILD_PACKET_THEN_RERUN.value,
+                scope_type=JobScopeType.PACKET.value,
+                scope_id=packet_id,
+                suggested_run_followup=True,
+            )
+
+            with patch.object(
+                workflow.bootstrap_repository,
+                "load_document_bundle",
+                return_value=SimpleNamespace(
+                    chapters=[SimpleNamespace(chapter=SimpleNamespace(id=chapter_id))],
+                    document=SimpleNamespace(id=document_id, status=DocumentStatus.ACTIVE),
+                ),
+            ), patch.object(
+                workflow.export_service,
+                "assert_chapter_exportable",
+                side_effect=ExportGateError(
+                    "chapter blocked",
+                    chapter_id=chapter_id,
+                    issue_ids=[issue.id],
+                    followup_actions=[followup_action],
+                ),
+            ), patch.object(workflow, "execute_action") as execute_mock:
+                with self.assertRaises(ExportGateError) as exc_info:
+                    workflow.export_document(
+                        document_id,
+                        ExportType.BILINGUAL_HTML,
+                        auto_execute_followup_on_gate=True,
+                        max_auto_followup_attempts=3,
+                    )
+
+            execute_mock.assert_not_called()
+            self.assertEqual(exc_info.exception.auto_followup_stop_reason, "manual_hold_required")
+            self.assertEqual(exc_info.exception.auto_followup_attempt_count, 0)
+            stop_events = session.scalars(
+                select(AuditEvent).where(AuditEvent.action == "export.auto_followup.stopped")
+            ).all()
+            self.assertEqual(len(stop_events), 1)
+            self.assertEqual(stop_events[0].payload_json["stop_reason"], "manual_hold_required")
+            self.assertEqual(stop_events[0].payload_json["followup_action_ids"], [followup_action.action_id])
 
     def test_workflow_review_auto_executes_packet_style_followups(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(

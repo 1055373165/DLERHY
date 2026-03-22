@@ -1693,6 +1693,19 @@ def _is_page_number_text(text: str) -> bool:
     return bool(_PAGE_NUMBER_PATTERN.fullmatch(_normalize_text(text).casefold()))
 
 
+_MONOSPACE_FONT_PATTERNS = re.compile(
+    r"(?i)(?:mono|courier|consol|menlo|fira\s*code|source\s*code|deja\s*vu\s*sans\s*mono"
+    r"|liberation\s*mono|roboto\s*mono|inconsolata|ubuntu\s*mono|jetbrains\s*mono"
+    r"|cascadia|hack|anonymous\s*pro|ibm\s*plex\s*mono|noto\s*sans\s*mono"
+    r"|lucida\s*console|sf\s*mono|pragmata|iosevka|input\s*mono|droid\s*sans\s*mono)"
+)
+
+
+def _has_monospace_font(font_names: frozenset[str]) -> bool:
+    """Return True if any font name looks like a monospace/code font."""
+    return any(_MONOSPACE_FONT_PATTERNS.search(name) for name in font_names)
+
+
 def _looks_like_code(text: str, line_count: int) -> bool:
     normalized_lines = _expanded_code_candidate_lines(text)
     effective_line_count = max(line_count, len(normalized_lines))
@@ -2578,6 +2591,7 @@ class PdfTextBlock:
     font_size_min: float
     font_size_max: float
     font_size_avg: float
+    font_names: frozenset[str] = frozenset()
 
 
 @dataclass(slots=True, frozen=True)
@@ -2660,6 +2674,7 @@ class PyMuPDFTextExtractor:
                     lines: list[str] = []
                     span_count = 0
                     font_sizes: list[float] = []
+                    font_names_set: set[str] = set()
                     for line in block.get("lines", []):
                         parts: list[str] = []
                         for span in line.get("spans", []):
@@ -2669,6 +2684,9 @@ class PyMuPDFTextExtractor:
                             parts.append(text)
                             span_count += 1
                             font_sizes.append(float(span.get("size", 0.0) or 0.0))
+                            fn = span.get("font", "")
+                            if fn:
+                                font_names_set.add(fn)
                         normalized_line = _normalize_text("".join(parts))
                         if normalized_line:
                             lines.append(normalized_line)
@@ -2689,6 +2707,7 @@ class PyMuPDFTextExtractor:
                             font_size_min=min(font_sizes) if font_sizes else 0.0,
                             font_size_max=max(font_sizes) if font_sizes else 0.0,
                             font_size_avg=_safe_mean(font_sizes),
+                            font_names=frozenset(font_names_set),
                         )
                     )
 
@@ -3490,7 +3509,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._recover_embedded_page_heading_blocks(recovered_blocks)
         recovered_blocks = self._recover_document_title_heading_blocks(recovered_blocks, extraction.title)
         recovered_blocks = self._recover_academic_section_blocks(recovered_blocks, profile)
-        recovered_blocks = self._merge_adjacent_heading_continuations(recovered_blocks)
+        recovered_blocks = self._merge_adjacent_heading_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._repair_prose_artifact_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._merge_same_anchor_code_continuations(recovered_blocks)
         recovered_blocks = self._merge_cross_page_code_continuations(recovered_blocks, ordered_pages)
@@ -3498,7 +3517,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._promote_late_code_like_bodies(recovered_blocks)
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
         recovered_blocks = self._promote_late_table_like_bodies(recovered_blocks)
-        recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks)
+        recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks, ordered_pages)
         self._link_artifact_captions(recovered_blocks)
         self._link_artifact_group_contexts(
             recovered_blocks,
@@ -4295,6 +4314,8 @@ class PdfStructureRecoveryService:
             return "equation"
         if _looks_like_code(text, raw_block.line_count):
             return "code_like"
+        if raw_block.font_names and _has_monospace_font(raw_block.font_names) and raw_block.line_count >= 2:
+            return "code_like"
         if _looks_like_table(raw_block.line_count, raw_block.line_texts):
             return "table_like"
         return "body"
@@ -4548,10 +4569,11 @@ class PdfStructureRecoveryService:
     def _merge_adjacent_heading_continuations(
         self,
         recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage] | None = None,
     ) -> list[_RecoveredBlock]:
         merged: list[_RecoveredBlock] = []
         for current in recovered_blocks:
-            if merged and self._should_merge_heading_continuation(merged[-1], current):
+            if merged and self._should_merge_heading_continuation(merged[-1], current, pages):
                 merged[-1] = self._merge_heading_blocks(merged[-1], current)
                 continue
             merged.append(current)
@@ -4561,14 +4583,11 @@ class PdfStructureRecoveryService:
         self,
         previous: _RecoveredBlock,
         current: _RecoveredBlock,
+        pages: list[PdfPage] | None = None,
     ) -> bool:
         if previous.role != "heading" or current.role != "heading":
             return False
         if previous.block_type != BlockType.HEADING or current.block_type != BlockType.HEADING:
-            return False
-        if previous.page_start != current.page_start or previous.page_end != current.page_end:
-            return False
-        if previous.page_start != previous.page_end:
             return False
         if previous.source_path != current.source_path:
             return False
@@ -4583,19 +4602,55 @@ class PdfStructureRecoveryService:
         if not _looks_like_heading_continuation_fragment(current_text):
             return False
 
-        previous_bbox = previous.bbox_regions[-1]["bbox"]
-        current_bbox = current.bbox_regions[0]["bbox"]
-        gap = float(current_bbox[1]) - float(previous_bbox[3])
-        if gap > max(min(previous.font_size_avg, current.font_size_avg) * 1.8, 18.0):
-            return False
-        if abs(float(previous_bbox[0]) - float(current_bbox[0])) > 48.0:
-            return False
-
+        # Font size ratio check (applies to both same-page and cross-page)
         previous_size = max(previous.font_size_avg, 1.0)
         current_size = max(current.font_size_avg, 1.0)
         ratio = current_size / previous_size
         if ratio < 0.8 or ratio > 1.25:
             return False
+
+        # --- Same-page merge ---
+        same_page = (
+            previous.page_start == current.page_start
+            and previous.page_end == current.page_end
+            and previous.page_start == previous.page_end
+        )
+        if same_page:
+            previous_bbox = previous.bbox_regions[-1]["bbox"]
+            current_bbox = current.bbox_regions[0]["bbox"]
+            gap = float(current_bbox[1]) - float(previous_bbox[3])
+            if gap > max(min(previous.font_size_avg, current.font_size_avg) * 1.8, 18.0):
+                return False
+            if abs(float(previous_bbox[0]) - float(current_bbox[0])) > 48.0:
+                return False
+            return True
+
+        # --- Cross-page heading merge ---
+        if not pages:
+            return False
+        if current.page_start != previous.page_end + 1:
+            return False
+
+        page_lookup = {page.page_number: page for page in pages}
+        prev_page = page_lookup.get(previous.page_end)
+        curr_page = page_lookup.get(current.page_start)
+        if prev_page is None or curr_page is None:
+            return False
+
+        previous_bbox = self._page_bbox(previous, previous.page_end)
+        current_bbox = self._page_bbox(current, current.page_start)
+        if previous_bbox is None or current_bbox is None:
+            return False
+
+        prev_bottom = float(previous_bbox[3])
+        curr_top = float(current_bbox[1])
+        if prev_bottom < prev_page.height * 0.72:
+            return False
+        if curr_top > curr_page.height * 0.28:
+            return False
+
+        # Mark as cross-page heading merge
+        previous.flags = list(dict.fromkeys([*previous.flags, "cross_page_heading_merged"]))
         return True
 
     def _merge_heading_blocks(self, previous: _RecoveredBlock, current: _RecoveredBlock) -> _RecoveredBlock:
@@ -4771,6 +4826,25 @@ class PdfStructureRecoveryService:
             or _has_unterminated_quoted_string(previous_joined, "'")
         ):
             return True
+
+        # Fallback: if both blocks are code_like and spatially adjacent,
+        # merge even without syntactic continuation signals
+        previous_line_count = len(previous_lines)
+        current_line_count = len(current_lines)
+        if previous_line_count >= 2 and current_line_count >= 2:
+            # Both are substantial code blocks — merge if they share similar
+            # indentation or formatting characteristics
+            prev_indent_chars = sum(1 for line in previous_lines if line.startswith((' ', '\t')))
+            curr_indent_chars = sum(1 for line in current_lines if line.startswith((' ', '\t')))
+            # At least one block has indented lines (looks like structured code)
+            if prev_indent_chars >= 1 or curr_indent_chars >= 1:
+                return True
+            # Or both blocks have code-like lines (assignments, punctuation, keywords)
+            prev_code_signals = sum(1 for line in previous_lines if _looks_like_embedded_code_line(line.strip()))
+            curr_code_signals = sum(1 for line in current_lines if _looks_like_embedded_code_line(line.strip()))
+            if prev_code_signals >= previous_line_count * 0.5 and curr_code_signals >= current_line_count * 0.5:
+                return True
+
         return False
 
     def _should_merge_same_anchor_code_continuation(
@@ -4996,10 +5070,11 @@ class PdfStructureRecoveryService:
     def _merge_adjacent_table_fragments(
         self,
         recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage] | None = None,
     ) -> list[_RecoveredBlock]:
         merged: list[_RecoveredBlock] = []
         for current in recovered_blocks:
-            if merged and self._should_merge_table_fragments(merged[-1], current):
+            if merged and self._should_merge_table_fragments(merged[-1], current, pages):
                 merged_block = self._merge_blocks(merged[-1], current)
                 merged_block.flags = list(dict.fromkeys([*merged_block.flags, "table_fragments_merged"]))
                 merged[-1] = merged_block
@@ -5011,32 +5086,90 @@ class PdfStructureRecoveryService:
         self,
         previous: _RecoveredBlock,
         current: _RecoveredBlock,
+        pages: list[PdfPage] | None = None,
     ) -> bool:
         if previous.role != "table_like" or current.role != "table_like":
             return False
         if previous.block_type != BlockType.TABLE or current.block_type != BlockType.TABLE:
             return False
-        if previous.page_start != current.page_start or previous.page_end != current.page_end:
-            return False
-        if previous.page_start != previous.page_end:
-            return False
         if previous.source_path != current.source_path:
             return False
-        if current.reading_order_index - previous.reading_order_index > 2:
+
+        # --- Same-page merge (original logic) ---
+        if previous.page_end == current.page_start:
+            if previous.page_start != current.page_start or previous.page_end != current.page_end:
+                return False
+            if previous.page_start != previous.page_end:
+                return False
+            if current.reading_order_index - previous.reading_order_index > 2:
+                return False
+
+            previous_bbox = previous.bbox_regions[-1]["bbox"]
+            current_bbox = current.bbox_regions[0]["bbox"]
+            gap = float(current_bbox[1]) - float(previous_bbox[3])
+            if gap > 54.0:
+                return False
+
+            overlap_ratio = self._horizontal_overlap_ratio(previous_bbox, current_bbox)
+            previous_center = (float(previous_bbox[0]) + float(previous_bbox[2])) / 2.0
+            current_center = (float(current_bbox[0]) + float(current_bbox[2])) / 2.0
+            max_width = max(float(previous_bbox[2]) - float(previous_bbox[0]), float(current_bbox[2]) - float(current_bbox[0]), 1.0)
+            if overlap_ratio < 0.12 and abs(previous_center - current_center) > max_width * 0.85:
+                return False
+            return True
+
+        # --- Cross-page table merge ---
+        if not pages:
+            return False
+        if current.page_start != previous.page_end + 1:
             return False
 
-        previous_bbox = previous.bbox_regions[-1]["bbox"]
-        current_bbox = current.bbox_regions[0]["bbox"]
-        gap = float(current_bbox[1]) - float(previous_bbox[3])
-        if gap > 54.0:
+        page_lookup = {page.page_number: page for page in pages}
+        prev_page = page_lookup.get(previous.page_end)
+        curr_page = page_lookup.get(current.page_start)
+        if prev_page is None or curr_page is None:
+            return False
+
+        previous_bbox = self._page_bbox(previous, previous.page_end)
+        current_bbox = self._page_bbox(current, current.page_start)
+        if previous_bbox is None or current_bbox is None:
+            return False
+
+        prev_bottom = float(previous_bbox[3])
+        curr_top = float(current_bbox[1])
+        if prev_bottom < prev_page.height * 0.70:
+            return False
+        if curr_top > curr_page.height * 0.30:
             return False
 
         overlap_ratio = self._horizontal_overlap_ratio(previous_bbox, current_bbox)
-        previous_center = (float(previous_bbox[0]) + float(previous_bbox[2])) / 2.0
-        current_center = (float(current_bbox[0]) + float(current_bbox[2])) / 2.0
-        max_width = max(float(previous_bbox[2]) - float(previous_bbox[0]), float(current_bbox[2]) - float(current_bbox[0]), 1.0)
-        if overlap_ratio < 0.12 and abs(previous_center - current_center) > max_width * 0.85:
+        left_edge_dist = abs(float(previous_bbox[0]) - float(current_bbox[0]))
+        if overlap_ratio < 0.12 and left_edge_dist > 96.0:
             return False
+
+        # Validate column count similarity via separators
+        def _count_columns(text: str) -> int:
+            lines = [l for l in text.splitlines() if l.strip()]
+            if not lines:
+                return 0
+            counts: list[int] = []
+            for line in lines:
+                pipe_count = line.count("|")
+                if pipe_count >= 1:
+                    counts.append(pipe_count)
+                else:
+                    import re
+                    multi_space = len(re.findall(r"  +", line))
+                    counts.append(multi_space)
+            return max(counts) if counts else 0
+
+        prev_cols = _count_columns(previous.text)
+        curr_cols = _count_columns(current.text)
+        if abs(prev_cols - curr_cols) > 2:
+            return False
+
+        # Mark as cross-page merge
+        previous.flags = list(dict.fromkeys([*previous.flags, "cross_page_table_fragments_merged"]))
         return True
 
     def _should_repair_prose_artifact_continuation(

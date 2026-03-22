@@ -64,10 +64,17 @@ from book_agent.domain.structure.pdf import (
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.infra.repositories.export import ChapterExportBundle, DocumentExportBundle, ExportRepository
 from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
+from book_agent.services.layout_validate import LayoutValidationService
 
 _SPECIAL_PDF_PAGE_FAMILIES = {"frontmatter", "appendix", "references", "index", "backmatter", "toc"}
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _PDF_IMAGE_MATERIALIZATION_VERSION = 2
+_SEVERITY_RANK = {
+    Severity.LOW: 1,
+    Severity.MEDIUM: 2,
+    Severity.HIGH: 3,
+    Severity.CRITICAL: 4,
+}
 
 
 @dataclass(slots=True, frozen=True)
@@ -594,9 +601,15 @@ class ExportGateError(ValueError):
 
 
 class ExportService:
-    def __init__(self, repository: ExportRepository, output_root: str | Path = "artifacts/exports"):
+    def __init__(
+        self,
+        repository: ExportRepository,
+        output_root: str | Path = "artifacts/exports",
+        layout_validation_service: LayoutValidationService | None = None,
+    ):
         self.repository = repository
         self.output_root = Path(output_root)
+        self.layout_validation_service = layout_validation_service or LayoutValidationService()
 
     def export_review_package(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.REVIEW_PACKAGE)
@@ -1104,6 +1117,26 @@ class ExportService:
                         for action in export_alignment_artifacts.actions
                     ],
                 )
+            render_blocks = self._render_blocks_for_chapter(bundle)
+            export_layout_artifacts = self._sync_export_layout_issues(bundle, render_blocks)
+            if export_layout_artifacts.issues:
+                raise ExportGateError(
+                    "Chapter "
+                    f"{bundle.chapter.id} has export-time layout validation issues and cannot be exported. "
+                    f"Review issues created: {', '.join(issue.id for issue in export_layout_artifacts.issues)}.",
+                    chapter_id=bundle.chapter.id,
+                    issue_ids=[issue.id for issue in export_layout_artifacts.issues],
+                    followup_actions=[
+                        ExportFollowupAction(
+                            action_id=action.id,
+                            issue_id=action.issue_id,
+                            action_type=action.action_type.value,
+                            scope_type=action.scope_type.value,
+                            scope_id=action.scope_id,
+                        )
+                        for action in export_layout_artifacts.actions
+                    ],
+                )
             if self.repository.has_open_blocking_issues(bundle.chapter.id):
                 blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
                 raise ExportGateError(
@@ -1549,6 +1582,49 @@ class ExportService:
         ] + issues
         return ExportIssueSyncArtifacts(issues=issues, actions=actions)
 
+    def _sync_export_layout_issues(
+        self,
+        bundle: ChapterExportBundle,
+        render_blocks: list[MergedRenderBlock] | None = None,
+    ) -> ExportIssueSyncArtifacts:
+        now = _utcnow()
+        issue = self._build_export_layout_issue(bundle, now, render_blocks=render_blocks)
+        issues = [issue] if issue is not None else []
+        active_issue_ids = {current.id for current in issues}
+
+        existing_layout_issues = [
+            current
+            for current in bundle.review_issues
+            if current.issue_type == "LAYOUT_VALIDATION_FAILURE"
+            and current.root_cause_layer == RootCauseLayer.STRUCTURE
+            and (current.evidence_json or {}).get("reason") == "export_layout_validation"
+        ]
+        for current in existing_layout_issues:
+            if current.id in active_issue_ids:
+                continue
+            if current.status in {IssueStatus.OPEN, IssueStatus.TRIAGED}:
+                current.status = IssueStatus.RESOLVED
+                current.resolution_note = "Resolved by latest export-time layout validation check."
+                current.updated_at = now
+                self.repository.session.merge(current)
+
+        for current in issues:
+            self.repository.session.merge(current)
+        self.repository.session.flush()
+
+        actions = [self._build_action(current) for current in issues]
+        for action in actions:
+            self.repository.session.merge(action)
+        self.repository.session.flush()
+
+        retained_issue_ids = {current.id for current in existing_layout_issues if current.status != IssueStatus.RESOLVED}
+        bundle.review_issues = [
+            current
+            for current in bundle.review_issues
+            if current.id not in retained_issue_ids
+        ] + issues
+        return ExportIssueSyncArtifacts(issues=issues, actions=actions)
+
     def _build_export_alignment_issues(
         self,
         bundle: ChapterExportBundle,
@@ -1659,6 +1735,65 @@ class ExportService:
             )
         return issues
 
+    def _build_export_layout_issue(
+        self,
+        bundle: ChapterExportBundle,
+        now: datetime,
+        *,
+        render_blocks: list[MergedRenderBlock] | None = None,
+    ) -> ReviewIssue | None:
+        current_render_blocks = render_blocks if render_blocks is not None else self._render_blocks_for_chapter(bundle)
+        validation_result = self.layout_validation_service.validate_chapter(bundle, current_render_blocks)
+        if not validation_result.issues:
+            return None
+
+        highest_severity = max(
+            (issue.severity for issue in validation_result.issues),
+            key=lambda severity: _SEVERITY_RANK.get(severity, 0),
+        )
+        representative_issue = validation_result.issues[0]
+        return ReviewIssue(
+            id=stable_id(
+                "review-issue",
+                bundle.chapter.document_id,
+                bundle.chapter.id,
+                "LAYOUT_VALIDATION_FAILURE",
+                "export-layout",
+            ),
+            document_id=bundle.chapter.document_id,
+            chapter_id=bundle.chapter.id,
+            block_id=representative_issue.block_id,
+            sentence_id=None,
+            packet_id=None,
+            issue_type="LAYOUT_VALIDATION_FAILURE",
+            root_cause_layer=RootCauseLayer.STRUCTURE,
+            severity=highest_severity,
+            blocking=True,
+            detector=Detector.RULE,
+            confidence=1.0,
+            evidence_json={
+                "reason": "export_layout_validation",
+                "layout_issue_count": len(validation_result.issues),
+                "layout_issue_codes": [issue.issue_code for issue in validation_result.issues],
+                "layout_issues": [
+                    {
+                        "issue_code": issue.issue_code,
+                        "message": issue.message,
+                        "block_id": issue.block_id,
+                        "block_type": issue.block_type,
+                        "severity": issue.severity.value,
+                        "blocking": issue.blocking,
+                        "evidence": issue.evidence,
+                    }
+                    for issue in validation_result.issues
+                ],
+            },
+            status=IssueStatus.OPEN,
+            suggested_action=ActionType.REPARSE_CHAPTER.value,
+            created_at=now,
+            updated_at=now,
+        )
+
     def _packet_current_sentence_ids(self, packet) -> list[str]:
         sentence_ids: list[str] = []
         for block in packet.packet_json.get("current_blocks", []):
@@ -1690,8 +1825,17 @@ class ExportService:
     def _scope_for_action(self, issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
         if action_type in {ActionType.RERUN_PACKET, ActionType.REBUILD_PACKET_THEN_RERUN, ActionType.REALIGN_ONLY} and issue.packet_id:
             return JobScopeType.PACKET, issue.packet_id
-        if action_type == ActionType.REEXPORT_ONLY:
+        if action_type in {
+            ActionType.RESEGMENT_CHAPTER,
+            ActionType.REPARSE_CHAPTER,
+            ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED,
+            ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED,
+            ActionType.REBUILD_CHAPTER_BRIEF,
+            ActionType.REEXPORT_ONLY,
+        }:
             return JobScopeType.CHAPTER, issue.chapter_id
+        if action_type == ActionType.REPARSE_DOCUMENT:
+            return JobScopeType.DOCUMENT, issue.document_id
         return JobScopeType.SENTENCE, issue.sentence_id
 
     def _misalignment_evidence_payload(self, evidence: ExportMisalignmentEvidence) -> dict:
