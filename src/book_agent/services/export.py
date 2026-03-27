@@ -66,6 +66,8 @@ from book_agent.domain.structure.artifact_grouping import resolve_artifact_group
 from book_agent.infra.repositories.export import ChapterExportBundle, DocumentExportBundle, ExportRepository
 from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
 from book_agent.services.layout_validate import LayoutValidationService
+from book_agent.services.export_routing import ExportRouteDecision, ExportRoutingService
+from book_agent.services.runtime_bundle import RuntimeBundleService
 
 _SPECIAL_PDF_PAGE_FAMILIES = {"frontmatter", "appendix", "references", "index", "backmatter", "toc"}
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
@@ -503,6 +505,7 @@ class ExportArtifacts:
     export_record: Export
     file_path: Path
     manifest_path: Path | None = None
+    route_evidence_json: dict[str, object] | None = None
 
 
 @dataclass(slots=True)
@@ -611,10 +614,16 @@ class ExportService:
         repository: ExportRepository,
         output_root: str | Path = "artifacts/exports",
         layout_validation_service: LayoutValidationService | None = None,
+        runtime_bundle_service: RuntimeBundleService | None = None,
+        export_routing_service: ExportRoutingService | None = None,
     ):
         self.repository = repository
         self.output_root = Path(output_root)
         self.layout_validation_service = layout_validation_service or LayoutValidationService()
+        self.runtime_bundle_service = runtime_bundle_service or RuntimeBundleService(repository.session)
+        self.export_routing_service = export_routing_service or ExportRoutingService(
+            runtime_bundle_service=self.runtime_bundle_service
+        )
 
     def export_review_package(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.REVIEW_PACKAGE)
@@ -622,11 +631,30 @@ class ExportService:
     def export_bilingual_html(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.BILINGUAL_HTML)
 
+    def export_bilingual_markdown(self, chapter_id: str) -> ExportArtifacts:
+        return self.export_chapter(chapter_id, ExportType.BILINGUAL_MARKDOWN)
+
+    def _resolve_document_export_route(
+        self,
+        *,
+        document,
+        export_type: ExportType,
+        runtime_bundle_revision_id: str | None = None,
+    ) -> ExportRouteDecision:
+        return self.export_routing_service.resolve_document_route(
+            document=document,
+            export_type=export_type,
+            runtime_bundle_revision_id=runtime_bundle_revision_id,
+        )
     def export_document_merged_html(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.MERGED_HTML)
         self._sync_document_title_tgt(bundle)
+        route_decision = self._resolve_document_export_route(
+            document=bundle.document,
+            export_type=ExportType.MERGED_HTML,
+        )
         output_dir = self.output_root / bundle.document.id
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / "merged-document.html"
@@ -636,20 +664,43 @@ class ExportService:
         file_path.write_text(merged_html, encoding="utf-8")
         self._write_document_export_alias(output_dir, bundle.document, ExportType.MERGED_HTML, merged_html)
         manifest_path.write_text(
-            json.dumps(self._build_merged_document_manifest(bundle, file_path), ensure_ascii=False, indent=2),
+            json.dumps(
+                self._build_merged_document_manifest(
+                    bundle,
+                    file_path,
+                    route_evidence_json=route_decision.route_evidence_json,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
-        export = self._record_document_export(bundle, ExportType.MERGED_HTML, file_path, manifest_path)
+        export = self._record_document_export(
+            bundle,
+            ExportType.MERGED_HTML,
+            file_path,
+            manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
         self.repository.save_export(export)
         self._apply_document_export_status_updates(bundle, ExportType.MERGED_HTML)
         self.repository.session.flush()
-        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+        return ExportArtifacts(
+            export_record=export,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
 
     def export_document_merged_markdown(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.MERGED_MARKDOWN)
         self._sync_document_title_tgt(bundle)
+        route_decision = self._resolve_document_export_route(
+            document=bundle.document,
+            export_type=ExportType.MERGED_MARKDOWN,
+        )
         output_dir = self.output_root / bundle.document.id
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / "merged-document.md"
@@ -664,17 +715,29 @@ class ExportService:
                     bundle,
                     file_path,
                     export_type=ExportType.MERGED_MARKDOWN,
+                    route_evidence_json=route_decision.route_evidence_json,
                 ),
                 ensure_ascii=False,
                 indent=2,
             ),
             encoding="utf-8",
         )
-        export = self._record_document_export(bundle, ExportType.MERGED_MARKDOWN, file_path, manifest_path)
+        export = self._record_document_export(
+            bundle,
+            ExportType.MERGED_MARKDOWN,
+            file_path,
+            manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
         self.repository.save_export(export)
         self._apply_document_export_status_updates(bundle, ExportType.MERGED_MARKDOWN)
         self.repository.session.flush()
-        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+        return ExportArtifacts(
+            export_record=export,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
 
     def export_document_rebuilt_epub(self, document_id: str) -> ExportArtifacts:
         initial_bundle = self.repository.load_document_bundle(document_id)
@@ -684,6 +747,10 @@ class ExportService:
             )
         for chapter_bundle in initial_bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.REBUILT_EPUB)
+        route_decision = self._resolve_document_export_route(
+            document=initial_bundle.document,
+            export_type=ExportType.REBUILT_EPUB,
+        )
         upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
         bundle = self.repository.load_document_bundle(document_id)
         self._sync_document_title_tgt(bundle)
@@ -706,21 +773,37 @@ class ExportService:
                         "no_in_image_text_rewrite",
                         "single_document_level_output_only",
                     ],
+                    route_evidence_json=route_decision.route_evidence_json,
                 ),
                 ensure_ascii=False,
                 indent=2,
             ),
             encoding="utf-8",
         )
-        export = self._record_document_export(bundle, ExportType.REBUILT_EPUB, file_path, manifest_path)
+        export = self._record_document_export(
+            bundle,
+            ExportType.REBUILT_EPUB,
+            file_path,
+            manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
         self.repository.save_export(export)
         self.repository.session.flush()
-        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+        return ExportArtifacts(
+            export_record=export,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
 
     def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
             self._enforce_gate(chapter_bundle, ExportType.REBUILT_PDF)
+        route_decision = self._resolve_document_export_route(
+            document=bundle.document,
+            export_type=ExportType.REBUILT_PDF,
+        )
         upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
         bundle = self.repository.load_document_bundle(document_id)
         self._sync_document_title_tgt(bundle)
@@ -744,16 +827,28 @@ class ExportService:
                         "no_in_image_text_rewrite",
                         "single_document_level_output_only",
                     ],
+                    route_evidence_json=route_decision.route_evidence_json,
                 ),
                 ensure_ascii=False,
                 indent=2,
             ),
             encoding="utf-8",
         )
-        export = self._record_document_export(bundle, ExportType.REBUILT_PDF, file_path, manifest_path)
+        export = self._record_document_export(
+            bundle,
+            ExportType.REBUILT_PDF,
+            file_path,
+            manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
         self.repository.save_export(export)
         self.repository.session.flush()
-        return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
+        return ExportArtifacts(
+            export_record=export,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
 
     def _sync_document_title_tgt(self, bundle: DocumentExportBundle) -> None:
         current_title_tgt = _normalize_render_text(bundle.document.title_tgt)
@@ -972,6 +1067,8 @@ class ExportService:
         export_type: ExportType,
         file_path: Path,
         manifest_path: Path | None,
+        *,
+        route_evidence_json: dict[str, object] | None = None,
     ) -> Export:
         now = _utcnow()
         chapter_issue_count = sum(len(chapter.review_issues) for chapter in bundle.chapters)
@@ -1002,6 +1099,7 @@ class ExportService:
                 "issue_status_summary": self._document_issue_status_summary(bundle),
                 "sidecar_manifest_path": str(manifest_path) if manifest_path is not None else None,
                 "merged_render_summary": self._merged_render_summary(visible_chapters),
+                "route_evidence_json": route_evidence_json or {},
             },
             file_path=str(file_path),
             status=ExportStatus.SUCCEEDED,
@@ -2962,6 +3060,7 @@ class ExportService:
         output_path: Path,
         *,
         export_type: ExportType = ExportType.MERGED_HTML,
+        route_evidence_json: dict[str, object] | None = None,
     ) -> dict:
         runs = [run for chapter in bundle.chapters for run in chapter.translation_runs]
         visible_chapters = self._visible_merged_chapters(bundle)
@@ -3007,6 +3106,8 @@ class ExportService:
             },
             "chapters": chapter_summaries,
         }
+        if route_evidence_json:
+            manifest["route_evidence_json"] = route_evidence_json
         if export_type == ExportType.MERGED_HTML:
             manifest["html_path"] = str(output_path)
         elif export_type == ExportType.MERGED_MARKDOWN:
@@ -3022,8 +3123,14 @@ class ExportService:
         renderer_kind: str,
         derived_from_exports: dict[ExportType, ExportArtifacts],
         expected_limitations: list[str],
+        route_evidence_json: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        manifest = self._build_merged_document_manifest(bundle, output_path, export_type=export_type)
+        manifest = self._build_merged_document_manifest(
+            bundle,
+            output_path,
+            export_type=export_type,
+            route_evidence_json=route_evidence_json,
+        )
         manifest.update(
             {
                 "source_type": bundle.document.source_type.value,

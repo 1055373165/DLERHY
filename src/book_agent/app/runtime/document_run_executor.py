@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.app.runtime.controller_runner import ControllerRunner
+from book_agent.app.runtime.controllers.export_controller import ExportController
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
     DocumentRunStatus,
@@ -24,7 +25,7 @@ from book_agent.domain.enums import (
     WorkItemStatus,
 )
 from book_agent.domain.models import Block, Chapter
-from book_agent.domain.models.ops import DocumentRun, WorkItem
+from book_agent.domain.models.ops import DocumentRun, RuntimePatchProposal, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
@@ -39,12 +40,34 @@ from book_agent.orchestrator.state_machine import (
 )
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
+from book_agent.services.export_routing import ExportRoutingError
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.translator import TranslationWorker
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _append_recovered_lineage(
+    runtime_v2: dict[str, Any],
+    *,
+    lineage_entry: dict[str, Any],
+) -> None:
+    existing_entries = [
+        dict(entry)
+        for entry in (runtime_v2.get("recovered_lineage") or [])
+        if isinstance(entry, dict)
+    ]
+    proposal_id = lineage_entry.get("proposal_id")
+    if proposal_id:
+        existing_entries = [
+            entry
+            for entry in existing_entries
+            if entry.get("proposal_id") != proposal_id
+        ]
+    existing_entries.append(lineage_entry)
+    runtime_v2["recovered_lineage"] = existing_entries
 
 
 def _is_retryable_exception(exc: Exception) -> bool:
@@ -79,6 +102,8 @@ def _is_retryable_exception(exc: Exception) -> bool:
         "database is locked",
         "structured json output payload",
         "translationworkeroutput schema",
+        "export misrouting",
+        "selected route",
     ]
     return any(marker in message for marker in retryable_markers)
 
@@ -827,7 +852,8 @@ class DocumentRunExecutor:
         exc: Exception,
         stage_key: str,
     ) -> None:
-        retryable = _is_retryable_exception(exc)
+        export_misrouting = isinstance(exc, ExportRoutingError)
+        retryable = _is_retryable_exception(exc) or export_misrouting
         pause_reason = _pause_reason_for_exception(exc)
         error_detail = {
             "message": str(exc),
@@ -856,6 +882,13 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     work_item_id=claimed.work_item_id,
                     attempt=claimed.attempt,
+                )
+            if export_misrouting and claimed.stage == WorkItemStage.EXPORT.value:
+                self._recover_export_misrouting(
+                    session=session,
+                    run_id=run_id,
+                    claimed=claimed,
+                    exc=exc,
                 )
             if pause_reason is not None:
                 control = self._run_control_service(session)
@@ -886,6 +919,113 @@ class DocumentRunExecutor:
         if summary.status in {"failed", "paused", "cancelled"}:
             self._sync_pipeline_status(run_id, summary.status)
         self.wake(run_id)
+
+    def _recover_export_misrouting(
+        self,
+        *,
+        session: Session,
+        run_id: str,
+        claimed: ClaimedRunWorkItem,
+        exc: Exception,
+    ) -> None:
+        export_error = exc if isinstance(exc, ExportRoutingError) else None
+        route_evidence_json = dict(getattr(export_error, "route_evidence_json", {}) or {})
+        route_candidates = list(getattr(export_error, "expected_route_candidates", []) or [])
+        selected_route = str(
+            getattr(export_error, "selected_route", "")
+            or route_evidence_json.get("selected_route")
+            or ""
+        )
+        source_type = str(route_evidence_json.get("source_type") or "epub")
+        runtime_bundle_revision_id = route_evidence_json.get("runtime_bundle_revision_id")
+        export_type = str(route_evidence_json.get("export_type") or "rebuilt_pdf")
+        run = session.get(DocumentRun, run_id)
+        if run is not None:
+            status_detail = dict(run.status_detail_json or {})
+            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
+            runtime_v2["last_export_route_evidence"] = route_evidence_json
+            status_detail["runtime_v2"] = runtime_v2
+            run.status_detail_json = status_detail
+            run.updated_at = _utcnow()
+            session.add(run)
+            session.flush()
+        try:
+            controller = ExportController(session=session)
+            recovery = controller.recover_export_misrouting(
+                run_id=run_id,
+                work_item_id=claimed.work_item_id,
+                scope_id=claimed.scope_id,
+                source_type=source_type,
+                selected_route=selected_route,
+                runtime_bundle_revision_id=(
+                    str(runtime_bundle_revision_id) if runtime_bundle_revision_id is not None else None
+                ),
+                route_candidates=route_candidates,
+                route_evidence_json=route_evidence_json,
+                error_message=str(exc),
+                export_type=export_type,
+            )
+        except Exception as recovery_exc:  # pragma: no cover - defensive recovery path
+            if run is not None:
+                status_detail = dict(run.status_detail_json or {})
+                runtime_v2 = dict(status_detail.get("runtime_v2") or {})
+                runtime_v2["last_export_route_recovery_error"] = {
+                    "error_class": recovery_exc.__class__.__name__,
+                    "error_message": str(recovery_exc),
+                }
+                status_detail["runtime_v2"] = runtime_v2
+                run.status_detail_json = status_detail
+                run.updated_at = _utcnow()
+                session.add(run)
+                session.flush()
+            return
+
+        if run is not None:
+            proposal = session.get(RuntimePatchProposal, recovery.proposal_id)
+            published_bundle_revision_id = (
+                proposal.published_bundle_revision_id
+                if proposal is not None and proposal.published_bundle_revision_id
+                else recovery.bundle_revision_id
+            )
+            active_bundle_revision_id = str(
+                run.runtime_bundle_revision_id
+                or published_bundle_revision_id
+                or recovery.bundle_revision_id
+            )
+            lineage_entry = {
+                "incident_id": recovery.incident_id,
+                "proposal_id": recovery.proposal_id,
+                "published_bundle_revision_id": published_bundle_revision_id,
+                "active_bundle_revision_id": active_bundle_revision_id,
+                "replay_scope_id": claimed.scope_id,
+                "replay_work_item_id": claimed.work_item_id,
+                "bound_work_item_ids": list(recovery.bound_work_item_ids),
+                "recorded_at": _utcnow().isoformat(),
+            }
+            status_detail = dict(run.status_detail_json or {})
+            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
+            runtime_v2["last_export_route_recovery"] = {
+                "incident_id": recovery.incident_id,
+                "proposal_id": recovery.proposal_id,
+                "bundle_revision_id": published_bundle_revision_id,
+                "published_bundle_revision_id": published_bundle_revision_id,
+                "active_bundle_revision_id": active_bundle_revision_id,
+                "selected_route": selected_route,
+                "corrected_route": recovery.corrected_route,
+                "route_candidates": route_candidates,
+                "replay_scope_id": claimed.scope_id,
+                "replay_work_item_id": claimed.work_item_id,
+                "bound_work_item_ids": recovery.bound_work_item_ids,
+            }
+            runtime_v2["active_runtime_bundle_revision_id"] = active_bundle_revision_id
+            runtime_v2["runtime_bundle_revision_id"] = active_bundle_revision_id
+            _append_recovered_lineage(runtime_v2, lineage_entry=lineage_entry)
+            status_detail["runtime_v2"] = runtime_v2
+            run.status_detail_json = status_detail
+            run.runtime_bundle_revision_id = active_bundle_revision_id
+            run.updated_at = _utcnow()
+            session.add(run)
+            session.flush()
 
     def _claim_translate_work_items(
         self,

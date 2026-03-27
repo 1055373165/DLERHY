@@ -134,3 +134,9 @@ class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_value_type(ExportStatus, name="export_status"),
         nullable=False,
     )
+
+    @property
+    def runtime_v2_context(self) -> dict[str, Any] | None:
+        payload = dict(self.input_version_bundle_json or {})
+        runtime_v2 = payload.get("runtime_v2")
+        return runtime_v2 if isinstance(runtime_v2, dict) else None
