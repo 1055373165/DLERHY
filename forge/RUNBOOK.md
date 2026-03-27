@@ -21,6 +21,17 @@ Do not use Forge for:
 - Verify aggressively
 - Recover early
 - Keep batches small when write sets overlap
+- Keep one live repo checkout and one live worktree
+
+## Workspace Policy
+
+For personal development, Forge should stay inside a single git working tree.
+
+- Do not create a second worktree just to isolate a feature round.
+- Do not keep parallel live worktrees for the same repo by default.
+- Prefer a single checkout plus normal commits on the active branch.
+
+Only create another worktree when the user explicitly asks for it.
 
 ## Good Default Shape
 

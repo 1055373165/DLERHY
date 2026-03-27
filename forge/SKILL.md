@@ -58,6 +58,17 @@ Do not create a second live state ledger.
 
 The repo code plus `.forge/` are the truth. Chat is not the truth.
 
+## Workspace Rule
+
+Forge defaults to a single live git working tree for personal development.
+
+- Do not create a second worktree by default.
+- Do not split the same active run across two local worktrees.
+- Prefer working directly in the main repo checkout, even for long-running feature work.
+- If temporary isolation is needed, use normal commits and branches inside the same checkout first.
+
+Creating an additional worktree is an exception-only move and requires an explicit user request.
+
 ## Dispatch And Harvest Contract
 
 Dispatch is not complete when the worker is spawned.

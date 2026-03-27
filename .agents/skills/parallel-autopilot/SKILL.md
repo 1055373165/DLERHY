@@ -24,6 +24,9 @@ It assumes:
 - only the execution plane may become selectively parallel
 - requirement lock, ADR freeze, merge, rollback decisions, and phase checkpoints remain serialized
 - structured state is the source of truth; Markdown is the operator view
+- for personal development, one repo checkout and one worktree are the default
+
+Do not propose or create multiple live worktrees unless the user explicitly asks for that setup.
 
 ## What To Produce
 

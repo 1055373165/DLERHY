@@ -55,3 +55,17 @@
   - Prevent batches from pausing after background workers finish.
   - Let Forge keep moving without operator nudging.
   - Make batch completion handling deterministic and automation-friendly.
+
+## 2026-03-27 — Single Worktree Default For Personal Development
+
+- Trigger:
+  - Running a separate backport worktree added coordination overhead without providing real conflict
+    isolation for a solo developer workflow.
+- Protocol change:
+  - Forge now defaults to a single live repo checkout and a single live worktree.
+  - Additional worktrees are exception-only and require an explicit user request.
+  - Normal feature delivery should happen directly inside the active repo checkout.
+- Expected benefit:
+  - Less branch and path juggling.
+  - Faster execution and verification loops.
+  - A clearer single source of local truth during autonomous development.

@@ -848,6 +848,7 @@ class DocumentWorkflowService:
         quality_summary_map = self.review_repository.load_quality_summaries_for_document(document_id)
         chapter_export_map, merged_export_ready, latest_merged_export_at = self._chapter_export_status_map(document_id)
         latest_run = self._latest_document_run(document_id)
+        latest_run_current_stage, _, _ = _history_run_progress(latest_run)
         chapter_pdf_image_summary_map = self._chapter_pdf_image_summary_map(bundle)
         runtime_v2_context = self._runtime_v2_context_for_run(latest_run)
 
