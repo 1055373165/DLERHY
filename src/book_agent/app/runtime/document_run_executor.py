@@ -843,7 +843,10 @@ class DocumentRunExecutor:
                     "cost_usd": 0.0,
                     "latency_ms": 0,
                 }
-            artifacts = workflow.translation_service.execute_packet(packet_id)
+            artifacts = workflow.translation_service.execute_packet(
+                packet_id,
+                auto_commit_memory=False,
+            )
             translation_run = artifacts.translation_run
             return {
                 "packet_id": packet_id,

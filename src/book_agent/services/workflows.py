@@ -1217,7 +1217,10 @@ class DocumentWorkflowService:
             if packet.status != PacketStatus.BUILT:
                 skipped_packet_ids.append(packet.id)
                 continue
-            artifacts: TranslationExecutionArtifacts = self.translation_service.execute_packet(packet.id)
+            artifacts: TranslationExecutionArtifacts = self.translation_service.execute_packet(
+                packet.id,
+                auto_commit_memory=False,
+            )
             translated_packet_count += 1
             translation_run_ids.append(artifacts.translation_run.id)
             review_required_sentence_ids.extend(

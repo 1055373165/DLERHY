@@ -25,6 +25,7 @@ from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.review import ReviewService
 from book_agent.services.translation import TranslationService
+from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import (
     AlignmentSuggestion,
     CompiledTranslationContext,
@@ -446,6 +447,75 @@ class MemoryServiceTests(unittest.TestCase):
                 latest_snapshot.content_json["last_translation_run_id"],
                 proposals[-1].translation_run_id,
             )
+
+    def test_document_workflow_translation_is_proposal_first_until_review(self) -> None:
+        document_id, _packet_ids = self._bootstrap_to_db()
+
+        with self.session_factory() as session:
+            chapter = session.scalars(select(Chapter).where(Chapter.document_id == document_id)).first()
+            assert chapter is not None
+            self._seed_chapter_memory_snapshot(document_id=document_id, chapter_id=chapter.id)
+
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(session)
+            workflow.translate_document(document_id)
+            session.commit()
+
+            chapter = session.scalars(select(Chapter).where(Chapter.document_id == document_id)).first()
+            proposals = session.scalars(
+                select(ChapterMemoryProposal)
+                .where(ChapterMemoryProposal.chapter_id == chapter.id)
+                .order_by(ChapterMemoryProposal.created_at.asc())
+            ).all()
+            latest_snapshot = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter.id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+
+            self.assertEqual(chapter.status, ChapterStatus.TRANSLATED)
+            self.assertGreaterEqual(len(proposals), 1)
+            self.assertTrue(all(proposal.status == MemoryProposalStatus.PROPOSED for proposal in proposals))
+            self.assertIsNotNone(latest_snapshot)
+            assert latest_snapshot is not None
+            self.assertEqual(latest_snapshot.version, 2)
+
+            review = workflow.review_document(document_id)
+            session.commit()
+
+            self.assertTrue(review.chapter_results)
+            self.assertEqual(review.chapter_results[0].status, ChapterStatus.QA_CHECKED.value)
+
+        with self.session_factory() as session:
+            chapter = session.scalars(select(Chapter).where(Chapter.document_id == document_id)).first()
+            proposals = session.scalars(
+                select(ChapterMemoryProposal)
+                .where(ChapterMemoryProposal.chapter_id == chapter.id)
+                .order_by(ChapterMemoryProposal.created_at.asc())
+            ).all()
+            latest_snapshot = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter.id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+
+            self.assertEqual(chapter.status, ChapterStatus.QA_CHECKED)
+            self.assertTrue(all(proposal.status == MemoryProposalStatus.COMMITTED for proposal in proposals))
+            self.assertIsNotNone(latest_snapshot)
+            assert latest_snapshot is not None
+            self.assertGreater(latest_snapshot.version, 2)
 
 
 if __name__ == "__main__":

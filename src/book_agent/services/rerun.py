@@ -117,6 +117,7 @@ class RerunService:
                     packet.id,
                     compile_options=compile_options,
                     rerun_hints=style_hints,
+                    auto_commit_memory=False,
                 )
                 translation_run_ids.append(artifacts.translation_run.id)
 
