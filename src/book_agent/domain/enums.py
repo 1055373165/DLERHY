@@ -393,6 +393,8 @@ class ReviewTerminalityState(StrEnum):
 class RuntimeIncidentKind(StrEnum):
     EXPORT_MISROUTING = "export_misrouting"
     RUNTIME_DEFECT = "runtime_defect"
+    REVIEW_DEADLOCK = "review_deadlock"
+    PACKET_RUNTIME_DEFECT = "packet_runtime_defect"
 
 
 class RuntimeIncidentStatus(StrEnum):

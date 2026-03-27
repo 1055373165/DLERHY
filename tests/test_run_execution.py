@@ -17,10 +17,12 @@ from book_agent.domain.enums import (
     PacketType,
     ProtectedPolicy,
     SourceType,
+    WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Block, Chapter, Document
+from book_agent.domain.models.ops import WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -232,6 +234,53 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertIsNotNone(reclaimed_claim)
         assert reclaimed_claim is not None
         self.assertEqual(reclaimed_claim.attempt, 2)
+
+    def test_ensure_scope_replay_work_items_seeds_missing_chapter_review_once(self) -> None:
+        document_id = self._create_document()
+        run_id = self._create_running_run_for_document(document_id)
+        chapter_scope_id = str(uuid4())
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            execution = RunExecutionService(repository)
+
+            first_ids = execution.ensure_scope_replay_work_items(
+                run_id=run_id,
+                stage=WorkItemStage.REVIEW,
+                scope_type=WorkItemScopeType.CHAPTER,
+                scope_ids=[chapter_scope_id],
+                input_version_bundle_by_scope_id={
+                    chapter_scope_id: {
+                        "document_id": document_id,
+                        "chapter_id": chapter_scope_id,
+                    }
+                },
+            )
+            second_ids = execution.ensure_scope_replay_work_items(
+                run_id=run_id,
+                stage=WorkItemStage.REVIEW,
+                scope_type=WorkItemScopeType.CHAPTER,
+                scope_ids=[chapter_scope_id],
+                input_version_bundle_by_scope_id={
+                    chapter_scope_id: {
+                        "document_id": document_id,
+                        "chapter_id": chapter_scope_id,
+                    }
+                },
+            )
+
+            persisted_items = session.query(WorkItem).filter(
+                WorkItem.run_id == run_id,
+                WorkItem.stage == WorkItemStage.REVIEW,
+                WorkItem.scope_type == WorkItemScopeType.CHAPTER,
+                WorkItem.scope_id == chapter_scope_id,
+            ).all()
+
+        self.assertEqual(len(first_ids), 1)
+        self.assertEqual(first_ids, second_ids)
+        self.assertEqual(len(persisted_items), 1)
+        self.assertEqual(persisted_items[0].status, WorkItemStatus.PENDING)
+        self.assertEqual(persisted_items[0].input_version_bundle_json["document_id"], document_id)
 
     def test_executor_reclaims_expired_leases_before_stage_progression(self) -> None:
         run_id = self._create_running_run(

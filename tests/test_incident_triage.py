@@ -6,6 +6,7 @@ from book_agent.domain.enums import (
     DocumentRunType,
     DocumentStatus,
     JobScopeType,
+    RootCauseLayer,
     RuntimeIncidentKind,
     RuntimeIncidentStatus,
     SourceType,
@@ -142,3 +143,88 @@ class IncidentTriageServiceTests(unittest.TestCase):
         self.assertIsNotNone(persisted)
         assert persisted is not None
         self.assertEqual(persisted.failure_count, 2)
+
+    def test_runtime_defect_fingerprint_and_preview_are_stable_for_repeated_review_deadlocks(self) -> None:
+        run_id, work_item_id = self._create_run()
+        service = IncidentTriageService()
+        scope_id = str(uuid4())
+        bundle_revision_id = str(uuid4())
+        evidence = service.build_runtime_defect_evidence(
+            run_id=run_id,
+            scope_type=JobScopeType.CHAPTER,
+            scope_id=scope_id,
+            failure_family=RootCauseLayer.REVIEW,
+            reason_code="review_failed_without_terminality",
+            runtime_bundle_revision_id=bundle_revision_id,
+            lane_health_state="deadlocked",
+            work_item_id=work_item_id,
+            chapter_run_id=str(uuid4()),
+            review_session_id=str(uuid4()),
+            extra_json={"replay_scope": "review_session", "next_boundary": "review_session"},
+        )
+
+        self.assertEqual(
+            service.classify_runtime_incident_kind(
+                failure_family=RootCauseLayer.REVIEW,
+                reason_code="review_failed_without_terminality",
+            ),
+            RuntimeIncidentKind.REVIEW_DEADLOCK,
+        )
+        self.assertEqual(evidence["fingerprint_basis"]["failure_family"], RootCauseLayer.REVIEW.value)
+        self.assertEqual(evidence["fingerprint_basis"]["reason_code"], "review_failed_without_terminality")
+
+        with self.session_factory() as session:
+            first = service.open_or_update_incident(
+                session,
+                run_id=run_id,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=scope_id,
+                incident_kind=RuntimeIncidentKind.REVIEW_DEADLOCK,
+                source_type="epub",
+                selected_route="runtime.review_failed_without_terminality",
+                runtime_bundle_revision_id=bundle_revision_id,
+                error_code="review_failed_without_terminality",
+                error_message="review session is stuck without terminality",
+                route_evidence_json=evidence,
+                latest_work_item_id=work_item_id,
+            )
+            preview = service.preview_occurrence_count(
+                session,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=scope_id,
+                incident_kind=RuntimeIncidentKind.REVIEW_DEADLOCK,
+                source_type="epub",
+                selected_route="runtime.review_failed_without_terminality",
+                runtime_bundle_revision_id=bundle_revision_id,
+                route_evidence_json=evidence,
+            )
+            second = service.open_or_update_incident(
+                session,
+                run_id=run_id,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=scope_id,
+                incident_kind=RuntimeIncidentKind.REVIEW_DEADLOCK,
+                source_type="epub",
+                selected_route="runtime.review_failed_without_terminality",
+                runtime_bundle_revision_id=bundle_revision_id,
+                error_code="review_failed_without_terminality",
+                error_message="review session is still stuck without terminality",
+                route_evidence_json=evidence,
+                latest_work_item_id=work_item_id,
+            )
+            session.commit()
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(preview, 2)
+        self.assertEqual(second.failure_count, 2)
+        self.assertEqual(second.status, RuntimeIncidentStatus.DIAGNOSING)
+
+    def test_translation_runtime_defects_are_classified_as_packet_incidents(self) -> None:
+        service = IncidentTriageService()
+        self.assertEqual(
+            service.classify_runtime_incident_kind(
+                failure_family=RootCauseLayer.TRANSLATION,
+                reason_code="packet_runtime_stalled",
+            ),
+            RuntimeIncidentKind.PACKET_RUNTIME_DEFECT,
+        )

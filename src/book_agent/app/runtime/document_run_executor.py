@@ -612,44 +612,69 @@ class DocumentRunExecutor:
         )
 
     def _execute_review_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
+        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+
         def _run_review() -> dict[str, Any]:
             payload: dict[str, Any]
             remaining_blocking_issue_count = 0
             stop_reason = "unknown"
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                initial_result = workflow.review_document(
-                    claimed.scope_id,
-                    auto_execute_packet_followups=True,
-                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
-                )
-                repair_result = workflow.repair_document_blockers_until_exportable(
-                    claimed.scope_id,
-                    max_rounds=self._max_blocker_repair_rounds(session, run_id),
-                )
-                result = initial_result
-                if repair_result.applied:
-                    result = workflow.review_document(
-                        claimed.scope_id,
-                        auto_execute_packet_followups=False,
+                if claimed.scope_type == WorkItemScopeType.CHAPTER.value:
+                    chapter_id = str(input_bundle.get("chapter_id") or claimed.scope_id)
+                    document_id = str(input_bundle.get("document_id") or "")
+                    artifacts = workflow.review_service.review_chapter(chapter_id)
+                    remaining_blocking_issue_count = int(artifacts.summary.blocking_issue_count or 0)
+                    payload = {
+                        "document_id": document_id,
+                        "chapter_id": chapter_id,
+                        "total_issue_count": len(artifacts.issues),
+                        "total_action_count": len(artifacts.actions),
+                        "chapter_count": 1,
+                        "auto_followup_requested": False,
+                        "auto_followup_applied": False,
+                        "auto_followup_attempt_count": 0,
+                        "blocker_repair_requested": False,
+                        "blocker_repair_applied": False,
+                        "blocker_repair_round_count": 0,
+                        "blocker_repair_round_limit": 0,
+                        "blocker_repair_execution_count": 0,
+                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                    }
+                else:
+                    document_id = str(input_bundle.get("document_id") or claimed.scope_id)
+                    initial_result = workflow.review_document(
+                        document_id,
+                        auto_execute_packet_followups=True,
+                        max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
                     )
-                remaining_blocking_issue_count = repair_result.blocking_issue_count_after
-                stop_reason = repair_result.stop_reason or "unknown"
-                payload = {
-                    "document_id": claimed.scope_id,
-                    "total_issue_count": result.total_issue_count,
-                    "total_action_count": result.total_action_count,
-                    "chapter_count": len(result.chapter_results),
-                    "auto_followup_requested": initial_result.auto_followup_requested,
-                    "auto_followup_applied": initial_result.auto_followup_applied,
-                    "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
-                    "blocker_repair_requested": repair_result.requested,
-                    "blocker_repair_applied": repair_result.applied,
-                    "blocker_repair_round_count": repair_result.round_count,
-                    "blocker_repair_round_limit": repair_result.round_limit,
-                    "blocker_repair_execution_count": len(repair_result.executions),
-                    "remaining_blocking_issue_count": remaining_blocking_issue_count,
-                }
+                    repair_result = workflow.repair_document_blockers_until_exportable(
+                        document_id,
+                        max_rounds=self._max_blocker_repair_rounds(session, run_id),
+                    )
+                    result = initial_result
+                    if repair_result.applied:
+                        result = workflow.review_document(
+                            document_id,
+                            auto_execute_packet_followups=False,
+                        )
+                    remaining_blocking_issue_count = repair_result.blocking_issue_count_after
+                    stop_reason = repair_result.stop_reason or "unknown"
+                    payload = {
+                        "document_id": document_id,
+                        "total_issue_count": result.total_issue_count,
+                        "total_action_count": result.total_action_count,
+                        "chapter_count": len(result.chapter_results),
+                        "auto_followup_requested": initial_result.auto_followup_requested,
+                        "auto_followup_applied": initial_result.auto_followup_applied,
+                        "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
+                        "blocker_repair_requested": repair_result.requested,
+                        "blocker_repair_applied": repair_result.applied,
+                        "blocker_repair_round_count": repair_result.round_count,
+                        "blocker_repair_round_limit": repair_result.round_limit,
+                        "blocker_repair_execution_count": len(repair_result.executions),
+                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                    }
             if remaining_blocking_issue_count > 0:
                 self._update_pipeline_stage(
                     run_id,
@@ -670,7 +695,10 @@ class DocumentRunExecutor:
                 execution = self._run_execution_service(session)
                 execution.complete_work_item_success(
                     lease_token=lease_token,
-                    output_artifact_refs_json={"document_id": claimed.scope_id},
+                    output_artifact_refs_json={
+                        "document_id": str(payload.get("document_id") or ""),
+                        **({"chapter_id": str(payload["chapter_id"])} if payload.get("chapter_id") else {}),
+                    },
                     payload_json=payload,
                 )
             self._update_pipeline_stage(

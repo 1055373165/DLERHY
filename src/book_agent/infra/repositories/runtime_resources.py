@@ -141,6 +141,31 @@ class RuntimeResourcesRepository:
             status_detail_json=_merge_json(chapter_run.status_detail_json, patch),
         )
 
+    def append_chapter_recovered_lineage(
+        self,
+        *,
+        chapter_run_id: str,
+        lineage_event: dict[str, Any],
+    ) -> ChapterRun:
+        if not lineage_event:
+            raise ValueError("lineage_event must not be empty")
+
+        chapter_run = self.get_chapter_run(chapter_run_id)
+        conditions = dict(chapter_run.conditions_json or {})
+        recovered_lineage = [
+            dict(entry)
+            for entry in list(conditions.get("recovered_lineage") or [])
+            if isinstance(entry, dict)
+        ]
+        normalized_event = dict(lineage_event)
+        normalized_event.setdefault("recorded_at", _utcnow().isoformat())
+        recovered_lineage.append(normalized_event)
+        conditions["recovered_lineage"] = recovered_lineage
+        return self.update_chapter_run(
+            chapter_run_id,
+            conditions_json=conditions,
+        )
+
     def get_packet_task(self, packet_task_id: str) -> PacketTask:
         packet_task = self.session.get(PacketTask, packet_task_id)
         if packet_task is None:

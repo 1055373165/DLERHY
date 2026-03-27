@@ -1,16 +1,23 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from book_agent.app.runtime.controllers.budget_controller import BudgetController
 from book_agent.app.runtime.controllers.incident_controller import IncidentController
+from book_agent.app.runtime.controllers.review_controller import ReviewController
 from book_agent.core.config import Settings
 from book_agent.domain.enums import (
+    ChapterRunPhase,
+    ChapterRunStatus,
+    ChapterStatus,
     DocumentRunStatus,
     DocumentRunType,
     DocumentStatus,
     JobScopeType,
+    ReviewSessionStatus,
+    ReviewTerminalityState,
     RuntimeIncidentKind,
     RuntimeIncidentStatus,
     SourceType,
@@ -18,10 +25,19 @@ from book_agent.domain.enums import (
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models import Document
-from book_agent.domain.models.ops import DocumentRun, RunBudget, RuntimeIncident, RuntimePatchProposal, WorkItem
+from book_agent.domain.models import Chapter, Document
+from book_agent.domain.models.ops import (
+    ChapterRun,
+    DocumentRun,
+    RunBudget,
+    RuntimeCheckpoint,
+    RuntimeIncident,
+    RuntimePatchProposal,
+    WorkItem,
+)
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
 from book_agent.services.runtime_bundle import RuntimeBundleService
 from book_agent.services.runtime_patch_validation import RuntimePatchValidationService
 
@@ -156,6 +172,167 @@ class IncidentControllerTests(unittest.TestCase):
             self.assertEqual(incident.status.value, "published")
             self.assertEqual(run.runtime_bundle_revision_id, bundle_record.revision.id)
             self.assertEqual(work_item.runtime_bundle_revision_id, bundle_record.revision.id)
+
+    def test_review_controller_recovers_repeated_deadlock_with_minimal_chapter_replay(self) -> None:
+        with self.session_factory() as session:
+            document = Document(
+                source_type=SourceType.EPUB,
+                file_fingerprint=f"review-deadlock-{uuid4()}",
+                source_path="/tmp/review-deadlock.epub",
+                title="Review Deadlock",
+                author="Tester",
+                src_lang="en",
+                tgt_lang="zh",
+                status=DocumentStatus.ACTIVE,
+                parser_version=1,
+                segmentation_version=1,
+            )
+            session.add(document)
+            session.flush()
+
+            chapter = Chapter(
+                document_id=document.id,
+                ordinal=1,
+                title_src="Chapter 1",
+                status=ChapterStatus.PACKET_BUILT,
+                metadata_json={},
+            )
+            session.add(chapter)
+            session.flush()
+
+            run = DocumentRun(
+                document_id=document.id,
+                run_type=DocumentRunType.TRANSLATE_FULL,
+                status=DocumentRunStatus.RUNNING,
+                requested_by="tester",
+                priority=100,
+                status_detail_json={
+                    "runtime_v2": {
+                        "allowed_patch_surfaces": ["runtime_bundle"],
+                        "enable_review_deadlock_auto_repair": True,
+                    }
+                },
+            )
+            session.add(run)
+            session.flush()
+
+            chapter_run = ChapterRun(
+                run_id=run.id,
+                document_id=document.id,
+                chapter_id=chapter.id,
+                desired_phase=ChapterRunPhase.REVIEW,
+                observed_phase=ChapterRunPhase.REVIEW,
+                status=ChapterRunStatus.ACTIVE,
+                generation=1,
+                observed_generation=1,
+                conditions_json={},
+                status_detail_json={},
+            )
+            session.add(chapter_run)
+            session.flush()
+
+            review_session = RuntimeResourcesRepository(session).ensure_review_session(
+                chapter_run_id=chapter_run.id,
+                desired_generation=1,
+                observed_generation=1,
+                scope_json={
+                    "run_id": run.id,
+                    "document_id": document.id,
+                    "chapter_id": chapter.id,
+                },
+                runtime_bundle_revision_id=None,
+            )
+            review_session.status = ReviewSessionStatus.ACTIVE
+            review_session.terminality_state = ReviewTerminalityState.OPEN
+            review_session.last_reconciled_at = datetime.now(timezone.utc) - timedelta(minutes=40)
+            session.add(review_session)
+
+            work_item = WorkItem(
+                run_id=run.id,
+                stage=WorkItemStage.REVIEW,
+                scope_type=WorkItemScopeType.CHAPTER,
+                scope_id=chapter.id,
+                attempt=2,
+                priority=100,
+                status=WorkItemStatus.RETRYABLE_FAILED,
+                lease_owner=None,
+                lease_expires_at=None,
+                last_heartbeat_at=datetime.now(timezone.utc) - timedelta(minutes=40),
+                started_at=datetime.now(timezone.utc) - timedelta(minutes=45),
+                updated_at=datetime.now(timezone.utc) - timedelta(minutes=40),
+                finished_at=datetime.now(timezone.utc) - timedelta(minutes=40),
+                input_version_bundle_json={
+                    "document_id": document.id,
+                    "chapter_id": chapter.id,
+                    "chapter_run_id": chapter_run.id,
+                    "review_session_id": review_session.id,
+                },
+                output_artifact_refs_json={},
+                error_detail_json={},
+            )
+            session.add(work_item)
+            session.add(
+                RunBudget(
+                    run_id=run.id,
+                    max_auto_followup_attempts=2,
+                )
+            )
+            session.flush()
+
+            controller = ReviewController(session=session)
+            controller._incident_controller = IncidentController(
+                session=session,
+                bundle_service=RuntimeBundleService(session, settings=self._settings()),
+                validation_service=RuntimePatchValidationService(session),
+            )
+
+            controller.reconcile_review_session(chapter_run_id=chapter_run.id)
+            controller.reconcile_review_session(chapter_run_id=chapter_run.id)
+            session.commit()
+
+            incident = session.query(RuntimeIncident).filter(RuntimeIncident.run_id == run.id).one()
+            proposal = session.query(RuntimePatchProposal).filter(RuntimePatchProposal.incident_id == incident.id).one()
+            checkpoint = session.query(RuntimeCheckpoint).filter(
+                RuntimeCheckpoint.run_id == run.id,
+                RuntimeCheckpoint.scope_type == JobScopeType.CHAPTER,
+                RuntimeCheckpoint.scope_id == chapter.id,
+                RuntimeCheckpoint.checkpoint_key == "review_controller.deadlock_recovery",
+            ).one()
+            persisted_review_session = RuntimeResourcesRepository(session).get_review_session(review_session.id)
+            persisted_work_item = session.get(WorkItem, work_item.id)
+            persisted_run = session.get(DocumentRun, run.id)
+            persisted_chapter_run = session.get(ChapterRun, chapter_run.id)
+
+        self.assertEqual(incident.incident_kind, RuntimeIncidentKind.REVIEW_DEADLOCK)
+        self.assertEqual(incident.status, RuntimeIncidentStatus.PUBLISHED)
+        self.assertEqual(incident.failure_count, 1)
+        self.assertEqual(proposal.status.value, "published")
+        self.assertIsNotNone(persisted_run)
+        self.assertIsNotNone(persisted_chapter_run)
+        assert persisted_run is not None and persisted_chapter_run is not None
+        self.assertEqual(persisted_run.runtime_bundle_revision_id, proposal.published_bundle_revision_id)
+        self.assertEqual(persisted_work_item.runtime_bundle_revision_id, proposal.published_bundle_revision_id)
+        self.assertIn(work_item.id, proposal.status_detail_json["bound_work_item_ids"])
+        self.assertEqual(
+            persisted_review_session.status_detail_json["runtime_v2"]["recovery_decision"]["fingerprint_occurrences"],
+            2,
+        )
+        self.assertEqual(
+            persisted_review_session.status_detail_json["runtime_v2"]["last_deadlock_recovery"]["replay_work_item_ids"],
+            [work_item.id],
+        )
+        self.assertEqual(
+            checkpoint.checkpoint_json["recovery"]["replay_work_item_ids"],
+            [work_item.id],
+        )
+        self.assertEqual(
+            persisted_review_session.status_detail_json["runtime_v2"]["last_deadlock_recovery"]["bundle_revision_id"],
+            proposal.published_bundle_revision_id,
+        )
+        self.assertEqual(
+            persisted_chapter_run.conditions_json["recovered_lineage"][0]["incident_id"],
+            incident.id,
+        )
 
 
 class BudgetControllerTests(unittest.TestCase):

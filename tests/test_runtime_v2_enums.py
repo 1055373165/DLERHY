@@ -8,6 +8,7 @@ from book_agent.domain.enums import (
     PacketTaskStatus,
     ReviewSessionStatus,
     ReviewTerminalityState,
+    RuntimeIncidentKind,
 )
 
 
@@ -19,6 +20,7 @@ class RuntimeV2EnumsTests(unittest.TestCase):
         self.assertTrue(issubclass(PacketTaskStatus, StrEnum))
         self.assertTrue(issubclass(ReviewSessionStatus, StrEnum))
         self.assertTrue(issubclass(ReviewTerminalityState, StrEnum))
+        self.assertTrue(issubclass(RuntimeIncidentKind, StrEnum))
 
     def test_runtime_enum_values_are_stable_and_string_comparable(self) -> None:
         self.assertEqual(ChapterRunPhase.PACKETIZE.value, "packetize")
@@ -27,6 +29,8 @@ class RuntimeV2EnumsTests(unittest.TestCase):
         self.assertEqual(PacketTaskAction.RETRANSLATE.value, "retranslate")
         self.assertEqual(ReviewSessionStatus.ACTIVE.value, "active")
         self.assertEqual(ReviewTerminalityState.APPROVED.value, "approved")
+        self.assertEqual(RuntimeIncidentKind.REVIEW_DEADLOCK.value, "review_deadlock")
+        self.assertEqual(RuntimeIncidentKind.PACKET_RUNTIME_DEFECT.value, "packet_runtime_defect")
         self.assertTrue(ChapterRunStatus.ACTIVE == "active")
 
     def test_invalid_runtime_enum_value_raises(self) -> None:
