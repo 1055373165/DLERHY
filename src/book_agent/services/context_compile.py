@@ -336,6 +336,12 @@ def _select_previous_translated_blocks(
     if not blocks:
         return []
     if not _should_keep_previous_translated_blocks(packet):
+        # When chapter memory has already accumulated several accepted packets,
+        # keep that memory slice even if the current paragraph looks locally
+        # self-contained. This preserves terminology continuity across
+        # nonadjacent packets without depending on hidden dialog state.
+        if len(blocks) >= 3 and len(blocks) > len(packet.prev_translated_blocks):
+            return blocks[-MAX_CHAPTER_MEMORY_TRANSLATIONS:]
         return []
     return blocks[-MAX_PREVIOUS_TRANSLATED_BLOCKS:]
 

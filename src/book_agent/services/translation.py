@@ -278,6 +278,7 @@ class TranslationService:
         *,
         compile_options: ChapterContextCompileOptions | None = None,
         rerun_hints: tuple[str, ...] = (),
+        auto_commit_memory: bool = True,
     ) -> TranslationExecutionArtifacts:
         bundle = self.repository.load_packet_bundle(packet_id)
         compiled_context_result = self.memory_service.load_compiled_context(
@@ -303,12 +304,26 @@ class TranslationService:
             updated_sentences=artifacts.updated_sentences,
             packet=bundle.packet,
         )
-        self.write_chapter_memory(
+        proposed_content_json = self._build_chapter_memory_content_json(
             bundle=bundle,
             artifacts=artifacts,
             current_snapshot=chapter_memory_snapshot,
             compiled_context_packet=compiled_context_packet,
         )
+        self.memory_service.record_translation_proposals(
+            document_id=bundle.context_packet.document_id,
+            chapter_id=bundle.context_packet.chapter_id,
+            packet_id=bundle.packet.id,
+            translation_run_id=artifacts.translation_run.id,
+            current_snapshot=chapter_memory_snapshot,
+            proposed_content_json=proposed_content_json,
+        )
+        if auto_commit_memory:
+            self.memory_service.commit_approved_packet_memory(
+                document_id=bundle.context_packet.document_id,
+                chapter_id=bundle.context_packet.chapter_id,
+                translation_run_id=artifacts.translation_run.id,
+            )
         self.repository.session.flush()
         return artifacts
 
@@ -417,6 +432,27 @@ class TranslationService:
         current_snapshot: MemorySnapshot | None,
         compiled_context_packet,
     ) -> None:
+        content_json = self._build_chapter_memory_content_json(
+            bundle=bundle,
+            artifacts=artifacts,
+            current_snapshot=current_snapshot,
+            compiled_context_packet=compiled_context_packet,
+        )
+        self.chapter_memory_repository.supersede_and_create_next(
+            current_snapshot=current_snapshot,
+            document_id=bundle.context_packet.document_id,
+            chapter_id=bundle.context_packet.chapter_id,
+            content_json=content_json,
+        )
+
+    def _build_chapter_memory_content_json(
+        self,
+        *,
+        bundle: TranslationPacketBundle,
+        artifacts: TranslationExecutionArtifacts,
+        current_snapshot: MemorySnapshot | None,
+        compiled_context_packet,
+    ) -> dict[str, Any]:
         existing_content = dict(current_snapshot.content_json) if current_snapshot is not None else {}
         recent_accepted = existing_content.get("recent_accepted_translations", [])
         if not isinstance(recent_accepted, list):
@@ -474,12 +510,7 @@ class TranslationService:
             "last_packet_id": bundle.packet.id,
             "last_translation_run_id": artifacts.translation_run.id,
         }
-        self.chapter_memory_repository.supersede_and_create_next(
-            current_snapshot=current_snapshot,
-            document_id=bundle.context_packet.document_id,
-            chapter_id=bundle.context_packet.chapter_id,
-            content_json=content_json,
-        )
+        return content_json
 
     def _merge_active_concepts(
         self,

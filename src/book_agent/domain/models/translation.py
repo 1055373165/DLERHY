@@ -1,12 +1,14 @@
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
     ActorType,
     ArtifactStatus,
     LockLevel,
+    MemoryProposalStatus,
     MemoryScopeType,
     PacketSentenceRole,
     PacketStatus,
@@ -103,6 +105,48 @@ class TranslationRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     cost_usd: Mapped[float | None] = mapped_column(Numeric(12, 6))
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     error_code: Mapped[str | None] = mapped_column(Text)
+
+
+class ChapterMemoryProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "chapter_memory_proposals"
+    __table_args__ = (UniqueConstraint("translation_run_id", name="uq_chapter_memory_proposals_run"),)
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    chapter_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("chapters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    packet_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("translation_packets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    translation_run_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("translation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    base_snapshot_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("memory_snapshots.id", ondelete="SET NULL"),
+    )
+    base_snapshot_version: Mapped[int | None] = mapped_column(Integer)
+    proposed_content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[MemoryProposalStatus] = mapped_column(
+        enum_value_type(MemoryProposalStatus, name="memory_proposal_status"),
+        nullable=False,
+        default=MemoryProposalStatus.PROPOSED,
+    )
+    committed_snapshot_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("memory_snapshots.id", ondelete="SET NULL"),
+    )
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TargetSegment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -16,6 +16,7 @@ from book_agent.domain.models.ops import (
 from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import (
     AlignmentEdge,
+    ChapterMemoryProposal,
     PacketSentenceMap,
     TargetSegment,
     TermEntry,
@@ -30,6 +31,7 @@ __all__ = [
     "Block",
     "BookProfile",
     "ChapterQualitySummary",
+    "ChapterMemoryProposal",
     "ChapterWorklistAssignment",
     "Chapter",
     "Document",

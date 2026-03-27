@@ -92,6 +92,12 @@ class MemoryStatus(StrEnum):
     INVALIDATED = "invalidated"
 
 
+class MemoryProposalStatus(StrEnum):
+    PROPOSED = "proposed"
+    COMMITTED = "committed"
+    REJECTED = "rejected"
+
+
 class PacketType(StrEnum):
     TRANSLATE = "translate"
     RETRANSLATE = "retranslate"

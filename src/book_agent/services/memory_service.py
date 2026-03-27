@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
-from book_agent.domain.models import MemorySnapshot
+from book_agent.domain.models import ChapterMemoryProposal, MemorySnapshot
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
 from book_agent.workers.contracts import CompiledTranslationContext, ContextPacket
@@ -61,3 +62,58 @@ class MemoryService:
             context=compiled_context,
             chapter_memory_snapshot=chapter_memory_snapshot,
         )
+
+    def record_translation_proposals(
+        self,
+        *,
+        document_id: str,
+        chapter_id: str,
+        packet_id: str,
+        translation_run_id: str,
+        current_snapshot: MemorySnapshot | None,
+        proposed_content_json: dict[str, Any],
+    ) -> ChapterMemoryProposal:
+        return self.chapter_memory_repository.create_or_replace_proposal(
+            current_snapshot=current_snapshot,
+            document_id=document_id,
+            chapter_id=chapter_id,
+            packet_id=packet_id,
+            translation_run_id=translation_run_id,
+            proposed_content_json=proposed_content_json,
+        )
+
+    def commit_approved_packet_memory(
+        self,
+        *,
+        document_id: str,
+        chapter_id: str,
+        translation_run_id: str,
+    ) -> MemorySnapshot:
+        proposal = self.chapter_memory_repository.load_proposal_by_translation_run(
+            translation_run_id=translation_run_id
+        )
+        if proposal is None:
+            raise ValueError(f"No chapter memory proposal found for translation run {translation_run_id}")
+
+        latest_snapshot = self.load_latest_chapter_memory(document_id=document_id, chapter_id=chapter_id)
+        if (
+            proposal.base_snapshot_version is not None
+            and latest_snapshot is not None
+            and latest_snapshot.version != proposal.base_snapshot_version
+        ):
+            raise ValueError(
+                "Chapter memory drifted before proposal commit: "
+                f"expected version {proposal.base_snapshot_version}, got {latest_snapshot.version}"
+            )
+
+        committed_snapshot = self.chapter_memory_repository.supersede_and_create_next(
+            current_snapshot=latest_snapshot,
+            document_id=document_id,
+            chapter_id=chapter_id,
+            content_json=dict(proposal.proposed_content_json or {}),
+        )
+        self.chapter_memory_repository.mark_proposal_committed(
+            proposal,
+            committed_snapshot=committed_snapshot,
+        )
+        return committed_snapshot
