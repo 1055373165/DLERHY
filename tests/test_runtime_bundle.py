@@ -82,3 +82,53 @@ class RuntimeBundleServiceTests(unittest.TestCase):
         expected_digest = sha256(canonical_manifest.encode("utf-8")).hexdigest()
         expected_revision_id = stable_id("runtime-bundle-revision", "runtime", "bundle-v2", expected_digest)
         self.assertEqual(record.revision.id, expected_revision_id)
+
+    def test_canary_failure_rolls_back_to_latest_stable_bundle(self) -> None:
+        with self.session_factory() as session:
+            service = self._service(session)
+
+            stable = service.publish_bundle(
+                revision_name="bundle-v1",
+                manifest_json={"code": {"runner": "controller"}, "config": {"profile": "stable"}},
+                rollout_scope_json={"mode": "dev"},
+            )
+            service.record_canary_verdict(
+                stable.revision.id,
+                verdict="passed",
+                report_json={"lane": "canary", "result": "green"},
+            )
+            service.activate_bundle(stable.revision.id)
+
+            candidate = service.publish_bundle(
+                revision_name="bundle-v2",
+                manifest_json={"code": {"runner": "controller"}, "config": {"profile": "candidate"}},
+                parent_bundle_revision_id=stable.revision.id,
+                rollout_scope_json={"mode": "dev"},
+            )
+            service.activate_bundle(candidate.revision.id)
+            service.record_canary_verdict(
+                candidate.revision.id,
+                verdict="failed",
+                report_json={"signal": "export_misrouting"},
+            )
+            target = service.rollback_bundle(candidate.revision.id, reason="canary_regression")
+            session.commit()
+
+        with self.session_factory() as session:
+            service = self._service(session)
+            rolled_back = session.get(RuntimeBundleRevision, candidate.revision.id)
+            active = service.lookup_active_bundle()
+            latest_stable = service.lookup_latest_stable_bundle(exclude_revision_id=candidate.revision.id)
+
+            self.assertIsNotNone(rolled_back)
+            assert rolled_back is not None
+            self.assertEqual(target.revision.id, stable.revision.id)
+            self.assertEqual(rolled_back.status, RuntimeBundleRevisionStatus.ROLLED_BACK)
+            self.assertEqual(rolled_back.rollback_target_revision_id, stable.revision.id)
+            self.assertEqual(rolled_back.freeze_reason, "canary_regression")
+            self.assertEqual(rolled_back.canary_verdict, "failed")
+            self.assertEqual(rolled_back.canary_report_json["signal"], "export_misrouting")
+            self.assertIsNotNone(rolled_back.frozen_at)
+            self.assertIsNotNone(rolled_back.rolled_back_at)
+            self.assertEqual(active.revision.id, stable.revision.id)
+            self.assertEqual(latest_stable.revision.id, stable.revision.id)

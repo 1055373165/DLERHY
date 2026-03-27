@@ -1,5 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import uuid4
 
 from book_agent.app.runtime.document_run_executor import (
@@ -13,16 +15,21 @@ from book_agent.domain.enums import (
     ChapterStatus,
     DocumentStatus,
     DocumentRunType,
+    JobScopeType,
     PacketStatus,
     PacketType,
     ProtectedPolicy,
+    RuntimeBundleRevisionStatus,
+    RuntimeIncidentKind,
+    RuntimeIncidentStatus,
+    RuntimePatchProposalStatus,
     SourceType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Block, Chapter, Document
-from book_agent.domain.models.ops import WorkItem
+from book_agent.domain.models.ops import RuntimeBundleRevision, RuntimeIncident, RuntimePatchProposal, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -710,6 +717,140 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(summary.status, "paused")
         self.assertEqual(summary.stop_reason, "provider.insufficient_balance")
         self.assertEqual(summary.work_items.status_counts["terminal_failed"], 1)
+
+    def test_recover_export_misrouting_rebinds_run_to_effective_bundle_revision(self) -> None:
+        document_id = self._create_document()
+        run_id = self._create_running_run_for_document(document_id)
+        export_scope_id = str(uuid4())
+        proposal_id = str(uuid4())
+        stable_revision_id = str(uuid4())
+        bad_revision_id = str(uuid4())
+
+        with self.session_factory() as session:
+            work_item = WorkItem(
+                run_id=run_id,
+                stage=WorkItemStage.EXPORT,
+                scope_type=WorkItemScopeType.EXPORT,
+                scope_id=export_scope_id,
+                priority=100,
+                status=WorkItemStatus.RETRYABLE_FAILED,
+                input_version_bundle_json={"document_id": document_id, "export_type": "rebuilt_pdf"},
+                output_artifact_refs_json={},
+                error_detail_json={},
+            )
+            session.add(work_item)
+            stable_revision = RuntimeBundleRevision(
+                id=stable_revision_id,
+                bundle_type="runtime",
+                revision_name="bundle-stable",
+                status=RuntimeBundleRevisionStatus.PUBLISHED,
+                manifest_json={},
+                rollout_scope_json={"mode": "dev"},
+            )
+            bad_revision = RuntimeBundleRevision(
+                id=bad_revision_id,
+                bundle_type="runtime",
+                revision_name="bundle-bad",
+                status=RuntimeBundleRevisionStatus.ROLLED_BACK,
+                parent_bundle_revision_id=stable_revision_id,
+                rollback_target_revision_id=stable_revision_id,
+                manifest_json={},
+                rollout_scope_json={"mode": "dev"},
+            )
+            session.add(stable_revision)
+            session.add(bad_revision)
+            incident = RuntimeIncident(
+                id=str(uuid4()),
+                run_id=run_id,
+                scope_type=JobScopeType.DOCUMENT,
+                scope_id=export_scope_id,
+                incident_kind=RuntimeIncidentKind.EXPORT_MISROUTING,
+                fingerprint=f"export-misrouting:{uuid4()}",
+                source_type="epub",
+                selected_route="pdf.direct",
+                runtime_bundle_revision_id=stable_revision_id,
+                status=RuntimeIncidentStatus.FROZEN,
+                failure_count=1,
+                route_evidence_json={},
+                latest_error_json={},
+                bundle_json={},
+                status_detail_json={},
+            )
+            proposal = RuntimePatchProposal(
+                id=proposal_id,
+                incident_id=incident.id,
+                status=RuntimePatchProposalStatus.ROLLED_BACK,
+                published_bundle_revision_id=bad_revision_id,
+                diff_manifest_json={},
+                validation_report_json={},
+                status_detail_json={
+                    "bundle_guard": {
+                        "rollback_performed": True,
+                        "effective_revision_id": stable_revision_id,
+                        "rollback_target_revision_id": stable_revision_id,
+                    }
+                },
+            )
+            session.add(incident)
+            session.add(proposal)
+            session.commit()
+            work_item_id = work_item.id
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+        claimed = SimpleNamespace(
+            run_id=run_id,
+            work_item_id=work_item_id,
+            stage=WorkItemStage.EXPORT.value,
+            scope_type=WorkItemScopeType.EXPORT.value,
+            scope_id=export_scope_id,
+            attempt=1,
+            priority=100,
+            lease_token="lease-test",
+            worker_name="executor-test",
+            worker_instance_id="executor-test-worker",
+            lease_expires_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+        with self.session_factory() as session:
+            with patch(
+                "book_agent.app.runtime.document_run_executor.ExportController.recover_export_misrouting",
+                return_value=SimpleNamespace(
+                    incident_id=incident.id,
+                    proposal_id=proposal_id,
+                    bundle_revision_id=bad_revision_id,
+                    corrected_route="epub.rebuilt_pdf_via_html",
+                    bound_work_item_ids=[work_item_id],
+                ),
+            ):
+                executor._recover_export_misrouting(
+                    session=session,
+                    run_id=run_id,
+                    claimed=claimed,
+                    exc=RuntimeError("export misrouting"),
+                )
+                session.commit()
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            run = repository.get_run(run_id)
+            runtime_v2 = dict((run.status_detail_json or {}).get("runtime_v2") or {})
+            recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
+            lineage = list(runtime_v2.get("recovered_lineage") or [])
+
+        self.assertEqual(run.runtime_bundle_revision_id, stable_revision_id)
+        self.assertEqual(runtime_v2["active_runtime_bundle_revision_id"], stable_revision_id)
+        self.assertEqual(recovery["bundle_revision_id"], bad_revision_id)
+        self.assertEqual(recovery["active_bundle_revision_id"], stable_revision_id)
+        self.assertTrue(recovery["rollback_performed"])
+        self.assertEqual(recovery["replay_work_item_id"], work_item_id)
+        self.assertEqual(recovery["bound_work_item_ids"], [work_item_id])
+        self.assertEqual(len(lineage), 1)
+        self.assertEqual(lineage[0]["proposal_id"], proposal_id)
+        self.assertEqual(lineage[0]["active_bundle_revision_id"], stable_revision_id)
 
     def test_run_control_isoformat_treats_naive_sqlite_datetimes_as_utc(self) -> None:
         with self.session_factory() as session:

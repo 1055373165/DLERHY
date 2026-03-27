@@ -163,18 +163,54 @@ class RunControlService:
         latest_heartbeat_at = self.repository.latest_worker_heartbeat_at(run_id)
         latest_event_at = self.repository.latest_run_event_at(run_id)
         event_count = self.repository.list_run_events(run_id, limit=0).total_count
-        status_detail_json = self._with_default_status_detail(run.status_detail_json or {})
-        runtime_v2 = dict(status_detail_json.get("runtime_v2") or {})
-        runtime_v2.update(
+        status_detail_json = dict(run.status_detail_json or {})
+        status_detail_json.setdefault("runtime_v2", {})
+        runtime_v2 = dict(status_detail_json["runtime_v2"] or {})
+        active_runtime_bundle_revision_id = (
+            runtime_v2.get("active_runtime_bundle_revision_id") or run.runtime_bundle_revision_id
+        )
+        recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
+        if recovery:
+            recovery.setdefault("active_bundle_revision_id", active_runtime_bundle_revision_id)
+            recovery.setdefault(
+                "rollback_performed",
+                bool(
+                    active_runtime_bundle_revision_id
+                    and recovery.get("bundle_revision_id")
+                    and recovery.get("bundle_revision_id") != active_runtime_bundle_revision_id
+                ),
+            )
+            runtime_v2["last_export_route_recovery"] = recovery
+        runtime_v2["recovered_lineage"] = [
+            dict(entry)
+            for entry in (runtime_v2.get("recovered_lineage") or [])
+            if isinstance(entry, dict)
+        ]
+        status_detail_json["runtime_v2"].update(
             {
                 "runtime_bundle_revision_id": run.runtime_bundle_revision_id,
+                "active_runtime_bundle_revision_id": active_runtime_bundle_revision_id,
                 "chapter_run_count": self.repository.count_chapter_runs_for_run(run_id),
                 "packet_task_count": self.repository.count_packet_tasks_for_run(run_id),
                 "review_session_count": self.repository.count_review_sessions_for_run(run_id),
                 "runtime_checkpoint_count": self.repository.count_runtime_checkpoints_for_run(run_id),
+                "max_auto_patch_attempts": (
+                    budget.max_auto_followup_attempts if budget is not None else None
+                ),
+                "allowed_patch_surfaces": list(
+                    status_detail_json["runtime_v2"].get("allowed_patch_surfaces") or []
+                ),
+                "auto_patch_attempt_count": int(
+                    status_detail_json["runtime_v2"].get("auto_patch_attempt_count") or 0
+                ),
+                "recovered_lineage": runtime_v2["recovered_lineage"],
+                **(
+                    {"last_export_route_recovery": runtime_v2["last_export_route_recovery"]}
+                    if "last_export_route_recovery" in runtime_v2
+                    else {}
+                ),
             }
         )
-        status_detail_json["runtime_v2"] = runtime_v2
         return DocumentRunSummary(
             run_id=run.id,
             document_id=run.document_id,

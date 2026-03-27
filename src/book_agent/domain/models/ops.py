@@ -392,8 +392,17 @@ class RuntimeBundleRevision(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=False),
         ForeignKey("runtime_bundle_revisions.id", ondelete="SET NULL"),
     )
+    rollback_target_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("runtime_bundle_revisions.id", ondelete="SET NULL"),
+    )
     manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     rollout_scope_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    canary_verdict: Mapped[str | None] = mapped_column(Text)
+    canary_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    freeze_reason: Mapped[str | None] = mapped_column(Text)
+    frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

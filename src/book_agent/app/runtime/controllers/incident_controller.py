@@ -14,6 +14,7 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models.ops import DocumentRun, RuntimePatchProposal
 from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
+from book_agent.services.bundle_guard import BundleGuardService
 from book_agent.services.runtime_bundle import RuntimeBundleRecord, RuntimeBundleService
 from book_agent.services.runtime_patch_validation import (
     RuntimePatchValidationResult,
@@ -31,11 +32,16 @@ class IncidentController:
         *,
         session: Session,
         bundle_service: RuntimeBundleService | None = None,
+        bundle_guard_service: BundleGuardService | None = None,
         validation_service: RuntimePatchValidationService | None = None,
     ):
         self._session = session
         self._runtime_repo = RuntimeResourcesRepository(session)
         self._bundle_service = bundle_service or RuntimeBundleService(session)
+        self._bundle_guard_service = bundle_guard_service or BundleGuardService(
+            session,
+            bundle_service=self._bundle_service,
+        )
         self._validation_service = validation_service or RuntimePatchValidationService(session)
 
     def open_patch_proposal(
@@ -117,32 +123,49 @@ class IncidentController:
             rollout_scope_json=rollout_scope_json or {"mode": "dev"},
         )
         self._bundle_service.activate_bundle(bundle_record.revision.id)
+        bundle_guard = self._bundle_guard_service.evaluate_canary_and_maybe_rollback(
+            revision_id=bundle_record.revision.id,
+            report_json=canary_report_json or proposal.validation_report_json,
+            rollout_scope_json=rollout_scope_json or {"mode": "dev"},
+        )
+        effective_bundle_record = self._bundle_service.lookup_bundle(bundle_guard.effective_revision_id)
 
         now = _utcnow()
-        proposal.status = RuntimePatchProposalStatus.PUBLISHED
+        proposal.status = (
+            RuntimePatchProposalStatus.ROLLED_BACK
+            if bundle_guard.rollback_performed
+            else RuntimePatchProposalStatus.PUBLISHED
+        )
         proposal.published_bundle_revision_id = bundle_record.revision.id
         proposal.status_detail_json = {
             **dict(proposal.status_detail_json or {}),
             "published_revision_id": bundle_record.revision.id,
-            "validation": canary_report_json or proposal.validation_report_json,
+            "bundle_guard": {
+                "canary_verdict": bundle_guard.canary_verdict,
+                "rollback_performed": bundle_guard.rollback_performed,
+                "effective_revision_id": bundle_guard.effective_revision_id,
+                "rollback_target_revision_id": bundle_guard.rollback_target_revision_id,
+                "freeze_reason": bundle_guard.freeze_reason,
+            },
         }
         proposal.updated_at = now
 
-        incident.status = RuntimeIncidentStatus.PUBLISHED
-        incident.runtime_bundle_revision_id = bundle_record.revision.id
+        incident.status = RuntimeIncidentStatus.FROZEN if bundle_guard.rollback_performed else RuntimeIncidentStatus.PUBLISHED
+        incident.runtime_bundle_revision_id = effective_bundle_record.revision.id
         incident.bundle_json = {
             **dict(incident.bundle_json or {}),
             "published_bundle_revision_id": bundle_record.revision.id,
-            "active_bundle_revision_id": bundle_record.revision.id,
+            "active_bundle_revision_id": effective_bundle_record.revision.id,
+            "rollback_target_revision_id": bundle_guard.rollback_target_revision_id,
             "revision_name": revision_name,
         }
         incident.updated_at = now
 
         run = self._session.get(DocumentRun, incident.run_id)
         if run is not None:
-            run.runtime_bundle_revision_id = bundle_record.revision.id
+            run.runtime_bundle_revision_id = effective_bundle_record.revision.id
             runtime_v2 = dict((run.status_detail_json or {}).get("runtime_v2") or {})
-            runtime_v2["active_runtime_bundle_revision_id"] = bundle_record.revision.id
+            runtime_v2["active_runtime_bundle_revision_id"] = effective_bundle_record.revision.id
             status_detail = dict(run.status_detail_json or {})
             status_detail["runtime_v2"] = runtime_v2
             run.status_detail_json = status_detail
@@ -153,7 +176,7 @@ class IncidentController:
             run_id=incident.run_id,
             scope_type=incident.scope_type,
             scope_id=incident.scope_id,
-            revision_id=bundle_record.revision.id,
+            revision_id=effective_bundle_record.revision.id,
             work_item_scope_type_override=(
                 WorkItemScopeType.EXPORT
                 if incident.incident_kind == RuntimeIncidentKind.EXPORT_MISROUTING

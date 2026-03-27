@@ -30,6 +30,7 @@ from book_agent.domain.models.ops import (
     ChapterRun,
     DocumentRun,
     RunBudget,
+    RuntimeBundleRevision,
     RuntimeCheckpoint,
     RuntimeIncident,
     RuntimePatchProposal,
@@ -172,6 +173,83 @@ class IncidentControllerTests(unittest.TestCase):
             self.assertEqual(incident.status.value, "published")
             self.assertEqual(run.runtime_bundle_revision_id, bundle_record.revision.id)
             self.assertEqual(work_item.runtime_bundle_revision_id, bundle_record.revision.id)
+
+    def test_publish_validated_patch_rolls_back_failed_dev_canary_and_rebinds_scope(self) -> None:
+        run_id, incident_id, work_item_id, _packet_scope_id = self._seed_run_incident_and_work_item()
+
+        with self.session_factory() as session:
+            bundle_service = RuntimeBundleService(session, settings=self._settings())
+            stable = bundle_service.publish_bundle(
+                revision_name="bundle-stable",
+                manifest_json={"code": {"entrypoint": "book_agent"}, "config": {"mode": "dev"}},
+                rollout_scope_json={"mode": "dev"},
+            )
+            bundle_service.record_canary_verdict(stable.revision.id, verdict="passed", report_json={"passed": True})
+            bundle_service.activate_bundle(stable.revision.id)
+
+            incident = session.get(RuntimeIncident, incident_id)
+            assert incident is not None
+            incident.runtime_bundle_revision_id = stable.revision.id
+            session.add(incident)
+            session.commit()
+
+        with self.session_factory() as session:
+            bundle_service = RuntimeBundleService(session, settings=self._settings())
+            validation_service = RuntimePatchValidationService(session)
+            controller = IncidentController(
+                session=session,
+                bundle_service=bundle_service,
+                validation_service=validation_service,
+            )
+
+            proposal = controller.open_patch_proposal(
+                incident_id=incident_id,
+                patch_surface="runtime_bundle",
+                diff_manifest_json={"files": ["src/book_agent/services/bundle_guard.py"]},
+            )
+            controller.validate_patch_proposal(
+                proposal_id=proposal.id,
+                passed=True,
+                report_json={"command": "uv run pytest tests/test_incident_controller.py"},
+            )
+            published_bundle = controller.publish_validated_patch(
+                proposal_id=proposal.id,
+                revision_name="bundle-bad-canary",
+                manifest_json={"code": {"entrypoint": "book_agent"}, "config": {"mode": "dev", "candidate": True}},
+                rollout_scope_json={"mode": "dev", "lane": "canary"},
+                canary_report_json={"canary_verdict": "failed", "signal": "export_misrouting"},
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            proposal = session.get(RuntimePatchProposal, proposal.id)
+            incident = session.get(RuntimeIncident, incident_id)
+            run = session.get(DocumentRun, run_id)
+            work_item = session.get(WorkItem, work_item_id)
+            rolled_back_revision = session.get(RuntimeBundleRevision, published_bundle.revision.id)
+
+            self.assertIsNotNone(proposal)
+            self.assertIsNotNone(incident)
+            self.assertIsNotNone(run)
+            self.assertIsNotNone(work_item)
+            self.assertIsNotNone(rolled_back_revision)
+            assert proposal is not None
+            assert incident is not None
+            assert run is not None
+            assert work_item is not None
+            assert rolled_back_revision is not None
+
+            self.assertEqual(proposal.status.value, "rolled_back")
+            self.assertEqual(proposal.published_bundle_revision_id, published_bundle.revision.id)
+            self.assertTrue(proposal.status_detail_json["bundle_guard"]["rollback_performed"])
+            self.assertEqual(proposal.status_detail_json["bundle_guard"]["effective_revision_id"], stable.revision.id)
+            self.assertEqual(incident.status.value, "frozen")
+            self.assertEqual(incident.runtime_bundle_revision_id, stable.revision.id)
+            self.assertEqual(run.runtime_bundle_revision_id, stable.revision.id)
+            self.assertEqual(work_item.runtime_bundle_revision_id, stable.revision.id)
+            self.assertEqual(rolled_back_revision.status.value, "rolled_back")
+            self.assertEqual(rolled_back_revision.rollback_target_revision_id, stable.revision.id)
+            self.assertEqual(rolled_back_revision.freeze_reason, "export_misrouting")
 
     def test_review_controller_recovers_repeated_deadlock_with_minimal_chapter_replay(self) -> None:
         with self.session_factory() as session:

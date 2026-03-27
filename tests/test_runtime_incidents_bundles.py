@@ -1,16 +1,17 @@
 import unittest
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from book_agent.domain.enums import (
-    DocumentRunStatus,
-    DocumentRunType,
-    DocumentStatus,
     JobScopeType,
     RuntimeBundleRevisionStatus,
     RuntimeIncidentKind,
     RuntimeIncidentStatus,
     RuntimePatchProposalStatus,
     SourceType,
+    DocumentRunStatus,
+    DocumentRunType,
+    DocumentStatus,
 )
 from book_agent.domain.models import Document
 from book_agent.domain.models.ops import DocumentRun, RuntimeBundleRevision, RuntimeIncident, RuntimePatchProposal
@@ -108,3 +109,52 @@ class RuntimeIncidentsBundlesTests(unittest.TestCase):
             self.assertEqual(persisted_revision.status, RuntimeBundleRevisionStatus.PUBLISHED)
             self.assertEqual(persisted_incident.status, RuntimeIncidentStatus.OPEN)
             self.assertEqual(persisted_patch.status, RuntimePatchProposalStatus.PROPOSED)
+
+    def test_runtime_bundle_revision_persists_canary_and_rollback_lineage_fields(self) -> None:
+        with self.session_factory() as session:
+            stable_revision = RuntimeBundleRevision(
+                id=str(uuid4()),
+                bundle_type="runtime",
+                revision_name="bundle-stable",
+                status=RuntimeBundleRevisionStatus.PUBLISHED,
+                manifest_json={"code": {"runner": "controller"}},
+                rollout_scope_json={"mode": "dev"},
+                canary_verdict="passed",
+                canary_report_json={"result": "green"},
+                published_at=datetime.now(timezone.utc),
+                active_at=datetime.now(timezone.utc),
+            )
+            session.add(stable_revision)
+            session.flush()
+
+            rolled_back_revision = RuntimeBundleRevision(
+                id=str(uuid4()),
+                bundle_type="runtime",
+                revision_name="bundle-bad",
+                status=RuntimeBundleRevisionStatus.ROLLED_BACK,
+                parent_bundle_revision_id=stable_revision.id,
+                rollback_target_revision_id=stable_revision.id,
+                manifest_json={"code": {"runner": "controller"}, "patch": {"id": "bad-rollout"}},
+                rollout_scope_json={"mode": "dev"},
+                canary_verdict="failed",
+                canary_report_json={"signal": "export_misrouting"},
+                freeze_reason="canary_regression",
+                frozen_at=datetime.now(timezone.utc),
+                rolled_back_at=datetime.now(timezone.utc),
+                published_at=datetime.now(timezone.utc),
+                active_at=datetime.now(timezone.utc),
+            )
+            session.add(rolled_back_revision)
+            session.commit()
+
+        with self.session_factory() as session:
+            persisted_revision = session.get(RuntimeBundleRevision, rolled_back_revision.id)
+            self.assertIsNotNone(persisted_revision)
+            assert persisted_revision is not None
+            self.assertEqual(persisted_revision.status, RuntimeBundleRevisionStatus.ROLLED_BACK)
+            self.assertEqual(persisted_revision.rollback_target_revision_id, stable_revision.id)
+            self.assertEqual(persisted_revision.canary_verdict, "failed")
+            self.assertEqual(persisted_revision.canary_report_json["signal"], "export_misrouting")
+            self.assertEqual(persisted_revision.freeze_reason, "canary_regression")
+            self.assertIsNotNone(persisted_revision.frozen_at)
+            self.assertIsNotNone(persisted_revision.rolled_back_at)

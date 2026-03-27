@@ -1010,21 +1010,31 @@ class DocumentRunExecutor:
 
         if run is not None:
             proposal = session.get(RuntimePatchProposal, recovery.proposal_id)
+            proposal_detail = (
+                dict(proposal.status_detail_json or {})
+                if proposal is not None
+                else {}
+            )
+            bundle_guard = dict(proposal_detail.get("bundle_guard") or {})
             published_bundle_revision_id = (
                 proposal.published_bundle_revision_id
                 if proposal is not None and proposal.published_bundle_revision_id
                 else recovery.bundle_revision_id
             )
             active_bundle_revision_id = str(
-                run.runtime_bundle_revision_id
-                or published_bundle_revision_id
+                bundle_guard.get("effective_revision_id")
+                or run.runtime_bundle_revision_id
                 or recovery.bundle_revision_id
             )
+            rollback_target_revision_id = bundle_guard.get("rollback_target_revision_id")
+            rollback_performed = bool(bundle_guard.get("rollback_performed"))
             lineage_entry = {
                 "incident_id": recovery.incident_id,
                 "proposal_id": recovery.proposal_id,
                 "published_bundle_revision_id": published_bundle_revision_id,
                 "active_bundle_revision_id": active_bundle_revision_id,
+                "rollback_performed": rollback_performed,
+                "rollback_target_revision_id": rollback_target_revision_id,
                 "replay_scope_id": claimed.scope_id,
                 "replay_work_item_id": claimed.work_item_id,
                 "bound_work_item_ids": list(recovery.bound_work_item_ids),
@@ -1039,6 +1049,8 @@ class DocumentRunExecutor:
                 "published_bundle_revision_id": published_bundle_revision_id,
                 "active_bundle_revision_id": active_bundle_revision_id,
                 "selected_route": selected_route,
+                "rollback_performed": rollback_performed,
+                "rollback_target_revision_id": rollback_target_revision_id,
                 "corrected_route": recovery.corrected_route,
                 "route_candidates": route_candidates,
                 "replay_scope_id": claimed.scope_id,

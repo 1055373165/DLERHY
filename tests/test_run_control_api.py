@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -30,6 +31,7 @@ from book_agent.domain.models import Document
 from book_agent.domain.models.ops import RunAuditEvent, WorkItem, WorkerLease
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.infra.repositories.run_control import RunControlRepository
 
 
 class _NoopDocumentRunExecutor:
@@ -241,6 +243,58 @@ class RunControlApiTests(unittest.TestCase):
         self.assertEqual(summary_data["worker_leases"]["status_counts"]["active"], 1)
         self.assertIsNotNone(summary_data["worker_leases"]["latest_heartbeat_at"])
         self.assertEqual(summary_data["events"]["event_count"], 2)
+
+    def test_run_summary_surfaces_active_bundle_revision_and_recovered_lineage(self) -> None:
+        document_id = self._create_document()
+        create_response = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": DocumentRunType.TRANSLATE_FULL.value,
+                "requested_by": "ops-user",
+            },
+        )
+        run_id = create_response.json()["run_id"]
+        stable_revision_id = str(uuid4())
+        bad_revision_id = str(uuid4())
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            run = repository.get_run(run_id)
+            run.runtime_bundle_revision_id = stable_revision_id
+            run.status_detail_json = {
+                "runtime_v2": {
+                    "last_export_route_recovery": {
+                        "incident_id": "incident-1",
+                        "proposal_id": "proposal-1",
+                        "bundle_revision_id": bad_revision_id,
+                        "bound_work_item_ids": ["work-item-1"],
+                    },
+                    "recovered_lineage": [
+                        {
+                            "incident_id": "incident-1",
+                            "proposal_id": "proposal-1",
+                            "published_bundle_revision_id": bad_revision_id,
+                            "active_bundle_revision_id": stable_revision_id,
+                        }
+                    ],
+                }
+            }
+            repository.save_run(run)
+            session.commit()
+
+        summary_response = self.client.get(f"/v1/runs/{run_id}")
+        self.assertEqual(summary_response.status_code, 200)
+        runtime_v2 = summary_response.json()["status_detail_json"]["runtime_v2"]
+        self.assertEqual(runtime_v2["runtime_bundle_revision_id"], stable_revision_id)
+        self.assertEqual(runtime_v2["active_runtime_bundle_revision_id"], stable_revision_id)
+        self.assertEqual(runtime_v2["last_export_route_recovery"]["bundle_revision_id"], bad_revision_id)
+        self.assertEqual(
+            runtime_v2["last_export_route_recovery"]["active_bundle_revision_id"],
+            stable_revision_id,
+        )
+        self.assertEqual(len(runtime_v2["recovered_lineage"]), 1)
+        self.assertEqual(runtime_v2["recovered_lineage"][0]["proposal_id"], "proposal-1")
 
 
 if __name__ == "__main__":

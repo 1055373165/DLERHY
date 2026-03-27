@@ -77,8 +77,14 @@ class RuntimeBundleService:
                 revision_name=revision_name,
                 status=RuntimeBundleRevisionStatus.PUBLISHED,
                 parent_bundle_revision_id=parent_bundle_revision_id,
+                rollback_target_revision_id=None,
                 manifest_json=manifest_json,
                 rollout_scope_json=rollout_scope_json or {},
+                canary_verdict=None,
+                canary_report_json={},
+                freeze_reason=None,
+                frozen_at=None,
+                rolled_back_at=None,
                 published_at=published_at,
                 active_at=None,
                 created_at=published_at,
@@ -89,8 +95,14 @@ class RuntimeBundleService:
             revision.revision_name = revision_name
             revision.status = RuntimeBundleRevisionStatus.PUBLISHED
             revision.parent_bundle_revision_id = parent_bundle_revision_id
+            revision.rollback_target_revision_id = None
             revision.manifest_json = manifest_json
             revision.rollout_scope_json = rollout_scope_json or {}
+            revision.canary_verdict = None
+            revision.canary_report_json = {}
+            revision.freeze_reason = None
+            revision.frozen_at = None
+            revision.rolled_back_at = None
             revision.published_at = published_at
             revision.updated_at = published_at
         self.session.add(revision)
@@ -152,6 +164,91 @@ class RuntimeBundleService:
     def lookup_active_bundle_manifest_payload(self) -> dict[str, Any]:
         record = self.lookup_active_bundle()
         return self._manifest_payload(record)
+
+    def lookup_latest_stable_bundle(
+        self,
+        *,
+        exclude_revision_id: str | None = None,
+    ) -> RuntimeBundleRecord:
+        query = (
+            select(RuntimeBundleRevision)
+            .where(RuntimeBundleRevision.status == RuntimeBundleRevisionStatus.PUBLISHED)
+            .where(RuntimeBundleRevision.freeze_reason.is_(None))
+            .order_by(
+                RuntimeBundleRevision.active_at.desc(),
+                RuntimeBundleRevision.published_at.desc(),
+                RuntimeBundleRevision.created_at.desc(),
+            )
+        )
+        if exclude_revision_id:
+            query = query.where(RuntimeBundleRevision.id != exclude_revision_id)
+        revisions = self.session.scalars(query).all()
+        for revision in revisions:
+            if revision.canary_verdict == "failed":
+                continue
+            return self.lookup_bundle(revision.id)
+        raise ValueError("No stable runtime bundle revision available")
+
+    def record_canary_verdict(
+        self,
+        revision_id: str,
+        *,
+        verdict: str,
+        report_json: dict[str, Any] | None = None,
+    ) -> RuntimeBundleRecord:
+        normalized_verdict = verdict.strip().lower()
+        if normalized_verdict not in {"pending", "passed", "failed"}:
+            raise ValueError(f"Unsupported canary verdict: {verdict}")
+        record = self.lookup_bundle(revision_id)
+        record.revision.canary_verdict = normalized_verdict
+        record.revision.canary_report_json = dict(report_json or {})
+        record.revision.updated_at = _utcnow()
+        self.session.add(record.revision)
+        self.session.flush()
+        return record
+
+    def freeze_bundle(
+        self,
+        revision_id: str,
+        *,
+        reason: str,
+    ) -> RuntimeBundleRecord:
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValueError("freeze reason must not be empty")
+        record = self.lookup_bundle(revision_id)
+        now = _utcnow()
+        record.revision.freeze_reason = normalized_reason
+        record.revision.frozen_at = now
+        record.revision.updated_at = now
+        self.session.add(record.revision)
+        self.session.flush()
+        return record
+
+    def rollback_bundle(
+        self,
+        revision_id: str,
+        *,
+        reason: str,
+        target_revision_id: str | None = None,
+    ) -> RuntimeBundleRecord:
+        source = self.lookup_bundle(revision_id)
+        target = (
+            self.lookup_bundle(target_revision_id)
+            if target_revision_id is not None
+            else self.lookup_latest_stable_bundle(exclude_revision_id=revision_id)
+        )
+        now = _utcnow()
+        source.revision.status = RuntimeBundleRevisionStatus.ROLLED_BACK
+        source.revision.rollback_target_revision_id = target.revision.id
+        source.revision.freeze_reason = reason.strip() or "rollback"
+        source.revision.frozen_at = source.revision.frozen_at or now
+        source.revision.rolled_back_at = now
+        source.revision.updated_at = now
+        self.session.add(source.revision)
+        self.session.flush()
+        self.activate_bundle(target.revision.id)
+        return target
 
     def _manifest_payload(self, record: RuntimeBundleRecord) -> dict[str, Any]:
         manifest_json = record.manifest_json.get("manifest_json")
