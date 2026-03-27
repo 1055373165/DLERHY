@@ -11,9 +11,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.enums import ChapterStatus, MemoryProposalStatus, MemoryScopeType, MemoryStatus, SnapshotType
+from book_agent.domain.enums import ChapterStatus, MemoryProposalStatus, MemoryScopeType, MemoryStatus, PacketStatus, SnapshotType
 from book_agent.domain.models import Chapter, ChapterMemoryProposal, MemorySnapshot
-from book_agent.domain.models.translation import TranslationRun
+from book_agent.domain.models.translation import TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -395,6 +395,55 @@ class MemoryServiceTests(unittest.TestCase):
             assert proposal is not None
             assert latest_snapshot is not None
             self.assertEqual(proposal.status, MemoryProposalStatus.PROPOSED)
+            self.assertEqual(latest_snapshot.version, 2)
+
+    def test_newer_packet_proposal_retires_older_pending_proposal(self) -> None:
+        document_id, packet_ids = self._bootstrap_to_db()
+        target_packet_id = self._find_packet_with_text(packet_ids, "Context engineering")
+
+        with self.session_factory() as session:
+            chapter = session.scalars(select(Chapter).where(Chapter.document_id == document_id)).first()
+            assert chapter is not None
+            self._seed_chapter_memory_snapshot(document_id=document_id, chapter_id=chapter.id)
+
+            repository = TranslationRepository(session)
+            service = TranslationService(repository)
+
+            first_artifacts = service.execute_packet(target_packet_id)
+            packet = repository.session.get(TranslationPacket, target_packet_id)
+            assert packet is not None
+            packet.status = PacketStatus.BUILT
+            repository.session.flush()
+
+            second_artifacts = service.execute_packet(target_packet_id)
+            session.commit()
+
+            proposals = session.scalars(
+                select(ChapterMemoryProposal)
+                .where(ChapterMemoryProposal.packet_id == target_packet_id)
+                .order_by(ChapterMemoryProposal.created_at.asc())
+            ).all()
+            latest_snapshot = session.scalars(
+                select(MemorySnapshot)
+                .where(
+                    MemorySnapshot.document_id == document_id,
+                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                    MemorySnapshot.scope_id == chapter.id,
+                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                    MemorySnapshot.status == MemoryStatus.ACTIVE,
+                )
+                .order_by(MemorySnapshot.version.desc())
+            ).first()
+
+            self.assertEqual(first_artifacts.translation_run.attempt, 1)
+            self.assertEqual(second_artifacts.translation_run.attempt, 2)
+            self.assertEqual(len(proposals), 2)
+            self.assertEqual(proposals[0].translation_run_id, first_artifacts.translation_run.id)
+            self.assertEqual(proposals[0].status, MemoryProposalStatus.REJECTED)
+            self.assertEqual(proposals[1].translation_run_id, second_artifacts.translation_run.id)
+            self.assertEqual(proposals[1].status, MemoryProposalStatus.PROPOSED)
+            self.assertIsNotNone(latest_snapshot)
+            assert latest_snapshot is not None
             self.assertEqual(latest_snapshot.version, 2)
 
     def test_review_pass_commits_pending_chapter_memory_proposals_in_packet_order(self) -> None:

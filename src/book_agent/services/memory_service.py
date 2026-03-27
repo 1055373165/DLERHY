@@ -142,6 +142,10 @@ class MemoryService:
         current_snapshot = self.load_latest_chapter_memory(document_id=document_id, chapter_id=chapter_id)
         committed_snapshots: list[MemorySnapshot] = []
         for proposal in proposals:
+            self.chapter_memory_repository.retire_pending_proposals_for_packet(
+                packet_id=proposal.packet_id,
+                keep_translation_run_id=proposal.translation_run_id,
+            )
             merged_content_json = self._merge_review_approved_proposal(
                 base_content_json=current_snapshot.content_json if current_snapshot is not None else {},
                 proposal=proposal,

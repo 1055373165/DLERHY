@@ -105,6 +105,10 @@ class ChapterTranslationMemoryRepository:
         proposed_content_json: dict[str, Any],
     ) -> ChapterMemoryProposal:
         now = _utcnow()
+        self.retire_pending_proposals_for_packet(
+            packet_id=packet_id,
+            keep_translation_run_id=translation_run_id,
+        )
         proposal_id = stable_id("chapter-memory-proposal", translation_run_id)
         proposal = self.session.get(ChapterMemoryProposal, proposal_id)
         if proposal is None:
@@ -134,6 +138,33 @@ class ChapterTranslationMemoryRepository:
         self.session.merge(proposal)
         self.session.flush()
         return proposal
+
+    def retire_pending_proposals_for_packet(
+        self,
+        *,
+        packet_id: str,
+        keep_translation_run_id: str | None = None,
+    ) -> list[ChapterMemoryProposal]:
+        proposals = self.session.scalars(
+            select(ChapterMemoryProposal)
+            .where(
+                ChapterMemoryProposal.packet_id == packet_id,
+                ChapterMemoryProposal.status == MemoryProposalStatus.PROPOSED,
+            )
+            .order_by(ChapterMemoryProposal.created_at.asc(), ChapterMemoryProposal.translation_run_id.asc())
+        ).all()
+        retired: list[ChapterMemoryProposal] = []
+        now = _utcnow()
+        for proposal in proposals:
+            if keep_translation_run_id and proposal.translation_run_id == keep_translation_run_id:
+                continue
+            proposal.status = MemoryProposalStatus.REJECTED
+            proposal.updated_at = now
+            self.session.merge(proposal)
+            retired.append(proposal)
+        if retired:
+            self.session.flush()
+        return retired
 
     def mark_proposal_committed(
         self,
