@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     )
     docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
+    runtime_bundle_root: Path = Path("artifacts/runtime-bundles")
     upload_root: Path = Path("artifacts/uploads")
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"

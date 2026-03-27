@@ -6,8 +6,23 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import ChapterRunPhase, ChapterRunStatus, JobScopeType, PacketTaskAction, PacketTaskStatus
-from book_agent.domain.models.ops import ChapterRun, PacketTask, RuntimeCheckpoint
+from book_agent.domain.enums import (
+    ChapterRunPhase,
+    ChapterRunStatus,
+    JobScopeType,
+    PacketTaskAction,
+    PacketTaskStatus,
+    WorkItemScopeType,
+    WorkItemStatus,
+)
+from book_agent.domain.models.ops import (
+    ChapterRun,
+    PacketTask,
+    RuntimeCheckpoint,
+    RuntimeIncident,
+    RuntimePatchProposal,
+    WorkItem,
+)
 
 
 def _utcnow() -> datetime:
@@ -266,4 +281,34 @@ class RuntimeResourcesRepository:
             select(RuntimeCheckpoint)
             .where(RuntimeCheckpoint.run_id == run_id)
             .order_by(RuntimeCheckpoint.created_at.asc(), RuntimeCheckpoint.id.asc())
+        ).all()
+
+    def get_runtime_incident(self, incident_id: str) -> RuntimeIncident:
+        incident = self.session.get(RuntimeIncident, incident_id)
+        if incident is None:
+            raise ValueError(f"RuntimeIncident not found: {incident_id}")
+        return incident
+
+    def get_runtime_patch_proposal(self, proposal_id: str) -> RuntimePatchProposal:
+        proposal = self.session.get(RuntimePatchProposal, proposal_id)
+        if proposal is None:
+            raise ValueError(f"RuntimePatchProposal not found: {proposal_id}")
+        return proposal
+
+    def list_retryable_work_items_for_scope(
+        self,
+        *,
+        run_id: str,
+        scope_type: WorkItemScopeType,
+        scope_id: str,
+    ) -> list[WorkItem]:
+        return self.session.scalars(
+            select(WorkItem)
+            .where(
+                WorkItem.run_id == run_id,
+                WorkItem.scope_type == scope_type,
+                WorkItem.scope_id == scope_id,
+                WorkItem.status.in_([WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED]),
+            )
+            .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
         ).all()

@@ -17,6 +17,10 @@ from book_agent.domain.enums import (
     JobType,
     PacketTaskAction,
     PacketTaskStatus,
+    RuntimeBundleRevisionStatus,
+    RuntimeIncidentKind,
+    RuntimeIncidentStatus,
+    RuntimePatchProposalStatus,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
@@ -250,6 +254,97 @@ class RuntimeCheckpoint(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     checkpoint_key: Mapped[str] = mapped_column(Text, nullable=False)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     checkpoint_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class RuntimeIncident(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "runtime_incidents"
+    __table_args__ = (
+        UniqueConstraint(
+            "scope_type",
+            "scope_id",
+            "fingerprint",
+            name="uq_runtime_incidents_scope_fingerprint",
+        ),
+    )
+
+    run_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scope_type: Mapped[JobScopeType] = mapped_column(
+        enum_value_type(JobScopeType, name="runtime_incident_scope_type"),
+        nullable=False,
+    )
+    scope_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    incident_kind: Mapped[RuntimeIncidentKind] = mapped_column(
+        enum_value_type(RuntimeIncidentKind, name="runtime_incident_kind"),
+        nullable=False,
+    )
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str | None] = mapped_column(Text)
+    selected_route: Mapped[str | None] = mapped_column(Text)
+    runtime_bundle_revision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    status: Mapped[RuntimeIncidentStatus] = mapped_column(
+        enum_value_type(RuntimeIncidentStatus, name="runtime_incident_status"),
+        nullable=False,
+        default=RuntimeIncidentStatus.OPEN,
+    )
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    latest_work_item_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("work_items.id", ondelete="SET NULL"),
+    )
+    route_evidence_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    latest_error_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    bundle_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RuntimePatchProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "runtime_patch_proposals"
+
+    incident_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("runtime_incidents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[RuntimePatchProposalStatus] = mapped_column(
+        enum_value_type(RuntimePatchProposalStatus, name="runtime_patch_proposal_status"),
+        nullable=False,
+        default=RuntimePatchProposalStatus.PROPOSED,
+    )
+    proposed_by: Mapped[str | None] = mapped_column(Text)
+    approved_by: Mapped[str | None] = mapped_column(Text)
+    patch_surface: Mapped[str | None] = mapped_column(Text)
+    diff_manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    validation_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    published_bundle_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("runtime_bundle_revisions.id", ondelete="SET NULL"),
+    )
+    status_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class RuntimeBundleRevision(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "runtime_bundle_revisions"
+
+    bundle_type: Mapped[str] = mapped_column(Text, nullable=False, default="runtime")
+    revision_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[RuntimeBundleRevisionStatus] = mapped_column(
+        enum_value_type(RuntimeBundleRevisionStatus, name="runtime_bundle_revision_status"),
+        nullable=False,
+        default=RuntimeBundleRevisionStatus.DRAFT,
+    )
+    parent_bundle_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("runtime_bundle_revisions.id", ondelete="SET NULL"),
+    )
+    manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    rollout_scope_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class WorkItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):

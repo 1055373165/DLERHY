@@ -374,3 +374,34 @@ class PacketTaskStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class RuntimeIncidentKind(StrEnum):
+    EXPORT_MISROUTING = "export_misrouting"
+    RUNTIME_DEFECT = "runtime_defect"
+
+
+class RuntimeIncidentStatus(StrEnum):
+    OPEN = "open"
+    DIAGNOSING = "diagnosing"
+    PATCH_PROPOSED = "patch_proposed"
+    VALIDATING = "validating"
+    PUBLISHED = "published"
+    RESOLVED = "resolved"
+    FAILED = "failed"
+    FROZEN = "frozen"
+
+
+class RuntimePatchProposalStatus(StrEnum):
+    PROPOSED = "proposed"
+    VALIDATING = "validating"
+    VALIDATED = "validated"
+    PUBLISHED = "published"
+    REJECTED = "rejected"
+    ROLLED_BACK = "rolled_back"
+
+
+class RuntimeBundleRevisionStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ROLLED_BACK = "rolled_back"

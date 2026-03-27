@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
         backfill_legacy_history(settings.database_url)
     app.state.session_factory = build_session_factory(engine=engine)
     app.state.export_root = str(settings.export_root)
+    app.state.runtime_bundle_root = str(settings.runtime_bundle_root)
     app.state.upload_root = str(settings.upload_root)
     app.state.translation_worker = build_translation_worker(settings)
     app.state.document_run_executor = None
