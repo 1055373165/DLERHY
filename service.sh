@@ -26,6 +26,7 @@ BACKEND_PID_FILE="$ROOT_DIR/.server.pid"
 FRONTEND_PID_FILE="$ROOT_DIR/.frontend.pid"
 BACKEND_LOG_FILE="${BOOK_AGENT_BACKEND_LOG:-$ROOT_DIR/artifacts/server.log}"
 FRONTEND_LOG_FILE="${BOOK_AGENT_FRONTEND_LOG:-$ROOT_DIR/artifacts/frontend.log}"
+DEFAULT_SQLITE_DATABASE_URL="sqlite+pysqlite:///$ROOT_DIR/artifacts/book-agent.db"
 
 HOST="${BOOK_AGENT_HOST:-127.0.0.1}"
 PORT="${BOOK_AGENT_PORT:-8999}"
@@ -228,6 +229,12 @@ kill_orphan_backend() {
 
 start_postgres_if_needed() {
     if [[ "$MODE" != "postgres" ]]; then
+        if [[ -n "${BOOK_AGENT_DATABASE_URL:-}" ]] && [[ "${BOOK_AGENT_DATABASE_URL}" != sqlite* ]]; then
+            warn "Ignoring existing non-SQLite BOOK_AGENT_DATABASE_URL because default mode is SQLite."
+        fi
+        if [[ -z "${BOOK_AGENT_DATABASE_URL:-}" ]] || [[ "${BOOK_AGENT_DATABASE_URL}" != sqlite* ]]; then
+            export BOOK_AGENT_DATABASE_URL="${BOOK_AGENT_SQLITE_DATABASE_URL:-$DEFAULT_SQLITE_DATABASE_URL}"
+        fi
         info "Using SQLite database (pass ${BOLD}postgres${NC} to use PostgreSQL)."
         return
     fi
