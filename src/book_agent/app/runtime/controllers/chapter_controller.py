@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.app.runtime.controllers.review_controller import ReviewController
 from book_agent.domain.enums import PacketTaskAction, PacketType
 from book_agent.domain.models.ops import ChapterRun
 from book_agent.domain.models.translation import TranslationPacket
@@ -15,12 +16,14 @@ class ChapterController:
 
     Responsibility:
     - ensure PacketTask rows exist for TranslationPacket rows in the chapter
-    - do not create review resources or follow-up work yet
+    - ensure ReviewSession rows exist for the active ChapterRun generation
+    - do not seed review work items or infer review health yet
     """
 
     def __init__(self, *, session: Session):
         self._session = session
         self._runtime_repo = RuntimeResourcesRepository(session)
+        self._review_controller = ReviewController(session=session)
 
     def ensure_packet_tasks(self, *, run_id: str) -> int:
         chapter_runs = self._session.scalars(select(ChapterRun).where(ChapterRun.run_id == run_id)).all()
@@ -47,6 +50,14 @@ class ChapterController:
                     desired_action=desired_action,
                 )
                 created += 1
+        return created
+
+    def ensure_review_sessions(self, *, run_id: str) -> int:
+        chapter_runs = self._session.scalars(select(ChapterRun).where(ChapterRun.run_id == run_id)).all()
+        created = 0
+        for chapter_run in chapter_runs:
+            result = self._review_controller.reconcile_review_session(chapter_run_id=chapter_run.id)
+            created += int(result.created)
         return created
 
 

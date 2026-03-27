@@ -170,6 +170,7 @@ class RunControlService:
                 "runtime_bundle_revision_id": run.runtime_bundle_revision_id,
                 "chapter_run_count": self.repository.count_chapter_runs_for_run(run_id),
                 "packet_task_count": self.repository.count_packet_tasks_for_run(run_id),
+                "review_session_count": self.repository.count_review_sessions_for_run(run_id),
                 "runtime_checkpoint_count": self.repository.count_runtime_checkpoints_for_run(run_id),
             }
         )

@@ -376,6 +376,20 @@ class PacketTaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class ReviewSessionStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ReviewTerminalityState(StrEnum):
+    OPEN = "open"
+    APPROVED = "approved"
+    BLOCKED = "blocked"
+
+
 class RuntimeIncidentKind(StrEnum):
     EXPORT_MISROUTING = "export_misrouting"
     RUNTIME_DEFECT = "runtime_defect"

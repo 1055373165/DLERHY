@@ -10,13 +10,14 @@ from book_agent.domain.enums import (
     JobScopeType,
     PacketStatus,
     PacketType,
+    ReviewSessionStatus,
     SourceType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Chapter, Document
-from book_agent.domain.models.ops import DocumentRun
+from book_agent.domain.models.ops import DocumentRun, ReviewSession
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -94,6 +95,7 @@ class ControllerRunnerTests(unittest.TestCase):
         stats = runner.reconcile_run(run_id=run_id)
         self.assertEqual(stats.created_chapter_runs, 1)
         self.assertEqual(stats.created_packet_tasks, 1)
+        self.assertEqual(stats.created_review_sessions, 1)
         self.assertEqual(stats.mirrored_packet_tasks, 0)
 
         with self.session_factory() as session:
@@ -103,6 +105,9 @@ class ControllerRunnerTests(unittest.TestCase):
             packet_tasks = repo.list_packet_tasks_for_chapter_run(chapter_run_id=chapter_runs[0].id)
             self.assertEqual(len(packet_tasks), 1)
             self.assertEqual(packet_tasks[0].packet_id, packet_id)
+            review_sessions = repo.list_review_sessions_for_chapter_run(chapter_run_id=chapter_runs[0].id)
+            self.assertEqual(len(review_sessions), 1)
+            self.assertEqual(review_sessions[0].status, ReviewSessionStatus.ACTIVE)
             checkpoint = repo.get_checkpoint(
                 run_id=run_id,
                 scope_type=JobScopeType.DOCUMENT,
@@ -110,6 +115,24 @@ class ControllerRunnerTests(unittest.TestCase):
                 checkpoint_key="controller_runner.phase_a",
             )
             self.assertIsNotNone(checkpoint)
+            assert checkpoint is not None
+            self.assertEqual(checkpoint.checkpoint_json["created_review_sessions"], 1)
+            chapter_checkpoint = repo.get_checkpoint(
+                run_id=run_id,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=chapter_runs[0].chapter_id,
+                checkpoint_key="controller_runner.chapter.phase_a",
+            )
+            self.assertIsNotNone(chapter_checkpoint)
+            assert chapter_checkpoint is not None
+            self.assertEqual(chapter_checkpoint.checkpoint_json["review_session_id"], review_sessions[0].id)
+            review_checkpoint = repo.get_checkpoint(
+                run_id=run_id,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=chapter_runs[0].chapter_id,
+                checkpoint_key="review_controller.lane_health",
+            )
+            self.assertIsNotNone(review_checkpoint)
 
     def test_reconcile_run_mirrors_existing_translate_work_item_binding(self) -> None:
         run_id, _chapter_id, packet_id = self._seed_document_run()
@@ -131,6 +154,7 @@ class ControllerRunnerTests(unittest.TestCase):
         stats = runner.reconcile_run(run_id=run_id)
         self.assertEqual(stats.created_chapter_runs, 0)
         self.assertEqual(stats.created_packet_tasks, 0)
+        self.assertEqual(stats.created_review_sessions, 0)
         self.assertEqual(stats.mirrored_packet_tasks, 1)
 
         with self.session_factory() as session:
@@ -139,3 +163,5 @@ class ControllerRunnerTests(unittest.TestCase):
             packet_task = repo.list_packet_tasks_for_chapter_run(chapter_run_id=chapter_run.id)[0]
             self.assertIsNotNone(packet_task.last_work_item_id)
             self.assertEqual(packet_task.attempt_count, 1)
+            review_sessions = session.query(ReviewSession).all()
+            self.assertEqual(len(review_sessions), 1)

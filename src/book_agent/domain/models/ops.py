@@ -17,6 +17,8 @@ from book_agent.domain.enums import (
     JobType,
     PacketTaskAction,
     PacketTaskStatus,
+    ReviewSessionStatus,
+    ReviewTerminalityState,
     RuntimeBundleRevisionStatus,
     RuntimeIncidentKind,
     RuntimeIncidentStatus,
@@ -227,6 +229,45 @@ class PacketTask(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     conditions_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     status_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReviewSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "review_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "chapter_run_id",
+            "desired_generation",
+            name="uq_review_sessions_chapter_generation",
+        ),
+    )
+
+    chapter_run_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("chapter_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    desired_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    observed_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[ReviewSessionStatus] = mapped_column(
+        enum_value_type(ReviewSessionStatus, name="review_session_status"),
+        nullable=False,
+        default=ReviewSessionStatus.ACTIVE,
+    )
+    terminality_state: Mapped[ReviewTerminalityState] = mapped_column(
+        enum_value_type(ReviewTerminalityState, name="review_terminality_state"),
+        nullable=False,
+        default=ReviewTerminalityState.OPEN,
+    )
+    scope_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    runtime_bundle_revision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    last_work_item_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("work_items.id", ondelete="SET NULL"),
+    )
+    conditions_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    last_terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RuntimeCheckpoint(UUIDPrimaryKeyMixin, TimestampMixin, Base):

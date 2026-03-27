@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from book_agent.domain.enums import (
@@ -11,6 +12,8 @@ from book_agent.domain.enums import (
     PacketStatus,
     PacketType,
     PacketTaskAction,
+    ReviewSessionStatus,
+    ReviewTerminalityState,
     SourceType,
 )
 from book_agent.domain.models import Chapter, Document
@@ -179,3 +182,89 @@ class RuntimeResourcesRepositoryTests(unittest.TestCase):
                 repo.get_chapter_run("missing")
             with self.assertRaises(ValueError):
                 repo.get_packet_task("missing")
+            with self.assertRaises(ValueError):
+                repo.get_review_session("missing")
+
+    def test_review_session_repository_contract(self) -> None:
+        with self.session_factory() as session:
+            doc = Document(
+                source_type=SourceType.EPUB,
+                file_fingerprint=f"runtime-review-repo-{uuid4()}",
+                source_path="/tmp/review-repo.epub",
+                title="Review Repo Test",
+                author="Repo Tester",
+                src_lang="en",
+                tgt_lang="zh",
+                status=DocumentStatus.ACTIVE,
+                parser_version=1,
+                segmentation_version=1,
+            )
+            session.add(doc)
+            session.flush()
+
+            chapter = Chapter(
+                document_id=doc.id,
+                ordinal=1,
+                title_src="Chapter 1",
+                status=ChapterStatus.PACKET_BUILT,
+                metadata_json={},
+            )
+            session.add(chapter)
+            session.flush()
+
+            run = DocumentRun(
+                document_id=doc.id,
+                run_type=DocumentRunType.TRANSLATE_FULL,
+                status=DocumentRunStatus.RUNNING,
+                requested_by="test",
+                priority=100,
+                status_detail_json={},
+            )
+            session.add(run)
+            session.commit()
+
+        reconciled_at = datetime.now(timezone.utc)
+        terminal_at = datetime.now(timezone.utc)
+
+        with self.session_factory() as session:
+            repo = RuntimeResourcesRepository(session)
+            chapter_run = repo.ensure_chapter_run(
+                run_id=run.id,
+                document_id=doc.id,
+                chapter_id=chapter.id,
+                desired_phase=ChapterRunPhase.REVIEW,
+            )
+            created = repo.ensure_review_session(
+                chapter_run_id=chapter_run.id,
+                desired_generation=chapter_run.generation,
+                observed_generation=chapter_run.observed_generation,
+                scope_json={"document_id": doc.id, "chapter_id": chapter.id},
+                runtime_bundle_revision_id=str(uuid4()),
+            )
+            updated = repo.update_review_session(
+                created.id,
+                status=ReviewSessionStatus.SUCCEEDED,
+                terminality_state=ReviewTerminalityState.APPROVED,
+                observed_generation=chapter_run.observed_generation + 1,
+                status_detail_json={"issue_count": 0},
+                last_terminal_at=terminal_at,
+                last_reconciled_at=reconciled_at,
+            )
+
+            fetched = repo.get_review_session(created.id)
+            self.assertEqual(created.id, updated.id)
+            self.assertEqual(fetched.status, ReviewSessionStatus.SUCCEEDED)
+            self.assertEqual(fetched.terminality_state, ReviewTerminalityState.APPROVED)
+            self.assertEqual(fetched.observed_generation, chapter_run.observed_generation + 1)
+            self.assertEqual(fetched.status_detail_json["issue_count"], 0)
+            self.assertEqual(fetched.last_terminal_at, terminal_at)
+            self.assertEqual(fetched.last_reconciled_at, reconciled_at)
+            self.assertEqual(
+                repo.get_review_session_by_identity(
+                    chapter_run_id=chapter_run.id,
+                    desired_generation=chapter_run.generation,
+                ).id,
+                created.id,
+            )
+            self.assertIsNone(repo.get_active_review_session_for_chapter_run(chapter_run_id=chapter_run.id))
+            self.assertEqual(len(repo.list_review_sessions_for_chapter_run(chapter_run_id=chapter_run.id)), 1)

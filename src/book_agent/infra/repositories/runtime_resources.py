@@ -12,12 +12,15 @@ from book_agent.domain.enums import (
     JobScopeType,
     PacketTaskAction,
     PacketTaskStatus,
+    ReviewSessionStatus,
+    ReviewTerminalityState,
     WorkItemScopeType,
     WorkItemStatus,
 )
 from book_agent.domain.models.ops import (
     ChapterRun,
     PacketTask,
+    ReviewSession,
     RuntimeCheckpoint,
     RuntimeIncident,
     RuntimePatchProposal,
@@ -218,6 +221,135 @@ class RuntimeResourcesRepository:
         return self.update_packet_task(
             packet_task_id,
             status_detail_json=_merge_json(packet_task.status_detail_json, patch),
+        )
+
+    def get_review_session(self, review_session_id: str) -> ReviewSession:
+        review_session = self.session.get(ReviewSession, review_session_id)
+        if review_session is None:
+            raise ValueError(f"ReviewSession not found: {review_session_id}")
+        return review_session
+
+    def get_review_session_by_identity(
+        self,
+        *,
+        chapter_run_id: str,
+        desired_generation: int,
+    ) -> ReviewSession | None:
+        return self.session.scalar(
+            select(ReviewSession).where(
+                ReviewSession.chapter_run_id == chapter_run_id,
+                ReviewSession.desired_generation == desired_generation,
+            )
+        )
+
+    def get_active_review_session_for_chapter_run(self, *, chapter_run_id: str) -> ReviewSession | None:
+        return self.session.scalar(
+            select(ReviewSession)
+            .where(
+                ReviewSession.chapter_run_id == chapter_run_id,
+                ReviewSession.status == ReviewSessionStatus.ACTIVE,
+            )
+            .order_by(ReviewSession.desired_generation.desc(), ReviewSession.id.desc())
+        )
+
+    def list_review_sessions_for_chapter_run(self, *, chapter_run_id: str) -> list[ReviewSession]:
+        return self.session.scalars(
+            select(ReviewSession)
+            .where(ReviewSession.chapter_run_id == chapter_run_id)
+            .order_by(ReviewSession.created_at.asc(), ReviewSession.id.asc())
+        ).all()
+
+    def ensure_review_session(
+        self,
+        *,
+        chapter_run_id: str,
+        desired_generation: int = 1,
+        observed_generation: int | None = None,
+        scope_json: dict[str, Any] | None = None,
+        runtime_bundle_revision_id: str | None = None,
+    ) -> ReviewSession:
+        existing = self.get_review_session_by_identity(
+            chapter_run_id=chapter_run_id,
+            desired_generation=desired_generation,
+        )
+        if existing is not None:
+            return existing
+
+        now = _utcnow()
+        review_session = ReviewSession(
+            chapter_run_id=chapter_run_id,
+            desired_generation=desired_generation,
+            observed_generation=observed_generation or desired_generation,
+            status=ReviewSessionStatus.ACTIVE,
+            terminality_state=ReviewTerminalityState.OPEN,
+            scope_json=dict(scope_json or {}),
+            runtime_bundle_revision_id=runtime_bundle_revision_id,
+            last_work_item_id=None,
+            conditions_json={},
+            status_detail_json={},
+            last_terminal_at=None,
+            last_reconciled_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(review_session)
+        self.session.flush()
+        return review_session
+
+    def update_review_session(
+        self,
+        review_session_id: str,
+        *,
+        status: ReviewSessionStatus | None = None,
+        terminality_state: ReviewTerminalityState | None = None,
+        observed_generation: int | None = None,
+        scope_json: dict[str, Any] | None = None,
+        conditions_json: dict[str, Any] | None = None,
+        status_detail_json: dict[str, Any] | None = None,
+        runtime_bundle_revision_id: str | None | object = _UNSET,
+        last_work_item_id: str | None | object = _UNSET,
+        last_terminal_at: datetime | None | object = _UNSET,
+        last_reconciled_at: datetime | None | object = _UNSET,
+    ) -> ReviewSession:
+        review_session = self.get_review_session(review_session_id)
+        now = _utcnow()
+        if status is not None:
+            review_session.status = status
+        if terminality_state is not None:
+            review_session.terminality_state = terminality_state
+        if observed_generation is not None:
+            review_session.observed_generation = observed_generation
+        if scope_json is not None:
+            review_session.scope_json = dict(scope_json)
+        if conditions_json is not None:
+            review_session.conditions_json = dict(conditions_json)
+        if status_detail_json is not None:
+            review_session.status_detail_json = dict(status_detail_json)
+        if runtime_bundle_revision_id is not _UNSET:
+            review_session.runtime_bundle_revision_id = runtime_bundle_revision_id
+        if last_work_item_id is not _UNSET:
+            review_session.last_work_item_id = last_work_item_id
+        if last_terminal_at is not _UNSET:
+            review_session.last_terminal_at = last_terminal_at
+        if last_reconciled_at is not _UNSET:
+            review_session.last_reconciled_at = last_reconciled_at
+        review_session.updated_at = now
+        self.session.add(review_session)
+        self.session.flush()
+        return review_session
+
+    def merge_review_session_conditions(self, review_session_id: str, patch: dict[str, Any]) -> ReviewSession:
+        review_session = self.get_review_session(review_session_id)
+        return self.update_review_session(
+            review_session_id,
+            conditions_json=_merge_json(review_session.conditions_json, patch),
+        )
+
+    def merge_review_session_status_detail(self, review_session_id: str, patch: dict[str, Any]) -> ReviewSession:
+        review_session = self.get_review_session(review_session_id)
+        return self.update_review_session(
+            review_session_id,
+            status_detail_json=_merge_json(review_session.status_detail_json, patch),
         )
 
     def get_checkpoint(

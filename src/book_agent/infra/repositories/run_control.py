@@ -12,6 +12,7 @@ from book_agent.domain.models.ops import (
     ChapterRun,
     DocumentRun,
     PacketTask,
+    ReviewSession,
     RunAuditEvent,
     RunBudget,
     RuntimeCheckpoint,
@@ -238,6 +239,16 @@ class RunControlRepository:
             self.session.scalar(
                 select(func.count(PacketTask.id))
                 .join(ChapterRun, ChapterRun.id == PacketTask.chapter_run_id)
+                .where(ChapterRun.run_id == run_id)
+            )
+            or 0
+        )
+
+    def count_review_sessions_for_run(self, run_id: str) -> int:
+        return (
+            self.session.scalar(
+                select(func.count(ReviewSession.id))
+                .join(ChapterRun, ChapterRun.id == ReviewSession.chapter_run_id)
                 .where(ChapterRun.run_id == run_id)
             )
             or 0

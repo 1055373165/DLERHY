@@ -16,6 +16,7 @@ from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepo
 class ControllerReconcileStats:
     created_chapter_runs: int = 0
     created_packet_tasks: int = 0
+    created_review_sessions: int = 0
     mirrored_packet_tasks: int = 0
 
 
@@ -49,6 +50,7 @@ class ControllerRunner:
 
         chapter_controller = ChapterController(session=session)
         stats.created_packet_tasks += chapter_controller.ensure_packet_tasks(run_id=run_id)
+        stats.created_review_sessions += chapter_controller.ensure_review_sessions(run_id=run_id)
 
         packet_controller = PacketController(session=session)
         stats.mirrored_packet_tasks += packet_controller.mirror_bind_work_items(run_id=run_id)
@@ -62,10 +64,32 @@ class ControllerRunner:
             checkpoint_json={
                 "created_chapter_runs": stats.created_chapter_runs,
                 "created_packet_tasks": stats.created_packet_tasks,
+                "created_review_sessions": stats.created_review_sessions,
                 "mirrored_packet_tasks": stats.mirrored_packet_tasks,
             },
             generation=1,
         )
+        for chapter_run in runtime_repo.list_chapter_runs_for_run(run_id=run_id):
+            review_session = runtime_repo.get_review_session_by_identity(
+                chapter_run_id=chapter_run.id,
+                desired_generation=int(chapter_run.generation or 1),
+            )
+            runtime_repo.upsert_checkpoint(
+                run_id=run_id,
+                scope_type=JobScopeType.CHAPTER,
+                scope_id=chapter_run.chapter_id,
+                checkpoint_key="controller_runner.chapter.phase_a",
+                checkpoint_json={
+                    "chapter_run_id": chapter_run.id,
+                    "chapter_id": chapter_run.chapter_id,
+                    "generation": chapter_run.generation,
+                    "review_session_id": review_session.id if review_session is not None else None,
+                    "review_desired_generation": (
+                        review_session.desired_generation if review_session is not None else None
+                    ),
+                },
+                generation=int(chapter_run.generation or 1),
+            )
 
         session.commit()
         return stats
