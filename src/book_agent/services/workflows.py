@@ -199,6 +199,7 @@ class ChapterMemoryProposalSummary:
     committed_snapshot_id: str | None
     created_at: str
     updated_at: str
+    last_decision: "ChapterMemoryProposalDecisionAuditSummary | None" = None
 
 
 @dataclass(slots=True)
@@ -212,6 +213,16 @@ class ChapterMemoryProposalDecisionResult:
 
 
 @dataclass(slots=True)
+class ChapterMemoryProposalDecisionAuditSummary:
+    proposal_id: str
+    decision: str
+    actor_type: str
+    actor_id: str | None
+    note: str | None
+    created_at: str
+
+
+@dataclass(slots=True)
 class ChapterMemoryProposalSurface:
     proposal_count: int
     pending_proposal_count: int
@@ -219,6 +230,7 @@ class ChapterMemoryProposalSurface:
     latest_proposal_updated_at: str | None
     active_snapshot_version: int | None
     pending_proposals: list[ChapterMemoryProposalSummary]
+    recent_decisions: list[ChapterMemoryProposalDecisionAuditSummary]
 
 
 @dataclass(slots=True)
@@ -1383,18 +1395,36 @@ class DocumentWorkflowService:
             chapter_id=chapter_id,
             status=normalized_status,
         )
-        return [self._to_chapter_memory_proposal_summary(proposal) for proposal in proposals]
+        audit_map = self._load_latest_memory_proposal_decision_map(proposal.id for proposal in proposals)
+        return [
+            self._to_chapter_memory_proposal_summary(
+                proposal,
+                last_decision=audit_map.get(proposal.id),
+            )
+            for proposal in proposals
+        ]
 
     def approve_chapter_memory_proposal(
         self,
         document_id: str,
         chapter_id: str,
         proposal_id: str,
+        *,
+        actor_name: str | None = None,
+        note: str | None = None,
     ) -> ChapterMemoryProposalDecisionResult:
         committed_snapshot = self.memory_service.approve_proposal(
             document_id=document_id,
             chapter_id=chapter_id,
             proposal_id=proposal_id,
+        )
+        decision_audit = self._record_chapter_memory_proposal_decision_audit(
+            proposal_id=proposal_id,
+            document_id=document_id,
+            chapter_id=chapter_id,
+            decision="approved",
+            actor_name=actor_name,
+            note=note,
         )
         proposal = self.memory_service.chapter_memory_repository.load_proposal(proposal_id=proposal_id)
         if proposal is None:
@@ -1403,7 +1433,7 @@ class DocumentWorkflowService:
             document_id=document_id,
             chapter_id=chapter_id,
             decision="approved",
-            proposal=self._to_chapter_memory_proposal_summary(proposal),
+            proposal=self._to_chapter_memory_proposal_summary(proposal, last_decision=decision_audit),
             committed_snapshot_id=committed_snapshot.id,
             committed_snapshot_version=committed_snapshot.version,
         )
@@ -1413,17 +1443,28 @@ class DocumentWorkflowService:
         document_id: str,
         chapter_id: str,
         proposal_id: str,
+        *,
+        actor_name: str | None = None,
+        note: str | None = None,
     ) -> ChapterMemoryProposalDecisionResult:
         proposal = self.memory_service.reject_proposal(
             document_id=document_id,
             chapter_id=chapter_id,
             proposal_id=proposal_id,
         )
+        decision_audit = self._record_chapter_memory_proposal_decision_audit(
+            proposal_id=proposal_id,
+            document_id=document_id,
+            chapter_id=chapter_id,
+            decision="rejected",
+            actor_name=actor_name,
+            note=note,
+        )
         return ChapterMemoryProposalDecisionResult(
             document_id=document_id,
             chapter_id=chapter_id,
             decision="rejected",
-            proposal=self._to_chapter_memory_proposal_summary(proposal),
+            proposal=self._to_chapter_memory_proposal_summary(proposal, last_decision=decision_audit),
         )
 
     def repair_document_blockers_until_exportable(
@@ -2309,6 +2350,8 @@ class DocumentWorkflowService:
     def _to_chapter_memory_proposal_summary(
         self,
         proposal: ChapterMemoryProposal,
+        *,
+        last_decision: ChapterMemoryProposalDecisionAuditSummary | None = None,
     ) -> ChapterMemoryProposalSummary:
         return ChapterMemoryProposalSummary(
             proposal_id=proposal.id,
@@ -2319,6 +2362,7 @@ class DocumentWorkflowService:
             committed_snapshot_id=proposal.committed_snapshot_id,
             created_at=proposal.created_at.isoformat(),
             updated_at=proposal.updated_at.isoformat(),
+            last_decision=last_decision,
         )
 
     def _to_chapter_memory_proposal_surface(
@@ -2337,6 +2381,7 @@ class DocumentWorkflowService:
             MemoryProposalStatus.COMMITTED.value: 0,
             MemoryProposalStatus.REJECTED.value: 0,
         }
+        audit_map = self._load_latest_memory_proposal_decision_map(proposal.id for proposal in proposals)
         pending_proposals: list[ChapterMemoryProposalSummary] = []
         latest_proposal_updated_at: str | None = None
         for proposal in proposals:
@@ -2345,7 +2390,12 @@ class DocumentWorkflowService:
             if latest_proposal_updated_at is None or updated_at > latest_proposal_updated_at:
                 latest_proposal_updated_at = updated_at
             if proposal.status == MemoryProposalStatus.PROPOSED:
-                pending_proposals.append(self._to_chapter_memory_proposal_summary(proposal))
+                pending_proposals.append(
+                    self._to_chapter_memory_proposal_summary(
+                        proposal,
+                        last_decision=audit_map.get(proposal.id),
+                    )
+                )
 
         latest_snapshot = self.memory_service.load_latest_chapter_memory(
             document_id=document_id,
@@ -2358,7 +2408,98 @@ class DocumentWorkflowService:
             latest_proposal_updated_at=latest_proposal_updated_at,
             active_snapshot_version=(latest_snapshot.version if latest_snapshot is not None else None),
             pending_proposals=pending_proposals,
+            recent_decisions=self._list_recent_chapter_memory_proposal_decisions(chapter_id=chapter_id),
         )
+
+    def _load_latest_memory_proposal_decision_map(
+        self,
+        proposal_ids,
+    ) -> dict[str, ChapterMemoryProposalDecisionAuditSummary]:
+        normalized_proposal_ids = tuple(dict.fromkeys(str(proposal_id) for proposal_id in proposal_ids if proposal_id))
+        if not normalized_proposal_ids:
+            return {}
+        rows = self.session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.object_type == "chapter_memory_proposal",
+                AuditEvent.object_id.in_(normalized_proposal_ids),
+                AuditEvent.action.in_(("chapter.memory_proposal.approved", "chapter.memory_proposal.rejected")),
+            )
+            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        ).all()
+        latest_by_proposal: dict[str, ChapterMemoryProposalDecisionAuditSummary] = {}
+        for audit in rows:
+            proposal_id = str(audit.object_id)
+            if proposal_id in latest_by_proposal:
+                continue
+            latest_by_proposal[proposal_id] = self._to_chapter_memory_proposal_decision_audit_summary(audit)
+        return latest_by_proposal
+
+    def _list_recent_chapter_memory_proposal_decisions(
+        self,
+        *,
+        chapter_id: str,
+        limit: int = 5,
+    ) -> list[ChapterMemoryProposalDecisionAuditSummary]:
+        audits = self.session.scalars(
+            select(AuditEvent)
+            .join(ChapterMemoryProposal, ChapterMemoryProposal.id == AuditEvent.object_id)
+            .where(
+                AuditEvent.object_type == "chapter_memory_proposal",
+                ChapterMemoryProposal.chapter_id == chapter_id,
+                AuditEvent.action.in_(("chapter.memory_proposal.approved", "chapter.memory_proposal.rejected")),
+            )
+            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            .limit(limit)
+        ).all()
+        return [self._to_chapter_memory_proposal_decision_audit_summary(audit) for audit in audits]
+
+    def _to_chapter_memory_proposal_decision_audit_summary(
+        self,
+        audit: AuditEvent,
+    ) -> ChapterMemoryProposalDecisionAuditSummary:
+        payload = dict(audit.payload_json or {})
+        action = str(audit.action)
+        decision = "approved" if action.endswith(".approved") else "rejected"
+        return ChapterMemoryProposalDecisionAuditSummary(
+            proposal_id=str(audit.object_id),
+            decision=decision,
+            actor_type=audit.actor_type.value,
+            actor_id=audit.actor_id,
+            note=(str(payload.get("note")) if payload.get("note") is not None else None),
+            created_at=audit.created_at.isoformat(),
+        )
+
+    def _record_chapter_memory_proposal_decision_audit(
+        self,
+        *,
+        proposal_id: str,
+        document_id: str,
+        chapter_id: str,
+        decision: str,
+        actor_name: str | None,
+        note: str | None,
+    ) -> ChapterMemoryProposalDecisionAuditSummary:
+        normalized_actor_name = (actor_name or "").strip() or None
+        normalized_note = (note or "").strip() or None
+        audit = AuditEvent(
+            object_type="chapter_memory_proposal",
+            object_id=proposal_id,
+            action=f"chapter.memory_proposal.{decision}",
+            actor_type=(ActorType.HUMAN if normalized_actor_name else ActorType.SYSTEM),
+            actor_id=(normalized_actor_name or "memory-proposal-api"),
+            created_at=_utcnow(),
+            payload_json={
+                "document_id": document_id,
+                "chapter_id": chapter_id,
+                "proposal_id": proposal_id,
+                "decision": decision,
+                "note": normalized_note,
+            },
+        )
+        self.session.add(audit)
+        self.session.flush()
+        return self._to_chapter_memory_proposal_decision_audit_summary(audit)
 
     def get_document_export_dashboard(
         self,

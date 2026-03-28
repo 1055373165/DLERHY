@@ -858,7 +858,8 @@ class ApiWorkflowTests(unittest.TestCase):
         proposal = pending.json()["proposals"][0]
 
         approved = self.client.post(
-            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal['proposal_id']}/approve"
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal['proposal_id']}/approve",
+            json={"actor_name": "reviewer-alice", "note": "Approved after chapter QA pass"},
         )
         self.assertEqual(approved.status_code, 200)
         approved_payload = approved.json()
@@ -866,6 +867,10 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(approved_payload["proposal"]["status"], MemoryProposalStatus.COMMITTED.value)
         self.assertIsNotNone(approved_payload["committed_snapshot_id"])
         self.assertIsNotNone(approved_payload["committed_snapshot_version"])
+        self.assertEqual(approved_payload["proposal"]["last_decision"]["decision"], "approved")
+        self.assertEqual(approved_payload["proposal"]["last_decision"]["actor_type"], "human")
+        self.assertEqual(approved_payload["proposal"]["last_decision"]["actor_id"], "reviewer-alice")
+        self.assertEqual(approved_payload["proposal"]["last_decision"]["note"], "Approved after chapter QA pass")
 
         committed = self.client.get(
             f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals",
@@ -875,6 +880,7 @@ class ApiWorkflowTests(unittest.TestCase):
         committed_payload = committed.json()
         self.assertEqual(committed_payload["proposal_count"], 1)
         self.assertEqual(committed_payload["proposals"][0]["proposal_id"], proposal["proposal_id"])
+        self.assertEqual(committed_payload["proposals"][0]["last_decision"]["actor_id"], "reviewer-alice")
 
     def test_memory_proposal_api_returns_not_found_for_unknown_proposal(self) -> None:
         document_id, chapter_id, packet_id = self._bootstrap_document_with_first_packet()
@@ -908,7 +914,8 @@ class ApiWorkflowTests(unittest.TestCase):
         proposal_id = pending.json()["proposals"][0]["proposal_id"]
 
         approved = self.client.post(
-            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve"
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve",
+            json={"actor_name": "reviewer-bob", "note": "Snapshot accepted"},
         )
         self.assertEqual(approved.status_code, 200)
 
@@ -943,7 +950,8 @@ class ApiWorkflowTests(unittest.TestCase):
 
         proposal_id = memory_surface["pending_proposals"][0]["proposal_id"]
         approved = self.client.post(
-            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve"
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve",
+            json={"actor_name": "reviewer-bob", "note": "Snapshot accepted"},
         )
         self.assertEqual(approved.status_code, 200)
 
@@ -957,6 +965,10 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(approved_surface["counts_by_status"]["rejected"], 0)
         self.assertEqual(approved_surface["pending_proposals"], [])
         self.assertGreaterEqual(int(approved_surface["active_snapshot_version"] or 0), 1)
+        self.assertEqual(len(approved_surface["recent_decisions"]), 1)
+        self.assertEqual(approved_surface["recent_decisions"][0]["decision"], "approved")
+        self.assertEqual(approved_surface["recent_decisions"][0]["actor_id"], "reviewer-bob")
+        self.assertEqual(approved_surface["recent_decisions"][0]["note"], "Snapshot accepted")
 
     def test_bootstrap_upload_accepts_epub_file(self) -> None:
         epub_path = self._write_epub()

@@ -134,6 +134,21 @@ class ChapterMemoryProposalResponse(BaseSchema):
     committed_snapshot_id: str | None = None
     created_at: str
     updated_at: str
+    last_decision: "ChapterMemoryProposalDecisionAuditResponse | None" = None
+
+
+class ChapterMemoryProposalDecisionRequest(BaseSchema):
+    actor_name: str | None = None
+    note: str | None = None
+
+
+class ChapterMemoryProposalDecisionAuditResponse(BaseSchema):
+    proposal_id: str
+    decision: Literal["approved", "rejected"]
+    actor_type: str
+    actor_id: str | None = None
+    note: str | None = None
+    created_at: str
 
 
 class ChapterMemoryProposalListResponse(BaseSchema):
@@ -160,6 +175,7 @@ class ChapterMemoryProposalSurfaceResponse(BaseSchema):
     latest_proposal_updated_at: str | None = None
     active_snapshot_version: int | None = None
     pending_proposals: list[ChapterMemoryProposalResponse] = Field(default_factory=list)
+    recent_decisions: list[ChapterMemoryProposalDecisionAuditResponse] = Field(default_factory=list)
 
 
 class ChapterReviewResultResponse(BaseSchema):

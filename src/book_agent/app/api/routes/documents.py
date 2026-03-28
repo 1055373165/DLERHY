@@ -22,6 +22,8 @@ from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
     ChapterMemoryProposalResponse,
+    ChapterMemoryProposalDecisionAuditResponse,
+    ChapterMemoryProposalDecisionRequest,
     ChapterMemoryProposalDecisionResponse,
     ChapterMemoryProposalListResponse,
     ChapterMemoryProposalSurfaceResponse,
@@ -50,6 +52,7 @@ from book_agent.services.workflows import (
     DocumentHistoryPage,
     ExportDetail,
     ChapterMemoryProposalDecisionResult,
+    ChapterMemoryProposalDecisionAuditSummary,
     ChapterMemoryProposalSummary,
     DocumentExportResult,
     DocumentReviewResult,
@@ -719,6 +722,24 @@ def _to_chapter_memory_proposal_response(
         committed_snapshot_id=proposal.committed_snapshot_id,
         created_at=proposal.created_at,
         updated_at=proposal.updated_at,
+        last_decision=(
+            _to_chapter_memory_proposal_decision_audit_response(proposal.last_decision)
+            if proposal.last_decision is not None
+            else None
+        ),
+    )
+
+
+def _to_chapter_memory_proposal_decision_audit_response(
+    audit: ChapterMemoryProposalDecisionAuditSummary,
+) -> ChapterMemoryProposalDecisionAuditResponse:
+    return ChapterMemoryProposalDecisionAuditResponse(
+        proposal_id=audit.proposal_id,
+        decision=audit.decision,  # type: ignore[arg-type]
+        actor_type=audit.actor_type,
+        actor_id=audit.actor_id,
+        note=audit.note,
+        created_at=audit.created_at,
     )
 
 
@@ -1115,6 +1136,10 @@ def _to_chapter_worklist_detail_response(
             pending_proposals=[
                 _to_chapter_memory_proposal_response(proposal)
                 for proposal in result.memory_proposals.pending_proposals
+            ],
+            recent_decisions=[
+                _to_chapter_memory_proposal_decision_audit_response(audit)
+                for audit in result.memory_proposals.recent_decisions
             ],
         ),
     )
@@ -1649,6 +1674,7 @@ def approve_chapter_memory_proposal(
     chapter_id: str,
     proposal_id: str,
     request: Request,
+    payload: ChapterMemoryProposalDecisionRequest | None = None,
     session: Session = Depends(get_db_session),
 ) -> ChapterMemoryProposalDecisionResponse:
     try:
@@ -1656,6 +1682,8 @@ def approve_chapter_memory_proposal(
             document_id,
             chapter_id,
             proposal_id,
+            actor_name=(payload.actor_name if payload is not None else None),
+            note=(payload.note if payload is not None else None),
         )
     except ValueError as exc:
         raise _proposal_http_exception(exc) from exc
@@ -1671,6 +1699,7 @@ def reject_chapter_memory_proposal(
     chapter_id: str,
     proposal_id: str,
     request: Request,
+    payload: ChapterMemoryProposalDecisionRequest | None = None,
     session: Session = Depends(get_db_session),
 ) -> ChapterMemoryProposalDecisionResponse:
     try:
@@ -1678,6 +1707,8 @@ def reject_chapter_memory_proposal(
             document_id,
             chapter_id,
             proposal_id,
+            actor_name=(payload.actor_name if payload is not None else None),
+            note=(payload.note if payload is not None else None),
         )
     except ValueError as exc:
         raise _proposal_http_exception(exc) from exc
