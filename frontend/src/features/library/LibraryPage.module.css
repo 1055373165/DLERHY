@@ -1,0 +1,178 @@
+.layout,
+.filters,
+.filterGrid,
+.libraryList,
+.libraryRow,
+.libraryMeta,
+.libraryTop,
+.libraryBottom,
+.libraryActions,
+.message,
+.emptyState {
+  display: grid;
+}
+
+.layout,
+.libraryList {
+  gap: var(--space-5);
+}
+
+.filters {
+  gap: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.searchField,
+.filterField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.textInput,
+.selectInput {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--surface-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.filterGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.libraryRow,
+.message,
+.emptyState {
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(244, 238, 231, 0.88));
+}
+
+.libraryTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.libraryMeta {
+  gap: 10px;
+}
+
+.libraryTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 2vw, 1.7rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.libraryFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin: 0;
+}
+
+.libraryFacts span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.54);
+  color: var(--surface-ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.libraryProgress {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.libraryBottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.libraryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button,
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.button {
+  background: linear-gradient(135deg, var(--surface-ink) 0%, #243a4d 100%);
+  box-shadow: 0 12px 24px rgba(21, 35, 50, 0.16);
+  color: var(--surface-inverse);
+}
+
+.ghostButton {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--surface-ink);
+}
+
+.button:disabled,
+.ghostButton:disabled {
+  box-shadow: none;
+  color: var(--surface-ink-faint);
+}
+
+@media (max-width: 1080px) {
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryBottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .libraryTop {
+    flex-direction: column;
+  }
+
+  .libraryActions {
+    width: 100%;
+    flex-direction: column;
+  }
+}

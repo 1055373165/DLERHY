@@ -1,0 +1,351 @@
+.layout,
+.summaryGrid,
+.summaryCard,
+.stepList,
+.stepCard,
+.stepMeta,
+.splitGrid,
+.listCard,
+.listHeader,
+.chapterList,
+.chapterRow,
+.chapterMeta,
+.eventList,
+.eventCard,
+.eventMeta,
+.message,
+.emptyState {
+  display: grid;
+}
+
+.layout,
+.stepList,
+.chapterList,
+.eventList {
+  gap: var(--space-4);
+}
+
+.summaryGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.summaryCard,
+.progressPanel,
+.listCard,
+.stepCard,
+.eventCard,
+.chapterRow,
+.message,
+.emptyState {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.summaryCard {
+  gap: 8px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(244, 238, 231, 0.88));
+}
+
+.summaryCard:first-child {
+  background: linear-gradient(180deg, rgba(168, 106, 57, 0.12), rgba(255, 255, 255, 0.82));
+}
+
+.summaryLabel {
+  color: var(--surface-ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.06em;
+}
+
+.summaryNote {
+  color: var(--surface-ink-soft);
+  font-size: 13px;
+}
+
+.progressPanel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(244, 238, 231, 0.9));
+}
+
+.progressHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.progressMeta {
+  display: grid;
+  gap: 6px;
+}
+
+.progressLabel {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.progressValue {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+}
+
+.progressCopy {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: right;
+}
+
+.progressTrack {
+  position: relative;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(21, 35, 50, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--surface-ink));
+  box-shadow: 0 0 18px rgba(168, 106, 57, 0.25);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button,
+.ghostButton,
+.smallButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.button {
+  background: linear-gradient(135deg, var(--surface-ink) 0%, #243a4d 100%);
+  box-shadow: 0 12px 24px rgba(21, 35, 50, 0.16);
+  color: var(--surface-inverse);
+}
+
+.ghostButton,
+.smallButton {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--surface-ink);
+}
+
+.smallButton {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.button:disabled,
+.ghostButton:disabled,
+.smallButton:disabled {
+  box-shadow: none;
+  color: var(--surface-ink-faint);
+}
+
+.message {
+  color: var(--surface-ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.stepCard {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+  padding: 18px;
+}
+
+.stepIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.stepCard[data-current="true"] {
+  border-color: var(--accent-line);
+  background: linear-gradient(180deg, rgba(168, 106, 57, 0.08), rgba(255, 255, 255, 0.8));
+  box-shadow: 0 18px 34px rgba(168, 106, 57, 0.08);
+}
+
+.stepCard[data-state="succeeded"] .stepIndex {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.stepCard[data-state="failed"] .stepIndex,
+.stepCard[data-state="cancelled"] .stepIndex {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.stepCard[data-state="paused"] .stepIndex {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.stepMeta {
+  gap: 6px;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 800;
+}
+
+.stepCopy {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.splitGrid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.listCard {
+  gap: var(--space-4);
+  padding: 26px 24px;
+  background: linear-gradient(180deg, rgba(255, 251, 246, 0.94), rgba(244, 237, 229, 0.9));
+  box-shadow: var(--shadow-panel);
+}
+
+.listHeader {
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.listTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.listCopy {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.chapterRow,
+.eventCard {
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.chapterTop,
+.eventTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.chapterMeta,
+.eventMeta {
+  gap: 4px;
+}
+
+.chapterTitle,
+.eventTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.chapterCopy,
+.eventCopy {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.emptyState {
+  color: var(--surface-ink-soft);
+  line-height: 1.75;
+}
+
+@media (max-width: 1080px) {
+  .summaryGrid,
+  .splitGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .progressHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .progressCopy {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .stepCard {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .button,
+  .ghostButton {
+    width: 100%;
+  }
+
+  .chapterTop,
+  .eventTop {
+    flex-direction: column;
+  }
+}
