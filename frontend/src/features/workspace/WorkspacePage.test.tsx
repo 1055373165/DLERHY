@@ -739,7 +739,7 @@ describe("Workspace page", () => {
     await user.click(await screen.findByRole("button", { name: "执行 follow-up" }, { timeout: 10000 }));
 
     await waitFor(() => {
-      expect(screen.getByText("复核 rerun / recheck 结果")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "切到下一章重点" })).toBeInTheDocument();
     });
     expect(screen.getAllByText(/第 2 章 · Chapter Two/).length).toBeGreaterThan(0);
 
@@ -767,6 +767,42 @@ describe("Workspace page", () => {
     });
     expect(screen.getAllByText("Follow-up action 已执行").length).toBeGreaterThan(0);
     expect(screen.getByText(/已返回 第 1 章 · Chapter One/)).toBeInTheDocument();
+  }, 15000);
+
+  it("switches between focused and flow workbench modes", async () => {
+    window.localStorage.setItem("book-agent.current-document-id", "doc-123");
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "连续处理", selected: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "单章精查" }));
+
+    expect(screen.getByRole("tab", { name: "单章精查", selected: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("适合专注当前章节，隐藏连续处理提示，只保留当前章节的决策与收敛信息。")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。"
+      )
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "连续处理" }));
+
+    expect(screen.getByRole("tab", { name: "连续处理", selected: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
+    ).toBeInTheDocument();
   }, 15000);
 
   it("supports assignment set and clear from the chapter workbench", async () => {

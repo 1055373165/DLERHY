@@ -24,6 +24,8 @@
 .reviewLayout,
 .reviewColumn,
 .reviewSectionHeader,
+.modeSwitch,
+.modeSwitchControls,
 .sessionDigest,
 .sessionDigestGrid,
 .sessionDigestCard,
@@ -505,6 +507,41 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.modeSwitch {
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--surface-ink) 12%, var(--line));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-soft) 72%, white);
+}
+
+.modeSwitchControls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.modeSwitchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-strong);
+  color: var(--surface-ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.modeSwitchButtonActive {
+  border-color: color-mix(in srgb, var(--surface-ink) 18%, var(--line));
+  background: var(--surface-ink);
+  color: var(--surface-inverse);
 }
 
 .sessionDigestGrid {

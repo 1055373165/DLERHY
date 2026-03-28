@@ -18,6 +18,7 @@ import {
 import styles from "./WorkspacePage.module.css";
 
 type MessageTone = "success" | "error";
+type WorkbenchMode = "focused" | "flow";
 type TimelineFocusTarget =
   | {
       eventId: string;
@@ -133,6 +134,7 @@ export function WorkspacePage() {
   const [pendingChapterFocus, setPendingChapterFocus] = useState<PendingChapterFocus | null>(null);
   const [recentOperatorChange, setRecentOperatorChange] = useState<RecentOperatorChange | null>(null);
   const [sessionTrail, setSessionTrail] = useState<SessionTrailEntry[]>([]);
+  const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>("flow");
   const [reviewerName, setReviewerName] = useState("reviewer-ui");
   const [reviewerNote, setReviewerNote] = useState("");
   const [assignmentOwner, setAssignmentOwner] = useState("");
@@ -158,6 +160,7 @@ export function WorkspacePage() {
       ? queueEntries[selectedQueueIndex + 1]
       : null;
   const nextQueueRecommendation = nextQueueEntry ? buildNextQueueRecommendation(nextQueueEntry) : null;
+  const isFlowMode = workbenchMode === "flow";
   const timelineGroups = groupTimelineEntries(currentChapterReviewDetail?.timeline ?? []);
   const selectedChapterRecentChange =
     recentOperatorChange?.chapterId === selectedReviewChapterId ? recentOperatorChange : null;
@@ -921,7 +924,47 @@ export function WorkspacePage() {
                   </div>
                 </div>
 
-                {sessionDigest ? (
+                <div className={styles.modeSwitch}>
+                  <div className={styles.reviewSectionHeader}>
+                    <div>
+                      <div className={styles.fileLabel}>Workbench Mode</div>
+                      <h4 className={styles.reviewSectionTitle}>
+                        {isFlowMode ? "连续处理" : "单章精查"}
+                      </h4>
+                    </div>
+                    <p className={styles.reviewSectionCopy}>
+                      {isFlowMode
+                        ? "适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。"
+                        : "适合专注当前章节，隐藏连续处理提示，只保留当前章节的决策与收敛信息。"}
+                    </p>
+                  </div>
+                  <div className={styles.modeSwitchControls} role="tablist" aria-label="工作模式">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={workbenchMode === "focused"}
+                      className={`${styles.modeSwitchButton} ${
+                        workbenchMode === "focused" ? styles.modeSwitchButtonActive : ""
+                      }`}
+                      onClick={() => setWorkbenchMode("focused")}
+                    >
+                      单章精查
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={workbenchMode === "flow"}
+                      className={`${styles.modeSwitchButton} ${
+                        workbenchMode === "flow" ? styles.modeSwitchButtonActive : ""
+                      }`}
+                      onClick={() => setWorkbenchMode("flow")}
+                    >
+                      连续处理
+                    </button>
+                  </div>
+                </div>
+
+                {isFlowMode && sessionDigest ? (
                   <div className={styles.sessionDigest}>
                     <div className={styles.reviewSectionHeader}>
                       <div>
@@ -952,7 +995,7 @@ export function WorkspacePage() {
                   </div>
                 ) : null}
 
-                {sessionTrail.length ? (
+                {isFlowMode && sessionTrail.length ? (
                   <div className={styles.sessionTrail}>
                     <div className={styles.reviewSectionHeader}>
                       <div>
@@ -1164,7 +1207,7 @@ export function WorkspacePage() {
                             </button>
                           </div>
                         ) : null}
-                        {nextQueueEntry && nextQueueRecommendation ? (
+                        {isFlowMode && nextQueueEntry && nextQueueRecommendation ? (
                           <div className={styles.nextQueueCard}>
                             <div>
                               <span className={styles.deltaLabel}>Next in Queue</span>
