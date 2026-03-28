@@ -397,6 +397,15 @@ class IssueChapterQueueEntryResponse(BaseSchema):
     latest_net_issue_delta: int
     regression_hint: str
     flapping_hint: bool
+    memory_proposals: "ChapterMemoryProposalQueueSummaryResponse"
+
+
+class ChapterMemoryProposalQueueSummaryResponse(BaseSchema):
+    proposal_count: int
+    pending_proposal_count: int
+    counts_by_status: dict[str, int] = Field(default_factory=dict)
+    latest_proposal_updated_at: str | None = None
+    active_snapshot_version: int | None = None
 
 
 class ChapterOwnerWorkloadResponse(BaseSchema):

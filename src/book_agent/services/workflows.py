@@ -21,10 +21,13 @@ from book_agent.domain.enums import (
     IssueStatus,
     JobScopeType,
     MemoryProposalStatus,
+    MemoryScopeType,
+    MemoryStatus,
     PacketStatus,
+    SnapshotType,
     SourceType,
 )
-from book_agent.domain.models import Chapter, ChapterMemoryProposal, ChapterWorklistAssignment, Document, Sentence
+from book_agent.domain.models import Chapter, ChapterMemoryProposal, ChapterWorklistAssignment, Document, MemorySnapshot, Sentence
 from book_agent.domain.models.ops import AuditEvent, DocumentRun, RunAuditEvent
 from book_agent.domain.models.review import (
     ChapterQualitySummary as PersistedChapterQualitySummary,
@@ -216,6 +219,15 @@ class ChapterMemoryProposalSurface:
     latest_proposal_updated_at: str | None
     active_snapshot_version: int | None
     pending_proposals: list[ChapterMemoryProposalSummary]
+
+
+@dataclass(slots=True)
+class ChapterMemoryProposalQueueSummary:
+    proposal_count: int
+    pending_proposal_count: int
+    counts_by_status: dict[str, int]
+    latest_proposal_updated_at: str | None
+    active_snapshot_version: int | None
 
 
 def _display_author_value(author: str | None) -> str | None:
@@ -531,6 +543,7 @@ class IssueChapterQueueEntry:
     latest_net_issue_delta: int
     regression_hint: str
     flapping_hint: bool
+    memory_proposals: ChapterMemoryProposalQueueSummary
 
 
 @dataclass(slots=True)
@@ -2577,11 +2590,13 @@ class DocumentWorkflowService:
         issue_chapter_activity = self._to_issue_chapter_activity_map(document_id)
         issue_chapter_worklist_meta = self._to_issue_chapter_worklist_meta(document_id)
         chapter_assignment_map = self._to_chapter_assignment_map(document_id)
+        chapter_memory_proposal_map = self._to_chapter_memory_proposal_queue_map(document_id)
         entries = self._to_issue_chapter_queue(
             issue_chapter_heatmap,
             issue_chapter_activity,
             issue_chapter_worklist_meta,
             chapter_assignment_map,
+            chapter_memory_proposal_map,
         )
 
         filtered_entries = [
@@ -2658,11 +2673,13 @@ class DocumentWorkflowService:
         chapter_activity = self._to_issue_chapter_activity_map(document_id)
         chapter_worklist_meta = self._to_issue_chapter_worklist_meta(document_id)
         chapter_assignment_map = self._to_chapter_assignment_map(document_id)
+        chapter_memory_proposal_map = self._to_chapter_memory_proposal_queue_map(document_id)
         queue_entries = self._to_issue_chapter_queue(
             self._to_issue_chapter_heatmap(issue_family_breakdown),
             chapter_activity,
             chapter_worklist_meta,
             chapter_assignment_map,
+            chapter_memory_proposal_map,
         )
         queue_entry = queue_entries[0] if queue_entries else None
         quality_summary = self.review_repository.load_quality_summaries_for_document(document_id).get(chapter_id)
@@ -3513,6 +3530,7 @@ class DocumentWorkflowService:
         chapter_activity: dict[str, list[IssueActivityTimelineEntry]],
         chapter_worklist_meta: dict[str, dict[str, object]],
         chapter_assignment_map: dict[str, ChapterWorklistAssignmentSummary],
+        chapter_memory_proposal_map: dict[str, ChapterMemoryProposalQueueSummary],
     ) -> list[IssueChapterQueueEntry]:
         actionable_entries = [
             entry
@@ -3668,6 +3686,20 @@ class DocumentWorkflowService:
                     ),
                     regression_hint=_regression_hint(chapter_activity.get(entry.chapter_id, [])),
                     flapping_hint=_flapping_hint(chapter_activity.get(entry.chapter_id, [])),
+                    memory_proposals=chapter_memory_proposal_map.get(
+                        entry.chapter_id,
+                        ChapterMemoryProposalQueueSummary(
+                            proposal_count=0,
+                            pending_proposal_count=0,
+                            counts_by_status={
+                                MemoryProposalStatus.PROPOSED.value: 0,
+                                MemoryProposalStatus.COMMITTED.value: 0,
+                                MemoryProposalStatus.REJECTED.value: 0,
+                            },
+                            latest_proposal_updated_at=None,
+                            active_snapshot_version=None,
+                        ),
+                    ),
                 )
             )(
                 _priority(entry),
@@ -3676,6 +3708,84 @@ class DocumentWorkflowService:
             )
             for index, entry in enumerate(actionable_entries, start=1)
         ]
+
+    def _to_chapter_memory_proposal_queue_map(
+        self,
+        document_id: str,
+    ) -> dict[str, ChapterMemoryProposalQueueSummary]:
+        proposal_rows = self.session.execute(
+            select(
+                ChapterMemoryProposal.chapter_id,
+                ChapterMemoryProposal.status,
+                func.count(ChapterMemoryProposal.id),
+                func.max(ChapterMemoryProposal.updated_at),
+            )
+            .where(ChapterMemoryProposal.document_id == document_id)
+            .group_by(ChapterMemoryProposal.chapter_id, ChapterMemoryProposal.status)
+        ).all()
+        snapshot_rows = self.session.execute(
+            select(MemorySnapshot.scope_id, MemorySnapshot.version)
+            .where(
+                MemorySnapshot.document_id == document_id,
+                MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
+                MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
+                MemorySnapshot.status == MemoryStatus.ACTIVE,
+            )
+        ).all()
+
+        by_chapter: dict[str, ChapterMemoryProposalQueueSummary] = {}
+        for chapter_id, proposal_status, proposal_count, latest_updated_at in proposal_rows:
+            normalized_chapter_id = str(chapter_id)
+            summary = by_chapter.get(normalized_chapter_id)
+            if summary is None:
+                summary = ChapterMemoryProposalQueueSummary(
+                    proposal_count=0,
+                    pending_proposal_count=0,
+                    counts_by_status={
+                        MemoryProposalStatus.PROPOSED.value: 0,
+                        MemoryProposalStatus.COMMITTED.value: 0,
+                        MemoryProposalStatus.REJECTED.value: 0,
+                    },
+                    latest_proposal_updated_at=None,
+                    active_snapshot_version=None,
+                )
+                by_chapter[normalized_chapter_id] = summary
+
+            status_value = proposal_status.value
+            count_value = int(proposal_count or 0)
+            summary.proposal_count += count_value
+            summary.counts_by_status[status_value] = summary.counts_by_status.get(status_value, 0) + count_value
+            if status_value == MemoryProposalStatus.PROPOSED.value:
+                summary.pending_proposal_count += count_value
+            updated_at_value = latest_updated_at.isoformat() if latest_updated_at is not None else None
+            if (
+                updated_at_value is not None
+                and (
+                    summary.latest_proposal_updated_at is None
+                    or updated_at_value > summary.latest_proposal_updated_at
+                )
+            ):
+                summary.latest_proposal_updated_at = updated_at_value
+
+        for scope_id, version in snapshot_rows:
+            normalized_chapter_id = str(scope_id)
+            summary = by_chapter.get(normalized_chapter_id)
+            if summary is None:
+                summary = ChapterMemoryProposalQueueSummary(
+                    proposal_count=0,
+                    pending_proposal_count=0,
+                    counts_by_status={
+                        MemoryProposalStatus.PROPOSED.value: 0,
+                        MemoryProposalStatus.COMMITTED.value: 0,
+                        MemoryProposalStatus.REJECTED.value: 0,
+                    },
+                    latest_proposal_updated_at=None,
+                    active_snapshot_version=None,
+                )
+                by_chapter[normalized_chapter_id] = summary
+            summary.active_snapshot_version = int(version)
+
+        return by_chapter
 
     def _to_issue_chapter_activity_map(
         self,

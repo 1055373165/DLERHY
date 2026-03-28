@@ -876,6 +876,48 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(committed_payload["proposal_count"], 1)
         self.assertEqual(committed_payload["proposals"][0]["proposal_id"], proposal["proposal_id"])
 
+    def test_memory_proposal_api_returns_not_found_for_unknown_proposal(self) -> None:
+        document_id, chapter_id, packet_id = self._bootstrap_document_with_first_packet()
+
+        translate = self.client.post(
+            f"/v1/documents/{document_id}/translate",
+            json={"packet_ids": [packet_id]},
+        )
+        self.assertEqual(translate.status_code, 200)
+
+        missing = self.client.post(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{uuid4()}/approve"
+        )
+        self.assertEqual(missing.status_code, 404)
+        self.assertIn("not found", missing.json()["detail"].casefold())
+
+    def test_memory_proposal_api_rejects_committed_proposal_with_conflict(self) -> None:
+        document_id, chapter_id, packet_id = self._bootstrap_document_with_first_packet()
+
+        translate = self.client.post(
+            f"/v1/documents/{document_id}/translate",
+            json={"packet_ids": [packet_id]},
+        )
+        self.assertEqual(translate.status_code, 200)
+
+        pending = self.client.get(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals",
+            params={"status": "proposed"},
+        )
+        self.assertEqual(pending.status_code, 200)
+        proposal_id = pending.json()["proposals"][0]["proposal_id"]
+
+        approved = self.client.post(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve"
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        rejected_after_commit = self.client.post(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/reject"
+        )
+        self.assertEqual(rejected_after_commit.status_code, 409)
+        self.assertIn("cannot be rejected", rejected_after_commit.json()["detail"].casefold())
+
     def test_document_chapter_worklist_detail_exposes_memory_proposal_surface(self) -> None:
         document_id, chapter_id, packet_id = self._bootstrap_document_with_first_packet()
 
@@ -3098,6 +3140,9 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(detail_payload["queue_entry"]["sla_status"], "breached")
         self.assertTrue(detail_payload["queue_entry"]["is_assigned"])
         self.assertEqual(detail_payload["queue_entry"]["assigned_owner_name"], "ops-alice")
+        self.assertEqual(detail_payload["queue_entry"]["memory_proposals"]["proposal_count"], 3)
+        self.assertEqual(detail_payload["queue_entry"]["memory_proposals"]["pending_proposal_count"], 0)
+        self.assertEqual(detail_payload["queue_entry"]["memory_proposals"]["counts_by_status"]["committed"], 3)
         self.assertEqual(len(detail_payload["issue_family_breakdown"]), 1)
         self.assertEqual(detail_payload["issue_family_breakdown"][0]["issue_type"], "ALIGNMENT_FAILURE")
         self.assertEqual(detail_payload["issue_family_breakdown"][0]["root_cause_layer"], "export")
@@ -3117,6 +3162,9 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(assigned_worklist.status_code, 200)
         assigned_payload = assigned_worklist.json()
         self.assertEqual(assigned_payload["assigned_count"], 1)
+        self.assertEqual(assigned_payload["entries"][0]["memory_proposals"]["proposal_count"], 3)
+        self.assertEqual(assigned_payload["entries"][0]["memory_proposals"]["pending_proposal_count"], 0)
+        self.assertEqual(assigned_payload["entries"][0]["memory_proposals"]["counts_by_status"]["committed"], 3)
         self.assertTrue(assigned_payload["applied_assigned_filter"])
         self.assertEqual(assigned_payload["applied_assigned_owner_filter"], "ops-alice")
         self.assertEqual(len(assigned_payload["entries"]), 1)

@@ -494,6 +494,13 @@ def _serialize_issue_chapter_queue(entries) -> list[dict]:
             "latest_net_issue_delta": entry.latest_net_issue_delta,
             "regression_hint": entry.regression_hint,
             "flapping_hint": entry.flapping_hint,
+            "memory_proposals": {
+                "proposal_count": entry.memory_proposals.proposal_count,
+                "pending_proposal_count": entry.memory_proposals.pending_proposal_count,
+                "counts_by_status": entry.memory_proposals.counts_by_status,
+                "latest_proposal_updated_at": entry.memory_proposals.latest_proposal_updated_at,
+                "active_snapshot_version": entry.memory_proposals.active_snapshot_version,
+            },
         }
         for entry in entries
     ]
