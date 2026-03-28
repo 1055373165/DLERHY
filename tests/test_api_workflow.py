@@ -876,6 +876,46 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(committed_payload["proposal_count"], 1)
         self.assertEqual(committed_payload["proposals"][0]["proposal_id"], proposal["proposal_id"])
 
+    def test_document_chapter_worklist_detail_exposes_memory_proposal_surface(self) -> None:
+        document_id, chapter_id, packet_id = self._bootstrap_document_with_first_packet()
+
+        translate = self.client.post(
+            f"/v1/documents/{document_id}/translate",
+            json={"packet_ids": [packet_id]},
+        )
+        self.assertEqual(translate.status_code, 200)
+
+        detail = self.client.get(f"/v1/documents/{document_id}/chapters/{chapter_id}/worklist")
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        memory_surface = payload["memory_proposals"]
+        self.assertEqual(memory_surface["proposal_count"], 1)
+        self.assertEqual(memory_surface["pending_proposal_count"], 1)
+        self.assertEqual(memory_surface["counts_by_status"]["proposed"], 1)
+        self.assertEqual(memory_surface["counts_by_status"]["committed"], 0)
+        self.assertEqual(memory_surface["counts_by_status"]["rejected"], 0)
+        self.assertGreaterEqual(int(memory_surface["active_snapshot_version"] or 0), 1)
+        self.assertEqual(len(memory_surface["pending_proposals"]), 1)
+        self.assertEqual(memory_surface["pending_proposals"][0]["packet_id"], packet_id)
+        self.assertEqual(memory_surface["pending_proposals"][0]["status"], MemoryProposalStatus.PROPOSED.value)
+
+        proposal_id = memory_surface["pending_proposals"][0]["proposal_id"]
+        approved = self.client.post(
+            f"/v1/documents/{document_id}/chapters/{chapter_id}/memory-proposals/{proposal_id}/approve"
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        detail_after_approve = self.client.get(f"/v1/documents/{document_id}/chapters/{chapter_id}/worklist")
+        self.assertEqual(detail_after_approve.status_code, 200)
+        approved_surface = detail_after_approve.json()["memory_proposals"]
+        self.assertEqual(approved_surface["proposal_count"], 1)
+        self.assertEqual(approved_surface["pending_proposal_count"], 0)
+        self.assertEqual(approved_surface["counts_by_status"]["proposed"], 0)
+        self.assertEqual(approved_surface["counts_by_status"]["committed"], 1)
+        self.assertEqual(approved_surface["counts_by_status"]["rejected"], 0)
+        self.assertEqual(approved_surface["pending_proposals"], [])
+        self.assertGreaterEqual(int(approved_surface["active_snapshot_version"] or 0), 1)
+
     def test_bootstrap_upload_accepts_epub_file(self) -> None:
         epub_path = self._write_epub()
 
@@ -3065,6 +3105,10 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(detail_payload["recent_issues"][0]["status"], "open")
         self.assertEqual(detail_payload["recent_actions"][0]["issue_type"], "ALIGNMENT_FAILURE")
         self.assertEqual(detail_payload["recent_actions"][0]["action_type"], "REALIGN_ONLY")
+        self.assertEqual(detail_payload["memory_proposals"]["proposal_count"], 3)
+        self.assertEqual(detail_payload["memory_proposals"]["pending_proposal_count"], 0)
+        self.assertEqual(detail_payload["memory_proposals"]["counts_by_status"]["committed"], 3)
+        self.assertGreaterEqual(int(detail_payload["memory_proposals"]["active_snapshot_version"] or 0), 3)
 
         assigned_worklist = self.client.get(
             f"/v1/documents/{document_id}/chapters/worklist",

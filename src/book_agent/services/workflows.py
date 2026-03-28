@@ -208,6 +208,16 @@ class ChapterMemoryProposalDecisionResult:
     committed_snapshot_version: int | None = None
 
 
+@dataclass(slots=True)
+class ChapterMemoryProposalSurface:
+    proposal_count: int
+    pending_proposal_count: int
+    counts_by_status: dict[str, int]
+    latest_proposal_updated_at: str | None
+    active_snapshot_version: int | None
+    pending_proposals: list[ChapterMemoryProposalSummary]
+
+
 def _display_author_value(author: str | None) -> str | None:
     normalized = re.sub(r"\s+", " ", (author or "")).strip()
     if not normalized:
@@ -735,6 +745,7 @@ class DocumentChapterWorklistDetail:
     recent_issues: list[ChapterWorklistIssue]
     recent_actions: list[ChapterWorklistAction]
     assignment_history: list[ChapterWorklistAssignmentHistoryEntry]
+    memory_proposals: ChapterMemoryProposalSurface
 
 
 @dataclass(slots=True)
@@ -2297,6 +2308,45 @@ class DocumentWorkflowService:
             updated_at=proposal.updated_at.isoformat(),
         )
 
+    def _to_chapter_memory_proposal_surface(
+        self,
+        *,
+        document_id: str,
+        chapter_id: str,
+    ) -> ChapterMemoryProposalSurface:
+        proposals = self.memory_service.list_chapter_proposals(
+            document_id=document_id,
+            chapter_id=chapter_id,
+            status=None,
+        )
+        counts_by_status = {
+            MemoryProposalStatus.PROPOSED.value: 0,
+            MemoryProposalStatus.COMMITTED.value: 0,
+            MemoryProposalStatus.REJECTED.value: 0,
+        }
+        pending_proposals: list[ChapterMemoryProposalSummary] = []
+        latest_proposal_updated_at: str | None = None
+        for proposal in proposals:
+            counts_by_status[proposal.status.value] = counts_by_status.get(proposal.status.value, 0) + 1
+            updated_at = proposal.updated_at.isoformat()
+            if latest_proposal_updated_at is None or updated_at > latest_proposal_updated_at:
+                latest_proposal_updated_at = updated_at
+            if proposal.status == MemoryProposalStatus.PROPOSED:
+                pending_proposals.append(self._to_chapter_memory_proposal_summary(proposal))
+
+        latest_snapshot = self.memory_service.load_latest_chapter_memory(
+            document_id=document_id,
+            chapter_id=chapter_id,
+        )
+        return ChapterMemoryProposalSurface(
+            proposal_count=len(proposals),
+            pending_proposal_count=len(pending_proposals),
+            counts_by_status=counts_by_status,
+            latest_proposal_updated_at=latest_proposal_updated_at,
+            active_snapshot_version=(latest_snapshot.version if latest_snapshot is not None else None),
+            pending_proposals=pending_proposals,
+        )
+
     def get_document_export_dashboard(
         self,
         document_id: str,
@@ -2616,6 +2666,10 @@ class DocumentWorkflowService:
         )
         queue_entry = queue_entries[0] if queue_entries else None
         quality_summary = self.review_repository.load_quality_summaries_for_document(document_id).get(chapter_id)
+        memory_proposals = self._to_chapter_memory_proposal_surface(
+            document_id=document_id,
+            chapter_id=chapter_id,
+        )
 
         return DocumentChapterWorklistDetail(
             document_id=document_id,
@@ -2642,6 +2696,7 @@ class DocumentWorkflowService:
             recent_issues=self._to_chapter_recent_issues(chapter_id),
             recent_actions=self._to_chapter_recent_actions(chapter_id),
             assignment_history=self._to_chapter_assignment_history(chapter_id),
+            memory_proposals=memory_proposals,
         )
 
     def assign_document_chapter_worklist_owner(

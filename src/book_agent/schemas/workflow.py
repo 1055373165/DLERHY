@@ -153,6 +153,15 @@ class ChapterMemoryProposalDecisionResponse(BaseSchema):
     committed_snapshot_version: int | None = None
 
 
+class ChapterMemoryProposalSurfaceResponse(BaseSchema):
+    proposal_count: int
+    pending_proposal_count: int
+    counts_by_status: dict[str, int] = Field(default_factory=dict)
+    latest_proposal_updated_at: str | None = None
+    active_snapshot_version: int | None = None
+    pending_proposals: list[ChapterMemoryProposalResponse] = Field(default_factory=list)
+
+
 class ChapterReviewResultResponse(BaseSchema):
     chapter_id: str
     status: str
@@ -521,6 +530,7 @@ class DocumentChapterWorklistDetailResponse(BaseSchema):
     assignment_history: list[ChapterWorklistAssignmentHistoryEntryResponse] = Field(
         default_factory=list
     )
+    memory_proposals: ChapterMemoryProposalSurfaceResponse
 
 
 class IssueActivityTimelineEntryResponse(BaseSchema):

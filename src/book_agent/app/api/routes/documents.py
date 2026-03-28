@@ -24,6 +24,7 @@ from book_agent.schemas.workflow import (
     ChapterMemoryProposalResponse,
     ChapterMemoryProposalDecisionResponse,
     ChapterMemoryProposalListResponse,
+    ChapterMemoryProposalSurfaceResponse,
     ChapterWorklistAssignmentClearRequest,
     ChapterWorklistAssignmentClearResponse,
     ChapterWorklistAssignmentRequest,
@@ -1098,6 +1099,17 @@ def _to_chapter_worklist_detail_response(
             }
             for event in result.assignment_history
         ],
+        memory_proposals=ChapterMemoryProposalSurfaceResponse(
+            proposal_count=result.memory_proposals.proposal_count,
+            pending_proposal_count=result.memory_proposals.pending_proposal_count,
+            counts_by_status=result.memory_proposals.counts_by_status,
+            latest_proposal_updated_at=result.memory_proposals.latest_proposal_updated_at,
+            active_snapshot_version=result.memory_proposals.active_snapshot_version,
+            pending_proposals=[
+                _to_chapter_memory_proposal_response(proposal)
+                for proposal in result.memory_proposals.pending_proposals
+            ],
+        ),
     )
 
 
