@@ -71,6 +71,13 @@ type NextQueueRecommendation = {
   actionLabel: string;
   focus: PendingChapterFocus;
 };
+type SessionTrailEntry = {
+  chapterId: string;
+  chapterLabel: string;
+  changeTitle: string;
+  summary: string;
+  kind: RecentOperatorChange["kind"];
+};
 
 export function WorkspacePage() {
   const {
@@ -116,6 +123,7 @@ export function WorkspacePage() {
   const [timelineFocus, setTimelineFocus] = useState<TimelineFocusTarget | null>(null);
   const [pendingChapterFocus, setPendingChapterFocus] = useState<PendingChapterFocus | null>(null);
   const [recentOperatorChange, setRecentOperatorChange] = useState<RecentOperatorChange | null>(null);
+  const [sessionTrail, setSessionTrail] = useState<SessionTrailEntry[]>([]);
   const [reviewerName, setReviewerName] = useState("reviewer-ui");
   const [reviewerNote, setReviewerNote] = useState("");
   const [assignmentOwner, setAssignmentOwner] = useState("");
@@ -433,6 +441,23 @@ export function WorkspacePage() {
   function handleAdvanceToNextChapter() {
     if (!nextQueueEntry || !nextQueueRecommendation) {
       return;
+    }
+    if (selectedQueueEntry && selectedChapterRecentChange) {
+      const chapterLabel = `第 ${selectedQueueEntry.ordinal} 章 · ${selectedQueueEntry.title_src || `Chapter ${selectedQueueEntry.ordinal}`}`;
+      const summary =
+        selectedChapterConvergenceItems[0]?.value ??
+        selectedChapterRecentChange.highlights[0] ??
+        selectedChapterRecentChange.title;
+      setSessionTrail((current) => {
+        const nextEntry = {
+          chapterId: selectedQueueEntry.chapter_id,
+          chapterLabel,
+          changeTitle: selectedChapterRecentChange.title,
+          summary,
+          kind: selectedChapterRecentChange.kind,
+        } satisfies SessionTrailEntry;
+        return [nextEntry, ...current.filter((entry) => entry.chapterId !== nextEntry.chapterId)].slice(0, 3);
+      });
     }
     setReviewMessage({
       tone: "success",
@@ -883,6 +908,47 @@ export function WorkspacePage() {
                     </div>
                   </div>
                 </div>
+
+                {sessionTrail.length ? (
+                  <div className={styles.sessionTrail}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Session Trail</div>
+                        <h4 className={styles.reviewSectionTitle}>刚处理过的章节</h4>
+                      </div>
+                      <p className={styles.reviewSectionCopy}>
+                        连续处理多章时，可以随时跳回刚处理过的章节，不用再手动翻队列。
+                      </p>
+                    </div>
+                    <div className={styles.sessionTrailList}>
+                      {sessionTrail.map((entry) => (
+                        <button
+                          key={entry.chapterId}
+                          type="button"
+                          aria-label={`回到 ${entry.chapterLabel}`}
+                          className={`${styles.sessionTrailCard} ${
+                            entry.chapterId === selectedReviewChapterId ? styles.sessionTrailCardActive : ""
+                          }`}
+                          onClick={() => {
+                            setReviewMessage({
+                              tone: "success",
+                              text: `已返回 ${entry.chapterLabel}，继续查看刚才的 ${entry.changeTitle}。`,
+                            });
+                            selectReviewChapter(entry.chapterId);
+                          }}
+                        >
+                          <div className={styles.queueRankRow}>
+                            <span className={styles.changeBadge}>刚处理</span>
+                            <span className={styles.changeKindBadge}>{recentChangeKindLabel(entry.kind)}</span>
+                          </div>
+                          <strong className={styles.deltaValue}>{entry.chapterLabel}</strong>
+                          <p className={styles.timelineDetail}>{entry.changeTitle}</p>
+                          <p className={styles.queueDeltaHint}>{entry.summary}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div
                   className={`${styles.assignmentBar} ${

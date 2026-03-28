@@ -24,6 +24,9 @@
 .reviewLayout,
 .reviewColumn,
 .reviewSectionHeader,
+.sessionTrail,
+.sessionTrailList,
+.sessionTrailCard,
 .focusBanner,
 .focusActions,
 .proposalList,
@@ -346,6 +349,7 @@
 }
 
 .proposalList,
+.sessionTrail,
 .timelineList,
 .timelineGroupList,
 .timelineGroup,
@@ -370,6 +374,7 @@
 }
 
 .proposalCard,
+.sessionTrailCard,
 .timelineCard,
 .executionCard,
 .changeCard,
@@ -494,6 +499,34 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.sessionTrail {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--surface-ink) 14%, var(--line));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-strong) 84%, white);
+}
+
+.sessionTrailList {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.sessionTrailCard {
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.sessionTrailCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.sessionTrailCardActive {
+  border-color: color-mix(in srgb, var(--surface-ink) 22%, var(--line));
+  background: color-mix(in srgb, var(--surface-strong) 88%, white);
 }
 
 .queueInspector {

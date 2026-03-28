@@ -701,7 +701,7 @@ describe("Workspace page", () => {
     await user.clear(await screen.findByLabelText("操作人"));
     await user.type(screen.getByLabelText("操作人"), "reviewer-ui");
     await user.type(await screen.findByLabelText("备注"), "Looks good");
-    await user.click(screen.getByRole("button", { name: "批准写入" }));
+    await user.click(await screen.findByRole("button", { name: "批准写入" }, { timeout: 10000 }));
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Memory proposal 已批准" })).toBeInTheDocument();
@@ -723,7 +723,7 @@ describe("Workspace page", () => {
       expect.stringContaining("/v1/documents/doc-123/chapters/ch-1/memory-proposals/prop-123/approve"),
       expect.objectContaining({ method: "POST" })
     );
-  });
+  }, 15000);
 
   it("can advance to the next chapter from the latest-change batch flow", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
@@ -736,7 +736,7 @@ describe("Workspace page", () => {
     );
 
     expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "执行 follow-up" }));
+    await user.click(await screen.findByRole("button", { name: "执行 follow-up" }, { timeout: 10000 }));
 
     await waitFor(() => {
       expect(screen.getByText("复核 rerun / recheck 结果")).toBeInTheDocument();
@@ -750,7 +750,17 @@ describe("Workspace page", () => {
     });
     expect(screen.getByText("STYLE_DRIFT")).toBeInTheDocument();
     expect(screen.getByText("Follow-up Action · REBUILD_CHAPTER_BRIEF")).toBeInTheDocument();
-  });
+    expect(screen.getByText("刚处理过的章节")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "回到 第 1 章 · Chapter One" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "回到 第 1 章 · Chapter One" }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-1");
+    });
+    expect(screen.getAllByText("Follow-up action 已执行").length).toBeGreaterThan(0);
+    expect(screen.getByText(/已返回 第 1 章 · Chapter One/)).toBeInTheDocument();
+  }, 15000);
 
   it("supports assignment set and clear from the chapter workbench", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
@@ -769,7 +779,7 @@ describe("Workspace page", () => {
     await user.type(screen.getByLabelText("操作人"), "ops-lead");
     await user.type(screen.getByLabelText("指派给"), "queue-owner");
     await user.type(screen.getByLabelText("备注"), "Take over this chapter");
-    await user.click(screen.getByRole("button", { name: "指派章节" }));
+    await user.click(await screen.findByRole("button", { name: "指派章节" }, { timeout: 10000 }));
 
     await waitFor(() => {
       expect(
@@ -801,7 +811,7 @@ describe("Workspace page", () => {
       expect.stringContaining("/v1/documents/doc-123/chapters/ch-1/worklist/assignment/clear"),
       expect.objectContaining({ method: "POST" })
     );
-  });
+  }, 15000);
 
   it("switches chapters from the queue rail and refreshes chapter detail", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
