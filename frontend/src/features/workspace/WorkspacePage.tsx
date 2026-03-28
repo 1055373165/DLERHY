@@ -53,6 +53,12 @@ type RecentOperatorChange = {
   highlights: string[];
   before: OperatorConvergenceSnapshot | null;
 };
+type RecommendedNextStep = {
+  title: string;
+  body: string;
+  actionKind: "proposal" | "assignment" | "action" | null;
+  actionLabel?: string;
+};
 
 export function WorkspacePage() {
   const {
@@ -345,6 +351,52 @@ export function WorkspacePage() {
       setReviewMessage({
         tone: "error",
         text: error instanceof Error ? error.message : "执行 action 失败，请稍后重试。",
+      });
+    }
+  }
+
+  function handleRecommendedNextStep() {
+    if (!selectedChapterNextStep) {
+      return;
+    }
+    if (selectedChapterNextStep.actionKind === "proposal") {
+      const proposal = currentChapterReviewDetail?.memory_proposals.pending_proposals[0];
+      if (!proposal) {
+        return;
+      }
+      setTimelineFocus({
+        eventId: `next-step-proposal-${proposal.proposal_id}`,
+        section: "proposal",
+        proposalId: proposal.proposal_id,
+        label: `Memory Override · ${shorten(proposal.proposal_id, 5)}`,
+        helper: "已把焦点切到下一条待审批 proposal，可以直接批准或驳回。",
+      });
+      return;
+    }
+    if (selectedChapterNextStep.actionKind === "assignment") {
+      setTimelineFocus({
+        eventId: "next-step-assignment",
+        section: "assignment",
+        label: currentChapterReviewDetail?.assignment?.owner_name
+          ? `Assignment · ${currentChapterReviewDetail.assignment.owner_name}`
+          : "Assignment · 共享队列",
+        helper: currentChapterReviewDetail?.assignment?.owner_name
+          ? "已把焦点切到 assignment 控制区，可以继续交接、回收或补充备注。"
+          : "已把焦点切到 assignment 控制区，可以重新分派这章的 owner。",
+      });
+      return;
+    }
+    if (selectedChapterNextStep.actionKind === "action") {
+      const actionEntry = currentChapterReviewDetail?.recent_actions[0];
+      if (!actionEntry) {
+        return;
+      }
+      setTimelineFocus({
+        eventId: `next-step-action-${actionEntry.action_id}`,
+        section: "actions",
+        actionId: actionEntry.action_id,
+        label: `Follow-up Action · ${actionEntry.action_type || actionEntry.issue_type || shorten(actionEntry.action_id, 5)}`,
+        helper: "已把焦点切到 follow-up action，可以直接核对 rerun 结果或继续执行下一步。",
       });
     }
   }
@@ -945,6 +997,17 @@ export function WorkspacePage() {
                         <span className={styles.deltaLabel}>Recommended Next Step</span>
                         <strong className={styles.deltaValue}>{selectedChapterNextStep.title}</strong>
                         <p className={styles.timelineDetail}>{selectedChapterNextStep.body}</p>
+                        {selectedChapterNextStep.actionLabel ? (
+                          <div className={styles.nextStepActions}>
+                            <button
+                              className={styles.button}
+                              type="button"
+                              onClick={handleRecommendedNextStep}
+                            >
+                              {selectedChapterNextStep.actionLabel}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1553,17 +1616,22 @@ function buildRecentChangeNextStep(
       return {
         title: "继续清理剩余 proposal",
         body: `当前还有 ${snapshot.pendingProposalCount} 条待审批 proposal，优先继续处理 memory override，避免章节停在半收敛状态。`,
+        actionKind: "proposal",
+        actionLabel: "聚焦下一条 proposal",
       };
     }
     if (detail.current_active_blocking_issue_count > 0) {
       return {
         title: "转入 blocker / follow-up 处理",
         body: `proposal 已收敛，但当前仍有 ${detail.current_active_blocking_issue_count} 个 blocker，下一步应切回 issue/action 面继续推进。`,
+        actionKind: "action",
+        actionLabel: "切到 follow-up",
       };
     }
     return {
       title: "切回章节队列确认是否可放行",
       body: "当前没有待审批 proposal，也没有明显 blocker，可以回到章节队列判断这章是否已经达到下一阶段门槛。",
+      actionKind: null,
     };
   }
   if (change.kind === "assignment") {
@@ -1571,19 +1639,27 @@ function buildRecentChangeNextStep(
       ? {
           title: "由新 owner 接手 follow-up",
           body: `章节现在已经绑定到 ${detail.assignment.owner_name}，下一步应由当前 owner 继续执行 blocker 处理或 proposal 审批。`,
+          actionKind: "assignment",
+          actionLabel: "查看当前 owner",
         }
       : {
           title: "回到共享队列重新分诊",
           body: "章节已回收到共享队列，下一步应由值班 operator 重新确认优先级、owner 和 follow-up 动作。",
+          actionKind: "assignment",
+          actionLabel: "查看 assignment",
         };
   }
   return snapshot.actionStatus === "completed"
     ? {
         title: "复核 rerun / recheck 结果",
         body: "follow-up action 已执行完成，下一步应检查 rerun 后的 issue、timeline 和 queue 状态是否真正收敛。",
+        actionKind: "action",
+        actionLabel: "查看 rerun 结果",
       }
     : {
         title: "继续盯 action 执行结果",
         body: "当前 action 还没有进入完成态，下一步应继续观察 recheck / rerun 是否落盘，再决定是否扩大处理范围。",
+        actionKind: "action",
+        actionLabel: "切到 follow-up",
       };
 }

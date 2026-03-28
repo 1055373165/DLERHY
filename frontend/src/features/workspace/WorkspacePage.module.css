@@ -363,6 +363,7 @@
 .deltaGrid,
 .deltaCard,
 .nextStepCard,
+.nextStepActions,
 .focusTitle {
   gap: 10px;
 }
@@ -689,6 +690,12 @@
 .nextStepCard {
   border-color: color-mix(in srgb, var(--surface-ink) 12%, var(--line));
   background: color-mix(in srgb, var(--warning-soft) 42%, var(--surface-strong));
+}
+
+.nextStepActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .deltaLabel {

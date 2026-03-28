@@ -713,6 +713,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("Pending 1 -> 0")).toBeInTheDocument();
     expect(screen.getByText("Snapshot v3 -> v4")).toBeInTheDocument();
     expect(screen.getByText("转入 blocker / follow-up 处理")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "切到 follow-up" }));
+    expect(screen.getByText("Follow-up Action · REBUILD_PACKET_THEN_RERUN")).toBeInTheDocument();
     expect(screen.getAllByText("最新操作").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Proposal 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已影响当前状态").length).toBeGreaterThan(0);
@@ -749,6 +751,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("章节 assignment 已更新")).toBeInTheDocument();
     expect(screen.getAllByText("Owner 共享队列 -> queue-owner").length).toBeGreaterThan(0);
     expect(screen.getByText("由新 owner 接手 follow-up")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "查看当前 owner" }));
+    expect(screen.getByText("Assignment · queue-owner")).toBeInTheDocument();
     expect(screen.getAllByText("Assignment 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("queue-owner").length).toBeGreaterThan(0);
 
@@ -816,6 +820,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("已收敛")).toBeInTheDocument();
     expect(screen.getAllByText("Action queued -> completed").length).toBeGreaterThan(0);
     expect(screen.getByText("复核 rerun / recheck 结果")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "查看 rerun 结果" }));
+    expect(screen.getByText("Follow-up Action · REBUILD_PACKET_THEN_RERUN")).toBeInTheDocument();
     expect(screen.getAllByText("最新操作").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Action 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已影响当前状态").length).toBeGreaterThan(0);
