@@ -712,6 +712,7 @@ describe("Workspace page", () => {
     expect(screen.getByText(/reviewer-ui 对 proposal/)).toBeInTheDocument();
     expect(screen.getByText("Pending 1 -> 0")).toBeInTheDocument();
     expect(screen.getByText("Snapshot v3 -> v4")).toBeInTheDocument();
+    expect(screen.getByText("转入 blocker / follow-up 处理")).toBeInTheDocument();
     expect(screen.getAllByText("最新操作").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Proposal 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已影响当前状态").length).toBeGreaterThan(0);
@@ -747,6 +748,7 @@ describe("Workspace page", () => {
     });
     expect(screen.getByText("章节 assignment 已更新")).toBeInTheDocument();
     expect(screen.getAllByText("Owner 共享队列 -> queue-owner").length).toBeGreaterThan(0);
+    expect(screen.getByText("由新 owner 接手 follow-up")).toBeInTheDocument();
     expect(screen.getAllByText("Assignment 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("queue-owner").length).toBeGreaterThan(0);
 
@@ -757,7 +759,7 @@ describe("Workspace page", () => {
     await user.click(screen.getByRole("button", { name: "归还共享队列" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/章节已回收到共享队列/)).toBeInTheDocument();
+      expect(screen.getByText(/其他 operator 现在可以继续接手处理/)).toBeInTheDocument();
     });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/v1/documents/doc-123/chapters/ch-1/worklist/assignment"),
@@ -813,6 +815,7 @@ describe("Workspace page", () => {
     expect(screen.getAllByText("已触发 rerun").length).toBeGreaterThan(0);
     expect(screen.getByText("已收敛")).toBeInTheDocument();
     expect(screen.getAllByText("Action queued -> completed").length).toBeGreaterThan(0);
+    expect(screen.getByText("复核 rerun / recheck 结果")).toBeInTheDocument();
     expect(screen.getAllByText("最新操作").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Action 回写").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已影响当前状态").length).toBeGreaterThan(0);

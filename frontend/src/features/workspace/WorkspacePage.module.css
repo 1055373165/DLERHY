@@ -362,6 +362,7 @@
 .changeCard,
 .deltaGrid,
 .deltaCard,
+.nextStepCard,
 .focusTitle {
   gap: 10px;
 }
@@ -369,7 +370,8 @@
 .proposalCard,
 .timelineCard,
 .executionCard,
-.changeCard {
+.changeCard,
+.nextStepCard {
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--line);
@@ -682,6 +684,11 @@
   border: 1px dashed var(--line);
   border-radius: 14px;
   background: var(--surface-strong);
+}
+
+.nextStepCard {
+  border-color: color-mix(in srgb, var(--surface-ink) 12%, var(--line));
+  background: color-mix(in srgb, var(--warning-soft) 42%, var(--surface-strong));
 }
 
 .deltaLabel {

@@ -131,6 +131,13 @@ export function WorkspacePage() {
           timelineEntryMatchesRecentChange(entry, selectedChapterRecentChange)
         )?.event_id ?? null
       : null;
+  const selectedChapterNextStep = selectedChapterRecentChange
+    ? buildRecentChangeNextStep(
+        selectedChapterRecentChange,
+        selectedChapterCurrentSnapshot,
+        currentChapterReviewDetail
+      )
+    : null;
   const focusedActionEntry =
     timelineFocus?.section === "actions"
       ? currentChapterReviewDetail?.recent_actions.find(
@@ -933,6 +940,13 @@ export function WorkspacePage() {
                         ))}
                       </div>
                     ) : null}
+                    {selectedChapterNextStep ? (
+                      <div className={styles.nextStepCard}>
+                        <span className={styles.deltaLabel}>Recommended Next Step</span>
+                        <strong className={styles.deltaValue}>{selectedChapterNextStep.title}</strong>
+                        <p className={styles.timelineDetail}>{selectedChapterNextStep.body}</p>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1518,4 +1532,58 @@ function timelineEntryMatchesRecentChange(
     return entry.source_kind === "assignment";
   }
   return entry.source_kind === "action";
+}
+
+function buildRecentChangeNextStep(
+  change: RecentOperatorChange,
+  snapshot: OperatorConvergenceSnapshot | null,
+  detail:
+    | {
+        current_active_blocking_issue_count: number;
+        memory_proposals: { pending_proposal_count: number };
+        assignment?: { owner_name?: string | null } | null;
+      }
+    | null
+) {
+  if (!snapshot || !detail) {
+    return null;
+  }
+  if (change.kind === "proposal") {
+    if (snapshot.pendingProposalCount > 0) {
+      return {
+        title: "继续清理剩余 proposal",
+        body: `当前还有 ${snapshot.pendingProposalCount} 条待审批 proposal，优先继续处理 memory override，避免章节停在半收敛状态。`,
+      };
+    }
+    if (detail.current_active_blocking_issue_count > 0) {
+      return {
+        title: "转入 blocker / follow-up 处理",
+        body: `proposal 已收敛，但当前仍有 ${detail.current_active_blocking_issue_count} 个 blocker，下一步应切回 issue/action 面继续推进。`,
+      };
+    }
+    return {
+      title: "切回章节队列确认是否可放行",
+      body: "当前没有待审批 proposal，也没有明显 blocker，可以回到章节队列判断这章是否已经达到下一阶段门槛。",
+    };
+  }
+  if (change.kind === "assignment") {
+    return detail.assignment?.owner_name
+      ? {
+          title: "由新 owner 接手 follow-up",
+          body: `章节现在已经绑定到 ${detail.assignment.owner_name}，下一步应由当前 owner 继续执行 blocker 处理或 proposal 审批。`,
+        }
+      : {
+          title: "回到共享队列重新分诊",
+          body: "章节已回收到共享队列，下一步应由值班 operator 重新确认优先级、owner 和 follow-up 动作。",
+        };
+  }
+  return snapshot.actionStatus === "completed"
+    ? {
+        title: "复核 rerun / recheck 结果",
+        body: "follow-up action 已执行完成，下一步应检查 rerun 后的 issue、timeline 和 queue 状态是否真正收敛。",
+      }
+    : {
+        title: "继续盯 action 执行结果",
+        body: "当前 action 还没有进入完成态，下一步应继续观察 recheck / rerun 是否落盘，再决定是否扩大处理范围。",
+      };
 }
