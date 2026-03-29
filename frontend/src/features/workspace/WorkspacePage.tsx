@@ -171,6 +171,11 @@ type ReleaseLaneBatchPhase = {
   helper: string;
   queueHint: string;
 };
+type ReleaseLaneBatchDigest = {
+  statusLabel: string;
+  helper: string;
+  queueHint: string;
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -434,6 +439,18 @@ export function WorkspacePage() {
           statusLabel: selectedQueueOutcome.statusLabel,
           nextQueueEntry,
           observeFallback: releaseLaneObserveFallback,
+        })
+      : null;
+  const activeReleaseLaneBatchDigest =
+    isFlowMode &&
+    activeQueueLens?.outcome === "release-ready" &&
+    selectedChapterRecentChange &&
+    selectedQueueOutcome
+      ? buildReleaseLaneBatchDigest({
+          statusLabel: selectedQueueOutcome.statusLabel,
+          visibleCount: visibleQueueEntries.length,
+          selectedIndex: selectedQueueIndex,
+          observeCount: queueObserveCount,
         })
       : null;
   const releaseLaneFallback =
@@ -1556,6 +1573,13 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>{activeReleaseLaneBatchPhase.helper}</p>
                             </div>
                           ) : null}
+                          {activeReleaseLaneBatchDigest ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>放行批处理摘要</span>
+                              <strong className={styles.deltaValue}>{activeReleaseLaneBatchDigest.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLaneBatchDigest.helper}</p>
+                            </div>
+                          ) : null}
                           {activeReleaseGate ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>放行门</span>
@@ -1754,6 +1778,11 @@ export function WorkspacePage() {
                               {activeQueueLens?.outcome === "release-ready" && activeReleaseLaneBatchPhase ? (
                                 <p className={styles.queueOutcomeHint}>
                                   批处理阶段 · {activeReleaseLaneBatchPhase.queueHint}
+                                </p>
+                              ) : null}
+                              {activeQueueLens?.outcome === "release-ready" && activeReleaseLaneBatchDigest ? (
+                                <p className={styles.queueOutcomeHint}>
+                                  批处理摘要 · {activeReleaseLaneBatchDigest.queueHint}
                                 </p>
                               ) : null}
                             </>
@@ -3506,6 +3535,41 @@ function buildReleaseLaneBatchPhase(input: {
     statusLabel: "本轮批处理已收口",
     helper: "当前 release-ready lane 和最后观察 lane 都已收口，这一轮批处理已经完成。",
     queueHint: "本轮批处理已收口",
+  };
+}
+
+function buildReleaseLaneBatchDigest(input: {
+  statusLabel: string;
+  visibleCount: number;
+  selectedIndex: number;
+  observeCount: number;
+}): ReleaseLaneBatchDigest {
+  if (input.statusLabel !== "适合放行") {
+    const observeAfter = input.observeCount + 1;
+    return {
+      statusLabel: `已完成放行 0 / ${formatNumber(input.visibleCount)} 章 · 待观察 ${formatNumber(observeAfter)} 章`,
+      helper: `当前章退回继续观察后，这一轮批处理暂时没有新增放行收口；下一步先回到 ${formatNumber(
+        observeAfter
+      )} 章观察链继续修正。`,
+      queueHint: `放行 0 / ${formatNumber(input.visibleCount)} · 观察 ${formatNumber(observeAfter)}`,
+    };
+  }
+  const currentIndex = input.selectedIndex >= 0 ? input.selectedIndex : 0;
+  const completedReleaseCount = Math.min(currentIndex + 1, input.visibleCount);
+  const remainingReleaseCount = Math.max(input.visibleCount - completedReleaseCount, 0);
+  return {
+    statusLabel: `已完成放行 ${formatNumber(completedReleaseCount)} / ${formatNumber(input.visibleCount)} 章 · 待观察 ${formatNumber(input.observeCount)} 章`,
+    helper:
+      remainingReleaseCount > 0
+        ? `这一轮批处理已经完成 ${formatNumber(completedReleaseCount)} 章放行，后面还剩 ${formatNumber(
+            remainingReleaseCount
+          )} 章 release-ready、${formatNumber(input.observeCount)} 章最后观察。`
+        : `这一轮批处理已经完成当前 release-ready lane 的 ${formatNumber(
+            completedReleaseCount
+          )} 章放行；下一步回到 ${formatNumber(input.observeCount)} 章最后观察收尾。`,
+    queueHint: `放行 ${formatNumber(completedReleaseCount)} / ${formatNumber(input.visibleCount)} · 观察 ${formatNumber(
+      input.observeCount
+    )}`,
   };
 }
 
