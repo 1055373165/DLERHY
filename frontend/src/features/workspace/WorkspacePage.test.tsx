@@ -671,6 +671,39 @@ function installFetchMock() {
         updated_at: "2026-03-28T08:10:00Z",
       });
     }
+    if (path.endsWith("/v1/documents/doc-123/chapters/ch-3/worklist/assignment") && init?.method === "PUT") {
+      const payload = JSON.parse(String(init.body)) as {
+        owner_name: string;
+        assigned_by: string;
+        note?: string;
+      };
+      chapterState["ch-3"].assignment = {
+        assignment_id: "assign-3b",
+        owner_name: payload.owner_name,
+        assigned_by: payload.assigned_by,
+        note: payload.note,
+        assigned_at: "2026-03-28T08:16:00Z",
+      };
+      chapterState["ch-3"].assignmentHistory.unshift({
+        event_id: "assign-3b",
+        event_type: "assigned",
+        owner_name: payload.owner_name,
+        performed_by: payload.assigned_by,
+        note: payload.note ?? null,
+        created_at: "2026-03-28T08:16:00Z",
+      });
+      return jsonResponse({
+        assignment_id: "assign-3b",
+        document_id: "doc-123",
+        chapter_id: "ch-3",
+        owner_name: payload.owner_name,
+        assigned_by: payload.assigned_by,
+        note: payload.note ?? null,
+        assigned_at: "2026-03-28T08:16:00Z",
+        created_at: "2026-03-28T08:16:00Z",
+        updated_at: "2026-03-28T08:16:00Z",
+      });
+    }
     if (path.endsWith("/v1/actions/act-ch-1/execute") && init?.method === "POST") {
       chapterState["ch-1"].actionStatus = "completed";
       return jsonResponse({
@@ -1339,6 +1372,16 @@ describe("Workspace page", () => {
     expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看最终复核" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "放行后看最后观察" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "指派章节" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("连续放行结果反馈")).toBeInTheDocument();
+    });
+    expect(screen.getByText("这次操作后切回最后观察")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Assignment -> Owner Handoff 已经保持当前章的放行态；这条放行 lane 收口后，下一步切到 第 2 章 · Chapter Two 继续最后观察。/)
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "放行后看最后观察" }));
 
