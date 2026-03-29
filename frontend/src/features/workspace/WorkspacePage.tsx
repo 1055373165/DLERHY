@@ -187,6 +187,8 @@ export function WorkspacePage() {
   const activeQueueFilters = buildActiveQueueFilters(chapterWorklistFilters);
   const selectedOwnerWorkload =
     ownerWorkloads.find((owner) => owner.owner_name === chapterWorklistFilters.assignedOwnerName) ?? null;
+  const visibleReleaseReadyCount = queueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
+  const visibleObserveCount = Math.max(queueEntries.length - visibleReleaseReadyCount, 0);
   const selectedQueueEntry =
     queueEntries.find((entry) => entry.chapter_id === selectedReviewChapterId) ?? null;
   const selectedQueueIndex = selectedQueueEntry
@@ -989,6 +991,17 @@ export function WorkspacePage() {
                             : "当前展示整条 reviewer/operator 队列。"}
                         </p>
                       </div>
+                      <div className={styles.queueInspectorCard}>
+                        <span className={styles.reviewMetricLabel}>Queue 判断</span>
+                        <strong>
+                          放行 {formatNumber(visibleReleaseReadyCount)} · 观察 {formatNumber(visibleObserveCount)}
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {hasActiveQueueFilters
+                            ? "这是当前筛选范围下的判断，不是整条队列的全局统计。"
+                            : "先看当前范围里有多少章适合放行，再决定是否继续扫描整条队列。"}
+                        </p>
+                      </div>
                     </div>
                     {activeQueueFilters.length ? (
                       <div className={styles.filterChipRow}>
@@ -1067,6 +1080,7 @@ export function WorkspacePage() {
                   <div className={styles.queueList}>
                     {queueEntries.map((entry) => {
                       const active = entry.chapter_id === selectedReviewChapterId;
+                      const entryOutcome = buildQueueEntryOutcome(entry);
                       return (
                         <button
                           key={entry.chapter_id}
@@ -1102,6 +1116,9 @@ export function WorkspacePage() {
                             <span>Blockers {formatNumber(entry.active_blocking_issue_count)}</span>
                             <span>Pending {formatNumber(entry.memory_proposals.pending_proposal_count)}</span>
                           </div>
+                          <p className={styles.queueOutcomeMeta}>
+                            {entryOutcome.statusLabel} · {entryOutcome.reasonLabel}
+                          </p>
                           {recentOperatorChange?.chapterId === entry.chapter_id &&
                           selectedReviewChapterId === entry.chapter_id &&
                           selectedChapterConvergenceItems.length ? (
@@ -2331,6 +2348,47 @@ function buildQueueOutcomeSummary(
   return {
     chainLabel: sessionTrailChainLabel(change.kind),
     statusLabel: releaseReady ? "适合放行" : "继续观察",
+  };
+}
+
+function isQueueEntryReleaseReady(entry: {
+  active_blocking_issue_count: number;
+  open_issue_count: number;
+  memory_proposals: { pending_proposal_count: number };
+}) {
+  return (
+    entry.active_blocking_issue_count === 0 &&
+    entry.open_issue_count === 0 &&
+    entry.memory_proposals.pending_proposal_count === 0
+  );
+}
+
+function buildQueueEntryOutcome(entry: {
+  active_blocking_issue_count: number;
+  open_issue_count: number;
+  memory_proposals: { pending_proposal_count: number };
+}) {
+  if (entry.active_blocking_issue_count > 0) {
+    return {
+      statusLabel: "继续观察",
+      reasonLabel: "存在 blocker",
+    };
+  }
+  if (entry.memory_proposals.pending_proposal_count > 0) {
+    return {
+      statusLabel: "继续观察",
+      reasonLabel: "待审批 proposal",
+    };
+  }
+  if (entry.open_issue_count > 0) {
+    return {
+      statusLabel: "继续观察",
+      reasonLabel: "仍有 open issues",
+    };
+  }
+  return {
+    statusLabel: "适合放行",
+    reasonLabel: "当前未见 blocker / proposal / open issue",
   };
 }
 

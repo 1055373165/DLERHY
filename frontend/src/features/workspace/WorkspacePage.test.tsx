@@ -1124,6 +1124,10 @@ describe("Workspace page", () => {
     });
     expect(screen.getByText("Owner · night-shift")).toBeInTheDocument();
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByText("放行 0 · 观察 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toHaveTextContent(
+      "继续观察 · 仍有 open issues"
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/v1/documents/doc-123/chapters/worklist?limit=50&offset=0&assigned_owner_name=night-shift"),
       undefined

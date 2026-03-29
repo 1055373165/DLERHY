@@ -1050,6 +1050,14 @@
   line-height: 1.6;
 }
 
+.queueOutcomeMeta {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .queueOutcomeHint {
   margin: 0;
   color: var(--surface-ink-soft);
