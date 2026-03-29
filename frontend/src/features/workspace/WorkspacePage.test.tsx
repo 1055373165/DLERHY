@@ -1332,6 +1332,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("连续放行决策")).toBeInTheDocument();
     expect(screen.getByText("现在可放行")).toBeInTheDocument();
     expect(screen.getByText(/这条 lane 收口后，下一步切到 第 2 章 · Chapter Two 做最后观察/)).toBeInTheDocument();
+    expect(screen.getByText("批量放行反馈")).toBeInTheDocument();
+    expect(screen.getByText("本轮还可连续推进 1 章 · 之后观察 1 章")).toBeInTheDocument();
     expect(screen.getByText("放行门")).toBeInTheDocument();
     expect(screen.getByText("连续放行判断")).toBeInTheDocument();
     expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();

@@ -143,6 +143,10 @@ type ReleaseLaneDecision = {
   helper: string;
   actionLabel: string;
 };
+type ReleaseLaneBatchSummary = {
+  statusLabel: string;
+  helper: string;
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -339,6 +343,14 @@ export function WorkspacePage() {
           hasGateFailures: activeReleaseGateFailures.length > 0,
           nextQueueEntry,
           observeFallback: releaseLaneObserveFallback,
+        })
+      : null;
+  const activeReleaseLaneBatchSummary =
+    isFlowMode && activeQueueLens?.outcome === "release-ready"
+      ? buildReleaseLaneBatchSummary({
+          visibleCount: visibleQueueEntries.length,
+          selectedIndex: selectedQueueIndex,
+          observeCount: queueObserveCount,
         })
       : null;
   const releaseLaneFallback =
@@ -1375,6 +1387,13 @@ export function WorkspacePage() {
                               <span className={styles.deltaLabel}>连续放行决策</span>
                               <strong className={styles.deltaValue}>{activeReleaseLaneDecision.statusLabel}</strong>
                               <p className={styles.timelineDetail}>{activeReleaseLaneDecision.helper}</p>
+                            </div>
+                          ) : null}
+                          {activeReleaseLaneBatchSummary ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>批量放行反馈</span>
+                              <strong className={styles.deltaValue}>{activeReleaseLaneBatchSummary.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLaneBatchSummary.helper}</p>
                             </div>
                           ) : null}
                           {activeReleaseGate ? (
@@ -3086,6 +3105,35 @@ function buildReleaseLaneDecision(input: {
     statusLabel: "现在可放行",
     helper: "当前 scope 下已经没有更多放行候选或最后观察章节，完成最终复核后可以切回整条队列继续扫描。",
     actionLabel: "切回全部章节",
+  };
+}
+
+function buildReleaseLaneBatchSummary(input: {
+  visibleCount: number;
+  selectedIndex: number;
+  observeCount: number;
+}): ReleaseLaneBatchSummary {
+  const currentIndex = input.selectedIndex >= 0 ? input.selectedIndex : 0;
+  const remainingReleaseReady = input.visibleCount
+    ? Math.max(input.visibleCount - currentIndex, 0)
+    : 0;
+  if (!input.visibleCount) {
+    return {
+      statusLabel: `本轮可放行 0 章 · 最后观察 ${input.observeCount} 章`,
+      helper:
+        input.observeCount > 0
+          ? `当前这条放行 lane 已经空了，下一步回到最后观察 lane 继续处理 ${formatNumber(input.observeCount)} 章。`
+          : "当前 scope 下没有可直接放行章节，也没有最后观察章节，可以回到整条队列重新扫描。",
+    };
+  }
+  return {
+    statusLabel: `本轮还可连续推进 ${remainingReleaseReady} 章 · 之后观察 ${input.observeCount} 章`,
+    helper:
+      input.observeCount > 0
+        ? `当前这条放行 lane 还剩 ${formatNumber(remainingReleaseReady)} 章可连续复核；收口后，再回到 ${formatNumber(
+            input.observeCount
+          )} 章最后观察。`
+        : `当前这条放行 lane 还剩 ${formatNumber(remainingReleaseReady)} 章可连续复核；收口后可直接回到整条队列继续扫描。`,
   };
 }
 
