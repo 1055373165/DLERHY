@@ -370,6 +370,7 @@
 .filterChipRow,
 .ownerSnapshotGrid,
 .ownerSnapshotCard,
+.flowHandoffCard,
 .changeCard,
 .deltaGrid,
 .deltaCard,
@@ -385,6 +386,7 @@
 .sessionTrailCard,
 .timelineCard,
 .executionCard,
+.flowHandoffCard,
 .changeCard,
 .nextStepCard {
   gap: 12px;
@@ -473,6 +475,11 @@
 .executionCard {
   margin-top: 12px;
   background: color-mix(in srgb, var(--surface-strong) 72%, white);
+}
+
+.flowHandoffCard {
+  border-color: color-mix(in srgb, var(--surface-ink) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface-strong) 76%, white);
 }
 
 .executionGrid {

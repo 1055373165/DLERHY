@@ -755,8 +755,11 @@ describe("Workspace page", () => {
     await waitFor(() => {
       expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
     });
+    expect(screen.getByText("连续处理接力")).toBeInTheDocument();
+    expect(screen.getByText("已从 第 1 章 · Chapter One 切到 第 2 章 · Chapter Two。")).toBeInTheDocument();
+    expect(screen.getByText("下一章先看 follow-up action")).toBeInTheDocument();
     expect(screen.getByText("STYLE_DRIFT")).toBeInTheDocument();
-    expect(screen.getByText("Follow-up Action · REBUILD_CHAPTER_BRIEF")).toBeInTheDocument();
+    expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
     expect(screen.getByText("连续处理摘要")).toBeInTheDocument();
     expect(screen.getByText("Action 1")).toBeInTheDocument();
     expect(screen.getByText("继续沿最近链路推进")).toBeInTheDocument();
@@ -818,6 +821,7 @@ describe("Workspace page", () => {
     expect(screen.getByText("当前筛选范围")).toBeInTheDocument();
     expect(screen.getByText("连续处理节奏")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "切到下一章重点" })).toBeInTheDocument();
+    expect(screen.queryByText("连续处理接力")).not.toBeInTheDocument();
     expect(
       screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
     ).toBeInTheDocument();

@@ -88,6 +88,13 @@ type SessionDigest = {
   kindSummary: string[];
   continuityHint: string;
 };
+type FlowHandoff = {
+  targetChapterId: string;
+  sourceChapterLabel: string;
+  targetChapterLabel: string;
+  reasonTitle: string;
+  reasonBody: string;
+};
 type FocusedPriorityItem = {
   label: string;
   value: string;
@@ -149,6 +156,7 @@ export function WorkspacePage() {
   const [pendingChapterFocus, setPendingChapterFocus] = useState<PendingChapterFocus | null>(null);
   const [recentOperatorChange, setRecentOperatorChange] = useState<RecentOperatorChange | null>(null);
   const [sessionTrail, setSessionTrail] = useState<SessionTrailEntry[]>([]);
+  const [flowHandoff, setFlowHandoff] = useState<FlowHandoff | null>(null);
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => readInitialWorkbenchMode());
   const [reviewerName, setReviewerName] = useState("reviewer-ui");
   const [reviewerNote, setReviewerNote] = useState("");
@@ -201,6 +209,8 @@ export function WorkspacePage() {
         currentChapterReviewDetail
       )
     : null;
+  const activeFlowHandoff =
+    isFlowMode && flowHandoff?.targetChapterId === selectedReviewChapterId ? flowHandoff : null;
   const focusedPriorityItems =
     !isFlowMode && currentChapterReviewDetail
       ? buildFocusedPriorityItems(currentChapterReviewDetail, selectedQueueEntry)
@@ -234,6 +244,12 @@ export function WorkspacePage() {
     setLastActionExecution(null);
     setTimelineFocus(null);
   }, [selectedReviewChapterId]);
+
+  useEffect(() => {
+    if (workbenchMode !== "flow") {
+      setFlowHandoff(null);
+    }
+  }, [workbenchMode]);
 
   useEffect(() => {
     if (!pendingChapterFocus || pendingChapterFocus.chapterId !== selectedReviewChapterId || !currentChapterReviewDetail) {
@@ -481,8 +497,11 @@ export function WorkspacePage() {
     if (!nextQueueEntry || !nextQueueRecommendation) {
       return;
     }
+    const sourceChapterLabel = selectedQueueEntry
+      ? `第 ${selectedQueueEntry.ordinal} 章 · ${selectedQueueEntry.title_src || `Chapter ${selectedQueueEntry.ordinal}`}`
+      : "当前章节";
+    const targetChapterLabel = `第 ${nextQueueEntry.ordinal} 章 · ${nextQueueEntry.title_src || `Chapter ${nextQueueEntry.ordinal}`}`;
     if (selectedQueueEntry && selectedChapterRecentChange) {
-      const chapterLabel = `第 ${selectedQueueEntry.ordinal} 章 · ${selectedQueueEntry.title_src || `Chapter ${selectedQueueEntry.ordinal}`}`;
       const summary =
         selectedChapterConvergenceItems[0]?.value ??
         selectedChapterRecentChange.highlights[0] ??
@@ -490,7 +509,7 @@ export function WorkspacePage() {
       setSessionTrail((current) => {
         const nextEntry = {
           chapterId: selectedQueueEntry.chapter_id,
-          chapterLabel,
+          chapterLabel: sourceChapterLabel,
           changeTitle: selectedChapterRecentChange.title,
           summary,
           kind: selectedChapterRecentChange.kind,
@@ -500,6 +519,13 @@ export function WorkspacePage() {
         return [nextEntry, ...current.filter((entry) => entry.chapterId !== nextEntry.chapterId)].slice(0, 3);
       });
     }
+    setFlowHandoff({
+      targetChapterId: nextQueueEntry.chapter_id,
+      sourceChapterLabel,
+      targetChapterLabel,
+      reasonTitle: nextQueueRecommendation.title,
+      reasonBody: nextQueueRecommendation.body,
+    });
     setReviewMessage({
       tone: "success",
       text: `已切到第 ${nextQueueEntry.ordinal} 章，优先处理 ${nextQueueRecommendation.title.replace("下一章先看", "").replace("下一章先清", "").trim()}。`,
@@ -1076,6 +1102,43 @@ export function WorkspacePage() {
                         </button>
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
+
+                {activeFlowHandoff ? (
+                  <div className={styles.flowHandoffCard}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Flow Handoff</div>
+                        <h4 className={styles.reviewSectionTitle}>连续处理接力</h4>
+                      </div>
+                      <button
+                        className={styles.ghostButton}
+                        type="button"
+                        onClick={() => setFlowHandoff(null)}
+                      >
+                        隐藏接力提示
+                      </button>
+                    </div>
+                    <p className={styles.timelineDetail}>
+                      已从 {activeFlowHandoff.sourceChapterLabel} 切到 {activeFlowHandoff.targetChapterLabel}。
+                    </p>
+                    <div className={styles.deltaGrid}>
+                      <div className={styles.deltaCard}>
+                        <span className={styles.deltaLabel}>切换原因</span>
+                        <strong className={styles.deltaValue}>{activeFlowHandoff.reasonTitle}</strong>
+                        <p className={styles.timelineDetail}>{activeFlowHandoff.reasonBody}</p>
+                      </div>
+                      <div className={styles.deltaCard}>
+                        <span className={styles.deltaLabel}>当前聚焦</span>
+                        <strong className={styles.deltaValue}>
+                          {timelineFocus?.label || "正在定位下一章关键面"}
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {timelineFocus?.helper || "章节 detail 已切换完成，关键 surface 正在收口到当前工作面。"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
 
