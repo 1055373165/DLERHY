@@ -230,13 +230,14 @@ export function WorkspacePage() {
       ? buildFlowHandoffSteps(currentChapterReviewDetail, selectedQueueEntry)
       : [];
   const activeFlowCompletedStepCount = activeFlowHandoff
-    ? Math.min(activeFlowHandoff.completedStepCount, Math.max(activeFlowHandoffSteps.length - 1, 0))
+    ? Math.min(activeFlowHandoff.completedStepCount, activeFlowHandoffSteps.length)
     : 0;
   const activeFlowCompletedSteps = activeFlowHandoffSteps.slice(0, activeFlowCompletedStepCount);
   const activeFlowCurrentStep = activeFlowHandoffSteps[activeFlowCompletedStepCount] ?? null;
   const activeFlowQueuedSteps = activeFlowCurrentStep
     ? activeFlowHandoffSteps.slice(activeFlowCompletedStepCount + 1)
     : [];
+  const activeFlowExitReady = Boolean(activeFlowHandoff && !activeFlowCurrentStep && activeFlowCompletedSteps.length);
   const focusedPriorityItems =
     !isFlowMode && currentChapterReviewDetail
       ? buildFocusedPriorityItems(currentChapterReviewDetail, selectedQueueEntry)
@@ -671,6 +672,22 @@ export function WorkspacePage() {
       actionId: actionEntry.action_id,
       label: `Follow-up Action · ${actionEntry.action_type || actionEntry.issue_type || shorten(actionEntry.action_id, 5)}`,
       helper: step.helper,
+    });
+  }
+
+  function handleFlowExit(action: "review-current" | "queue-overview") {
+    if (action === "review-current" && selectedChapterNextStep?.actionKind) {
+      handleRecommendedNextStep();
+    } else {
+      setTimelineFocus(null);
+    }
+    setFlowHandoff(null);
+    setReviewMessage({
+      tone: "success",
+      text:
+        action === "review-current"
+          ? "已结束当前接力，继续停在本章做最终复核。"
+          : "已结束当前接力，可以回到左侧队列继续挑选下一章或调整筛选范围。",
     });
   }
 
@@ -1339,6 +1356,43 @@ export function WorkspacePage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    ) : null}
+                    {activeFlowExitReady ? (
+                      <div className={styles.nextStepCard}>
+                        <span className={styles.deltaLabel}>Flow Exit Strategy</span>
+                        <strong className={styles.deltaValue}>当前这章的接力步骤已经收口</strong>
+                        <p className={styles.timelineDetail}>
+                          {nextQueueEntry
+                            ? "你现在可以停在当前章做最终复核，或者直接继续下一章。"
+                            : "当前已经到这段队列的末尾，适合停在本章做最终复核，或回到左侧队列重新分诊。"}
+                        </p>
+                        <div className={styles.nextStepActions}>
+                          <button
+                            className={styles.button}
+                            type="button"
+                            onClick={() => handleFlowExit("review-current")}
+                          >
+                            停在当前章复核
+                          </button>
+                          {nextQueueEntry && nextQueueRecommendation ? (
+                            <button
+                              className={styles.ghostButton}
+                              type="button"
+                              onClick={handleAdvanceToNextChapter}
+                            >
+                              {nextQueueRecommendation.actionLabel}
+                            </button>
+                          ) : (
+                            <button
+                              className={styles.ghostButton}
+                              type="button"
+                              onClick={() => handleFlowExit("queue-overview")}
+                            >
+                              回到队列视角
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ) : null}
                   </div>

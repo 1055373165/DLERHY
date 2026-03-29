@@ -654,6 +654,32 @@ function installFetchMock() {
         cleared_assignment_id: "assign-1",
       });
     }
+    if (
+      path.endsWith("/v1/documents/doc-123/chapters/ch-2/worklist/assignment/clear") &&
+      init?.method === "POST"
+    ) {
+      const payload = JSON.parse(String(init.body)) as {
+        cleared_by: string;
+        note?: string;
+      };
+      chapterState["ch-2"].assignmentHistory.unshift({
+        event_id: "assign-2-clear",
+        event_type: "cleared",
+        owner_name: null,
+        performed_by: payload.cleared_by,
+        note: payload.note ?? null,
+        created_at: "2026-03-28T08:14:00Z",
+      });
+      chapterState["ch-2"].assignment = null;
+      return jsonResponse({
+        document_id: "doc-123",
+        chapter_id: "ch-2",
+        cleared: true,
+        cleared_by: payload.cleared_by,
+        note: payload.note ?? null,
+        cleared_assignment_id: "assign-2",
+      });
+    }
     if (path.endsWith("/v1/documents/doc-123")) {
       return jsonResponse(documentPayload);
     }
@@ -923,6 +949,22 @@ describe("Workspace page", () => {
     });
     expect(screen.getByText(/已完成 先看 recent action/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /查看 assignment/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /查看 assignment/ }));
+    await user.click(screen.getByRole("button", { name: "回收当前 assignment" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Flow Exit Strategy")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "停在当前章复核" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "回到队列视角" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "停在当前章复核" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Flow Exit Strategy")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("已结束当前接力，继续停在本章做最终复核。")).toBeInTheDocument();
   }, 15000);
 
   it("supports assignment set and clear from the chapter workbench", async () => {
