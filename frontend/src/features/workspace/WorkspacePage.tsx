@@ -223,6 +223,9 @@ export function WorkspacePage() {
         currentChapterReviewDetail
       )
     : null;
+  const selectedQueueOutcome = selectedChapterRecentChange
+    ? buildQueueOutcomeSummary(selectedChapterRecentChange, currentChapterReviewDetail)
+    : null;
   const activeFlowHandoff =
     isFlowMode && flowHandoff?.targetChapterId === selectedReviewChapterId ? flowHandoff : null;
   const activeFlowHandoffSteps =
@@ -1102,12 +1105,19 @@ export function WorkspacePage() {
                           {recentOperatorChange?.chapterId === entry.chapter_id &&
                           selectedReviewChapterId === entry.chapter_id &&
                           selectedChapterConvergenceItems.length ? (
-                            <p className={styles.queueDeltaHint}>
-                              {selectedChapterConvergenceItems
-                                .slice(0, 2)
-                                .map((item) => item.value)
-                                .join(" · ")}
-                            </p>
+                            <>
+                              <p className={styles.queueDeltaHint}>
+                                {selectedChapterConvergenceItems
+                                  .slice(0, 2)
+                                  .map((item) => item.value)
+                                  .join(" · ")}
+                              </p>
+                              {selectedQueueOutcome ? (
+                                <p className={styles.queueOutcomeHint}>
+                                  {selectedQueueOutcome.chainLabel} · {selectedQueueOutcome.statusLabel}
+                                </p>
+                              ) : null}
+                            </>
                           ) : null}
                         </button>
                       );
@@ -2297,6 +2307,31 @@ function buildConvergenceItems(
     });
   }
   return items;
+}
+
+function buildQueueOutcomeSummary(
+  change: RecentOperatorChange,
+  detail:
+    | {
+        current_open_issue_count: number;
+        current_active_blocking_issue_count: number;
+        memory_proposals: { pending_proposal_count: number };
+        recent_actions: Array<{ status: string }>;
+      }
+    | null
+) {
+  if (!detail) {
+    return null;
+  }
+  const releaseReady =
+    detail.current_open_issue_count === 0 &&
+    detail.current_active_blocking_issue_count === 0 &&
+    detail.memory_proposals.pending_proposal_count === 0 &&
+    (detail.recent_actions[0]?.status ?? "unknown") === "completed";
+  return {
+    chainLabel: sessionTrailChainLabel(change.kind),
+    statusLabel: releaseReady ? "适合放行" : "继续观察",
+  };
 }
 
 function recentChangeKindLabel(kind: RecentOperatorChange["kind"]) {

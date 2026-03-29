@@ -1050,6 +1050,14 @@
   line-height: 1.6;
 }
 
+.queueOutcomeHint {
+  margin: 0;
+  color: var(--surface-ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .assignmentBar {
   grid-template-columns: minmax(160px, 200px) minmax(160px, 220px) minmax(0, 1fr) auto;
   align-items: end;

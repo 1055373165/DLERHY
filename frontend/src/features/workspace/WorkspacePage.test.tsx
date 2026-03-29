@@ -965,6 +965,9 @@ describe("Workspace page", () => {
       expect(screen.queryByText("Flow Exit Strategy")).not.toBeInTheDocument();
     });
     expect(screen.getByText("已结束当前接力，继续停在本章做最终复核。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toHaveTextContent(
+      "Assignment -> Owner Handoff · 继续观察"
+    );
   }, 15000);
 
   it("supports assignment set and clear from the chapter workbench", async () => {
