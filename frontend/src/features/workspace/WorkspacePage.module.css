@@ -34,6 +34,7 @@
 .sessionTrailCard,
 .focusBanner,
 .focusActions,
+.handoffStepList,
 .proposalList,
 .proposalCard,
 .proposalTop,
@@ -485,6 +486,29 @@
   background: color-mix(in srgb, var(--surface-strong) 76%, white);
 }
 
+.handoffStepList {
+  gap: 12px;
+}
+
+.handoffStepCard {
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.handoffStepCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.handoffStepAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--surface-ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .focusedDecisionStrip {
   gap: 16px;
   padding: 18px;
@@ -739,6 +763,7 @@
 .focusBanner,
 .changeCard,
 .infoPanel,
+.handoffStepList,
 .focusedDecisionStrip,
 .focusedDecisionContent,
 .focusedDecisionActions,

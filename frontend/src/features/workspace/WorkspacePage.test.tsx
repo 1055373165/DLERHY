@@ -758,6 +758,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("连续处理接力")).toBeInTheDocument();
     expect(screen.getByText("已从 第 1 章 · Chapter One 切到 第 2 章 · Chapter Two。")).toBeInTheDocument();
     expect(screen.getByText("下一章先看 follow-up action")).toBeInTheDocument();
+    expect(screen.getByText("接力顺序")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /先看当前 action/ })).toBeInTheDocument();
     expect(screen.getByText("STYLE_DRIFT")).toBeInTheDocument();
     expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
     expect(screen.getByText("连续处理摘要")).toBeInTheDocument();
