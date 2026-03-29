@@ -1159,4 +1159,38 @@ describe("Workspace page", () => {
     });
     expect(screen.getByText("未启用")).toBeInTheDocument();
   });
+
+  it("filters the queue by outcome judgment in flow mode", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
+    expect(screen.getByText("放行 0 · 观察 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /第 1 章 · Chapter One/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "只看放行候选" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。")).toBeInTheDocument();
+    });
+    expect(screen.getByText("放行 0 · 观察 0")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /第 1 章 · Chapter One/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /第 2 章 · Chapter Two/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "只看继续观察" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /第 1 章 · Chapter One/ })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
+    expect(screen.getByText("放行 0 · 观察 2")).toBeInTheDocument();
+    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-1");
+  });
 });

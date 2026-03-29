@@ -19,6 +19,7 @@ import styles from "./WorkspacePage.module.css";
 
 type MessageTone = "success" | "error";
 type WorkbenchMode = "focused" | "flow";
+type QueueOutcomeFilter = "all" | "release-ready" | "observe";
 type TimelineFocusTarget =
   | {
       eventId: string;
@@ -172,6 +173,7 @@ export function WorkspacePage() {
   const [sessionTrail, setSessionTrail] = useState<SessionTrailEntry[]>([]);
   const [flowHandoff, setFlowHandoff] = useState<FlowHandoff | null>(null);
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => readInitialWorkbenchMode());
+  const [queueOutcomeFilter, setQueueOutcomeFilter] = useState<QueueOutcomeFilter>("all");
   const [reviewerName, setReviewerName] = useState("reviewer-ui");
   const [reviewerNote, setReviewerNote] = useState("");
   const [assignmentOwner, setAssignmentOwner] = useState("");
@@ -179,6 +181,7 @@ export function WorkspacePage() {
   const action = getPrimaryRunAction(currentDocument, currentRun);
   const badge = documentBadge(currentDocument, currentRun);
   const queueEntries = chapterWorklist?.entries ?? [];
+  const visibleQueueEntries = queueEntries.filter((entry) => queueOutcomeMatchesFilter(entry, queueOutcomeFilter));
   const ownerWorkloads = chapterWorklist?.owner_workload_summary ?? [];
   const hasActiveQueueFilters =
     chapterWorklistFilters.queuePriority !== "all" ||
@@ -187,16 +190,18 @@ export function WorkspacePage() {
   const activeQueueFilters = buildActiveQueueFilters(chapterWorklistFilters);
   const selectedOwnerWorkload =
     ownerWorkloads.find((owner) => owner.owner_name === chapterWorklistFilters.assignedOwnerName) ?? null;
-  const visibleReleaseReadyCount = queueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
-  const visibleObserveCount = Math.max(queueEntries.length - visibleReleaseReadyCount, 0);
+  const queueReleaseReadyCount = queueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
+  const queueObserveCount = Math.max(queueEntries.length - queueReleaseReadyCount, 0);
+  const visibleReleaseReadyCount = visibleQueueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
+  const visibleObserveCount = Math.max(visibleQueueEntries.length - visibleReleaseReadyCount, 0);
   const selectedQueueEntry =
-    queueEntries.find((entry) => entry.chapter_id === selectedReviewChapterId) ?? null;
+    visibleQueueEntries.find((entry) => entry.chapter_id === selectedReviewChapterId) ?? null;
   const selectedQueueIndex = selectedQueueEntry
-    ? queueEntries.findIndex((entry) => entry.chapter_id === selectedQueueEntry.chapter_id)
+    ? visibleQueueEntries.findIndex((entry) => entry.chapter_id === selectedQueueEntry.chapter_id)
     : -1;
   const nextQueueEntry =
-    selectedQueueIndex >= 0 && selectedQueueIndex < queueEntries.length - 1
-      ? queueEntries[selectedQueueIndex + 1]
+    selectedQueueIndex >= 0 && selectedQueueIndex < visibleQueueEntries.length - 1
+      ? visibleQueueEntries[selectedQueueIndex + 1]
       : null;
   const nextQueueRecommendation = nextQueueEntry ? buildNextQueueRecommendation(nextQueueEntry) : null;
   const isFlowMode = workbenchMode === "flow";
@@ -284,6 +289,22 @@ export function WorkspacePage() {
       setFlowHandoff(null);
     }
   }, [workbenchMode]);
+
+  useEffect(() => {
+    if (workbenchMode !== "flow") {
+      return;
+    }
+    if (!visibleQueueEntries.length) {
+      return;
+    }
+    const stillVisible = selectedReviewChapterId
+      ? visibleQueueEntries.some((entry) => entry.chapter_id === selectedReviewChapterId)
+      : false;
+    if (stillVisible) {
+      return;
+    }
+    selectReviewChapter(visibleQueueEntries[0]?.chapter_id ?? null);
+  }, [workbenchMode, visibleQueueEntries, selectedReviewChapterId, selectReviewChapter]);
 
   useEffect(() => {
     if (!recentOperatorChange || !flowHandoff || recentOperatorChange.chapterId !== flowHandoff.targetChapterId) {
@@ -977,7 +998,7 @@ export function WorkspacePage() {
                       <div className={styles.queueInspectorCard}>
                         <span className={styles.reviewMetricLabel}>Visible</span>
                         <strong>
-                          {formatNumber(chapterWorklist?.filtered_worklist_count ?? chapterWorklist?.entry_count)} /{" "}
+                          {formatNumber(visibleQueueEntries.length)} /{" "}
                           {formatNumber(chapterWorklist?.worklist_count)}
                         </strong>
                         <p className={styles.timelineDetail}>chapters in current scope</p>
@@ -997,11 +1018,48 @@ export function WorkspacePage() {
                           放行 {formatNumber(visibleReleaseReadyCount)} · 观察 {formatNumber(visibleObserveCount)}
                         </strong>
                         <p className={styles.timelineDetail}>
-                          {hasActiveQueueFilters
-                            ? "这是当前筛选范围下的判断，不是整条队列的全局统计。"
-                            : "先看当前范围里有多少章适合放行，再决定是否继续扫描整条队列。"}
+                          {queueOutcomeFilter === "all"
+                            ? hasActiveQueueFilters
+                              ? "这是当前筛选范围下的判断，不是整条队列的全局统计。"
+                              : "先看当前范围里有多少章适合放行，再决定是否继续扫描整条队列。"
+                            : "当前是 queue judgment 视角，detail 会跟着只显示这类章节。"}
                         </p>
                       </div>
+                    </div>
+                    <div className={styles.modeSwitchControls} role="tablist" aria-label="queue judgment filter">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={queueOutcomeFilter === "all"}
+                        className={`${styles.modeSwitchButton} ${
+                          queueOutcomeFilter === "all" ? styles.modeSwitchButtonActive : ""
+                        }`}
+                        onClick={() => setQueueOutcomeFilter("all")}
+                      >
+                        全部章节
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={queueOutcomeFilter === "release-ready"}
+                        className={`${styles.modeSwitchButton} ${
+                          queueOutcomeFilter === "release-ready" ? styles.modeSwitchButtonActive : ""
+                        }`}
+                        onClick={() => setQueueOutcomeFilter("release-ready")}
+                      >
+                        只看放行候选
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={queueOutcomeFilter === "observe"}
+                        className={`${styles.modeSwitchButton} ${
+                          queueOutcomeFilter === "observe" ? styles.modeSwitchButtonActive : ""
+                        }`}
+                        onClick={() => setQueueOutcomeFilter("observe")}
+                      >
+                        只看继续观察
+                      </button>
                     </div>
                     {activeQueueFilters.length ? (
                       <div className={styles.filterChipRow}>
@@ -1076,9 +1134,9 @@ export function WorkspacePage() {
 
                 {chapterWorklistLoading ? (
                   <div className={styles.reviewEmpty}>正在加载章节队列…</div>
-                ) : queueEntries.length ? (
+                ) : visibleQueueEntries.length ? (
                   <div className={styles.queueList}>
-                    {queueEntries.map((entry) => {
+                    {visibleQueueEntries.map((entry) => {
                       const active = entry.chapter_id === selectedReviewChapterId;
                       const entryOutcome = buildQueueEntryOutcome(entry);
                       return (
@@ -1142,8 +1200,10 @@ export function WorkspacePage() {
                   </div>
                 ) : (
                   <div className={styles.reviewEmpty}>
-                    {hasActiveQueueFilters
-                      ? "当前过滤条件下没有匹配章节。可以放宽优先级、owner 或分派条件。"
+                    {queueOutcomeFilter !== "all"
+                      ? "当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。"
+                      : hasActiveQueueFilters
+                        ? "当前过滤条件下没有匹配章节。可以放宽优先级、owner 或分派条件。"
                       : "当前书籍还没有进入 reviewer/operator 队列的章节。"}
                   </div>
                 )}
@@ -2361,6 +2421,21 @@ function isQueueEntryReleaseReady(entry: {
     entry.open_issue_count === 0 &&
     entry.memory_proposals.pending_proposal_count === 0
   );
+}
+
+function queueOutcomeMatchesFilter(
+  entry: {
+    active_blocking_issue_count: number;
+    open_issue_count: number;
+    memory_proposals: { pending_proposal_count: number };
+  },
+  filter: QueueOutcomeFilter
+) {
+  if (filter === "all") {
+    return true;
+  }
+  const releaseReady = isQueueEntryReleaseReady(entry);
+  return filter === "release-ready" ? releaseReady : !releaseReady;
 }
 
 function buildQueueEntryOutcome(entry: {
