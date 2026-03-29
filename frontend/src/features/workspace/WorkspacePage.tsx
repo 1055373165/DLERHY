@@ -96,9 +96,12 @@ type FlowHandoff = {
   reasonBody: string;
 };
 type FocusedPriorityItem = {
+  rankLabel: string;
   label: string;
   value: string;
   hint: string;
+  section: TimelineFocusTarget["section"];
+  actionLabel: string;
 };
 
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
@@ -215,6 +218,8 @@ export function WorkspacePage() {
     !isFlowMode && currentChapterReviewDetail
       ? buildFocusedPriorityItems(currentChapterReviewDetail, selectedQueueEntry)
       : [];
+  const focusedPrimaryItem = !isFlowMode && focusedPriorityItems.length ? focusedPriorityItems[0] : null;
+  const focusedSecondaryItems = focusedPrimaryItem ? focusedPriorityItems.slice(1) : [];
   const focusedActionEntry =
     timelineFocus?.section === "actions"
       ? currentChapterReviewDetail?.recent_actions.find(
@@ -533,6 +538,50 @@ export function WorkspacePage() {
     setTimelineFocus(null);
     setPendingChapterFocus(nextQueueRecommendation.focus);
     selectReviewChapter(nextQueueEntry.chapter_id);
+  }
+
+  function handleFocusCurrentChapterPriority(item: FocusedPriorityItem) {
+    if (!currentChapterReviewDetail) {
+      return;
+    }
+    if (item.section === "proposal") {
+      const proposal = currentChapterReviewDetail.memory_proposals.pending_proposals[0];
+      if (!proposal) {
+        return;
+      }
+      setTimelineFocus({
+        eventId: `focused-priority-proposal-${proposal.proposal_id}`,
+        section: "proposal",
+        proposalId: proposal.proposal_id,
+        label: `Memory Override · ${shorten(proposal.proposal_id, 5)}`,
+        helper: "已把焦点切到当前章节的待审批 proposal，可以直接做 approve / reject。",
+      });
+      return;
+    }
+    if (item.section === "assignment") {
+      setTimelineFocus({
+        eventId: `focused-priority-assignment-${selectedReviewChapterId ?? "chapter"}`,
+        section: "assignment",
+        label: currentChapterReviewDetail.assignment?.owner_name
+          ? `Assignment · ${currentChapterReviewDetail.assignment.owner_name}`
+          : "Assignment · 共享队列",
+        helper: currentChapterReviewDetail.assignment?.owner_name
+          ? "已把焦点切到当前章节的 assignment 控制区，可以继续交接、回收或补充备注。"
+          : "已把焦点切到当前章节的 assignment 控制区，可以为这章重新指定 owner。",
+      });
+      return;
+    }
+    const actionEntry = currentChapterReviewDetail.recent_actions[0];
+    if (!actionEntry) {
+      return;
+    }
+    setTimelineFocus({
+      eventId: `focused-priority-action-${actionEntry.action_id}`,
+      section: "actions",
+      actionId: actionEntry.action_id,
+      label: `Follow-up Action · ${actionEntry.action_type || actionEntry.issue_type || shorten(actionEntry.action_id, 5)}`,
+      helper: "已把焦点切到当前章节的 follow-up action，可以直接执行或核对 rerun / recheck 收敛情况。",
+    });
   }
 
   return (
@@ -1142,7 +1191,7 @@ export function WorkspacePage() {
                   </div>
                 ) : null}
 
-                {!isFlowMode && focusedPriorityItems.length ? (
+                {!isFlowMode && focusedPrimaryItem ? (
                   <section className={styles.infoPanel}>
                     <div className={styles.reviewSectionHeader}>
                       <div>
@@ -1153,15 +1202,65 @@ export function WorkspacePage() {
                         单章精查模式下，先把这章最值得处理的 blocker、proposal、follow-up 收到一个面里。
                       </p>
                     </div>
-                    <div className={styles.contextGrid}>
-                      {focusedPriorityItems.map((item) => (
-                        <div key={item.label} className={styles.contextCard}>
-                          <span className={styles.reviewMetricLabel}>{item.label}</span>
+                    <div className={styles.focusedDecisionStrip}>
+                      <div className={styles.focusedDecisionContent}>
+                        <div className={styles.queueRankRow}>
+                          <span className={styles.changeBadge}>{focusedPrimaryItem.rankLabel}</span>
+                          <span className={styles.changeKindBadge}>{focusedPrimaryItem.label}</span>
+                        </div>
+                        <strong className={styles.deltaValue}>{focusedPrimaryItem.value}</strong>
+                        <p className={styles.timelineDetail}>{focusedPrimaryItem.hint}</p>
+                      </div>
+                      <div className={styles.focusedDecisionActions}>
+                        <div className={styles.deltaGrid}>
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>当前先处理</span>
+                            <strong className={styles.deltaValue}>{focusedPrimaryItem.label}</strong>
+                            <p className={styles.timelineDetail}>先把这条链路收口，再看 proposal、owner 或 follow-up 余项。</p>
+                          </div>
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>后续待看</span>
+                            <strong className={styles.deltaValue}>
+                              {formatNumber(focusedSecondaryItems.length)} 个次级面
+                            </strong>
+                            <p className={styles.timelineDetail}>
+                              {focusedSecondaryItems.length
+                                ? `接下来优先看 ${focusedSecondaryItems.map((item) => item.label).join(" / ")}。`
+                                : "当前章节已经没有更多次级面待处理。"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className={styles.nextStepActions}>
+                          <button
+                            className={styles.button}
+                            type="button"
+                            onClick={() => handleFocusCurrentChapterPriority(focusedPrimaryItem)}
+                          >
+                            {focusedPrimaryItem.actionLabel}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    {focusedSecondaryItems.length ? (
+                      <div className={styles.focusedPriorityList}>
+                        {focusedSecondaryItems.map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          className={styles.focusedPriorityCard}
+                          onClick={() => handleFocusCurrentChapterPriority(item)}
+                        >
+                          <div className={styles.queueRankRow}>
+                            <span className={styles.changeBadge}>{item.rankLabel}</span>
+                            <span className={styles.changeKindBadge}>{item.label}</span>
+                          </div>
                           <strong>{item.value}</strong>
                           <p className={styles.timelineDetail}>{item.hint}</p>
-                        </div>
-                      ))}
-                    </div>
+                          <span className={styles.focusedPriorityAction}>{item.actionLabel}</span>
+                        </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </section>
                 ) : null}
 
@@ -2203,39 +2302,57 @@ function buildFocusedPriorityItems(
   return [
     detail.current_active_blocking_issue_count > 0
       ? {
+          rankLabel: "先处理",
           label: "首要阻断",
           value: `${detail.current_active_blocking_issue_count} 个 blocker`,
           hint: `优先从 Issue / Action Summary 和 timeline 中定位当前阻断链，当前 queue driver 为 ${queueEntry?.queue_driver || "章节阻断"}。`,
+          section: "actions",
+          actionLabel: "查看 blocker / follow-up",
         }
       : {
+          rankLabel: "先处理",
           label: "首要阻断",
           value: "当前无 blocker",
           hint: "这章暂时没有 active blocking issue，可以把注意力转到 proposal 或 follow-up 收敛上。",
+          section: "proposal",
+          actionLabel: "查看当前 proposal",
         },
     detail.memory_proposals.pending_proposal_count > 0
       ? {
+          rankLabel: "随后",
           label: "待决 Proposal",
           value: `${detail.memory_proposals.pending_proposal_count} 条待审批`,
           hint: `当前 snapshot v${detail.memory_proposals.active_snapshot_version ?? "—"}，优先决定 proposal 是否进入正式 chapter memory。`,
+          section: "proposal",
+          actionLabel: "查看 pending proposal",
         }
       : {
+          rankLabel: "随后",
           label: "待决 Proposal",
           value: "proposal 已收敛",
           hint: "当前没有待审批 proposal，可以把精力放回 blocker、action 或 owner handoff。",
+          section: "actions",
+          actionLabel: "查看当前 action",
         },
     latestAction
       ? {
+          rankLabel: "最后复核",
           label: "Follow-up",
           value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
           hint:
             latestAction.status === "completed"
               ? "最新 follow-up 已完成，下一步应优先核对 rerun / recheck 结果是否真正收敛。"
               : "最新 follow-up 还没进入完成态，继续盯 action 结果比扫描整条队列更重要。",
+          section: "actions",
+          actionLabel: "查看当前 follow-up",
         }
       : {
+          rankLabel: "最后复核",
           label: "Follow-up",
           value: detail.assignment?.owner_name ? `Owner ${detail.assignment.owner_name}` : "共享队列",
           hint: "当前章节还没有 recent action，可先确认 owner handoff 或直接处理 proposal / blocker。",
+          section: "assignment",
+          actionLabel: "查看当前 owner",
         },
   ];
 }

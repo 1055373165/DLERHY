@@ -371,6 +371,8 @@
 .ownerSnapshotGrid,
 .ownerSnapshotCard,
 .flowHandoffCard,
+.focusedPriorityList,
+.focusedPriorityCard,
 .changeCard,
 .deltaGrid,
 .deltaCard,
@@ -387,6 +389,7 @@
 .timelineCard,
 .executionCard,
 .flowHandoffCard,
+.focusedPriorityCard,
 .changeCard,
 .nextStepCard {
   gap: 12px;
@@ -480,6 +483,50 @@
 .flowHandoffCard {
   border-color: color-mix(in srgb, var(--surface-ink) 14%, var(--line));
   background: color-mix(in srgb, var(--surface-strong) 76%, white);
+}
+
+.focusedDecisionStrip {
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--surface-ink) 16%, var(--line));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-strong) 88%, white);
+}
+
+.focusedDecisionContent {
+  gap: 10px;
+}
+
+.focusedDecisionActions {
+  gap: 14px;
+}
+
+.focusedPriorityList {
+  gap: 12px;
+}
+
+.focusedPriorityCard {
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.focusedPriorityCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.focusedPriorityCardPrimary {
+  border-color: color-mix(in srgb, var(--surface-ink) 18%, var(--line));
+  background: color-mix(in srgb, var(--surface-strong) 84%, white);
+}
+
+.focusedPriorityAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--surface-ink-soft);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .executionGrid {
@@ -692,6 +739,9 @@
 .focusBanner,
 .changeCard,
 .infoPanel,
+.focusedDecisionStrip,
+.focusedDecisionContent,
+.focusedDecisionActions,
 .contextGrid,
 .contextCard,
 .signalGrid,
@@ -1021,7 +1071,8 @@
   .signalGrid,
   .executionGrid,
   .queueInspectorGrid,
-  .ownerSnapshotGrid {
+  .ownerSnapshotGrid,
+  .deltaGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1047,7 +1098,8 @@
   .signalGrid,
   .executionGrid,
   .queueInspectorGrid,
-  .ownerSnapshotGrid {
+  .ownerSnapshotGrid,
+  .deltaGrid {
     grid-template-columns: 1fr;
   }
 

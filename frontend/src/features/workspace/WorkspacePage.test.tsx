@@ -803,6 +803,9 @@ describe("Workspace page", () => {
     expect(window.localStorage.getItem(STORAGE_KEY_WORKBENCH_MODE)).toBe("focused");
     expect(screen.getByText("当前章节优先面")).toBeInTheDocument();
     expect(screen.getByText("当前章节摘要")).toBeInTheDocument();
+    expect(screen.getByText("当前先处理")).toBeInTheDocument();
+    expect(screen.getByText("先处理")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /查看 blocker \/ follow-up/ })).toBeInTheDocument();
     expect(
       screen.getByText("适合专注当前章节，隐藏连续处理提示，只保留当前章节的决策与收敛信息。")
     ).toBeInTheDocument();
@@ -846,6 +849,29 @@ describe("Workspace page", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("当前筛选范围")).not.toBeInTheDocument();
     expect(screen.queryByText("连续处理摘要")).not.toBeInTheDocument();
+  });
+
+  it("lets focused mode jump straight to the highest-priority surface", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    window.localStorage.setItem(STORAGE_KEY_WORKBENCH_MODE, "focused");
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "单章精查", selected: true })).toBeInTheDocument();
+    expect(await screen.findByText("当前章节优先面")).toBeInTheDocument();
+    expect(screen.getByText("当前先处理")).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: /查看 blocker \/ follow-up/ }));
+
+    expect(screen.getByText("Current Focus")).toBeInTheDocument();
+    expect(screen.getAllByText("Follow-up Action · REBUILD_PACKET_THEN_RERUN").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "执行当前 follow-up" })).toBeInTheDocument();
   });
 
   it("supports assignment set and clear from the chapter workbench", async () => {
