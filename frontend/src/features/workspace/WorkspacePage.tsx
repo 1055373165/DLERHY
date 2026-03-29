@@ -122,6 +122,22 @@ type QueueLensPriority = {
   section: TimelineFocusTarget["section"];
   actionLabel: string;
 };
+type ReleaseGateSummary = {
+  statusLabel: string;
+  helper: string;
+  checks: Array<{
+    label: string;
+    value: string;
+    passed: boolean;
+  }>;
+};
+type ReleaseLaneFallback = {
+  chapterId: string;
+  chapterLabel: string;
+  helper: string;
+  chips: string[];
+  focus: PendingChapterFocus;
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -300,6 +316,16 @@ export function WorkspacePage() {
   const activeQueueLensPriority =
     isFlowMode && activeQueueLens && currentChapterReviewDetail
       ? buildQueueLensPriority(activeQueueLens, currentChapterReviewDetail, selectedQueueEntry)
+      : null;
+  const activeReleaseGate =
+    isFlowMode &&
+    activeQueueLens?.outcome === "release-ready" &&
+    currentChapterReviewDetail
+      ? buildReleaseGateSummary(currentChapterReviewDetail)
+      : null;
+  const releaseLaneFallback =
+    isFlowMode && activeQueueLens?.outcome === "release-ready" && !visibleQueueEntries.length
+      ? buildReleaseLaneFallback(queueEntries)
       : null;
   const focusedPrimaryItem = !isFlowMode && focusedPriorityItems.length ? focusedPriorityItems[0] : null;
   const focusedSecondaryItems = focusedPrimaryItem ? focusedPriorityItems.slice(1) : [];
@@ -825,6 +851,19 @@ export function WorkspacePage() {
     setChapterAssignmentFilter("all");
   }
 
+  function handleFocusReleaseLaneFallback() {
+    if (!releaseLaneFallback) {
+      return;
+    }
+    setReviewMessage({
+      tone: "success",
+      text: `已切到 ${releaseLaneFallback.chapterLabel}，先把当前最接近放行的一步收口。`,
+    });
+    setTimelineFocus(null);
+    setPendingChapterFocus(releaseLaneFallback.focus);
+    selectReviewChapter(releaseLaneFallback.chapterId);
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -1286,6 +1325,34 @@ export function WorkspacePage() {
                               </p>
                             </div>
                           ) : null}
+                          {activeReleaseGate ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>放行门</span>
+                              <strong className={styles.deltaValue}>{activeReleaseGate.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseGate.helper}</p>
+                              <div className={styles.filterChipRow}>
+                                {activeReleaseGate.checks.map((check) => (
+                                  <span key={check.label} className={styles.filterChip}>
+                                    {check.label} · {check.value}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {releaseLaneFallback ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>最接近放行</span>
+                              <strong className={styles.deltaValue}>{releaseLaneFallback.chapterLabel}</strong>
+                              <p className={styles.timelineDetail}>{releaseLaneFallback.helper}</p>
+                              <div className={styles.filterChipRow}>
+                                {releaseLaneFallback.chips.map((chip) => (
+                                  <span key={chip} className={styles.filterChip}>
+                                    {chip}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                           <div className={styles.nextStepActions}>
                             {activeQueueLensPriority ? (
                               <button
@@ -1420,7 +1487,59 @@ export function WorkspacePage() {
                   </div>
                 ) : (
                   <div className={styles.reviewEmpty}>
-                    {queueOutcomeFilter !== "all"
+                    {activeQueueLens?.outcome === "release-ready" ? (
+                      <>
+                        <p className={styles.timelineDetail}>
+                          当前放行候选 lane 里还没有章节。更常见的下一步是切回 `继续观察`，把 blocker、proposal 或最后一次 action 先收口。
+                        </p>
+                        {releaseLaneFallback ? (
+                          <div className={styles.nextStepCard}>
+                            <span className={styles.deltaLabel}>最接近放行</span>
+                            <strong className={styles.deltaValue}>{releaseLaneFallback.chapterLabel}</strong>
+                            <p className={styles.timelineDetail}>{releaseLaneFallback.helper}</p>
+                            <div className={styles.filterChipRow}>
+                              {releaseLaneFallback.chips.map((chip) => (
+                                <span key={chip} className={styles.filterChip}>
+                                  {chip}
+                                </span>
+                              ))}
+                            </div>
+                            <div className={styles.nextStepActions}>
+                              <button
+                                className={styles.button}
+                                type="button"
+                                onClick={handleFocusReleaseLaneFallback}
+                              >
+                                查看最接近放行章节
+                              </button>
+                              <button
+                                className={styles.ghostButton}
+                                type="button"
+                                onClick={() => setQueueOutcomeFilter("observe")}
+                              >
+                                切到继续观察
+                              </button>
+                              <button className={styles.ghostButton} type="button" onClick={handleResetQueueLens}>
+                                切回全部章节
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={styles.nextStepActions}>
+                            <button
+                              className={styles.button}
+                              type="button"
+                              onClick={() => setQueueOutcomeFilter("observe")}
+                            >
+                              切到继续观察
+                            </button>
+                            <button className={styles.ghostButton} type="button" onClick={handleResetQueueLens}>
+                              切回全部章节
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : queueOutcomeFilter !== "all"
                       ? "当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。"
                       : hasActiveQueueFilters
                         ? "当前过滤条件下没有匹配章节。可以放宽优先级、owner 或分派条件。"
@@ -2806,6 +2925,131 @@ function buildQueueLensPriority(
     section: "assignment",
     actionLabel: "查看当前 owner",
   };
+}
+
+function buildReleaseGateSummary(detail: {
+  current_open_issue_count: number;
+  current_active_blocking_issue_count: number;
+  memory_proposals: { pending_proposal_count: number };
+  recent_actions: Array<{ status: string }>;
+}): ReleaseGateSummary {
+  const latestActionCompleted = (detail.recent_actions[0]?.status ?? "unknown") === "completed";
+  const checks = [
+    {
+      label: "Blocker",
+      value: detail.current_active_blocking_issue_count === 0 ? "0" : String(detail.current_active_blocking_issue_count),
+      passed: detail.current_active_blocking_issue_count === 0,
+    },
+    {
+      label: "Open issues",
+      value: detail.current_open_issue_count === 0 ? "0" : String(detail.current_open_issue_count),
+      passed: detail.current_open_issue_count === 0,
+    },
+    {
+      label: "Pending proposal",
+      value:
+        detail.memory_proposals.pending_proposal_count === 0
+          ? "0"
+          : String(detail.memory_proposals.pending_proposal_count),
+      passed: detail.memory_proposals.pending_proposal_count === 0,
+    },
+    {
+      label: "Latest action",
+      value: latestActionCompleted ? "completed" : "waiting",
+      passed: latestActionCompleted,
+    },
+  ];
+  const releaseReady = checks.every((check) => check.passed);
+  return {
+    statusLabel: releaseReady ? "适合放行" : "最后观察",
+    helper: releaseReady
+      ? "当前章节已经满足放行门，可以把注意力放到最终确认和下一章接力。"
+      : "这条 lane 里的章节虽然接近可放行，但还需要最后一轮观察，先核对未收口的 gate。",
+    checks,
+  };
+}
+
+function buildReleaseLaneFallback(
+  entries: Array<{
+    chapter_id: string;
+    ordinal: number;
+    title_src?: string | null;
+    queue_rank: number;
+    active_blocking_issue_count: number;
+    open_issue_count: number;
+    memory_proposals: { pending_proposal_count: number };
+  }>
+): ReleaseLaneFallback | null {
+  if (!entries.length) {
+    return null;
+  }
+  const candidate = [...entries].sort((left, right) => {
+    const leftScore = buildReleaseLaneGapScore(left);
+    const rightScore = buildReleaseLaneGapScore(right);
+    if (leftScore !== rightScore) {
+      return leftScore - rightScore;
+    }
+    return left.queue_rank - right.queue_rank;
+  })[0];
+  const chapterLabel = `第 ${candidate.ordinal} 章 · ${candidate.title_src || `Chapter ${candidate.ordinal}`}`;
+  if (candidate.active_blocking_issue_count > 0) {
+    return {
+      chapterId: candidate.chapter_id,
+      chapterLabel,
+      helper: `这章离放行最近，但还有 ${formatNumber(candidate.active_blocking_issue_count)} 个 blocker 没收口，先看 follow-up / issue。`,
+      chips: [
+        `Blocker · ${formatNumber(candidate.active_blocking_issue_count)}`,
+        `Open issues · ${formatNumber(candidate.open_issue_count)}`,
+      ],
+      focus: {
+        chapterId: candidate.chapter_id,
+        section: "actions",
+        label: "最后观察 · blocker",
+        helper: "已把焦点切到最接近放行的章节，先把 blocker / follow-up 收口。",
+      },
+    };
+  }
+  if (candidate.memory_proposals.pending_proposal_count > 0) {
+    return {
+      chapterId: candidate.chapter_id,
+      chapterLabel,
+      helper: `这章离放行最近，但还有 ${formatNumber(candidate.memory_proposals.pending_proposal_count)} 条 proposal 待审批，先收口 memory override。`,
+      chips: [
+        `Pending proposal · ${formatNumber(candidate.memory_proposals.pending_proposal_count)}`,
+        `Open issues · ${formatNumber(candidate.open_issue_count)}`,
+      ],
+      focus: {
+        chapterId: candidate.chapter_id,
+        section: "proposal",
+        label: "最后观察 · proposal",
+        helper: "已把焦点切到最接近放行的章节，先做最后一条 proposal 决策。",
+      },
+    };
+  }
+  return {
+    chapterId: candidate.chapter_id,
+    chapterLabel,
+    helper: `这章离放行最近，但还有 ${formatNumber(candidate.open_issue_count)} 个 open issue 待最终观察，先核对最近 action 和 recheck。`,
+    chips: [`Open issues · ${formatNumber(candidate.open_issue_count)}`],
+    focus: {
+      chapterId: candidate.chapter_id,
+      section: "actions",
+      label: "最后观察 · open issues",
+      helper: "已把焦点切到最接近放行的章节，先核对最后观察和 rerun / recheck 是否都落盘。",
+    },
+  };
+}
+
+function buildReleaseLaneGapScore(entry: {
+  active_blocking_issue_count: number;
+  open_issue_count: number;
+  memory_proposals: { pending_proposal_count: number };
+}) {
+  return (
+    entry.active_blocking_issue_count * 100 +
+    entry.memory_proposals.pending_proposal_count * 10 +
+    entry.open_issue_count
+  );
 }
 
 function recentChangeKindLabel(kind: RecentOperatorChange["kind"]) {

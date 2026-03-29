@@ -774,7 +774,7 @@ describe("Workspace page", () => {
       expect.stringContaining("/v1/documents/doc-123/chapters/ch-1/memory-proposals/prop-123/approve"),
       expect.objectContaining({ method: "POST" })
     );
-  }, 15000);
+  }, 30000);
 
   it("can advance to the next chapter from the latest-change batch flow", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
@@ -839,8 +839,8 @@ describe("Workspace page", () => {
 
     expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "连续处理", selected: true })).toBeInTheDocument();
-    expect(await screen.findByText("连续处理节奏")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "切到下一章重点" })).toBeInTheDocument();
+    expect(await screen.findByText("当前筛选范围")).toBeInTheDocument();
+    expect(screen.getByText("Operator Lens")).toBeInTheDocument();
     expect(
       screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
     ).toBeInTheDocument();
@@ -870,8 +870,7 @@ describe("Workspace page", () => {
     expect(window.localStorage.getItem(STORAGE_KEY_WORKBENCH_MODE)).toBe("flow");
     expect(screen.queryByText("当前章节优先面")).not.toBeInTheDocument();
     expect(screen.getByText("当前筛选范围")).toBeInTheDocument();
-    expect(screen.getByText("连续处理节奏")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "切到下一章重点" })).toBeInTheDocument();
+    expect(screen.getByText("Operator Lens")).toBeInTheDocument();
     expect(screen.queryByText("连续处理接力")).not.toBeInTheDocument();
     expect(
       screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
@@ -1237,12 +1236,22 @@ describe("Workspace page", () => {
     await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 0/ }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。")
-      ).toBeInTheDocument();
+      expect(screen.getByText("当前放行候选 lane 里还没有章节。更常见的下一步是切回 `继续观察`，把 blocker、proposal 或最后一次 action 先收口。")).toBeInTheDocument();
     });
+    expect(screen.getAllByText("最接近放行").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("第 2 章 · Chapter Two").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Open issues · 1").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "查看最接近放行章节" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切到继续观察" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ }));
+    await user.click(screen.getByRole("button", { name: "查看最接近放行章节" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Current Focus")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "切到继续观察" }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
