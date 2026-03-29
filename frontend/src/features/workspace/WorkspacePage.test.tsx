@@ -610,6 +610,24 @@ function installFetchMock() {
         recheck_issue_count: 0,
       });
     }
+    if (path.endsWith("/v1/actions/act-ch-2/execute") && init?.method === "POST") {
+      chapterState["ch-2"].actionStatus = "completed";
+      return jsonResponse({
+        action_id: "act-ch-2",
+        status: "completed",
+        invalidation_count: 1,
+        rerun_scope_type: "chapter",
+        rerun_scope_ids: ["ch-2"],
+        followup_executed: true,
+        rebuild_applied: false,
+        rebuilt_packet_ids: [],
+        rebuilt_snapshot_ids: [],
+        rerun_packet_ids: [],
+        rerun_translation_run_ids: ["run-ch-2"],
+        issue_resolved: false,
+        recheck_issue_count: 1,
+      });
+    }
     if (
       path.endsWith("/v1/documents/doc-123/chapters/ch-1/worklist/assignment/clear") &&
       init?.method === "POST"
@@ -759,6 +777,8 @@ describe("Workspace page", () => {
     expect(screen.getByText("已从 第 1 章 · Chapter One 切到 第 2 章 · Chapter Two。")).toBeInTheDocument();
     expect(screen.getByText("下一章先看 follow-up action")).toBeInTheDocument();
     expect(screen.getByText("接力顺序")).toBeInTheDocument();
+    expect(screen.getByText("接力进度")).toBeInTheDocument();
+    expect(screen.getByText("接力进度").closest("div")).toHaveTextContent("0 / 2 已收口");
     expect(screen.getByRole("button", { name: /先看当前 action/ })).toBeInTheDocument();
     expect(screen.getByText("STYLE_DRIFT")).toBeInTheDocument();
     expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
@@ -875,6 +895,35 @@ describe("Workspace page", () => {
     expect(screen.getAllByText("Follow-up Action · REBUILD_PACKET_THEN_RERUN").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "执行当前 follow-up" })).toBeInTheDocument();
   });
+
+  it("compresses flow handoff progress after the first operator action on the next chapter", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "执行 follow-up" }, { timeout: 10000 }));
+    await user.click(screen.getAllByRole("button", { name: "切到下一章重点" })[0]);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+    });
+    expect(screen.getByText("接力进度").closest("div")).toHaveTextContent("0 / 2 已收口");
+
+    await user.click(screen.getByRole("button", { name: /先看当前 action/ }));
+    await user.click(screen.getByRole("button", { name: "执行当前 follow-up" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("接力进度").closest("div")).toHaveTextContent("1 / 2 已收口");
+    });
+    expect(screen.getByText(/已完成 先看 recent action/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /查看 assignment/ })).toBeInTheDocument();
+  }, 15000);
 
   it("supports assignment set and clear from the chapter workbench", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
@@ -1025,7 +1074,9 @@ describe("Workspace page", () => {
       expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: /第 1 章 · Chapter One/ })).not.toBeInTheDocument();
-    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+    });
     expect(screen.getByText("Owner · night-shift")).toBeInTheDocument();
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(

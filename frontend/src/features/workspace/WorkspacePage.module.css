@@ -486,6 +486,10 @@
   background: color-mix(in srgb, var(--surface-strong) 76%, white);
 }
 
+.handoffStepLane {
+  gap: 14px;
+}
+
 .handoffStepList {
   gap: 12px;
 }
@@ -507,6 +511,23 @@
   color: var(--surface-ink-soft);
   font-size: 12px;
   font-weight: 700;
+}
+
+.handoffQueuedSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.handoffQueuedStep {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-strong) 86%, white);
 }
 
 .focusedDecisionStrip {
@@ -763,6 +784,7 @@
 .focusBanner,
 .changeCard,
 .infoPanel,
+.handoffStepLane,
 .handoffStepList,
 .focusedDecisionStrip,
 .focusedDecisionContent,

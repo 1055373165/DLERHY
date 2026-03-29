@@ -53,6 +53,7 @@ type RecentOperatorChange = {
   body: string;
   highlights: string[];
   before: OperatorConvergenceSnapshot | null;
+  eventToken: string;
 };
 type PendingChapterFocus = {
   chapterId: string;
@@ -94,6 +95,8 @@ type FlowHandoff = {
   targetChapterLabel: string;
   reasonTitle: string;
   reasonBody: string;
+  completedStepCount: number;
+  lastProgressToken: string | null;
 };
 type FlowHandoffStep = {
   orderLabel: string;
@@ -226,6 +229,14 @@ export function WorkspacePage() {
     activeFlowHandoff && currentChapterReviewDetail
       ? buildFlowHandoffSteps(currentChapterReviewDetail, selectedQueueEntry)
       : [];
+  const activeFlowCompletedStepCount = activeFlowHandoff
+    ? Math.min(activeFlowHandoff.completedStepCount, Math.max(activeFlowHandoffSteps.length - 1, 0))
+    : 0;
+  const activeFlowCompletedSteps = activeFlowHandoffSteps.slice(0, activeFlowCompletedStepCount);
+  const activeFlowCurrentStep = activeFlowHandoffSteps[activeFlowCompletedStepCount] ?? null;
+  const activeFlowQueuedSteps = activeFlowCurrentStep
+    ? activeFlowHandoffSteps.slice(activeFlowCompletedStepCount + 1)
+    : [];
   const focusedPriorityItems =
     !isFlowMode && currentChapterReviewDetail
       ? buildFocusedPriorityItems(currentChapterReviewDetail, selectedQueueEntry)
@@ -267,6 +278,25 @@ export function WorkspacePage() {
       setFlowHandoff(null);
     }
   }, [workbenchMode]);
+
+  useEffect(() => {
+    if (!recentOperatorChange || !flowHandoff || recentOperatorChange.chapterId !== flowHandoff.targetChapterId) {
+      return;
+    }
+    setFlowHandoff((current) => {
+      if (!current || current.targetChapterId !== recentOperatorChange.chapterId) {
+        return current;
+      }
+      if (current.lastProgressToken === recentOperatorChange.eventToken) {
+        return current;
+      }
+      return {
+        ...current,
+        completedStepCount: current.completedStepCount + 1,
+        lastProgressToken: recentOperatorChange.eventToken,
+      };
+    });
+  }, [recentOperatorChange, flowHandoff]);
 
   useEffect(() => {
     if (!pendingChapterFocus || pendingChapterFocus.chapterId !== selectedReviewChapterId || !currentChapterReviewDetail) {
@@ -352,6 +382,7 @@ export function WorkspacePage() {
               ]
             : [`Proposal ${shorten(result.proposal.proposal_id, 5)}`, "等待新 proposal"],
         before: beforeSnapshot,
+        eventToken: new Date().toISOString(),
       });
       setReviewerNote("");
     } catch (error) {
@@ -390,6 +421,7 @@ export function WorkspacePage() {
           body: "队列所有权已经切到新的 operator，后续 follow-up 和 override 会沿着这条 ownership 链继续推进。",
           highlights: [assignment.owner_name, `By ${assignment.assigned_by}`],
           before: beforeSnapshot,
+          eventToken: new Date().toISOString(),
         });
       } else {
         await clearChapterAssignment(selectedReviewChapterId, {
@@ -407,6 +439,7 @@ export function WorkspacePage() {
           body: "这章不再绑定单一 owner，当前队列里的其他 operator 都可以继续接手。",
           highlights: ["共享队列", `By ${reviewerName.trim() || "reviewer-ui"}`],
           before: beforeSnapshot,
+          eventToken: new Date().toISOString(),
         });
         setAssignmentOwner("");
       }
@@ -455,6 +488,7 @@ export function WorkspacePage() {
           result.issue_resolved ? "issue 已收敛" : `复检 ${formatNumber(result.recheck_issue_count ?? 0)}`,
         ],
         before: beforeSnapshot,
+        eventToken: new Date().toISOString(),
       });
     } catch (error) {
       setReviewMessage({
@@ -542,6 +576,8 @@ export function WorkspacePage() {
       targetChapterLabel,
       reasonTitle: nextQueueRecommendation.title,
       reasonBody: nextQueueRecommendation.body,
+      completedStepCount: 0,
+      lastProgressToken: null,
     });
     setReviewMessage({
       tone: "success",
@@ -1242,33 +1278,67 @@ export function WorkspacePage() {
                         </p>
                       </div>
                     </div>
-                    {activeFlowHandoffSteps.length ? (
-                      <div className={styles.handoffStepList}>
+                    {activeFlowCurrentStep ? (
+                      <div className={styles.handoffStepLane}>
                         <div className={styles.reviewSectionHeader}>
                           <div>
-                            <div className={styles.fileLabel}>Handoff Checklist</div>
+                            <div className={styles.fileLabel}>Handoff Progress</div>
                             <h4 className={styles.reviewSectionTitle}>接力顺序</h4>
                           </div>
                           <p className={styles.reviewSectionCopy}>
-                            切到下一章后，先按 1-2-3 收口，不用重新扫完整个章节工作面。
+                            切到下一章后，系统会把已完成的步骤压缩掉，只把当前下一步顶上来。
                           </p>
                         </div>
-                        {activeFlowHandoffSteps.map((step) => (
-                          <button
-                            key={step.title}
-                            type="button"
-                            className={styles.handoffStepCard}
-                            onClick={() => handleFocusFlowHandoffStep(step)}
-                          >
-                            <div className={styles.queueRankRow}>
-                              <span className={styles.changeBadge}>{step.orderLabel}</span>
-                              <span className={styles.changeKindBadge}>{step.title}</span>
+                        <div className={styles.deltaGrid}>
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>接力进度</span>
+                            <strong className={styles.deltaValue}>
+                              {formatNumber(activeFlowCompletedStepCount)} / {formatNumber(activeFlowHandoffSteps.length)} 已收口
+                            </strong>
+                            <p className={styles.timelineDetail}>
+                              {activeFlowCompletedSteps.length
+                                ? `已完成 ${activeFlowCompletedSteps.map((step) => step.title).join(" / ")}。`
+                                : "当前还在这章的第一步。"}
+                            </p>
+                          </div>
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>当前下一步</span>
+                            <strong className={styles.deltaValue}>{activeFlowCurrentStep.title}</strong>
+                            <p className={styles.timelineDetail}>{activeFlowCurrentStep.helper}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.handoffStepCard}
+                          onClick={() => handleFocusFlowHandoffStep(activeFlowCurrentStep)}
+                        >
+                          <div className={styles.queueRankRow}>
+                            <span className={styles.changeBadge}>{activeFlowCurrentStep.orderLabel}</span>
+                            <span className={styles.changeKindBadge}>{activeFlowCurrentStep.title}</span>
+                          </div>
+                          <strong>{activeFlowCurrentStep.value}</strong>
+                          <p className={styles.timelineDetail}>{activeFlowCurrentStep.helper}</p>
+                          <span className={styles.handoffStepAction}>{activeFlowCurrentStep.actionLabel}</span>
+                        </button>
+                        {activeFlowQueuedSteps.length ? (
+                          <div className={styles.handoffQueuedSteps}>
+                            {activeFlowQueuedSteps.map((step) => (
+                              <div key={step.title} className={styles.handoffQueuedStep}>
+                                <span className={styles.changeBadge}>{step.orderLabel}</span>
+                                <span className={styles.timelineDetail}>
+                                  接下来：{step.title} · {step.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.handoffQueuedSteps}>
+                            <div className={styles.handoffQueuedStep}>
+                              <span className={styles.changeBadge}>✓</span>
+                              <span className={styles.timelineDetail}>当前这章的接力步骤已经全部排完，收口后可以继续回到队列。</span>
                             </div>
-                            <strong>{step.value}</strong>
-                            <p className={styles.timelineDetail}>{step.helper}</p>
-                            <span className={styles.handoffStepAction}>{step.actionLabel}</span>
-                          </button>
-                        ))}
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -2382,70 +2452,82 @@ function buildFlowHandoffSteps(
     | null
 ): FlowHandoffStep[] {
   const latestAction = detail.recent_actions[0];
-  return [
-    detail.current_active_blocking_issue_count > 0
-      ? {
-          orderLabel: "1",
-          title: "先稳 blocker",
-          value: `${detail.current_active_blocking_issue_count} 个 blocker`,
-          helper: `先沿着 ${queueEntry?.queue_driver || "当前阻断"} 这条链路收口，别在切章后立刻分散到次级信号。`,
-          section: "actions",
-          actionLabel: "先看 blocker / follow-up",
-        }
-      : queueEntry?.open_issue_count && queueEntry.open_issue_count > 0 && latestAction
-        ? {
-            orderLabel: "1",
-            title: "先看 recent action",
-            value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
-            helper: "这章虽然没有 active blocker，但仍有 open issues，先核对最近 follow-up 有没有把问题真正往下推。",
-            section: "actions",
-            actionLabel: "先看当前 action",
-          }
-      : {
-          orderLabel: "1",
-          title: "先清 proposal",
-          value:
-            detail.memory_proposals.pending_proposal_count > 0
-              ? `${detail.memory_proposals.pending_proposal_count} 条待审批`
-              : "当前无 blocker",
-          helper:
-            detail.memory_proposals.pending_proposal_count > 0
-              ? "这章没有 active blocker，先把 proposal 做掉，避免切入下一轮 review 时还留着半收敛 memory。"
-              : "这章暂时没有 blocker，先从最容易收敛的 proposal 或 recent action 开始确认。",
-          section: detail.memory_proposals.pending_proposal_count > 0 ? "proposal" : "actions",
-          actionLabel:
-            detail.memory_proposals.pending_proposal_count > 0 ? "先看 pending proposal" : "先看当前 action",
-        },
-    detail.memory_proposals.pending_proposal_count > 0
-      ? {
-          orderLabel: "2",
-          title: "再看 proposal",
-          value: `Snapshot v${detail.memory_proposals.active_snapshot_version ?? "—"}`,
-          helper: "确认 memory override 是该批准、驳回，还是应该让它继续留在待审面。 ",
-          section: "proposal",
-          actionLabel: "查看 proposal 面",
-        }
-      : {
-          orderLabel: "2",
-          title: "再核 recent action",
-          value: latestAction ? `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}` : "当前无 recent action",
-          helper: latestAction
-            ? "就算切章已经完成，还是要确认最新 follow-up 有没有真的把问题往下推。"
-            : "这章没有 recent action，可以把第二步留给 owner handoff 或新的 follow-up 决策。",
-          section: "actions",
-          actionLabel: "查看 recent action",
-        },
-    {
-      orderLabel: "3",
-      title: "最后确认 owner",
-      value: detail.assignment?.owner_name ? `Owner ${detail.assignment.owner_name}` : "共享队列",
-      helper: detail.assignment?.owner_name
-        ? "最后再确认 owner handoff 还是否合理，避免因为切章顺手把本章 owner 语义弄乱。"
-        : "如果前两步已经收敛，就确认这章是否还需要继续留在共享队列。",
-      section: "assignment",
-      actionLabel: "查看 assignment",
-    },
-  ];
+  const steps: Omit<FlowHandoffStep, "orderLabel">[] = [];
+  const pushStep = (step: Omit<FlowHandoffStep, "orderLabel">) => {
+    if (steps.some((current) => current.section === step.section)) {
+      return;
+    }
+    steps.push(step);
+  };
+
+  if (detail.current_active_blocking_issue_count > 0) {
+    pushStep({
+      title: "先稳 blocker",
+      value: `${detail.current_active_blocking_issue_count} 个 blocker`,
+      helper: `先沿着 ${queueEntry?.queue_driver || "当前阻断"} 这条链路收口，别在切章后立刻分散到次级信号。`,
+      section: "actions",
+      actionLabel: "先看 blocker / follow-up",
+    });
+  } else if (queueEntry?.open_issue_count && queueEntry.open_issue_count > 0 && latestAction) {
+    pushStep({
+      title: "先看 recent action",
+      value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
+      helper: "这章虽然没有 active blocker，但仍有 open issues，先核对最近 follow-up 有没有把问题真正往下推。",
+      section: "actions",
+      actionLabel: "先看当前 action",
+    });
+  } else if (detail.memory_proposals.pending_proposal_count > 0) {
+    pushStep({
+      title: "先清 proposal",
+      value: `${detail.memory_proposals.pending_proposal_count} 条待审批`,
+      helper: "这章没有 active blocker，先把 proposal 做掉，避免切入下一轮 review 时还留着半收敛 memory。",
+      section: "proposal",
+      actionLabel: "先看 pending proposal",
+    });
+  } else if (latestAction) {
+    pushStep({
+      title: "先看 recent action",
+      value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
+      helper: "先从这章最近一次 follow-up 入手，确认它有没有把问题继续往下推进。",
+      section: "actions",
+      actionLabel: "先看当前 action",
+    });
+  }
+
+  if (detail.memory_proposals.pending_proposal_count > 0) {
+    pushStep({
+      title: "再看 proposal",
+      value: `Snapshot v${detail.memory_proposals.active_snapshot_version ?? "—"}`,
+      helper: "确认 memory override 是该批准、驳回，还是应该让它继续留在待审面。",
+      section: "proposal",
+      actionLabel: "查看 proposal 面",
+    });
+  }
+
+  if (latestAction) {
+    pushStep({
+      title: "再核 recent action",
+      value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
+      helper: "就算切章已经完成，还是要确认最新 follow-up 有没有真的把问题往下推。",
+      section: "actions",
+      actionLabel: "查看 recent action",
+    });
+  }
+
+  pushStep({
+    title: "最后确认 owner",
+    value: detail.assignment?.owner_name ? `Owner ${detail.assignment.owner_name}` : "共享队列",
+    helper: detail.assignment?.owner_name
+      ? "最后再确认 owner handoff 还是否合理，避免因为切章顺手把本章 owner 语义弄乱。"
+      : "如果前两步已经收敛，就确认这章是否还需要继续留在共享队列。",
+    section: "assignment",
+    actionLabel: "查看 assignment",
+  });
+
+  return steps.map((step, index) => ({
+    ...step,
+    orderLabel: String(index + 1),
+  }));
 }
 
 function buildFocusedPriorityItems(
