@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
@@ -73,6 +73,28 @@ function installFetchMock() {
         },
       ],
     },
+    "ch-3": {
+      proposalStatus: "none",
+      actionStatus: "completed",
+      assignment: {
+        assignment_id: "assign-3",
+        owner_name: "night-shift",
+        assigned_by: "lead-reviewer",
+        note: "Ready for release pass",
+        assigned_at: "2026-03-28T08:02:00Z",
+      },
+      recentDecision: null,
+      assignmentHistory: [
+        {
+          event_id: "assign-3",
+          event_type: "assigned",
+          owner_name: "night-shift",
+          performed_by: "lead-reviewer",
+          note: "Ready for release pass",
+          created_at: "2026-03-28T08:02:00Z",
+        },
+      ],
+    },
   };
 
   const chapterBase = {
@@ -89,6 +111,15 @@ function installFetchMock() {
       owner_ready_reason: "Waiting for reviewer decision",
       regression_hint: "Blocking terminology drift keeps returning.",
       needs_immediate_attention: true,
+      issue_count: 2,
+      open_issue_count: 2,
+      active_blocking_issue_count: 1,
+      dominant_root_cause_layer: "memory",
+      heat_score: 92,
+      heat_level: "critical",
+      queue_rank: 1,
+      age_hours: 4,
+      age_bucket: "4h",
     },
     "ch-2": {
       ordinal: 2,
@@ -103,6 +134,38 @@ function installFetchMock() {
       owner_ready_reason: "Context is stable enough for a named operator.",
       regression_hint: "Style drift is stable but unresolved.",
       needs_immediate_attention: false,
+      issue_count: 1,
+      open_issue_count: 1,
+      active_blocking_issue_count: 0,
+      dominant_root_cause_layer: "review",
+      heat_score: 64,
+      heat_level: "warm",
+      queue_rank: 2,
+      age_hours: 2,
+      age_bucket: "2h",
+    },
+    "ch-3": {
+      ordinal: 3,
+      title_src: "Chapter Three",
+      packet_count: 3,
+      translated_packet_count: 3,
+      issue_type: "EXPORT_RECOVERY",
+      action_type: "REEXPORT_ONLY",
+      queue_priority: "medium",
+      queue_driver: "release ready",
+      sla_status: "on_track",
+      owner_ready_reason: "Everything is green enough for a final release pass.",
+      regression_hint: "No fresh blockers remain; only final release confirmation is left.",
+      needs_immediate_attention: false,
+      issue_count: 0,
+      open_issue_count: 0,
+      active_blocking_issue_count: 0,
+      dominant_root_cause_layer: "export",
+      heat_score: 38,
+      heat_level: "cool",
+      queue_rank: 3,
+      age_hours: 1,
+      age_bucket: "1h",
     },
   } as const;
 
@@ -115,25 +178,25 @@ function installFetchMock() {
       ordinal: base.ordinal,
       title_src: base.title_src,
       chapter_status: "review_required",
-      issue_count: chapterId === "ch-1" ? 2 : 1,
-      open_issue_count: chapterId === "ch-1" ? 2 : 1,
+      issue_count: base.issue_count,
+      open_issue_count: base.open_issue_count,
       triaged_issue_count: 0,
-      blocking_issue_count: chapterId === "ch-1" ? 1 : 0,
-      active_blocking_issue_count: chapterId === "ch-1" ? 1 : 0,
-      issue_family_count: 1,
+      blocking_issue_count: base.active_blocking_issue_count,
+      active_blocking_issue_count: base.active_blocking_issue_count,
+      issue_family_count: base.issue_count > 0 ? 1 : 0,
       dominant_issue_type: base.issue_type,
-      dominant_root_cause_layer: chapterId === "ch-1" ? "memory" : "review",
-      dominant_issue_count: 1,
+      dominant_root_cause_layer: base.dominant_root_cause_layer,
+      dominant_issue_count: base.issue_count > 0 ? 1 : 0,
       latest_issue_at: "2026-03-28T08:05:00Z",
-      heat_score: chapterId === "ch-1" ? 92 : 64,
-      heat_level: chapterId === "ch-1" ? "critical" : "warm",
-      queue_rank: chapterId === "ch-1" ? 1 : 2,
+      heat_score: base.heat_score,
+      heat_level: base.heat_level,
+      queue_rank: base.queue_rank,
       queue_priority: base.queue_priority,
       queue_driver: base.queue_driver,
       needs_immediate_attention: base.needs_immediate_attention,
       oldest_active_issue_at: "2026-03-28T06:00:00Z",
-      age_hours: chapterId === "ch-1" ? 4 : 2,
-      age_bucket: chapterId === "ch-1" ? "4h" : "2h",
+      age_hours: base.age_hours,
+      age_bucket: base.age_bucket,
       sla_target_hours: 6,
       sla_status: base.sla_status,
       owner_ready: true,
@@ -249,10 +312,10 @@ function installFetchMock() {
       chapter_status: "review_required",
       packet_count: base.packet_count,
       translated_packet_count: base.translated_packet_count,
-      current_issue_count: chapterId === "ch-1" ? 2 : 1,
-      current_open_issue_count: chapterId === "ch-1" ? 2 : 1,
+      current_issue_count: base.issue_count,
+      current_open_issue_count: base.open_issue_count,
       current_triaged_issue_count: 0,
-      current_active_blocking_issue_count: chapterId === "ch-1" ? 1 : 0,
+      current_active_blocking_issue_count: base.active_blocking_issue_count,
       assignment: state.assignment
         ? {
             assignment_id: state.assignment.assignment_id,
@@ -267,20 +330,23 @@ function installFetchMock() {
           }
         : null,
       queue_entry: buildQueueEntry(chapterId),
-      recent_issues: [
-        {
-          issue_id: `iss-${chapterId}`,
-          issue_type: base.issue_type,
-          root_cause_layer: chapterId === "ch-1" ? "memory" : "review",
-          severity: chapterId === "ch-1" ? "high" : "medium",
-          status: "open",
-          blocking: chapterId === "ch-1",
-          detector: "qa",
-          suggested_action: base.action_type,
-          created_at: "2026-03-28T08:00:00Z",
-          updated_at: "2026-03-28T08:05:00Z",
-        },
-      ],
+      recent_issues:
+        base.issue_count > 0
+          ? [
+              {
+                issue_id: `iss-${chapterId}`,
+                issue_type: base.issue_type,
+                root_cause_layer: base.dominant_root_cause_layer,
+                severity: chapterId === "ch-1" ? "high" : "medium",
+                status: "open",
+                blocking: base.active_blocking_issue_count > 0,
+                detector: "qa",
+                suggested_action: base.action_type,
+                created_at: "2026-03-28T08:00:00Z",
+                updated_at: "2026-03-28T08:05:00Z",
+              },
+            ]
+          : [],
       recent_actions: [
         {
           action_id: `act-${chapterId}`,
@@ -372,6 +438,16 @@ function installFetchMock() {
         open_issue_count: 1,
         bilingual_export_ready: false,
       },
+      {
+        chapter_id: "ch-3",
+        ordinal: 3,
+        title_src: "Chapter Three",
+        status: "review_required",
+        sentence_count: 96,
+        packet_count: 3,
+        open_issue_count: 0,
+        bilingual_export_ready: true,
+      },
     ],
   };
 
@@ -456,7 +532,7 @@ function installFetchMock() {
       const queuePriority = url.searchParams.get("queue_priority");
       const assigned = url.searchParams.get("assigned");
       const assignedOwnerName = url.searchParams.get("assigned_owner_name");
-      const allEntries = [buildQueueEntry("ch-1"), buildQueueEntry("ch-2")];
+      const allEntries = [buildQueueEntry("ch-1"), buildQueueEntry("ch-2"), buildQueueEntry("ch-3")];
       const filteredEntries = allEntries.filter((entry) => {
         if (queuePriority && entry.queue_priority !== queuePriority) {
           return false;
@@ -480,10 +556,10 @@ function installFetchMock() {
         offset: 0,
         limit: 50,
         has_more: false,
-        queue_priority_counts: { immediate: 1, high: 1 },
-        sla_status_counts: { breached: 1, due_soon: 1 },
+        queue_priority_counts: { immediate: 1, high: 1, medium: 1 },
+        sla_status_counts: { breached: 1, due_soon: 1, on_track: 1 },
         immediate_attention_count: 1,
-        owner_ready_count: 2,
+        owner_ready_count: 3,
         assigned_count: Object.values(chapterState).filter((entry) => entry.assignment).length,
         applied_queue_priority_filter: queuePriority,
         applied_assigned_filter:
@@ -500,6 +576,9 @@ function installFetchMock() {
     }
     if (path.endsWith("/v1/documents/doc-123/chapters/ch-2/worklist")) {
       return jsonResponse(buildDetail("ch-2"));
+    }
+    if (path.endsWith("/v1/documents/doc-123/chapters/ch-3/worklist")) {
+      return jsonResponse(buildDetail("ch-3"));
     }
     if (path.endsWith("/v1/documents/doc-123/chapters/ch-1/memory-proposals/prop-123/approve")) {
       chapterState["ch-1"].proposalStatus = "committed";
@@ -955,8 +1034,10 @@ describe("Workspace page", () => {
     await waitFor(() => {
       expect(screen.getByText("Flow Exit Strategy")).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "停在当前章复核" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "回到队列视角" })).toBeInTheDocument();
+    const flowExitCard = screen.getByText("Flow Exit Strategy").closest("div");
+    expect(flowExitCard).not.toBeNull();
+    expect(within(flowExitCard as HTMLElement).getByRole("button", { name: "停在当前章复核" })).toBeInTheDocument();
+    expect(within(flowExitCard as HTMLElement).getByRole("button", { name: "切到下一章 owner" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "停在当前章复核" }));
 
@@ -1117,13 +1198,13 @@ describe("Workspace page", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /第 1 章 · Chapter One/ })).not.toBeInTheDocument();
     await waitFor(() => {
       expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
     });
     expect(screen.getByText("Owner · night-shift")).toBeInTheDocument();
-    expect(screen.getByText("1 / 2")).toBeInTheDocument();
-    expect(screen.getByText("放行 0 · 观察 1")).toBeInTheDocument();
+    expect(screen.getByText("放行 1 · 观察 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toHaveTextContent(
       "继续观察 · 仍有 open issues"
     );
@@ -1170,18 +1251,23 @@ describe("Workspace page", () => {
     );
 
     expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
-    expect(screen.getByText("放行 0 · 观察 2")).toBeInTheDocument();
+    expect(screen.getByText("放行 1 · 观察 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /第 1 章 · Chapter One/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "只看放行候选" }));
 
     await waitFor(() => {
-      expect(screen.getByText("当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
     });
-    expect(screen.getByText("放行 0 · 观察 0")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /第 1 章 · Chapter One/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /第 2 章 · Chapter Two/ })).not.toBeInTheDocument();
+    expect(screen.getByText("放行 1 · 观察 0")).toBeInTheDocument();
+    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
+    expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toHaveTextContent(
+      "适合放行 · 当前未见 blocker / proposal / open issue"
+    );
 
     await user.click(screen.getByRole("tab", { name: "只看继续观察" }));
 
@@ -1189,6 +1275,7 @@ describe("Workspace page", () => {
       expect(screen.getByRole("button", { name: /第 1 章 · Chapter One/ })).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /第 3 章 · Chapter Three/ })).not.toBeInTheDocument();
     expect(screen.getByText("放行 0 · 观察 2")).toBeInTheDocument();
     expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-1");
   });
@@ -1232,28 +1319,27 @@ describe("Workspace page", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ })).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 0/ }));
+    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ }));
 
     await waitFor(() => {
-      expect(screen.getByText("当前放行候选 lane 里还没有章节。更常见的下一步是切回 `继续观察`，把 blocker、proposal 或最后一次 action 先收口。")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
     });
+    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
+    expect(screen.getByText("放行门")).toBeInTheDocument();
     expect(screen.getByText("连续放行判断")).toBeInTheDocument();
-    expect(screen.getByText("还差 2 道 gate")).toBeInTheDocument();
-    expect(screen.getAllByText("最接近放行").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("第 2 章 · Chapter Two").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Open issues · 1").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "查看最接近放行章节" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "切到继续观察" })).toBeInTheDocument();
+    expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看最终复核" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "查看最接近放行章节" }));
+    await user.click(screen.getByRole("button", { name: "查看最终复核" }));
 
     await waitFor(() => {
       expect(screen.getByText("Current Focus")).toBeInTheDocument();
     });
-    expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Follow-up Action · REEXPORT_ONLY").length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: "切到继续观察" }));
+    await user.click(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();

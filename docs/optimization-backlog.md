@@ -16,6 +16,7 @@ Scope: 不阻断当前用户使用、但值得后续打磨的增强项
 - 让 `focused` 模式进一步弱化 queue rail 和 batch 语义
 - 让 `flow` 模式进一步强化连续处理节奏和批处理感
 - 为 mode switch 增加更强的 mode-specific 空态 / 提示
+- 为 `release-ready` lane 增加更细的视觉层级与批处理 affordance，但不改变当前放行判断逻辑
 
 ### Timeline / Session 可视化
 
@@ -23,6 +24,7 @@ Scope: 不阻断当前用户使用、但值得后续打磨的增强项
 - 为 `Latest Change` / `Session Trail` / `Session Digest` 增加更紧凑的信息密度设计
 - 为“已影响当前状态”的 timeline event 增加更明显的视觉标记
 - 为 session history 增加更长窗口的轻量回看能力
+- 为 `Flow Exit Strategy` / `连续处理接力` / `连续放行判断` 增加更强的状态动效与视觉反馈
 
 ### Operator 便利性增强
 
