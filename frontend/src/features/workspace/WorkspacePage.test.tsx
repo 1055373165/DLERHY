@@ -1380,10 +1380,14 @@ describe("Workspace page", () => {
     expect(screen.getAllByText("可直放 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("待观察 1").length).toBeGreaterThan(0);
     expect(screen.getByText("压力建议")).toBeInTheDocument();
-    expect(screen.getByText("观察 backlog 优先")).toBeInTheDocument();
+    expect(screen.getAllByText("观察 backlog 优先").length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 1 章；这时更适合先切回最后观察 lane。/)
-    ).toBeInTheDocument();
+      screen.getAllByText(/当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 1 章；这时更适合先切回最后观察 lane。/).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Operator 压力建议")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 1 章；这时更适合先切回最后观察 lane。/).length
+    ).toBeGreaterThan(1);
     expect(screen.getByRole("button", { name: "按压力建议处理" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "按压力建议处理" }));
@@ -1442,6 +1446,8 @@ describe("Workspace page", () => {
     expect(screen.getAllByText("当前阶段 · 已转入最后观察收尾").length).toBeGreaterThan(0);
     expect(screen.getByText("Release-ready 批处理")).toBeInTheDocument();
     expect(screen.getAllByText("已完成放行 1 / 1 章 · 待观察 1 章").length).toBeGreaterThan(1);
+    expect(screen.getByText("Release-ready 去留判断")).toBeInTheDocument();
+    expect(screen.getAllByText("观察 backlog 优先").length).toBeGreaterThan(0);
     expect(screen.getByText("本轮建议")).toBeInTheDocument();
     expect(screen.getAllByText("切到最后观察 lane").length).toBeGreaterThan(1);
     expect(

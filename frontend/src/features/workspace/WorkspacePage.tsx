@@ -1691,6 +1691,15 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>{activeReleaseLaneBatchSummary.helper}</p>
                             </div>
                           ) : null}
+                          {activeReleaseLanePressureAction ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>Operator 压力建议</span>
+                              <strong className={styles.deltaValue}>
+                                {activeReleaseLanePressureAction.statusLabel}
+                              </strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLanePressureAction.helper}</p>
+                            </div>
+                          ) : null}
                           {activeReleaseLaneResultFeedback ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>连续放行结果反馈</span>
@@ -2406,6 +2415,13 @@ export function WorkspacePage() {
                           {activeReleaseLaneBatchPhase ? (
                             <p className={styles.queueDeltaHint}>当前阶段 · {activeReleaseLaneBatchPhase.queueHint}</p>
                           ) : null}
+                        </div>
+                      ) : null}
+                      {showReleaseLaneSessionDigest && activeReleaseLanePressureAction ? (
+                        <div className={styles.sessionDigestCard}>
+                          <span className={styles.deltaLabel}>Release-ready 去留判断</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLanePressureAction.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLanePressureAction.helper}</p>
                         </div>
                       ) : null}
                       {showReleaseLaneSessionDigest && activeReleaseLaneExitStrategy ? (
