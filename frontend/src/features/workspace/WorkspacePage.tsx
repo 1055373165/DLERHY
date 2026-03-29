@@ -1027,6 +1027,58 @@ export function WorkspacePage() {
                   </div>
                 </div>
 
+                {isFlowMode && selectedQueueEntry ? (
+                  <div className={styles.sessionDigest}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Flow Momentum</div>
+                        <h4 className={styles.reviewSectionTitle}>连续处理节奏</h4>
+                      </div>
+                      <p className={styles.reviewSectionCopy}>
+                        连续处理模式下，先确认自己在队列中的位置、还剩多少章、下一章重点是什么，再决定是否直接往前推进。
+                      </p>
+                    </div>
+                    <div className={styles.sessionDigestGrid}>
+                      <div className={styles.sessionDigestCard}>
+                        <span className={styles.deltaLabel}>当前队列位置</span>
+                        <strong className={styles.deltaValue}>
+                          第 {formatNumber(selectedQueueIndex + 1)} / {formatNumber(queueEntries.length)} 章
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {selectedQueueEntry.title_src || `Chapter ${selectedQueueEntry.ordinal}`}
+                        </p>
+                      </div>
+                      <div className={styles.sessionDigestCard}>
+                        <span className={styles.deltaLabel}>剩余章节</span>
+                        <strong className={styles.deltaValue}>
+                          {formatNumber(Math.max(queueEntries.length - selectedQueueIndex - 1, 0))} 章
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {nextQueueEntry
+                            ? `下一章是第 ${nextQueueEntry.ordinal} 章 · ${nextQueueEntry.title_src || `Chapter ${nextQueueEntry.ordinal}`}`
+                            : "当前已经在本筛选范围的最后一章。"}
+                        </p>
+                      </div>
+                      <div className={styles.sessionDigestCard}>
+                        <span className={styles.deltaLabel}>下一章重点</span>
+                        <strong className={styles.sessionTrailChain}>
+                          {nextQueueRecommendation?.title || "当前已到队列末尾"}
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {nextQueueRecommendation?.body || "可以停在当前章节完成最终复核，或调整筛选条件后继续扫描队列。"}
+                        </p>
+                      </div>
+                    </div>
+                    {nextQueueEntry && nextQueueRecommendation ? (
+                      <div className={styles.nextStepActions}>
+                        <button className={styles.button} type="button" onClick={handleAdvanceToNextChapter}>
+                          {nextQueueRecommendation.actionLabel}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {!isFlowMode && focusedPriorityItems.length ? (
                   <section className={styles.infoPanel}>
                     <div className={styles.reviewSectionHeader}>
