@@ -796,9 +796,12 @@ describe("Workspace page", () => {
 
     expect(screen.getByRole("tab", { name: "单章精查", selected: true })).toBeInTheDocument();
     expect(window.localStorage.getItem(STORAGE_KEY_WORKBENCH_MODE)).toBe("focused");
+    expect(screen.getByText("当前章节优先面")).toBeInTheDocument();
+    expect(screen.getByText("当前章节摘要")).toBeInTheDocument();
     expect(
       screen.getByText("适合专注当前章节，隐藏连续处理提示，只保留当前章节的决策与收敛信息。")
     ).toBeInTheDocument();
+    expect(screen.queryByText("当前筛选范围")).not.toBeInTheDocument();
     expect(
       screen.queryByText(
         "适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。"
@@ -809,6 +812,8 @@ describe("Workspace page", () => {
 
     expect(screen.getByRole("tab", { name: "连续处理", selected: true })).toBeInTheDocument();
     expect(window.localStorage.getItem(STORAGE_KEY_WORKBENCH_MODE)).toBe("flow");
+    expect(screen.queryByText("当前章节优先面")).not.toBeInTheDocument();
+    expect(screen.getByText("当前筛选范围")).toBeInTheDocument();
     expect(
       screen.getByText("适合连续处理章节队列，保留 session digest、session trail 和 next-in-queue 推荐。")
     ).toBeInTheDocument();
@@ -826,9 +831,12 @@ describe("Workspace page", () => {
 
     expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "单章精查", selected: true })).toBeInTheDocument();
+    expect(await screen.findByText("当前章节优先面")).toBeInTheDocument();
+    expect(screen.getByText("当前章节摘要")).toBeInTheDocument();
     expect(
       screen.getByText("适合专注当前章节，隐藏连续处理提示，只保留当前章节的决策与收敛信息。")
     ).toBeInTheDocument();
+    expect(screen.queryByText("当前筛选范围")).not.toBeInTheDocument();
     expect(screen.queryByText("连续处理摘要")).not.toBeInTheDocument();
   });
 

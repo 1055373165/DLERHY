@@ -88,6 +88,11 @@ type SessionDigest = {
   kindSummary: string[];
   continuityHint: string;
 };
+type FocusedPriorityItem = {
+  label: string;
+  value: string;
+  hint: string;
+};
 
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
 
@@ -196,6 +201,10 @@ export function WorkspacePage() {
         currentChapterReviewDetail
       )
     : null;
+  const focusedPriorityItems =
+    !isFlowMode && currentChapterReviewDetail
+      ? buildFocusedPriorityItems(currentChapterReviewDetail, selectedQueueEntry)
+      : [];
   const focusedActionEntry =
     timelineFocus?.section === "actions"
       ? currentChapterReviewDetail?.recent_actions.find(
@@ -766,65 +775,102 @@ export function WorkspacePage() {
                   </div>
                 ) : null}
 
-                <section className={styles.queueInspector}>
-                  <div className={styles.reviewSectionHeader}>
-                    <div>
-                      <div className={styles.fileLabel}>Active Scope</div>
-                      <h4 className={styles.reviewSectionTitle}>当前筛选范围</h4>
-                    </div>
-                    <p className={styles.reviewSectionCopy}>
-                      先确认你现在看到的是整条队列，还是某个 owner / assignment 子集。
-                    </p>
-                  </div>
-                  <div className={styles.queueInspectorGrid}>
-                    <div className={styles.queueInspectorCard}>
-                      <span className={styles.reviewMetricLabel}>Visible</span>
-                      <strong>
-                        {formatNumber(chapterWorklist?.filtered_worklist_count ?? chapterWorklist?.entry_count)} /{" "}
-                        {formatNumber(chapterWorklist?.worklist_count)}
-                      </strong>
-                      <p className={styles.timelineDetail}>chapters in current scope</p>
-                    </div>
-                    <div className={styles.queueInspectorCard}>
-                      <span className={styles.reviewMetricLabel}>Filters</span>
-                      <strong>{hasActiveQueueFilters ? "已启用" : "未启用"}</strong>
-                      <p className={styles.timelineDetail}>
-                        {hasActiveQueueFilters
-                          ? "当前队列已收窄到更明确的操作范围。"
-                          : "当前展示整条 reviewer/operator 队列。"}
+                {isFlowMode ? (
+                  <section className={styles.queueInspector}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Active Scope</div>
+                        <h4 className={styles.reviewSectionTitle}>当前筛选范围</h4>
+                      </div>
+                      <p className={styles.reviewSectionCopy}>
+                        先确认你现在看到的是整条队列，还是某个 owner / assignment 子集。
                       </p>
                     </div>
-                  </div>
-                  {activeQueueFilters.length ? (
-                    <div className={styles.filterChipRow}>
-                      {activeQueueFilters.map((label) => (
-                        <span key={label} className={styles.filterChip}>
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={styles.timelineDetail}>当前未启用过滤，适合做整条队列扫描。</p>
-                  )}
-                  {selectedOwnerWorkload ? (
-                    <div className={styles.ownerSnapshotGrid}>
-                      <div className={styles.ownerSnapshotCard}>
-                        <span className={styles.reviewMetricLabel}>Owner</span>
-                        <strong>{selectedOwnerWorkload.owner_name}</strong>
-                        <p className={styles.timelineDetail}>
-                          {formatNumber(selectedOwnerWorkload.assigned_chapter_count)} 章在此 owner 下
-                        </p>
+                    <div className={styles.queueInspectorGrid}>
+                      <div className={styles.queueInspectorCard}>
+                        <span className={styles.reviewMetricLabel}>Visible</span>
+                        <strong>
+                          {formatNumber(chapterWorklist?.filtered_worklist_count ?? chapterWorklist?.entry_count)} /{" "}
+                          {formatNumber(chapterWorklist?.worklist_count)}
+                        </strong>
+                        <p className={styles.timelineDetail}>chapters in current scope</p>
                       </div>
-                      <div className={styles.ownerSnapshotCard}>
-                        <span className={styles.reviewMetricLabel}>Immediate</span>
-                        <strong>{formatNumber(selectedOwnerWorkload.immediate_count)}</strong>
+                      <div className={styles.queueInspectorCard}>
+                        <span className={styles.reviewMetricLabel}>Filters</span>
+                        <strong>{hasActiveQueueFilters ? "已启用" : "未启用"}</strong>
                         <p className={styles.timelineDetail}>
-                          blocker {formatNumber(selectedOwnerWorkload.total_active_blocking_issue_count)}
+                          {hasActiveQueueFilters
+                            ? "当前队列已收窄到更明确的操作范围。"
+                            : "当前展示整条 reviewer/operator 队列。"}
                         </p>
                       </div>
                     </div>
-                  ) : null}
-                </section>
+                    {activeQueueFilters.length ? (
+                      <div className={styles.filterChipRow}>
+                        {activeQueueFilters.map((label) => (
+                          <span key={label} className={styles.filterChip}>
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={styles.timelineDetail}>当前未启用过滤，适合做整条队列扫描。</p>
+                    )}
+                    {selectedOwnerWorkload ? (
+                      <div className={styles.ownerSnapshotGrid}>
+                        <div className={styles.ownerSnapshotCard}>
+                          <span className={styles.reviewMetricLabel}>Owner</span>
+                          <strong>{selectedOwnerWorkload.owner_name}</strong>
+                          <p className={styles.timelineDetail}>
+                            {formatNumber(selectedOwnerWorkload.assigned_chapter_count)} 章在此 owner 下
+                          </p>
+                        </div>
+                        <div className={styles.ownerSnapshotCard}>
+                          <span className={styles.reviewMetricLabel}>Immediate</span>
+                          <strong>{formatNumber(selectedOwnerWorkload.immediate_count)}</strong>
+                          <p className={styles.timelineDetail}>
+                            blocker {formatNumber(selectedOwnerWorkload.total_active_blocking_issue_count)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </section>
+                ) : (
+                  <section className={styles.queueInspector}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Focused Review</div>
+                        <h4 className={styles.reviewSectionTitle}>当前章节摘要</h4>
+                      </div>
+                      <p className={styles.reviewSectionCopy}>
+                        单章精查模式下，先守住当前章节的 blocker、proposal 和 owner 语义，不再强调整条队列范围。
+                      </p>
+                    </div>
+                    <div className={styles.queueInspectorGrid}>
+                      <div className={styles.queueInspectorCard}>
+                        <span className={styles.reviewMetricLabel}>Chapter</span>
+                        <strong>
+                          第 {selectedQueueEntry?.ordinal ?? currentChapterReviewDetail?.ordinal ?? "—"} 章
+                        </strong>
+                        <p className={styles.timelineDetail}>
+                          {selectedQueueEntry?.title_src ||
+                            currentChapterReviewDetail?.title_src ||
+                            "当前章节"}
+                        </p>
+                      </div>
+                      <div className={styles.queueInspectorCard}>
+                        <span className={styles.reviewMetricLabel}>Driver</span>
+                        <strong>{selectedQueueEntry?.queue_driver ?? "当前章节待确认"}</strong>
+                        <p className={styles.timelineDetail}>
+                          {selectedQueueEntry?.owner_ready_reason || "优先围绕当前章节的 blocker 和 proposal 做决策。"}
+                        </p>
+                      </div>
+                    </div>
+                    <p className={styles.timelineDetail}>
+                      如果要恢复整条队列扫描，可切回 `连续处理` 模式。
+                    </p>
+                  </section>
+                )}
 
                 {chapterWorklistError ? (
                   <div className={`${styles.message} ${styles.messageError}`}>{chapterWorklistError}</div>
@@ -980,6 +1026,29 @@ export function WorkspacePage() {
                     </button>
                   </div>
                 </div>
+
+                {!isFlowMode && focusedPriorityItems.length ? (
+                  <section className={styles.infoPanel}>
+                    <div className={styles.reviewSectionHeader}>
+                      <div>
+                        <div className={styles.fileLabel}>Focused Review</div>
+                        <h3 className={styles.reviewSectionTitle}>当前章节优先面</h3>
+                      </div>
+                      <p className={styles.reviewSectionCopy}>
+                        单章精查模式下，先把这章最值得处理的 blocker、proposal、follow-up 收到一个面里。
+                      </p>
+                    </div>
+                    <div className={styles.contextGrid}>
+                      {focusedPriorityItems.map((item) => (
+                        <div key={item.label} className={styles.contextCard}>
+                          <span className={styles.reviewMetricLabel}>{item.label}</span>
+                          <strong>{item.value}</strong>
+                          <p className={styles.timelineDetail}>{item.hint}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
                 {isFlowMode && sessionDigest ? (
                   <div className={styles.sessionDigest}>
@@ -1999,6 +2068,61 @@ function buildNextQueueRecommendation(entry: {
       helper: "已把焦点切到下一章的 assignment 控制区，可以继续分派或回收。",
     },
   } satisfies NextQueueRecommendation;
+}
+
+function buildFocusedPriorityItems(
+  detail: {
+    current_active_blocking_issue_count: number;
+    memory_proposals: { pending_proposal_count: number; active_snapshot_version?: number | null };
+    assignment?: { owner_name?: string | null } | null;
+    recent_actions: Array<{ status: string; action_type?: string | null }>;
+  },
+  queueEntry:
+    | {
+        queue_driver?: string | null;
+        open_issue_count: number;
+      }
+    | null
+): FocusedPriorityItem[] {
+  const latestAction = detail.recent_actions[0];
+  return [
+    detail.current_active_blocking_issue_count > 0
+      ? {
+          label: "首要阻断",
+          value: `${detail.current_active_blocking_issue_count} 个 blocker`,
+          hint: `优先从 Issue / Action Summary 和 timeline 中定位当前阻断链，当前 queue driver 为 ${queueEntry?.queue_driver || "章节阻断"}。`,
+        }
+      : {
+          label: "首要阻断",
+          value: "当前无 blocker",
+          hint: "这章暂时没有 active blocking issue，可以把注意力转到 proposal 或 follow-up 收敛上。",
+        },
+    detail.memory_proposals.pending_proposal_count > 0
+      ? {
+          label: "待决 Proposal",
+          value: `${detail.memory_proposals.pending_proposal_count} 条待审批`,
+          hint: `当前 snapshot v${detail.memory_proposals.active_snapshot_version ?? "—"}，优先决定 proposal 是否进入正式 chapter memory。`,
+        }
+      : {
+          label: "待决 Proposal",
+          value: "proposal 已收敛",
+          hint: "当前没有待审批 proposal，可以把精力放回 blocker、action 或 owner handoff。",
+        },
+    latestAction
+      ? {
+          label: "Follow-up",
+          value: `${latestAction.action_type || "当前 action"} · ${statusLabel(latestAction.status)}`,
+          hint:
+            latestAction.status === "completed"
+              ? "最新 follow-up 已完成，下一步应优先核对 rerun / recheck 结果是否真正收敛。"
+              : "最新 follow-up 还没进入完成态，继续盯 action 结果比扫描整条队列更重要。",
+        }
+      : {
+          label: "Follow-up",
+          value: detail.assignment?.owner_name ? `Owner ${detail.assignment.owner_name}` : "共享队列",
+          hint: "当前章节还没有 recent action，可先确认 owner handoff 或直接处理 proposal / blocker。",
+        },
+  ];
 }
 
 function buildPendingChapterFocusTarget(
