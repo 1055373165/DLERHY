@@ -1372,6 +1372,34 @@ describe("Workspace page", () => {
     expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看最终复核" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "放行后看最后观察" })).toBeInTheDocument();
+    expect(screen.getByText("Lane 压力")).toBeInTheDocument();
+    expect(screen.getAllByText("放行余量见底").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/当前 scope 只剩最后 1 章 release-ready；做完当前后更适合切回 1 章最后观察。/).length
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("可直放 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("待观察 1").length).toBeGreaterThan(0);
+    expect(screen.getByText("压力建议")).toBeInTheDocument();
+    expect(screen.getByText("观察 backlog 优先")).toBeInTheDocument();
+    expect(
+      screen.getByText(/当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 1 章；这时更适合先切回最后观察 lane。/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "按压力建议处理" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "按压力建议处理" }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+    });
+    expect(screen.getAllByText("night-shift · 继续观察").length).toBeGreaterThan(0);
+    expect(screen.getByText("Current Focus")).toBeInTheDocument();
+    expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
+    });
 
     await user.click(screen.getByRole("button", { name: "指派章节" }));
 

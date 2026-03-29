@@ -176,6 +176,17 @@ type ReleaseLaneBatchDigest = {
   helper: string;
   queueHint: string;
 };
+type ReleaseLanePressure = {
+  statusLabel: string;
+  helper: string;
+  chips: string[];
+};
+type ReleaseLanePressureAction = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+  actionKind: "continue-release" | "switch-observe" | "reset";
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -362,9 +373,18 @@ export function WorkspacePage() {
       ? buildReleaseGateSummary(currentChapterReviewDetail)
       : null;
   const activeReleaseGateFailures = activeReleaseGate?.checks.filter((check) => !check.passed) ?? [];
+  const activeReleaseLaneObserveEntries =
+    isFlowMode && activeQueueLens?.outcome === "release-ready"
+      ? activeQueueLens.ownerName
+        ? selectedOwnerQueueEntries.filter((entry) => !isQueueEntryReleaseReady(entry))
+        : activeQueueLens.assignment === "unassigned"
+          ? sharedQueueEntries.filter((entry) => !isQueueEntryReleaseReady(entry))
+          : queueEntries.filter((entry) => !isQueueEntryReleaseReady(entry))
+      : [];
+  const activeReleaseLaneObserveCount = activeReleaseLaneObserveEntries.length;
   const releaseLaneObserveFallback =
-    isFlowMode && activeQueueLens?.outcome === "release-ready" && queueObserveCount
-      ? buildReleaseLaneFallback(queueEntries.filter((entry) => !isQueueEntryReleaseReady(entry)))
+    isFlowMode && activeQueueLens?.outcome === "release-ready" && activeReleaseLaneObserveCount
+      ? buildReleaseLaneFallback(activeReleaseLaneObserveEntries)
       : null;
   const activeReleaseLaneDecision =
     isFlowMode && activeQueueLens?.outcome === "release-ready" && activeReleaseGate
@@ -451,6 +471,20 @@ export function WorkspacePage() {
           visibleCount: visibleQueueEntries.length,
           selectedIndex: selectedQueueIndex,
           observeCount: queueObserveCount,
+        })
+      : null;
+  const activeReleaseLanePressure =
+    isFlowMode && activeQueueLens?.outcome === "release-ready"
+      ? buildReleaseLanePressure({
+          visibleCount: visibleQueueEntries.length,
+          observeCount: activeReleaseLaneObserveCount,
+        })
+      : null;
+  const activeReleaseLanePressureAction =
+    isFlowMode && activeQueueLens?.outcome === "release-ready"
+      ? buildReleaseLanePressureAction({
+          visibleCount: visibleQueueEntries.length,
+          observeCount: activeReleaseLaneObserveCount,
         })
       : null;
   const showReleaseLaneSessionDigest =
@@ -1047,6 +1081,40 @@ export function WorkspacePage() {
     });
   }
 
+  function handleReleaseLanePressureAction() {
+    if (!activeReleaseLanePressureAction) {
+      return;
+    }
+    if (activeReleaseLanePressureAction.actionKind === "switch-observe") {
+      handleInspectReleaseObserveLane();
+      return;
+    }
+    if (activeReleaseLanePressureAction.actionKind === "reset") {
+      handleResetQueueLens();
+      setReviewMessage({
+        tone: "success",
+        text: "当前 release-ready scope 已经没有可继续推进的章节，可以回到整条队列重新扫描。",
+      });
+      return;
+    }
+
+    const releaseTarget = selectedQueueEntry ?? visibleQueueEntries[0] ?? null;
+    if (releaseTarget && releaseTarget.chapter_id !== selectedReviewChapterId) {
+      selectReviewChapter(releaseTarget.chapter_id);
+    }
+    if (selectedQueueEntry && activeQueueLensPriority) {
+      handleFocusQueueLensPriority(activeQueueLensPriority);
+    } else {
+      setTimelineFocus(null);
+    }
+    setReviewMessage({
+      tone: "success",
+      text: releaseTarget
+        ? `继续沿第 ${releaseTarget.ordinal} 章的 release-ready lane 推进，先把当前可直接放行的判断收口。`
+        : "当前 scope 仍有放行余量，继续沿 release-ready lane 推进。",
+    });
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -1411,16 +1479,23 @@ export function WorkspacePage() {
                       <p className={styles.timelineDetail}>当前未启用过滤，适合做整条队列扫描。</p>
                     )}
                     {activeQueueLens?.outcome === "release-ready" &&
-                    (activeReleaseLaneBatchDigest || activeReleaseLaneExitStrategy || activeReleaseLaneBatchPhase) ? (
+                    (activeReleaseLanePressure ||
+                      activeReleaseLaneBatchDigest ||
+                      activeReleaseLaneExitStrategy ||
+                      activeReleaseLaneBatchPhase) ? (
                       <div className={styles.nextStepCard}>
                         <span className={styles.deltaLabel}>放行链总览</span>
                         <strong className={styles.deltaValue}>
-                          {activeReleaseLaneBatchDigest?.statusLabel ?? activeReleaseLaneBatchPhase?.statusLabel}
+                          {activeReleaseLaneBatchDigest?.statusLabel ??
+                            activeReleaseLaneBatchPhase?.statusLabel ??
+                            activeReleaseLanePressure?.statusLabel}
                         </strong>
                         <p className={styles.timelineDetail}>
                           {activeReleaseLaneExitStrategy
                             ? `当前建议：${activeReleaseLaneExitStrategy.statusLabel}。${activeReleaseLaneExitStrategy.helper}`
-                            : activeReleaseLaneBatchDigest?.helper ?? activeReleaseLaneBatchPhase?.helper}
+                            : activeReleaseLaneBatchDigest?.helper ??
+                              activeReleaseLaneBatchPhase?.helper ??
+                              activeReleaseLanePressure?.helper}
                         </p>
                         <div className={styles.filterChipRow}>
                           {activeReleaseLaneBatchDigest ? (
@@ -1434,6 +1509,38 @@ export function WorkspacePage() {
                             </span>
                           ) : null}
                         </div>
+                        {activeReleaseLanePressure ? (
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>Lane 压力</span>
+                            <strong className={styles.deltaValue}>{activeReleaseLanePressure.statusLabel}</strong>
+                            <p className={styles.timelineDetail}>{activeReleaseLanePressure.helper}</p>
+                            <div className={styles.filterChipRow}>
+                              {activeReleaseLanePressure.chips.map((chip) => (
+                                <span key={chip} className={styles.filterChip}>
+                                  {chip}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {activeReleaseLanePressureAction ? (
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>压力建议</span>
+                            <strong className={styles.deltaValue}>
+                              {activeReleaseLanePressureAction.statusLabel}
+                            </strong>
+                            <p className={styles.timelineDetail}>{activeReleaseLanePressureAction.helper}</p>
+                            <div className={styles.nextStepActions}>
+                              <button
+                                className={styles.ghostButton}
+                                type="button"
+                                onClick={handleReleaseLanePressureAction}
+                              >
+                                按压力建议处理
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                         {activeReleaseLaneExitStrategy ? (
                           <div className={styles.nextStepActions}>
                             <button className={styles.button} type="button" onClick={handleReleaseLaneExitStrategy}>
@@ -3653,6 +3760,94 @@ function buildReleaseLaneBatchDigest(input: {
     queueHint: `放行 ${formatNumber(completedReleaseCount)} / ${formatNumber(input.visibleCount)} · 观察 ${formatNumber(
       input.observeCount
     )}`,
+  };
+}
+
+function buildReleaseLanePressure(input: {
+  visibleCount: number;
+  observeCount: number;
+}): ReleaseLanePressure {
+  const chips = [`可直放 ${formatNumber(input.visibleCount)}`, `待观察 ${formatNumber(input.observeCount)}`];
+  if (input.visibleCount <= 0) {
+    return {
+      statusLabel: "release-ready runway 已空",
+      helper:
+        input.observeCount > 0
+          ? `当前 scope 已没有可直接放行章节，先回 ${formatNumber(input.observeCount)} 章观察链修正，再等待新的 release-ready 候选出现。`
+          : "当前 scope 下已没有 release-ready 或观察 backlog，可以回到整条队列重新扫描。",
+      chips,
+    };
+  }
+  if (input.visibleCount === 1 && input.observeCount > 0) {
+    return {
+      statusLabel: "放行余量见底",
+      helper: `当前 scope 只剩最后 ${formatNumber(
+        input.visibleCount
+      )} 章 release-ready；做完当前后更适合切回 ${formatNumber(input.observeCount)} 章最后观察。`,
+      chips,
+    };
+  }
+  if (input.observeCount === 0) {
+    return {
+      statusLabel: input.visibleCount === 1 ? "最后一章可放行" : "继续冲放行",
+      helper:
+        input.visibleCount === 1
+          ? "当前 scope 只剩最后 1 章 release-ready，完成后这条 lane 就会整体收口。"
+          : `当前 scope 还有 ${formatNumber(input.visibleCount)} 章 release-ready，观察 backlog 已清空，适合连续推进放行。`,
+      chips,
+    };
+  }
+  return {
+    statusLabel: "还有放行余量",
+    helper: `当前 scope 还剩 ${formatNumber(input.visibleCount)} 章 release-ready，观察 backlog ${formatNumber(
+      input.observeCount
+    )} 章；可以继续推进放行，但要准备在余量见底后切回观察 lane。`,
+    chips,
+  };
+}
+
+function buildReleaseLanePressureAction(input: {
+  visibleCount: number;
+  observeCount: number;
+}): ReleaseLanePressureAction {
+  if (input.visibleCount <= 0) {
+    if (input.observeCount > 0) {
+      return {
+        statusLabel: "先切回最后观察",
+        helper: `当前 scope 已没有可继续推进的 release-ready 章节，先回 ${formatNumber(
+          input.observeCount
+        )} 章观察 backlog 收口更划算。`,
+        actionLabel: "切到最后观察 backlog",
+        actionKind: "switch-observe",
+      };
+    }
+    return {
+      statusLabel: "回到整条队列",
+      helper: "当前 scope 下 release-ready 和观察 backlog 都已经清空，适合回到整条队列重新扫描。",
+      actionLabel: "回到整条队列",
+      actionKind: "reset",
+    };
+  }
+  if (input.visibleCount === 1 && input.observeCount > 0) {
+    return {
+      statusLabel: "观察 backlog 优先",
+      helper: `当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 ${formatNumber(
+        input.observeCount
+      )} 章；这时更适合先切回最后观察 lane。`,
+      actionLabel: "切到最后观察 backlog",
+      actionKind: "switch-observe",
+    };
+  }
+  return {
+    statusLabel: "继续推进 release-ready",
+    helper:
+      input.observeCount > 0
+        ? `当前 scope 仍有 ${formatNumber(input.visibleCount)} 章可直接放行，同时观察 backlog 还有 ${formatNumber(
+            input.observeCount
+          )} 章；先继续冲 release-ready 更合算。`
+        : `当前 scope 还有 ${formatNumber(input.visibleCount)} 章可直接放行，观察 backlog 已清空，适合继续连续推进。`,
+    actionLabel: "按 release-ready 继续推进",
+    actionKind: "continue-release",
   };
 }
 
