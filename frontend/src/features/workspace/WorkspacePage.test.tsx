@@ -1327,10 +1327,28 @@ describe("Workspace page", () => {
       expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
     });
     expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
+    expect(screen.getByText("放行候选结构")).toBeInTheDocument();
+    expect(screen.getByText("可直接放行 1 · 最后观察 1")).toBeInTheDocument();
     expect(screen.getByText("放行门")).toBeInTheDocument();
     expect(screen.getByText("连续放行判断")).toBeInTheDocument();
     expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看最终复核" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看仍需最后观察" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "查看仍需最后观察" }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+    });
+    expect(screen.getAllByText("night-shift · 继续观察").length).toBeGreaterThan(0);
+    expect(screen.getByText("Current Focus")).toBeInTheDocument();
+    expect(screen.getAllByText("Follow-up Action · REBUILD_CHAPTER_BRIEF").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
+    });
 
     await user.click(screen.getByRole("button", { name: "查看最终复核" }));
 

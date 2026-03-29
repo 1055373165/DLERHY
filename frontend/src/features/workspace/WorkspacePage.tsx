@@ -324,6 +324,10 @@ export function WorkspacePage() {
       ? buildReleaseGateSummary(currentChapterReviewDetail)
       : null;
   const activeReleaseGateFailures = activeReleaseGate?.checks.filter((check) => !check.passed) ?? [];
+  const releaseLaneObserveFallback =
+    isFlowMode && activeQueueLens?.outcome === "release-ready" && queueObserveCount
+      ? buildReleaseLaneFallback(queueEntries.filter((entry) => !isQueueEntryReleaseReady(entry)))
+      : null;
   const releaseLaneFallback =
     isFlowMode && activeQueueLens?.outcome === "release-ready" && !visibleQueueEntries.length
       ? buildReleaseLaneFallback(queueEntries)
@@ -865,6 +869,20 @@ export function WorkspacePage() {
     selectReviewChapter(releaseLaneFallback.chapterId);
   }
 
+  function handleInspectReleaseObserveLane() {
+    if (!releaseLaneObserveFallback) {
+      return;
+    }
+    setQueueOutcomeFilter("observe");
+    setReviewMessage({
+      tone: "success",
+      text: `已切到 ${releaseLaneObserveFallback.chapterLabel}，先把这条放行候选 lane 里最后仍需观察的一步收口。`,
+    });
+    setTimelineFocus(null);
+    setPendingChapterFocus(releaseLaneObserveFallback.focus);
+    selectReviewChapter(releaseLaneObserveFallback.chapterId);
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -1326,6 +1344,19 @@ export function WorkspacePage() {
                               </p>
                             </div>
                           ) : null}
+                          {activeQueueLens.outcome === "release-ready" ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>放行候选结构</span>
+                              <strong className={styles.deltaValue}>
+                                可直接放行 {formatNumber(queueReleaseReadyCount)} · 最后观察 {formatNumber(queueObserveCount)}
+                              </strong>
+                              <p className={styles.timelineDetail}>
+                                {queueObserveCount
+                                  ? "这条 scope 里既有可直接放行章节，也还有仍需最后观察的章节；放行 lane 不该和最后观察 lane 脱节。"
+                                  : "当前 scope 下已没有最后观察章节，可以沿着这条 lane 连续完成最终复核。"}
+                              </p>
+                            </div>
+                          ) : null}
                           {activeReleaseGate ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>放行门</span>
@@ -1353,7 +1384,9 @@ export function WorkspacePage() {
                                   ? `先收口 ${activeReleaseGateFailures.map((check) => check.label).join(" / ")}，再继续推进这一条放行候选 lane。`
                                   : nextQueueEntry
                                     ? "当前章已经进入可放行态，完成最后复核后可以直接继续下一条放行候选。"
-                                    : "当前章已经进入可放行态，完成最后复核后可以回到队列继续扫描其他章节。"}
+                                    : queueObserveCount
+                                      ? "当前可直接放行章节已经收口，完成最后复核后可以切到仍需最后观察的章节继续推进。"
+                                      : "当前章已经进入可放行态，完成最后复核后可以回到队列继续扫描其他章节。"}
                               </p>
                             </div>
                           ) : null}
@@ -1379,6 +1412,15 @@ export function WorkspacePage() {
                                 onClick={() => handleFocusQueueLensPriority(activeQueueLensPriority)}
                               >
                                 {activeQueueLensPriority.actionLabel}
+                              </button>
+                            ) : null}
+                            {activeQueueLens.outcome === "release-ready" && releaseLaneObserveFallback ? (
+                              <button
+                                className={styles.ghostButton}
+                                type="button"
+                                onClick={handleInspectReleaseObserveLane}
+                              >
+                                查看仍需最后观察
                               </button>
                             ) : null}
                             {nextQueueEntry ? (
