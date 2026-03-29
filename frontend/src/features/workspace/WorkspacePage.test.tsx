@@ -1329,13 +1329,16 @@ describe("Workspace page", () => {
     expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-3");
     expect(screen.getByText("放行候选结构")).toBeInTheDocument();
     expect(screen.getByText("可直接放行 1 · 最后观察 1")).toBeInTheDocument();
+    expect(screen.getByText("连续放行决策")).toBeInTheDocument();
+    expect(screen.getByText("现在可放行")).toBeInTheDocument();
+    expect(screen.getByText(/这条 lane 收口后，下一步切到 第 2 章 · Chapter Two 做最后观察/)).toBeInTheDocument();
     expect(screen.getByText("放行门")).toBeInTheDocument();
     expect(screen.getByText("连续放行判断")).toBeInTheDocument();
     expect(screen.getByText("当前章已满足放行门")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看最终复核" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看仍需最后观察" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "放行后看最后观察" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "查看仍需最后观察" }));
+    await user.click(screen.getByRole("button", { name: "放行后看最后观察" }));
 
     await waitFor(() => {
       expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");

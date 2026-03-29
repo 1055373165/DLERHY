@@ -138,6 +138,11 @@ type ReleaseLaneFallback = {
   chips: string[];
   focus: PendingChapterFocus;
 };
+type ReleaseLaneDecision = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -327,6 +332,14 @@ export function WorkspacePage() {
   const releaseLaneObserveFallback =
     isFlowMode && activeQueueLens?.outcome === "release-ready" && queueObserveCount
       ? buildReleaseLaneFallback(queueEntries.filter((entry) => !isQueueEntryReleaseReady(entry)))
+      : null;
+  const activeReleaseLaneDecision =
+    isFlowMode && activeQueueLens?.outcome === "release-ready" && activeReleaseGate
+      ? buildReleaseLaneDecision({
+          hasGateFailures: activeReleaseGateFailures.length > 0,
+          nextQueueEntry,
+          observeFallback: releaseLaneObserveFallback,
+        })
       : null;
   const releaseLaneFallback =
     isFlowMode && activeQueueLens?.outcome === "release-ready" && !visibleQueueEntries.length
@@ -1357,6 +1370,13 @@ export function WorkspacePage() {
                               </p>
                             </div>
                           ) : null}
+                          {activeReleaseLaneDecision ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>连续放行决策</span>
+                              <strong className={styles.deltaValue}>{activeReleaseLaneDecision.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLaneDecision.helper}</p>
+                            </div>
+                          ) : null}
                           {activeReleaseGate ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>放行门</span>
@@ -1420,7 +1440,9 @@ export function WorkspacePage() {
                                 type="button"
                                 onClick={handleInspectReleaseObserveLane}
                               >
-                                查看仍需最后观察
+                                {activeReleaseLaneDecision?.actionLabel === "放行后看最后观察"
+                                  ? "放行后看最后观察"
+                                  : "查看仍需最后观察"}
                               </button>
                             ) : null}
                             {nextQueueEntry ? (
@@ -3026,6 +3048,44 @@ function buildReleaseGateSummary(detail: {
       ? "当前章节已经满足放行门，可以把注意力放到最终确认和下一章接力。"
       : "这条 lane 里的章节虽然接近可放行，但还需要最后一轮观察，先核对未收口的 gate。",
     checks,
+  };
+}
+
+function buildReleaseLaneDecision(input: {
+  hasGateFailures: boolean;
+  nextQueueEntry: {
+    ordinal: number;
+    title_src?: string | null;
+  } | null;
+  observeFallback: ReleaseLaneFallback | null;
+}): ReleaseLaneDecision {
+  if (input.hasGateFailures) {
+    return {
+      statusLabel: "还差最后观察",
+      helper: "当前章还没真正进入可放行态，先留在本章做最终复核，把最后一条 gate 收口。",
+      actionLabel: "查看最终复核",
+    };
+  }
+  if (input.nextQueueEntry) {
+    return {
+      statusLabel: "现在可放行",
+      helper: `当前章已经满足放行门；完成最终复核后，下一步直接继续第 ${input.nextQueueEntry.ordinal} 章 · ${
+        input.nextQueueEntry.title_src || `Chapter ${input.nextQueueEntry.ordinal}`
+      }。`,
+      actionLabel: "切到下一条放行候选",
+    };
+  }
+  if (input.observeFallback) {
+    return {
+      statusLabel: "现在可放行",
+      helper: `当前章已经满足放行门；这条 lane 收口后，下一步切到 ${input.observeFallback.chapterLabel} 做最后观察。`,
+      actionLabel: "放行后看最后观察",
+    };
+  }
+  return {
+    statusLabel: "现在可放行",
+    helper: "当前 scope 下已经没有更多放行候选或最后观察章节，完成最终复核后可以切回整条队列继续扫描。",
+    actionLabel: "切回全部章节",
   };
 }
 
