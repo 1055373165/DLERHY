@@ -1193,4 +1193,50 @@ describe("Workspace page", () => {
     expect(screen.getByText("放行 0 · 观察 2")).toBeInTheDocument();
     expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-1");
   });
+
+  it("applies operator lens presets for shared and owner-specific queue views", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "继续当前转换" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /共享队列 · 继续观察 · 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /共享队列 · 放行候选 · 0/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /共享队列 · 继续观察 · 1/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /第 1 章 · Chapter One/ })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /第 2 章 · Chapter Two/ })).not.toBeInTheDocument();
+    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-1");
+    expect(screen.getByText("放行 0 · 观察 1")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("owner 视角筛选"), "night-shift");
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 0/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("当前判断视角下没有匹配章节。可以切回全部章节，或继续调整 owner / assignment 过滤。")
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /第 2 章 · Chapter Two/ })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /第 1 章 · Chapter One/ })).not.toBeInTheDocument();
+    expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");
+  });
 });

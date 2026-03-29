@@ -115,6 +115,15 @@ type FocusedPriorityItem = {
   section: TimelineFocusTarget["section"];
   actionLabel: string;
 };
+type QueueLensPreset = {
+  key: string;
+  label: string;
+  helper: string;
+  assignment: "all" | "assigned" | "unassigned";
+  ownerName: string;
+  outcome: QueueOutcomeFilter;
+  count: number;
+};
 
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
 
@@ -194,6 +203,26 @@ export function WorkspacePage() {
   const queueObserveCount = Math.max(queueEntries.length - queueReleaseReadyCount, 0);
   const visibleReleaseReadyCount = visibleQueueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
   const visibleObserveCount = Math.max(visibleQueueEntries.length - visibleReleaseReadyCount, 0);
+  const sharedQueueEntries = queueEntries.filter((entry) => !entry.is_assigned);
+  const sharedReleaseReadyCount = sharedQueueEntries.filter((entry) => isQueueEntryReleaseReady(entry)).length;
+  const sharedObserveCount = Math.max(sharedQueueEntries.length - sharedReleaseReadyCount, 0);
+  const selectedOwnerQueueEntries = selectedOwnerWorkload
+    ? queueEntries.filter((entry) => entry.assigned_owner_name === selectedOwnerWorkload.owner_name)
+    : [];
+  const selectedOwnerReleaseReadyCount = selectedOwnerQueueEntries.filter((entry) =>
+    isQueueEntryReleaseReady(entry)
+  ).length;
+  const selectedOwnerObserveCount = Math.max(
+    selectedOwnerQueueEntries.length - selectedOwnerReleaseReadyCount,
+    0
+  );
+  const operatorLenses = buildQueueLensPresets({
+    sharedReleaseReadyCount,
+    sharedObserveCount,
+    selectedOwnerName: selectedOwnerWorkload?.owner_name ?? null,
+    selectedOwnerReleaseReadyCount,
+    selectedOwnerObserveCount,
+  });
   const selectedQueueEntry =
     visibleQueueEntries.find((entry) => entry.chapter_id === selectedReviewChapterId) ?? null;
   const selectedQueueIndex = selectedQueueEntry
@@ -717,6 +746,17 @@ export function WorkspacePage() {
     });
   }
 
+  function handleQueueLens(lens: QueueLensPreset) {
+    setQueueOutcomeFilter(lens.outcome);
+    if (lens.ownerName) {
+      setChapterAssignmentFilter("all");
+      setChapterAssignedOwnerFilter(lens.ownerName);
+      return;
+    }
+    setChapterAssignedOwnerFilter("");
+    setChapterAssignmentFilter(lens.assignment);
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -922,11 +962,13 @@ export function WorkspacePage() {
                       aria-label="章节分派筛选"
                       className={styles.reviewSelect}
                       value={chapterWorklistFilters.assignment}
-                      onChange={(event) =>
-                        setChapterAssignmentFilter(
-                          event.target.value as "all" | "assigned" | "unassigned"
-                        )
-                      }
+                      onChange={(event) => {
+                        const nextValue = event.target.value as "all" | "assigned" | "unassigned";
+                        if (nextValue === "unassigned" && chapterWorklistFilters.assignedOwnerName) {
+                          setChapterAssignedOwnerFilter("");
+                        }
+                        setChapterAssignmentFilter(nextValue);
+                      }}
                     >
                       <option value="all">全部章节</option>
                       <option value="assigned">仅已分派</option>
@@ -939,7 +981,13 @@ export function WorkspacePage() {
                       aria-label="owner 视角筛选"
                       className={styles.reviewSelect}
                       value={chapterWorklistFilters.assignedOwnerName}
-                      onChange={(event) => setChapterAssignedOwnerFilter(event.target.value)}
+                      onChange={(event) => {
+                        const nextOwner = event.target.value;
+                        if (nextOwner) {
+                          setChapterAssignmentFilter("all");
+                        }
+                        setChapterAssignedOwnerFilter(nextOwner);
+                      }}
                     >
                       <option value="">全部 owner</option>
                       {ownerWorkloads.map((owner) => (
@@ -1090,6 +1138,44 @@ export function WorkspacePage() {
                         </div>
                       </div>
                     ) : null}
+                    <div className={styles.queueInspector}>
+                      <div className={styles.reviewSectionHeader}>
+                        <div>
+                          <div className={styles.fileLabel}>Operator Lens</div>
+                          <h4 className={styles.reviewSectionTitle}>一键切到可处理子队列</h4>
+                        </div>
+                        <p className={styles.reviewSectionCopy}>
+                          把 judgment、owner 和 assignment 收成预设视角，少做手动组合筛选。
+                        </p>
+                      </div>
+                      <div className={styles.modeSwitchControls}>
+                        {operatorLenses.map((lens) => {
+                          const active = queueLensIsActive(
+                            lens,
+                            chapterWorklistFilters.assignment,
+                            chapterWorklistFilters.assignedOwnerName,
+                            queueOutcomeFilter
+                          );
+                          return (
+                            <button
+                              key={lens.key}
+                              type="button"
+                              className={`${styles.modeSwitchButton} ${
+                                active ? styles.modeSwitchButtonActive : ""
+                              }`}
+                              onClick={() => handleQueueLens(lens)}
+                            >
+                              {lens.label} · {formatNumber(lens.count)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className={styles.timelineDetail}>
+                        {selectedOwnerWorkload
+                          ? `当前已选 owner ${selectedOwnerWorkload.owner_name}，可以直接切到这位 operator 名下的放行候选或继续观察章节。`
+                          : "先从共享队列切观察/放行候选，再决定是否收窄到具体 owner。"}
+                      </p>
+                    </div>
                   </section>
                 ) : (
                   <section className={styles.queueInspector}>
@@ -2436,6 +2522,71 @@ function queueOutcomeMatchesFilter(
   }
   const releaseReady = isQueueEntryReleaseReady(entry);
   return filter === "release-ready" ? releaseReady : !releaseReady;
+}
+
+function buildQueueLensPresets(input: {
+  sharedReleaseReadyCount: number;
+  sharedObserveCount: number;
+  selectedOwnerName: string | null;
+  selectedOwnerReleaseReadyCount: number;
+  selectedOwnerObserveCount: number;
+}) {
+  const presets: QueueLensPreset[] = [
+    {
+      key: "shared-observe",
+      label: "共享队列 · 继续观察",
+      helper: "只看共享队列里仍需继续观察的章节。",
+      assignment: "unassigned",
+      ownerName: "",
+      outcome: "observe",
+      count: input.sharedObserveCount,
+    },
+    {
+      key: "shared-release-ready",
+      label: "共享队列 · 放行候选",
+      helper: "只看共享队列里已经接近可放行的章节。",
+      assignment: "unassigned",
+      ownerName: "",
+      outcome: "release-ready",
+      count: input.sharedReleaseReadyCount,
+    },
+  ];
+  if (input.selectedOwnerName) {
+    presets.push(
+      {
+        key: "owner-observe",
+        label: `${input.selectedOwnerName} · 继续观察`,
+        helper: "只看当前 owner 名下仍需继续观察的章节。",
+        assignment: "all",
+        ownerName: input.selectedOwnerName,
+        outcome: "observe",
+        count: input.selectedOwnerObserveCount,
+      },
+      {
+        key: "owner-release-ready",
+        label: `${input.selectedOwnerName} · 放行候选`,
+        helper: "只看当前 owner 名下已经接近可放行的章节。",
+        assignment: "all",
+        ownerName: input.selectedOwnerName,
+        outcome: "release-ready",
+        count: input.selectedOwnerReleaseReadyCount,
+      }
+    );
+  }
+  return presets;
+}
+
+function queueLensIsActive(
+  lens: QueueLensPreset,
+  assignmentFilter: "all" | "assigned" | "unassigned",
+  assignedOwnerName: string,
+  outcomeFilter: QueueOutcomeFilter
+) {
+  return (
+    lens.assignment === assignmentFilter &&
+    lens.ownerName === assignedOwnerName &&
+    lens.outcome === outcomeFilter
+  );
 }
 
 function buildQueueEntryOutcome(entry: {
