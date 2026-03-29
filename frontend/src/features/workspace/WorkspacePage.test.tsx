@@ -1238,6 +1238,8 @@ describe("Workspace page", () => {
     await waitFor(() => {
       expect(screen.getByText("当前放行候选 lane 里还没有章节。更常见的下一步是切回 `继续观察`，把 blocker、proposal 或最后一次 action 先收口。")).toBeInTheDocument();
     });
+    expect(screen.getByText("连续放行判断")).toBeInTheDocument();
+    expect(screen.getByText("还差 2 道 gate")).toBeInTheDocument();
     expect(screen.getAllByText("最接近放行").length).toBeGreaterThan(0);
     expect(screen.getAllByText("第 2 章 · Chapter Two").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Open issues · 1").length).toBeGreaterThan(0);

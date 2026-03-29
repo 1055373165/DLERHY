@@ -323,6 +323,7 @@ export function WorkspacePage() {
     currentChapterReviewDetail
       ? buildReleaseGateSummary(currentChapterReviewDetail)
       : null;
+  const activeReleaseGateFailures = activeReleaseGate?.checks.filter((check) => !check.passed) ?? [];
   const releaseLaneFallback =
     isFlowMode && activeQueueLens?.outcome === "release-ready" && !visibleQueueEntries.length
       ? buildReleaseLaneFallback(queueEntries)
@@ -1337,6 +1338,23 @@ export function WorkspacePage() {
                                   </span>
                                 ))}
                               </div>
+                            </div>
+                          ) : null}
+                          {activeReleaseGate ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>连续放行判断</span>
+                              <strong className={styles.deltaValue}>
+                                {activeReleaseGateFailures.length
+                                  ? `还差 ${formatNumber(activeReleaseGateFailures.length)} 道 gate`
+                                  : "当前章已满足放行门"}
+                              </strong>
+                              <p className={styles.timelineDetail}>
+                                {activeReleaseGateFailures.length
+                                  ? `先收口 ${activeReleaseGateFailures.map((check) => check.label).join(" / ")}，再继续推进这一条放行候选 lane。`
+                                  : nextQueueEntry
+                                    ? "当前章已经进入可放行态，完成最后复核后可以直接继续下一条放行候选。"
+                                    : "当前章已经进入可放行态，完成最后复核后可以回到队列继续扫描其他章节。"}
+                              </p>
                             </div>
                           ) : null}
                           {releaseLaneFallback ? (
