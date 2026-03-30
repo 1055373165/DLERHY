@@ -20,3 +20,7 @@
 - 2026-03-30 13:39:29 +0800 | executed batch-4 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 13:39:29 +0800 | verified batch-4 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 13:39:29 +0800 | wrote .forge/reports/batch-4-report.md and advanced STATE.md to current_step=batch-4_verified
+- 2026-03-30 14:18:21 +0800 | froze batch-5: move release-ready route-first judgment into Operator Lens entry
+- 2026-03-30 14:18:21 +0800 | executed batch-5 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 14:18:21 +0800 | verified batch-5 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 14:18:21 +0800 | wrote .forge/reports/batch-5-report.md and advanced STATE.md to current_step=batch-5_verified

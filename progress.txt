@@ -1,5 +1,5 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-30 13:39:29 +0800
+Last Updated: 2026-03-30 14:18:21 +0800
 
 1. 高层需求
 
@@ -79,6 +79,7 @@ Last Updated: 2026-03-30 13:39:29 +0800
 - release-ready 的路线建议已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在可以先按 lane health 读出主导动作，而不是先扫多张 supporting cards。
 - 当 release-ready lane 已经足够明确时，supporting signals 会默认收拢，只保留路线建议和展开入口，进一步减少 reviewer 在进入 detail 前的扫描成本。
 - release-ready 的 route-first 判断已经进一步前移到 lane 入口附近；reviewer 进入该视角后，会先决定“是否值得继续留在这条 lane”，然后再按需进入中段 detail。
+- release-ready 的 route-first 判断已经进入 `Operator Lens` 入口层；reviewer 切到 release-ready 子队列后，可以先按入口判断处理，再决定是否继续停留在当前章节 surface。
 
 5. 最近一次验证基线
 
@@ -106,17 +107,17 @@ Reviewer / Operator 工作台主线收敛阶段
 
 7. 建议交给 Forge 的下一刀
 
-batch-1、batch-2、batch-3 和 batch-4 已经完成。下一批最自然的主线，不是继续增加 release-ready 的中段卡片，而是把 route-first 判断继续上提到更靠近子队列入口的位置：
+batch-1、batch-2、batch-3、batch-4 和 batch-5 已经完成。下一批最自然的主线，不是继续增加 release-ready 的中段卡片，而是把 route-first 判断从入口卡继续推到“选择子队列前”的更高层判断：
 
 - 目标：
-  让 release-ready 的路由建议在切入 `operator lens` 或 `queue rail` 时就更接近子队列入口判断，而不是仍然依赖进入当前章节后再读。
+  让 release-ready 的路由建议在 reviewer 选择子队列之前，就更像一个高层 go / no-go 判断，而不是等进入子队列后才出现。
 
 - 期望效果：
   reviewer 在 release-ready 视角里，不只先读出：
   - 健康可冲
   - 临界收尾
   - 需要切回观察修正
-  还会更早知道是否值得继续停留在这条 lane，还是该直接切回观察 backlog，并在判断足够明确时少看中段 supporting cards。
+  还会更早知道是否值得继续停留在这条 lane，还是该直接切回观察 backlog，并在判断足够明确时少看中段 supporting cards，甚至少进一次错误的子队列。
 
 - 建议范围：
   - frontend/src/features/workspace/WorkspacePage.tsx

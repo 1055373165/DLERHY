@@ -1381,11 +1381,12 @@ describe("Workspace page", () => {
     expect(screen.queryByText("Operator 放行把握度")).not.toBeInTheDocument();
     expect(screen.queryByText("Operator 漂移趋势")).not.toBeInTheDocument();
     expect(screen.queryByText("Operator 压力建议")).not.toBeInTheDocument();
+    expect(screen.getByText("入口判断")).toBeInTheDocument();
     expect(screen.getByText("当前路线建议")).toBeInTheDocument();
     expect(screen.getByText("Operator 路线建议")).toBeInTheDocument();
     expect(screen.getAllByText("支持信号已收拢").length).toBeGreaterThan(0);
     expect(screen.getByText("Operator 支持信号")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "切到最后观察 backlog" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "按入口判断处理" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "展开支持信号" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "展开支持信号" }));
@@ -1421,7 +1422,7 @@ describe("Workspace page", () => {
       screen.getAllByText(/当前 scope 只剩最后 1 章 release-ready，而观察 backlog 还有 1 章；这时更适合先切回最后观察 lane。/).length
     ).toBeGreaterThan(1);
 
-    await user.click(screen.getByRole("button", { name: "切到最后观察 backlog" }));
+    await user.click(screen.getByRole("button", { name: "按入口判断处理" }));
 
     await waitFor(() => {
       expect((screen.getByLabelText("当前章节") as HTMLSelectElement).value).toBe("ch-2");

@@ -209,6 +209,11 @@ type ReleaseLaneRoutingCue = {
   source: "pressure" | "exit";
   chips: string[];
 };
+type ReleaseLaneEntryCue = {
+  statusLabel: string;
+  helper: string;
+  chips: string[];
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -547,6 +552,19 @@ export function WorkspacePage() {
           healthSummary: activeReleaseLaneHealthSummary,
           pressureAction: activeReleaseLanePressureAction,
           exitStrategy: activeReleaseLaneExitStrategy,
+        })
+      : null;
+  const activeReleaseLaneEntryCue =
+    isFlowMode &&
+    activeQueueLens?.outcome === "release-ready" &&
+    activeReleaseLaneRoutingCue &&
+    activeReleaseLaneHealthSummary
+      ? buildReleaseLaneEntryCue({
+          routingCue: activeReleaseLaneRoutingCue,
+          healthSummary: activeReleaseLaneHealthSummary,
+          chapterLabel: selectedQueueEntry
+            ? `第 ${selectedQueueEntry.ordinal} 章 · ${selectedQueueEntry.title_src || `Chapter ${selectedQueueEntry.ordinal}`}`
+            : null,
         })
       : null;
   const releaseLaneHealthIsDecisive = Boolean(
@@ -1775,6 +1793,25 @@ export function WorkspacePage() {
                           ? `当前已选 owner ${selectedOwnerWorkload.owner_name}，可以直接切到这位 operator 名下的放行候选或继续观察章节。`
                           : "先从共享队列切观察/放行候选，再决定是否收窄到具体 owner。"}
                       </p>
+                      {activeReleaseLaneEntryCue ? (
+                        <div className={styles.nextStepCard}>
+                          <span className={styles.deltaLabel}>入口判断</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLaneEntryCue.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLaneEntryCue.helper}</p>
+                          <div className={styles.filterChipRow}>
+                            {activeReleaseLaneEntryCue.chips.map((chip) => (
+                              <span key={chip} className={styles.filterChip}>
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                          <div className={styles.nextStepActions}>
+                            <button className={styles.button} type="button" onClick={handleReleaseLaneRoutingCue}>
+                              按入口判断处理
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       {activeQueueLens ? (
                         <div className={styles.nextStepCard}>
                           <span className={styles.deltaLabel}>当前 operator lane</span>
@@ -4208,6 +4245,23 @@ function buildReleaseLaneRoutingCue(input: {
     actionLabel: "保持当前视角",
     source: "pressure",
     chips: [`Lane Health · ${input.healthSummary.statusLabel}`],
+  };
+}
+
+function buildReleaseLaneEntryCue(input: {
+  routingCue: ReleaseLaneRoutingCue;
+  healthSummary: ReleaseLaneHealthSummary;
+  chapterLabel: string | null;
+}): ReleaseLaneEntryCue {
+  return {
+    statusLabel: input.routingCue.statusLabel,
+    helper: input.chapterLabel
+      ? `进入当前 release-ready 子队列后，先按这条判断决定是否继续停留在 ${input.chapterLabel}，不用先扫中段 supporting cards。`
+      : "进入当前 release-ready 子队列后，先按这条判断决定是否继续停留在这条 lane，不用先扫中段 supporting cards。",
+    chips: [
+      `Lane Health · ${input.healthSummary.statusLabel}`,
+      `入口动作 · ${input.routingCue.statusLabel}`,
+    ],
   };
 }
 
