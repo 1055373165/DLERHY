@@ -1,0 +1,130 @@
+Book Agent Mainline Handoff
+Last Updated: 2026-03-30 11:17:36 +0800
+
+1. 高层需求
+
+本轮会话的高层目标，不再是继续空谈多 agent 愿景，而是沿着已经落地的 Runtime V2 主线，把 reviewer/operator 真正可用的产品面持续做实。
+
+主线要求分三层：
+
+- 保持 Runtime V2 control plane 已落地能力稳定，不回头重开抽象重构。
+- 把 Memory Governance 做成 reviewer/operator 可以直接使用的治理能力。
+- 把 standalone frontend 的 Chapter Workbench 收敛成真正可持续使用的 reviewer/operator 工作台。
+
+一句话概括：
+
+当前主线 = Runtime V2 已落地控制面 + Memory Governance + Chapter Workbench 产品化
+
+2. 不可破坏的约束
+
+- 单仓库、单 live 工作树开发；不要再开第二个 worktree。
+- 优先推进主线闭环，不阻断用户使用的增强项统一放到 docs/optimization-backlog.md。
+- 当前主线优先前端 reviewer/operator 工作面，不再回头扩写 Runtime V2 抽象设计。
+- 当前 repo 的真实进度以代码、docs/mainline-progress.md 和后续 .forge live state 为准，不以聊天记忆为准。
+
+3. 已完成的主线能力
+
+3.1 Runtime V2 round-2 已完成
+
+- ReviewSession runtime scaffold
+- packet/review lane health
+- RecoveryMatrix
+- review deadlock incidentization + bounded replay
+- chapter_hold escalation boundary
+- bundle rollback governance + stable revision rebinding
+- REQ-MX-01 ~ REQ-MX-04 acceptance
+
+3.2 Memory Governance 已完成到可用状态
+
+- proposal-first chapter memory 写入
+- review pass commit memory proposals
+- stale / blocking / rerun / action invalidation proposal retirement
+- explicit list / approve / reject workflow
+- explicit override HTTP API
+- explicit override 的 operator audit / timeline surface
+
+3.3 Chapter Workbench 已完成的产品面
+
+- chapter queue rail
+- queue judgment filter
+- operator lens 子队列
+- owner / assignment 操作
+- pending proposal approve / reject
+- unified review / action / memory timeline
+- Latest Change / Recommended Next Step / timeline-driven focus
+- Next in Queue / Session Trail / Session Digest
+- focused / flow 模式与持久化恢复
+- focused 模式下的当前章节优先面 / 当前先处理
+- flow 模式下的连续处理节奏 / 接力 / Flow Exit Strategy
+- release-ready lane 的 fallback candidate、gate judgment、连续放行判断、放行后看最后观察
+- release-ready lane 的批处理摘要、批处理阶段、退出策略、完成态、结果反馈、收口反馈
+- release-ready lane 的压力建议、去留判断、放行把握度、漂移趋势
+- 上述 release-ready 判断已进入 queue rail、Operator Lens、Session Digest，而不只在 detail 中段出现
+
+4. 当前已验证但尚未提交的工作
+
+当前这轮主线修改集中在 3 个文件：
+
+- docs/mainline-progress.md
+- frontend/src/features/workspace/WorkspacePage.tsx
+- frontend/src/features/workspace/WorkspacePage.test.tsx
+
+这轮已经实际落下并验证通过的增量是：
+
+- release-ready lane 的压力建议已经可执行，能直接决定继续沿 release-ready lane 推进，还是切回 observe backlog。
+- release-ready 的去留判断已经上提到 Operator Lens 和 Session Digest，reviewer 进入该视角后无需先滚进 detail。
+- release-ready 的放行把握度已经上提到 queue rail / Operator Lens / Session Digest。
+- release-ready 的漂移趋势已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在能看出这条 lane 是在变稳、稳定推进、逼近切换点，还是退回观察链。
+
+5. 最近一次验证基线
+
+前端主线当前验证结果：
+
+- 命令：
+  cd /Users/smy/project/book-agent/frontend && npx vitest run src/features/workspace/WorkspacePage.test.tsx src/app/App.test.tsx
+  结果：16 passed
+
+- 命令：
+  cd /Users/smy/project/book-agent/frontend && npm run build
+  结果：passed
+
+6. 当前主线判断
+
+当前已经不再缺更多底层 runtime 能力，真正的主线阶段是：
+
+Reviewer / Operator 工作台主线收敛阶段
+
+当前最重要的，不是再扩写 agent runtime 抽象，而是让 reviewer/operator 在 Chapter Workbench 里：
+
+- 快速判断当前章节应先处理什么
+- 在 flow 模式里顺畅连续推进
+- 在 release-ready 视角里更快判断一条 lane 是否值得继续冲
+
+7. 建议交给 Forge 的下一刀
+
+下一批最自然的主线不是再加一个零散卡片，而是把当前 release-ready 的多个判断信号收成更高一级的 lane health：
+
+- 目标：
+  把 pressure / confidence / drift 三层判断汇总成一个更直接的 lane health 读数。
+
+- 期望效果：
+  reviewer 在 release-ready 视角里一眼就能知道这条 lane 当前是：
+  - 健康可冲
+  - 临界收尾
+  - 需要切回观察修正
+
+- 建议范围：
+  - frontend/src/features/workspace/WorkspacePage.tsx
+  - frontend/src/features/workspace/WorkspacePage.test.tsx
+  - docs/mainline-progress.md
+
+- 验收门：
+  - npx vitest run src/features/workspace/WorkspacePage.test.tsx src/app/App.test.tsx
+  - npm run build
+
+8. Forge 交接说明
+
+本次 handoff 已同步初始化 .forge live state，作为后续 Forge 接管的唯一运行面。
+
+progress.txt 负责高层需求与主线进度说明；
+.forge/STATE.md、.forge/DECISIONS.md、.forge/batches/batch-1.md、.forge/log.md 负责后续可执行交接。
