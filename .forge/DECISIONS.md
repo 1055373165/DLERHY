@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `queue/session route-first trust`.
-- Goal: keep the verified lane go/no-go summary, but push more decision trust into queue/session level so reviewer/operator needs lane detail later and less often.
+- The next dependency-closed slice is `single-cue route trust`.
+- Goal: keep the verified lane go/no-go summary, but make queue/session level rely on one primary route cue instead of several similar high-level cards.

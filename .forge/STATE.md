@@ -1,11 +1,11 @@
 # Forge State
 
-last_update_time: 2026-03-30 16:15:58 +0800
+last_update_time: 2026-03-30 16:24:41 +0800
 mode: resume
-current_step: batch-12_verified
-active_batch: batch-12
-authoritative_batch_contract: .forge/batches/batch-12.md
-expected_report_path: .forge/reports/batch-12-report.md
+current_step: batch-13_verified
+active_batch: batch-13
+authoritative_batch_contract: .forge/batches/batch-13.md
+expected_report_path: .forge/reports/batch-13-report.md
 
 active_worker_slot:
 - worker_id: none
@@ -32,6 +32,7 @@ completed_items:
 - Forge batch-10 is verified complete: summary-level release-ready guidance is now compressed into a clearer lane go/no-go read, so reviewers can read “continue / switch / stop” faster before diving into lane detail.
 - Forge batch-11 is verified complete: the lane go/no-go card now reads as a shorter “status + reason + action” decision, so reviewers can trust the top-level route without reading as much supporting copy.
 - Forge batch-12 is verified complete: the top-level lane go/no-go card now replaces multiple summary chips with a single compact summary line, so queue/session decisions rely on fewer visual layers.
+- Forge batch-13 is verified complete: when the top-level lane go/no-go card exists, duplicate Lens/Session entry suggestion cards now collapse away, so queue/session level route trust depends on one primary cue instead of several similar cards.
 
 failed_items:
 - none recorded in the current handoff state
@@ -52,6 +53,7 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/batches/batch-10.md
 - /Users/smy/project/book-agent/.forge/batches/batch-11.md
 - /Users/smy/project/book-agent/.forge/batches/batch-12.md
+- /Users/smy/project/book-agent/.forge/batches/batch-13.md
 - /Users/smy/project/book-agent/.forge/log.md
 - /Users/smy/project/book-agent/.forge/reports/batch-1-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-2-report.md
@@ -65,6 +67,7 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/reports/batch-10-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-11-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-12-report.md
+- /Users/smy/project/book-agent/.forge/reports/batch-13-report.md
 - /Users/smy/project/book-agent/docs/mainline-progress.md
 - /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.tsx
 - /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.test.tsx
@@ -79,4 +82,4 @@ handoff_source:
 - /Users/smy/project/book-agent/progress.txt
 
 next_mainline_focus:
-- Push the release-ready route cue further into queue/session level so reviewer/operator can decide whether to stay in-lane before needing mid-page lane detail at all.
+- Push more release-ready route trust into queue/session level so reviewer/operator can decide whether to stay in-lane before needing repeated higher-level route cards or mid-page lane detail.

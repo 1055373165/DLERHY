@@ -1354,8 +1354,8 @@ describe("Workspace page", () => {
     });
     expect(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ })).toBeInTheDocument();
     expect(screen.getAllByText("Lane 去留判断").length).toBeGreaterThan(1);
-    expect(screen.getByText("Lens 选择建议")).toBeInTheDocument();
-    expect(screen.getByText("Session 入口建议")).toBeInTheDocument();
+    expect(screen.queryByText("Lens 选择建议")).not.toBeInTheDocument();
+    expect(screen.queryByText("Session 入口建议")).not.toBeInTheDocument();
     expect(screen.getByText("Lens 选择预判")).toBeInTheDocument();
     expect(screen.getAllByText("继续往放行候选走").length).toBeGreaterThan(1);
     expect(screen.getAllByText("理由 · 先收窄到更稳的放行 scope").length).toBeGreaterThan(1);

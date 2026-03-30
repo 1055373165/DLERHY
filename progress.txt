@@ -1,5 +1,5 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-30 16:15:58 +0800
+Last Updated: 2026-03-30 16:24:41 +0800
 
 1. 高层需求
 
@@ -87,6 +87,7 @@ Last Updated: 2026-03-30 16:15:58 +0800
 - release-ready 的高层判断现在已经压成更简洁的 `Lane 去留判断`；reviewer 在顶部先读“继续冲 / 切回观察 / 回队列”，再决定是否继续往下钻到 lane detail。
 - `Lane 去留判断` 现在已经进一步收成更短的“状态 + 理由 + 动作”卡；reviewer 在 `Active Scope / Session Digest` 顶部先读短理由，再决定是否继续下钻到 lane detail。
 - `Lane 去留判断` 现在已经进一步去掉 summary 卡上的多枚 chips，改成一条更轻的 `摘要 · ...`；reviewer 在 `Active Scope` 顶部读完状态、理由和摘要后，就能更快做 go / no-go 决策。
+- 当 `Lane 去留判断` 已经存在时，顶层重复的 `Lens 选择建议 / Session 入口建议` 现在会直接折叠掉；reviewer 在 queue/session 层先读一张主导卡，而不是来回比对多张含义相近的 route cue。
 
 5. 最近一次验证基线
 
@@ -114,13 +115,13 @@ Reviewer / Operator 工作台主线收敛阶段
 
 7. 建议交给 Forge 的下一刀
 
-batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7、batch-8、batch-9、batch-10、batch-11 和 batch-12 已经完成。下一批最自然的主线，不是继续增加 release-ready 的 lane 卡片，而是继续减少 queue/session 层对 lane detail 的依赖：
+batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7、batch-8、batch-9、batch-10、batch-11、batch-12 和 batch-13 已经完成。下一批最自然的主线，不是继续增加 release-ready 的 lane 卡片，而是继续减少 queue/session 层对重复 route cue 的依赖：
 
 - 目标：
-  让 release-ready 的去留判断在 reviewer 还没真正滚进中段 lane detail 前，就主要依赖顶层状态、理由和摘要完成决策，而不是再读重复的 supporting copy。
+  让 release-ready 的去留判断在 reviewer 还没真正滚进中段 lane detail 前，就主要依赖一张顶层主导卡完成决策，而不是再读多张重复的 route cue。
 
 - 期望效果：
-  reviewer 在 release-ready 视角里，会更快信任 queue/session 层的 go / no-go 判断，不需要为了理解去留，再阅读中段 lane detail 里的重复解释。
+  reviewer 在 release-ready 视角里，会更快信任 queue/session 层的 go / no-go 判断，不需要为了理解去留，再在顶层多张相似卡片之间来回对照。
 
 - 建议范围：
   - frontend/src/features/workspace/WorkspacePage.tsx

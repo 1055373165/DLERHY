@@ -52,3 +52,7 @@
 - 2026-03-30 16:15:58 +0800 | executed batch-12 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 16:15:58 +0800 | verified batch-12 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 16:15:58 +0800 | wrote .forge/reports/batch-12-report.md and advanced STATE.md to current_step=batch-12_verified
+- 2026-03-30 16:24:41 +0800 | froze batch-13: collapse duplicate high-level release-ready route cards when the lane go/no-go summary already exists
+- 2026-03-30 16:24:41 +0800 | executed batch-13 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 16:24:41 +0800 | verified batch-13 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 16:24:41 +0800 | wrote .forge/reports/batch-13-report.md and advanced STATE.md to current_step=batch-13_verified

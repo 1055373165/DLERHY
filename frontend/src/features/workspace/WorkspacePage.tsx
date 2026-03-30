@@ -1697,7 +1697,7 @@ export function WorkspacePage() {
                         </div>
                       </div>
                     ) : null}
-                    {activeReleaseLaneLensChoiceCue ? (
+                    {activeReleaseLaneLensChoiceCue && !activeReleaseLaneSummaryRouteCue ? (
                       <div className={styles.nextStepCard}>
                         <span className={styles.deltaLabel}>Lens 选择建议</span>
                         <strong className={styles.deltaValue}>{activeReleaseLaneLensChoiceCue.statusLabel}</strong>
@@ -2812,7 +2812,7 @@ export function WorkspacePage() {
                           </div>
                         </div>
                       ) : null}
-                      {activeReleaseLaneLensChoiceCue ? (
+                      {activeReleaseLaneLensChoiceCue && !activeReleaseLaneSummaryRouteCue ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Session 入口建议</span>
                           <strong className={styles.deltaValue}>{activeReleaseLaneLensChoiceCue.statusLabel}</strong>
