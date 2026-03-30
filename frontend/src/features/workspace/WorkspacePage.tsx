@@ -277,6 +277,7 @@ export function WorkspacePage() {
   const [flowHandoff, setFlowHandoff] = useState<FlowHandoff | null>(null);
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => readInitialWorkbenchMode());
   const [queueOutcomeFilter, setQueueOutcomeFilter] = useState<QueueOutcomeFilter>("all");
+  const [releaseSignalExpanded, setReleaseSignalExpanded] = useState(false);
   const [reviewerName, setReviewerName] = useState("reviewer-ui");
   const [reviewerNote, setReviewerNote] = useState("");
   const [assignmentOwner, setAssignmentOwner] = useState("");
@@ -548,6 +549,26 @@ export function WorkspacePage() {
           exitStrategy: activeReleaseLaneExitStrategy,
         })
       : null;
+  const releaseLaneHealthIsDecisive = Boolean(
+    activeReleaseLaneHealthSummary && activeReleaseLaneHealthSummary.statusLabel !== "稳态推进"
+  );
+  const allowReleaseSignalToggle = Boolean(activeReleaseLaneHealthSummary && !selectedChapterRecentChange);
+  const showCondensedReleaseSignals =
+    Boolean(activeReleaseLaneHealthSummary) &&
+    releaseLaneHealthIsDecisive &&
+    !selectedChapterRecentChange &&
+    !releaseSignalExpanded;
+  const activeReleaseLaneSignalSnapshot =
+    showCondensedReleaseSignals && activeReleaseLaneHealthSummary && activeReleaseLaneRoutingCue
+      ? {
+          statusLabel: "支持信号已收拢",
+          helper: `当前路线建议已经足够明确：${activeReleaseLaneRoutingCue.statusLabel}。如需复核，再展开把握度 / 漂移 / 压力细节。`,
+          chips: [
+            `路线 · ${activeReleaseLaneRoutingCue.statusLabel}`,
+            ...activeReleaseLaneHealthSummary.chips,
+          ],
+        }
+      : null;
   const showReleaseLaneSessionDigest =
     isFlowMode &&
     activeQueueLens?.outcome === "release-ready" &&
@@ -593,6 +614,14 @@ export function WorkspacePage() {
       setFlowHandoff(null);
     }
   }, [workbenchMode]);
+
+  useEffect(() => {
+    if (!allowReleaseSignalToggle) {
+      setReleaseSignalExpanded(false);
+      return;
+    }
+    setReleaseSignalExpanded(false);
+  }, [allowReleaseSignalToggle, activeQueueLens?.key, activeReleaseLaneHealthSummary?.statusLabel, selectedReviewChapterId]);
 
   useEffect(() => {
     if (workbenchMode !== "flow") {
@@ -1187,6 +1216,10 @@ export function WorkspacePage() {
     handleReleaseLanePressureAction();
   }
 
+  function handleToggleReleaseSignals() {
+    setReleaseSignalExpanded((current) => !current);
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -1585,6 +1618,29 @@ export function WorkspacePage() {
                               <button className={styles.button} type="button" onClick={handleReleaseLaneRoutingCue}>
                                 {activeReleaseLaneRoutingCue.actionLabel}
                               </button>
+                              {allowReleaseSignalToggle ? (
+                                <button
+                                  className={styles.ghostButton}
+                                  type="button"
+                                  onClick={handleToggleReleaseSignals}
+                                >
+                                  {showCondensedReleaseSignals ? "展开支持信号" : "收起支持信号"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                        {activeReleaseLaneSignalSnapshot ? (
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>支持信号已收拢</span>
+                            <strong className={styles.deltaValue}>{activeReleaseLaneSignalSnapshot.statusLabel}</strong>
+                            <p className={styles.timelineDetail}>{activeReleaseLaneSignalSnapshot.helper}</p>
+                            <div className={styles.filterChipRow}>
+                              {activeReleaseLaneSignalSnapshot.chips.map((chip) => (
+                                <span key={chip} className={styles.filterChip}>
+                                  {chip}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         ) : null}
@@ -1600,7 +1656,7 @@ export function WorkspacePage() {
                             </span>
                           ) : null}
                         </div>
-                        {activeReleaseLanePressure ? (
+                        {activeReleaseLanePressure && !showCondensedReleaseSignals ? (
                           <div className={styles.deltaCard}>
                             <span className={styles.deltaLabel}>Lane 压力</span>
                             <strong className={styles.deltaValue}>{activeReleaseLanePressure.statusLabel}</strong>
@@ -1614,7 +1670,7 @@ export function WorkspacePage() {
                             </div>
                           </div>
                         ) : null}
-                        {activeReleaseLaneHealthSummary ? (
+                        {activeReleaseLaneHealthSummary && !showCondensedReleaseSignals ? (
                           <div className={styles.deltaCard}>
                             <span className={styles.deltaLabel}>Lane Health</span>
                             <strong className={styles.deltaValue}>
@@ -1630,7 +1686,7 @@ export function WorkspacePage() {
                             </div>
                           </div>
                         ) : null}
-                        {activeReleaseLaneConfidence ? (
+                        {activeReleaseLaneConfidence && !showCondensedReleaseSignals ? (
                           <div className={styles.deltaCard}>
                             <span className={styles.deltaLabel}>Lane 把握度</span>
                             <strong className={styles.deltaValue}>{activeReleaseLaneConfidence.statusLabel}</strong>
@@ -1644,7 +1700,7 @@ export function WorkspacePage() {
                             </div>
                           </div>
                         ) : null}
-                        {activeReleaseLaneDrift ? (
+                        {activeReleaseLaneDrift && !showCondensedReleaseSignals ? (
                           <div className={styles.deltaCard}>
                             <span className={styles.deltaLabel}>Lane 漂移</span>
                             <strong className={styles.deltaValue}>{activeReleaseLaneDrift.statusLabel}</strong>
@@ -1658,7 +1714,7 @@ export function WorkspacePage() {
                             </div>
                           </div>
                         ) : null}
-                        {activeReleaseLanePressureAction ? (
+                        {activeReleaseLanePressureAction && !showCondensedReleaseSignals ? (
                           <div className={styles.deltaCard}>
                             <span className={styles.deltaLabel}>压力建议</span>
                             <strong className={styles.deltaValue}>
@@ -1790,6 +1846,13 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>{activeReleaseLaneRoutingCue.helper}</p>
                             </div>
                           ) : null}
+                          {activeReleaseLaneSignalSnapshot ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>Operator 支持信号</span>
+                              <strong className={styles.deltaValue}>{activeReleaseLaneSignalSnapshot.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLaneSignalSnapshot.helper}</p>
+                            </div>
+                          ) : null}
                           {activeQueueLens.outcome === "release-ready" ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>放行候选结构</span>
@@ -1817,7 +1880,7 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>{activeReleaseLaneBatchSummary.helper}</p>
                             </div>
                           ) : null}
-                          {activeReleaseLaneHealthSummary ? (
+                          {activeReleaseLaneHealthSummary && !showCondensedReleaseSignals ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>Operator Lane Health</span>
                               <strong className={styles.deltaValue}>
@@ -1826,21 +1889,21 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>{activeReleaseLaneHealthSummary.helper}</p>
                             </div>
                           ) : null}
-                          {activeReleaseLaneConfidence ? (
+                          {activeReleaseLaneConfidence && !showCondensedReleaseSignals ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>Operator 放行把握度</span>
                               <strong className={styles.deltaValue}>{activeReleaseLaneConfidence.statusLabel}</strong>
                               <p className={styles.timelineDetail}>{activeReleaseLaneConfidence.helper}</p>
                             </div>
                           ) : null}
-                          {activeReleaseLaneDrift ? (
+                          {activeReleaseLaneDrift && !showCondensedReleaseSignals ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>Operator 漂移趋势</span>
                               <strong className={styles.deltaValue}>{activeReleaseLaneDrift.statusLabel}</strong>
                               <p className={styles.timelineDetail}>{activeReleaseLaneDrift.helper}</p>
                             </div>
                           ) : null}
-                          {activeReleaseLanePressureAction ? (
+                          {activeReleaseLanePressureAction && !showCondensedReleaseSignals ? (
                             <div className={styles.deltaCard}>
                               <span className={styles.deltaLabel}>Operator 压力建议</span>
                               <strong className={styles.deltaValue}>
@@ -2573,28 +2636,43 @@ export function WorkspacePage() {
                           <p className={styles.timelineDetail}>{activeReleaseLaneRoutingCue.helper}</p>
                         </div>
                       ) : null}
-                      {showReleaseLaneSessionDigest && activeReleaseLaneHealthSummary ? (
+                      {showReleaseLaneSessionDigest && activeReleaseLaneSignalSnapshot ? (
+                        <div className={styles.sessionDigestCard}>
+                          <span className={styles.deltaLabel}>Release-ready 支持信号</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLaneSignalSnapshot.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLaneSignalSnapshot.helper}</p>
+                        </div>
+                      ) : null}
+                      {showReleaseLaneSessionDigest &&
+                      activeReleaseLaneHealthSummary &&
+                      !showCondensedReleaseSignals ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Release-ready Lane Health</span>
                           <strong className={styles.deltaValue}>{activeReleaseLaneHealthSummary.statusLabel}</strong>
                           <p className={styles.timelineDetail}>{activeReleaseLaneHealthSummary.helper}</p>
                         </div>
                       ) : null}
-                      {showReleaseLaneSessionDigest && activeReleaseLanePressureAction ? (
+                      {showReleaseLaneSessionDigest &&
+                      activeReleaseLanePressureAction &&
+                      !showCondensedReleaseSignals ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Release-ready 去留判断</span>
                           <strong className={styles.deltaValue}>{activeReleaseLanePressureAction.statusLabel}</strong>
                           <p className={styles.timelineDetail}>{activeReleaseLanePressureAction.helper}</p>
                         </div>
                       ) : null}
-                      {showReleaseLaneSessionDigest && activeReleaseLaneConfidence ? (
+                      {showReleaseLaneSessionDigest &&
+                      activeReleaseLaneConfidence &&
+                      !showCondensedReleaseSignals ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Release-ready 把握度</span>
                           <strong className={styles.deltaValue}>{activeReleaseLaneConfidence.statusLabel}</strong>
                           <p className={styles.timelineDetail}>{activeReleaseLaneConfidence.helper}</p>
                         </div>
                       ) : null}
-                      {showReleaseLaneSessionDigest && activeReleaseLaneDrift ? (
+                      {showReleaseLaneSessionDigest &&
+                      activeReleaseLaneDrift &&
+                      !showCondensedReleaseSignals ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Release-ready 漂移趋势</span>
                           <strong className={styles.deltaValue}>{activeReleaseLaneDrift.statusLabel}</strong>

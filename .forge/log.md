@@ -12,3 +12,7 @@
 - 2026-03-30 13:01:09 +0800 | executed batch-2 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 13:01:09 +0800 | verified batch-2 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 13:01:09 +0800 | wrote .forge/reports/batch-2-report.md and advanced STATE.md to current_step=batch-2_verified
+- 2026-03-30 13:20:30 +0800 | froze batch-3: reduce release-ready scan cost by collapsing supporting cards behind route-first cues
+- 2026-03-30 13:20:30 +0800 | executed batch-3 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 13:20:30 +0800 | verified batch-3 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 13:20:30 +0800 | wrote .forge/reports/batch-3-report.md and advanced STATE.md to current_step=batch-3_verified

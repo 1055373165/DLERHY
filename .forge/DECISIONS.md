@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `release-ready lane scan-cost reduction`.
-- Goal: use the verified lane-health + routing-cue layer to reduce how many supporting cards reviewer/operator must scan before deciding whether to keep pushing release-ready or switch back to observe backlog.
+- The next dependency-closed slice is `release-ready lane entry routing`.
+- Goal: move the verified lane-health + routing-cue layer even closer to lane entry, so reviewer/operator can decide whether to stay in release-ready before scanning mid-page detail.
