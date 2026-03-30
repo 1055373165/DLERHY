@@ -240,6 +240,7 @@ type ReleaseLaneLensChoiceCue = {
 type ReleaseLaneSummaryRouteCue = {
   statusLabel: string;
   reasonLabel: string;
+  summaryLine: string;
   helper: string;
   actionLabel: string;
   chips: string[];
@@ -1688,13 +1689,7 @@ export function WorkspacePage() {
                         <span className={styles.deltaLabel}>Lane 去留判断</span>
                         <strong className={styles.deltaValue}>{activeReleaseLaneSummaryRouteCue.statusLabel}</strong>
                         <p className={styles.queueDeltaHint}>理由 · {activeReleaseLaneSummaryRouteCue.reasonLabel}</p>
-                        <div className={styles.filterChipRow}>
-                          {activeReleaseLaneSummaryRouteCue.chips.map((chip) => (
-                            <span key={chip} className={styles.filterChip}>
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
+                        <p className={styles.queueDeltaHint}>{activeReleaseLaneSummaryRouteCue.summaryLine}</p>
                         <div className={styles.nextStepActions}>
                           <button className={styles.button} type="button" onClick={handleReleaseLaneSummaryRouteCue}>
                             {activeReleaseLaneSummaryRouteCue.actionLabel}
@@ -3900,6 +3895,7 @@ function buildReleaseLaneSummaryRouteCue(input: {
     return {
       statusLabel: targetIsReleaseReady ? "继续往放行候选走" : "先留在观察链",
       reasonLabel: targetIsReleaseReady ? "先收窄到更稳的放行 scope" : "观察 backlog 更值得先处理",
+      summaryLine: `摘要 · ${targetLabel} · ${input.lensChoiceCue.chips.join(" · ")}`,
       helper: targetIsReleaseReady
         ? `当前更值得先进入 ${targetLabel}，再决定是否继续停留在 release-ready 处理链。`
         : `当前更适合先进入 ${targetLabel}，不必急着往 release-ready 钻。`,
@@ -3923,6 +3919,7 @@ function buildReleaseLaneSummaryRouteCue(input: {
     return {
       statusLabel: goNoGoLabel,
       reasonLabel,
+      summaryLine: `摘要 · ${input.routingCue.chips.join(" · ")}`,
       helper: `当前已经进入 release-ready 处理链；高层判断是“${goNoGoLabel}”。${input.routingCue.helper}`,
       actionLabel: "按高层建议处理",
       chips: ["阶段 · lane 内路由", ...input.routingCue.chips],

@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `lane go-no-go density reduction`.
-- Goal: keep the verified lane go/no-go summary, but reduce visual/copy density further so reviewer/operator can trust the top-level decision from queue/session level with even less repeated explanation text.
+- The next dependency-closed slice is `queue/session route-first trust`.
+- Goal: keep the verified lane go/no-go summary, but push more decision trust into queue/session level so reviewer/operator needs lane detail later and less often.

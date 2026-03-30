@@ -1359,6 +1359,7 @@ describe("Workspace page", () => {
     expect(screen.getByText("Lens 选择预判")).toBeInTheDocument();
     expect(screen.getAllByText("继续往放行候选走").length).toBeGreaterThan(1);
     expect(screen.getAllByText("理由 · 先收窄到更稳的放行 scope").length).toBeGreaterThan(1);
+    expect(screen.getByText(/摘要 · night-shift · 放行候选 · 当前放行候选 1 章 · 备选观察 1 章/)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "按高层建议处理" }).length).toBeGreaterThan(1);
     expect(screen.getByRole("button", { name: "按预判进入 night-shift · 放行候选" })).toBeInTheDocument();
 
