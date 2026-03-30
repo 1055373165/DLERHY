@@ -1,5 +1,5 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-30 15:03:13 +0800
+Last Updated: 2026-03-30 15:16:06 +0800
 
 1. 高层需求
 
@@ -83,6 +83,7 @@ Last Updated: 2026-03-30 15:03:13 +0800
 - release-ready 的 route-first 判断已经进一步前移到 `子队列入口预判`；reviewer 在真正切入某条 release-ready 子队列前，就能先读 go / no-go 建议，减少误入 lane 的次数。
 - release-ready 的 route-first 判断已经进一步上提到 `Lens 选择预判`；reviewer 在真正点击某条 Operator Lens 子队列前，就能先判断更值得进入哪条处理链，进一步减少错选 lens 后再回退。
 - release-ready 的 route-first 判断现在已经进入 `Active Scope / Session Digest` 高层摘要；reviewer 在滚到 Operator Lens 控制区前，就能先读出更值得进入哪条 lens，再决定是否继续下钻。
+- release-ready 的 route-first 判断现在已经收成可执行的 `高层路线建议`；reviewer 在 `Active Scope / Session Digest` 这一层就能直接按建议进入合适的处理链，不必先滚到 Operator Lens 才开始操作。
 
 5. 最近一次验证基线
 
@@ -110,17 +111,17 @@ Reviewer / Operator 工作台主线收敛阶段
 
 7. 建议交给 Forge 的下一刀
 
-batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7 和 batch-8 已经完成。下一批最自然的主线，不是继续增加 release-ready 的 lane 卡片，而是把 route-first 判断从“高层摘要提示”继续收成更强的 queue / session route cue：
+batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7、batch-8 和 batch-9 已经完成。下一批最自然的主线，不是继续增加 release-ready 的 lane 卡片，而是把 route-first 判断从“高层路线建议”继续收成更明确的 lane go/no-go summary：
 
 - 目标：
-  让 release-ready 的路由建议在 reviewer 还没真正滚到 Operator Lens 控制区前，就更像一个高层 go / no-go 判断。
+  让 release-ready 的路由建议在 reviewer 还没真正滚进中段 lane detail 前，就更像一个清晰的 go / no-go summary。
 
 - 期望效果：
   reviewer 在 release-ready 视角里，不只先读出：
   - 健康可冲
   - 临界收尾
   - 需要切回观察修正
-  还会更早知道是否值得继续停留在这条 lane，还是该直接切回观察 backlog，并在判断足够明确时少看 supporting cards，甚至少滚到一个不值得进入的操作区。
+  还会更早知道是否值得继续停留在这条 lane，还是该直接切回观察 backlog，并在判断足够明确时把“继续冲 / 切回观察 / 回队列”压缩成更少的阅读成本。
 
 - 建议范围：
   - frontend/src/features/workspace/WorkspacePage.tsx

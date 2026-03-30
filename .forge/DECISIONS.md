@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `release-ready route-cue summary`.
-- Goal: turn the verified summary-first layer into a stronger queue / session route cue, so reviewer/operator can decide whether to keep scrolling toward Operator Lens or switch direction even earlier.
+- The next dependency-closed slice is `release-ready go-no-go summary`.
+- Goal: refine the verified summary-level route cue into a sharper lane go/no-go summary, so reviewer/operator can read “continue / switch / stop” with less supporting text before diving into lane detail.

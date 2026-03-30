@@ -36,3 +36,7 @@
 - 2026-03-30 15:03:13 +0800 | executed batch-8 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 15:03:13 +0800 | verified batch-8 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 15:03:13 +0800 | wrote .forge/reports/batch-8-report.md and advanced STATE.md to current_step=batch-8_verified
+- 2026-03-30 15:16:06 +0800 | froze batch-9: turn summary-level release-ready guidance into an actionable high-level route cue
+- 2026-03-30 15:16:06 +0800 | executed batch-9 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 15:16:06 +0800 | verified batch-9 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 15:16:06 +0800 | wrote .forge/reports/batch-9-report.md and advanced STATE.md to current_step=batch-9_verified

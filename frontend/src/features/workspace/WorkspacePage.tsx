@@ -237,6 +237,13 @@ type ReleaseLaneLensChoiceCue = {
   targetLensKey: string;
   chips: string[];
 };
+type ReleaseLaneSummaryRouteCue = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+  chips: string[];
+  actionKind: "lens-choice" | "lane-routing";
+};
 
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
 
@@ -581,6 +588,12 @@ export function WorkspacePage() {
           exitStrategy: activeReleaseLaneExitStrategy,
         })
       : null;
+  const activeReleaseLaneSummaryRouteCue = isFlowMode
+    ? buildReleaseLaneSummaryRouteCue({
+        lensChoiceCue: activeReleaseLaneLensChoiceCue,
+        routingCue: activeReleaseLaneRoutingCue,
+      })
+    : null;
   const activeReleaseLaneEntryCue =
     isFlowMode &&
     activeQueueLens?.outcome === "release-ready" &&
@@ -1291,6 +1304,17 @@ export function WorkspacePage() {
     handleReleaseLanePressureAction();
   }
 
+  function handleReleaseLaneSummaryRouteCue() {
+    if (!activeReleaseLaneSummaryRouteCue) {
+      return;
+    }
+    if (activeReleaseLaneSummaryRouteCue.actionKind === "lens-choice") {
+      handleReleaseLaneLensChoiceCue();
+      return;
+    }
+    handleReleaseLaneRoutingCue();
+  }
+
   function handleToggleReleaseSignals() {
     setReleaseSignalExpanded((current) => !current);
   }
@@ -1658,6 +1682,25 @@ export function WorkspacePage() {
                     ) : (
                       <p className={styles.timelineDetail}>当前未启用过滤，适合做整条队列扫描。</p>
                     )}
+                    {activeReleaseLaneSummaryRouteCue ? (
+                      <div className={styles.nextStepCard}>
+                        <span className={styles.deltaLabel}>高层路线建议</span>
+                        <strong className={styles.deltaValue}>{activeReleaseLaneSummaryRouteCue.statusLabel}</strong>
+                        <p className={styles.timelineDetail}>{activeReleaseLaneSummaryRouteCue.helper}</p>
+                        <div className={styles.filterChipRow}>
+                          {activeReleaseLaneSummaryRouteCue.chips.map((chip) => (
+                            <span key={chip} className={styles.filterChip}>
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                        <div className={styles.nextStepActions}>
+                          <button className={styles.button} type="button" onClick={handleReleaseLaneSummaryRouteCue}>
+                            {activeReleaseLaneSummaryRouteCue.actionLabel}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {activeReleaseLaneLensChoiceCue ? (
                       <div className={styles.nextStepCard}>
                         <span className={styles.deltaLabel}>Lens 选择建议</span>
@@ -2761,6 +2804,18 @@ export function WorkspacePage() {
                           </div>
                         </>
                       ) : null}
+                      {activeReleaseLaneSummaryRouteCue ? (
+                        <div className={styles.sessionDigestCard}>
+                          <span className={styles.deltaLabel}>高层路线建议</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLaneSummaryRouteCue.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLaneSummaryRouteCue.helper}</p>
+                          <div className={styles.nextStepActions}>
+                            <button className={styles.button} type="button" onClick={handleReleaseLaneSummaryRouteCue}>
+                              {activeReleaseLaneSummaryRouteCue.actionLabel}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       {activeReleaseLaneLensChoiceCue ? (
                         <div className={styles.sessionDigestCard}>
                           <span className={styles.deltaLabel}>Session 入口建议</span>
@@ -3832,6 +3887,31 @@ function buildReleaseLaneLensChoiceCue(input: {
     targetLensKey: preferredLens.key,
     chips: [`当前${preferredKind} ${formatNumber(preferredLens.count)} 章`, ...(alternativeChip ? [alternativeChip] : [])],
   };
+}
+
+function buildReleaseLaneSummaryRouteCue(input: {
+  lensChoiceCue: ReleaseLaneLensChoiceCue | null;
+  routingCue: ReleaseLaneRoutingCue | null;
+}): ReleaseLaneSummaryRouteCue | null {
+  if (input.lensChoiceCue) {
+    return {
+      statusLabel: input.lensChoiceCue.statusLabel,
+      helper: `先按这条高层预判决定要不要进入具体子队列。${input.lensChoiceCue.helper}`,
+      actionLabel: "按高层建议处理",
+      chips: ["阶段 · 进入 lane 前", ...input.lensChoiceCue.chips],
+      actionKind: "lens-choice",
+    };
+  }
+  if (input.routingCue) {
+    return {
+      statusLabel: input.routingCue.statusLabel,
+      helper: `当前已经进入 release-ready 处理链，先按这条高层路线继续或退出。${input.routingCue.helper}`,
+      actionLabel: "按高层建议处理",
+      chips: ["阶段 · lane 内路由", ...input.routingCue.chips],
+      actionKind: "lane-routing",
+    };
+  }
+  return null;
 }
 
 function queueLensIsActive(
