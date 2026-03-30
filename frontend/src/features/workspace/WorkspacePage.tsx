@@ -223,6 +223,20 @@ type QueueLensPreset = {
   outcome: QueueOutcomeFilter;
   count: number;
 };
+type ReleaseLanePreEntryCue = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+  targetLensKey: string;
+  chips: string[];
+};
+type ReleaseLaneLensChoiceCue = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+  targetLensKey: string;
+  chips: string[];
+};
 
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
 
@@ -343,6 +357,19 @@ export function WorkspacePage() {
       : null;
   const nextQueueRecommendation = nextQueueEntry ? buildNextQueueRecommendation(nextQueueEntry) : null;
   const isFlowMode = workbenchMode === "flow";
+  const activeReleaseLaneLensChoiceCue = isFlowMode
+    ? buildReleaseLaneLensChoiceCue({
+        operatorLenses,
+        activeLensKey: activeQueueLens?.key ?? null,
+      })
+    : null;
+  const activeReleaseLanePreEntryCue =
+    isFlowMode && !activeReleaseLaneLensChoiceCue
+      ? buildReleaseLanePreEntryCue({
+          operatorLenses,
+          activeLensKey: activeQueueLens?.key ?? null,
+        })
+      : null;
   const timelineGroups = groupTimelineEntries(currentChapterReviewDetail?.timeline ?? []);
   const selectedChapterRecentChange =
     recentOperatorChange?.chapterId === selectedReviewChapterId ? recentOperatorChange : null;
@@ -1121,6 +1148,36 @@ export function WorkspacePage() {
     setChapterAssignmentFilter(lens.assignment);
   }
 
+  function handleReleaseLanePreEntryCue() {
+    if (!activeReleaseLanePreEntryCue) {
+      return;
+    }
+    const targetLens = operatorLenses.find((lens) => lens.key === activeReleaseLanePreEntryCue.targetLensKey);
+    if (!targetLens) {
+      return;
+    }
+    handleQueueLens(targetLens);
+    setReviewMessage({
+      tone: "success",
+      text: `已按入口预判切到 ${targetLens.label}，先沿这条子队列决定是否继续推进。`,
+    });
+  }
+
+  function handleReleaseLaneLensChoiceCue() {
+    if (!activeReleaseLaneLensChoiceCue) {
+      return;
+    }
+    const targetLens = operatorLenses.find((lens) => lens.key === activeReleaseLaneLensChoiceCue.targetLensKey);
+    if (!targetLens) {
+      return;
+    }
+    handleQueueLens(targetLens);
+    setReviewMessage({
+      tone: "success",
+      text: `已按 lens 预判切到 ${targetLens.label}，先用这条处理链判断是否值得继续推进。`,
+    });
+  }
+
   function handleResetQueueLens() {
     setQueueOutcomeFilter("all");
     setChapterAssignedOwnerFilter("");
@@ -1771,6 +1828,25 @@ export function WorkspacePage() {
                           把 judgment、owner 和 assignment 收成预设视角，少做手动组合筛选。
                         </p>
                       </div>
+                      {activeReleaseLaneLensChoiceCue ? (
+                        <div className={styles.nextStepCard}>
+                          <span className={styles.deltaLabel}>Lens 选择预判</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLaneLensChoiceCue.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLaneLensChoiceCue.helper}</p>
+                          <div className={styles.filterChipRow}>
+                            {activeReleaseLaneLensChoiceCue.chips.map((chip) => (
+                              <span key={chip} className={styles.filterChip}>
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                          <div className={styles.nextStepActions}>
+                            <button className={styles.button} type="button" onClick={handleReleaseLaneLensChoiceCue}>
+                              {activeReleaseLaneLensChoiceCue.actionLabel}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className={styles.modeSwitchControls}>
                         {operatorLenses.map((lens) => {
                           const active = activeQueueLens?.key === lens.key;
@@ -1793,6 +1869,25 @@ export function WorkspacePage() {
                           ? `当前已选 owner ${selectedOwnerWorkload.owner_name}，可以直接切到这位 operator 名下的放行候选或继续观察章节。`
                           : "先从共享队列切观察/放行候选，再决定是否收窄到具体 owner。"}
                       </p>
+                      {activeReleaseLanePreEntryCue ? (
+                        <div className={styles.nextStepCard}>
+                          <span className={styles.deltaLabel}>子队列入口预判</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLanePreEntryCue.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLanePreEntryCue.helper}</p>
+                          <div className={styles.filterChipRow}>
+                            {activeReleaseLanePreEntryCue.chips.map((chip) => (
+                              <span key={chip} className={styles.filterChip}>
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                          <div className={styles.nextStepActions}>
+                            <button className={styles.button} type="button" onClick={handleReleaseLanePreEntryCue}>
+                              {activeReleaseLanePreEntryCue.actionLabel}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       {activeReleaseLaneEntryCue ? (
                         <div className={styles.nextStepCard}>
                           <span className={styles.deltaLabel}>入口判断</span>
@@ -3631,6 +3726,91 @@ function buildQueueLensPresets(input: {
     );
   }
   return presets;
+}
+
+function buildReleaseLanePreEntryCue(input: {
+  operatorLenses: QueueLensPreset[];
+  activeLensKey: string | null;
+}): ReleaseLanePreEntryCue | null {
+  const sharedReleaseLens = input.operatorLenses.find((lens) => lens.key === "shared-release-ready" && lens.count > 0);
+  const ownerReleaseLens = input.operatorLenses.find((lens) => lens.key === "owner-release-ready" && lens.count > 0);
+  const sharedObserveLens = input.operatorLenses.find((lens) => lens.key === "shared-observe" && lens.count > 0);
+  const ownerObserveLens = input.operatorLenses.find((lens) => lens.key === "owner-observe" && lens.count > 0);
+  const preferredReleaseLens = ownerReleaseLens ?? sharedReleaseLens ?? null;
+  if (preferredReleaseLens && preferredReleaseLens.key !== input.activeLensKey) {
+    const matchingObserveLens =
+      preferredReleaseLens.key === "owner-release-ready" ? ownerObserveLens : sharedObserveLens;
+    return {
+      statusLabel: `优先进入 ${preferredReleaseLens.label}`,
+      helper: matchingObserveLens
+        ? `当前最值得先看的不是中段卡片，而是直接切到 ${preferredReleaseLens.label}；如果路线建议转弱，再回 ${matchingObserveLens.label} 收口。`
+        : `当前最值得先看的是 ${preferredReleaseLens.label}，可以直接进入这条 lane 决定是否继续推进。`,
+      actionLabel: `按预判切到 ${preferredReleaseLens.label}`,
+      targetLensKey: preferredReleaseLens.key,
+      chips: [
+        `候选 ${formatNumber(preferredReleaseLens.count)} 章`,
+        matchingObserveLens ? `观察 ${formatNumber(matchingObserveLens.count)} 章` : "观察 0 章",
+      ],
+    };
+  }
+  const fallbackObserveLens = ownerObserveLens ?? sharedObserveLens ?? null;
+  if (fallbackObserveLens && fallbackObserveLens.key !== input.activeLensKey) {
+    return {
+      statusLabel: `先留在 ${fallbackObserveLens.label}`,
+      helper: "当前没有更值得优先切入的 release-ready lane，先在继续观察子队列里收口 blocker / proposal 更稳。",
+      actionLabel: `按预判切到 ${fallbackObserveLens.label}`,
+      targetLensKey: fallbackObserveLens.key,
+      chips: [`观察 ${formatNumber(fallbackObserveLens.count)} 章`],
+    };
+  }
+  return null;
+}
+
+function buildReleaseLaneLensChoiceCue(input: {
+  operatorLenses: QueueLensPreset[];
+  activeLensKey: string | null;
+}): ReleaseLaneLensChoiceCue | null {
+  const sharedObserveLens = input.operatorLenses.find((lens) => lens.key === "shared-observe" && lens.count > 0);
+  const sharedReleaseLens = input.operatorLenses.find((lens) => lens.key === "shared-release-ready" && lens.count > 0);
+  const ownerObserveLens = input.operatorLenses.find((lens) => lens.key === "owner-observe" && lens.count > 0);
+  const ownerReleaseLens = input.operatorLenses.find((lens) => lens.key === "owner-release-ready" && lens.count > 0);
+
+  const preferredLens =
+    ownerReleaseLens ?? ownerObserveLens ?? sharedReleaseLens ?? sharedObserveLens ?? null;
+  if (!preferredLens || preferredLens.key === input.activeLensKey) {
+    return null;
+  }
+
+  const alternativeLens =
+    preferredLens.key === "owner-release-ready"
+      ? ownerObserveLens ?? sharedObserveLens ?? sharedReleaseLens
+      : preferredLens.key === "owner-observe"
+        ? ownerReleaseLens ?? sharedObserveLens ?? sharedReleaseLens
+        : preferredLens.key === "shared-release-ready"
+          ? sharedObserveLens ?? ownerObserveLens ?? ownerReleaseLens
+          : sharedReleaseLens ?? ownerObserveLens ?? ownerReleaseLens;
+
+  const preferredKind = preferredLens.outcome === "release-ready" ? "放行候选" : "继续观察";
+  const alternativeChip = alternativeLens
+    ? `${
+        alternativeLens.outcome === "release-ready" ? "备选放行" : "备选观察"
+      } ${formatNumber(alternativeLens.count)} 章`
+    : null;
+
+  return {
+    statusLabel:
+      preferredLens.ownerName && preferredLens.outcome === "release-ready"
+        ? `先收窄到 ${preferredLens.label}`
+        : preferredLens.ownerName
+          ? `先走 ${preferredLens.label}`
+          : `先从 ${preferredLens.label} 起手`,
+    helper: alternativeLens
+      ? `当前更值得先进入 ${preferredLens.label}，再根据路线建议判断是否继续停留；不用先在 ${alternativeLens.label} 里来回切换。`
+      : `当前最值得先切到 ${preferredLens.label}，用更稳定的 scope 先做 go / no-go 判断。`,
+    actionLabel: `按预判进入 ${preferredLens.label}`,
+    targetLensKey: preferredLens.key,
+    chips: [`当前${preferredKind} ${formatNumber(preferredLens.count)} 章`, ...(alternativeChip ? [alternativeChip] : [])],
+  };
 }
 
 function queueLensIsActive(

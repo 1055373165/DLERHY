@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `release-ready pre-entry routing`.
-- Goal: let the verified route-first layer influence subqueue choice before entry, so reviewer/operator can avoid entering the wrong release-ready lane in the first place.
+- The next dependency-closed slice is `release-ready summary-first routing`.
+- Goal: lift the verified route-first / lens-choice layer into queue and session summary surfaces, so reviewer/operator can judge whether a lane is worth entering before reaching Operator Lens controls.

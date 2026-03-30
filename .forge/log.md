@@ -24,3 +24,11 @@
 - 2026-03-30 14:18:21 +0800 | executed batch-5 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 14:18:21 +0800 | verified batch-5 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 14:18:21 +0800 | wrote .forge/reports/batch-5-report.md and advanced STATE.md to current_step=batch-5_verified
+- 2026-03-30 14:23:19 +0800 | froze batch-6: move release-ready route-first judgment into a pre-entry cue before subqueue selection
+- 2026-03-30 14:23:19 +0800 | executed batch-6 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 14:23:19 +0800 | verified batch-6 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 14:23:19 +0800 | wrote .forge/reports/batch-6-report.md and advanced STATE.md to current_step=batch-6_verified
+- 2026-03-30 14:30:26 +0800 | froze batch-7: move release-ready route-first judgment into a higher-level Lens 选择预判 before Operator Lens lane selection
+- 2026-03-30 14:30:26 +0800 | executed batch-7 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 14:30:26 +0800 | verified batch-7 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 14:30:26 +0800 | wrote .forge/reports/batch-7-report.md and advanced STATE.md to current_step=batch-7_verified

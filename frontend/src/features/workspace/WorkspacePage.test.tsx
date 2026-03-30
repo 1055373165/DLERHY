@@ -1353,8 +1353,11 @@ describe("Workspace page", () => {
       expect(screen.getByRole("button", { name: /night-shift · 继续观察 · 1/ })).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ })).toBeInTheDocument();
+    expect(screen.getByText("Lens 选择预判")).toBeInTheDocument();
+    expect(screen.getByText("先收窄到 night-shift · 放行候选")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "按预判进入 night-shift · 放行候选" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /night-shift · 放行候选 · 1/ }));
+    await user.click(screen.getByRole("button", { name: "按预判进入 night-shift · 放行候选" }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /第 3 章 · Chapter Three/ })).toBeInTheDocument();
