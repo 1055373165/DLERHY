@@ -239,6 +239,7 @@ type ReleaseLaneLensChoiceCue = {
 };
 type ReleaseLaneSummaryRouteCue = {
   statusLabel: string;
+  reasonLabel: string;
   helper: string;
   actionLabel: string;
   chips: string[];
@@ -1684,9 +1685,9 @@ export function WorkspacePage() {
                     )}
                     {activeReleaseLaneSummaryRouteCue ? (
                       <div className={styles.nextStepCard}>
-                        <span className={styles.deltaLabel}>高层路线建议</span>
+                        <span className={styles.deltaLabel}>Lane 去留判断</span>
                         <strong className={styles.deltaValue}>{activeReleaseLaneSummaryRouteCue.statusLabel}</strong>
-                        <p className={styles.timelineDetail}>{activeReleaseLaneSummaryRouteCue.helper}</p>
+                        <p className={styles.queueDeltaHint}>理由 · {activeReleaseLaneSummaryRouteCue.reasonLabel}</p>
                         <div className={styles.filterChipRow}>
                           {activeReleaseLaneSummaryRouteCue.chips.map((chip) => (
                             <span key={chip} className={styles.filterChip}>
@@ -2806,9 +2807,9 @@ export function WorkspacePage() {
                       ) : null}
                       {activeReleaseLaneSummaryRouteCue ? (
                         <div className={styles.sessionDigestCard}>
-                          <span className={styles.deltaLabel}>高层路线建议</span>
+                          <span className={styles.deltaLabel}>Lane 去留判断</span>
                           <strong className={styles.deltaValue}>{activeReleaseLaneSummaryRouteCue.statusLabel}</strong>
-                          <p className={styles.timelineDetail}>{activeReleaseLaneSummaryRouteCue.helper}</p>
+                          <p className={styles.queueDeltaHint}>理由 · {activeReleaseLaneSummaryRouteCue.reasonLabel}</p>
                           <div className={styles.nextStepActions}>
                             <button className={styles.button} type="button" onClick={handleReleaseLaneSummaryRouteCue}>
                               {activeReleaseLaneSummaryRouteCue.actionLabel}
@@ -3894,18 +3895,35 @@ function buildReleaseLaneSummaryRouteCue(input: {
   routingCue: ReleaseLaneRoutingCue | null;
 }): ReleaseLaneSummaryRouteCue | null {
   if (input.lensChoiceCue) {
+    const targetLabel = input.lensChoiceCue.actionLabel.replace("按预判进入 ", "");
+    const targetIsReleaseReady = input.lensChoiceCue.targetLensKey.includes("release-ready");
     return {
-      statusLabel: input.lensChoiceCue.statusLabel,
-      helper: `先按这条高层预判决定要不要进入具体子队列。${input.lensChoiceCue.helper}`,
+      statusLabel: targetIsReleaseReady ? "继续往放行候选走" : "先留在观察链",
+      reasonLabel: targetIsReleaseReady ? "先收窄到更稳的放行 scope" : "观察 backlog 更值得先处理",
+      helper: targetIsReleaseReady
+        ? `当前更值得先进入 ${targetLabel}，再决定是否继续停留在 release-ready 处理链。`
+        : `当前更适合先进入 ${targetLabel}，不必急着往 release-ready 钻。`,
       actionLabel: "按高层建议处理",
       chips: ["阶段 · 进入 lane 前", ...input.lensChoiceCue.chips],
       actionKind: "lens-choice",
     };
   }
   if (input.routingCue) {
+    const goNoGoLabel = input.routingCue.actionLabel.includes("最后观察")
+      ? "切回观察收尾"
+      : input.routingCue.actionLabel.includes("回到")
+        ? "回到整条队列"
+        : "继续冲放行";
+    const reasonLabel =
+      goNoGoLabel === "继续冲放行"
+        ? "当前 lane 仍有连续放行余量"
+        : goNoGoLabel === "切回观察收尾"
+          ? "放行链已到最后观察切换点"
+          : "当前 scope 已收口，不值得继续停留";
     return {
-      statusLabel: input.routingCue.statusLabel,
-      helper: `当前已经进入 release-ready 处理链，先按这条高层路线继续或退出。${input.routingCue.helper}`,
+      statusLabel: goNoGoLabel,
+      reasonLabel,
+      helper: `当前已经进入 release-ready 处理链；高层判断是“${goNoGoLabel}”。${input.routingCue.helper}`,
       actionLabel: "按高层建议处理",
       chips: ["阶段 · lane 内路由", ...input.routingCue.chips],
       actionKind: "lane-routing",

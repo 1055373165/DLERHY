@@ -25,5 +25,5 @@
   - `cd /Users/smy/project/book-agent/frontend && npm run build`
 
 6. Immediate next-slice decision
-- The next dependency-closed slice is `release-ready go-no-go summary`.
-- Goal: refine the verified summary-level route cue into a sharper lane go/no-go summary, so reviewer/operator can read “continue / switch / stop” with less supporting text before diving into lane detail.
+- The next dependency-closed slice is `lane go-no-go density reduction`.
+- Goal: keep the verified lane go/no-go summary, but reduce visual/copy density further so reviewer/operator can trust the top-level decision from queue/session level with even less repeated explanation text.

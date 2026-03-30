@@ -40,3 +40,11 @@
 - 2026-03-30 15:16:06 +0800 | executed batch-9 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-30 15:16:06 +0800 | verified batch-9 with vitest (16 passed) and frontend build (passed)
 - 2026-03-30 15:16:06 +0800 | wrote .forge/reports/batch-9-report.md and advanced STATE.md to current_step=batch-9_verified
+- 2026-03-30 15:38:16 +0800 | froze batch-10: compress summary-level release-ready guidance into a clearer lane go/no-go read
+- 2026-03-30 15:38:16 +0800 | executed batch-10 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 15:38:16 +0800 | verified batch-10 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 15:38:16 +0800 | wrote .forge/reports/batch-10-report.md and advanced STATE.md to current_step=batch-10_verified
+- 2026-03-30 16:01:42 +0800 | froze batch-11: reduce supporting copy around the lane go/no-go summary and make it read as status + reason + action
+- 2026-03-30 16:01:42 +0800 | executed batch-11 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-30 16:01:42 +0800 | verified batch-11 with vitest (16 passed) and frontend build (passed)
+- 2026-03-30 16:01:42 +0800 | wrote .forge/reports/batch-11-report.md and advanced STATE.md to current_step=batch-11_verified

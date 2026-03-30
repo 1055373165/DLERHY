@@ -1,11 +1,11 @@
 # Forge State
 
-last_update_time: 2026-03-30 15:16:06 +0800
+last_update_time: 2026-03-30 16:01:42 +0800
 mode: resume
-current_step: batch-9_verified
-active_batch: batch-9
-authoritative_batch_contract: .forge/batches/batch-9.md
-expected_report_path: .forge/reports/batch-9-report.md
+current_step: batch-11_verified
+active_batch: batch-11
+authoritative_batch_contract: .forge/batches/batch-11.md
+expected_report_path: .forge/reports/batch-11-report.md
 
 active_worker_slot:
 - worker_id: none
@@ -29,6 +29,8 @@ completed_items:
 - Forge batch-7 is verified complete: route-first release-ready decisions now influence Operator Lens choice itself, so reviewers can pick the right lane before entering subqueue-level handling.
 - Forge batch-8 is verified complete: release-ready route-first guidance now appears in Active Scope / Session Digest summaries, so reviewers can judge lane worthiness before reaching Operator Lens controls.
 - Forge batch-9 is verified complete: release-ready route-first guidance is now actionable at the summary layer, so reviewers can enter the right lane directly from Active Scope / Session Digest.
+- Forge batch-10 is verified complete: summary-level release-ready guidance is now compressed into a clearer lane go/no-go read, so reviewers can read “continue / switch / stop” faster before diving into lane detail.
+- Forge batch-11 is verified complete: the lane go/no-go card now reads as a shorter “status + reason + action” decision, so reviewers can trust the top-level route without reading as much supporting copy.
 
 failed_items:
 - none recorded in the current handoff state
@@ -46,6 +48,8 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/batches/batch-7.md
 - /Users/smy/project/book-agent/.forge/batches/batch-8.md
 - /Users/smy/project/book-agent/.forge/batches/batch-9.md
+- /Users/smy/project/book-agent/.forge/batches/batch-10.md
+- /Users/smy/project/book-agent/.forge/batches/batch-11.md
 - /Users/smy/project/book-agent/.forge/log.md
 - /Users/smy/project/book-agent/.forge/reports/batch-1-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-2-report.md
@@ -56,6 +60,8 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/reports/batch-7-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-8-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-9-report.md
+- /Users/smy/project/book-agent/.forge/reports/batch-10-report.md
+- /Users/smy/project/book-agent/.forge/reports/batch-11-report.md
 - /Users/smy/project/book-agent/docs/mainline-progress.md
 - /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.tsx
 - /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.test.tsx
@@ -70,4 +76,4 @@ handoff_source:
 - /Users/smy/project/book-agent/progress.txt
 
 next_mainline_focus:
-- Refine the new summary-level route cue into a sharper lane go/no-go summary, so reviewer/operator can read “continue / switch / stop” with less supporting text before diving into lane detail.
+- Reduce visual and copy density around the top-level lane go/no-go summary even further, so reviewer/operator can decide “continue / switch / stop” from queue/session level without needing repeated explanation text.
