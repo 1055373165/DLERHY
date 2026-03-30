@@ -1,25 +1,25 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-30 16:24:41 +0800
+Last Updated: 2026-03-30 16:33:12 +0800
 
 1. 高层需求
 
-本轮会话的高层目标，不再是继续空谈多 agent 愿景，而是沿着已经落地的 Runtime V2 主线，把 reviewer/operator 真正可用的产品面持续做实。
+本轮会话的高层目标，不是继续扩写 reviewer/operator 前端，而是沿着已经落地的 Runtime V2 主线，把真正的 runtime 自愈闭环补实。
 
 主线要求分三层：
 
 - 保持 Runtime V2 control plane 已落地能力稳定，不回头重开抽象重构。
-- 把 Memory Governance 做成 reviewer/operator 可以直接使用的治理能力。
-- 把 standalone frontend 的 Chapter Workbench 收敛成真正可持续使用的 reviewer/operator 工作台。
+- 把 `incident -> repair plan -> validation -> bundle publish/rollback -> replay` 补成 runtime 自己可驱动的自愈链。
+- 把 Memory Governance 和 Chapter Workbench 视为辅助产品面，不再占用当前最核心的主线节奏。
 
 一句话概括：
 
-当前主线 = Runtime V2 已落地控制面 + Memory Governance + Chapter Workbench 产品化
+当前主线 = Runtime V2 已落地控制面 + 自愈 incident/repair 闭环 + 最小必要产品面
 
 2. 不可破坏的约束
 
 - 单仓库、单 live 工作树开发；不要再开第二个 worktree。
 - 优先推进主线闭环，不阻断用户使用的增强项统一放到 docs/optimization-backlog.md。
-- 当前主线优先前端 reviewer/operator 工作面，不再回头扩写 Runtime V2 抽象设计。
+- 当前主线优先 runtime self-heal 闭环，不再让 reviewer/operator 前端继续占用最核心节奏。
 - 当前 repo 的真实进度以代码、docs/mainline-progress.md 和后续 .forge live state 为准，不以聊天记忆为准。
 
 3. 已完成的主线能力
@@ -60,77 +60,75 @@ Last Updated: 2026-03-30 16:24:41 +0800
 - release-ready lane 的批处理摘要、批处理阶段、退出策略、完成态、结果反馈、收口反馈
 - release-ready lane 的压力建议、去留判断、放行把握度、漂移趋势
 - 上述 release-ready 判断已进入 queue rail、Operator Lens、Session Digest，而不只在 detail 中段出现
+- 上述 reviewer/operator 工作面现在视为辅助能力，后续默认降级为次主线
 
 4. 当前已验证但尚未提交的工作
 
-当前这轮主线修改集中在 3 个文件：
+当前这轮主线修改集中在 backend runtime self-heal 相关文件：
 
-- docs/mainline-progress.md
-- frontend/src/features/workspace/WorkspacePage.tsx
-- frontend/src/features/workspace/WorkspacePage.test.tsx
+- src/book_agent/services/runtime_repair_planner.py
+- src/book_agent/app/runtime/controllers/incident_controller.py
+- src/book_agent/app/runtime/controllers/export_controller.py
+- src/book_agent/app/runtime/controllers/review_controller.py
+- tests/test_runtime_repair_planner.py
+- tests/test_export_controller.py
+- tests/test_incident_controller.py
 
 这轮已经实际落下并验证通过的增量是：
 
-- release-ready lane 的压力建议已经可执行，能直接决定继续沿 release-ready lane 推进，还是切回 observe backlog。
-- release-ready 的去留判断已经上提到 Operator Lens 和 Session Digest，reviewer 进入该视角后无需先滚进 detail。
-- release-ready 的放行把握度已经上提到 queue rail / Operator Lens / Session Digest。
-- release-ready 的漂移趋势已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在能看出这条 lane 是在变稳、稳定推进、逼近切换点，还是退回观察链。
-- release-ready 的 lane health 汇总已经落地，reviewer 现在可以直接把一条 lane 判断成“健康可冲 / 临界收尾 / 需要切回观察修正”。
-- release-ready 的路线建议已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在可以先按 lane health 读出主导动作，而不是先扫多张 supporting cards。
-- 当 release-ready lane 已经足够明确时，supporting signals 会默认收拢，只保留路线建议和展开入口，进一步减少 reviewer 在进入 detail 前的扫描成本。
-- release-ready 的 route-first 判断已经进一步前移到 lane 入口附近；reviewer 进入该视角后，会先决定“是否值得继续留在这条 lane”，然后再按需进入中段 detail。
-- release-ready 的 route-first 判断已经进入 `Operator Lens` 入口层；reviewer 切到 release-ready 子队列后，可以先按入口判断处理，再决定是否继续停留在当前章节 surface。
-- release-ready 的 route-first 判断已经进一步前移到 `子队列入口预判`；reviewer 在真正切入某条 release-ready 子队列前，就能先读 go / no-go 建议，减少误入 lane 的次数。
-- release-ready 的 route-first 判断已经进一步上提到 `Lens 选择预判`；reviewer 在真正点击某条 Operator Lens 子队列前，就能先判断更值得进入哪条处理链，进一步减少错选 lens 后再回退。
-- release-ready 的 route-first 判断现在已经进入 `Active Scope / Session Digest` 高层摘要；reviewer 在滚到 Operator Lens 控制区前，就能先读出更值得进入哪条 lens，再决定是否继续下钻。
-- release-ready 的 route-first 判断现在已经收成可执行的 `高层路线建议`；reviewer 在 `Active Scope / Session Digest` 这一层就能直接按建议进入合适的处理链，不必先滚到 Operator Lens 才开始操作。
-- release-ready 的高层判断现在已经压成更简洁的 `Lane 去留判断`；reviewer 在顶部先读“继续冲 / 切回观察 / 回队列”，再决定是否继续往下钻到 lane detail。
-- `Lane 去留判断` 现在已经进一步收成更短的“状态 + 理由 + 动作”卡；reviewer 在 `Active Scope / Session Digest` 顶部先读短理由，再决定是否继续下钻到 lane detail。
-- `Lane 去留判断` 现在已经进一步去掉 summary 卡上的多枚 chips，改成一条更轻的 `摘要 · ...`；reviewer 在 `Active Scope` 顶部读完状态、理由和摘要后，就能更快做 go / no-go 决策。
-- 当 `Lane 去留判断` 已经存在时，顶层重复的 `Lens 选择建议 / Session 入口建议` 现在会直接折叠掉；reviewer 在 queue/session 层先读一张主导卡，而不是来回比对多张含义相近的 route cue。
+- runtime 现在已经能从 incident 自动生成结构化 `repair plan`
+- 这份 repair plan 明确包含：
+  - patch surface
+  - owned files
+  - validation command
+  - bundle manifest / revision name / rollout scope
+  - replay boundary / replay scope
+- review deadlock 和 export misrouting 这两条已落地自愈链，现在都不再把修复动作散落在 controller 里，而是先生成统一 repair handoff
+- patch proposal 和 incident 的 `status_detail_json` 里现在都会保留这份 repair plan，供后续真正的 repair agent / repair lane 消费
 
 5. 最近一次验证基线
 
-前端主线当前验证结果：
+runtime self-heal 当前验证结果：
 
 - 命令：
-  cd /Users/smy/project/book-agent/frontend && npx vitest run src/features/workspace/WorkspacePage.test.tsx src/app/App.test.tsx
-  结果：16 passed
+  .venv/bin/python -m unittest tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal
+  结果：Ran 8 tests, OK
 
 - 命令：
-  cd /Users/smy/project/book-agent/frontend && npm run build
+  .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_planner.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py
   结果：passed
 
 6. 当前主线判断
 
-当前已经不再缺更多底层 runtime 能力，真正的主线阶段是：
+最近几轮主要在推进 Chapter Workbench，这对 operator 产品面有价值，但和“runtime 发现故障后能自决策、自修复、继续拉起失败任务”的核心目标相比，已经发生主线偏移。
 
-Reviewer / Operator 工作台主线收敛阶段
+现在已经重新校准为：
 
-当前最重要的，不是再扩写 agent runtime 抽象，而是让 reviewer/operator 在 Chapter Workbench 里：
+Runtime Self-Heal 主线收敛阶段
 
-- 快速判断当前章节应先处理什么
-- 在 flow 模式里顺畅连续推进
-- 在 release-ready 视角里更快判断一条 lane 是否值得继续冲
+当前最重要的，是把 runtime incident 继续推进成真正可驱动 repair agent / repair lane 的执行闭环，而不是继续加前端 lane 说明卡。
 
 7. 建议交给 Forge 的下一刀
 
-batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7、batch-8、batch-9、batch-10、batch-11、batch-12 和 batch-13 已经完成。下一批最自然的主线，不是继续增加 release-ready 的 lane 卡片，而是继续减少 queue/session 层对重复 route cue 的依赖：
+batch-1、batch-2、batch-3、batch-4、batch-5、batch-6、batch-7、batch-8、batch-9、batch-10、batch-11、batch-12、batch-13 和 batch-14 已经完成。下一批最自然的主线，不是继续增加前端 lane 卡片，而是把 repair plan 继续推进成 runtime-owned repair dispatch：
 
 - 目标：
-  让 release-ready 的去留判断在 reviewer 还没真正滚进中段 lane detail 前，就主要依赖一张顶层主导卡完成决策，而不是再读多张重复的 route cue。
+  让 runtime 从“生成 repair plan”继续走到“持有 repair dispatch / execution lineage”，为真正的自修复 agent 执行面做准备。
 
 - 期望效果：
-  reviewer 在 release-ready 视角里，会更快信任 queue/session 层的 go / no-go 判断，不需要为了理解去留，再在顶层多张相似卡片之间来回对照。
+  incident 不只是记录问题和提案，而是能明确告诉系统：下一步该修哪类 surface、用什么验证、发布到哪条 rollout scope、回放哪一级失败任务。
 
 - 建议范围：
-  - frontend/src/features/workspace/WorkspacePage.tsx
-  - frontend/src/features/workspace/WorkspacePage.test.tsx
+  - src/book_agent/app/runtime/controllers/incident_controller.py
+  - src/book_agent/services/runtime_repair_planner.py
+  - src/book_agent/services/run_execution.py
+  - tests/test_incident_controller.py
+  - tests/test_run_execution.py
   - docs/mainline-progress.md
 
 - 验收门：
-  - npx vitest run src/features/workspace/WorkspacePage.test.tsx src/app/App.test.tsx
-  - npm run build
+  - .venv/bin/python -m unittest tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal
+  - .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_planner.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py
 
 8. Forge 交接说明
 

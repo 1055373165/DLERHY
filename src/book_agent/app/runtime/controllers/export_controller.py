@@ -10,6 +10,7 @@ from book_agent.domain.models.ops import DocumentRun, RuntimeIncident, RuntimePa
 from book_agent.app.runtime.controllers.budget_controller import BudgetController
 from book_agent.app.runtime.controllers.incident_controller import IncidentController
 from book_agent.services.incident_triage import IncidentTriageService
+from book_agent.services.runtime_repair_planner import RuntimeRepairPlannerService
 
 
 def _utcnow():
@@ -37,6 +38,7 @@ class ExportController:
         self._budget_controller = BudgetController(session=session)
         self._incident_controller = IncidentController(session=session)
         self._incident_triage = IncidentTriageService()
+        self._repair_planner = RuntimeRepairPlannerService()
 
     def recover_export_misrouting(
         self,
@@ -101,7 +103,8 @@ class ExportController:
         )
 
         corrected_route = route_candidates[0] if route_candidates else selected_route
-        patch_manifest = self._build_patch_manifest(
+        repair_plan = self._repair_planner.plan_export_misrouting_repair(
+            scope_id=scope_id,
             export_type=export_type,
             corrected_route=corrected_route,
             route_candidates=route_candidates,
@@ -109,37 +112,22 @@ class ExportController:
         )
         proposal = self._incident_controller.open_patch_proposal(
             incident_id=incident.id,
-            patch_surface="runtime_bundle",
-            diff_manifest_json=patch_manifest,
+            patch_surface=repair_plan.patch_surface,
+            diff_manifest_json=repair_plan.diff_manifest_json,
             proposed_by="runtime.export-controller",
+            status_detail_json={"repair_plan": repair_plan.handoff_json},
         )
-        validation_report = {
-            "command": "uv run pytest tests/test_export_routing.py tests/test_export_controller.py tests/test_incident_controller.py",
-            "scope": "export_misrouting",
-            "route_evidence_json": route_evidence_json,
-            "corrected_route": corrected_route,
-        }
         validation_result = self._incident_controller.validate_patch_proposal(
             proposal_id=proposal.id,
             passed=True,
-            report_json=validation_report,
+            report_json=repair_plan.validation_report_json,
         )
 
         bundle_record = self._incident_controller.publish_validated_patch(
             proposal_id=proposal.id,
-            revision_name=f"export-routing-fix-{route_evidence_json.get('route_fingerprint', scope_id)[:12]}",
-            manifest_json=self._build_runtime_bundle_manifest(
-                export_type=export_type,
-                corrected_route=corrected_route,
-                route_candidates=route_candidates,
-                route_evidence_json=route_evidence_json,
-            ),
-            rollout_scope_json={
-                "mode": "dev",
-                "scope_type": "export",
-                "scope_id": scope_id,
-                "replay_scope_id": scope_id,
-            },
+            revision_name=repair_plan.revision_name,
+            manifest_json=repair_plan.manifest_json,
+            rollout_scope_json=repair_plan.rollout_scope_json,
         )
 
         proposal = self._session.get(RuntimePatchProposal, proposal.id)

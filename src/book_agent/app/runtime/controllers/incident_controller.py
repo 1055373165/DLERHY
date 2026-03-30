@@ -51,6 +51,7 @@ class IncidentController:
         patch_surface: str,
         diff_manifest_json: dict[str, Any],
         proposed_by: str = "runtime.incident-controller",
+        status_detail_json: dict[str, Any] | None = None,
     ) -> RuntimePatchProposal:
         incident = self._runtime_repo.get_runtime_incident(incident_id)
         now = _utcnow()
@@ -61,11 +62,19 @@ class IncidentController:
             patch_surface=patch_surface,
             diff_manifest_json=dict(diff_manifest_json),
             validation_report_json={},
-            status_detail_json={},
+            status_detail_json=dict(status_detail_json or {}),
             created_at=now,
             updated_at=now,
         )
         incident.status = RuntimeIncidentStatus.PATCH_PROPOSED
+        incident.status_detail_json = {
+            **dict(incident.status_detail_json or {}),
+            "latest_patch_proposal": {
+                "patch_surface": patch_surface,
+                "proposed_by": proposed_by,
+                "repair_plan": dict((status_detail_json or {}).get("repair_plan") or {}),
+            },
+        }
         incident.updated_at = now
         self._session.add_all([proposal, incident])
         self._session.flush()

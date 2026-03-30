@@ -26,6 +26,7 @@ from book_agent.services.incident_triage import IncidentTriageService
 from book_agent.services.recovery_matrix import RecoveryDecision, RecoveryMatrixService
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.runtime_lane_health import LaneHealthResult, RuntimeLaneHealthService
+from book_agent.services.runtime_repair_planner import RuntimeRepairPlannerService
 
 
 def _utcnow() -> datetime:
@@ -94,6 +95,7 @@ class ReviewController:
         self._budget_controller = budget_controller or BudgetController(session=session)
         self._incident_controller = incident_controller or IncidentController(session=session)
         self._incident_triage = incident_triage or IncidentTriageService()
+        self._repair_planner = RuntimeRepairPlannerService()
 
     def reconcile_review_session(self, *, chapter_run_id: str) -> ReviewSessionReconcileResult:
         chapter_run = self._runtime_repo.get_chapter_run(chapter_run_id)
@@ -361,35 +363,23 @@ class ReviewController:
             },
             latest_work_item_id=work_item.id if work_item is not None else None,
         )
+        repair_plan = self._repair_planner.plan_review_deadlock_repair(
+            chapter_id=chapter_run.chapter_id,
+            chapter_run_id=chapter_run.id,
+            review_session_id=review_session.id,
+            reason_code=lane_health.reason_code,
+        )
         proposal = self._incident_controller.open_patch_proposal(
             incident_id=incident.id,
-            patch_surface="runtime_bundle",
-            diff_manifest_json={
-                "files": [
-                    "src/book_agent/app/runtime/controllers/review_controller.py",
-                    "src/book_agent/app/runtime/controllers/incident_controller.py",
-                    "src/book_agent/services/incident_triage.py",
-                    "src/book_agent/services/run_execution.py",
-                ],
-                "patch_surface": "runtime_bundle",
-                "reason_code": lane_health.reason_code or "review_deadlock",
-                "replay_scope": "review_session",
-                "scope_id": chapter_run.chapter_id,
-            },
+            patch_surface=repair_plan.patch_surface,
+            diff_manifest_json=repair_plan.diff_manifest_json,
             proposed_by="runtime.review-controller",
+            status_detail_json={"repair_plan": repair_plan.handoff_json},
         )
         validation_result = self._incident_controller.validate_patch_proposal(
             proposal_id=proposal.id,
             passed=True,
-            report_json={
-                "command": (
-                    "uv run pytest tests/test_incident_triage.py "
-                    "tests/test_incident_controller.py tests/test_review_sessions.py"
-                ),
-                "scope": "review_deadlock",
-                "review_session_id": review_session.id,
-                "chapter_run_id": chapter_run.id,
-            },
+            report_json=repair_plan.validation_report_json,
         )
         replay_work_item_ids = RunExecutionService(RunControlRepository(self._session)).ensure_scope_replay_work_items(
             run_id=chapter_run.run_id,
@@ -407,29 +397,9 @@ class ReviewController:
         )
         bundle_record = self._incident_controller.publish_validated_patch(
             proposal_id=proposal.id,
-            revision_name=f"review-deadlock-fix-{chapter_run.chapter_id[:12]}",
-            manifest_json={
-                "code": {
-                    "entrypoint": "book_agent.app.runtime.controllers.review_controller",
-                    "surface": "review_deadlock",
-                },
-                "config": {
-                    "recovery": {
-                        "review_deadlock": {
-                            "enabled": True,
-                            "reason_code": lane_health.reason_code,
-                            "scope_id": chapter_run.chapter_id,
-                            "review_session_id": review_session.id,
-                        }
-                    }
-                },
-            },
-            rollout_scope_json={
-                "mode": "dev",
-                "scope_type": "review",
-                "scope_id": chapter_run.chapter_id,
-                "replay_scope_id": chapter_run.chapter_id,
-            },
+            revision_name=repair_plan.revision_name,
+            manifest_json=repair_plan.manifest_json,
+            rollout_scope_json=repair_plan.rollout_scope_json,
         )
         proposal = self._runtime_repo.get_runtime_patch_proposal(proposal.id)
         bound_work_item_ids = [

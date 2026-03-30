@@ -1,11 +1,11 @@
 # Forge State
 
-last_update_time: 2026-03-30 16:24:41 +0800
+last_update_time: 2026-03-30 16:33:12 +0800
 mode: resume
-current_step: batch-13_verified
-active_batch: batch-13
-authoritative_batch_contract: .forge/batches/batch-13.md
-expected_report_path: .forge/reports/batch-13-report.md
+current_step: batch-14_verified
+active_batch: batch-14
+authoritative_batch_contract: .forge/batches/batch-14.md
+expected_report_path: .forge/reports/batch-14-report.md
 
 active_worker_slot:
 - worker_id: none
@@ -33,6 +33,7 @@ completed_items:
 - Forge batch-11 is verified complete: the lane go/no-go card now reads as a shorter “status + reason + action” decision, so reviewers can trust the top-level route without reading as much supporting copy.
 - Forge batch-12 is verified complete: the top-level lane go/no-go card now replaces multiple summary chips with a single compact summary line, so queue/session decisions rely on fewer visual layers.
 - Forge batch-13 is verified complete: when the top-level lane go/no-go card exists, duplicate Lens/Session entry suggestion cards now collapse away, so queue/session level route trust depends on one primary cue instead of several similar cards.
+- Forge batch-14 is verified complete: runtime incidents now generate structured repair plans that capture owned files, validation, bundle rollout, and replay scope, so self-heal execution can move from hardcoded controller actions toward runtime-owned repair dispatch.
 
 failed_items:
 - none recorded in the current handoff state
@@ -54,6 +55,7 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/batches/batch-11.md
 - /Users/smy/project/book-agent/.forge/batches/batch-12.md
 - /Users/smy/project/book-agent/.forge/batches/batch-13.md
+- /Users/smy/project/book-agent/.forge/batches/batch-14.md
 - /Users/smy/project/book-agent/.forge/log.md
 - /Users/smy/project/book-agent/.forge/reports/batch-1-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-2-report.md
@@ -68,18 +70,24 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/reports/batch-11-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-12-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-13-report.md
+- /Users/smy/project/book-agent/.forge/reports/batch-14-report.md
 - /Users/smy/project/book-agent/docs/mainline-progress.md
-- /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.tsx
-- /Users/smy/project/book-agent/frontend/src/features/workspace/WorkspacePage.test.tsx
+- /Users/smy/project/book-agent/src/book_agent/services/runtime_repair_planner.py
+- /Users/smy/project/book-agent/src/book_agent/app/runtime/controllers/incident_controller.py
+- /Users/smy/project/book-agent/src/book_agent/app/runtime/controllers/export_controller.py
+- /Users/smy/project/book-agent/src/book_agent/app/runtime/controllers/review_controller.py
+- /Users/smy/project/book-agent/tests/test_runtime_repair_planner.py
+- /Users/smy/project/book-agent/tests/test_export_controller.py
+- /Users/smy/project/book-agent/tests/test_incident_controller.py
 
 last_verified_test_baseline:
-- command: cd /Users/smy/project/book-agent/frontend && npx vitest run src/features/workspace/WorkspacePage.test.tsx src/app/App.test.tsx
-  result: 16 passed
-- command: cd /Users/smy/project/book-agent/frontend && npm run build
+- command: .venv/bin/python -m unittest tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal
+  result: Ran 8 tests, OK
+- command: .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_planner.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py
   result: passed
 
 handoff_source:
 - /Users/smy/project/book-agent/progress.txt
 
 next_mainline_focus:
-- Push more release-ready route trust into queue/session level so reviewer/operator can decide whether to stay in-lane before needing repeated higher-level route cards or mid-page lane detail.
+- Turn structured repair plans into runtime-owned repair dispatch / execution lineage, so the self-heal loop can progress from planning to actual repair-lane ownership.

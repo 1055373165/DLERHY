@@ -190,3 +190,15 @@ class ExportControllerTests(unittest.TestCase):
                 "pdf.direct",
             )
             self.assertIn(work_item_id, proposal.status_detail_json["bound_work_item_ids"])
+            self.assertEqual(
+                proposal.status_detail_json["repair_plan"]["incident_kind"],
+                "export_misrouting",
+            )
+            self.assertEqual(
+                proposal.status_detail_json["repair_plan"]["replay"]["scope_id"],
+                scope_id,
+            )
+            self.assertEqual(
+                incident.status_detail_json["latest_patch_proposal"]["repair_plan"]["bundle"]["revision_name"],
+                f"export-routing-fix-{recovery.route_evidence_json.get('route_fingerprint', scope_id)[:12]}",
+            )

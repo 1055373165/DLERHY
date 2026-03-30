@@ -411,6 +411,15 @@ class IncidentControllerTests(unittest.TestCase):
             persisted_chapter_run.conditions_json["recovered_lineage"][0]["incident_id"],
             incident.id,
         )
+        self.assertEqual(proposal.status_detail_json["repair_plan"]["incident_kind"], "review_deadlock")
+        self.assertEqual(
+            proposal.status_detail_json["repair_plan"]["replay"]["scope_id"],
+            chapter.id,
+        )
+        self.assertEqual(
+            incident.status_detail_json["latest_patch_proposal"]["repair_plan"]["replay"]["boundary"],
+            "review_session",
+        )
 
 
 class BudgetControllerTests(unittest.TestCase):
