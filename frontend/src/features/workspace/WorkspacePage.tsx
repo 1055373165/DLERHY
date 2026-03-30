@@ -202,6 +202,13 @@ type ReleaseLanePressureAction = {
   actionLabel: string;
   actionKind: "continue-release" | "switch-observe" | "reset";
 };
+type ReleaseLaneRoutingCue = {
+  statusLabel: string;
+  helper: string;
+  actionLabel: string;
+  source: "pressure" | "exit";
+  chips: string[];
+};
 type QueueLensPreset = {
   key: string;
   label: string;
@@ -528,6 +535,17 @@ export function WorkspacePage() {
           pressureActionKind: activeReleaseLanePressureAction.actionKind,
           confidenceStatus: activeReleaseLaneConfidence.statusLabel,
           driftStatus: activeReleaseLaneDrift.statusLabel,
+        })
+      : null;
+  const activeReleaseLaneRoutingCue =
+    isFlowMode &&
+    activeQueueLens?.outcome === "release-ready" &&
+    activeReleaseLaneHealthSummary &&
+    (activeReleaseLaneExitStrategy || activeReleaseLanePressureAction)
+      ? buildReleaseLaneRoutingCue({
+          healthSummary: activeReleaseLaneHealthSummary,
+          pressureAction: activeReleaseLanePressureAction,
+          exitStrategy: activeReleaseLaneExitStrategy,
         })
       : null;
   const showReleaseLaneSessionDigest =
@@ -1158,6 +1176,17 @@ export function WorkspacePage() {
     });
   }
 
+  function handleReleaseLaneRoutingCue() {
+    if (!activeReleaseLaneRoutingCue) {
+      return;
+    }
+    if (activeReleaseLaneRoutingCue.source === "exit") {
+      handleReleaseLaneExitStrategy();
+      return;
+    }
+    handleReleaseLanePressureAction();
+  }
+
   return (
     <div className={styles.grid}>
       <div className={styles.summaryStack}>
@@ -1540,6 +1569,25 @@ export function WorkspacePage() {
                               activeReleaseLaneBatchPhase?.helper ??
                               activeReleaseLanePressure?.helper}
                         </p>
+                        {activeReleaseLaneRoutingCue ? (
+                          <div className={styles.deltaCard}>
+                            <span className={styles.deltaLabel}>当前路线建议</span>
+                            <strong className={styles.deltaValue}>{activeReleaseLaneRoutingCue.statusLabel}</strong>
+                            <p className={styles.timelineDetail}>{activeReleaseLaneRoutingCue.helper}</p>
+                            <div className={styles.filterChipRow}>
+                              {activeReleaseLaneRoutingCue.chips.map((chip) => (
+                                <span key={chip} className={styles.filterChip}>
+                                  {chip}
+                                </span>
+                              ))}
+                            </div>
+                            <div className={styles.nextStepActions}>
+                              <button className={styles.button} type="button" onClick={handleReleaseLaneRoutingCue}>
+                                {activeReleaseLaneRoutingCue.actionLabel}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                         <div className={styles.filterChipRow}>
                           {activeReleaseLaneBatchDigest ? (
                             <span className={styles.filterChip}>
@@ -1617,22 +1665,6 @@ export function WorkspacePage() {
                               {activeReleaseLanePressureAction.statusLabel}
                             </strong>
                             <p className={styles.timelineDetail}>{activeReleaseLanePressureAction.helper}</p>
-                            <div className={styles.nextStepActions}>
-                              <button
-                                className={styles.ghostButton}
-                                type="button"
-                                onClick={handleReleaseLanePressureAction}
-                              >
-                                按压力建议处理
-                              </button>
-                            </div>
-                          </div>
-                        ) : null}
-                        {activeReleaseLaneExitStrategy ? (
-                          <div className={styles.nextStepActions}>
-                            <button className={styles.button} type="button" onClick={handleReleaseLaneExitStrategy}>
-                              按当前建议处理
-                            </button>
                           </div>
                         ) : null}
                       </div>
@@ -1749,6 +1781,13 @@ export function WorkspacePage() {
                               <p className={styles.timelineDetail}>
                                 {activeQueueLensPriority.value} · {activeQueueLensPriority.helper}
                               </p>
+                            </div>
+                          ) : null}
+                          {activeReleaseLaneRoutingCue ? (
+                            <div className={styles.deltaCard}>
+                              <span className={styles.deltaLabel}>Operator 路线建议</span>
+                              <strong className={styles.deltaValue}>{activeReleaseLaneRoutingCue.statusLabel}</strong>
+                              <p className={styles.timelineDetail}>{activeReleaseLaneRoutingCue.helper}</p>
                             </div>
                           ) : null}
                           {activeQueueLens.outcome === "release-ready" ? (
@@ -2525,6 +2564,13 @@ export function WorkspacePage() {
                           {activeReleaseLaneBatchPhase ? (
                             <p className={styles.queueDeltaHint}>当前阶段 · {activeReleaseLaneBatchPhase.queueHint}</p>
                           ) : null}
+                        </div>
+                      ) : null}
+                      {showReleaseLaneSessionDigest && activeReleaseLaneRoutingCue ? (
+                        <div className={styles.sessionDigestCard}>
+                          <span className={styles.deltaLabel}>Release-ready 路线建议</span>
+                          <strong className={styles.deltaValue}>{activeReleaseLaneRoutingCue.statusLabel}</strong>
+                          <p className={styles.timelineDetail}>{activeReleaseLaneRoutingCue.helper}</p>
                         </div>
                       ) : null}
                       {showReleaseLaneSessionDigest && activeReleaseLaneHealthSummary ? (
@@ -4046,6 +4092,44 @@ function buildReleaseLaneHealthSummary(input: {
     statusLabel: "稳态推进",
     helper: "当前这条 lane 仍值得继续推进，但已经需要留意下一步是否转入最后观察收尾。",
     chips,
+  };
+}
+
+function buildReleaseLaneRoutingCue(input: {
+  healthSummary: ReleaseLaneHealthSummary;
+  pressureAction: ReleaseLanePressureAction | null;
+  exitStrategy: ReleaseLaneExitStrategy | null;
+}): ReleaseLaneRoutingCue {
+  if (input.exitStrategy) {
+    return {
+      statusLabel: input.exitStrategy.statusLabel,
+      helper: `Lane Health 显示 ${input.healthSummary.statusLabel}。${input.exitStrategy.helper}`,
+      actionLabel: input.exitStrategy.actionLabel,
+      source: "exit",
+      chips: [
+        `Lane Health · ${input.healthSummary.statusLabel}`,
+        `退出策略 · ${input.exitStrategy.statusLabel}`,
+      ],
+    };
+  }
+  if (input.pressureAction) {
+    return {
+      statusLabel: input.pressureAction.statusLabel,
+      helper: `Lane Health 显示 ${input.healthSummary.statusLabel}。${input.pressureAction.helper}`,
+      actionLabel: input.pressureAction.actionLabel,
+      source: "pressure",
+      chips: [
+        `Lane Health · ${input.healthSummary.statusLabel}`,
+        `压力建议 · ${input.pressureAction.statusLabel}`,
+      ],
+    };
+  }
+  return {
+    statusLabel: input.healthSummary.statusLabel,
+    helper: input.healthSummary.helper,
+    actionLabel: "保持当前视角",
+    source: "pressure",
+    chips: [`Lane Health · ${input.healthSummary.statusLabel}`],
   };
 }
 

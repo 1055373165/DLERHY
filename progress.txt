@@ -1,5 +1,5 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-30 12:07:48 +0800
+Last Updated: 2026-03-30 13:01:09 +0800
 
 1. 高层需求
 
@@ -76,6 +76,7 @@ Last Updated: 2026-03-30 12:07:48 +0800
 - release-ready 的放行把握度已经上提到 queue rail / Operator Lens / Session Digest。
 - release-ready 的漂移趋势已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在能看出这条 lane 是在变稳、稳定推进、逼近切换点，还是退回观察链。
 - release-ready 的 lane health 汇总已经落地，reviewer 现在可以直接把一条 lane 判断成“健康可冲 / 临界收尾 / 需要切回观察修正”。
+- release-ready 的路线建议已经上提到 queue rail / Operator Lens / Session Digest，reviewer 现在可以先按 lane health 读出主导动作，而不是先扫多张 supporting cards。
 
 5. 最近一次验证基线
 
@@ -103,17 +104,17 @@ Reviewer / Operator 工作台主线收敛阶段
 
 7. 建议交给 Forge 的下一刀
 
-batch-1 已经完成。下一批最自然的主线，不是再回去补零散卡片，而是把已经落地的 lane health 更进一步变成真正的主导判断：
+batch-1 和 batch-2 已经完成。下一批最自然的主线，不是继续增加 release-ready 的判断卡，而是利用已经成型的 `lane health + routing cue` 进一步减少 reviewer 的扫描成本：
 
 - 目标：
-  让 release-ready 的 lane health 成为 queue rail / Operator Lens / Session Digest 上更强的主导判断，而不只是新增一张摘要卡。
+  让 release-ready 的路由建议在进入 detail 前就更像真正的工作入口，并在判断足够明确时减少 supporting cards 的扫描负担。
 
 - 期望效果：
-  reviewer 在 release-ready 视角里，不用再扫多张卡，就能先读出：
+  reviewer 在 release-ready 视角里，不只先读出：
   - 健康可冲
   - 临界收尾
   - 需要切回观察修正
-  然后再决定是否继续推进、切回观察 backlog、或回整条队列。
+  还会更早知道是否值得继续停留在这条 lane，还是该直接切回观察 backlog。
 
 - 建议范围：
   - frontend/src/features/workspace/WorkspacePage.tsx
@@ -129,4 +130,4 @@ batch-1 已经完成。下一批最自然的主线，不是再回去补零散卡
 本次 handoff 已同步初始化 .forge live state，作为后续 Forge 接管的唯一运行面。
 
 progress.txt 负责高层需求与主线进度说明；
-.forge/STATE.md、.forge/DECISIONS.md、.forge/batches/batch-1.md、.forge/log.md 负责后续可执行交接。
+.forge/STATE.md、.forge/DECISIONS.md、.forge/batches/、.forge/reports/、.forge/log.md 负责后续可执行交接。
