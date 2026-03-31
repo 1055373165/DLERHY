@@ -87,3 +87,7 @@
 - 2026-03-31 15:50:51 +0800 | executed batch-20 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-31 15:50:51 +0800 | verified batch-20 with unittest (15 tests OK) and py_compile (passed)
 - 2026-03-31 15:50:51 +0800 | wrote .forge/reports/batch-20-report.md and advanced STATE.md to current_step=batch-20_verified
+- 2026-03-31 15:57:50 +0800 | froze batch-21: interpose explicit repair-agent adapters between the executor-owned REPAIR lane and specialized repair workers
+- 2026-03-31 15:57:50 +0800 | executed batch-21 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 15:57:50 +0800 | verified batch-21 with unittest (15 tests OK) and py_compile (passed)
+- 2026-03-31 15:57:50 +0800 | wrote .forge/reports/batch-21-report.md and advanced STATE.md to current_step=batch-21_verified

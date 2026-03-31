@@ -254,3 +254,7 @@ class ExportControllerTests(unittest.TestCase):
                 incident.status_detail_json["repair_dispatch"]["last_result"]["status"],
                 "succeeded",
             )
+            self.assertEqual(
+                incident.status_detail_json["repair_dispatch"]["last_result"]["result_json"]["repair_agent_adapter_name"],
+                "export_routing_in_process_repair_agent",
+            )

@@ -5,13 +5,13 @@ from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
-from book_agent.services.runtime_repair_worker import (
-    ExportRoutingRepairWorker,
-    ReviewDeadlockRepairWorker,
-    RuntimeRepairWorker,
+from book_agent.services.runtime_repair_agent_adapter import (
+    ExportRoutingRepairAgentAdapter,
+    ReviewDeadlockRepairAgentAdapter,
+    RuntimeRepairAgentAdapter,
 )
 
-RuntimeRepairWorkerFactory = Callable[[sessionmaker], RuntimeRepairWorker]
+RuntimeRepairAgentAdapterFactory = Callable[[sessionmaker], RuntimeRepairAgentAdapter]
 
 
 class UnsupportedRuntimeRepairWorkerError(RuntimeError):
@@ -26,12 +26,12 @@ class RuntimeRepairWorkerRegistry:
         self,
         *,
         session_factory: sessionmaker,
-        registrations: Mapping[tuple[str, int], RuntimeRepairWorkerFactory] | None = None,
+        registrations: Mapping[tuple[str, int], RuntimeRepairAgentAdapterFactory] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._registrations = dict(registrations or self._default_registrations())
 
-    def resolve_for_input_bundle(self, input_bundle: dict[str, Any]) -> RuntimeRepairWorker:
+    def resolve_for_input_bundle(self, input_bundle: dict[str, Any]) -> RuntimeRepairAgentAdapter:
         worker_hint = str(input_bundle.get("worker_hint") or self.DEFAULT_WORKER_HINT).strip()
         worker_contract_version = int(
             input_bundle.get("worker_contract_version") or self.DEFAULT_WORKER_CONTRACT_VERSION
@@ -46,7 +46,7 @@ class RuntimeRepairWorkerRegistry:
         *,
         worker_hint: str,
         worker_contract_version: int,
-    ) -> RuntimeRepairWorker:
+    ) -> RuntimeRepairAgentAdapter:
         normalized_hint = str(worker_hint or self.DEFAULT_WORKER_HINT).strip()
         normalized_version = int(
             worker_contract_version or self.DEFAULT_WORKER_CONTRACT_VERSION
@@ -75,21 +75,21 @@ class RuntimeRepairWorkerRegistry:
         )
 
     @classmethod
-    def _default_registrations(cls) -> dict[tuple[str, int], RuntimeRepairWorkerFactory]:
+    def _default_registrations(cls) -> dict[tuple[str, int], RuntimeRepairAgentAdapterFactory]:
         return {
-            (cls.DEFAULT_WORKER_HINT, cls.DEFAULT_WORKER_CONTRACT_VERSION): cls._runtime_repair_worker_factory,
-            ("review_deadlock_repair_agent", 1): cls._review_deadlock_repair_worker_factory,
-            ("export_routing_repair_agent", 1): cls._export_routing_repair_worker_factory,
+            (cls.DEFAULT_WORKER_HINT, cls.DEFAULT_WORKER_CONTRACT_VERSION): cls._default_repair_agent_adapter_factory,
+            ("review_deadlock_repair_agent", 1): cls._review_deadlock_repair_agent_adapter_factory,
+            ("export_routing_repair_agent", 1): cls._export_routing_repair_agent_adapter_factory,
         }
 
     @staticmethod
-    def _runtime_repair_worker_factory(session_factory: sessionmaker) -> RuntimeRepairWorker:
-        return RuntimeRepairWorker(session_factory=session_factory)
+    def _default_repair_agent_adapter_factory(session_factory: sessionmaker) -> RuntimeRepairAgentAdapter:
+        return RuntimeRepairAgentAdapter(session_factory=session_factory)
 
     @staticmethod
-    def _review_deadlock_repair_worker_factory(session_factory: sessionmaker) -> RuntimeRepairWorker:
-        return ReviewDeadlockRepairWorker(session_factory=session_factory)
+    def _review_deadlock_repair_agent_adapter_factory(session_factory: sessionmaker) -> RuntimeRepairAgentAdapter:
+        return ReviewDeadlockRepairAgentAdapter(session_factory=session_factory)
 
     @staticmethod
-    def _export_routing_repair_worker_factory(session_factory: sessionmaker) -> RuntimeRepairWorker:
-        return ExportRoutingRepairWorker(session_factory=session_factory)
+    def _export_routing_repair_agent_adapter_factory(session_factory: sessionmaker) -> RuntimeRepairAgentAdapter:
+        return ExportRoutingRepairAgentAdapter(session_factory=session_factory)

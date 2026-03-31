@@ -814,20 +814,20 @@ class DocumentRunExecutor:
 
     def _execute_repair_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-        repair_worker = None
+        repair_agent = None
 
         def _prepare_repair_execution() -> dict[str, Any]:
-            nonlocal repair_worker
-            repair_worker = self._runtime_repair_registry.resolve_for_input_bundle(input_bundle)
-            return repair_worker.prepare_execution(
+            nonlocal repair_agent
+            repair_agent = self._runtime_repair_registry.resolve_for_input_bundle(input_bundle)
+            return repair_agent.prepare_execution(
                 claimed=claimed,
                 input_bundle=input_bundle,
             )
 
         def _complete_repair_execution(payload: dict[str, Any], lease_token: str) -> None:
-            if repair_worker is None:
-                raise RuntimeError("Repair worker was not resolved before completion.")
-            repair_worker.complete_execution(
+            if repair_agent is None:
+                raise RuntimeError("Repair agent was not resolved before completion.")
+            repair_agent.complete_execution(
                 run_id=run_id,
                 payload=payload,
                 lease_token=lease_token,
