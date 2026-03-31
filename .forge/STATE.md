@@ -1,11 +1,11 @@
 # Forge State
 
-last_update_time: 2026-03-31 15:31:03 +0800
+last_update_time: 2026-03-31 15:43:13 +0800
 mode: resume
-current_step: batch-18_verified
-active_batch: batch-18
-authoritative_batch_contract: .forge/batches/batch-18.md
-expected_report_path: .forge/reports/batch-18-report.md
+current_step: batch-19_verified
+active_batch: batch-19
+authoritative_batch_contract: .forge/batches/batch-19.md
+expected_report_path: .forge/reports/batch-19-report.md
 
 active_worker_slot:
 - worker_id: none
@@ -38,6 +38,7 @@ completed_items:
 - Forge batch-16 is verified complete: runtime repair dispatch is now bound to a claimable `REPAIR` work-item lane, so proposal/incident repair lineage is no longer only JSON metadata and can be deterministically picked up by a future repair agent.
 - Forge batch-17 is verified complete: repair execution now runs through the executor-owned `REPAIR` lane end-to-end, so work-items only succeed after validate/publish/finalize, and both REQ-MX-01 and REQ-EX-02 prove the scheduled repair can be claimed, executed, and replayed after commit.
 - Forge batch-18 is verified complete: repair execution is now delegated through an explicit `RuntimeRepairWorker` plus work-item contract metadata, so the executor only orchestrates the lane and the next slice can focus on independent worker selection instead of untangling inline repair code.
+- Forge batch-19 is verified complete: repair work-items are now resolved through an explicit worker registry keyed by `worker_hint / worker_contract_version`, and unknown contracts fail deterministically through the repair lane instead of exploding outside the work-item lifecycle.
 
 failed_items:
 - none recorded in the current handoff state
@@ -64,6 +65,7 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/batches/batch-16.md
 - /Users/smy/project/book-agent/.forge/batches/batch-17.md
 - /Users/smy/project/book-agent/.forge/batches/batch-18.md
+- /Users/smy/project/book-agent/.forge/batches/batch-19.md
 - /Users/smy/project/book-agent/.forge/log.md
 - /Users/smy/project/book-agent/.forge/reports/batch-1-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-2-report.md
@@ -83,9 +85,11 @@ working_tree_scope:
 - /Users/smy/project/book-agent/.forge/reports/batch-16-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-17-report.md
 - /Users/smy/project/book-agent/.forge/reports/batch-18-report.md
+- /Users/smy/project/book-agent/.forge/reports/batch-19-report.md
 - /Users/smy/project/book-agent/docs/mainline-progress.md
 - /Users/smy/project/book-agent/src/book_agent/services/runtime_repair_planner.py
 - /Users/smy/project/book-agent/src/book_agent/services/runtime_repair_worker.py
+- /Users/smy/project/book-agent/src/book_agent/services/runtime_repair_registry.py
 - /Users/smy/project/book-agent/src/book_agent/services/run_execution.py
 - /Users/smy/project/book-agent/src/book_agent/app/runtime/controllers/incident_controller.py
 - /Users/smy/project/book-agent/src/book_agent/app/runtime/controllers/export_controller.py
@@ -93,6 +97,7 @@ working_tree_scope:
 - /Users/smy/project/book-agent/src/book_agent/app/runtime/document_run_executor.py
 - /Users/smy/project/book-agent/src/book_agent/services/workflows.py
 - /Users/smy/project/book-agent/tests/test_runtime_repair_planner.py
+- /Users/smy/project/book-agent/tests/test_runtime_repair_registry.py
 - /Users/smy/project/book-agent/tests/test_export_controller.py
 - /Users/smy/project/book-agent/tests/test_incident_controller.py
 - /Users/smy/project/book-agent/tests/test_req_ex_02_export_misrouting_self_heal.py
@@ -100,13 +105,13 @@ working_tree_scope:
 - /Users/smy/project/book-agent/tests/test_req_mx_01_review_deadlock_self_heal.py
 
 last_verified_test_baseline:
-- command: .venv/bin/python -m unittest tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal tests.test_req_ex_02_export_misrouting_self_heal tests.test_run_execution.RunExecutionServiceTests.test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once
-  result: Ran 11 tests, OK
-- command: .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_planner.py src/book_agent/services/runtime_repair_worker.py src/book_agent/services/run_execution.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py src/book_agent/app/runtime/document_run_executor.py src/book_agent/services/workflows.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py tests/test_req_mx_01_review_deadlock_self_heal.py tests/test_req_ex_02_export_misrouting_self_heal.py tests/test_run_execution.py
+- command: .venv/bin/python -m unittest tests.test_runtime_repair_registry tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal tests.test_req_ex_02_export_misrouting_self_heal tests.test_run_execution.RunExecutionServiceTests.test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_worker_hint
+  result: Ran 15 tests, OK
+- command: .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_registry.py src/book_agent/services/runtime_repair_planner.py src/book_agent/services/runtime_repair_worker.py src/book_agent/services/run_execution.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py src/book_agent/app/runtime/document_run_executor.py src/book_agent/services/workflows.py tests/test_runtime_repair_registry.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py tests/test_req_mx_01_review_deadlock_self_heal.py tests/test_req_ex_02_export_misrouting_self_heal.py tests/test_run_execution.py
   result: passed
 
 handoff_source:
 - /Users/smy/project/book-agent/progress.txt
 
 next_mainline_focus:
-- Move the new repair worker contract toward a pluggable repair-agent registry, so runtime self-heal can route `REPAIR` work-items by worker hint / contract version instead of hardwiring a single in-process implementation.
+- Move the new repair worker registry toward truly distinct repair-agent implementations, so runtime self-heal can hand `REPAIR` work-items to independent workers instead of resolving every hint to the same in-process implementation.

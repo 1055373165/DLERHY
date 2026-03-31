@@ -355,6 +355,63 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(work_item.input_version_bundle_json["worker_hint"], "review_deadlock_repair_agent")
         self.assertEqual(work_item.input_version_bundle_json["worker_contract_version"], 1)
 
+    def test_executor_fails_repair_work_item_for_unknown_worker_hint(self) -> None:
+        run_id = self._create_running_run()
+        proposal_id = str(uuid4())
+        incident_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.ensure_repair_dispatch_work_item(
+                run_id=run_id,
+                proposal_id=proposal_id,
+                incident_id=incident_id,
+                repair_dispatch_json={
+                    "dispatch_id": str(uuid4()),
+                    "patch_surface": "runtime_bundle",
+                    "claim_mode": "runtime_owned",
+                    "claim_target": "runtime_patch_proposal",
+                    "lane": "runtime.repair",
+                    "worker_hint": "unknown_runtime_repair_agent",
+                    "worker_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_incident_controller.py",
+                    "bundle_revision_name": "bundle-repair-unknown",
+                    "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "chapter",
+                        "scope_id": "chapter-unknown",
+                        "boundary": "review_session",
+                    },
+                },
+            )
+            claimed = execution.claim_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            session.commit()
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+        executor._execute_repair_work_item(run_id, claimed)
+
+        with self.session_factory() as session:
+            work_item = session.get(WorkItem, work_item_id)
+            self.assertIsNotNone(work_item)
+            assert work_item is not None
+            self.assertEqual(work_item.status, WorkItemStatus.TERMINAL_FAILED)
+            self.assertEqual(work_item.error_class, "UnsupportedRuntimeRepairWorkerError")
+            self.assertIn(
+                "unknown_runtime_repair_agent",
+                str((work_item.error_detail_json or {}).get("message") or ""),
+            )
+
     def test_executor_reclaims_expired_leases_before_stage_progression(self) -> None:
         run_id = self._create_running_run(
             budget=RunBudgetSummary(

@@ -44,7 +44,7 @@ from book_agent.orchestrator.state_machine import (
 )
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
-from book_agent.services.runtime_repair_worker import RuntimeRepairWorker
+from book_agent.services.runtime_repair_registry import RuntimeRepairWorkerRegistry
 from book_agent.services.export_routing import ExportRoutingError
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.translator import TranslationWorker
@@ -164,6 +164,7 @@ class DocumentRunExecutor:
         self.default_max_auto_followup_attempts = default_max_auto_followup_attempts
         self.default_max_blocker_repair_rounds = max(1, int(default_max_blocker_repair_rounds))
         self.default_max_parallel_workers = max(1, int(default_max_parallel_workers))
+        self._runtime_repair_registry = RuntimeRepairWorkerRegistry(session_factory=session_factory)
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
         self._supervisor_thread: threading.Thread | None = None
@@ -813,20 +814,30 @@ class DocumentRunExecutor:
 
     def _execute_repair_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-        repair_worker = RuntimeRepairWorker(session_factory=self.session_factory)
+        repair_worker = None
+
+        def _prepare_repair_execution() -> dict[str, Any]:
+            nonlocal repair_worker
+            repair_worker = self._runtime_repair_registry.resolve_for_input_bundle(input_bundle)
+            return repair_worker.prepare_execution(
+                claimed=claimed,
+                input_bundle=input_bundle,
+            )
+
+        def _complete_repair_execution(payload: dict[str, Any], lease_token: str) -> None:
+            if repair_worker is None:
+                raise RuntimeError("Repair worker was not resolved before completion.")
+            repair_worker.complete_execution(
+                run_id=run_id,
+                payload=payload,
+                lease_token=lease_token,
+            )
 
         self._execute_claimed_work_item(
             run_id=run_id,
             claimed=claimed,
-            worker_fn=lambda: repair_worker.prepare_execution(
-                claimed=claimed,
-                input_bundle=input_bundle,
-            ),
-            on_success=lambda payload, lease_token: repair_worker.complete_execution(
-                run_id=run_id,
-                payload=payload,
-                lease_token=lease_token,
-            ),
+            worker_fn=_prepare_repair_execution,
+            on_success=_complete_repair_execution,
             stage_key="repair",
             lease_seconds=self.lease_seconds,
         )

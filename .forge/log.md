@@ -79,3 +79,7 @@
 - 2026-03-31 15:31:03 +0800 | executed batch-18 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-31 15:31:03 +0800 | verified batch-18 with unittest (11 tests OK) and py_compile (passed)
 - 2026-03-31 15:31:03 +0800 | wrote .forge/reports/batch-18-report.md and advanced STATE.md to current_step=batch-18_verified
+- 2026-03-31 15:43:13 +0800 | froze batch-19: resolve REPAIR work-items through a registry keyed by worker_hint / worker_contract_version and fail unsupported contracts inside the repair lane lifecycle
+- 2026-03-31 15:43:13 +0800 | executed batch-19 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 15:43:13 +0800 | verified batch-19 with unittest (15 tests OK) and py_compile (passed)
+- 2026-03-31 15:43:13 +0800 | wrote .forge/reports/batch-19-report.md and advanced STATE.md to current_step=batch-19_verified
