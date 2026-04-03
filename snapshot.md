@@ -74,7 +74,7 @@ The current stack is not yet claiming:
 ## 5. Important Boundaries
 
 - Certification currently applies to the nine-sample benchmark corpus, not to every unseen document family.
-- `REACT.pdf` still requires a direct parser probe because the product bootstrap path blocks high-risk text PDFs.
+- High-risk text PDFs now enter the guarded bootstrap path through the normal product route instead of requiring a direct parser probe.
 - `L2` and `L6` still include fallback-rendered PDF asset slices; those slices are accepted because legibility passes, not because original-asset extraction is universally solved.
 - `L6` is effectively a `Tier C` lane: content fidelity plus explicit artifact preservation and controlled degradation when inner artifact text cannot be safely recovered.
 
@@ -102,7 +102,6 @@ The current line has already closed the benchmark-program phase:
 
 ## 8. Next Todo
 
-1. Remove the high-risk text-PDF bootstrap gate so certified parser readiness can flow through the product path.
-2. Improve PDF original-asset extraction parity, especially where current certified slices still rely on fallback renders.
-3. Start controlled slice-first whole-document runs on the certified lanes.
-4. Expand the benchmark corpus before making broader cross-format generalization claims.
+1. Improve PDF original-asset extraction parity, especially where current certified slices still rely on fallback renders.
+2. Start controlled slice-first whole-document runs on the certified lanes.
+3. Expand the benchmark corpus before making broader cross-format generalization claims.

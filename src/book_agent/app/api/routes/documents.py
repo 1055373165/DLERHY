@@ -1273,10 +1273,10 @@ def _to_assignment_response(result) -> ChapterWorklistAssignmentResponse:
 def document_contract() -> DocumentContractResponse:
     return DocumentContractResponse(
         supported_source_types=["epub", "pdf_text"],
-        current_phase="p1_text_pdf_bootstrap",
+        current_phase="p1_text_pdf_guarded_bootstrap",
         notes=[
-            "P1-A supports EPUB plus low-risk text PDFs with geometry-aware provenance.",
-            "OCR-required PDFs and unsupported high-risk layouts are rejected before translation; short academic papers may enter a medium-risk recovery lane.",
+            "P1-A supports EPUB plus text PDFs with geometry-aware provenance and explicit layout-risk metadata.",
+            "High-risk text PDFs now enter a guarded bootstrap path instead of being rejected up front; OCR-required PDFs still route outside the text-PDF path.",
             "Sentence coverage, packet-based context, provenance, and rerunability remain hard requirements.",
         ],
     )

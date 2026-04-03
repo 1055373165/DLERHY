@@ -37,10 +37,11 @@ For `PDF books`, `EPUB books`, and `PDF papers`, the system should:
    - scorecard
    - lane verdicts
    - certification report
-8. Whole-document execution must default to `slice-first` on certified lanes.
-9. The current readiness claim must remain bounded to the current benchmark corpus; it must not be
+8. High-risk text PDFs must be allowed through the guarded bootstrap path when they are parser-ready text PDFs; explicit risk metadata should remain visible instead of being hidden behind an entry rejection.
+9. Whole-document execution must default to `slice-first` on certified lanes.
+10. The current readiness claim must remain bounded to the current benchmark corpus; it must not be
    restated as universal cross-format support.
-10. Future continuation must enter through explicit `change_request` work against the same single
+11. Future continuation must enter through explicit `change_request` work against the same single
     `.forge/` ledger.
 
 ## Hidden Requirements

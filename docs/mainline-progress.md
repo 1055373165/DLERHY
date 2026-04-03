@@ -76,7 +76,6 @@ Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围
 
 ### P0
 
-- 移除高风险 text-PDF bootstrap gate，让 `REACT` 类文档进入正式产品路径时不再需要 direct parser probe
 - 提升 PDF original-asset extraction parity，减少 `L2 / L6` 对 fallback render 的依赖
 - 以 `slice-first` 模式开始受控整本书 / 整篇论文运行
 

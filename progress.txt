@@ -45,6 +45,7 @@ Last Updated: 2026-04-03 11:21:49 +0800
 - `REACT.pdf` 仍然需要 direct parser probe，因为产品 bootstrap gate 还会拦截高风险 text PDF
 - `L2 / L6` 的部分图片 slice 仍然依赖高分辨率 fallback render；当前是 legibility 过线，但 original-asset parity 还没有完全补齐
 - `L6` 的认证语义是 `Tier C`：优先保证内容与 artifact 保真，并在必要时显式降级，而不是伪装成完全版式无损
+- 高风险 text PDF 现在已经能走正式 guarded bootstrap path，不再需要 direct parser probe 旁路
 
 4. 已完成的关键工作
 
@@ -67,7 +68,6 @@ Last Updated: 2026-04-03 11:21:49 +0800
 
 ### P0
 
-- 去掉高风险 text-PDF bootstrap gate，让 `REACT` 这类文档不再需要 direct parser probe
 - 提升 `PDF` 原图抽取命中率，减少 `L2 / L6` 对 fallback render 的依赖
 - 以 `slice-first` 模式开始受控整本运行，而不是继续只停留在局部 benchmark
 

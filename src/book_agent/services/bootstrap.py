@@ -176,12 +176,6 @@ class ParseService:
             parsed = self.epub_parser.parse(file_path)
         elif document.source_type == SourceType.PDF_TEXT:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            if (
-                isinstance(pdf_profile, dict)
-                and pdf_profile.get("layout_risk") == "high"
-                and pdf_profile.get("recovery_lane") != "academic_paper"
-            ):
-                raise ValueError("P1-A only supports low-risk or medium-risk text PDFs; layout_risk=high")
             parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
         elif document.source_type == SourceType.PDF_MIXED:
             pdf_profile = document.metadata_json.get("pdf_profile")

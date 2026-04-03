@@ -26,8 +26,9 @@
 - `L6` remains a `Tier C` certification: preserve content/artifact fidelity first, and degrade explicitly when inner artifact text cannot be recovered safely.
 
 6. Current follow-up decision
-- The closest next slice is `bootstrap-gate removal for high-risk text PDFs`, so `REACT`-class documents can enter the product path without requiring a direct parser probe.
-- After that, the next closest slice is `PDF original-asset extraction parity`, especially where `L2 / L6` still rely on fallback-rendered assets.
+- High-risk text PDFs now enter the guarded bootstrap path through the normal product route; bootstrap-gate removal is no longer the active blocker.
+- The closest next slice is now `PDF original-asset extraction parity`, especially where `L2 / L6` still rely on fallback-rendered assets.
+- After that, the next closest slice is `controlled slice-first whole-document pilots` on certified lanes.
 - After that, the next closest slice is `benchmark corpus expansion`, so readiness claims can extend beyond the current nine-sample set.
 
 7. Operating-mode decision

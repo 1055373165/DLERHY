@@ -227,3 +227,6 @@
 - 2026-04-03 11:21:49 +0800 | wrote new handoff truth across `.forge/STATE.md`, `.forge/DECISIONS.md`, `snapshot.md`, `progress.txt`, and `docs/mainline-progress.md` so future resume starts from translate-agent whole-document readiness rather than the completed runtime line
 - 2026-04-03 11:21:49 +0800 | recorded the next translate-agent todo stack: remove the high-risk text-PDF bootstrap gate, improve PDF original-asset extraction parity, begin controlled slice-first whole-document pilots, and expand the benchmark corpus
 - 2026-04-03 11:21:49 +0800 | rewrote `.forge/spec/SPEC.md` and `.forge/spec/FEATURES.json` so spec truth now matches the translate-agent readiness mainline instead of the completed runtime-self-heal feature inventory
+- 2026-04-03 11:37:41 +0800 | removed the high-risk text-PDF bootstrap rejection so parser-ready documents such as `REACT` now enter the guarded product path with explicit risk metadata instead of requiring a direct parser probe
+- 2026-04-03 11:37:41 +0800 | refreshed current benchmark execution artifacts; `pdf-react-001` now runs through `bootstrap_parse` with `bootstrap_gate_reason = null`
+- 2026-04-03 11:37:41 +0800 | advanced translate-agent handoff truth so the active next todo is now PDF original-asset extraction parity rather than bootstrap-gate removal

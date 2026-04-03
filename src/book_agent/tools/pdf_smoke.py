@@ -35,7 +35,7 @@ def _pdf_candidate_kind(profile: dict[str, Any]) -> str:
     if pdf_kind == "text_pdf" and layout_risk == "low" and not ocr_required:
         return "pass_path"
     if pdf_kind == "text_pdf":
-        return "reject_path"
+        return "guarded_path"
     if ocr_required:
         return "ocr_path"
     return "unsupported_path"
@@ -45,7 +45,7 @@ def _candidate_score(profile: dict[str, Any]) -> int:
     kind = _pdf_candidate_kind(profile)
     score = {
         "pass_path": 100,
-        "reject_path": 48,
+        "guarded_path": 48,
         "ocr_path": 18,
         "unsupported_path": 10,
         "profile_error": 0,
@@ -79,7 +79,7 @@ def _candidate_reasons(profile: dict[str, Any]) -> list[str]:
 
     if kind == "pass_path":
         reasons.append("Low-risk text PDF can validate the bootstrap pass path.")
-    elif kind == "reject_path":
+    elif kind == "guarded_path":
         reasons.append("Text PDF with elevated layout risk can exercise the guarded recovery path.")
     elif kind == "ocr_path":
         reasons.append("OCR-required PDF is useful for fail-safe rejection coverage.")
@@ -327,7 +327,7 @@ def discover_pdf_smoke_candidates(
 
     priority = {
         "pass_path": 0,
-        "reject_path": 1,
+        "guarded_path": 1,
         "ocr_path": 2,
         "unsupported_path": 3,
         "profile_error": 4,

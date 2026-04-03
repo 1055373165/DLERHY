@@ -126,5 +126,22 @@
       "F007"
     ],
     "passes": true
+  },
+  {
+    "id": "F009",
+    "category": "product-path",
+    "priority": "P0",
+    "title": "High-risk text PDFs can enter the guarded bootstrap path with explicit risk metadata",
+    "description": "Parser-ready high-risk text PDFs should bootstrap through the normal product route instead of requiring a direct parser probe or being rejected up front.",
+    "verification": [
+      "Read src/book_agent/services/bootstrap.py and confirm ParseService no longer rejects text PDFs solely because layout_risk is high",
+      "Read src/book_agent/app/api/routes/documents.py and confirm the document contract describes guarded high-risk text-PDF bootstrap rather than rejection",
+      "Run tests.test_pdf_support.PdfApiWorkflowTests.test_bootstrap_document_accepts_high_risk_layout_pdf_with_explicit_risk and confirm it passes"
+    ],
+    "dependencies": [
+      "F007",
+      "F008"
+    ],
+    "passes": true
   }
 ]

@@ -26,6 +26,7 @@ completed_items:
 - `L2` `PDF-text-tech-book` is measured `go`.
 - `L3` `PDF-text-academic-paper` is measured `go`.
 - `L6` `High-artifact-density-paper` is measured `go` at `Tier C`, with explicit artifact preservation and controlled degradation when inner artifact text cannot be recovered safely.
+- High-risk text PDFs now enter the guarded bootstrap path through the normal product route instead of requiring a direct parser probe.
 - Current benchmark execution has `9/9` executed samples, `0` parse failures, and `0` catastrophic protected-artifact corruption events across the certified lane set.
 - The current readiness decision is grounded in:
   - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-execution-summary-current.json`
@@ -37,7 +38,6 @@ failed_items:
 - none recorded in the current handoff state
 
 next_items:
-- Remove the high-risk text-PDF bootstrap gate so `REACT`-class documents no longer require a direct parser probe.
 - Improve PDF original-asset extraction parity for fallback-only slices, especially on `L2` and `L6`.
 - Expand the benchmark corpus beyond the current nine-sample set before making stronger cross-format generalization claims.
 - Start controlled slice-first whole-document pilots on the currently certified lanes instead of blind full-document rollout.

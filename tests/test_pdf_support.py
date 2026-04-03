@@ -1934,6 +1934,23 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         )
         self.assertTrue(all(sentence.source_text not in {"1", "2"} for sentence in result.sentences if sentence.translatable))
 
+    def test_bootstrap_pipeline_supports_high_risk_text_pdf(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "two-column.pdf"
+            _write_high_risk_two_column_pdf(pdf_path)
+
+            result = BootstrapOrchestrator().bootstrap_document(pdf_path)
+
+        self.assertEqual(result.document.source_type, SourceType.PDF_TEXT)
+        self.assertEqual(result.document.metadata_json["pdf_profile"]["pdf_kind"], "text_pdf")
+        self.assertEqual(result.document.metadata_json["pdf_profile"]["layout_risk"], "high")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertEqual(result.chapters[0].risk_level, Severity.CRITICAL)
+        self.assertIn(
+            "layout_risk_high",
+            result.chapters[0].metadata_json.get("structure_flags", []),
+        )
+
     def test_bootstrap_pipeline_merges_multiline_heading_continuations(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "multiline-heading.pdf"
@@ -6252,7 +6269,7 @@ class PdfApiWorkflowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("pdf_text", payload["supported_source_types"])
-        self.assertEqual(payload["current_phase"], "p1_text_pdf_bootstrap")
+        self.assertEqual(payload["current_phase"], "p1_text_pdf_guarded_bootstrap")
 
     def test_bootstrap_document_returns_pdf_profile_for_text_pdf(self) -> None:
         pdf_path = Path(self.tempdir.name) / "sample.pdf"
@@ -6271,14 +6288,23 @@ class PdfApiWorkflowTests(unittest.TestCase):
         self.assertEqual(payload["chapters"][0]["risk_level"], "low")
         self.assertGreater(payload["chapters"][0]["parse_confidence"], 0.9)
 
-    def test_bootstrap_document_rejects_high_risk_layout_pdf(self) -> None:
+    def test_bootstrap_document_accepts_high_risk_layout_pdf_with_explicit_risk(self) -> None:
         pdf_path = Path(self.tempdir.name) / "two-column.pdf"
         _write_high_risk_two_column_pdf(pdf_path)
 
         response = self.client.post("/v1/documents/bootstrap", json={"source_path": str(pdf_path)})
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("layout_risk=high", response.json()["detail"])
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["source_type"], "pdf_text")
+        self.assertEqual(payload["pdf_profile"]["pdf_kind"], "text_pdf")
+        self.assertEqual(payload["pdf_profile"]["layout_risk"], "high")
+        self.assertEqual(payload["chapters"][0]["risk_level"], "critical")
+        self.assertEqual(payload["pdf_page_evidence"]["page_count"], 2)
+        self.assertEqual(
+            [page["page_layout_risk"] for page in payload["pdf_page_evidence"]["pdf_pages"]],
+            ["medium", "medium"],
+        )
 
     def test_bootstrap_document_accepts_academic_paper_pdf_lane(self) -> None:
         pdf_path = Path(self.tempdir.name) / "academic-paper.pdf"
