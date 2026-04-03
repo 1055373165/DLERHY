@@ -9108,6 +9108,51 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
             else:
                 sys.modules["fitz"] = original_fitz
 
+    def test_pdf_original_asset_probe_flags_fragmented_embedded_images(self) -> None:
+        class _FakeImageRect:
+            def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.x0 = x0
+                self.y0 = y0
+                self.x1 = x1
+                self.y1 = y1
+
+        class _FakePage:
+            def get_images(self, full=False):
+                return [(101,), (202,)]
+
+            def get_image_rects(self, xref: int):
+                if xref == 101:
+                    return [_FakeImageRect(0.0, 0.0, 20.0, 20.0)]
+                if xref == 202:
+                    return [_FakeImageRect(30.0, 0.0, 50.0, 20.0)]
+                return []
+
+        class _FakeDocument:
+            def extract_image(self, _xref: int):
+                raise AssertionError("fragmented composite probe should not attempt single-image extraction")
+
+        class _FakeRect:
+            def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.x0 = x0
+                self.y0 = y0
+                self.x1 = x1
+                self.y1 = y1
+
+        export_service = ExportService(
+            repository=SimpleNamespace(session=None),
+            runtime_bundle_service=object(),
+            export_routing_service=object(),
+        )
+        availability = export_service._probe_pdf_original_asset(
+            _FakeDocument(),
+            _FakePage(),
+            _FakeRect(0.0, 0.0, 100.0, 100.0),
+        )
+
+        self.assertEqual(availability["availability"], "fragmented_embedded_images")
+        self.assertEqual(availability["fragment_count"], 2)
+        self.assertEqual(availability["best_overlap_ratio"], 0.04)
+
     def test_export_merges_linked_pdf_image_caption_into_single_render_block(self) -> None:
         class _StubPdfParser:
             def parse(self, _file_path, profile=None):

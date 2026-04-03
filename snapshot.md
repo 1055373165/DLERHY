@@ -1,6 +1,6 @@
 # Translate Agent Readiness Snapshot
 
-Last Updated: 2026-04-03 11:59 +0800
+Last Updated: 2026-04-03 12:24 +0800
 Workspace: `/Users/smy/project/book-agent`
 Branch: `main`
 Worktree Policy: single live worktree only
@@ -75,7 +75,7 @@ The current stack is not yet claiming:
 
 - Certification currently applies to the nine-sample benchmark corpus, not to every unseen document family.
 - High-risk text PDFs now enter the guarded bootstrap path through the normal product route instead of requiring a direct parser probe.
-- `L2` and `L6` still include fallback-rendered PDF asset slices; those slices are accepted because legibility passes, and current provenance now distinguishes vector-only/non-extractable pages from true original-asset parity misses.
+- `L2` and `L6` still include fallback-rendered PDF asset slices; those slices are accepted because legibility passes, and current provenance now distinguishes vector-only/non-extractable pages, noncanonical fragmented composites, and true original-asset parity misses.
 - `L6` is effectively a `Tier C` lane: content fidelity plus explicit artifact preservation and controlled degradation when inner artifact text cannot be safely recovered.
 
 ## 6. Core Files On The Active Mainline
@@ -102,6 +102,6 @@ The current line has already closed the benchmark-program phase:
 
 ## 8. Next Todo
 
-1. Improve PDF original-asset extraction parity on the remaining fragmented composite figure slices.
-2. Start controlled slice-first whole-document runs on the certified lanes.
-3. Expand the benchmark corpus before making broader cross-format generalization claims.
+1. Start controlled slice-first whole-document runs on the certified lanes.
+2. Expand the benchmark corpus before making broader cross-format generalization claims.
+3. Reopen asset-parity hardening only if future documents expose a true extractable-original miss.

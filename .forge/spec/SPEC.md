@@ -145,5 +145,5 @@ The current mainline is considered successful when:
 1. Keep the current benchmark/certification truth as the active mainline baseline.
 2. Keep high-risk text PDFs on the guarded bootstrap path so parser readiness and product-path readiness stay converged.
 3. Distinguish unavailable original-asset opportunities from true parity misses on PDF lanes.
-4. Improve original-asset extraction parity on the remaining fragmented composite PDF figure slices.
+4. Use slice-first whole-document pilots as the next default step on currently certified lanes.
 5. Expand the benchmark corpus before widening readiness claims further.

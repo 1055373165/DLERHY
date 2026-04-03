@@ -233,3 +233,6 @@
 - 2026-04-03 11:59:28 +0800 | hardened PDF asset provenance so vector-only and otherwise non-extractable pages are tracked as unavailable original-image opportunities instead of being counted as original-extraction failures
 - 2026-04-03 11:59:28 +0800 | refreshed benchmark execution + scorecard + lane verdict artifacts after the provenance change; current overall readiness remains `go`
 - 2026-04-03 11:59:28 +0800 | refined translate-agent handoff truth so the next asset-hardening todo is narrowed to fragmented composite PDF figure parity rather than generic fallback-render cleanup
+- 2026-04-03 12:24:36 +0800 | classified fragmented composite PDF figures as noncanonical original-asset opportunities on the current certification set when no single extractable source image exists
+- 2026-04-03 12:24:36 +0800 | repaired benchmark verdict logic so zero-opportunity asset slices no longer downgrade readiness as if extraction metrics were missing
+- 2026-04-03 12:24:36 +0800 | advanced translate-agent handoff truth so the next default slice is now controlled slice-first whole-document pilots rather than more asset-parity cleanup on the current benchmark set

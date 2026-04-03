@@ -1,6 +1,6 @@
 # Mainline Progress
 
-Last Updated: 2026-04-03 11:59 +0800
+Last Updated: 2026-04-03 12:24 +0800
 Status: translate-agent-readiness-mainline
 Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围。
 
@@ -45,6 +45,7 @@ Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围
 - 高 artifact 密度论文的受保护 artifact 处理
 - PDF 原图优先提取 + 高分辨率 fallback 的正式主链路接入
 - PDF asset provenance 现在会把“向量页/不可抽原图页”与“真正的原图 parity 缺口”区分开
+- fragmented composite PDF figure 现在也会被视作 noncanonical original opportunity，而不是被误算成 parity miss
 
 ### 2.3 当前认证结果
 
@@ -77,11 +78,11 @@ Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围
 
 ### P0
 
-- 提升 fragmented composite PDF figure 的 original-asset extraction parity
 - 以 `slice-first` 模式开始受控整本书 / 整篇论文运行
+- 扩展 benchmark corpus，把 readiness claim 从当前 9 样本推进到更多文档家族
 
 ### P1
 
-- 扩展 benchmark corpus，把 readiness claim 从当前 9 样本推进到更多文档家族
+- 如果未来文档暴露出真实的 extractable-original miss，再重新打开 asset parity hardening
 - 补 mixed / scanned / unusual-layout 样本，明确哪些 lane 应该继续 `go`，哪些应该只给降级支持
 - 把整本运行后的抽样复核结果继续并入 readiness truth
