@@ -22,6 +22,8 @@ def _route_name_for(export_type: ExportType, source_type: SourceType) -> str:
         return f"{source_type.value}.rebuilt_pdf_via_html"
     if export_type == ExportType.REBUILT_EPUB:
         return f"{source_type.value}.rebuilt_epub_spine"
+    if export_type == ExportType.ZH_EPUB:
+        return f"{source_type.value}.source_preserving_epub_patch"
     if export_type == ExportType.MERGED_HTML:
         return f"{source_type.value}.merged_html"
     if export_type == ExportType.MERGED_MARKDOWN:

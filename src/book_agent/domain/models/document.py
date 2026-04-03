@@ -90,6 +90,11 @@ class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_value_type(BlockType, name="block_type"),
         nullable=False,
     )
+    parse_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="SET NULL"),
+    )
+    canonical_node_id: Mapped[str | None] = mapped_column(Text)
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_text: Mapped[str | None] = mapped_column(Text)
     source_anchor: Mapped[str | None] = mapped_column(Text)
@@ -120,6 +125,11 @@ class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("chapters.id", ondelete="CASCADE"),
         nullable=False,
     )
+    parse_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="SET NULL"),
+    )
+    canonical_node_id: Mapped[str | None] = mapped_column(Text)
     document_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
         ForeignKey("documents.id", ondelete="CASCADE"),

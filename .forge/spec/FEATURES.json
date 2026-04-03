@@ -1,468 +1,146 @@
 [
   {
     "id": "F001",
-    "category": "functional",
+    "category": "framework",
     "priority": "P0",
-    "title": "Review deadlock self-heal remains runtime-owned and replay-bounded",
-    "description": "Review deadlock incidents flow through repair dispatch, repair execution, bundle publication, and bounded review replay.",
+    "title": "Forge v2 now owns the high-fidelity document translation change_request mainline",
+    "description": "The active `.forge/` ledger no longer points at runtime self-heal closure as the current mainline. It now treats high-fidelity document translation foundation as the authoritative change_request path.",
     "verification": [
-      "Run the representative runtime self-heal controller baseline",
-      "Confirm review deadlock tests pass",
-      "Confirm the repair path remains bounded to chapter review scope"
+      "Read .forge/spec/SPEC.md and confirm the north star is high-fidelity document translation foundation",
+      "Read .forge/DECISIONS.md and confirm the mainline decision has been rewritten accordingly",
+      "Read .forge/STATE.md and confirm batch-64 is the active change_request slice"
     ],
     "dependencies": [],
     "passes": true
   },
   {
     "id": "F002",
-    "category": "functional",
+    "category": "data-model",
     "priority": "P0",
-    "title": "Export misrouting self-heal remains runtime-owned and replay-bounded",
-    "description": "Export misrouting incidents flow through repair dispatch, repair execution, bundle publication, and bounded export replay.",
+    "title": "Document parse revisions persist canonical IR sidecar truth",
+    "description": "The system can persist parse revisions and revision artifacts so canonical IR exists as durable file truth rather than ephemeral parser output.",
     "verification": [
-      "Run the representative runtime self-heal controller baseline",
-      "Confirm export controller tests pass",
-      "Confirm export runtime v2 context still records bounded recovery data"
+      "Create parse revision ORM models and migration",
+      "Persist a parse revision plus canonical IR artifact record",
+      "Confirm the stored artifact path points at a materialized canonical IR sidecar"
     ],
-    "dependencies": [],
+    "dependencies": [
+      "F001"
+    ],
     "passes": true
   },
   {
     "id": "F003",
-    "category": "functional",
+    "category": "contract",
     "priority": "P0",
-    "title": "Packet runtime defect self-heal remains runtime-owned and replay-bounded",
-    "description": "Packet runtime defects continue to repair through the bounded packet lane across direct and controller-runner paths.",
+    "title": "Canonical IR has a minimal executable schema",
+    "description": "Canonical IR defines a stable minimal schema for document, chapter, block, asset, and relation truth plus JSON serialization helpers.",
     "verification": [
-      "Run the representative runtime self-heal controller baseline",
-      "Confirm packet runtime repair tests pass",
-      "Confirm packet repair remains packet-scoped"
+      "Instantiate canonical IR types from a representative ParsedDocument",
+      "Serialize the canonical IR to JSON",
+      "Reload the same JSON into canonical IR objects without losing core fields"
     ],
-    "dependencies": [],
+    "dependencies": [
+      "F002"
+    ],
     "passes": true
   },
   {
     "id": "F004",
-    "category": "contract",
+    "category": "projection",
     "priority": "P0",
-    "title": "Repair execution remains contract-driven across remote and transport-backed paths",
-    "description": "The runtime preserves explicit request/result contracts plus deterministic worker, executor, and transport selection.",
+    "title": "Execution artifacts carry parse revision and canonical node provenance",
+    "description": "Projected Block and Sentence artifacts can point back to parse revision and canonical node identity without breaking the current bootstrap flow.",
     "verification": [
-      "Read .forge/STATE.md for the last widened runtime self-heal baseline",
-      "Confirm the last verified baseline still includes contract, executor, registry, transport, and remote-agent tests",
-      "Confirm no later batch regressed those guarantees"
+      "Run ParseService on a representative ParsedDocument",
+      "Confirm Block provenance includes parse_revision_id and canonical_node_id",
+      "Confirm Sentence provenance carries the same upstream identity through segmentation"
     ],
-    "dependencies": [],
+    "dependencies": [
+      "F002",
+      "F003"
+    ],
     "passes": true
   },
   {
     "id": "F005",
-    "category": "functional",
+    "category": "verification",
     "priority": "P0",
-    "title": "Decision-aware scheduling and explicit resume semantics remain enforced",
-    "description": "Repair work items honor retry-after backoff, manual escalation non-claimability, reseed blocking, and explicit resume with route overrides.",
+    "title": "Canonical IR foundation is covered by targeted tests and compile checks",
+    "description": "The first slice is not considered complete until targeted tests and compile checks prove the new parse revision skeleton works and does not obviously regress the repo.",
     "verification": [
-      "Read .forge/STATE.md for the last widened runtime self-heal baseline",
-      "Confirm batches 39-41 remain verified in file truth",
-      "Confirm no later slice regressed retry-later or manual-escalation semantics"
+      "Run the targeted canonical IR unittest slice",
+      "Run py_compile across the new parse revision and canonical IR files",
+      "Confirm the baseline init smoke still passes or remains intentionally unchanged"
     ],
-    "dependencies": [],
+    "dependencies": [
+      "F004"
+    ],
     "passes": true
   },
   {
     "id": "F006",
-    "category": "control-plane",
-    "priority": "P0",
-    "title": "Bounded-lane control-plane surfaces expose repair blockage truth",
-    "description": "Review, export, and packet recovery surfaces expose whether a repair lane is backoff-blocked, manual-escalation-waiting, or ready-to-continue.",
+    "category": "export",
+    "priority": "P1",
+    "title": "EPUB export gains a source-preserving patch path",
+    "description": "The system can patch original EPUB spine/DOM structure instead of relying only on rebuilt EPUB output.",
     "verification": [
-      "Run the representative runtime self-heal controller baseline",
-      "Confirm blockage projection assertions pass for packet, review, and export surfaces",
-      "Confirm batch-42 report records this capability"
+      "Introduce a source-preserving EPUB patch exporter",
+      "Preserve TOC, internal anchors, and footnote links",
+      "Verify translated text is written back without rebuilding the entire book"
     ],
     "dependencies": [
-      "F001",
-      "F002",
-      "F003",
-      "F005"
+      "F004"
     ],
     "passes": true
   },
   {
     "id": "F007",
-    "category": "control-plane",
+    "category": "parser",
     "priority": "P1",
-    "title": "Workflow and API surfaces expose runtime repair blockage summaries",
-    "description": "Operator-facing runtime contexts should surface repair blockage summaries without requiring callers to inspect deep controller or proposal lineage.",
+    "title": "PDF planning persists page and zone extraction intent",
+    "description": "The parser can record page-level or zone-level extraction modes such as native_text, ocr_overlay, and hybrid_merge as part of canonical truth.",
     "verification": [
-      "Add workflow or API-level assertions for exported runtime v2 contexts",
-      "Confirm blockage summary is present in the user-facing payload",
-      "Confirm the payload remains stable across review, export, or packet recovery surfaces"
+      "Introduce PDF page or zone planning metadata",
+      "Persist extraction mode and risk reasons into canonical truth",
+      "Confirm mixed-risk PDFs no longer depend only on document-level routing semantics"
     ],
     "dependencies": [
-      "F006"
+      "F003"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "id": "F008",
-    "category": "framework",
-    "priority": "P0",
-    "title": "Forge v2 resume sessions start from spec, feature inventory, and init file truth",
-    "description": "The repo provides SPEC.md, FEATURES.json, and an idempotent init.sh so autonomous resume no longer depends on chat reconstruction.",
+    "category": "translation",
+    "priority": "P1",
+    "title": "Translation units project from canonical truth rather than raw block heuristics",
+    "description": "The translation orchestration layer can derive translation units from canonical nodes instead of only the current coarse block grouping.",
     "verification": [
-      "Confirm .forge/spec/SPEC.md exists",
-      "Confirm .forge/spec/FEATURES.json is valid JSON",
-      "Run bash .forge/init.sh and confirm the smoke baseline passes"
+      "Introduce TranslationUnit projection objects",
+      "Project representative body/caption/reference units from canonical IR",
+      "Confirm packet construction can consume projected unit provenance"
     ],
-    "dependencies": [],
-    "passes": true
+    "dependencies": [
+      "F004"
+    ],
+    "passes": false
   },
   {
     "id": "F009",
-    "category": "control-plane",
+    "category": "quality",
     "priority": "P1",
-    "title": "Export dashboard records expose runtime repair blockage summaries",
-    "description": "Export list/dashboard callers should be able to read runtime repair blockage summary directly from each export record without fetching the export detail payload first.",
+    "title": "Canonical-truth export gates and source maps exist",
+    "description": "Exporter-grade source maps and parse-projection validation gates exist so canonical truth can be verified before and after export.",
     "verification": [
-      "Add export dashboard assertions for runtime v2 blockage summary fields",
-      "Confirm export record payloads carry runtime_v2_context with blockage summary",
-      "Confirm the record-level summary matches the export detail payload for the same export"
+      "Introduce export source-map sidecar output",
+      "Add parse-projection validation or gate checks",
+      "Confirm failures can be surfaced as structured issues instead of silent drift"
     ],
     "dependencies": [
-      "F007"
+      "F004",
+      "F006"
     ],
-    "passes": true
-  },
-  {
-    "id": "F010",
-    "category": "control-plane",
-    "priority": "P1",
-    "title": "Document-level latest-run surfaces expose bounded-lane blockage summaries beyond export-only recovery",
-    "description": "Document summary and history callers should be able to read the latest run's normalized repair blockage summary for review deadlock, packet runtime defect, or export recovery without drilling into controller-specific state.",
-    "verification": [
-      "Add document summary or history assertions for non-export bounded-lane runtime_v2_context",
-      "Confirm latest-run payloads surface normalized blockage summary for review or packet recovery",
-      "Confirm the exposed summary remains aligned with the underlying runtime_v2 lineage source"
-    ],
-    "dependencies": [
-      "F007"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F011",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 smoke baseline covers workflow blockage parity surfaces",
-    "description": "The default resume smoke path should verify the newer run/export/dashboard/document-history blockage summary surfaces so automated takeover does not silently regress them.",
-    "verification": [
-      "Expand .forge/init.sh to include representative workflow blockage parity tests",
-      "Run bash .forge/init.sh and confirm the widened smoke baseline passes",
-      "Confirm the widened baseline still covers the original runtime self-heal controller smoke"
-    ],
-    "dependencies": [
-      "F008",
-      "F010"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F012",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Human-facing resume handoff docs track verified Forge truth",
-    "description": "snapshot.md, progress.txt, and docs/mainline-progress.md should reflect the currently verified runtime self-heal batches so a new programmer can resume from file truth without replaying chat.",
-    "verification": [
-      "Update snapshot.md to the latest verified batch and next frozen slice",
-      "Update progress.txt and docs/mainline-progress.md to the same verified state",
-      "Confirm the handoff docs no longer point at stale pre-batch-43 checkpoints"
-    ],
-    "dependencies": [
-      "F011"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F013",
-    "category": "control-plane",
-    "priority": "P1",
-    "title": "Document-level latest-run workflow parity is explicitly covered for packet runtime defects",
-    "description": "Document summary and history callers should have representative API regression coverage proving packet-runtime-defect blockage summary appears in latest-run workflow context, not only review-deadlock coverage.",
-    "verification": [
-      "Add API regression assertions for latest_run runtime_v2_context sourced from last_runtime_defect_recovery",
-      "Confirm document summary exposes packet blockage summary",
-      "Confirm document history latest-run context matches the same packet blockage summary"
-    ],
-    "dependencies": [
-      "F010"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F014",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 default smoke also covers packet latest-run workflow parity",
-    "description": "The widened init smoke should cover the explicit packet latest-run workflow parity regression as well as the existing review-side regression, so default resume protects both non-export bounded lanes.",
-    "verification": [
-      "Add the packet latest-run workflow parity API regression to .forge/init.sh",
-      "Run bash .forge/init.sh and confirm the widened smoke still passes",
-      "Confirm the smoke still includes the previously added review-side workflow parity coverage"
-    ],
-    "dependencies": [
-      "F011",
-      "F013"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F015",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 classifies discovered branch work before rewriting the mainline",
-    "description": "Autonomous runs should classify new mid-run work as mainline_required, mainline_adjacent, or out_of_band instead of silently absorbing or ignoring it.",
-    "verification": [
-      "Read forge-v2/SKILL.md and confirm branch intake classes and admission rules are defined",
-      "Read forge-v2/references/branch-intake-governance.md and confirm classification criteria are explicit",
-      "Read .forge/spec/SPEC.md and confirm the current run now treats branch intake as part of the executable spec"
-    ],
-    "dependencies": [
-      "F008"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F016",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Accepted, deferred, and rejected branch decisions are written transactionally to the single live ledger",
-    "description": "Branch handling should specify which .forge artifacts must change so resume never depends on chat memory or silent scope drift.",
-    "verification": [
-      "Read forge-v2/SKILL.md and confirm the branch-decision ledger transaction lists SPEC, FEATURES, DECISIONS, STATE, log, and batch updates",
-      "Read forge-v2/references/branch-intake-governance.md and confirm accepted, deferred, and rejected branches all require file-truth traces",
-      "Confirm .forge/DECISIONS.md records this ledger rule as part of the active execution contract"
-    ],
-    "dependencies": [
-      "F015"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F017",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 stop legality is auditable after each verified batch",
-    "description": "A verified batch should not naturally suspend the run; file truth must explain why the run stopped or why no next dependency-closed slice remains.",
-    "verification": [
-      "Read forge-v2/SKILL.md and confirm the mandatory post-verification loop resolves branch work before stop/go decisions",
-      "Read forge-v2/SKILL.md and forge-v2/references/long-running-hardening.md and confirm legal stop reasons are explicit",
-      "Read .forge/spec/SPEC.md and .forge/DECISIONS.md and confirm stop legality is now part of the current run contract"
-    ],
-    "dependencies": [
-      "F015",
-      "F016"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F018",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 default init smoke validates governance contract drift",
-    "description": "The default resume smoke should cheaply verify that branch-intake, single-ledger transaction, stop-legality, and handoff truth remain aligned with the active Forge v2 governance model.",
-    "verification": [
-      "Add a lightweight governance validation script under .forge/scripts",
-      "Run bash .forge/init.sh and confirm the runtime smoke plus governance validation both pass",
-      "Confirm the init path checks FEATURES.json validity and cross-artifact governance text/handoff truth"
-    ],
-    "dependencies": [
-      "F014",
-      "F015",
-      "F016",
-      "F017"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F019",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Forge v2 active takeover continues into the next change request after inventory completion",
-    "description": "A fully green inventory should not naturally suspend a fully autonomous takeover; Forge v2 should scan local truth for the next credible change request before it is allowed to stop.",
-    "verification": [
-      "Read forge-v2/SKILL.md and confirm inventory completion now requires a continuation scan for the next credible change request",
-      "Read forge-v2/references/branch-intake-governance.md and confirm stop legality now includes post-completion change-request discovery",
-      "Read .forge/spec/SPEC.md and .forge/DECISIONS.md and confirm the current run now treats inventory completion as a checkpoint rather than automatic stop permission"
-    ],
-    "dependencies": [
-      "F015",
-      "F016",
-      "F017",
-      "F018"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F020",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Default Forge v2 smoke no longer emits FastAPI lifecycle deprecation warnings",
-    "description": "The app should use a lifespan-managed startup/shutdown path instead of deprecated FastAPI on_event hooks so the default takeover baseline is cleaner and less misleading.",
-    "verification": [
-      "Replace FastAPI on_event startup/shutdown hooks with a lifespan-managed app lifecycle",
-      "Run bash .forge/init.sh and confirm the smoke still passes",
-      "Confirm the init output no longer contains the FastAPI on_event deprecation warning"
-    ],
-    "dependencies": [
-      "F018",
-      "F019"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F021",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Default Forge v2 smoke no longer emits sqlite unclosed database resource warnings",
-    "description": "The default takeover smoke should close sqlite connections and representative test engines cleanly so `ResourceWarning: unclosed database` does not obscure real regressions.",
-    "verification": [
-      "Close sqlite backfill helpers and representative smoke tests cleanly enough that the warning disappears",
-      "Run bash .forge/init.sh and confirm the smoke still passes",
-      "Confirm the init output no longer contains `ResourceWarning: unclosed database`"
-    ],
-    "dependencies": [
-      "F020"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F022",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Default Forge v2 init smoke treats warning-hygiene regressions as hard failures",
-    "description": "The default takeover smoke should fail immediately when previously eliminated FastAPI lifecycle or sqlite unclosed-database warnings reappear, rather than relying on ad hoc follow-up probes in reports.",
-    "verification": [
-      "Capture the runtime smoke output and validate it through a dedicated warning-hygiene gate inside .forge/init.sh",
-      "Run bash .forge/init.sh and confirm the baseline passes with smoke warning hygiene validation",
-      "Feed the warning-hygiene validator a synthetic forbidden-warning log and confirm it fails"
-    ],
-    "dependencies": [
-      "F020",
-      "F021"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F023",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation proves warning-hygiene gate wiring remains present",
-    "description": "Forge v2 governance validation should assert that the default init path still wires in the warning-hygiene gate and that the validator still blocks the two known warning classes, so batch-56 cannot silently drift back into a report-only guarantee.",
-    "verification": [
-      "Update the governance validator to assert .forge/init.sh still captures smoke output and invokes validate_init_warning_hygiene.sh",
-      "Update the governance validator to assert validate_init_warning_hygiene.sh still blocks the FastAPI lifecycle and sqlite unclosed-database warnings",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F022"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F024",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation proves latest verified checkpoint artifacts exist and mainline state is aligned",
-    "description": "Forge v2 governance validation should assert that the latest verified batch and report files actually exist on disk and that the current `.forge/STATE.md` mainline-complete checkpoint fields remain aligned, so the active checkpoint cannot silently drift into a chat-only or half-written state.",
-    "verification": [
-      "Update the governance validator to assert the latest verified batch and report artifacts exist",
-      "Update the governance validator to assert STATE.md keeps the explicit mainline_complete / active_batch none / authoritative_batch_contract none checkpoint fields",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F023"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F025",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation derives the latest verified checkpoint dynamically from .forge truth",
-    "description": "Forge v2 governance validation should discover the latest passing feature id and latest batch report from `.forge` truth instead of hardcoding the newest checkpoint markers, so future verified checkpoints do not require another validator self-patch just to stay governable.",
-    "verification": [
-      "Update the governance validator to compute the latest passing feature id from FEATURES.json",
-      "Update the governance validator to compute the latest batch/report checkpoint from .forge/reports and use those values in its assertions",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F024"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F026",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation no longer hardcodes the default smoke test count",
-    "description": "Forge v2 governance validation should assert the default `bash .forge/init.sh` contract and its expected post-smoke validations, rather than hardcoding a specific `Ran N tests` count that would require another validator patch whenever the smoke surface expands.",
-    "verification": [
-      "Update the governance validator so handoff truth checks depend on the default init command and post-smoke validation markers instead of a fixed test-count string",
-      "Keep the latest-checkpoint and feature-marker checks intact while removing the fixed smoke-count dependency",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F025"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F027",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation derives current checkpoint state shape from STATE.md",
-    "description": "Forge v2 governance validation should derive the current checkpoint shape from `.forge/STATE.md` instead of hardcoding `mainline_complete / active_batch none`, so the default governance path remains valid when the repo moves back into an active change-request batch.",
-    "verification": [
-      "Update the governance validator to read current_step and active_batch dynamically from STATE.md",
-      "Update handoff-truth assertions to use those dynamic state values instead of hardcoded mainline_complete markers",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F026"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F028",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Governance validation derives and validates the full STATE checkpoint tuple",
-    "description": "Forge v2 governance validation should derive and validate the full checkpoint tuple from `.forge/STATE.md` including `authoritative_batch_contract` and `expected_report_path`, so state pointers are semantically consistent instead of merely present.",
-    "verification": [
-      "Update the governance validator to read authoritative_batch_contract and expected_report_path dynamically from STATE.md",
-      "Validate those fields contextually: they should be `none` for an inactive checkpoint or match the active batch paths when a batch is open",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F027"
-    ],
-    "passes": true
-  },
-  {
-    "id": "F029",
-    "category": "framework",
-    "priority": "P1",
-    "title": "Remaining development work is explicitly delegated to Forge v2 change-request intake",
-    "description": "When the current inventory is complete, `.forge` and handoff truth should explicitly delegate all future development work to Forge v2's single-ledger `change_request` protocol, so the next session knows how to continue without reopening a fake active batch.",
-    "verification": [
-      "Write the remaining-work delegation contract into `.forge` decisions, state, and handoff docs",
-      "Confirm the handoff docs name Forge v2 `change_request` intake as the owner of future work against the existing `.forge/` ledger",
-      "Run bash .forge/init.sh and confirm the full default baseline still passes"
-    ],
-    "dependencies": [
-      "F028"
-    ],
-    "passes": true
+    "passes": false
   }
 ]

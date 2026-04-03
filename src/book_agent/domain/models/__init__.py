@@ -1,4 +1,5 @@
 from book_agent.domain.models.document import Block, BookProfile, Chapter, Document, DocumentImage, MemorySnapshot, Sentence
+from book_agent.domain.models.parse_revision import DocumentParseRevision, DocumentParseRevisionArtifact
 from book_agent.domain.models.ops import (
     ArtifactInvalidation,
     AuditEvent,
@@ -36,6 +37,8 @@ __all__ = [
     "Chapter",
     "Document",
     "DocumentImage",
+    "DocumentParseRevision",
+    "DocumentParseRevisionArtifact",
     "DocumentRun",
     "Export",
     "IssueAction",

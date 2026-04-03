@@ -1,244 +1,168 @@
-# Runtime Self-Heal Closure Spec
+# High-Fidelity Document Translation Foundation Spec
 
 ## North Star
 
-Book Agent should behave like a runtime-owned self-healing system rather than a workflow that only
-records failures for humans to babysit.
+Book Agent should evolve from a strong translation production pipeline into a high-fidelity
+document translation system.
 
-When translation, review, export, or packet-scoped runtime work fails, the system should:
+The target is not merely “English in, Chinese out.” The target is:
 
-- classify the failure deterministically
-- derive a bounded repair plan
-- create repair dispatch lineage
-- bind that dispatch to a claimable `REPAIR` work item
-- route repair execution through worker, adapter, executor, and transport contracts
-- interpret non-default repair decisions such as `retry_later` and
-  `manual_escalation_required` deterministically
-- publish and replay only after verified repair success
-- expose repair blockage truth in the control plane so the runtime can tell whether a lane is
-  blocked or ready without deep lineage inspection
+- parser truth that survives export
+- structure-aware translation that preserves meaning, hierarchy, and reading flow
+- source-preserving EPUB output
+- risk-aware PDF output that defaults to a readable Chinese edition instead of pretending to be a
+  page-faithful facsimile before the system is ready
+- a single-ledger Forge v2 execution model that can keep shipping this mainline without drifting
 
 ## Explicit Requirements
 
-1. The runtime must support bounded self-heal for all three proven lanes:
-   - review deadlock
-   - export misrouting
-   - packet runtime defect
-2. Repair execution must remain contract-driven:
-   - request contract
-   - result contract
-   - worker selection
-   - executor selection
-   - transport selection
-3. Repair scheduling must honor decision-aware semantics:
-   - `publish_bundle_and_replay`
-   - `retry_later`
-   - `manual_escalation_required`
-4. Manual escalation must be resumable explicitly with deterministic lineage and route overrides.
-5. Bounded-lane control-plane surfaces must expose repair blockage truth:
-   - `backoff_blocked`
-   - `manual_escalation_waiting`
-   - `ready_to_continue`
-6. Forge v2 autonomous execution must classify newly discovered branch work before it can change
-   the active mainline.
-7. Branch governance must support all of:
-   - `mainline_required`
-   - `mainline_adjacent`
-   - `out_of_band`
-8. Accepted, deferred, and rejected branch decisions must be written back to the single live
-   `.forge/` ledger so resume never depends on chat reconstruction.
-9. Stop legality must be auditable from file truth; a verified batch is a checkpoint, not a stop
-   reason.
-10. The default Forge v2 init smoke must validate both runtime self-heal behavior and governance
-    drift, so resume cannot silently fall back to a weaker autonomy contract.
-11. In active takeover mode, a fully green inventory must trigger a continuation scan for the next
-    credible `change_request` before the run may stop.
-12. When no credible adjacent slice remains, the remaining development surface must be delegated
-    explicitly to Forge v2's future `change_request` intake against the same single-ledger
-    `.forge/` truth.
+1. The new mainline is high-fidelity document translation foundation, not runtime self-heal
+   closure.
+2. The repo must preserve the current translation execution backbone:
+   - `Document / Chapter / Block / Sentence / TranslationPacket / TranslationRun / Review / Export`
+3. The system must introduce a Canonical Document IR layer that captures document structure truth
+   beyond the current execution-oriented block model.
+4. The first delivery slice must add parse revision persistence and canonical IR artifacts without
+   breaking the current parse/bootstrap pipeline.
+5. Canonical IR must be sidecar-first:
+   - revision record in the database
+   - canonical IR artifact on disk
+   - projection hints back into execution objects
+6. `Block` and `Sentence` provenance must be able to point back to parse revision and canonical
+   node identity.
+7. EPUB’s long-term primary export path must become source-preserving patch export rather than only
+   rebuilt export.
+8. PDF’s near-term product truth must remain “high-quality Chinese reading edition,” not
+   misleading page-faithful facsimile.
+9. Parser, translator, and exporter must converge on one shared source truth instead of each
+   carrying their own private structure guesses.
+10. Forge v2 remains the active owner of execution:
+    - `change_request` intake
+    - `mainline_required / mainline_adjacent / out_of_band` branch classification
+    - continuation scan after verified slices
+    - stop-legality proven from file truth
 
 ## Hidden Requirements
 
-- Resume sessions must not depend on previous chat context.
-- The repo must keep a single live `.forge/` ledger; no parallel runtime ledger may be created.
-- Published recovery truth must not be accidentally downgraded by transient dispatch updates.
-- The next slice must remain obvious from file truth, not from human interpretation.
-- Mid-run discovered work must be absorbable without human micromanagement, but also without
-  silent scope drift.
-- Rejected or deferred branch work must remain visible enough that the next session does not reopen
-  the same decision from scratch.
-- Governance guarantees should not live only in prose; the default init path should cheaply assert
-  that the current ledger and handoff docs still reflect them.
-- Inventory completion is not sufficient to end a fully autonomous takeover; the framework must
-  search local truth for the next credible adjacent hardening slice first.
-- The default init smoke should not emit known framework-noise warnings that obscure real
-  regressions, including deprecated lifecycle hooks or sqlite cleanup leakage.
-- Those warning-hygiene guarantees must be enforced by the default init path itself rather than by
-  ad hoc follow-up probe commands in reports or state notes.
-- Governance validation must also prove that this warning-hygiene gate remains wired into the
-  default init path, so the guarantee cannot silently fall back to report-only status.
-- Governance validation must also prove that the latest verified batch/report artifacts actually
-  exist and that the explicit `mainline_complete` checkpoint fields in `.forge/STATE.md` remain
-  aligned with that checkpoint.
-- Governance validation should derive the latest verified checkpoint markers from `.forge` truth
-  itself instead of hardcoding the newest batch/report/feature ids, so each new verified checkpoint
-  does not require another validator self-patch just to stay covered.
-- Governance validation should also avoid hardcoding the current smoke test count; it should verify
-  the default `bash .forge/init.sh` contract and its expected post-smoke validators instead.
-- Governance validation should also avoid hardcoding the current checkpoint shape; it should derive
-  the active `current_step` and `active_batch` from `.forge/STATE.md` and verify handoff truth
-  against those live values.
-- Governance validation should also derive and validate the rest of the STATE checkpoint tuple,
-  especially `authoritative_batch_contract` and `expected_report_path`, so state pointers remain
-  semantically aligned rather than only syntactically present.
-- When the current inventory is complete, handoff truth should still say who owns future work:
-  Forge v2 must remain the delegated intake path for subsequent change requests instead of leaving
-  the repo in an ambiguous "done for now" state.
+- Existing runtime self-heal work must remain reusable and not be reopened as accidental collateral
+  damage.
+- The first canonical IR slice must be small enough to land without a schema explosion.
+- The canonical IR artifact must be inspectable and restartable from file truth.
+- The first slice must improve future parser/export work immediately, not merely create abstract
+  types no one consumes.
+- The repo must remain resumable by Forge v2 after the mainline rewrite; a credible next change
+  request must stay visible from `.forge/` truth.
 
 ## Constraints
 
-- Work in the single shared checkout.
-- Do not reset or discard unrelated in-flight changes.
-- Keep replay bounded to the failed scope.
-- Preserve audit lineage across incident, proposal, dispatch, validation, bundle publication, and
-  replay.
-- Prefer representative runtime verification over purely local confidence.
-- Keep framework governance changes inside the same `.forge/` truth model; do not solve autonomy by
-  creating parallel planning artifacts.
-- Keep governance validation lightweight enough for routine resume use.
-- Keep post-completion continuation scanning grounded in local repo truth rather than open-ended
-  ideation.
+- Stay in the single shared checkout on `main`.
+- Do not revert unrelated user changes.
+- Keep the current parse/bootstrap/translation/review/export path working while introducing the
+  new layer.
+- Prefer sidecar artifact persistence over a first-pass page/line/span schema explosion.
+- Keep baseline verification cheap enough to run every resume session.
 
 ## Chosen Problem Framing
 
-This repo is no longer primarily blocked on UI polish or additional transport variants.
+The user is not asking for “another parser improvement.”
+The real request is to re-found the system around document structure truth so future translation
+and export quality stop being capped by the current execution-only IR.
 
-The mainline problem is runtime self-heal closure:
-
-- the control plane already exists
-- the repair lane already exists
-- the routing contracts already exist
-- the remaining work is to make the runtime increasingly self-deciding, observable, resumable, and
-  governable when new branch work appears mid-run
+A naive framing would keep tuning prompts or adding parser heuristics directly into `Block`.
+That would underperform because exporter-grade provenance, DOM/node identity, page/zone structure,
+and source-preserving rewrites need a deeper truth layer than the current pipeline stores.
 
 ## Chosen Solution Topology
 
-The active topology is:
+The chosen topology is:
 
-1. runtime lane health detects a bounded failure
-2. incident triage classifies the failure
-3. runtime repair planner emits a bounded repair plan
-4. incident controller seeds repair dispatch plus claimable `REPAIR` work item
-5. runtime repair execution runs through worker / adapter / executor / transport contracts
-6. validation and bundle publication happen only after successful repair execution
-7. replay stays bounded to the failed scope
-8. control-plane surfaces mirror repair blockage truth back to runtime-facing callers
-9. after every verified slice, Forge v2 classifies any newly discovered branch work, rewrites the
-   single live ledger if needed, and only then continues or stops legally
+1. introduce Canonical Document IR as a sidecar-first source-of-truth layer
+2. keep Translation Execution IR as a projection of that layer
+3. tag projected execution artifacts with parse revision + canonical node provenance
+4. later add source-preserving EPUB export and risk-aware PDF planning on top of the same truth
+
+Rejected topologies:
+
+- “Just extend `Block.source_span_json` forever”
+  - loses query discipline and turns provenance into ad hoc nested metadata
+- “Fully normalize page/line/span tables immediately”
+  - too much migration cost before the first value-producing slice lands
+- “Start with rebuilt exporter redesign before shared source truth exists”
+  - exporter quality would still be capped by lossy upstream data
 
 ## User And Operator Flows
 
-### Runtime-Owned Happy Path
+### Parse Truth Flow
 
-1. A bounded lane fails.
-2. The runtime opens or updates an incident.
-3. A repair proposal and repair dispatch are created.
-4. The `REPAIR` lane executes a bounded repair.
-5. Validation passes, the bundle is published, and bounded replay occurs.
-6. The control plane shows published recovery state.
+1. A document is ingested and parsed.
+2. The parser produces `ParsedDocument`.
+3. The canonical IR service materializes a parse revision plus canonical IR sidecar artifact.
+4. The bootstrap projection emits `Chapter / Block / Sentence / Packet` as before.
+5. Execution artifacts carry parse revision and canonical node provenance.
 
-### Retry-Later Path
+### Future EPUB Flow
 
-1. Repair execution returns `retry_later`.
-2. The dispatch records retry timing and blockage state.
-3. The scheduler/claim layer leaves the work item non-claimable until backoff elapses.
-4. The control plane shows `backoff_blocked`.
-5. Once backoff elapses or a resume occurs, the lane becomes `ready_to_continue`.
+1. Canonical IR maps EPUB spine, DOM structure, and text-node identity.
+2. Translation units are projected from canonical nodes.
+3. Export patches the original EPUB structure instead of rebuilding the whole book from scratch.
 
-### Manual Escalation Path
+### Future PDF Flow
 
-1. Repair execution returns `manual_escalation_required`.
-2. The work item becomes terminal and non-claimable by default.
-3. The control plane shows `manual_escalation_waiting`.
-4. A human explicitly resumes the dispatch, optionally with routing overrides.
-5. The lane returns to `ready_to_continue`.
+1. Canonical IR captures page, zone, reading-order, asset, and relation truth.
+2. Translation units project from that truth.
+3. Export defaults to a faithful Chinese reading edition until facsimile-grade truth is proven.
 
-### Branch Intake Path
+### Forge v2 Flow
 
-1. A verified slice exposes new work or a new requirement edge.
-2. Forge v2 classifies it as `mainline_required`, `mainline_adjacent`, or `out_of_band`.
-3. If it is `mainline_required`, the active mainline and acceptance truth are rewritten before the
-   next dispatch.
-4. If it is `mainline_adjacent`, the branch is recorded and allowed to compete through the fork
-   rule.
-5. If it is `out_of_band`, the branch is explicitly deferred or rejected in file truth.
-
-### Stop-Legality Path
-
-1. A slice reaches verified state.
-2. Forge v2 resolves any discovered branch candidates into file truth.
-3. Forge v2 determines whether a next dependency-closed slice exists.
-4. The run may stop only for a real blocker, an explicit user decision, an explicit framework turn
-   boundary, or an explicit no-next-slice state recorded in `.forge/`.
+1. A verified slice lands.
+2. Forge v2 performs a continuation scan.
+3. Any newly discovered work is classified as `mainline_required`, `mainline_adjacent`, or
+   `out_of_band`.
+4. The ledger is rewritten transactionally if the mainline changes.
+5. The run continues unless a real blocker or no next dependency-closed slice exists.
 
 ## Edge Cases And Failure Modes
 
-- malformed remote repair result contracts must fail deterministically
-- unknown worker, executor, or transport hints must fail inside the bounded repair lifecycle
-- published recovery state must remain stable even while transient dispatch state changes
-- resumed repairs must refresh request-contract input bundles before re-entering the lane
-- duplicate reseed must remain blocked for manual-escalation terminal repair items
-- newly discovered branch work must not be left only in a summary or chat transcript
-- a clean checkpoint must not become an illegal soft stop simply because the next slice is obvious
+- canonical IR exists but execution projection never consumes it
+- parse revisions are persisted but sidecar artifacts are not restartable
+- provenance is attached to blocks but lost at sentence level
+- EPUB patch export is attempted before stable DOM/node locators exist
+- PDF work drifts into page-faithful export claims before the parser truth supports them
+- the new mainline is only written in chat and not in `.forge/`, causing the next resume to
+  restart the old runtime self-heal mainline by accident
 
 ## Non-Goals
 
-- broad UI polish unrelated to runtime self-heal closure
-- decorative framework ceremony
-- opening a second live execution ledger
-- widening replay beyond the failed bounded scope
+- page-faithful Chinese PDF facsimile in the first slice
+- image text redraw in the first slice
+- replacing the current translation pipeline
+- reopening the already verified runtime self-heal closure mainline
 
 ## Success Criteria
 
-The system is considered successful when:
+The foundation is successful when:
 
-- the three bounded repair lanes remain verified
-- decision-aware scheduling and explicit resume semantics remain verified
-- bounded-lane control-plane surfaces expose blockage truth without deep lineage inspection
-- Forge v2 resume sessions can restart from `.forge/STATE.md`, `.forge/spec/SPEC.md`,
-  `.forge/spec/FEATURES.json`, and `.forge/init.sh` without relying on chat memory
-- newly discovered branch work is classified and reflected in file truth before it changes the run
-- legal stops are explainable from file truth alone
-- the default init smoke validates that the active governance contract still exists across skill,
-  spec, decision, and handoff artifacts
-- a fully green inventory still triggers a continuation scan for the next credible change request
-  before stop legality may be claimed
-- the default init smoke remains free of the previously known FastAPI lifecycle and sqlite
-  unclosed-database warning noise
-- the default init smoke fails as soon as those known warning classes reappear
-- governance validation proves that the warning-hygiene gate and its forbidden-warning patterns are
-  still part of the default init contract
-- governance validation proves the active latest verified checkpoint still exists on disk and that
-  `.forge/STATE.md` remains aligned to the explicit mainline-complete checkpoint state
-- governance validation discovers the active latest verified checkpoint dynamically from `.forge`
-  truth instead of depending on stale hardcoded marker ids
-- governance validation does not depend on a stale hardcoded `Ran N tests` marker for the default
-  smoke surface
-- file truth explicitly delegates any remaining or future development work to Forge v2's
-  `change_request` protocol once the current inventory is complete
-- governance validation does not depend on a stale hardcoded `mainline_complete / active_batch none`
-  assumption for the current checkpoint shape
-- governance validation validates the full STATE checkpoint tuple, not just a subset of the visible
-  state fields
+- the active mainline in `.forge/` clearly points at high-fidelity document translation
+  foundation
+- parse revisions can be persisted and associated with canonical IR artifacts
+- canonical IR has a stable minimal schema for document/chapter/block/asset/relation truth
+- projected execution artifacts can point back to parse revision and canonical node identity
+- the first slice lands with targeted verification and without regressing the baseline
+- Forge v2 can resume this new mainline from file truth and continue on the next credible change
+  request
+- continuation scan and stop-legality remain part of the active execution contract
 
 ## Initial Delivery Strategy
 
-1. Preserve the verified runtime self-heal mainline through batch-42.
-2. Bootstrap Forge v2 spec/features/init artifacts from verified truth.
-3. Continue by selecting the next failing feature from `FEATURES.json`.
-4. Keep each subsequent slice dependency-closed, verified, and ledger-backed.
-5. When new branch work appears, classify it, rewrite the ledger transactionally, and only then
-   continue or stop.
-6. Keep the default init smoke current enough to validate both runtime behavior and governance.
-7. After inventory completion in active takeover mode, scan local truth for the next credible
-   change request before declaring the run complete.
+1. Rewrite the mainline from runtime self-heal closure to high-fidelity document translation
+   foundation through `change_request` intake.
+2. Freeze batch-64 as the smallest dependency-closed first slice:
+   - parse revision models
+   - canonical IR types
+   - repository/service skeleton
+   - projection provenance wiring
+   - targeted tests
+3. Verify batch-64.
+4. Perform a continuation scan for the next credible change request.
+5. Keep the single-ledger `.forge/` contract current as the system moves from parser truth to
+   source-preserving export.

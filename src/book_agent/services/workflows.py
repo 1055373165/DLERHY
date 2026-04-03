@@ -2307,6 +2307,31 @@ class DocumentWorkflowService:
                 route_evidence_json=artifacts.route_evidence_json,
                 runtime_v2_context=runtime_v2_context,
             )
+        if export_type == ExportType.ZH_EPUB:
+            artifacts = self.export_service.export_document_zh_epub(document_id)
+            document = self.session.get(type(bundle.document), document_id) or bundle.document
+            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
+            self._persist_document_export_runtime_v2_context(
+                document_id=document_id,
+                export_type=export_type,
+                export_records=[artifacts.export_record],
+                runtime_v2_context=runtime_v2_context,
+            )
+            return DocumentExportResult(
+                document_id=document_id,
+                export_type=export_type.value,
+                document_status=document.status.value,
+                file_path=str(artifacts.file_path),
+                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
+                chapter_results=results,
+                auto_followup_requested=auto_execute_followup_on_gate,
+                auto_followup_applied=bool(auto_followup_executions),
+                auto_followup_attempt_count=len(auto_followup_executions),
+                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
+                auto_followup_executions=auto_followup_executions,
+                route_evidence_json=artifacts.route_evidence_json,
+                runtime_v2_context=runtime_v2_context,
+            )
         if export_type == ExportType.REBUILT_PDF:
             artifacts = self.export_service.export_document_rebuilt_pdf(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document

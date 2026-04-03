@@ -206,6 +206,8 @@ def _document_export_label(export_type: ExportType) -> str:
         return "中文阅读稿"
     if export_type == ExportType.MERGED_MARKDOWN:
         return "中文阅读稿-Markdown"
+    if export_type == ExportType.ZH_EPUB:
+        return "中文EPUB"
     if export_type == ExportType.REBUILT_EPUB:
         return "重建EPUB"
     if export_type == ExportType.REBUILT_PDF:
@@ -799,6 +801,58 @@ class ExportService:
             route_evidence_json=route_decision.route_evidence_json,
         )
 
+    def export_document_zh_epub(self, document_id: str) -> ExportArtifacts:
+        bundle = self.repository.load_document_bundle(document_id)
+        if bundle.document.source_type != SourceType.EPUB:
+            raise ExportGateError("Source-preserving EPUB export is only available for EPUB source documents.")
+        for chapter_bundle in bundle.chapters:
+            self._enforce_gate(chapter_bundle, ExportType.ZH_EPUB)
+        route_decision = self._resolve_document_export_route(
+            document=bundle.document,
+            export_type=ExportType.ZH_EPUB,
+        )
+        output_dir = self.output_root / bundle.document.id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_path = output_dir / "zh-document.epub"
+        manifest_path = output_dir / "zh-document.epub.manifest.json"
+        self._write_source_preserving_epub(bundle, file_path)
+        manifest_path.write_text(
+            json.dumps(
+                self._build_rebuilt_document_manifest(
+                    bundle,
+                    file_path,
+                    export_type=ExportType.ZH_EPUB,
+                    renderer_kind="source_preserving_epub_patcher",
+                    derived_from_exports={},
+                    expected_limitations=[
+                        "source_archive_structure_preserved",
+                        "nav_and_anchors_preserved",
+                        "only_leaf_xhtml_nodes_patched",
+                    ],
+                    route_evidence_json=route_decision.route_evidence_json,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        export = self._record_document_export(
+            bundle,
+            ExportType.ZH_EPUB,
+            file_path,
+            manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
+        self.repository.save_export(export)
+        self._apply_source_preserving_epub_status_updates(bundle)
+        self.repository.session.flush()
+        return ExportArtifacts(
+            export_record=export,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            route_evidence_json=route_decision.route_evidence_json,
+        )
+
     def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
@@ -1317,6 +1371,7 @@ class ExportService:
             ExportType.BILINGUAL_HTML,
             ExportType.MERGED_HTML,
             ExportType.MERGED_MARKDOWN,
+            ExportType.ZH_EPUB,
             ExportType.REBUILT_EPUB,
             ExportType.REBUILT_PDF,
         }:
@@ -3155,6 +3210,8 @@ class ExportService:
             }
         )
         if export_type == ExportType.REBUILT_EPUB:
+            manifest["epub_path"] = str(output_path)
+        elif export_type == ExportType.ZH_EPUB:
             manifest["epub_path"] = str(output_path)
         elif export_type == ExportType.REBUILT_PDF:
             manifest["pdf_path"] = str(output_path)
@@ -7084,6 +7141,114 @@ class ExportService:
                 archive.writestr(f"OEBPS/{filename}", content, compress_type=zipfile.ZIP_DEFLATED)
             for asset_file in asset_files:
                 archive.write(asset_file, arcname=f"OEBPS/assets/{asset_file.relative_to(asset_root).as_posix()}")
+
+    def _write_source_preserving_epub(
+        self,
+        bundle: DocumentExportBundle,
+        file_path: Path,
+    ) -> None:
+        source_path = Path(bundle.document.source_path or "")
+        if not source_path.exists():
+            raise ExportGateError("Source-preserving EPUB export requires the original EPUB source file.")
+
+        chapter_render_blocks: dict[str, list[MergedRenderBlock]] = {
+            str((chapter_bundle.chapter.metadata_json or {}).get("href") or ""): self._render_blocks_for_chapter(
+                chapter_bundle
+            )
+            for chapter_bundle in bundle.chapters
+        }
+        patch_sources: dict[str, dict[str, str]] = {}
+        for chapter_href, render_blocks in chapter_render_blocks.items():
+            for block in render_blocks:
+                source_metadata = dict(block.source_metadata or {})
+                if not block.target_text:
+                    continue
+                source_path_value = str(source_metadata.get("source_path") or chapter_href or "").strip()
+                if source_path_value != chapter_href:
+                    continue
+                anchor = str(source_metadata.get("anchor") or "").strip()
+                if not anchor:
+                    continue
+                patch_sources.setdefault(chapter_href, {})[anchor] = block.target_text
+
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(source_path) as source_archive, zipfile.ZipFile(file_path, mode="w") as target_archive:
+            for info in source_archive.infolist():
+                raw = source_archive.read(info.filename)
+                if info.filename.endswith((".xhtml", ".html", ".htm")):
+                    raw = self._patch_source_preserving_epub_xhtml(
+                        raw,
+                        patch_sources.get(info.filename, {}),
+                    )
+                target_archive.writestr(info, raw)
+
+    def _patch_source_preserving_epub_xhtml(
+        self,
+        raw: bytes,
+        anchor_to_translation: dict[str, str],
+    ) -> bytes:
+        if not anchor_to_translation:
+            return raw
+        try:
+            root = _parse_xml_document(raw)
+        except ET.ParseError:
+            return raw
+
+        patched = False
+        for anchor, translation in anchor_to_translation.items():
+            element = self._find_epub_element_by_id(root, anchor)
+            if element is None:
+                continue
+            if not _normalize_render_text("".join(element.itertext())):
+                continue
+            self._patch_epub_element_text(element, translation)
+            patched = True
+
+        if not patched:
+            return raw
+        return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+    def _patch_epub_element_text(self, element: ET.Element, translation: str) -> None:
+        element.text = translation
+        for child in list(element):
+            if child.attrib.get("href") or child.attrib.get("id"):
+                self._clear_epub_descendant_text(child)
+                child.tail = ""
+                continue
+            self._clear_epub_text_recursively(child)
+            child.text = ""
+            child.tail = ""
+        for child in list(element):
+            if child.attrib.get("href") or child.attrib.get("id"):
+                child.tail = ""
+
+    def _clear_epub_descendant_text(self, element: ET.Element) -> None:
+        for child in list(element):
+            self._clear_epub_text_recursively(child)
+            child.tail = ""
+
+    def _clear_epub_text_recursively(self, element: ET.Element) -> None:
+        if element.text:
+            element.text = ""
+        for child in list(element):
+            self._clear_epub_text_recursively(child)
+            child.tail = ""
+
+    def _find_epub_element_by_id(self, root: ET.Element, element_id: str) -> ET.Element | None:
+        for element in root.iter():
+            if str(element.attrib.get("id") or "").strip() == element_id:
+                return element
+        return None
+
+    def _apply_source_preserving_epub_status_updates(self, bundle: DocumentExportBundle) -> None:
+        now = _utcnow()
+        for chapter_bundle in bundle.chapters:
+            chapter_bundle.chapter.status = ChapterStatus.EXPORTED
+            chapter_bundle.chapter.updated_at = now
+            self.repository.session.merge(chapter_bundle.chapter)
+        bundle.document.status = DocumentStatus.EXPORTED
+        bundle.document.updated_at = now
+        self.repository.session.merge(bundle.document)
 
     def _render_rebuilt_pdf_from_html(self, html_path: Path, pdf_path: Path) -> None:
         try:

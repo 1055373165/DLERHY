@@ -2831,6 +2831,53 @@ class _PageAssistPlan:
     region_candidates: tuple[dict[str, Any], ...] = ()
 
 
+@dataclass(slots=True, frozen=True)
+class _PageExtractionPlan:
+    intent: str
+    reasons: tuple[str, ...]
+    scope: str = "page"
+
+
+def _page_extraction_plan(
+    page: "PdfPage",
+    *,
+    profile: "PdfFileProfile",
+    page_layout_assessment: _PageLayoutAssessment,
+    page_context: _PageRecoveryContext,
+) -> _PageExtractionPlan:
+    reasons = list(page_layout_assessment.reasons)
+    if page_context.page_family != "body":
+        reasons.append(f"page_family_{page_context.page_family}")
+    if page_context.family_source and page_context.family_source != "body":
+        reasons.append(f"page_family_source_{page_context.family_source}")
+
+    if profile.pdf_kind == "scanned_pdf" or "ocr_scanned_page" in page_layout_assessment.reasons:
+        intent = "ocr_overlay"
+        reasons.append("scanned_or_ocr_required")
+    elif profile.pdf_kind == "mixed_pdf":
+        intent = "hybrid_merge"
+        reasons.append("mixed_pdf")
+    elif (
+        profile.recovery_lane == "academic_paper"
+        and (
+            "multi_column" in page_layout_assessment.reasons
+            or "column_fragment" in page_layout_assessment.reasons
+            or "academic_first_page_asymmetric" in page_layout_assessment.reasons
+        )
+    ):
+        intent = "hybrid_merge"
+        reasons.append("academic_paper_lane")
+    elif "multi_column" in page_layout_assessment.reasons or "column_fragment" in page_layout_assessment.reasons:
+        intent = "hybrid_merge"
+        reasons.append("layout_fragmentation")
+    else:
+        intent = "native_text"
+        reasons.append("text_preserving")
+
+    deduped_reasons = tuple(dict.fromkeys(reason for reason in reasons if reason))
+    return _PageExtractionPlan(intent=intent, reasons=deduped_reasons)
+
+
 def _assess_page_layout(
     page: "PdfPage",
     *,
@@ -4494,6 +4541,12 @@ class PdfStructureRecoveryService:
         for page in sorted(pages, key=lambda item: item.page_number):
             context = page_contexts.get(page.page_number, _PageRecoveryContext(is_toc_page=False))
             layout_assessment = page_layout_assessments.get(page.page_number, _PageLayoutAssessment())
+            extraction_plan = _page_extraction_plan(
+                page,
+                profile=profile,
+                page_layout_assessment=layout_assessment,
+                page_context=context,
+            )
             layout_signals = list(layout_assessment.reasons)
             toc_entries = [
                 {
@@ -4537,6 +4590,9 @@ class PdfStructureRecoveryService:
                     "layout_signals": layout_signals,
                     "page_layout_risk": layout_assessment.risk,
                     "page_layout_reasons": layout_signals,
+                    "extraction_intent": extraction_plan.intent,
+                    "extraction_intent_scope": extraction_plan.scope,
+                    "extraction_intent_reasons": list(extraction_plan.reasons),
                     "layout_suspect": page.page_number in suspicious_pages,
                     "role_counts": _sorted_counter(role_counts_by_page.get(page.page_number, Counter())),
                     "recovery_flags": sorted(flags_by_page.get(page.page_number, set())),

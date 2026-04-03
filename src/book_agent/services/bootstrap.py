@@ -34,6 +34,8 @@ from book_agent.domain.models import (
     Chapter,
     Document,
     DocumentImage,
+    DocumentParseRevision,
+    DocumentParseRevisionArtifact,
     JobRun,
     MemorySnapshot,
     Sentence,
@@ -44,6 +46,7 @@ from book_agent.domain.structure.epub import EPUBParser
 from book_agent.domain.structure.ocr import OcrPdfParser
 from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler, PdfFileProfile
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
+from book_agent.services.parse_ir import ParseIrService
 
 
 @dataclass(slots=True)
@@ -52,6 +55,8 @@ class ParseArtifacts:
     chapters: list[Chapter]
     blocks: list[Block]
     job_run: JobRun
+    parse_revision: DocumentParseRevision | None = None
+    parse_revision_artifact: DocumentParseRevisionArtifact | None = None
     document_images: list[DocumentImage] = field(default_factory=list)
 
 
@@ -69,6 +74,8 @@ class BootstrapArtifacts:
     chapters: list[Chapter]
     blocks: list[Block]
     sentences: list[Sentence]
+    parse_revision: DocumentParseRevision | None = None
+    parse_revision_artifact: DocumentParseRevisionArtifact | None = None
     book_profile: BookProfile | None = None
     memory_snapshots: list[MemorySnapshot] = field(default_factory=list)
     translation_packets: list[TranslationPacket] = field(default_factory=list)
@@ -166,10 +173,12 @@ class ParseService:
         epub_parser: EPUBParser | None = None,
         pdf_parser: PDFParser | None = None,
         ocr_pdf_parser: OcrPdfParser | None = None,
+        parse_ir_service: ParseIrService | None = None,
     ):
         self.epub_parser = epub_parser or EPUBParser()
         self.pdf_parser = pdf_parser or PDFParser()
         self.ocr_pdf_parser = ocr_pdf_parser or OcrPdfParser()
+        self.parse_ir_service = parse_ir_service or ParseIrService()
 
     def parse(self, document: Document, file_path: str | Path) -> ParseArtifacts:
         if document.source_type == SourceType.EPUB:
@@ -227,6 +236,22 @@ class ParseService:
         document.status = DocumentStatus.PARSED
         document.updated_at = now
 
+        parse_ir_result = self.parse_ir_service.build(document, parsed)
+        parsed = parse_ir_result.parsed_document
+        document.metadata_json = {
+            **document.metadata_json,
+            "parse_ir": {
+                "revision_id": parse_ir_result.parse_revision.id,
+                "canonical_ir_path": parse_ir_result.parse_revision.canonical_ir_path,
+                "canonical_root_node_id": parse_ir_result.canonical_ir.root_node_id,
+                "projection_hint_count": len(parse_ir_result.canonical_ir.projection_hints),
+                "page_plan_count": len(parse_ir_result.canonical_ir.page_plans),
+                "page_plan_intents": {
+                    str(plan.page_number): plan.intent for plan in parse_ir_result.canonical_ir.page_plans
+                },
+            },
+        }
+
         chapters: list[Chapter] = []
         blocks: list[Block] = []
         document_images: list[DocumentImage] = []
@@ -259,6 +284,8 @@ class ParseService:
             chapters=chapters,
             blocks=blocks,
             job_run=job,
+            parse_revision=parse_ir_result.parse_revision,
+            parse_revision_artifact=parse_ir_result.parse_revision_artifact,
             document_images=document_images,
         )
 
@@ -361,6 +388,13 @@ class ParseService:
         now: datetime,
     ) -> Block:
         block_type = BlockType(parsed_block.block_type)
+        parse_revision_id = parsed_block.metadata.get("parse_revision_id")
+        canonical_node_id = parsed_block.metadata.get("canonical_node_id")
+        source_span_json = {
+            "source_path": parsed_block.source_path,
+            "anchor": parsed_block.anchor,
+            **parsed_block.metadata,
+        }
         return Block(
             id=stable_id(
                 "block",
@@ -373,14 +407,12 @@ class ParseService:
             chapter_id=chapter.id,
             ordinal=parsed_block.ordinal,
             block_type=block_type,
+            parse_revision_id=str(parse_revision_id) if isinstance(parse_revision_id, str) else None,
+            canonical_node_id=str(canonical_node_id) if isinstance(canonical_node_id, str) else None,
             source_text=parsed_block.text,
             normalized_text=_normalize_text(parsed_block.text),
             source_anchor=_compose_anchor(parsed_block.source_path, parsed_block.anchor),
-            source_span_json={
-                "source_path": parsed_block.source_path,
-                "anchor": parsed_block.anchor,
-                **parsed_block.metadata,
-            },
+            source_span_json=source_span_json,
             parse_confidence=parsed_block.parse_confidence if parsed_block.parse_confidence is not None else 1.0,
             protected_policy=protected_policy_for_block(block_type.value, parsed_block.metadata),
             status=ArtifactStatus.ACTIVE,
@@ -540,8 +572,15 @@ class SegmentationService:
             block.block_type,
             block.source_span_json,
         )
+        parse_revision_id = block.parse_revision_id or (block.source_span_json or {}).get("parse_revision_id")
+        block_canonical_node_id = block.canonical_node_id or (block.source_span_json or {}).get("canonical_node_id")
         output: list[Sentence] = []
         for ordinal, text in enumerate(segmented, start=1):
+            sentence_canonical_node_id = stable_id(
+                "canonical-sentence",
+                block_canonical_node_id or block.id,
+                ordinal,
+            )
             output.append(
                 Sentence(
                     id=stable_id(
@@ -555,6 +594,8 @@ class SegmentationService:
                     chapter_id=chapter.id,
                     document_id=document.id,
                     ordinal_in_block=ordinal,
+                    parse_revision_id=str(parse_revision_id) if isinstance(parse_revision_id, str) else None,
+                    canonical_node_id=sentence_canonical_node_id,
                     source_text=text,
                     normalized_text=_normalize_text(text),
                     source_lang=document.src_lang,
@@ -565,6 +606,8 @@ class SegmentationService:
                         "block_id": block.id,
                         "block_type": block.block_type.value,
                         "ordinal_in_block": ordinal,
+                        "parse_revision_id": parse_revision_id,
+                        "canonical_node_id": sentence_canonical_node_id,
                     },
                     upstream_confidence=block.parse_confidence,
                     sentence_status=initial_status,
@@ -646,6 +689,8 @@ class BootstrapPipeline:
             chapters=parse_artifacts.chapters,
             blocks=parse_artifacts.blocks,
             sentences=segment_artifacts.sentences,
+            parse_revision=parse_artifacts.parse_revision,
+            parse_revision_artifact=parse_artifacts.parse_revision_artifact,
             book_profile=profile_result.book_profile,
             memory_snapshots=[
                 profile_result.termbase_snapshot,

@@ -17,6 +17,12 @@ class DocumentStatus(StrEnum):
     FAILED = "failed"
 
 
+class ParseRevisionStatus(StrEnum):
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    INVALIDATED = "invalidated"
+
+
 class ChapterStatus(StrEnum):
     READY = "ready"
     SEGMENTED = "segmented"

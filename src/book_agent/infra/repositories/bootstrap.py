@@ -12,6 +12,8 @@ from book_agent.domain.models import (
     Chapter,
     Document,
     DocumentImage,
+    DocumentParseRevision,
+    DocumentParseRevisionArtifact,
     JobRun,
     MemorySnapshot,
     Sentence,
@@ -34,6 +36,8 @@ class PersistedChapterBundle:
 class PersistedDocumentBundle:
     document: Document
     chapters: list[PersistedChapterBundle]
+    parse_revision: DocumentParseRevision | None
+    parse_revision_artifact: DocumentParseRevisionArtifact | None
     book_profile: BookProfile | None
     memory_snapshots: list[MemorySnapshot]
     job_runs: list[JobRun]
@@ -48,9 +52,24 @@ class BootstrapRepository:
         connection = self.session.connection()
         return bool(inspect(connection).has_table(DocumentImage.__tablename__))
 
+    def _parse_revision_tables_available(self) -> bool:
+        connection = self.session.connection()
+        inspector = inspect(connection)
+        return inspector.has_table(DocumentParseRevision.__tablename__) and inspector.has_table(
+            DocumentParseRevisionArtifact.__tablename__
+        )
+
     def save(self, artifacts: BootstrapArtifacts) -> None:
         self.session.merge(artifacts.document)
         self.session.flush()
+
+        if self._parse_revision_tables_available():
+            if artifacts.parse_revision is not None:
+                self.session.merge(artifacts.parse_revision)
+                self.session.flush()
+            if artifacts.parse_revision_artifact is not None:
+                self.session.merge(artifacts.parse_revision_artifact)
+                self.session.flush()
 
         self._merge_collection(artifacts.chapters)
         self.session.flush()
@@ -111,6 +130,24 @@ class BootstrapRepository:
             if self._document_images_table_available()
             else []
         )
+        parse_revision = (
+            self.session.scalars(
+                select(DocumentParseRevision)
+                .where(DocumentParseRevision.document_id == document_id)
+                .order_by(DocumentParseRevision.version.desc(), DocumentParseRevision.created_at.desc())
+            ).first()
+            if self._parse_revision_tables_available()
+            else None
+        )
+        parse_revision_artifact = (
+            self.session.scalars(
+                select(DocumentParseRevisionArtifact)
+                .where(DocumentParseRevisionArtifact.document_parse_revision_id == parse_revision.id)
+                .order_by(DocumentParseRevisionArtifact.created_at.asc(), DocumentParseRevisionArtifact.id.asc())
+            ).first()
+            if parse_revision is not None and self._parse_revision_tables_available()
+            else None
+        )
         packets = self.session.scalars(
             select(TranslationPacket)
             .join(Chapter, TranslationPacket.chapter_id == Chapter.id)
@@ -166,6 +203,8 @@ class BootstrapRepository:
         return PersistedDocumentBundle(
             document=document,
             chapters=chapter_bundles,
+            parse_revision=parse_revision,
+            parse_revision_artifact=parse_revision_artifact,
             book_profile=book_profile,
             memory_snapshots=memory_snapshots,
             job_runs=job_runs,
