@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -19,6 +19,8 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.bundle_guard import BundleGuardService
 from book_agent.services.runtime_bundle import RuntimeBundleRecord, RuntimeBundleService
+from book_agent.services.runtime_repair_blockage import project_runtime_repair_blockage
+from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
 from book_agent.services.runtime_patch_validation import (
     RuntimePatchValidationResult,
     RuntimePatchValidationService,
@@ -101,8 +103,11 @@ class IncidentController:
             **({"repair_dispatch": dict(repair_dispatch)} if repair_dispatch is not None else {}),
         }
         incident.updated_at = now
-        self._session.add_all([proposal, incident])
-        self._session.flush()
+        if repair_dispatch is not None:
+            self._persist_repair_dispatch(proposal=proposal, incident=incident, dispatch=repair_dispatch, now=now)
+        else:
+            self._session.add_all([proposal, incident])
+            self._session.flush()
         return proposal
 
     def claim_repair_dispatch(
@@ -176,6 +181,67 @@ class IncidentController:
         self._persist_repair_dispatch(proposal=proposal, incident=incident, dispatch=dispatch, now=now)
         return dict(dispatch)
 
+    def resume_repair_dispatch(
+        self,
+        *,
+        proposal_id: str,
+        resumed_by: str,
+        note: str | None = None,
+        dispatch_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        proposal = self._runtime_repo.get_runtime_patch_proposal(proposal_id)
+        incident = self._runtime_repo.get_runtime_incident(proposal.incident_id)
+        dispatch = self._get_repair_dispatch(proposal)
+        work_item_id = str(dispatch.get("repair_work_item_id") or "")
+        if not work_item_id:
+            raise ValueError(f"Repair dispatch is missing repair work item id: {proposal_id}")
+        normalized_overrides = self._apply_repair_dispatch_overrides(
+            dispatch=dispatch,
+            overrides=dispatch_overrides,
+        )
+        self._refresh_repair_dispatch_work_item_input(
+            proposal=proposal,
+            incident_id=incident.id,
+            dispatch=dispatch,
+        )
+        work_item = self._run_execution.resume_repair_dispatch_work_item(
+            work_item_id=work_item_id,
+            actor_id=resumed_by,
+            note=note,
+        )
+        now = _utcnow()
+        resume_entry = {
+            "resumed_at": now.isoformat(),
+            "resumed_by": resumed_by,
+            "note": note or "",
+            "previous_status": str(dispatch.get("status") or ""),
+            "previous_decision": str(dispatch.get("decision") or ""),
+            "next_action": "claim_repair_lane",
+            "work_item_attempt": int(work_item.attempt or 0),
+            "dispatch_overrides": dict(normalized_overrides),
+        }
+        resume_history = [
+            dict(entry)
+            for entry in list(dispatch.get("resume_history") or [])
+            if isinstance(entry, dict)
+        ]
+        resume_history.append(resume_entry)
+        dispatch["status"] = "pending"
+        dispatch["next_action"] = "claim_repair_lane"
+        dispatch["retryable"] = False
+        dispatch["current_execution"] = None
+        dispatch["resume_history"] = resume_history
+        dispatch["resume_count"] = len(resume_history)
+        dispatch["last_resumed_at"] = now.isoformat()
+        dispatch["last_resumed_by"] = resumed_by
+        dispatch["last_resume_overrides"] = dict(normalized_overrides)
+        dispatch.pop("decision", None)
+        dispatch.pop("decision_reason", None)
+        dispatch.pop("retry_after_seconds", None)
+        dispatch.pop("next_retry_after", None)
+        self._persist_repair_dispatch(proposal=proposal, incident=incident, dispatch=dispatch, now=now)
+        return dict(dispatch)
+
     def record_repair_dispatch_execution(
         self,
         *,
@@ -230,7 +296,40 @@ class IncidentController:
             if isinstance(entry, dict)
         ]
         history.append(execution_record)
-        dispatch["status"] = "executed" if succeeded else "failed"
+        decision = str((result_json or {}).get("repair_agent_decision") or "").strip()
+        decision_reason = str((result_json or {}).get("repair_agent_decision_reason") or "").strip()
+        retry_after_seconds = int((result_json or {}).get("repair_agent_retry_after_seconds") or 0)
+        dispatch["decision"] = decision or ("publish_bundle_and_replay" if succeeded else "failed")
+        if decision_reason:
+            dispatch["decision_reason"] = decision_reason
+        if succeeded:
+            dispatch["status"] = "executed"
+            dispatch["next_action"] = "replay_repaired_scope"
+            dispatch["retryable"] = False
+            dispatch.pop("retry_after_seconds", None)
+            dispatch.pop("next_retry_after", None)
+        elif decision in {"manual_escalation_required", "retry_later"}:
+            dispatch["status"] = decision
+            dispatch["next_action"] = (
+                "manual_escalation"
+                if decision == "manual_escalation_required"
+                else "retry_repair_lane"
+            )
+            dispatch["retryable"] = decision == "retry_later"
+            if decision == "retry_later" and retry_after_seconds > 0:
+                dispatch["retry_after_seconds"] = retry_after_seconds
+                dispatch["next_retry_after"] = (now + timedelta(seconds=retry_after_seconds)).replace(
+                    microsecond=0
+                ).isoformat()
+            else:
+                dispatch.pop("retry_after_seconds", None)
+                dispatch.pop("next_retry_after", None)
+        else:
+            dispatch["status"] = "failed"
+            dispatch["next_action"] = "inspect_repair_failure"
+            dispatch["retryable"] = False
+            dispatch.pop("retry_after_seconds", None)
+            dispatch.pop("next_retry_after", None)
         dispatch["current_execution"] = None
         dispatch["execution_history"] = history
         dispatch["last_result"] = execution_record
@@ -397,6 +496,10 @@ class IncidentController:
             "executor_contract_version": int(
                 (repair_plan.get("dispatch") or {}).get("executor_contract_version") or 1
             ),
+            "transport_hint": str((repair_plan.get("dispatch") or {}).get("transport_hint") or ""),
+            "transport_contract_version": int(
+                (repair_plan.get("dispatch") or {}).get("transport_contract_version") or 1
+            ),
             "proposal_id": proposal_id,
             "incident_id": incident_id,
             "patch_surface": patch_surface,
@@ -414,6 +517,7 @@ class IncidentController:
             proposal_id=proposal_id,
             incident_id=incident_id,
             repair_dispatch_json=dispatch,
+            repair_plan_json=repair_plan,
         )
         return dispatch
 
@@ -431,6 +535,7 @@ class IncidentController:
         dispatch: dict[str, Any],
         now: datetime,
     ) -> None:
+        dispatch["repair_blockage"] = project_runtime_repair_blockage(dispatch, now=now)
         proposal.status_detail_json = {
             **dict(proposal.status_detail_json or {}),
             "repair_dispatch": dict(dispatch),
@@ -447,6 +552,294 @@ class IncidentController:
 
         self._session.add_all([proposal, incident])
         self._session.flush()
+        self._project_bounded_lane_repair_control_plane(
+            proposal=proposal,
+            incident=incident,
+            dispatch=dispatch,
+            now=now,
+        )
+
+    def _refresh_repair_dispatch_work_item_input(
+        self,
+        *,
+        proposal: RuntimePatchProposal,
+        incident_id: str,
+        dispatch: dict[str, Any],
+    ) -> None:
+        work_item_id = str(dispatch.get("repair_work_item_id") or "")
+        if not work_item_id:
+            return
+        work_item = RunControlRepository(self._session).get_work_item(work_item_id)
+        repair_plan = dict((proposal.status_detail_json or {}).get("repair_plan") or {})
+        work_item.input_version_bundle_json = build_runtime_repair_request_input_bundle(
+            proposal_id=proposal.id,
+            incident_id=incident_id,
+            repair_dispatch_json=dispatch,
+            repair_plan_json=repair_plan,
+        )
+        work_item.updated_at = _utcnow()
+        self._session.add(work_item)
+        self._session.flush()
+
+    @staticmethod
+    def _apply_repair_dispatch_overrides(
+        *,
+        dispatch: dict[str, Any],
+        overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        normalized = dict(overrides or {})
+        if not normalized:
+            return {}
+        if "execution_mode" in normalized:
+            dispatch["execution_mode"] = str(normalized["execution_mode"] or "").strip()
+        if "worker_hint" in normalized:
+            dispatch["worker_hint"] = str(normalized["worker_hint"] or "").strip()
+        if "worker_contract_version" in normalized:
+            dispatch["worker_contract_version"] = int(normalized["worker_contract_version"] or 1)
+        if "executor_hint" in normalized:
+            dispatch["executor_hint"] = str(normalized["executor_hint"] or "").strip()
+        if "executor_contract_version" in normalized:
+            dispatch["executor_contract_version"] = int(normalized["executor_contract_version"] or 1)
+        if "transport_hint" in normalized:
+            dispatch["transport_hint"] = str(normalized["transport_hint"] or "").strip()
+        if "transport_contract_version" in normalized:
+            dispatch["transport_contract_version"] = int(normalized["transport_contract_version"] or 1)
+        if "validation_command" in normalized:
+            dispatch["validation_command"] = str(normalized["validation_command"] or "").strip()
+        if "bundle_revision_name" in normalized:
+            dispatch["bundle_revision_name"] = str(normalized["bundle_revision_name"] or "").strip()
+        return {
+            key: dispatch[key]
+            for key in (
+                "execution_mode",
+                "worker_hint",
+                "worker_contract_version",
+                "executor_hint",
+                "executor_contract_version",
+                "transport_hint",
+                "transport_contract_version",
+                "validation_command",
+                "bundle_revision_name",
+            )
+            if key in normalized
+        }
+
+    def _project_bounded_lane_repair_control_plane(
+        self,
+        *,
+        proposal: RuntimePatchProposal,
+        incident,
+        dispatch: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        if incident.incident_kind == RuntimeIncidentKind.REVIEW_DEADLOCK:
+            self._project_review_deadlock_repair_control_plane(
+                proposal=proposal,
+                incident=incident,
+                dispatch=dispatch,
+                now=now,
+            )
+            return
+        if incident.incident_kind == RuntimeIncidentKind.PACKET_RUNTIME_DEFECT:
+            self._project_packet_runtime_defect_repair_control_plane(
+                proposal=proposal,
+                incident=incident,
+                dispatch=dispatch,
+                now=now,
+            )
+            return
+        if incident.incident_kind == RuntimeIncidentKind.EXPORT_MISROUTING:
+            self._project_export_misrouting_repair_control_plane(
+                proposal=proposal,
+                incident=incident,
+                dispatch=dispatch,
+                now=now,
+            )
+
+    def _project_review_deadlock_repair_control_plane(
+        self,
+        *,
+        proposal: RuntimePatchProposal,
+        incident,
+        dispatch: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        route_evidence = dict(incident.route_evidence_json or {})
+        chapter_run_id = str(
+            route_evidence.get("chapter_run_id")
+            or (incident.bundle_json or {}).get("chapter_run_id")
+            or ""
+        )
+        review_session_id = str(
+            route_evidence.get("review_session_id")
+            or (incident.bundle_json or {}).get("review_session_id")
+            or ""
+        )
+        replay_scope_id = str(
+            (proposal.status_detail_json or {}).get("repair_plan", {}).get("replay", {}).get("scope_id")
+            or incident.scope_id
+        )
+        if not chapter_run_id or not review_session_id or not replay_scope_id:
+            return
+        try:
+            review_session = self._runtime_repo.get_review_session(review_session_id)
+            chapter_run = self._runtime_repo.get_chapter_run(chapter_run_id)
+        except ValueError:
+            return
+        existing_runtime_v2 = dict((review_session.status_detail_json or {}).get("runtime_v2") or {})
+        existing_recovery = dict(existing_runtime_v2.get("last_deadlock_recovery") or {})
+        recovery_payload = self._build_bounded_lane_recovery_payload(
+            proposal=proposal,
+            incident=incident,
+            dispatch=dispatch,
+            existing_recovery=existing_recovery,
+            replay_scope_id=replay_scope_id,
+        )
+        self._runtime_repo.merge_review_session_status_detail(
+            review_session.id,
+            {"runtime_v2": {"last_deadlock_recovery": recovery_payload}},
+        )
+        self._runtime_repo.upsert_checkpoint(
+            run_id=incident.run_id,
+            scope_type=JobScopeType.CHAPTER,
+            scope_id=replay_scope_id,
+            checkpoint_key="review_controller.deadlock_recovery",
+            checkpoint_json={
+                "chapter_run_id": chapter_run.id,
+                "review_session_id": review_session.id,
+                "recovery": recovery_payload,
+                "validation_report": dict((dispatch.get("validation") or {}).get("report_json") or {}),
+            },
+            generation=int(chapter_run.generation or 1),
+        )
+
+    def _project_packet_runtime_defect_repair_control_plane(
+        self,
+        *,
+        proposal: RuntimePatchProposal,
+        incident,
+        dispatch: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        route_evidence = dict(incident.route_evidence_json or {})
+        packet_task_id = str(
+            route_evidence.get("packet_task_id")
+            or (incident.bundle_json or {}).get("packet_task_id")
+            or ""
+        )
+        chapter_run_id = str(
+            route_evidence.get("chapter_run_id")
+            or (incident.bundle_json or {}).get("chapter_run_id")
+            or ""
+        )
+        replay_scope_id = str(
+            (proposal.status_detail_json or {}).get("repair_plan", {}).get("replay", {}).get("scope_id")
+            or incident.scope_id
+        )
+        if not packet_task_id or not chapter_run_id or not replay_scope_id:
+            return
+        try:
+            packet_task = self._runtime_repo.get_packet_task(packet_task_id)
+            chapter_run = self._runtime_repo.get_chapter_run(chapter_run_id)
+        except ValueError:
+            return
+        existing_runtime_v2 = dict((packet_task.status_detail_json or {}).get("runtime_v2") or {})
+        existing_recovery = dict(existing_runtime_v2.get("last_runtime_defect_recovery") or {})
+        recovery_payload = self._build_bounded_lane_recovery_payload(
+            proposal=proposal,
+            incident=incident,
+            dispatch=dispatch,
+            existing_recovery=existing_recovery,
+            replay_scope_id=replay_scope_id,
+        )
+        self._runtime_repo.merge_packet_task_status_detail(
+            packet_task.id,
+            {"runtime_v2": {"last_runtime_defect_recovery": recovery_payload}},
+        )
+        self._runtime_repo.upsert_checkpoint(
+            run_id=incident.run_id,
+            scope_type=JobScopeType.PACKET,
+            scope_id=replay_scope_id,
+            checkpoint_key="packet_controller.runtime_defect_recovery",
+            checkpoint_json={
+                "packet_task_id": packet_task.id,
+                "chapter_run_id": chapter_run.id,
+                "recovery": recovery_payload,
+                "validation_report": dict((dispatch.get("validation") or {}).get("report_json") or {}),
+            },
+            generation=int(packet_task.packet_generation or 1),
+        )
+
+    def _project_export_misrouting_repair_control_plane(
+        self,
+        *,
+        proposal: RuntimePatchProposal,
+        incident,
+        dispatch: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        run = self._session.get(DocumentRun, incident.run_id)
+        if run is None:
+            return
+        status_detail = dict(run.status_detail_json or {})
+        runtime_v2 = dict(status_detail.get("runtime_v2") or {})
+        existing_pending = dict(runtime_v2.get("pending_export_route_repair") or {})
+        repair_plan = dict((proposal.status_detail_json or {}).get("repair_plan") or {})
+        runtime_v2["pending_export_route_repair"] = {
+            **existing_pending,
+            "incident_id": incident.id,
+            "proposal_id": proposal.id,
+            "bundle_revision_id": proposal.published_bundle_revision_id,
+            "repair_work_item_id": str(dispatch.get("repair_work_item_id") or ""),
+            "replay_scope_id": str((repair_plan.get("replay") or {}).get("scope_id") or incident.scope_id),
+            "bound_work_item_ids": [
+                str(work_item_id)
+                for work_item_id in list((proposal.status_detail_json or {}).get("bound_work_item_ids") or [])
+                if str(work_item_id).strip()
+            ],
+            "status": str(dispatch.get("status") or existing_pending.get("status") or "pending"),
+            "repair_blockage": dict(dispatch.get("repair_blockage") or {}),
+            "updated_at": now.isoformat(),
+        }
+        status_detail["runtime_v2"] = runtime_v2
+        run.status_detail_json = status_detail
+        run.updated_at = now
+        self._session.add(run)
+        self._session.flush()
+
+    @staticmethod
+    def _build_bounded_lane_recovery_payload(
+        *,
+        proposal: RuntimePatchProposal,
+        incident,
+        dispatch: dict[str, Any],
+        existing_recovery: dict[str, Any],
+        replay_scope_id: str,
+    ) -> dict[str, Any]:
+        route_evidence = dict(incident.route_evidence_json or {})
+        persisted_status = str(existing_recovery.get("status") or "").strip()
+        dispatch_status = str(dispatch.get("status") or "").strip()
+        return {
+            **existing_recovery,
+            "incident_id": incident.id,
+            "proposal_id": proposal.id,
+            "bundle_revision_id": proposal.published_bundle_revision_id or existing_recovery.get("bundle_revision_id"),
+            "repair_work_item_id": str(dispatch.get("repair_work_item_id") or ""),
+            "replay_scope_id": replay_scope_id,
+            "bound_work_item_ids": [
+                str(work_item_id)
+                for work_item_id in list((proposal.status_detail_json or {}).get("bound_work_item_ids") or [])
+                if str(work_item_id).strip()
+            ],
+            "reason_code": route_evidence.get("reason_code") or existing_recovery.get("reason_code"),
+            "lane_health_state": route_evidence.get("lane_health_state") or existing_recovery.get("lane_health_state"),
+            "status": (
+                persisted_status
+                if persisted_status == "published"
+                else (dispatch_status or persisted_status or "pending")
+            ),
+            "repair_blockage": dict(dispatch.get("repair_blockage") or {}),
+        }
 
     def _bind_retryable_scope_work_items(
         self,

@@ -9,8 +9,13 @@ from book_agent.infra.db.session import build_session_factory, session_scope
 def get_session_factory(request: Request) -> sessionmaker:
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        session_factory = build_session_factory()
-        request.app.state.session_factory = session_factory
+        ensure_database_state = getattr(request.app.state, "ensure_database_state", None)
+        if callable(ensure_database_state):
+            ensure_database_state()
+            session_factory = getattr(request.app.state, "session_factory", None)
+        if session_factory is None:
+            session_factory = build_session_factory()
+            request.app.state.session_factory = session_factory
     return session_factory
 
 

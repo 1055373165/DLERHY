@@ -95,3 +95,131 @@
 - 2026-03-31 16:37:35 +0800 | executed batch-22 locally in main checkout; no extra worktree or batch fork created
 - 2026-03-31 16:37:35 +0800 | verified batch-22 with unittest (19 tests OK) and py_compile (passed)
 - 2026-03-31 16:37:35 +0800 | wrote .forge/reports/batch-22-report.md and advanced STATE.md to current_step=batch-22_verified
+- 2026-03-31 16:50:55 +0800 | froze batch-23: move the first bounded export repair lane behind an agent-backed subprocess executor without reopening REPAIR lifecycle semantics
+- 2026-03-31 16:50:55 +0800 | executed batch-23 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 16:50:55 +0800 | verified batch-23 with unittest (20 tests OK) and py_compile (passed)
+- 2026-03-31 16:50:55 +0800 | wrote .forge/reports/batch-23-report.md and advanced STATE.md to current_step=batch-23_verified
+- 2026-03-31 17:34:12 +0800 | froze batch-24: add an explicit repair transport contract, move export misrouting to a transport-backed executor plus subprocess transport, and fail unknown transport hints deterministically inside the REPAIR lane lifecycle
+- 2026-03-31 17:34:12 +0800 | executed batch-24 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 17:34:12 +0800 | verified batch-24 with unittest (25 tests OK) and py_compile (passed)
+- 2026-03-31 17:34:12 +0800 | wrote .forge/reports/batch-24-report.md and advanced STATE.md to current_step=batch-24_verified
+- 2026-03-31 19:13:05 +0800 | froze batch-25: move review deadlock repair onto the same transport-backed executor plus subprocess transport used by export misrouting, while preserving deterministic REPAIR lane semantics
+- 2026-03-31 19:13:05 +0800 | executed batch-25 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 19:13:05 +0800 | verified batch-25 with unittest (25 tests OK) and py_compile (passed)
+- 2026-03-31 19:13:05 +0800 | wrote .forge/reports/batch-25-report.md and advanced STATE.md to current_step=batch-25_verified
+- 2026-03-31 20:03:19 +0800 | froze batch-26: add a configured command repair transport and route-level transport override so transport-backed repair is no longer hardwired to the built-in subprocess transport
+- 2026-03-31 20:03:19 +0800 | executed batch-26 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 20:03:19 +0800 | verified batch-26 with unittest (30 tests OK) and py_compile (passed)
+- 2026-03-31 20:03:19 +0800 | wrote .forge/reports/batch-26-report.md and advanced STATE.md to current_step=batch-26_verified
+- 2026-03-31 20:09:47 +0800 | froze batch-27: add an HTTP repair transport and prove a bounded repair lane can execute through a remote transport endpoint while preserving deterministic REPAIR lifecycle semantics
+- 2026-03-31 20:09:47 +0800 | executed batch-27 locally in main checkout; no extra worktree or batch fork created
+- 2026-03-31 20:09:47 +0800 | verified batch-27 with unittest (34 tests OK) and py_compile (passed)
+- 2026-03-31 20:09:47 +0800 | wrote .forge/reports/batch-27-report.md and advanced STATE.md to current_step=batch-27_verified
+- 2026-03-31 20:09:47 +0800 | evolved Forge protocol: requirement/implementation forks must now be explicitly resolved by mainline proximity + impact scoring before the next dispatch
+- 2026-03-31 20:09:47 +0800 | evolved Forge protocol: verified batches must now continue automatically into the next dependency-closed slice unless a concrete blocker is recorded
+- 2026-03-31 21:20:16 +0800 | froze batch-28: expand run-level repair dispatch preferences from transport-only override to executor + transport override symmetry across both bounded repair lanes
+- 2026-03-31 21:20:16 +0800 | executed batch-28 locally in main checkout; continued automatically across multiple dependency-closed sub-slices instead of stopping after the first green checkpoint
+- 2026-03-31 21:20:16 +0800 | verified batch-28 with unittest (40 tests OK) and py_compile (passed)
+- 2026-03-31 21:20:16 +0800 | wrote .forge/reports/batch-28-report.md and advanced STATE.md to current_step=batch-28_verified
+- 2026-03-31 21:20:16 +0800 | applied fork rule: next mainline branch should favor the next bounded repair lane over adding another transport variant, while keeping remote executor/transport depth on the active path
+- 2026-03-31 21:24:41 +0800 | froze batch-29: promote packet_runtime_defect into the next bounded repair lane because packet lane health + incident triage + chapter-hold scaffolding are already in place and closer to autonomous self-heal than adding another transport variant
+- 2026-03-31 23:09:35 +0800 | executed batch-29 locally in main checkout; packet_runtime_defect is now a bounded repair lane with incident -> dispatch -> REPAIR lane -> packet replay semantics and controller-runner integration
+- 2026-03-31 23:09:35 +0800 | verified batch-29 with packet-focused unittest slices and broader runtime self-heal baseline; packet lane closure is now proven rather than only frozen
+- 2026-03-31 23:09:35 +0800 | froze batch-30: prove packet lane direct routing parity across agent-backed executor, configured-command transport, and HTTP transport
+- 2026-03-31 23:09:35 +0800 | executed batch-30 locally in main checkout; packet repair now proves the same direct routing matrix as review deadlock and export misrouting
+- 2026-03-31 23:09:35 +0800 | verified batch-30 with packet planner + packet repair unittest slices
+- 2026-03-31 23:09:35 +0800 | froze batch-31: lift packet routing parity into the real ControllerRunner automatic path
+- 2026-03-31 23:09:35 +0800 | executed batch-31 locally in main checkout; ControllerRunner now proves packet repair through HTTP, configured-command, and agent-backed routes
+- 2026-03-31 23:09:35 +0800 | verified batch-31 with controller-runner packet repair integration tests and widened runtime self-heal baseline (60 tests OK)
+- 2026-03-31 23:09:35 +0800 | froze batch-32: promote repair work-item input/output into explicit external-agent request/result contracts
+- 2026-03-31 23:09:35 +0800 | executed batch-32 locally in main checkout; REPAIR work-items now carry stable request payloads and both in-process + runner paths emit stable result payloads
+- 2026-03-31 23:09:35 +0800 | verified batch-32 with runtime repair contract slices and widened runtime self-heal baseline (62 tests OK)
+- 2026-03-31 23:09:35 +0800 | applied fork rule again: with three bounded repair lanes closed and request/result contracts in place, the next closest slice is a truly remote / agent-facing repair executor instead of more lane expansion or more route variants
+- 2026-03-31 23:09:35 +0800 | froze batch-33: replace the local-registry runner assumption with a genuinely independent repair-agent execution path built on the explicit runtime_repair_contract
+- 2026-03-31 23:16:03 +0800 | executed batch-33 locally in main checkout; transport-backed and agent-backed executor paths now reject malformed remote result payloads unless they satisfy the explicit repair result contract
+- 2026-03-31 23:16:03 +0800 | verified batch-33 with contract/executor slices and widened runtime self-heal baseline (64 tests OK)
+- 2026-03-31 23:16:03 +0800 | froze batch-34: introduce the first truly independent remote repair-agent adapter path that consumes the explicit request/result contract without assuming the remote side is our local runtime_repair_runner
+- 2026-04-01 00:44:15 +0800 | executed batch-34 locally in main checkout; added contract-backed remote repair execution, contract-backed HTTP transport routing, and auto-default remote route selection across export/review/packet bounded repair lanes
+- 2026-04-01 00:44:15 +0800 | verified batch-34 with the expanded runtime self-heal baseline (85 tests OK)
+- 2026-04-01 00:44:15 +0800 | froze batch-35: preserve remote execution provenance and transport endpoint metadata in the explicit repair result contract
+- 2026-04-01 00:44:15 +0800 | executed batch-35 locally in main checkout; remote repair results now preserve execution ids, execution timestamps, and transport endpoint metadata
+- 2026-04-01 00:44:15 +0800 | verified batch-35 with targeted provenance slices and the expanded runtime self-heal baseline (85 tests OK)
+- 2026-04-01 00:44:15 +0800 | froze batch-36: add explicit remote/local repair decision semantics so bounded repair results state what decision the repair agent made
+- 2026-04-01 00:44:15 +0800 | executed batch-36 locally in main checkout; repair payloads now carry explicit `publish_bundle_and_replay` decisions and unsupported decisions fail deterministically
+- 2026-04-01 00:44:15 +0800 | verified batch-36 with targeted decision slices and the expanded runtime self-heal baseline (85 tests OK)
+- 2026-04-01 00:44:15 +0800 | applied fork rule again: with remote execution provenance and explicit decisions on the mainline, the next closest gap is decision-aware REPAIR lane handling rather than more transport variants
+- 2026-04-01 00:44:15 +0800 | froze batch-37: teach the REPAIR lane to interpret non-default remote repair decisions such as manual escalation and retry without breaking deterministic lifecycle semantics
+- 2026-04-01 01:10:16 +0800 | executed batch-37 locally in main checkout; REPAIR now maps manual-escalation and retry-later decisions to deterministic failure classes, work-item statuses, and dispatch statuses instead of generic repair failure
+- 2026-04-01 01:10:16 +0800 | verified batch-37 with targeted remote-decision slices and the expanded runtime self-heal baseline (87 tests OK)
+- 2026-04-01 01:10:16 +0800 | froze batch-38: promote decision-aware repair dispatch lineage into explicit next_action / retryable / retry_after metadata and extend retry-later coverage across the packet lane
+- 2026-04-01 01:10:16 +0800 | executed batch-38 locally in main checkout; repair dispatch now records next_action, retryability, retry-after metadata, and packet runtime defect also proves the retry-later path
+- 2026-04-01 01:10:16 +0800 | verified batch-38 with targeted lineage slices and the expanded runtime self-heal baseline (88 tests OK)
+- 2026-04-01 01:10:16 +0800 | applied fork rule again: with decision-aware REPAIR semantics and backoff lineage on the mainline, the next closest gap is making the scheduler/claim layer honor retry-later and manual-escalation guidance
+- 2026-04-01 01:10:16 +0800 | froze batch-39: teach repair scheduling and claimability to respect retry-after/backoff and manual-escalation guidance rather than only recording those decisions in dispatch state
+- 2026-04-02 02:40:00 +0800 | reconciled late-stage artifact gap from repo truth; reconstructed batch-39 report, batch-40 contract/report, batch-41 contract/report, and batch-42 contract so `.forge` once again matches the verified runtime self-heal code state
+- 2026-04-02 02:40:00 +0800 | wrote `/Users/smy/project/book-agent/snapshot.md` as the primary high-granularity resume handoff for the next programmer and forge-v2
+- 2026-04-02 02:40:00 +0800 | confirmed current resume target remains batch-42: bounded-lane repair blockage projection; forge-v2 should resume from existing `.forge` truth instead of creating a second runtime ledger
+- 2026-04-02 03:14:39 +0800 | executed batch-42 locally in main checkout; repair dispatch now projects unified blockage truth back into review/export/packet bounded-lane control-plane surfaces
+- 2026-04-02 03:14:39 +0800 | verified batch-42 with representative runtime self-heal unittest baselines (4 targeted tests OK, 33-test controller/runtime slice OK)
+- 2026-04-02 03:14:39 +0800 | wrote .forge/reports/batch-42-report.md and advanced STATE.md to current_step=batch-42_verified without freezing a speculative batch-43
+- 2026-04-02 03:14:39 +0800 | applied forge-v2 resume protocol and found missing `.forge/spec/SPEC.md`, `.forge/spec/FEATURES.json`, and `.forge/init.sh`, so the closest next slice became artifact bootstrap rather than new product behavior
+- 2026-04-02 03:14:39 +0800 | froze batch-43: bootstrap Forge v2 spec/features/init artifacts from the already verified batch-42 runtime self-heal truth
+- 2026-04-02 03:14:39 +0800 | verified batch-43 with `bash .forge/init.sh` (33 tests OK) plus FEATURES.json validation, then promoted F001/F002/F003/F004/F005/F006/F008 to passing and left F007 as the next failing feature
+- 2026-04-02 03:14:39 +0800 | froze batch-44: project runtime repair blockage into workflow/API-friendly summaries so run/export callers can read it without deep nested lineage inspection
+- 2026-04-02 04:10:56 +0800 | verified batch-44 with targeted run/export API regression coverage (`tests.test_run_control_api` + `tests.test_req_ex_02_export_misrouting_self_heal`, 5 tests OK) and promoted F007 to passing
+- 2026-04-02 04:10:56 +0800 | froze batch-45: surface the same normalized runtime repair blockage summary on export dashboard records so callers can inspect blocked/ready state without fetching export detail
+- 2026-04-02 04:14:27 +0800 | verified batch-45 with export self-heal + dashboard API regressions (3 tests OK) plus `bash .forge/init.sh` (33 tests OK), and promoted F009 to passing
+- 2026-04-02 04:14:27 +0800 | froze batch-46: project latest-run bounded-lane blockage summary into document-level workflow surfaces beyond export-only recovery context
+- 2026-04-02 04:17:21 +0800 | verified batch-46 with document summary/history workflow regressions (4 tests OK), export self-heal regression (1 test OK), and `bash .forge/init.sh` (33 tests OK), and promoted F010 to passing
+- 2026-04-02 04:17:21 +0800 | froze batch-47: widen `.forge/init.sh` so the default Forge v2 resume smoke baseline also covers workflow blockage parity surfaces
+- 2026-04-02 04:18:58 +0800 | verified batch-47 with widened `bash .forge/init.sh` smoke baseline (41 tests OK) and promoted F011 to passing
+- 2026-04-02 04:18:58 +0800 | froze batch-48: reconcile snapshot/progress/mainline handoff docs to the verified batch-47 Forge truth
+- 2026-04-02 04:24:01 +0800 | verified batch-48 with text-level reconciliation checks across snapshot/progress/mainline docs and promoted F012 to passing
+- 2026-04-02 04:24:01 +0800 | froze batch-49: add explicit packet latest-run workflow parity API coverage so non-export bounded-lane document surfaces are proven for both review and packet lanes
+- 2026-04-02 04:25:40 +0800 | verified batch-49 with targeted API workflow regressions (5 tests OK) and promoted F013 to passing
+- 2026-04-02 04:25:40 +0800 | froze batch-50: widen `.forge/init.sh` so default Forge v2 smoke also covers packet latest-run workflow parity
+- 2026-04-02 08:08:39 +0800 | verified batch-50 with widened `bash .forge/init.sh` smoke baseline (42 tests OK) and promoted F014 to passing
+- 2026-04-02 08:08:39 +0800 | froze batch-51: formalize Forge v2 branch-intake governance, single-ledger branch transactions, and stop-legality audit rules across skill + current `.forge` truth
+- 2026-04-02 08:08:39 +0800 | executed batch-51 locally in main checkout; Forge v2 now classifies discovered branch work, records accepted/deferred/rejected branch decisions in file truth, and treats legal stop reasons as auditable state rather than conversational habit
+- 2026-04-02 08:08:39 +0800 | verified batch-51 with FEATURES.json JSON validation plus cross-artifact text assertions, and promoted F015/F016/F017 to passing
+- 2026-04-02 08:08:39 +0800 | aligned snapshot/progress/mainline handoff docs to the new mainline_complete + F017-green truth so future resume no longer inherits stale batch-48 guidance
+- 2026-04-02 08:08:39 +0800 | no next dependency-closed slice remains in the current FEATURES.json inventory; future work should enter through a change request against the existing single-ledger `.forge` truth
+- 2026-04-02 12:27:34 +0800 | opened change request after mainline completion: harden the default Forge v2 init smoke so governance guarantees are validated automatically instead of only by ad hoc report commands
+- 2026-04-02 12:27:34 +0800 | froze batch-52: add lightweight governance validation to the default Forge v2 init smoke without reopening runtime product behavior
+- 2026-04-02 12:28:02 +0800 | verified batch-52 with `bash .forge/init.sh` (42 tests OK + governance contract validated) and promoted F018 to passing
+- 2026-04-02 12:28:02 +0800 | returned STATE.md to mainline_complete after batch-52; no further dependency-closed slice remains and future work should enter as a change request
+- 2026-04-02 12:37:33 +0800 | root-caused the unexpected second stop: Forge v2 still treated inventory completion as sufficient stop evidence even under full takeover
+- 2026-04-02 12:37:33 +0800 | froze and verified batch-53: active takeover now requires a post-completion continuation scan for the next credible change request before the run may stop
+- 2026-04-02 12:37:33 +0800 | continuation scan selected batch-54: FastAPI lifecycle warning cleanup is the closest adjacent slice because the default init smoke still emits explicit `on_event` deprecation warnings
+- 2026-04-02 12:37:33 +0800 | froze batch-54: replace deprecated FastAPI `on_event` lifecycle hooks with a lifespan-managed app lifecycle so the default takeover baseline no longer emits that warning
+- 2026-04-02 12:51:32 +0800 | verified batch-54 with REQ-EX-02 targeted regression (`Ran 1 test, OK`), `bash .forge/init.sh` (`Ran 42 tests, OK + governance contract validated`), and a negative warning probe for `on_event is deprecated`
+- 2026-04-02 12:51:32 +0800 | continuation scan after batch-54 selected batch-55 because sqlite `ResourceWarning: unclosed database` was still visible in the default smoke path
+- 2026-04-02 12:51:32 +0800 | froze and verified batch-55: sqlite backfill helpers plus representative controller/runtime smoke tests now close cleanly enough that the unclosed-database warning probe returns `not_found`
+- 2026-04-02 12:51:32 +0800 | post-batch-55 continuation scan found no further credible adjacent change_request in current local truth, so STATE.md returned to explicit `mainline_complete`
+- 2026-04-02 12:56:49 +0800 | revalidated `bash .forge/init.sh` after syncing `.forge` and handoff docs; baseline stayed green (`Ran 42 tests, OK + governance contract validated`)
+- 2026-04-02 13:22:41 +0800 | continuation scan after batch-55 found one more adjacent hardening gap: warning-free baseline was still enforced only by ad hoc probes rather than by the default init path
+- 2026-04-02 13:22:41 +0800 | froze and verified batch-56: `.forge/init.sh` now captures smoke output, validates warning hygiene as a hard gate, and stays green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 13:22:41 +0800 | verified the warning-hygiene gate rejects a synthetic forbidden-warning log (`expected_fail`)
+- 2026-04-02 13:22:41 +0800 | post-batch-56 continuation scan found no further credible adjacent change_request in current local truth, so STATE.md remains at explicit `mainline_complete`
+- 2026-04-02 13:24:36 +0800 | revalidated `bash .forge/init.sh` after syncing batch-56 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 13:35:40 +0800 | continuation scan after batch-56 found one more adjacent governance gap: the governance validator did not yet prove warning-hygiene gate wiring remained present in `.forge/init.sh`
+- 2026-04-02 13:35:40 +0800 | froze and verified batch-57: governance validation now asserts `.forge/init.sh` still wires the warning-hygiene gate and that the validator script still forbids the known warning classes
+- 2026-04-02 13:37:25 +0800 | revalidated `bash .forge/init.sh` after syncing batch-57 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 13:53:21 +0800 | continuation scan after batch-57 found one more adjacent governance gap: the validator did not yet prove the latest verified batch/report artifacts existed or that STATE.md still carried the explicit mainline checkpoint fields
+- 2026-04-02 13:53:21 +0800 | froze and verified batch-58: governance validation now asserts latest checkpoint artifact existence and explicit mainline-complete STATE field alignment
+- 2026-04-02 13:54:56 +0800 | revalidated `bash .forge/init.sh` after syncing batch-58 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 14:22:29 +0800 | continuation scan after batch-58 found one more adjacent governance gap: the validator still hardcoded newest batch/report/feature markers instead of deriving them from `.forge` truth
+- 2026-04-02 14:22:29 +0800 | froze and verified batch-59: governance validation now derives the latest passing feature id and latest batch/report checkpoint dynamically from `.forge` truth
+- 2026-04-02 14:24:13 +0800 | revalidated `bash .forge/init.sh` after syncing batch-59 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 14:31:52 +0800 | continuation scan after batch-59 found one more adjacent governance gap: the validator still depended on the fixed `Ran 42 tests` smoke-count marker
+- 2026-04-02 14:31:52 +0800 | froze and verified batch-60: governance validation now checks the default init contract and post-smoke validators without hardcoding the current smoke test count
+- 2026-04-02 14:34:09 +0800 | revalidated `bash .forge/init.sh` after syncing batch-60 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 14:41:54 +0800 | continuation scan after batch-60 found one more adjacent governance gap: the validator still hardcoded the current checkpoint shape as `mainline_complete / active_batch none`
+- 2026-04-02 14:41:54 +0800 | froze and verified batch-61: governance validation now derives `current_step` and `active_batch` dynamically from `.forge/STATE.md`
+- 2026-04-02 14:43:51 +0800 | revalidated `bash .forge/init.sh` after syncing batch-61 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 15:01:11 +0800 | continuation scan after batch-61 found one more adjacent governance gap: the validator still treated authoritative_batch_contract and expected_report_path as presence-only fields rather than semantically validating them
+- 2026-04-02 15:01:11 +0800 | froze and verified batch-62: governance validation now derives and validates the full STATE checkpoint tuple including authoritative batch/report pointers
+- 2026-04-02 15:06:05 +0800 | revalidated `bash .forge/init.sh` after syncing batch-62 ledger + handoff truth; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 15:16:16 +0800 | revalidated `bash .forge/init.sh` while preparing the overall progress + delegation snapshot; baseline stayed green (`Ran 42 tests, OK + smoke warning hygiene validated + governance contract validated`)
+- 2026-04-02 15:22:11 +0800 | opened change request for explicit remaining-work delegation: future development should be handed to Forge v2 rather than left implicit after mainline completion
+- 2026-04-02 15:22:11 +0800 | froze and verified batch-63: remaining-work delegation is now written into `.forge` truth and handoff docs without reopening runtime product behavior

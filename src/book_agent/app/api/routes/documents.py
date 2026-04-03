@@ -694,6 +694,7 @@ def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHis
                 "latest_run_current_stage": entry.latest_run_current_stage,
                 "latest_run_completed_work_item_count": entry.latest_run_completed_work_item_count,
                 "latest_run_total_work_item_count": entry.latest_run_total_work_item_count,
+                "latest_run_runtime_v2_context": entry.latest_run_runtime_v2_context,
             }
             for entry in page.entries
         ],
@@ -1004,6 +1005,7 @@ def _to_export_dashboard_response(result: DocumentExportDashboard) -> DocumentEx
                     if record.export_time_misalignment_counts is not None
                     else None
                 ),
+                "runtime_v2_context": record.runtime_v2_context,
             }
             for record in result.records
         ],

@@ -17,6 +17,7 @@ from book_agent.domain.enums import (
 from book_agent.domain.models.ops import RunAuditEvent, WorkItem
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
+from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
 
 
 def _utcnow() -> datetime:
@@ -145,28 +146,15 @@ class RunExecutionService:
         proposal_id: str,
         incident_id: str,
         repair_dispatch_json: dict[str, Any],
+        repair_plan_json: dict[str, Any] | None = None,
         priority: int = 40,
     ) -> str:
-        input_bundle = {
-            "proposal_id": proposal_id,
-            "incident_id": incident_id,
-            "repair_dispatch_id": repair_dispatch_json.get("dispatch_id"),
-            "patch_surface": repair_dispatch_json.get("patch_surface"),
-            "target_scope_type": repair_dispatch_json.get("replay", {}).get("scope_type"),
-            "target_scope_id": repair_dispatch_json.get("replay", {}).get("scope_id"),
-            "replay_boundary": repair_dispatch_json.get("replay", {}).get("boundary"),
-            "validation_command": repair_dispatch_json.get("validation_command"),
-            "bundle_revision_name": repair_dispatch_json.get("bundle_revision_name"),
-            "rollout_scope_json": dict(repair_dispatch_json.get("rollout_scope_json") or {}),
-            "claim_mode": repair_dispatch_json.get("claim_mode"),
-            "claim_target": repair_dispatch_json.get("claim_target"),
-            "dispatch_lane": repair_dispatch_json.get("lane"),
-            "worker_hint": repair_dispatch_json.get("worker_hint"),
-            "worker_contract_version": int(repair_dispatch_json.get("worker_contract_version") or 1),
-            "execution_mode": repair_dispatch_json.get("execution_mode"),
-            "executor_hint": repair_dispatch_json.get("executor_hint"),
-            "executor_contract_version": int(repair_dispatch_json.get("executor_contract_version") or 1),
-        }
+        input_bundle = build_runtime_repair_request_input_bundle(
+            proposal_id=proposal_id,
+            incident_id=incident_id,
+            repair_dispatch_json=repair_dispatch_json,
+            repair_plan_json=repair_plan_json,
+        )
         work_item_ids = self.ensure_scope_replay_work_items(
             run_id=run_id,
             stage=WorkItemStage.REPAIR,
@@ -184,13 +172,48 @@ class RunExecutionService:
         worker_name: str,
         worker_instance_id: str,
         lease_seconds: int,
-    ) -> ClaimedRunWorkItem | None:
+        ) -> ClaimedRunWorkItem | None:
         return self.claim_work_item_by_id(
             work_item_id=work_item_id,
             worker_name=worker_name,
             worker_instance_id=worker_instance_id,
             lease_seconds=lease_seconds,
         )
+
+    def resume_repair_dispatch_work_item(
+        self,
+        *,
+        work_item_id: str,
+        actor_id: str,
+        note: str | None = None,
+    ) -> WorkItem:
+        now = _utcnow()
+        work_item = self.repository.resume_repair_work_item(
+            work_item_id=work_item_id,
+            resumed_at=now,
+        )
+        if work_item is None:
+            raise ValueError(f"Repair work item is not resumable: {work_item_id}")
+        run = self.repository.get_run(work_item.run_id)
+        self.repository.save_run(
+            run,
+            audit_event=RunAuditEvent(
+                run_id=run.id,
+                work_item_id=work_item.id,
+                event_type="work_item.resumed",
+                actor_type=ActorType.HUMAN,
+                actor_id=actor_id,
+                created_at=now,
+                payload_json={
+                    "stage": work_item.stage.value,
+                    "scope_type": work_item.scope_type.value,
+                    "scope_id": work_item.scope_id,
+                    "note": note or "",
+                    "attempt": work_item.attempt,
+                },
+            ),
+        )
+        return work_item
 
     def ensure_scope_replay_work_items(
         self,
@@ -206,24 +229,37 @@ class RunExecutionService:
         if not normalized_scope_ids:
             return []
 
-        existing_items = self.repository.session.scalars(
+        statuses = [
+            WorkItemStatus.PENDING,
+            WorkItemStatus.RETRYABLE_FAILED,
+            WorkItemStatus.LEASED,
+            WorkItemStatus.RUNNING,
+        ]
+        if stage == WorkItemStage.REPAIR:
+            statuses.append(WorkItemStatus.TERMINAL_FAILED)
+        existing_items_raw = self.repository.session.scalars(
             select(WorkItem)
             .where(
                 WorkItem.run_id == run_id,
                 WorkItem.stage == stage,
                 WorkItem.scope_type == scope_type,
                 WorkItem.scope_id.in_(normalized_scope_ids),
-                WorkItem.status.in_(
-                    [
-                        WorkItemStatus.PENDING,
-                        WorkItemStatus.RETRYABLE_FAILED,
-                        WorkItemStatus.LEASED,
-                        WorkItemStatus.RUNNING,
-                    ]
-                ),
+                WorkItem.status.in_(statuses),
             )
             .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
         ).all()
+        existing_items = [
+            item
+            for item in existing_items_raw
+            if item.status
+            in {
+                WorkItemStatus.PENDING,
+                WorkItemStatus.RETRYABLE_FAILED,
+                WorkItemStatus.LEASED,
+                WorkItemStatus.RUNNING,
+            }
+            or (stage == WorkItemStage.REPAIR and self._terminal_repair_item_blocks_reseed(item))
+        ]
         existing_scope_ids = {item.scope_id for item in existing_items}
         missing_scope_ids = [scope_id for scope_id in normalized_scope_ids if scope_id not in existing_scope_ids]
 
@@ -270,6 +306,21 @@ class RunExecutionService:
             ),
         )
         return replay_item_ids
+
+    @staticmethod
+    def _terminal_repair_item_blocks_reseed(work_item: WorkItem) -> bool:
+        if work_item.status != WorkItemStatus.TERMINAL_FAILED:
+            return False
+        error_detail = dict(work_item.error_detail_json or {})
+        repair_result_json = error_detail.get("repair_result_json")
+        if not isinstance(repair_result_json, dict):
+            repair_result_json = {}
+        decision = str(
+            error_detail.get("repair_agent_decision")
+            or repair_result_json.get("repair_agent_decision")
+            or ""
+        ).strip()
+        return decision == "manual_escalation_required"
 
     def claim_next_work_item(
         self,

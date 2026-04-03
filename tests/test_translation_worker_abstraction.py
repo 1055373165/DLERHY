@@ -48,6 +48,11 @@ from book_agent.core.config import Settings
 from book_agent.services.packet_experiment import PacketExperimentOptions, PacketExperimentService
 from book_agent.services.packet_experiment_diff import compare_experiment_payloads
 from book_agent.services.packet_experiment_scan import PacketExperimentScanService
+from book_agent.services.translation_prompt_ab import (
+    TranslationPromptABOptions,
+    TranslationPromptCandidate,
+    TranslationPromptABService,
+)
 from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
 from book_agent.services.translation_chapter_smoke import (
@@ -300,7 +305,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             self.assertEqual(artifacts.translation_run.model_name, "mock-llm")
         self.assertEqual(artifacts.translation_run.prompt_version, "p0.llm.v1")
         self.assertEqual(artifacts.translation_run.model_config_json["provider"], "fake")
-        self.assertEqual(artifacts.translation_run.model_config_json["prompt_profile"], "role-style-faithful-v6")
+        self.assertEqual(artifacts.translation_run.model_config_json["prompt_profile"], "tech-column-meta-v1")
         self.assertEqual(artifacts.alignment_edges[0].sentence_id, first_sentence_id)
 
         self.assertEqual(len(fake_client.requests), 1)
@@ -315,7 +320,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("Current Paragraph:", fake_client.requests[0].user_prompt)
         self.assertIn("Sentence Ledger:", fake_client.requests[0].user_prompt)
         self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
-        self.assertIn("publication-grade English-to-Chinese translator", fake_client.requests[0].system_prompt)
+        self.assertIn("专业的 AI 与计算机技术文本中英翻译专家", fake_client.requests[0].system_prompt)
 
     def test_load_packet_bundle_restores_current_sentence_order_by_block_ordinal(self) -> None:
         document_id = "11111111-1111-1111-1111-111111111111"
@@ -841,6 +846,12 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_version="profile-test",
             prompt_profile="role-style-faithful-v6",
         )
+        tech_column_prompt = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="profile-test",
+            prompt_profile="tech-column-meta-v1",
+        )
         memory_prompt = build_translation_prompt_request(
             TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
             model_name="mock-llm",
@@ -869,6 +880,10 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("Chinese Style Priorities:", faithful_prompt_v6.user_prompt)
         self.assertIn("Paragraph Intent Signal:", faithful_prompt_v6.user_prompt)
         self.assertIn("follow them over generic smoothing", faithful_prompt_v6.user_prompt)
+        self.assertEqual(tech_column_prompt.system_prompt_static, tech_column_prompt.system_prompt)
+        self.assertEqual(tech_column_prompt.system_prompt_dynamic, "")
+        self.assertIn("专业的 AI 与计算机技术文本中英翻译专家", tech_column_prompt.system_prompt)
+        self.assertIn("完成初稿后进行元迭代润色", tech_column_prompt.system_prompt)
         self.assertIn("Chinese Style Priorities:", role_prompt.user_prompt)
         self.assertIn("Paragraph Intent Signal:", role_prompt.user_prompt)
         self.assertIn("Intent: definition", role_prompt.user_prompt)
@@ -880,6 +895,63 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("Paragraph Intent Priorities:", brief_prompt.user_prompt)
         self.assertIn("Literalism Guardrails:", brief_prompt.user_prompt)
         self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.user_prompt)
+
+    def test_build_translation_prompt_request_exposes_static_and_dynamic_system_prompt_parts_for_native_profiles(self) -> None:
+        context_packet = ContextPacket(
+            packet_id="pkt-native",
+            document_id="doc-1",
+            chapter_id="ch-1",
+            packet_type="translate",
+            book_profile_version=1,
+            chapter_brief_version=1,
+            heading_path=["Chapter One"],
+            current_blocks=[
+                PacketBlock(
+                    block_id="block-1",
+                    block_type="paragraph",
+                    sentence_ids=["s1"],
+                    text="Context engineering helps an agent decide what matters now.",
+                )
+            ],
+            chapter_brief="This chapter explains how context engineering changes agent behavior.",
+            style_constraints={
+                "translation_material": "technical_book",
+                "paragraph_intent": "definition",
+                "paragraph_intent_hint": "Treat this as concept-definition prose.",
+            },
+        )
+        current_sentences = [
+            Sentence(
+                id="s1",
+                block_id="block-1",
+                chapter_id="ch-1",
+                document_id="doc-1",
+                ordinal_in_block=1,
+                source_text="Context engineering helps an agent decide what matters now.",
+                normalized_text="Context engineering helps an agent decide what matters now.",
+                source_lang="en",
+                translatable=True,
+                nontranslatable_reason=None,
+                source_anchor=None,
+                source_span_json={},
+                upstream_confidence=1.0,
+                sentence_status=SentenceStatus.PENDING,
+                active_version=1,
+            )
+        ]
+
+        prompt_request = build_translation_prompt_request(
+            TranslationTask(context_packet=context_packet, current_sentences=current_sentences),
+            model_name="mock-llm",
+            prompt_version="native-profile-test",
+            prompt_profile="cn-native-faithful-v3",
+        )
+
+        self.assertIn("Static Translation Contract:", prompt_request.system_prompt)
+        self.assertIn("Dynamic Packet Guidance:", prompt_request.system_prompt)
+        self.assertIn("native Chinese readability that feels written, not translated", prompt_request.system_prompt_static)
+        self.assertIn("technical-book context", prompt_request.system_prompt_dynamic)
+        self.assertIn("Paragraph Intent: definition", prompt_request.system_prompt_dynamic)
 
     def test_build_translation_prompt_request_includes_section_level_scaffolding(self) -> None:
         context_packet = ContextPacket(
@@ -2018,7 +2090,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertFalse(artifacts.payload["options"]["include_literalism_guardrails"])
         self.assertTrue(artifacts.payload["options"]["prefer_previous_translations_over_source_context"])
         self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
-        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "role-style-faithful-v6")
+        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "tech-column-meta-v1")
         self.assertFalse(artifacts.payload["options"]["execute"])
         self.assertIsNone(artifacts.payload["worker_output"])
         self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")
@@ -2031,6 +2103,8 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("prompt_chapter_brief_present", artifacts.payload["context_sources"])
         self.assertEqual(artifacts.payload["context_sources"]["chapter_brief_source"], "packet")
         self.assertIn("Current Sentences:", artifacts.payload["prompt_request"]["user_prompt"])
+        self.assertIn("system_prompt_static", artifacts.payload["prompt_request"])
+        self.assertIn("system_prompt_dynamic", artifacts.payload["prompt_request"])
 
     def test_packet_experiment_service_execute_runs_single_packet_worker(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
@@ -2366,6 +2440,69 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             "memory",
         )
         self.assertIn("prompt_stats", diff.payload["prompt_delta"])
+
+    def test_translation_prompt_ab_service_collects_candidates_and_pairwise_diffs(self) -> None:
+        class StubExperimentService:
+            def run(self, packet_id: str, options: PacketExperimentOptions):
+                profile = str(options.prompt_profile)
+                return type(
+                    "Artifacts",
+                    (),
+                    {
+                        "payload": {
+                            "packet_id": packet_id,
+                            "options": {
+                                "prompt_layout": options.prompt_layout,
+                                "prompt_profile": options.prompt_profile,
+                            },
+                            "prompt_request": {
+                                "system_prompt": f"Static Translation Contract:\nprofile={profile}",
+                                "system_prompt_static": f"profile={profile}",
+                                "system_prompt_dynamic": "material=technical_book",
+                                "user_prompt": f"Current Paragraph:\n- P1 {profile}",
+                            },
+                            "worker_output": {
+                                "target_segments": [
+                                    {
+                                        "text_zh": f"译文::{profile}",
+                                    }
+                                ]
+                            },
+                        }
+                    },
+                )()
+
+        service = TranslationPromptABService(experiment_service=StubExperimentService())
+        artifacts = service.run_packet(
+            "pkt-ab",
+            options=TranslationPromptABOptions(
+                execute=True,
+                candidates=(
+                    TranslationPromptCandidate(
+                        label="base",
+                        prompt_profile="role-style-faithful-v6",
+                        prompt_layout="paragraph-led",
+                        notes="baseline",
+                    ),
+                    TranslationPromptCandidate(
+                        label="cand",
+                        prompt_profile="cn-native-faithful-v2",
+                        prompt_layout="paragraph-led",
+                        notes="candidate",
+                    ),
+                ),
+            ),
+        )
+
+        self.assertEqual(artifacts.payload["review_summary"]["candidate_count"], 2)
+        self.assertEqual(artifacts.payload["review_summary"]["executed_candidate_count"], 2)
+        self.assertEqual(artifacts.payload["review_summary"]["labels"], ["base", "cand"])
+        self.assertEqual(len(artifacts.payload["candidates"]), 2)
+        self.assertEqual(artifacts.payload["candidates"][0]["translation_text"], "译文::role-style-faithful-v6")
+        self.assertEqual(artifacts.payload["candidates"][1]["translation_text"], "译文::cn-native-faithful-v2")
+        self.assertEqual(len(artifacts.payload["pairwise_diffs"]), 1)
+        self.assertTrue(artifacts.payload["pairwise_diffs"][0]["summary"]["prompt_profile_changed"])
+        self.assertTrue(artifacts.payload["pairwise_diffs"][0]["summary"]["worker_output_changed"])
 
     def test_packet_experiment_scan_ranks_memory_rich_packets_first(self) -> None:
         packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"

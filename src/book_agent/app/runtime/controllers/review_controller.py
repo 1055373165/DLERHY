@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.app.runtime.controllers.budget_controller import BudgetController
 from book_agent.app.runtime.controllers.incident_controller import IncidentController
+from book_agent.core.config import get_settings
 from book_agent.domain.enums import (
     JobScopeType,
     ReviewSessionStatus,
@@ -31,6 +32,39 @@ from book_agent.services.runtime_repair_planner import RuntimeRepairPlannerServi
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _preferred_repair_dispatch(run: DocumentRun) -> dict[str, Any]:
+    runtime_v2 = dict((run.status_detail_json or {}).get("runtime_v2") or {})
+    dispatch: dict[str, Any] = {}
+    execution_mode = str(runtime_v2.get("preferred_repair_execution_mode") or "").strip() or None
+    executor_hint = str(runtime_v2.get("preferred_repair_executor_hint") or "").strip() or None
+    transport_hint = str(runtime_v2.get("preferred_repair_transport_hint") or "").strip() or None
+    if execution_mode is not None:
+        dispatch["execution_mode"] = execution_mode
+    if executor_hint is not None:
+        dispatch["executor_hint"] = executor_hint
+    if execution_mode is not None or executor_hint is not None:
+        dispatch["executor_contract_version"] = int(
+            runtime_v2.get("preferred_repair_executor_contract_version") or 1
+        )
+    if transport_hint is not None:
+        dispatch["transport_hint"] = transport_hint
+        dispatch["transport_contract_version"] = int(
+            runtime_v2.get("preferred_repair_transport_contract_version") or 1
+        )
+    if dispatch:
+        return dispatch
+    remote_http_endpoint = str(get_settings().runtime_repair_transport_http_url or "").strip()
+    if remote_http_endpoint:
+        return {
+            "execution_mode": "transport_backed",
+            "executor_hint": "python_contract_transport_repair_executor",
+            "executor_contract_version": 1,
+            "transport_hint": "http_contract_repair_transport",
+            "transport_contract_version": 1,
+        }
+    return dispatch
 
 
 def _lane_health_payload(result: LaneHealthResult, *, observed_at: datetime) -> dict[str, object]:
@@ -364,11 +398,13 @@ class ReviewController:
             },
             latest_work_item_id=work_item.id if work_item is not None else None,
         )
+        dispatch_preferences = _preferred_repair_dispatch(run)
         repair_plan = self._repair_planner.plan_review_deadlock_repair(
             chapter_id=chapter_run.chapter_id,
             chapter_run_id=chapter_run.id,
             review_session_id=review_session.id,
             reason_code=lane_health.reason_code,
+            **dispatch_preferences,
         )
         proposal = self._incident_controller.open_patch_proposal(
             incident_id=incident.id,
@@ -390,6 +426,7 @@ class ReviewController:
             "reason_code": lane_health.reason_code,
             "lane_health_state": lane_health.health_state,
             "status": "scheduled",
+            "repair_blockage": dict(repair_dispatch.get("repair_blockage") or {}),
         }
         self._runtime_repo.merge_review_session_status_detail(
             review_session.id,

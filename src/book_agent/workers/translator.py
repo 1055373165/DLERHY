@@ -243,6 +243,8 @@ class TranslationPromptRequest:
     system_prompt: str
     user_prompt: str
     response_schema: dict[str, Any]
+    system_prompt_static: str = ""
+    system_prompt_dynamic: str = ""
     sentence_alias_map: dict[str, str] = field(default_factory=dict)
 
 
@@ -257,7 +259,37 @@ PromptProfile = Literal[
     "role-style-brief-v3",
     "material-aware-v1",
     "material-aware-minimal-v1",
+    "cn-native-faithful-v1",
+    "cn-native-faithful-v2",
+    "cn-native-faithful-v3",
+    "tech-column-meta-v1",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationSystemPromptParts:
+    static_lines: tuple[str, ...]
+    dynamic_lines: tuple[str, ...] = ()
+
+    @property
+    def static_prompt(self) -> str:
+        return "\n".join(line.strip() for line in self.static_lines if line.strip())
+
+    @property
+    def dynamic_prompt(self) -> str:
+        return "\n".join(line.strip() for line in self.dynamic_lines if line.strip())
+
+    @property
+    def combined_prompt(self) -> str:
+        sections: list[str] = []
+        if self.static_prompt:
+            sections.append("Static Translation Contract:")
+            sections.extend(self.static_prompt.splitlines())
+        if self.dynamic_prompt:
+            sections.append("")
+            sections.append("Dynamic Packet Guidance:")
+            sections.extend(self.dynamic_prompt.splitlines())
+        return "\n".join(sections).strip()
 TranslationMaterial = Literal[
     "general_nonfiction",
     "technical_book",
@@ -494,6 +526,72 @@ def _material_system_prompt(material: TranslationMaterial, *, minimal: bool) -> 
     )
 
 
+def _dynamic_material_system_lines(material: TranslationMaterial) -> list[str]:
+    if material == "academic_paper":
+        return [
+            "- The current packet belongs to an academic-paper context. Keep the register formal, rigorous, and evidence-aware.",
+            "- Preserve qualifiers, scope, and rhetorical caution exactly; do not popularize or relax the argument.",
+        ]
+    if material == "technical_book":
+        return [
+            "- The current packet belongs to a technical-book context. The Chinese should read like a strong mainland-Chinese technical author wrote it directly.",
+            "- Prefer fluent, publication-ready Chinese prose over English-shaped sentence shells or abstract noun-chain calques.",
+        ]
+    if material == "technical_blog":
+        return [
+            "- The current packet belongs to a technical-blog context. Keep the Chinese direct, concrete, and easy for engineers to scan.",
+            "- Prefer practitioner language over academic or literary wording while staying fully faithful.",
+        ]
+    if material == "business_document":
+        return [
+            "- The current packet belongs to a business-document context. Keep the Chinese professional, restrained, and executive-readable.",
+            "- Preserve responsibility, risk, and decision-impact wording without inflating tone.",
+        ]
+    return [
+        "- The current packet belongs to a professional nonfiction context. Keep the Chinese fluent, faithful, and publication-ready.",
+    ]
+
+
+def _packet_dynamic_system_lines(packet: ContextPacket) -> list[str]:
+    material = _resolve_translation_material(packet)
+    lines = _dynamic_material_system_lines(material)
+    if packet.section_brief:
+        lines.append(
+            f"- Section Brief: {_trim_prompt_excerpt(packet.section_brief, max_chars=180)}"
+        )
+    elif packet.chapter_brief and _chapter_brief_visible(packet):
+        lines.append(
+            f"- Chapter Brief: {_trim_prompt_excerpt(packet.chapter_brief, max_chars=180)}"
+        )
+    intent = str(packet.style_constraints.get("paragraph_intent") or "").strip()
+    if intent:
+        lines.append(f"- Paragraph Intent: {intent}")
+    hint = str(packet.style_constraints.get("paragraph_intent_hint") or "").strip()
+    if hint:
+        lines.append(f"- Paragraph Intent Hint: {hint}")
+    return lines
+
+
+def _build_split_system_prompt(
+    *,
+    static_lines: list[str],
+    packet: ContextPacket,
+) -> TranslationSystemPromptParts:
+    return TranslationSystemPromptParts(
+        static_lines=tuple(static_lines),
+        dynamic_lines=tuple(_packet_dynamic_system_lines(packet)),
+    )
+
+
+TECH_COLUMN_META_V1_SYSTEM_PROMPT = """【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：
+自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；
+彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；
+译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；
+技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；
+严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；
+完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。"""
+
+
 class TranslationModelClient(Protocol):
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult | TranslationWorkerOutput:
         ...
@@ -505,7 +603,7 @@ def build_translation_prompt_request(
     model_name: str,
     prompt_version: str,
     prompt_layout: PromptLayout = "paragraph-led",
-    prompt_profile: PromptProfile = "current",
+    prompt_profile: PromptProfile = "tech-column-meta-v1",
     allow_compact_prompt: bool = True,
 ) -> TranslationPromptRequest:
     packet = task.context_packet
@@ -715,7 +813,42 @@ def build_translation_prompt_request(
         _extend_section(sections, "Current Paragraph:", current_paragraph_lines)
         _extend_section(sections, "Sentence Ledger:", sentence_lines)
     user_prompt = "\n".join(sections)
-    if material_aware_prompt:
+    system_prompt_parts: TranslationSystemPromptParts | None = None
+    if prompt_profile == "cn-native-faithful-v1":
+        system_prompt_parts = _build_split_system_prompt(
+            static_lines=[
+                "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction.",
+                "Your non-negotiable goal is to preserve meaning exactly while making the Chinese read as if a strong native Chinese author wrote it directly.",
+                "Do not produce translationese, rigid English sentence mirroring, slogan-like wrap-ups, or abstract noun-heavy paraphrases.",
+                "Keep concrete imagery concrete, keep technical logic precise, and keep alignment coverage complete.",
+            ],
+            packet=packet,
+        )
+    elif prompt_profile == "cn-native-faithful-v2":
+        system_prompt_parts = _build_split_system_prompt(
+            static_lines=[
+                "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction.",
+                "Faithfulness comes first, but the Chinese must feel native, concise, and smooth to mainland-Chinese readers.",
+                "Prefer plain, direct Chinese over inflated or literary substitutes; avoid copying English abstract noun chains into Chinese.",
+                "When the source would sound stiff if mirrored literally, reshape it into natural Chinese without changing claims, constraints, or emphasis.",
+                "Keep alignment coverage complete.",
+            ],
+            packet=packet,
+        )
+    elif prompt_profile == "cn-native-faithful-v3":
+        system_prompt_parts = _build_split_system_prompt(
+            static_lines=[
+                "You are a publication-grade English-to-Chinese translator and stylistic localizer for technical books and professional nonfiction.",
+                "Translate with two simultaneous goals: exact fidelity to source meaning and native Chinese readability that feels written, not translated.",
+                "Preserve claims, logic, qualifiers, contrasts, and rhetorical force exactly; never add explanation, soften stance, or upgrade tone.",
+                "Favor connected Chinese discourse, stable terminology, and natural sentence rhythm over sentence-by-sentence English mirroring.",
+                "Keep the translated body free of translator commentary and keep alignment coverage complete.",
+            ],
+            packet=packet,
+        )
+    elif prompt_profile == "tech-column-meta-v1":
+        system_prompt = TECH_COLUMN_META_V1_SYSTEM_PROMPT
+    elif material_aware_prompt:
         system_prompt = _material_system_prompt(
             translation_material,
             minimal=minimal_material_prompt,
@@ -780,11 +913,20 @@ def build_translation_prompt_request(
             "Keep the translated body free of inline translator notes; report uncertainty only through structured notes or low-confidence flags. "
             "Alignment coverage must remain complete."
         )
+    if system_prompt_parts is not None:
+        system_prompt_static = system_prompt_parts.static_prompt
+        system_prompt_dynamic = system_prompt_parts.dynamic_prompt
+        system_prompt = system_prompt_parts.combined_prompt
+    else:
+        system_prompt_static = system_prompt
+        system_prompt_dynamic = ""
     return TranslationPromptRequest(
         packet_id=packet.packet_id,
         model_name=model_name,
         prompt_version=prompt_version,
         system_prompt=system_prompt,
+        system_prompt_static=system_prompt_static,
+        system_prompt_dynamic=system_prompt_dynamic,
         user_prompt=user_prompt,
         response_schema=TranslationWorkerOutput.model_json_schema(),
         sentence_alias_map=sentence_alias_map,
@@ -853,7 +995,7 @@ class LLMTranslationWorker:
         *,
         model_name: str,
         prompt_version: str = "p0.llm.v1",
-        prompt_profile: PromptProfile = "role-style-faithful-v6",
+        prompt_profile: PromptProfile = "tech-column-meta-v1",
         runtime_config: dict[str, Any] | None = None,
     ):
         self.client = client

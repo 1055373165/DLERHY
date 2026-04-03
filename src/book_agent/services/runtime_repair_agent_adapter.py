@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from book_agent.services.run_execution import ClaimedRunWorkItem
 from book_agent.services.runtime_repair_worker import (
     ExportRoutingRepairWorker,
+    PacketRuntimeDefectRepairWorker,
     ReviewDeadlockRepairWorker,
     RuntimeRepairWorker,
 )
@@ -83,3 +84,9 @@ class ExportRoutingRepairAgentAdapter(RuntimeRepairAgentAdapter):
     ADAPTER_NAME = "export_routing_in_process_repair_agent"
     WORKER_HINT = "export_routing_repair_agent"
     WORKER_CLASS = ExportRoutingRepairWorker
+
+
+class PacketRuntimeDefectRepairAgentAdapter(RuntimeRepairAgentAdapter):
+    ADAPTER_NAME = "packet_runtime_defect_in_process_repair_agent"
+    WORKER_HINT = "packet_runtime_defect_repair_agent"
+    WORKER_CLASS = PacketRuntimeDefectRepairWorker

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -407,7 +408,7 @@ class PdfStructureRefreshService:
         storage_path = (
             existing_image.storage_path
             if existing_image is not None and str(existing_image.storage_path or "").strip()
-            else f"document-images/{document.id}/{block.id}.png"
+            else f"document-images/{document.id}/{block.id}.{self._normalized_image_extension(remapped_block_metadata.get('image_ext'))}"
         )
         storage_status = (
             (existing_image.metadata_json or {}).get("storage_status")
@@ -446,6 +447,14 @@ class PdfStructureRefreshService:
         image.height_px = refreshed_image.height_px
         image.metadata_json = metadata_json
         return image
+
+    def _normalized_image_extension(self, candidate: object) -> str:
+        if not isinstance(candidate, str):
+            return "png"
+        normalized = candidate.strip().lower().lstrip(".")
+        if not normalized or not re.fullmatch(r"[a-z0-9]+", normalized):
+            return "png"
+        return normalized
 
     def _save_audits(
         self,

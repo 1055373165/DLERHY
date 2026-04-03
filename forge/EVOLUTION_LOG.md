@@ -69,3 +69,46 @@
   - Less branch and path juggling.
   - Faster execution and verification loops.
   - A clearer single source of local truth during autonomous development.
+
+## 2026-03-31 — Fork Resolution Is Now A Hard Rule
+
+- Trigger:
+  - A real run drifted into a secondary direction because Forge had “mainline correction” and
+    “framework evolution”, but it did not yet have an explicit mandatory rule for resolving
+    competing next directions.
+- Root cause:
+  - Dynamic mainline adjustment was possible in practice, but it was not encoded as a required
+    control step when requirement or implementation forks appeared.
+  - That meant a fork could survive as chat guidance instead of immediately mutating the live
+    mainline artifacts.
+- Protocol change:
+  - Added an explicit fork resolution rule to Forge.
+  - Forge must now compare competing directions against the active mainline, choose the closest
+    one as the next slice, and then score the other direction for mainline impact.
+  - If the non-chosen direction has high impact, Forge must rewrite the mainline immediately.
+  - If not, Forge must move it to backlog or a later batch.
+  - This resolution must be written to decisions, log, and progress artifacts before the next
+    dispatch.
+- Expected benefit:
+  - Prevent silent drift into a secondary lane.
+  - Make mainline mutation explicit instead of implicit.
+  - Keep Forge adaptive without becoming ambiguous.
+
+## 2026-03-31 — Verified Batch Is Not A Stop Condition
+
+- Trigger:
+  - Real runs repeatedly paused after a verified batch even when the next dependency-closed slice
+    was already obvious and no real blocker existed.
+- Root cause:
+  - Forge emphasized verification and progress visibility, but it did not state strongly enough
+    that a successful batch summary is not itself a stop signal.
+  - That left room for human-style “checkpoint pauses” inside an autonomous loop.
+- Protocol change:
+  - Added an explicit continue-until-blocked rule.
+  - After verification, Forge must either freeze and execute the next slice or record a concrete
+    blocker.
+  - “Nice place to report progress” is now explicitly invalid as a stop reason.
+- Expected benefit:
+  - Preserve real autonomous momentum.
+  - Reduce unnecessary operator nudging between clean slices.
+  - Make the control loop behave more like a real supervisor and less like a chat habit.

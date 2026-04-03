@@ -55,6 +55,7 @@ from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
 from book_agent.services.review import NaturalnessSummary as ReviewNaturalnessSummary, ReviewArtifacts, ReviewService
+from book_agent.services.runtime_repair_blockage import summarize_runtime_repair_blockage
 from book_agent.services.runtime_bundle import RuntimeBundleService
 from book_agent.services.translation import TranslationExecutionArtifacts, TranslationService
 from book_agent.workers.translator import TranslationWorker
@@ -166,6 +167,7 @@ class DocumentHistoryEntry:
     latest_run_current_stage: str | None
     latest_run_completed_work_item_count: int | None
     latest_run_total_work_item_count: int | None
+    latest_run_runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -622,6 +624,7 @@ class ExportRecordSummary:
     translation_usage_highlights: TranslationUsageHighlights | None = None
     export_auto_followup_summary: ExportAutoFollowupSummary | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummary | None = None
+    runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -1035,6 +1038,7 @@ class DocumentWorkflowService:
         for document in documents:
             latest_run = latest_runs.get(document.id)
             current_stage, completed_work_item_count, total_work_item_count = _history_run_progress(latest_run)
+            latest_run_runtime_v2_context = self._runtime_v2_context_for_run(latest_run)
             entries.append(
                 DocumentHistoryEntry(
                     document_id=document.id,
@@ -1058,6 +1062,7 @@ class DocumentWorkflowService:
                     latest_run_current_stage=current_stage,
                     latest_run_completed_work_item_count=completed_work_item_count,
                     latest_run_total_work_item_count=total_work_item_count,
+                    latest_run_runtime_v2_context=latest_run_runtime_v2_context,
                 )
             )
         if latest_run_status is not None:
@@ -2647,37 +2652,83 @@ class DocumentWorkflowService:
         status_detail = dict(run.status_detail_json or {})
         runtime_v2 = dict(status_detail.get("runtime_v2") or {})
         active_bundle_revision_id = runtime_v2.get("active_runtime_bundle_revision_id") or run.runtime_bundle_revision_id
-        recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
         evidence = dict(runtime_v2.get("last_export_route_evidence") or {})
-        if not active_bundle_revision_id and not recovery and not evidence:
+        pending_repair = dict(runtime_v2.get("pending_export_route_repair") or {})
+        blockage_summary = summarize_runtime_repair_blockage(runtime_v2)
+        blockage_source = str((blockage_summary or {}).get("repair_blockage_source") or "").strip()
+        bounded_recovery = dict(runtime_v2.get(blockage_source) or {}) if blockage_source else {}
+        export_recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
+        if (
+            not active_bundle_revision_id
+            and not bounded_recovery
+            and not export_recovery
+            and not evidence
+            and not pending_repair
+        ):
             return None
         context: dict[str, Any] = {
             "active_runtime_bundle_revision_id": active_bundle_revision_id,
             "runtime_bundle_revision_id": runtime_v2.get("runtime_bundle_revision_id") or run.runtime_bundle_revision_id,
-            "recovered": bool(recovery),
-            "last_export_route_recovery": recovery or None,
+            "recovered": bool(export_recovery),
+            "last_export_route_recovery": export_recovery or None,
             "last_export_route_evidence": evidence or None,
+            "pending_export_route_repair": pending_repair or None,
         }
-        if recovery:
+        if blockage_summary is not None:
+            context.update(blockage_summary)
+        if bounded_recovery:
             bound_work_item_ids = [
                 str(work_item_id)
-                for work_item_id in (recovery.get("bound_work_item_ids") or [])
+                for work_item_id in (
+                    bounded_recovery.get("bound_work_item_ids")
+                    or bounded_recovery.get("replay_work_item_ids")
+                    or []
+                )
                 if str(work_item_id).strip()
             ]
-            replay_work_item_id = recovery.get("replay_work_item_id") or (
+            replay_work_item_id = bounded_recovery.get("replay_work_item_id") or (
                 bound_work_item_ids[0] if bound_work_item_ids else None
             )
             context.update(
                 {
-                    "incident_id": recovery.get("incident_id"),
-                    "proposal_id": recovery.get("proposal_id"),
-                    "bundle_revision_id": recovery.get("bundle_revision_id"),
-                    "selected_route": recovery.get("selected_route"),
-                    "corrected_route": recovery.get("corrected_route"),
-                    "route_candidates": list(recovery.get("route_candidates") or []),
-                    "replay_scope_id": recovery.get("replay_scope_id"),
+                    "incident_id": bounded_recovery.get("incident_id"),
+                    "proposal_id": bounded_recovery.get("proposal_id"),
+                    "bundle_revision_id": bounded_recovery.get("bundle_revision_id"),
+                    "repair_work_item_id": bounded_recovery.get("repair_work_item_id"),
+                    "recovery_status": bounded_recovery.get("status"),
+                    "replay_scope_id": bounded_recovery.get("replay_scope_id"),
                     "bound_work_item_ids": bound_work_item_ids,
                     "replay_work_item_id": replay_work_item_id,
+                }
+            )
+            if blockage_source == "last_export_route_recovery" or blockage_source == "pending_export_route_repair":
+                context.update(
+                    {
+                        "selected_route": bounded_recovery.get("selected_route"),
+                        "corrected_route": bounded_recovery.get("corrected_route"),
+                        "route_candidates": list(bounded_recovery.get("route_candidates") or []),
+                    }
+                )
+            else:
+                context.update(
+                    {
+                        "reason_code": bounded_recovery.get("reason_code"),
+                        "lane_health_state": bounded_recovery.get("lane_health_state"),
+                    }
+                )
+        elif pending_repair:
+            context.update(
+                {
+                    "incident_id": pending_repair.get("incident_id"),
+                    "proposal_id": pending_repair.get("proposal_id"),
+                    "bundle_revision_id": pending_repair.get("bundle_revision_id"),
+                    "repair_work_item_id": pending_repair.get("repair_work_item_id"),
+                    "selected_route": pending_repair.get("selected_route"),
+                    "corrected_route": pending_repair.get("corrected_route"),
+                    "route_candidates": list(pending_repair.get("route_candidates") or []),
+                    "replay_scope_id": pending_repair.get("replay_scope_id"),
+                    "bound_work_item_ids": list(pending_repair.get("bound_work_item_ids") or []),
+                    "replay_work_item_id": pending_repair.get("replay_work_item_id"),
                 }
             )
         if evidence:
@@ -3175,6 +3226,7 @@ class DocumentWorkflowService:
             ),
             export_auto_followup_summary=self._to_export_auto_followup_summary(export),
             export_time_misalignment_counts=self._to_export_misalignment_summary(export),
+            runtime_v2_context=export.runtime_v2_context,
         )
 
     def _to_export_auto_followup_summary(self, export) -> ExportAutoFollowupSummary | None:

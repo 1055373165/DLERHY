@@ -103,12 +103,59 @@ def _local_name(tag: str) -> str:
     return tag
 
 
-def _normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+def _normalize_text(text: str | None) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
 def _normalize_preformatted_text(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+
+
+def _normalized_heading_level(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _normalize_chapter_heading_levels(blocks: list[ParsedBlock]) -> list[ParsedBlock]:
+    heading_positions = [index for index, block in enumerate(blocks) if block.block_type == "heading"]
+    if not heading_positions:
+        return blocks
+
+    raw_levels = [
+        _normalized_heading_level(blocks[index].metadata.get("heading_level"))
+        for index in heading_positions
+    ]
+    numeric_raw_levels = [level for level in raw_levels if level is not None]
+    if not numeric_raw_levels:
+        return blocks
+
+    chapter_base_level = min(numeric_raw_levels)
+    first_heading_index = heading_positions[0]
+    normalized_blocks: list[ParsedBlock] = []
+    for index, block in enumerate(blocks):
+        if block.block_type != "heading":
+            normalized_blocks.append(block)
+            continue
+        metadata = dict(block.metadata or {})
+        raw_level = _normalized_heading_level(metadata.get("heading_level"))
+        if index == first_heading_index:
+            metadata["heading_level"] = 1
+        elif raw_level is not None:
+            metadata["heading_level"] = max(2, raw_level - chapter_base_level + 2)
+        normalized_blocks.append(
+            ParsedBlock(
+                block_type=block.block_type,
+                text=block.text,
+                source_path=block.source_path,
+                ordinal=block.ordinal,
+                anchor=block.anchor,
+                metadata=metadata,
+            )
+        )
+    return normalized_blocks
 
 
 def _extract_rich_text(element: ET.Element) -> str:
@@ -228,10 +275,38 @@ def _looks_like_generic_spine_nav_title(value: str | None) -> bool:
     return _normalize_text(value or "").casefold() in _GENERIC_SPINE_NAV_TITLES
 
 
+_SAFE_XML_ENTITY_NAMES = {"amp", "apos", "gt", "lt", "quot"}
+_NAMED_HTML_ENTITY_PATTERN = re.compile(r"&([A-Za-z][A-Za-z0-9]+);")
+
+
+def _replace_named_html_entities(text: str) -> str:
+    def repl(match: re.Match[str]) -> str:
+        entity_name = match.group(1)
+        if entity_name in _SAFE_XML_ENTITY_NAMES:
+            return match.group(0)
+        entity_value = html.entities.html5.get(f"{entity_name};") or html.entities.html5.get(entity_name)
+        if entity_value is None:
+            return match.group(0)
+        if isinstance(entity_value, tuple):
+            entity_value = entity_value[0]
+        return str(entity_value)
+
+    return _NAMED_HTML_ENTITY_PATTERN.sub(repl, text)
+
+
 def _parse_xml_document(raw: bytes) -> ET.Element:
-    # EPUB XHTML frequently includes named HTML entities like &times; that
-    # ElementTree's XML parser does not resolve by default.
-    return ET.fromstring(html.unescape(raw.decode("utf-8")))
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        return ET.fromstring(text)
+    except ET.ParseError:
+        # EPUB XHTML/OPF files occasionally mix XML with named HTML entities like
+        # &times;. Resolve only those named entities and leave XML escapes like
+        # &lt;...&gt; intact so encoded HTML snippets inside metadata do not become
+        # real XML tags and break parsing.
+        sanitized = _replace_named_html_entities(text)
+        if sanitized == text:
+            raise
+        return ET.fromstring(sanitized)
 
 
 def _block_type_for_html(tag: str, attrs: dict[str, str]) -> str | None:
@@ -314,11 +389,14 @@ class _FallbackHTMLBlockExtractor(HTMLParser):
         if self._active_block is None:
             block_type = _block_type_for_html(tag, attr_map)
             if block_type:
+                metadata: dict[str, str | int] = {"tag": tag}
+                if tag in _HEADING_TAGS and len(tag) == 2 and tag[1].isdigit():
+                    metadata["heading_level"] = int(tag[1])
                 active_block = {
                     "tag": tag,
                     "block_type": block_type,
                     "anchor": attr_map.get("id"),
-                    "metadata": {"tag": tag},
+                    "metadata": metadata,
                     "text_parts": [],
                     "source_path": self.href,
                 }
@@ -618,6 +696,7 @@ class EPUBParser:
             blocks = self._extract_blocks(body, href)
         except ET.ParseError:
             blocks = _FallbackHTMLBlockExtractor(href).extract(raw.decode("utf-8", errors="replace"))
+        blocks = _normalize_chapter_heading_levels(blocks)
         nav_title = nav_map.get(posixpath.normpath(href))
         heading_title = next((block.text for block in blocks if block.block_type == "heading"), None)
         chapter_title = self._resolve_chapter_title(nav_title, heading_title)
@@ -691,8 +770,13 @@ class EPUBParser:
     def _extract_blocks(self, body: ET.Element, href: str) -> list[ParsedBlock]:
         blocks: list[ParsedBlock] = []
 
-        def visit(element: ET.Element) -> None:
+        def visit(element: ET.Element, inherited_anchor: str | None = None) -> None:
             local = _local_name(element.tag)
+            class_tokens = _element_class_tokens(element)
+            current_anchor = _normalize_text(element.attrib.get("id")) or inherited_anchor
+            if _figure_like_container(local, class_tokens, element):
+                blocks.extend(self._figure_blocks(element, href, starting_ordinal=len(blocks) + 1))
+                return
             block_type = self._block_type_for_element(element, local)
             if block_type:
                 text, metadata = self._block_text_and_metadata(element, local, href)
@@ -703,17 +787,86 @@ class EPUBParser:
                             text=text,
                             source_path=href,
                             ordinal=len(blocks) + 1,
-                            anchor=element.attrib.get("id"),
+                            anchor=current_anchor,
                             metadata=metadata,
                         )
                     )
                     return
 
             for child in list(element):
-                visit(child)
+                visit(child, current_anchor)
 
         for child in list(body):
             visit(child)
+        return blocks
+
+    def _figure_blocks(
+        self,
+        element: ET.Element,
+        href: str,
+        *,
+        starting_ordinal: int,
+    ) -> list[ParsedBlock]:
+        class_tokens = _element_class_tokens(element)
+        if not _figure_like_container(_local_name(element.tag), class_tokens, element):
+            return []
+
+        image = _first_descendant(element, {"img"})
+        image_src = ""
+        image_alt = ""
+        if image is not None:
+            image_src = _normalize_text(image.attrib.get("src"))
+            image_alt = _normalize_text(image.attrib.get("alt"))
+
+        image_id = _normalize_text(image.attrib.get("id")) if image is not None else ""
+        base_anchor = _normalize_text(element.attrib.get("id")) or image_id or f"figure-{starting_ordinal}"
+        figure_anchor = f"{base_anchor}-figure"
+        caption_anchor = f"{base_anchor}-caption"
+
+        figure_metadata: dict[str, object] = {"tag": "figure"}
+        if image_src:
+            figure_metadata["image_src"] = image_src
+            figure_metadata["image_path"] = _join_path(posixpath.dirname(href), image_src)
+        if image_alt:
+            figure_metadata["image_alt"] = image_alt
+        figure_metadata["translatable"] = False
+        figure_metadata["nontranslatable_reason"] = "epub_figure_artifact"
+
+        caption_text = _figure_caption_text(element)
+        caption_metadata: dict[str, object] = {
+            "tag": "figcaption",
+            "caption_for_source_anchor": f"{href}#{figure_anchor}",
+        }
+        if image_src:
+            caption_metadata["image_src"] = image_src
+            caption_metadata["image_path"] = _join_path(posixpath.dirname(href), image_src)
+        if image_alt:
+            caption_metadata["image_alt"] = image_alt
+
+        figure_metadata["linked_caption_source_anchor"] = f"{href}#{caption_anchor}"
+
+        figure_text = image_alt or "[Image]"
+        figure_block = ParsedBlock(
+            block_type="figure",
+            text=figure_text,
+            source_path=href,
+            ordinal=starting_ordinal,
+            anchor=figure_anchor,
+            metadata=figure_metadata,
+        )
+
+        blocks = [figure_block]
+        if caption_text:
+            blocks.append(
+                ParsedBlock(
+                    block_type="caption",
+                    text=caption_text,
+                    source_path=href,
+                    ordinal=starting_ordinal + 1,
+                    anchor=caption_anchor,
+                    metadata=caption_metadata,
+                )
+            )
         return blocks
 
     def _block_type_for_element(self, element: ET.Element, local_name: str) -> str | None:
@@ -738,6 +891,8 @@ class EPUBParser:
         href: str,
     ) -> tuple[str, dict[str, object]]:
         metadata: dict[str, object] = {"tag": local_name}
+        if local_name in _HEADING_TAGS and len(local_name) == 2 and local_name[1].isdigit():
+            metadata["heading_level"] = int(local_name[1])
         class_tokens = _element_class_tokens(element)
         if _figure_like_container(local_name, class_tokens, element):
             image = _first_descendant(element, {"img"})

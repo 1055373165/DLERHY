@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from book_agent.services.runtime_repair_agent_adapter import (
     ExportRoutingRepairAgentAdapter,
+    PacketRuntimeDefectRepairAgentAdapter,
     ReviewDeadlockRepairAgentAdapter,
     RuntimeRepairAgentAdapter,
 )
@@ -80,6 +81,7 @@ class RuntimeRepairWorkerRegistry:
             (cls.DEFAULT_WORKER_HINT, cls.DEFAULT_WORKER_CONTRACT_VERSION): cls._default_repair_agent_adapter_factory,
             ("review_deadlock_repair_agent", 1): cls._review_deadlock_repair_agent_adapter_factory,
             ("export_routing_repair_agent", 1): cls._export_routing_repair_agent_adapter_factory,
+            ("packet_runtime_defect_repair_agent", 1): cls._packet_runtime_defect_repair_agent_adapter_factory,
         }
 
     @staticmethod
@@ -93,3 +95,9 @@ class RuntimeRepairWorkerRegistry:
     @staticmethod
     def _export_routing_repair_agent_adapter_factory(session_factory: sessionmaker) -> RuntimeRepairAgentAdapter:
         return ExportRoutingRepairAgentAdapter(session_factory=session_factory)
+
+    @staticmethod
+    def _packet_runtime_defect_repair_agent_adapter_factory(
+        session_factory: sessionmaker,
+    ) -> RuntimeRepairAgentAdapter:
+        return PacketRuntimeDefectRepairAgentAdapter(session_factory=session_factory)

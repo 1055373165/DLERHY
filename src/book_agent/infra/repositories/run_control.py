@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
@@ -20,6 +20,14 @@ from book_agent.domain.models.ops import (
     WorkerLease,
 )
 from book_agent.domain.models.translation import TranslationPacket
+
+
+def _ensure_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 @dataclass(slots=True)
@@ -190,12 +198,12 @@ class RunControlRepository:
         return created
 
     def count_claimable_work_items(self, run_id: str) -> int:
-        return self.session.scalar(
-            select(func.count(WorkItem.id)).where(
-                WorkItem.run_id == run_id,
-                WorkItem.status.in_([WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED]),
-            )
-        ) or 0
+        stmt = select(WorkItem).where(
+            WorkItem.run_id == run_id,
+            WorkItem.status.in_([WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED]),
+        )
+        now = _utcnow()
+        return sum(1 for item in self.session.scalars(stmt).all() if self._is_work_item_claimable(item, now=now))
 
     def count_inflight_work_items(self, run_id: str) -> int:
         return self.session.scalar(
@@ -268,18 +276,27 @@ class RunControlRepository:
         stage: WorkItemStage | None = None,
         limit: int = 32,
     ) -> list[str]:
+        scan_limit = max(limit * 8, limit)
         stmt = (
-            select(WorkItem.id)
+            select(WorkItem)
             .where(
                 WorkItem.run_id == run_id,
                 WorkItem.status.in_([WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED]),
             )
             .order_by(WorkItem.priority.asc(), WorkItem.created_at.asc(), WorkItem.id.asc())
-            .limit(limit)
+            .limit(scan_limit)
         )
         if stage is not None:
             stmt = stmt.where(WorkItem.stage == stage)
-        return list(self.session.scalars(stmt).all())
+        now = _utcnow()
+        claimable_ids: list[str] = []
+        for work_item in self.session.scalars(stmt).all():
+            if not self._is_work_item_claimable(work_item, now=now):
+                continue
+            claimable_ids.append(work_item.id)
+            if len(claimable_ids) >= limit:
+                break
+        return claimable_ids
 
     def claim_work_item(
         self,
@@ -291,6 +308,12 @@ class RunControlRepository:
         heartbeat_at: datetime,
         lease_expires_at: datetime,
     ) -> ClaimedWorkItemBundle | None:
+        current_work_item = self.session.get(WorkItem, work_item_id)
+        if current_work_item is None:
+            raise ValueError(f"Work item not found: {work_item_id}")
+        if not self._is_work_item_claimable(current_work_item, now=heartbeat_at):
+            self.session.flush()
+            return None
         result = self.session.execute(
             update(WorkItem)
             .where(
@@ -331,6 +354,69 @@ class RunControlRepository:
         self.session.add(worker_lease)
         self.session.flush()
         return ClaimedWorkItemBundle(work_item=work_item, worker_lease=worker_lease)
+
+    def _is_work_item_claimable(self, work_item: WorkItem, *, now: datetime) -> bool:
+        if work_item.status == WorkItemStatus.PENDING:
+            return True
+        if work_item.status != WorkItemStatus.RETRYABLE_FAILED:
+            return False
+        retry_after_seconds = self._retry_after_seconds_for_work_item(work_item)
+        released_at = _ensure_utc(work_item.finished_at)
+        if retry_after_seconds <= 0 or released_at is None:
+            return True
+        return (released_at + timedelta(seconds=retry_after_seconds)) <= now
+
+    @staticmethod
+    def _repair_decision_for_work_item(work_item: WorkItem) -> str:
+        error_detail = dict(work_item.error_detail_json or {})
+        repair_result_json = error_detail.get("repair_result_json")
+        if not isinstance(repair_result_json, dict):
+            repair_result_json = {}
+        return str(
+            error_detail.get("repair_agent_decision")
+            or repair_result_json.get("repair_agent_decision")
+            or ""
+        ).strip()
+
+    @staticmethod
+    def _retry_after_seconds_for_work_item(work_item: WorkItem) -> int:
+        error_detail = dict(work_item.error_detail_json or {})
+        repair_result_json = error_detail.get("repair_result_json")
+        if not isinstance(repair_result_json, dict):
+            return 0
+        decision = RunControlRepository._repair_decision_for_work_item(work_item)
+        if decision != "retry_later":
+            return 0
+        return max(0, int(repair_result_json.get("repair_agent_retry_after_seconds") or 0))
+
+    def resume_repair_work_item(
+        self,
+        *,
+        work_item_id: str,
+        resumed_at: datetime,
+    ) -> WorkItem | None:
+        work_item = self.session.get(WorkItem, work_item_id)
+        if work_item is None:
+            raise ValueError(f"Work item not found: {work_item_id}")
+        if work_item.stage != WorkItemStage.REPAIR:
+            return None
+        if work_item.status not in {WorkItemStatus.TERMINAL_FAILED, WorkItemStatus.RETRYABLE_FAILED}:
+            return None
+        decision = self._repair_decision_for_work_item(work_item)
+        if decision not in {"manual_escalation_required", "retry_later"}:
+            return None
+        work_item.status = WorkItemStatus.PENDING
+        work_item.attempt = int(work_item.attempt or 0) + 1
+        work_item.started_at = None
+        work_item.finished_at = None
+        work_item.last_heartbeat_at = resumed_at
+        work_item.lease_owner = None
+        work_item.lease_expires_at = None
+        work_item.error_class = None
+        work_item.error_detail_json = {}
+        work_item.output_artifact_refs_json = {}
+        self.session.flush()
+        return work_item
 
     def get_active_lease_by_token(self, lease_token: str) -> WorkerLease:
         lease = self.session.scalar(

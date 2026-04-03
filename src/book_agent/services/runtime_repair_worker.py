@@ -13,6 +13,7 @@ from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
+from book_agent.services.runtime_repair_blockage import project_runtime_repair_blockage
 
 
 def _utcnow() -> datetime:
@@ -42,6 +43,43 @@ def _append_recovered_lineage(
 
 class UnsupportedRuntimeRepairIncidentError(RuntimeError):
     """Raised when a repair worker is asked to execute an unsupported incident kind."""
+
+
+class RuntimeRepairDecisionError(RuntimeError):
+    """Raised when a repair worker needs deterministic non-default decision handling."""
+
+    RETRYABLE = False
+
+    def __init__(
+        self,
+        *,
+        decision: str,
+        decision_reason: str | None = None,
+        result_json: dict[str, Any] | None = None,
+        message: str,
+    ) -> None:
+        super().__init__(message)
+        self.decision = str(decision or "").strip()
+        self.decision_reason = str(decision_reason or "").strip()
+        self.result_json = dict(result_json or {})
+
+    @property
+    def retryable(self) -> bool:
+        return bool(self.RETRYABLE)
+
+
+class UnsupportedRuntimeRepairDecisionError(RuntimeRepairDecisionError):
+    """Raised when a repair worker receives an unsupported repair decision."""
+
+
+class RuntimeRepairManualEscalationRequired(RuntimeRepairDecisionError):
+    """Raised when a repair must deterministically stop and escalate to manual handling."""
+
+
+class RuntimeRepairRetryLater(RuntimeRepairDecisionError):
+    """Raised when a repair should deterministically retry later."""
+
+    RETRYABLE = True
 
 
 @dataclass(slots=True)
@@ -74,6 +112,34 @@ class RuntimeRepairDispatchContract:
             raise ValueError("Repair dispatch input bundle is missing proposal_id.")
         if not incident_id:
             raise ValueError(f"Repair dispatch input bundle is missing incident_id for proposal {proposal_id}.")
+        return cls(
+            proposal_id=proposal_id,
+            incident_id=incident_id,
+            repair_dispatch_id=str(input_bundle.get("repair_dispatch_id") or "").strip(),
+            patch_surface=str(input_bundle.get("patch_surface") or "").strip(),
+            target_scope_type=str(input_bundle.get("target_scope_type") or "").strip(),
+            target_scope_id=str(input_bundle.get("target_scope_id") or "").strip(),
+            replay_boundary=str(input_bundle.get("replay_boundary") or "").strip(),
+            validation_command=str(input_bundle.get("validation_command") or "").strip(),
+            bundle_revision_name=str(input_bundle.get("bundle_revision_name") or "").strip(),
+            claim_mode=str(input_bundle.get("claim_mode") or "runtime_owned").strip(),
+            claim_target=str(input_bundle.get("claim_target") or "runtime_patch_proposal").strip(),
+            dispatch_lane=str(input_bundle.get("dispatch_lane") or "runtime.repair").strip(),
+            worker_hint=str(input_bundle.get("worker_hint") or "").strip(),
+            worker_contract_version=int(input_bundle.get("worker_contract_version") or 1),
+        )
+
+    @classmethod
+    def from_request_input_bundle(
+        cls,
+        input_bundle: dict[str, Any],
+    ) -> "RuntimeRepairDispatchContract":
+        proposal_id = str(input_bundle.get("proposal_id") or "").strip()
+        incident_id = str(input_bundle.get("incident_id") or "").strip()
+        if not proposal_id:
+            raise ValueError("Repair request contract is missing proposal_id.")
+        if not incident_id:
+            raise ValueError(f"Repair request contract is missing incident_id for proposal {proposal_id}.")
         return cls(
             proposal_id=proposal_id,
             incident_id=incident_id,
@@ -158,6 +224,8 @@ class RuntimeRepairWorker:
                 "replay_scope_id": (repair_plan.get("replay") or {}).get("scope_id"),
                 "bundle_revision_name": (repair_plan.get("bundle") or {}).get("revision_name"),
                 "corrected_route": corrected_route,
+                "repair_agent_decision": "publish_bundle_and_replay",
+                "repair_agent_decision_reason": "bounded_repair_plan_ready",
             }
 
     def complete_execution(
@@ -183,6 +251,39 @@ class RuntimeRepairWorker:
             worker_hint=str(payload.get("worker_hint") or ""),
             worker_contract_version=int(payload.get("worker_contract_version") or 1),
         )
+        decision = str(payload.get("repair_agent_decision") or "publish_bundle_and_replay").strip()
+        decision_reason = str(payload.get("repair_agent_decision_reason") or "").strip()
+        if decision == "manual_escalation_required":
+            raise RuntimeRepairManualEscalationRequired(
+                decision=decision,
+                decision_reason=decision_reason,
+                result_json=dict(payload),
+                message=(
+                    "Runtime repair worker requires manual escalation before continuing repair "
+                    f"execution. decision={decision!r}."
+                ),
+            )
+        if decision == "retry_later":
+            raise RuntimeRepairRetryLater(
+                decision=decision,
+                decision_reason=decision_reason,
+                result_json=dict(payload),
+                message=(
+                    "Runtime repair worker requested a bounded retry-later outcome for this "
+                    f"repair lane. decision={decision!r}."
+                ),
+            )
+        if decision != "publish_bundle_and_replay":
+            raise UnsupportedRuntimeRepairDecisionError(
+                decision=decision,
+                decision_reason=decision_reason,
+                result_json=dict(payload),
+                message=(
+                    "Runtime repair worker only supports 'publish_bundle_and_replay', "
+                    "'manual_escalation_required', or 'retry_later' decisions. "
+                    f"Received {decision!r}."
+                ),
+            )
         with session_scope(self._session_factory) as session:
             controller = IncidentController(session=session)
             execution = RunExecutionService(RunControlRepository(session))
@@ -220,6 +321,15 @@ class RuntimeRepairWorker:
                     proposal=runtime_repo.get_runtime_patch_proposal(contract.proposal_id),
                     bundle_revision_id=bundle_record.revision.id,
                     corrected_route=str(payload.get("corrected_route") or ""),
+                )
+            elif incident.incident_kind == RuntimeIncidentKind.PACKET_RUNTIME_DEFECT:
+                self._finalize_packet_runtime_defect_repair(
+                    session=session,
+                    run_id=run_id,
+                    incident=incident,
+                    proposal=runtime_repo.get_runtime_patch_proposal(contract.proposal_id),
+                    bundle_revision_id=bundle_record.revision.id,
+                    validation_report_json=validation.report_json,
                 )
 
             proposal = runtime_repo.get_runtime_patch_proposal(contract.proposal_id)
@@ -301,6 +411,7 @@ class RuntimeRepairWorker:
         repair_dispatch = dict(proposal_detail.get("repair_dispatch") or {})
         replay_scope_id = str((repair_dispatch.get("replay") or {}).get("scope_id") or incident.scope_id)
         replay_work_item_id = bound_work_item_ids[0] if bound_work_item_ids else ""
+        repair_blockage = project_runtime_repair_blockage(repair_dispatch)
         corrected_route = str(
             corrected_route
             or (repair_dispatch.get("last_result") or {}).get("result_json", {}).get("corrected_route")
@@ -336,6 +447,7 @@ class RuntimeRepairWorker:
             "replay_scope_id": replay_scope_id,
             "replay_work_item_id": replay_work_item_id,
             "bound_work_item_ids": bound_work_item_ids,
+            "repair_blockage": repair_blockage,
         }
         runtime_v2["active_runtime_bundle_revision_id"] = active_bundle_revision_id
         runtime_v2["runtime_bundle_revision_id"] = active_bundle_revision_id
@@ -410,6 +522,7 @@ class RuntimeRepairWorker:
             "reason_code": route_evidence.get("reason_code"),
             "lane_health_state": route_evidence.get("lane_health_state"),
             "status": "published",
+            "repair_blockage": project_runtime_repair_blockage(proposal_detail.get("repair_dispatch") or {}),
         }
         runtime_repo.merge_review_session_status_detail(
             review_session.id,
@@ -441,6 +554,97 @@ class RuntimeRepairWorker:
             generation=int(chapter_run.generation or 1),
         )
 
+    def _finalize_packet_runtime_defect_repair(
+        self,
+        *,
+        session: Session,
+        run_id: str,
+        incident: RuntimeIncident,
+        proposal: RuntimePatchProposal,
+        bundle_revision_id: str,
+        validation_report_json: dict[str, Any],
+    ) -> None:
+        runtime_repo = RuntimeResourcesRepository(session)
+        route_evidence = dict(incident.route_evidence_json or {})
+        packet_task_id = str(
+            route_evidence.get("packet_task_id")
+            or (incident.bundle_json or {}).get("packet_task_id")
+            or ""
+        )
+        chapter_run_id = str(
+            route_evidence.get("chapter_run_id")
+            or (incident.bundle_json or {}).get("chapter_run_id")
+            or ""
+        )
+        packet_id = str(
+            (proposal.status_detail_json or {}).get("repair_plan", {}).get("replay", {}).get("scope_id")
+            or incident.scope_id
+        )
+        if not packet_task_id or not chapter_run_id or not packet_id:
+            return
+        packet_task = runtime_repo.get_packet_task(packet_task_id)
+        chapter_run = runtime_repo.get_chapter_run(chapter_run_id)
+        replay_work_item_ids = RunExecutionService(RunControlRepository(session)).ensure_scope_replay_work_items(
+            run_id=run_id,
+            stage=WorkItemStage.TRANSLATE,
+            scope_type=WorkItemScopeType.PACKET,
+            scope_ids=[packet_id],
+            input_version_bundle_by_scope_id={
+                packet_id: {
+                    "packet_id": packet_id,
+                    "chapter_id": chapter_run.chapter_id,
+                }
+            },
+        )
+        proposal_detail = dict(proposal.status_detail_json or {})
+        bound_work_item_ids = [
+            str(work_item_id)
+            for work_item_id in list(proposal_detail.get("bound_work_item_ids") or [])
+            if str(work_item_id).strip()
+        ]
+        recovery_payload = {
+            "incident_id": incident.id,
+            "proposal_id": proposal.id,
+            "bundle_revision_id": bundle_revision_id,
+            "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
+            "replay_scope_id": packet_id,
+            "replay_work_item_ids": replay_work_item_ids,
+            "bound_work_item_ids": bound_work_item_ids,
+            "reason_code": route_evidence.get("reason_code"),
+            "lane_health_state": route_evidence.get("lane_health_state"),
+            "status": "published",
+            "repair_blockage": project_runtime_repair_blockage(proposal_detail.get("repair_dispatch") or {}),
+        }
+        runtime_repo.merge_packet_task_status_detail(
+            packet_task.id,
+            {"runtime_v2": {"last_runtime_defect_recovery": recovery_payload}},
+        )
+        runtime_repo.append_chapter_recovered_lineage(
+            chapter_run_id=chapter_run.id,
+            lineage_event={
+                "source": "runtime.packet_runtime_defect",
+                "incident_id": incident.id,
+                "proposal_id": proposal.id,
+                "bundle_revision_id": bundle_revision_id,
+                "replay_scope_id": packet_id,
+                "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
+                "status": "published",
+            },
+        )
+        runtime_repo.upsert_checkpoint(
+            run_id=run_id,
+            scope_type=JobScopeType.PACKET,
+            scope_id=packet_id,
+            checkpoint_key="packet_controller.runtime_defect_recovery",
+            checkpoint_json={
+                "packet_task_id": packet_task.id,
+                "chapter_run_id": chapter_run.id,
+                "recovery": recovery_payload,
+                "validation_report": validation_report_json,
+            },
+            generation=int(packet_task.packet_generation or 1),
+        )
+
 
 class ReviewDeadlockRepairWorker(RuntimeRepairWorker):
     SUPPORTED_INCIDENT_KINDS = frozenset({RuntimeIncidentKind.REVIEW_DEADLOCK})
@@ -448,3 +652,7 @@ class ReviewDeadlockRepairWorker(RuntimeRepairWorker):
 
 class ExportRoutingRepairWorker(RuntimeRepairWorker):
     SUPPORTED_INCIDENT_KINDS = frozenset({RuntimeIncidentKind.EXPORT_MISROUTING})
+
+
+class PacketRuntimeDefectRepairWorker(RuntimeRepairWorker):
+    SUPPORTED_INCIDENT_KINDS = frozenset({RuntimeIncidentKind.PACKET_RUNTIME_DEFECT})

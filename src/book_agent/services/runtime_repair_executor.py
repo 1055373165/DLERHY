@@ -3,16 +3,23 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import json
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
 from typing import Any
-from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
 
+from book_agent.app.runtime.controllers.incident_controller import IncidentController
+from book_agent.infra.db.session import session_scope
 from book_agent.services.run_execution import ClaimedRunWorkItem
 from book_agent.services.runtime_repair_agent_adapter import RuntimeRepairAgentAdapter
+from book_agent.services.runtime_repair_contract import (
+    build_runtime_repair_result_payload,
+    validate_runtime_repair_result_payload,
+)
+from book_agent.services.runtime_repair_transport import RuntimeRepairTransportRegistry
 
 RuntimeRepairExecutorFactory = Callable[[sessionmaker, RuntimeRepairAgentAdapter], "RuntimeRepairExecutor"]
 
@@ -30,7 +37,7 @@ class UnsupportedRuntimeRepairExecutorError(RuntimeError):
 
 
 class RuntimeRepairExecutorInvocationError(RuntimeError):
-    """Raised when a repair executor cannot successfully invoke its underlying execution backend."""
+    """Raised when a repair executor cannot successfully invoke its delegated execution body."""
 
 
 class RuntimeRepairExecutor:
@@ -67,13 +74,18 @@ class RuntimeRepairExecutor:
             input_bundle=input_bundle,
         )
         descriptor = self.descriptor()
-        return {
-            **payload,
-            "repair_executor_name": descriptor.executor_name,
-            "repair_executor_execution_mode": descriptor.execution_mode,
-            "repair_executor_hint": descriptor.executor_hint,
-            "repair_executor_contract_version": descriptor.executor_contract_version,
-        }
+        return build_runtime_repair_result_payload(
+            prepared_payload=payload,
+            executor_descriptor={
+                "executor_name": descriptor.executor_name,
+                "execution_mode": descriptor.execution_mode,
+                "executor_hint": descriptor.executor_hint,
+                "executor_contract_version": descriptor.executor_contract_version,
+            },
+            transport_descriptor={},
+            repair_runner_status="in_process",
+            repair_runner_pid=None,
+        )
 
     def complete_execution(
         self,
@@ -88,6 +100,16 @@ class RuntimeRepairExecutor:
             lease_token=lease_token,
         )
 
+    def _begin_dispatch_execution(self, *, claimed: ClaimedRunWorkItem, proposal_id: str) -> None:
+        with session_scope(self._session_factory) as session:
+            IncidentController(session=session).begin_repair_dispatch_execution(
+                proposal_id=proposal_id,
+                worker_name=claimed.worker_name,
+                worker_instance_id=claimed.worker_instance_id,
+                work_item_id=claimed.work_item_id,
+                lease_token=claimed.lease_token,
+            )
+
 
 class InProcessRuntimeRepairExecutor(RuntimeRepairExecutor):
     EXECUTOR_NAME = "python_in_process_repair_executor"
@@ -101,6 +123,17 @@ class AgentBackedSubprocessRuntimeRepairExecutor(RuntimeRepairExecutor):
     EXECUTION_MODE = "agent_backed"
     EXECUTOR_HINT = "python_subprocess_repair_executor"
     EXECUTOR_CONTRACT_VERSION = 1
+    DEFAULT_TRANSPORT_HINT = "python_subprocess_repair_transport"
+    DEFAULT_TRANSPORT_CONTRACT_VERSION = 1
+
+    def __init__(
+        self,
+        *,
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> None:
+        super().__init__(session_factory=session_factory, repair_agent=repair_agent)
+        self._transport_registry = RuntimeRepairTransportRegistry(session_factory=session_factory)
 
     def prepare_execution(
         self,
@@ -108,76 +141,25 @@ class AgentBackedSubprocessRuntimeRepairExecutor(RuntimeRepairExecutor):
         claimed: ClaimedRunWorkItem,
         input_bundle: dict[str, Any],
     ) -> dict[str, Any]:
-        database_url = self._resolve_database_url()
-        runner_payload = {
-            "database_url": database_url,
-            "run_id": claimed.run_id,
-            "lease_token": claimed.lease_token,
-            "executor_descriptor": {
-                "executor_name": self.EXECUTOR_NAME,
-                "execution_mode": self.EXECUTION_MODE,
-                "executor_hint": self.EXECUTOR_HINT,
-                "executor_contract_version": self.EXECUTOR_CONTRACT_VERSION,
-            },
-            "claimed": {
-                "run_id": claimed.run_id,
-                "work_item_id": claimed.work_item_id,
-                "stage": claimed.stage,
-                "scope_type": claimed.scope_type,
-                "scope_id": claimed.scope_id,
-                "attempt": claimed.attempt,
-                "priority": claimed.priority,
-                "lease_token": claimed.lease_token,
-                "worker_name": claimed.worker_name,
-                "worker_instance_id": claimed.worker_instance_id,
-                "lease_expires_at": claimed.lease_expires_at,
-            },
-            "input_bundle": dict(input_bundle),
-        }
-        payload_path = self._write_runner_payload(runner_payload)
-        try:
-            command = [
-                sys.executable,
-                "-m",
-                "book_agent.tools.runtime_repair_runner",
-                "--payload-file",
-                str(payload_path),
-            ]
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        finally:
-            payload_path.unlink(missing_ok=True)
-        if completed.returncode != 0:
-            stderr = completed.stderr.strip()
-            stdout = completed.stdout.strip()
-            detail = stderr or stdout or "repair runner exited without output"
-            raise RuntimeRepairExecutorInvocationError(
-                "Agent-backed repair executor failed to invoke runtime repair runner: "
-                f"{detail}"
-            )
-        stdout = completed.stdout.strip()
-        if not stdout:
-            raise RuntimeRepairExecutorInvocationError(
-                "Agent-backed repair executor received no output from runtime repair runner."
-            )
-        try:
-            payload = json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise RuntimeRepairExecutorInvocationError(
-                "Agent-backed repair executor received invalid JSON from runtime repair runner."
-            ) from exc
         descriptor = self.descriptor()
-        return {
-            **payload,
-            "repair_executor_name": descriptor.executor_name,
-            "repair_executor_execution_mode": descriptor.execution_mode,
-            "repair_executor_hint": descriptor.executor_hint,
-            "repair_executor_contract_version": descriptor.executor_contract_version,
-        }
+        transport = self._transport_registry.resolve(
+            transport_hint=self.DEFAULT_TRANSPORT_HINT,
+            transport_contract_version=self.DEFAULT_TRANSPORT_CONTRACT_VERSION,
+        )
+        return validate_runtime_repair_result_payload(
+            transport.dispatch(
+                run_id=claimed.run_id,
+                lease_token=claimed.lease_token,
+                claimed=claimed,
+                input_bundle=input_bundle,
+                executor_descriptor={
+                    "executor_name": descriptor.executor_name,
+                    "execution_mode": descriptor.execution_mode,
+                    "executor_hint": descriptor.executor_hint,
+                    "executor_contract_version": descriptor.executor_contract_version,
+                },
+            )
+        )
 
     def complete_execution(
         self,
@@ -189,31 +171,172 @@ class AgentBackedSubprocessRuntimeRepairExecutor(RuntimeRepairExecutor):
         # The subprocess runner owns the success-path DB mutation and completes the work item.
         return None
 
-    def _resolve_database_url(self) -> str:
-        bind = self._session_factory.kw.get("bind")
-        if bind is None or getattr(bind, "url", None) is None:
-            raise RuntimeRepairExecutorInvocationError(
-                "Agent-backed repair executor requires a bound database URL."
+
+class ContractBackedSubprocessRuntimeRepairExecutor(RuntimeRepairExecutor):
+    EXECUTOR_NAME = "python_contract_agent_backed_repair_executor"
+    EXECUTION_MODE = "agent_backed"
+    EXECUTOR_HINT = "python_contract_agent_repair_executor"
+    EXECUTOR_CONTRACT_VERSION = 1
+
+    def prepare_execution(
+        self,
+        *,
+        claimed: ClaimedRunWorkItem,
+        input_bundle: dict[str, Any],
+    ) -> dict[str, Any]:
+        proposal_id = str(input_bundle.get("proposal_id") or claimed.scope_id or "").strip()
+        if proposal_id:
+            self._begin_dispatch_execution(claimed=claimed, proposal_id=proposal_id)
+        descriptor = self.descriptor()
+        payload_path = self._write_runner_payload(
+            {
+                "executor_descriptor": {
+                    "executor_name": descriptor.executor_name,
+                    "execution_mode": descriptor.execution_mode,
+                    "executor_hint": descriptor.executor_hint,
+                    "executor_contract_version": descriptor.executor_contract_version,
+                },
+                "transport_descriptor": {},
+                "input_bundle": dict(input_bundle),
+            }
+        )
+        try:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "book_agent.tools.runtime_repair_contract_runner",
+                    "--payload-file",
+                    str(payload_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
             )
-        database_url = str(bind.url)
-        if database_url.endswith("/:memory:") or database_url.endswith("://"):
+        finally:
+            payload_path.unlink(missing_ok=True)
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip()
+            stdout = completed.stdout.strip()
+            detail = stderr or stdout or "repair contract runner exited without output"
             raise RuntimeRepairExecutorInvocationError(
-                "Agent-backed repair executor requires a file-backed database URL; in-memory "
-                "SQLite cannot be shared with a subprocess repair agent."
+                "Contract-backed repair executor failed to invoke remote repair agent: "
+                f"{detail}"
             )
-        return database_url
+        stdout = completed.stdout.strip()
+        if not stdout:
+            raise RuntimeRepairExecutorInvocationError(
+                "Contract-backed repair executor received no output from remote repair agent."
+            )
+        try:
+            result = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeRepairExecutorInvocationError(
+                "Contract-backed repair executor received invalid JSON from remote repair agent."
+            ) from exc
+        return validate_runtime_repair_result_payload(dict(result))
 
     @staticmethod
     def _write_runner_payload(payload: dict[str, Any]) -> Path:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
-            suffix=".runtime-repair.json",
+            suffix=".runtime-repair-contract.json",
             delete=False,
         ) as handle:
             json.dump(payload, handle)
             handle.flush()
             return Path(handle.name)
+
+
+class TransportBackedRuntimeRepairExecutor(RuntimeRepairExecutor):
+    EXECUTOR_NAME = "python_transport_backed_repair_executor"
+    EXECUTION_MODE = "transport_backed"
+    EXECUTOR_HINT = "python_transport_repair_executor"
+    EXECUTOR_CONTRACT_VERSION = 1
+
+    def __init__(
+        self,
+        *,
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> None:
+        super().__init__(session_factory=session_factory, repair_agent=repair_agent)
+        self._transport_registry = RuntimeRepairTransportRegistry(session_factory=session_factory)
+
+    def prepare_execution(
+        self,
+        *,
+        claimed: ClaimedRunWorkItem,
+        input_bundle: dict[str, Any],
+    ) -> dict[str, Any]:
+        descriptor = self.descriptor()
+        transport = self._transport_registry.resolve_for_input_bundle(input_bundle)
+        return validate_runtime_repair_result_payload(
+            transport.dispatch(
+                run_id=claimed.run_id,
+                lease_token=claimed.lease_token,
+                claimed=claimed,
+                input_bundle=input_bundle,
+                executor_descriptor={
+                    "executor_name": descriptor.executor_name,
+                    "execution_mode": descriptor.execution_mode,
+                    "executor_hint": descriptor.executor_hint,
+                    "executor_contract_version": descriptor.executor_contract_version,
+                },
+            )
+        )
+
+    def complete_execution(
+        self,
+        *,
+        run_id: str,
+        payload: dict[str, Any],
+        lease_token: str,
+    ) -> None:
+        return None
+
+
+class ContractTransportBackedRuntimeRepairExecutor(RuntimeRepairExecutor):
+    EXECUTOR_NAME = "python_contract_transport_backed_repair_executor"
+    EXECUTION_MODE = "transport_backed"
+    EXECUTOR_HINT = "python_contract_transport_repair_executor"
+    EXECUTOR_CONTRACT_VERSION = 1
+
+    def __init__(
+        self,
+        *,
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> None:
+        super().__init__(session_factory=session_factory, repair_agent=repair_agent)
+        self._transport_registry = RuntimeRepairTransportRegistry(session_factory=session_factory)
+
+    def prepare_execution(
+        self,
+        *,
+        claimed: ClaimedRunWorkItem,
+        input_bundle: dict[str, Any],
+    ) -> dict[str, Any]:
+        proposal_id = str(input_bundle.get("proposal_id") or claimed.scope_id or "").strip()
+        if proposal_id:
+            self._begin_dispatch_execution(claimed=claimed, proposal_id=proposal_id)
+        descriptor = self.descriptor()
+        transport = self._transport_registry.resolve_for_input_bundle(input_bundle)
+        return validate_runtime_repair_result_payload(
+            transport.dispatch(
+                run_id=claimed.run_id,
+                lease_token=claimed.lease_token,
+                claimed=claimed,
+                input_bundle=input_bundle,
+                executor_descriptor={
+                    "executor_name": descriptor.executor_name,
+                    "execution_mode": descriptor.execution_mode,
+                    "executor_hint": descriptor.executor_hint,
+                    "executor_contract_version": descriptor.executor_contract_version,
+                },
+            )
+        )
 
 
 class RuntimeRepairExecutorRegistry:
@@ -309,6 +432,21 @@ class RuntimeRepairExecutorRegistry:
                 "python_subprocess_repair_executor",
                 1,
             ): cls._agent_backed_subprocess_executor_factory,
+            (
+                "agent_backed",
+                "python_contract_agent_repair_executor",
+                1,
+            ): cls._contract_backed_subprocess_executor_factory,
+            (
+                "transport_backed",
+                "python_transport_repair_executor",
+                1,
+            ): cls._transport_backed_executor_factory,
+            (
+                "transport_backed",
+                "python_contract_transport_repair_executor",
+                1,
+            ): cls._contract_transport_backed_executor_factory,
         }
 
     @staticmethod
@@ -327,6 +465,36 @@ class RuntimeRepairExecutorRegistry:
         repair_agent: RuntimeRepairAgentAdapter,
     ) -> RuntimeRepairExecutor:
         return AgentBackedSubprocessRuntimeRepairExecutor(
+            session_factory=session_factory,
+            repair_agent=repair_agent,
+        )
+
+    @staticmethod
+    def _contract_backed_subprocess_executor_factory(
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> RuntimeRepairExecutor:
+        return ContractBackedSubprocessRuntimeRepairExecutor(
+            session_factory=session_factory,
+            repair_agent=repair_agent,
+        )
+
+    @staticmethod
+    def _transport_backed_executor_factory(
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> RuntimeRepairExecutor:
+        return TransportBackedRuntimeRepairExecutor(
+            session_factory=session_factory,
+            repair_agent=repair_agent,
+        )
+
+    @staticmethod
+    def _contract_transport_backed_executor_factory(
+        session_factory: sessionmaker,
+        repair_agent: RuntimeRepairAgentAdapter,
+    ) -> RuntimeRepairExecutor:
+        return ContractTransportBackedRuntimeRepairExecutor(
             session_factory=session_factory,
             repair_agent=repair_agent,
         )

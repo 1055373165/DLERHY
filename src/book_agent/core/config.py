@@ -34,11 +34,15 @@ class Settings(BaseSettings):
     export_root: Path = Path("artifacts/exports")
     runtime_bundle_root: Path = Path("artifacts/runtime-bundles")
     upload_root: Path = Path("artifacts/uploads")
+    runtime_repair_transport_command: str | None = None
+    runtime_repair_transport_http_url: str | None = None
+    runtime_repair_transport_http_timeout_seconds: int = 60
+    runtime_repair_transport_http_bearer_token: str | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"
     translation_prompt_version: str = "p0.echo.v1"
-    translation_prompt_profile: str = "role-style-faithful-v6"
+    translation_prompt_profile: str = "tech-column-meta-v1"
     translation_timeout_seconds: int = 60
     translation_max_retries: int = 1
     translation_retry_backoff_seconds: float = 1.5

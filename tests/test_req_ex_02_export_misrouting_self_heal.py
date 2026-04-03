@@ -290,6 +290,13 @@ class ReqEx02ExportMisroutingSelfHealTests(unittest.TestCase):
         )
         self.assertEqual(runtime_v2_context["replay_work_item_id"], work_item.id)
         self.assertEqual(runtime_v2_context["bound_work_item_ids"], [work_item.id])
+        self.assertEqual(runtime_v2_context["repair_blockage_state"], "ready_to_continue")
+        self.assertFalse(runtime_v2_context["repair_blocked"])
+        self.assertEqual(runtime_v2_context["repair_blockage_source"], "last_export_route_recovery")
+        self.assertEqual(
+            runtime_v2_context["repair_blockage"]["state"],
+            runtime_v2_context["last_export_route_recovery"]["repair_blockage"]["state"],
+        )
 
         exports_dashboard = self.client.get(
             f"/v1/documents/{document_id}/exports",
@@ -299,6 +306,21 @@ class ReqEx02ExportMisroutingSelfHealTests(unittest.TestCase):
         dashboard_payload = exports_dashboard.json()
         self.assertGreaterEqual(dashboard_payload["record_count"], 1)
         export_id = dashboard_payload["records"][0]["export_id"]
+        dashboard_record = next(record for record in dashboard_payload["records"] if record["export_id"] == export_id)
+        self.assertIsNotNone(dashboard_record["runtime_v2_context"])
+        dashboard_runtime_v2 = dashboard_record["runtime_v2_context"]
+        assert dashboard_runtime_v2 is not None
+        self.assertEqual(dashboard_runtime_v2["incident_id"], runtime_v2_context["incident_id"])
+        self.assertEqual(dashboard_runtime_v2["proposal_id"], runtime_v2_context["proposal_id"])
+        self.assertEqual(dashboard_runtime_v2["bundle_revision_id"], runtime_v2_context["bundle_revision_id"])
+        self.assertEqual(
+            dashboard_runtime_v2["repair_blockage_state"],
+            runtime_v2_context["repair_blockage_state"],
+        )
+        self.assertEqual(
+            dashboard_runtime_v2["repair_blockage_source"],
+            runtime_v2_context["repair_blockage_source"],
+        )
 
         export_detail = self.client.get(f"/v1/documents/{document_id}/exports/{export_id}")
         self.assertEqual(export_detail.status_code, 200)
@@ -310,6 +332,7 @@ class ReqEx02ExportMisroutingSelfHealTests(unittest.TestCase):
         self.assertEqual(detail_runtime_v2["proposal_id"], runtime_v2_context["proposal_id"])
         self.assertEqual(detail_runtime_v2["bundle_revision_id"], runtime_v2_context["bundle_revision_id"])
         self.assertEqual(detail_runtime_v2["replay_work_item_id"], work_item.id)
+        self.assertEqual(detail_runtime_v2["repair_blockage_state"], runtime_v2_context["repair_blockage_state"])
 
         summary = self.client.get(f"/v1/documents/{document_id}")
         self.assertEqual(summary.status_code, 200)
@@ -323,6 +346,7 @@ class ReqEx02ExportMisroutingSelfHealTests(unittest.TestCase):
             runtime_v2_context["active_runtime_bundle_revision_id"],
         )
         self.assertEqual(summary_runtime_v2["replay_work_item_id"], work_item.id)
+        self.assertEqual(summary_runtime_v2["repair_blockage_state"], runtime_v2_context["repair_blockage_state"])
 
         run_events = self.client.get(f"/v1/runs/{run_id}/events")
         self.assertEqual(run_events.status_code, 200)

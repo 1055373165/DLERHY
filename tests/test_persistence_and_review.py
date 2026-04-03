@@ -8790,6 +8790,67 @@ class PersistenceAndReviewTests(unittest.TestCase):
             )
             self.assertTrue((output_dir / "assets/OEBPS/images/ch1/fig1.png").is_file())
 
+    def test_export_epub_archive_assets_materializes_original_asset_for_reuse(self) -> None:
+        chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <figure class="Figure" id="Fig1">
+      <img alt="" src="../images/ch1/fig1.jpg" />
+      <figcaption>Fig. 1.1 Original asset retained</figcaption>
+    </figure>
+  </body>
+</html>
+"""
+
+        block = MergedRenderBlock(
+            block_id="legacy-epub-figure-materialized",
+            chapter_id="chapter-1",
+            block_type=BlockType.CAPTION.value,
+            render_mode="image_anchor_with_translated_caption",
+            artifact_kind="figure",
+            title=None,
+            source_text="Fig. 1.1 Original asset retained",
+            target_text="图 1.1 保留原始图片资源",
+            source_metadata={"source_path": "OEBPS/html/chapter1.xhtml", "tag": "figcaption"},
+            source_sentence_ids=[],
+            target_segment_ids=[],
+            is_expected_source_only=True,
+            notice="图片锚点保留",
+        )
+        document_image = SimpleNamespace(
+            block_id="legacy-epub-figure-materialized",
+            document_id="epub-document-001",
+            storage_path="document-images/epub-document-001/legacy-epub-figure-materialized.jpg",
+            metadata_json={"image_ext": "jpg", "storage_status": "logical_only"},
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "legacy-figure-original.epub"
+            output_dir = Path(tmpdir) / "export"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("OEBPS/html/chapter1.xhtml", chapter_xhtml)
+                archive.writestr("OEBPS/images/ch1/fig1.jpg", b"fake-jpg-bytes")
+
+            with self.session_factory() as session:
+                service = ExportService(ExportRepository(session), output_root=output_dir)
+                asset_map = service._export_epub_archive_assets(
+                    str(epub_path),
+                    [block],
+                    output_dir,
+                    document_images=[document_image],
+                )
+
+            self.assertEqual(
+                asset_map,
+                {"legacy-epub-figure-materialized": "assets/OEBPS/images/ch1/fig1.jpg"},
+            )
+            self.assertEqual((output_dir / "assets/OEBPS/images/ch1/fig1.jpg").read_bytes(), b"fake-jpg-bytes")
+            self.assertTrue(Path(document_image.storage_path).exists())
+            self.assertEqual(Path(document_image.storage_path).read_bytes(), b"fake-jpg-bytes")
+            self.assertEqual(document_image.metadata_json["materialized_via"], "epub_archive_asset")
+            self.assertEqual(document_image.metadata_json["materialized_version"], 3)
+            self.assertEqual(document_image.metadata_json["storage_status"], "materialized")
+
     def test_extract_main_chapter_number_rejects_lowercase_fragment_after_number(self) -> None:
         with self.session_factory() as session:
             service = ExportService(ExportRepository(session))

@@ -46,6 +46,7 @@ from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.runtime_repair_executor import RuntimeRepairExecutorRegistry
 from book_agent.services.runtime_repair_registry import RuntimeRepairWorkerRegistry
+from book_agent.services.runtime_repair_worker import RuntimeRepairDecisionError
 from book_agent.services.export_routing import ExportRoutingError
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.translator import TranslationWorker
@@ -125,6 +126,9 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     executor = getattr(app.state, "document_run_executor", None)
     if executor is not None:
         return executor
+    ensure_database_state = getattr(app.state, "ensure_database_state", None)
+    if callable(ensure_database_state):
+        ensure_database_state()
     executor = DocumentRunExecutor(
         session_factory=app.state.session_factory,
         export_root=app.state.export_root,
@@ -963,15 +967,27 @@ class DocumentRunExecutor:
         export_misrouting = isinstance(exc, ExportRoutingError)
         retryable = _is_retryable_exception(exc) or export_misrouting
         pause_reason = _pause_reason_for_exception(exc)
+        error_class = exc.__class__.__name__
         error_detail = {
             "message": str(exc),
             "traceback": traceback.format_exc(limit=8),
         }
+        repair_result_json: dict[str, Any] | None = None
+        if isinstance(exc, RuntimeRepairDecisionError):
+            retryable = exc.retryable
+            repair_result_json = dict(exc.result_json or {})
+            error_class = exc.__class__.__name__
+            if exc.decision:
+                error_detail["repair_agent_decision"] = exc.decision
+            if exc.decision_reason:
+                error_detail["repair_agent_decision_reason"] = exc.decision_reason
+            if repair_result_json:
+                error_detail["repair_result_json"] = dict(repair_result_json)
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_work_item_failure(
                 lease_token=claimed.lease_token,
-                error_class=exc.__class__.__name__,
+                error_class=error_class,
                 error_detail_json=error_detail,
                 retryable=retryable,
             )
@@ -979,13 +995,13 @@ class DocumentRunExecutor:
                 input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
                 proposal_id = str(input_bundle.get("proposal_id") or claimed.scope_id)
                 try:
+                    result_json = dict(repair_result_json or {})
+                    result_json.setdefault("error_class", error_class)
+                    result_json.setdefault("error_message", str(exc))
                     IncidentController(session=session).record_repair_dispatch_execution(
                         proposal_id=proposal_id,
                         succeeded=False,
-                        result_json={
-                            "error_class": exc.__class__.__name__,
-                            "error_message": str(exc),
-                        },
+                        result_json=result_json,
                         manage_work_item_lifecycle=False,
                     )
                 except Exception:
@@ -1033,7 +1049,7 @@ class DocumentRunExecutor:
             stage_key,
             status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
             extra={
-                "error_class": exc.__class__.__name__,
+                "error_class": error_class,
                 "error_message": str(exc),
                 **({"stop_reason": pause_reason} if pause_reason is not None else {}),
             },

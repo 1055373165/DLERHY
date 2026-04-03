@@ -85,7 +85,7 @@ class PacketExperimentOptions:
     include_paragraph_intent: bool = True
     include_literalism_guardrails: bool = True
     prompt_layout: PromptLayout = "paragraph-led"
-    prompt_profile: PromptProfile = "role-style-faithful-v6"
+    prompt_profile: PromptProfile = "tech-column-meta-v1"
     material_profile_override: TranslationMaterial | None = None
     execute: bool = False
     concept_overrides: tuple[ConceptCandidate, ...] = ()
@@ -275,6 +275,8 @@ class PacketExperimentService:
                 "model_name": prompt_request.model_name,
                 "prompt_version": prompt_request.prompt_version,
                 "system_prompt": prompt_request.system_prompt,
+                "system_prompt_static": prompt_request.system_prompt_static,
+                "system_prompt_dynamic": prompt_request.system_prompt_dynamic,
                 "user_prompt": prompt_request.user_prompt,
                 "sentence_alias_map": prompt_request.sentence_alias_map,
             },

@@ -96,6 +96,7 @@ class DocumentHistoryEntryResponse(BaseSchema):
     latest_run_current_stage: str | None = None
     latest_run_completed_work_item_count: int | None = None
     latest_run_total_work_item_count: int | None = None
+    latest_run_runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentHistoryPageResponse(BaseSchema):
@@ -636,6 +637,7 @@ class ExportRecordSummaryResponse(BaseSchema):
     translation_usage_highlights: TranslationUsageHighlightsResponse | None = None
     export_auto_followup_summary: ExportAutoFollowupSummaryResponse | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummaryResponse | None = None
+    runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentExportDashboardResponse(BaseSchema):

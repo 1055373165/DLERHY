@@ -1633,6 +1633,158 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(entry["latest_run_completed_work_item_count"], 148)
         self.assertEqual(entry["latest_run_total_work_item_count"], 3163)
 
+    def test_document_surfaces_include_latest_run_runtime_v2_context_for_review_recovery(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {
+                    "runtime_v2": {
+                        "last_deadlock_recovery": {
+                            "incident_id": "incident-review-1",
+                            "proposal_id": "proposal-review-1",
+                            "bundle_revision_id": "bundle-review-1",
+                            "repair_work_item_id": "repair-work-item-1",
+                            "replay_scope_id": bootstrap.json()["chapters"][0]["chapter_id"],
+                            "replay_work_item_ids": ["review-replay-1"],
+                            "bound_work_item_ids": ["review-replay-1"],
+                            "reason_code": "chapter_deadlock",
+                            "lane_health_state": "stalled",
+                            "status": "scheduled",
+                            "repair_blockage": {
+                                "state": "manual_escalation_waiting",
+                                "blocked": True,
+                                "reason": "manual_escalation_required",
+                            },
+                        }
+                    }
+                },
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        with self.session_factory() as session:
+            run = session.get(DocumentRun, run_id)
+            self.assertIsNotNone(run)
+            assert run is not None
+            run.status = DocumentRunStatus.RUNNING
+            session.commit()
+
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
+        summary_payload = summary.json()
+        self.assertIsNotNone(summary_payload["runtime_v2_context"])
+        summary_runtime_v2 = summary_payload["runtime_v2_context"]
+        assert summary_runtime_v2 is not None
+        self.assertEqual(summary_runtime_v2["repair_blockage_source"], "last_deadlock_recovery")
+        self.assertEqual(summary_runtime_v2["repair_blockage_state"], "manual_escalation_waiting")
+        self.assertTrue(summary_runtime_v2["repair_blocked"])
+        self.assertEqual(summary_runtime_v2["incident_id"], "incident-review-1")
+        self.assertEqual(summary_runtime_v2["proposal_id"], "proposal-review-1")
+        self.assertEqual(summary_runtime_v2["bundle_revision_id"], "bundle-review-1")
+        self.assertEqual(summary_runtime_v2["repair_work_item_id"], "repair-work-item-1")
+        self.assertEqual(summary_runtime_v2["lane_health_state"], "stalled")
+        self.assertEqual(summary_runtime_v2["replay_work_item_id"], "review-replay-1")
+
+        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        history_payload = history.json()
+        self.assertEqual(history_payload["total_count"], 1)
+        entry = history_payload["entries"][0]
+        self.assertEqual(entry["document_id"], document_id)
+        self.assertEqual(entry["latest_run_id"], run_id)
+        self.assertIsNotNone(entry["latest_run_runtime_v2_context"])
+        history_runtime_v2 = entry["latest_run_runtime_v2_context"]
+        assert history_runtime_v2 is not None
+        self.assertEqual(history_runtime_v2["repair_blockage_source"], summary_runtime_v2["repair_blockage_source"])
+        self.assertEqual(history_runtime_v2["repair_blockage_state"], summary_runtime_v2["repair_blockage_state"])
+        self.assertEqual(history_runtime_v2["incident_id"], summary_runtime_v2["incident_id"])
+        self.assertEqual(history_runtime_v2["proposal_id"], summary_runtime_v2["proposal_id"])
+
+    def test_document_surfaces_include_latest_run_runtime_v2_context_for_packet_recovery(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+
+        created = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": "translate_full",
+                "requested_by": "api-test",
+                "status_detail_json": {
+                    "runtime_v2": {
+                        "last_runtime_defect_recovery": {
+                            "incident_id": "incident-packet-1",
+                            "proposal_id": "proposal-packet-1",
+                            "bundle_revision_id": "bundle-packet-1",
+                            "repair_work_item_id": "repair-work-item-packet-1",
+                            "replay_scope_id": "packet-1",
+                            "replay_work_item_ids": ["packet-replay-1"],
+                            "bound_work_item_ids": ["packet-replay-1"],
+                            "reason_code": "packet_runtime_defect",
+                            "lane_health_state": "degraded",
+                            "status": "published",
+                            "repair_blockage": {
+                                "state": "ready_to_continue",
+                                "blocked": False,
+                                "reason": "repair_completed",
+                            },
+                        }
+                    }
+                },
+            },
+        )
+        self.assertEqual(created.status_code, 201)
+        run_id = created.json()["run_id"]
+
+        with self.session_factory() as session:
+            run = session.get(DocumentRun, run_id)
+            self.assertIsNotNone(run)
+            assert run is not None
+            run.status = DocumentRunStatus.RUNNING
+            session.commit()
+
+        summary = self.client.get(f"/v1/documents/{document_id}")
+        self.assertEqual(summary.status_code, 200)
+        summary_payload = summary.json()
+        self.assertIsNotNone(summary_payload["runtime_v2_context"])
+        summary_runtime_v2 = summary_payload["runtime_v2_context"]
+        assert summary_runtime_v2 is not None
+        self.assertEqual(summary_runtime_v2["repair_blockage_source"], "last_runtime_defect_recovery")
+        self.assertEqual(summary_runtime_v2["repair_blockage_state"], "ready_to_continue")
+        self.assertFalse(summary_runtime_v2["repair_blocked"])
+        self.assertEqual(summary_runtime_v2["incident_id"], "incident-packet-1")
+        self.assertEqual(summary_runtime_v2["proposal_id"], "proposal-packet-1")
+        self.assertEqual(summary_runtime_v2["bundle_revision_id"], "bundle-packet-1")
+        self.assertEqual(summary_runtime_v2["repair_work_item_id"], "repair-work-item-packet-1")
+        self.assertEqual(summary_runtime_v2["lane_health_state"], "degraded")
+        self.assertEqual(summary_runtime_v2["replay_work_item_id"], "packet-replay-1")
+
+        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
+        self.assertEqual(history.status_code, 200)
+        history_payload = history.json()
+        self.assertEqual(history_payload["total_count"], 1)
+        entry = history_payload["entries"][0]
+        self.assertEqual(entry["document_id"], document_id)
+        self.assertEqual(entry["latest_run_id"], run_id)
+        self.assertIsNotNone(entry["latest_run_runtime_v2_context"])
+        history_runtime_v2 = entry["latest_run_runtime_v2_context"]
+        assert history_runtime_v2 is not None
+        self.assertEqual(history_runtime_v2["repair_blockage_source"], summary_runtime_v2["repair_blockage_source"])
+        self.assertEqual(history_runtime_v2["repair_blockage_state"], summary_runtime_v2["repair_blockage_state"])
+        self.assertEqual(history_runtime_v2["incident_id"], summary_runtime_v2["incident_id"])
+        self.assertEqual(history_runtime_v2["proposal_id"], summary_runtime_v2["proposal_id"])
+
     def test_retry_run_restarts_pipeline_with_previous_lineage(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})

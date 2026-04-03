@@ -50,13 +50,16 @@ class IncidentControllerTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         self.bundle_root = Path(self.tempdir.name) / "runtime-bundles"
-        self.engine = build_engine("sqlite+pysqlite:///:memory:")
+        self.database_path = Path(self.tempdir.name) / "incident-controller.sqlite"
+        self.database_url = f"sqlite+pysqlite:///{self.database_path}"
+        self.engine = build_engine(self.database_url)
+        self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)
         self.session_factory = build_session_factory(engine=self.engine)
 
     def _settings(self) -> Settings:
         return Settings(
-            database_url="sqlite+pysqlite:///:memory:",
+            database_url=self.database_url,
             runtime_bundle_root=self.bundle_root,
         )
 
@@ -273,6 +276,141 @@ class IncidentControllerTests(unittest.TestCase):
             )
             self.assertEqual(run.runtime_bundle_revision_id, bundle_record.revision.id)
             self.assertEqual(work_item.runtime_bundle_revision_id, bundle_record.revision.id)
+
+    def test_resume_repair_dispatch_requeues_manual_escalation_with_resume_lineage(self) -> None:
+        _run_id, incident_id, _work_item_id, packet_scope_id = self._seed_run_incident_and_work_item()
+
+        with self.session_factory() as session:
+            controller = IncidentController(session=session)
+            repair_plan = RuntimeRepairPlannerService().plan_export_misrouting_repair(
+                scope_id=packet_scope_id,
+                export_type="rebuilt_pdf",
+                corrected_route="epub.rebuilt_pdf_via_html",
+                route_candidates=["epub.rebuilt_pdf_via_html"],
+                route_evidence_json={"route_fingerprint": f"resume-{packet_scope_id}", "source_type": "epub"},
+            )
+            proposal = controller.open_patch_proposal(
+                incident_id=incident_id,
+                patch_surface=repair_plan.patch_surface,
+                diff_manifest_json=repair_plan.diff_manifest_json,
+                status_detail_json={"repair_plan": repair_plan.handoff_json},
+            )
+            controller.claim_repair_dispatch(
+                proposal_id=proposal.id,
+                worker_name="runtime.repair-agent",
+                worker_instance_id="repair-worker-1",
+            )
+            executed = controller.record_repair_dispatch_execution(
+                proposal_id=proposal.id,
+                succeeded=False,
+                result_json={
+                    "repair_agent_decision": "manual_escalation_required",
+                    "repair_agent_decision_reason": "requires_operator_review",
+                },
+            )
+            self.assertEqual(executed["status"], "manual_escalation_required")
+
+            resumed = controller.resume_repair_dispatch(
+                proposal_id=proposal.id,
+                resumed_by="ops-user",
+                note="approved override",
+            )
+            self.assertEqual(resumed["status"], "pending")
+            self.assertEqual(resumed["next_action"], "claim_repair_lane")
+            self.assertEqual(resumed["resume_count"], 1)
+            self.assertEqual(resumed["resume_history"][0]["previous_status"], "manual_escalation_required")
+            self.assertEqual(resumed["resume_history"][0]["resumed_by"], "ops-user")
+            session.commit()
+
+        with self.session_factory() as session:
+            proposal = session.get(RuntimePatchProposal, proposal.id)
+            self.assertIsNotNone(proposal)
+            assert proposal is not None
+            repair_work_item_id = proposal.status_detail_json["repair_dispatch"]["repair_work_item_id"]
+            repair_work_item = session.get(WorkItem, repair_work_item_id)
+            self.assertIsNotNone(repair_work_item)
+            assert repair_work_item is not None
+            self.assertEqual(repair_work_item.status, WorkItemStatus.PENDING)
+            self.assertEqual(repair_work_item.attempt, 2)
+
+        with self.session_factory() as session:
+            controller = IncidentController(session=session)
+            reclaimed = controller.claim_repair_dispatch(
+                proposal_id=proposal.id,
+                worker_name="runtime.repair-agent",
+                worker_instance_id="repair-worker-2",
+            )
+            self.assertEqual(reclaimed["status"], "claimed")
+            self.assertEqual(reclaimed["attempt_count"], 2)
+
+    def test_resume_repair_dispatch_can_override_executor_routing(self) -> None:
+        _run_id, incident_id, _work_item_id, packet_scope_id = self._seed_run_incident_and_work_item()
+
+        with self.session_factory() as session:
+            controller = IncidentController(session=session)
+            repair_plan = RuntimeRepairPlannerService().plan_review_deadlock_repair(
+                chapter_id=packet_scope_id,
+                chapter_run_id=str(uuid4()),
+                review_session_id=str(uuid4()),
+                reason_code="review_deadlock",
+            )
+            proposal = controller.open_patch_proposal(
+                incident_id=incident_id,
+                patch_surface=repair_plan.patch_surface,
+                diff_manifest_json=repair_plan.diff_manifest_json,
+                status_detail_json={"repair_plan": repair_plan.handoff_json},
+            )
+            controller.claim_repair_dispatch(
+                proposal_id=proposal.id,
+                worker_name="runtime.repair-agent",
+                worker_instance_id="repair-worker-1",
+            )
+            controller.record_repair_dispatch_execution(
+                proposal_id=proposal.id,
+                succeeded=False,
+                result_json={
+                    "repair_agent_decision": "manual_escalation_required",
+                    "repair_agent_decision_reason": "switch_executor_route",
+                },
+            )
+            resumed = controller.resume_repair_dispatch(
+                proposal_id=proposal.id,
+                resumed_by="ops-user",
+                note="switch to agent-backed executor",
+                dispatch_overrides={
+                    "execution_mode": "agent_backed",
+                    "executor_hint": "python_subprocess_repair_executor",
+                    "executor_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_req_mx_01_review_deadlock_self_heal.py",
+                },
+            )
+            self.assertEqual(resumed["status"], "pending")
+            self.assertEqual(resumed["execution_mode"], "agent_backed")
+            self.assertEqual(resumed["executor_hint"], "python_subprocess_repair_executor")
+            self.assertEqual(
+                resumed["last_resume_overrides"]["executor_hint"],
+                "python_subprocess_repair_executor",
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            proposal = session.get(RuntimePatchProposal, proposal.id)
+            self.assertIsNotNone(proposal)
+            assert proposal is not None
+            repair_work_item_id = proposal.status_detail_json["repair_dispatch"]["repair_work_item_id"]
+            repair_work_item = session.get(WorkItem, repair_work_item_id)
+            self.assertIsNotNone(repair_work_item)
+            assert repair_work_item is not None
+            self.assertEqual(repair_work_item.status, WorkItemStatus.PENDING)
+            self.assertEqual(repair_work_item.input_version_bundle_json["execution_mode"], "agent_backed")
+            self.assertEqual(
+                repair_work_item.input_version_bundle_json["executor_hint"],
+                "python_subprocess_repair_executor",
+            )
+            self.assertEqual(
+                repair_work_item.input_version_bundle_json["validation_command"],
+                "uv run pytest tests/test_req_mx_01_review_deadlock_self_heal.py",
+            )
 
     def test_publish_validated_patch_rolls_back_failed_dev_canary_and_rebinds_scope(self) -> None:
         run_id, incident_id, work_item_id, _packet_scope_id = self._seed_run_incident_and_work_item()
@@ -541,6 +679,14 @@ class IncidentControllerTests(unittest.TestCase):
             proposal.status_detail_json["repair_dispatch"]["status"],
             "executed",
         )
+        self.assertEqual(
+            proposal.status_detail_json["repair_dispatch"]["execution_mode"],
+            "transport_backed",
+        )
+        self.assertEqual(
+            proposal.status_detail_json["repair_dispatch"]["transport_hint"],
+            "python_subprocess_repair_transport",
+        )
         repair_work_item_id = proposal.status_detail_json["repair_dispatch"]["repair_work_item_id"]
         repair_work_item = session.get(WorkItem, repair_work_item_id)
         self.assertIsNotNone(repair_work_item)
@@ -549,6 +695,18 @@ class IncidentControllerTests(unittest.TestCase):
         self.assertEqual(repair_work_item.scope_type, WorkItemScopeType.ISSUE_ACTION)
         self.assertEqual(repair_work_item.scope_id, proposal.id)
         self.assertEqual(repair_work_item.status, WorkItemStatus.SUCCEEDED)
+        self.assertEqual(
+            repair_work_item.input_version_bundle_json["execution_mode"],
+            "transport_backed",
+        )
+        self.assertEqual(
+            repair_work_item.input_version_bundle_json["executor_hint"],
+            "python_transport_repair_executor",
+        )
+        self.assertEqual(
+            repair_work_item.input_version_bundle_json["transport_hint"],
+            "python_subprocess_repair_transport",
+        )
         self.assertEqual(
             proposal.status_detail_json["repair_dispatch"]["validation"]["status"],
             "passed",
@@ -561,11 +719,20 @@ class IncidentControllerTests(unittest.TestCase):
             incident.status_detail_json["repair_dispatch"]["last_result"]["status"],
             "succeeded",
         )
+        self.assertEqual(
+            incident.status_detail_json["repair_dispatch"]["last_result"]["result_json"]["repair_executor_execution_mode"],
+            "transport_backed",
+        )
+        self.assertEqual(
+            incident.status_detail_json["repair_dispatch"]["last_result"]["result_json"]["repair_transport_hint"],
+            "python_subprocess_repair_transport",
+        )
 
 
 class BudgetControllerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = build_engine("sqlite+pysqlite:///:memory:")
+        self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)
         self.session_factory = build_session_factory(engine=self.engine)
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
+import re
 from typing import Iterable
 
 from book_agent.core.ids import stable_id
@@ -406,7 +407,10 @@ class ParseService:
         bbox_json = source_bbox_json if isinstance(source_bbox_json, dict) else {"regions": []}
         storage_path = metadata.get("storage_path")
         if not isinstance(storage_path, str) or not storage_path.strip():
-            storage_path = f"document-images/{document.id}/{block.id}.png"
+            image_ext = str(metadata.get("image_ext") or "png").strip().lower().lstrip(".")
+            if not re.fullmatch(r"[a-z0-9]+", image_ext):
+                image_ext = "png"
+            storage_path = f"document-images/{document.id}/{block.id}.{image_ext}"
 
         width_px = metadata.get("image_width_px")
         height_px = metadata.get("image_height_px")

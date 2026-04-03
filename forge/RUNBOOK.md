@@ -40,7 +40,7 @@ Only create another worktree when the user explicitly asks for it.
 3. create 1-3 immediate batches
 4. dispatch first batch
 5. verify
-6. continue
+6. continue automatically until a real blocker appears
 
 ## Signals To Tighten Control
 
@@ -48,6 +48,7 @@ Only create another worktree when the user explicitly asks for it.
 - liveness stalls
 - worker-complete-without-report situations
 - scope drift
+- requirement / implementation fork
 - write-set collisions
 - hidden dependency chains
 
@@ -56,6 +57,7 @@ When these appear:
 - shrink batch size
 - increase verification frequency
 - sharpen ownership boundaries
+- resolve the fork explicitly before dispatching the next slice
 
 ## Signals To Loosen Control
 
@@ -78,6 +80,19 @@ When these appear:
 - re-reading the whole world every batch
 - preserving framework ritual after it stops adding value
 - allowing workers to mutate global state without master verification
+- letting two competing next directions coexist without choosing one authoritative mainline
+- treating a successful batch summary as a reason to stop when the next dependency-closed slice is already clear
+
+## Fork Resolution Checklist
+
+When a fork appears, Forge must do this in order:
+
+1. name the two directions
+2. choose the one closest to the active mainline
+3. evaluate whether the other direction changes the mainline materially
+4. if yes, rewrite the mainline and decisions now
+5. if no, move it to backlog
+6. only then freeze the next batch
 
 ## Migration Note
 

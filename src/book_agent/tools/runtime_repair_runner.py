@@ -8,6 +8,7 @@ from typing import Any
 
 from book_agent.infra.db.session import build_session_factory
 from book_agent.services.run_execution import ClaimedRunWorkItem
+from book_agent.services.runtime_repair_contract import build_runtime_repair_result_payload
 from book_agent.services.runtime_repair_registry import RuntimeRepairWorkerRegistry
 
 
@@ -38,6 +39,7 @@ def execute_runtime_repair_runner(payload: dict[str, Any]) -> dict[str, Any]:
     lease_token = str(payload["lease_token"])
     input_bundle = dict(payload.get("input_bundle") or {})
     executor_descriptor = dict(payload.get("executor_descriptor") or {})
+    transport_descriptor = dict(payload.get("transport_descriptor") or {})
     claimed = _build_claimed(payload)
     session_factory = build_session_factory(database_url=database_url)
     repair_agent = RuntimeRepairWorkerRegistry(session_factory=session_factory).resolve_for_input_bundle(
@@ -47,23 +49,19 @@ def execute_runtime_repair_runner(payload: dict[str, Any]) -> dict[str, Any]:
         claimed=claimed,
         input_bundle=input_bundle,
     )
-    prepared_with_executor = {
-        **prepared,
-        "repair_executor_name": executor_descriptor.get("executor_name"),
-        "repair_executor_execution_mode": executor_descriptor.get("execution_mode"),
-        "repair_executor_hint": executor_descriptor.get("executor_hint"),
-        "repair_executor_contract_version": executor_descriptor.get("executor_contract_version"),
-    }
+    prepared_with_executor = build_runtime_repair_result_payload(
+        prepared_payload=prepared,
+        executor_descriptor=executor_descriptor,
+        transport_descriptor=transport_descriptor,
+        repair_runner_status="succeeded",
+        repair_runner_pid=os.getpid(),
+    )
     repair_agent.complete_execution(
         run_id=run_id,
         payload=prepared_with_executor,
         lease_token=lease_token,
     )
-    return {
-        **prepared_with_executor,
-        "repair_runner_status": "succeeded",
-        "repair_runner_pid": os.getpid(),
-    }
+    return prepared_with_executor
 
 
 def main() -> int:

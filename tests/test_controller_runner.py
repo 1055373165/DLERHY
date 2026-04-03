@@ -11,13 +11,14 @@ from book_agent.domain.enums import (
     PacketStatus,
     PacketType,
     ReviewSessionStatus,
+    RuntimeIncidentKind,
     SourceType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Chapter, Document
-from book_agent.domain.models.ops import DocumentRun, ReviewSession
+from book_agent.domain.models.ops import DocumentRun, ReviewSession, RunBudget, RuntimeIncident, RuntimePatchProposal
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -97,6 +98,7 @@ class ControllerRunnerTests(unittest.TestCase):
         self.assertEqual(stats.created_packet_tasks, 1)
         self.assertEqual(stats.created_review_sessions, 1)
         self.assertEqual(stats.mirrored_packet_tasks, 0)
+        self.assertEqual(stats.projected_packet_lane_health, 1)
 
         with self.session_factory() as session:
             repo = RuntimeResourcesRepository(session)
@@ -117,6 +119,7 @@ class ControllerRunnerTests(unittest.TestCase):
             self.assertIsNotNone(checkpoint)
             assert checkpoint is not None
             self.assertEqual(checkpoint.checkpoint_json["created_review_sessions"], 1)
+            self.assertEqual(checkpoint.checkpoint_json["projected_packet_lane_health"], 1)
             chapter_checkpoint = repo.get_checkpoint(
                 run_id=run_id,
                 scope_type=JobScopeType.CHAPTER,
@@ -156,6 +159,7 @@ class ControllerRunnerTests(unittest.TestCase):
         self.assertEqual(stats.created_packet_tasks, 0)
         self.assertEqual(stats.created_review_sessions, 0)
         self.assertEqual(stats.mirrored_packet_tasks, 1)
+        self.assertEqual(stats.projected_packet_lane_health, 1)
 
         with self.session_factory() as session:
             repo = RuntimeResourcesRepository(session)
@@ -165,3 +169,55 @@ class ControllerRunnerTests(unittest.TestCase):
             self.assertEqual(packet_task.attempt_count, 1)
             review_sessions = session.query(ReviewSession).all()
             self.assertEqual(len(review_sessions), 1)
+
+    def test_reconcile_run_auto_schedules_packet_runtime_defect_repair(self) -> None:
+        run_id, _chapter_id, packet_id = self._seed_document_run()
+        runner = ControllerRunner(self.session_factory)
+        runner.reconcile_run(run_id=run_id)
+
+        with self.session_factory() as session:
+            run = session.get(DocumentRun, run_id)
+            assert run is not None
+            run.status_detail_json = {
+                "runtime_v2": {
+                    "allowed_patch_surfaces": ["runtime_bundle"],
+                    "preferred_repair_execution_mode": "in_process",
+                    "preferred_repair_executor_hint": "python_repair_executor",
+                    "preferred_repair_executor_contract_version": 1,
+                }
+            }
+            session.add(run)
+            session.add(RunBudget(run_id=run_id, max_auto_followup_attempts=4))
+
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.seed_work_items(
+                run_id=run_id,
+                stage=WorkItemStage.TRANSLATE,
+                scope_type=WorkItemScopeType.PACKET,
+                scope_ids=[packet_id],
+                priority=100,
+                input_version_bundle_by_scope_id={packet_id: {"packet_id": packet_id}},
+            )[0]
+            work_item = execution.repository.get_work_item(work_item_id)
+            work_item.attempt = 2
+            work_item.status = WorkItemStatus.TERMINAL_FAILED
+            session.add(work_item)
+            session.commit()
+
+        stats = runner.reconcile_run(run_id=run_id)
+        self.assertEqual(stats.projected_packet_lane_health, 1)
+
+        with self.session_factory() as session:
+            incident = (
+                session.query(RuntimeIncident)
+                .filter(RuntimeIncident.run_id == run_id, RuntimeIncident.scope_id == packet_id)
+                .one()
+            )
+            proposal = (
+                session.query(RuntimePatchProposal)
+                .filter(RuntimePatchProposal.incident_id == incident.id)
+                .one()
+            )
+
+        self.assertEqual(incident.incident_kind, RuntimeIncidentKind.PACKET_RUNTIME_DEFECT)
+        self.assertEqual(proposal.status_detail_json["repair_dispatch"]["execution_mode"], "in_process")

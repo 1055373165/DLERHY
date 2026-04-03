@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from book_agent.core.config import get_settings
 from book_agent.domain.enums import JobScopeType, RuntimeIncidentKind
 from book_agent.domain.models.ops import DocumentRun, RuntimeIncident, RuntimePatchProposal
 from book_agent.app.runtime.controllers.budget_controller import BudgetController
@@ -17,6 +18,39 @@ def _utcnow():
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc)
+
+
+def _preferred_repair_dispatch(run: DocumentRun) -> dict[str, Any]:
+    runtime_v2 = dict((run.status_detail_json or {}).get("runtime_v2") or {})
+    dispatch: dict[str, Any] = {}
+    execution_mode = str(runtime_v2.get("preferred_repair_execution_mode") or "").strip() or None
+    executor_hint = str(runtime_v2.get("preferred_repair_executor_hint") or "").strip() or None
+    transport_hint = str(runtime_v2.get("preferred_repair_transport_hint") or "").strip() or None
+    if execution_mode is not None:
+        dispatch["execution_mode"] = execution_mode
+    if executor_hint is not None:
+        dispatch["executor_hint"] = executor_hint
+    if execution_mode is not None or executor_hint is not None:
+        dispatch["executor_contract_version"] = int(
+            runtime_v2.get("preferred_repair_executor_contract_version") or 1
+        )
+    if transport_hint is not None:
+        dispatch["transport_hint"] = transport_hint
+        dispatch["transport_contract_version"] = int(
+            runtime_v2.get("preferred_repair_transport_contract_version") or 1
+        )
+    if dispatch:
+        return dispatch
+    remote_http_endpoint = str(get_settings().runtime_repair_transport_http_url or "").strip()
+    if remote_http_endpoint:
+        return {
+            "execution_mode": "transport_backed",
+            "executor_hint": "python_contract_transport_repair_executor",
+            "executor_contract_version": 1,
+            "transport_hint": "http_contract_repair_transport",
+            "transport_contract_version": 1,
+        }
+    return dispatch
 
 
 @dataclass(slots=True)
@@ -104,12 +138,17 @@ class ExportController:
         )
 
         corrected_route = route_candidates[0] if route_candidates else selected_route
+        run = self._session.get(DocumentRun, run_id)
+        if run is None:
+            raise RuntimeError("Runtime misrouting recovery state vanished before transport selection.")
+        dispatch_preferences = _preferred_repair_dispatch(run)
         repair_plan = self._repair_planner.plan_export_misrouting_repair(
             scope_id=scope_id,
             export_type=export_type,
             corrected_route=corrected_route,
             route_candidates=route_candidates,
             route_evidence_json=route_evidence_json,
+            **dispatch_preferences,
         )
         proposal = self._incident_controller.open_patch_proposal(
             incident_id=incident.id,
@@ -120,7 +159,6 @@ class ExportController:
         )
         proposal = self._session.get(RuntimePatchProposal, proposal.id)
         incident = self._session.get(RuntimeIncident, incident.id)
-        run = self._session.get(DocumentRun, run_id)
         if proposal is None or incident is None or run is None:
             raise RuntimeError("Runtime misrouting recovery state vanished during dispatch scheduling.")
         proposal_detail = dict(proposal.status_detail_json or {})
@@ -136,6 +174,8 @@ class ExportController:
             "corrected_route": corrected_route,
             "route_candidates": list(route_candidates),
             "export_type": export_type,
+            "status": str(repair_dispatch.get("status") or "pending"),
+            "repair_blockage": dict(repair_dispatch.get("repair_blockage") or {}),
         }
         status_detail = dict(run.status_detail_json or {})
         status_detail["runtime_v2"] = runtime_v2

@@ -71,7 +71,10 @@ from book_agent.services.runtime_bundle import RuntimeBundleService
 
 _SPECIAL_PDF_PAGE_FAMILIES = {"frontmatter", "appendix", "references", "index", "backmatter", "toc"}
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
-_PDF_IMAGE_MATERIALIZATION_VERSION = 2
+_DOCUMENT_IMAGE_MATERIALIZATION_VERSION = 3
+_PDF_IMAGE_MIN_RENDER_SCALE = 4.0
+_PDF_IMAGE_MAX_RENDER_SCALE = 8.0
+_PDF_IMAGE_TARGET_LONG_EDGE_PX = 1800
 _SEVERITY_RANK = {
     Severity.LOW: 1,
     Severity.MEDIUM: 2,
@@ -7165,7 +7168,12 @@ class ExportService:
             return {}
 
         if source_type == SourceType.EPUB:
-            return self._export_epub_archive_assets(source_path, render_blocks, output_dir)
+            return self._export_epub_archive_assets(
+                source_path,
+                render_blocks,
+                output_dir,
+                document_images=document_images,
+            )
         if source_type in {SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN}:
             return self._export_pdf_assets(
                 source_path,
@@ -7180,11 +7188,18 @@ class ExportService:
         source_path: str,
         render_blocks: list[MergedRenderBlock],
         output_dir: Path,
+        *,
+        document_images: list[object] | None = None,
     ) -> dict[str, str]:
         epub_path = Path(source_path)
         if not epub_path.exists():
             return {}
 
+        document_image_by_block_id = {
+            str(getattr(image, "block_id", "")): image
+            for image in (document_images or [])
+            if getattr(image, "block_id", None)
+        }
         archive_path_by_block_id: dict[str, str] = {}
         asset_root = output_dir / "assets"
         asset_root.mkdir(parents=True, exist_ok=True)
@@ -7217,6 +7232,33 @@ class ExportService:
                     with archive.open(archive_info) as source_handle, target_path.open("wb") as target_handle:
                         shutil.copyfileobj(source_handle, target_handle)
                 relative_path_by_archive_path[archive_path] = relative_path.as_posix()
+
+            for block_id, archive_path in archive_path_by_block_id.items():
+                persisted_image = document_image_by_block_id.get(block_id)
+                if persisted_image is None:
+                    continue
+                try:
+                    archive_info = archive.getinfo(archive_path)
+                except KeyError:
+                    continue
+                asset_suffix = self._normalize_asset_extension(PurePosixPath(archive_path).suffix or ".bin")
+                materialized_path = self._materialized_document_image_path(
+                    persisted_image,
+                    suffix=asset_suffix,
+                )
+                needs_refresh = self._document_image_needs_refresh(
+                    persisted_image,
+                    expected_vias={"epub_archive_asset"},
+                )
+                if not materialized_path.exists() or needs_refresh:
+                    materialized_path.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.open(archive_info) as source_handle, materialized_path.open("wb") as target_handle:
+                        shutil.copyfileobj(source_handle, target_handle)
+                    self._mark_document_image_materialized(
+                        persisted_image,
+                        materialized_path,
+                        materialized_via="epub_archive_asset",
+                    )
 
         return {
             block_id: relative_path_by_archive_path[archive_path]
@@ -7362,46 +7404,59 @@ class ExportService:
                 rect = fitz.Rect(*resolved_bbox)
                 if rect.width <= 1 or rect.height <= 1:
                     continue
-                target_path = asset_root / f"{block_id}.png"
                 persisted_image = document_image_by_block_id.get(block_id)
+                original_pdf_image = self._extract_pdf_original_image(document, page, rect)
+                asset_suffix = self._normalize_asset_extension(
+                    original_pdf_image[1]
+                    if original_pdf_image is not None
+                    else self._document_image_asset_suffix(persisted_image, default_ext=".png")
+                )
+                target_path = asset_root / f"{block_id}{asset_suffix}"
                 desired_width_px, desired_height_px = self._preferred_pdf_crop_pixel_size(
                     render_blocks_by_id.get(block_id),
                     persisted_image,
                 )
                 if persisted_image is not None:
-                    materialized_path = self._materialized_document_image_path(persisted_image)
-                    needs_refresh = self._document_image_needs_refresh(persisted_image)
+                    materialized_path = self._materialized_document_image_path(
+                        persisted_image,
+                        suffix=asset_suffix,
+                    )
+                    needs_refresh = self._document_image_needs_refresh(
+                        persisted_image,
+                        expected_vias={"pdf_export_crop", "pdf_original_image"},
+                    )
                     if not materialized_path.exists() or needs_refresh:
-                        self._save_pdf_crop(
+                        materialized_via, render_scale = self._save_pdf_asset(
+                            document,
                             page,
                             rect,
                             materialized_path,
+                            original_image=original_pdf_image,
                             desired_width_px=desired_width_px,
                             desired_height_px=desired_height_px,
                         )
                         self._mark_document_image_materialized(
                             persisted_image,
                             materialized_path,
-                            render_scale=self._pdf_crop_render_scale(
-                                rect,
-                                desired_width_px=desired_width_px,
-                                desired_height_px=desired_height_px,
-                            ),
+                            materialized_via=materialized_via,
+                            render_scale=render_scale,
                         )
                     if not target_path.exists():
                         shutil.copy2(materialized_path, target_path)
                 elif not target_path.exists():
-                    self._save_pdf_crop(
+                    self._save_pdf_asset(
+                        document,
                         page,
                         rect,
                         target_path,
+                        original_image=original_pdf_image,
                         desired_width_px=desired_width_px,
                         desired_height_px=desired_height_px,
                     )
                 relative_path_by_block_id[block_id] = PurePosixPath(
                     "assets",
                     "pdf-images",
-                    f"{block_id}.png",
+                    target_path.name,
                 ).as_posix()
         finally:
             document.close()
@@ -7745,15 +7800,20 @@ class ExportService:
             height_px if isinstance(height_px, int) and height_px > 0 else None,
         )
 
-    def _document_image_needs_refresh(self, document_image: object) -> bool:
+    def _document_image_needs_refresh(
+        self,
+        document_image: object,
+        *,
+        expected_vias: set[str],
+    ) -> bool:
         metadata = dict(getattr(document_image, "metadata_json", {}) or {})
-        if metadata.get("materialized_via") != "pdf_export_crop":
+        if metadata.get("materialized_via") not in expected_vias:
             return True
         if metadata.get("storage_status") != "materialized":
             return True
         version = metadata.get("materialized_version")
         try:
-            return int(version) < _PDF_IMAGE_MATERIALIZATION_VERSION
+            return int(version) < _DOCUMENT_IMAGE_MATERIALIZATION_VERSION
         except (TypeError, ValueError):
             return True
 
@@ -7766,12 +7826,44 @@ class ExportService:
     ) -> float:
         rect_width = float(getattr(rect, "width", 0.0) or 0.0)
         rect_height = float(getattr(rect, "height", 0.0) or 0.0)
-        scale_candidates = [2.0]
+        longest_edge = max(rect_width, rect_height, 1.0)
+        scale_candidates = [_PDF_IMAGE_MIN_RENDER_SCALE, _PDF_IMAGE_TARGET_LONG_EDGE_PX / longest_edge]
         if desired_width_px and rect_width > 0:
             scale_candidates.append(desired_width_px / rect_width)
         if desired_height_px and rect_height > 0:
             scale_candidates.append(desired_height_px / rect_height)
-        return max(1.0, min(max(scale_candidates), 4.0))
+        return max(1.0, min(max(scale_candidates), _PDF_IMAGE_MAX_RENDER_SCALE))
+
+    def _save_pdf_asset(
+        self,
+        document: object,
+        page: object,
+        rect: object,
+        target_path: Path,
+        *,
+        original_image: tuple[bytes, str] | None = None,
+        desired_width_px: int | None = None,
+        desired_height_px: int | None = None,
+    ) -> tuple[str, float | None]:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if original_image is None:
+            original_image = self._extract_pdf_original_image(document, page, rect)
+        if original_image is not None:
+            target_path.write_bytes(original_image[0])
+            return ("pdf_original_image", None)
+        render_scale = self._pdf_crop_render_scale(
+            rect,
+            desired_width_px=desired_width_px,
+            desired_height_px=desired_height_px,
+        )
+        self._save_pdf_crop(
+            page,
+            rect,
+            target_path,
+            desired_width_px=desired_width_px,
+            desired_height_px=desired_height_px,
+        )
+        return ("pdf_export_crop", render_scale)
 
     def _save_pdf_crop(
         self,
@@ -7804,16 +7896,80 @@ class ExportService:
         finally:
             pixmap = None
 
-    def _materialized_document_image_path(self, document_image: object) -> Path:
+    def _extract_pdf_original_image(
+        self,
+        document: object,
+        page: object,
+        rect: object,
+    ) -> tuple[bytes, str] | None:
+        get_images = getattr(page, "get_images", None)
+        get_image_rects = getattr(page, "get_image_rects", None)
+        extract_image = getattr(document, "extract_image", None)
+        if get_images is None or get_image_rects is None or extract_image is None:
+            return None
+        rect_x0 = getattr(rect, "x0", None)
+        rect_y0 = getattr(rect, "y0", None)
+        rect_x1 = getattr(rect, "x1", None)
+        rect_y1 = getattr(rect, "y1", None)
+        if not all(isinstance(value, (int, float)) for value in (rect_x0, rect_y0, rect_x1, rect_y1)):
+            return None
+        crop_area = max((float(rect_x1) - float(rect_x0)) * (float(rect_y1) - float(rect_y0)), 1.0)
+        best_match: tuple[float, int] | None = None
+        try:
+            images = get_images(full=True)
+        except Exception:
+            return None
+        for image in images or []:
+            if not isinstance(image, (list, tuple)) or not image:
+                continue
+            try:
+                xref = int(image[0])
+            except (TypeError, ValueError):
+                continue
+            try:
+                image_rects = get_image_rects(xref)
+            except Exception:
+                continue
+            for image_rect in image_rects or []:
+                overlap_area = self._rect_overlap_area(
+                    [float(rect_x0), float(rect_y0), float(rect_x1), float(rect_y1)],
+                    [
+                        float(getattr(image_rect, "x0", 0.0)),
+                        float(getattr(image_rect, "y0", 0.0)),
+                        float(getattr(image_rect, "x1", 0.0)),
+                        float(getattr(image_rect, "y1", 0.0)),
+                    ],
+                )
+                overlap_ratio = overlap_area / crop_area
+                if overlap_ratio < 0.35:
+                    continue
+                if best_match is None or overlap_ratio > best_match[0]:
+                    best_match = (overlap_ratio, xref)
+        if best_match is None:
+            return None
+        try:
+            extracted_image = extract_image(best_match[1])
+        except Exception:
+            return None
+        image_bytes = extracted_image.get("image")
+        if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
+            return None
+        return (bytes(image_bytes), self._normalize_asset_extension(extracted_image.get("ext") or ".png"))
+
+    def _materialized_document_image_path(self, document_image: object, *, suffix: str | None = None) -> Path:
         document_id = str(getattr(document_image, "document_id"))
         block_id = str(getattr(document_image, "block_id"))
-        return (self.output_root.parent / "document-images" / document_id / f"{block_id}.png").resolve()
+        asset_suffix = self._normalize_asset_extension(
+            suffix or self._document_image_asset_suffix(document_image, default_ext=".png")
+        )
+        return (self.output_root.parent / "document-images" / document_id / f"{block_id}{asset_suffix}").resolve()
 
     def _mark_document_image_materialized(
         self,
         document_image: object,
         materialized_path: Path,
         *,
+        materialized_via: str,
         render_scale: float | None = None,
     ) -> None:
         storage_path = str(materialized_path)
@@ -7823,14 +7979,48 @@ class ExportService:
         metadata.update(
             {
                 "storage_status": "materialized",
-                "materialized_via": "pdf_export_crop",
+                "materialized_via": materialized_via,
                 "materialized_at": _utcnow().isoformat(),
-                "materialized_version": _PDF_IMAGE_MATERIALIZATION_VERSION,
+                "materialized_version": _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
             }
         )
         if render_scale is not None:
             metadata["materialized_render_scale"] = round(render_scale, 3)
+        else:
+            metadata.pop("materialized_render_scale", None)
         setattr(document_image, "metadata_json", metadata)
+
+    def _document_image_asset_suffix(self, document_image: object | None, *, default_ext: str) -> str:
+        if document_image is None:
+            return self._normalize_asset_extension(default_ext)
+        storage_path = str(getattr(document_image, "storage_path", "") or "").strip()
+        if storage_path:
+            storage_suffix = self._normalize_asset_extension(Path(storage_path).suffix)
+            if storage_suffix != ".png" or Path(storage_path).suffix:
+                return storage_suffix
+        metadata = dict(getattr(document_image, "metadata_json", {}) or {})
+        return self._normalize_asset_extension(metadata.get("image_ext") or default_ext)
+
+    def _normalize_asset_extension(self, extension: object) -> str:
+        if not isinstance(extension, str):
+            return ".png"
+        normalized = extension.strip().lower()
+        if not normalized:
+            return ".png"
+        if not normalized.startswith("."):
+            normalized = f".{normalized}"
+        if not re.fullmatch(r"\.[a-z0-9]+", normalized):
+            return ".png"
+        return normalized
+
+    def _rect_overlap_area(self, left_rect: list[float], right_rect: list[float]) -> float:
+        left = max(float(left_rect[0]), float(right_rect[0]))
+        top = max(float(left_rect[1]), float(right_rect[1]))
+        right = min(float(left_rect[2]), float(right_rect[2]))
+        bottom = min(float(left_rect[3]), float(right_rect[3]))
+        if right <= left or bottom <= top:
+            return 0.0
+        return (right - left) * (bottom - top)
 
     def _safe_epub_archive_path(self, candidate: object) -> str | None:
         if not isinstance(candidate, str):

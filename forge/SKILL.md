@@ -90,6 +90,33 @@ After that, master must do one of two things immediately:
 Worker UI state or completion notification is only a trigger.
 The report path and owned-file truth remain authoritative.
 
+## Continue-Until-Blocked Rule
+
+Forge must not stop after a successful batch just because a good reporting checkpoint exists.
+
+After a batch is verified, Forge must immediately do one of the following:
+
+1. freeze the next dependency-closed batch and continue execution, or
+2. enter an explicit blocked state with a concrete blocker
+
+Valid blockers are narrow and real:
+
+- missing permission that cannot be worked around
+- ambiguous requirement with structural consequences
+- unresolved safety boundary
+- missing external dependency or credential that cannot be inferred or substituted
+
+These are not valid blockers:
+
+- a convenient status-reporting moment
+- "waiting for user confirmation" when no real decision is needed
+- finishing one neat slice and pausing by habit
+- framework ceremony that does not change the next action
+
+If the next slice is clear, Forge must keep going.
+
+User updates are progress visibility, not implicit stop signs.
+
 ## Working Modes
 
 Classify every run into one of four modes:
@@ -167,6 +194,27 @@ If execution reality differs from the plan:
 - backtrack
 
 Adapt immediately. Do not leave the fix in chat notes only.
+
+## Branch Resolution Rule
+
+Requirement or implementation forks are first-class runtime events.
+
+When Forge sees two plausible next directions:
+
+1. compare both directions against the active mainline
+2. choose the one that is closest to the mainline as the next delivery slice
+3. evaluate the non-chosen direction for mainline impact
+4. if that impact is high, update the mainline immediately
+5. if that impact is not high, move it to backlog or a later slice
+6. record the resolution in `.forge/DECISIONS.md`, `.forge/log.md`, and the mainline progress doc
+7. continue dispatch from the updated mainline instead of waiting for human nudging
+
+This is a hard rule, not an optional style preference.
+
+Forge must never leave a fork unresolved in chat alone.
+
+If a competing direction is important enough to change the real delivery path, Forge must mutate the
+mainline and continue from that new truth.
 
 ## Liveness Rule
 

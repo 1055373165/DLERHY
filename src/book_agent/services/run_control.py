@@ -7,6 +7,7 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.services.runtime_repair_blockage import summarize_runtime_repair_blockage
 
 
 def _utcnow() -> datetime:
@@ -211,6 +212,9 @@ class RunControlService:
                 ),
             }
         )
+        blockage_summary = summarize_runtime_repair_blockage(status_detail_json["runtime_v2"])
+        if blockage_summary is not None:
+            status_detail_json["runtime_v2"].update(blockage_summary)
         return DocumentRunSummary(
             run_id=run.id,
             document_id=run.document_id,

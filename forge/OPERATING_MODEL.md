@@ -82,6 +82,46 @@ Master immediately harvests or recovers that batch.
 
 If the plan is wrong, the plan changes immediately.
 
+### 7. Continue
+
+If the batch is verified and the next slice is clear, Forge continues immediately.
+
+Forge does not pause just because:
+
+- the last batch landed cleanly
+- a progress summary is available
+- chat has reached a natural paragraph break
+
+Forge only pauses when the next step is genuinely blocked or when a real human decision is
+required.
+
+The default behavior is:
+
+`verify -> freeze next slice -> continue`
+
+not:
+
+`verify -> summarize -> idle`
+
+## Fork Handling
+
+Forge must treat “direction 1 vs direction 2” as a real control event, not as a casual planning
+note.
+
+When a fork appears:
+
+1. identify which direction is closer to the current mainline
+2. choose that direction as the next active slice
+3. score the other direction for mainline impact
+4. if impact is high, rewrite the mainline now
+5. if impact is not high, move it to backlog or a later batch
+6. update decisions, log, and progress artifacts before continuing execution
+
+The important point is that the mainline is allowed to change.
+
+Forge is dynamic by design, but that dynamic behavior must be made explicit in state artifacts.
+It is not enough to “remember” the better path in chat.
+
 ## Recovery Philosophy
 
 Forge treats stale execution as a framework problem first, not an operator problem first.

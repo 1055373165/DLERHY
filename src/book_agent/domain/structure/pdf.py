@@ -17,9 +17,9 @@ from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, Parse
 
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _HEADING_PATTERN = re.compile(r"^(chapter|part|appendix)\b", re.IGNORECASE)
-_ARTIFACT_INDEX_PATTERN = r"(?:\(?\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?\)?|[A-Z])"
+_ARTIFACT_INDEX_PATTERN = r"(?:[A-Z]\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?|\(?\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?\)?|[A-Z])"
 _FIGURE_CAPTION_PATTERN = re.compile(
-    r"^(?:figure|fig\.|image|diagram|chart)\s+"
+    r"^(?:figure|fig\.?|image|diagram|chart)\s*"
     + _ARTIFACT_INDEX_PATTERN
     + r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
     re.IGNORECASE,
@@ -31,7 +31,7 @@ _TABLE_CAPTION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _TABLE_HEADER_CUE_PATTERN = re.compile(
-    r"\b(?:method|model|accuracy|team|individual|instances?|allocated|baseline(?:s)?|dataset|bleu|score(?:s)?|cost)\b",
+    r"\b(?:method|model|accuracy|team|individual|instances?|allocated|baseline(?:s)?|dataset|bleu|score(?:s)?|cost|layer(?:\s+type)?|complexity|operations?|path\s+length|maximum)\b",
     re.IGNORECASE,
 )
 _TABLE_BRACKETED_GROUP_PATTERN = re.compile(r"\[[^\]]+\]")
@@ -805,7 +805,7 @@ def _looks_like_visual_heading(text: str, line_count: int) -> bool:
         return False
     if line_count > 4:
         return False
-    if compact.endswith((".", "?", "!", ";")):
+    if compact.endswith((".", "!", ";")):
         return False
     if re.search(r"[=∼≤≥\[\]{}|]", compact):
         return False
@@ -832,6 +832,9 @@ def _looks_like_visual_heading(text: str, line_count: int) -> bool:
             titleish_words += 1
         elif word[:1].islower():
             lowercase_words += 1
+
+    if compact.endswith("?"):
+        return titleish_words >= 2 and lowercase_words <= max(4, len(alpha_words) // 2)
 
     return titleish_words >= max(2, len(alpha_words) - 3) and lowercase_words <= 1
 
@@ -896,14 +899,33 @@ def _leading_reference_heading_and_remainder(text: str) -> tuple[str, str] | Non
     normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
     if not normalized:
         return None
-    match = _BROKEN_REFERENCES_HEADING_PATTERN.match(normalized)
-    if match is None:
-        return None
-    remainder = _normalize_intro_title_artifacts(normalized[match.end() :]).strip(" -:;,.")
+    lowered = normalized.casefold()
+    downloaded_from_marker = "downloaded from "
+    if downloaded_from_marker in lowered:
+        download_index = lowered.find(downloaded_from_marker)
+        normalized = normalized[download_index + len(downloaded_from_marker) :].lstrip()
+        lowered = normalized.casefold()
+    heading_text = _section_family_display_title("references")
+    if lowered.startswith("references and notes"):
+        heading_text = "References and Notes"
+        remainder = _normalize_intro_title_artifacts(normalized[len("References and Notes") :]).strip(" -:;,.")
+    else:
+        match = _BROKEN_REFERENCES_HEADING_PATTERN.match(normalized)
+        if match is None:
+            return None
+        remainder = _normalize_intro_title_artifacts(normalized[match.end() :]).strip(" -:;,.")
     if not remainder:
-        return _section_family_display_title("references"), ""
-    if remainder.startswith("[") or _looks_like_reference_entry(remainder):
-        return _section_family_display_title("references"), remainder
+        return heading_text, ""
+    first_remainder_line = next(
+        (_normalize_text(line) for line in remainder.splitlines() if _normalize_text(line)),
+        "",
+    )
+    if (
+        remainder.startswith("[")
+        or _looks_like_reference_entry(remainder)
+        or bool(re.match(r"^(?:\[\s*\d+\s*\]|\d+[.)])\s+", first_remainder_line))
+    ):
+        return heading_text, remainder
     return None
 
 
@@ -1102,15 +1124,48 @@ def _leading_academic_standalone_heading(text: str) -> tuple[str, str] | None:
     return None
 
 
+def _embedded_academic_abstract_segments(text: str) -> tuple[str, str, str] | None:
+    normalized = _normalize_multiline_text(text)
+    if not normalized:
+        return None
+    match = re.search(r"\b(?:ABSTRACT|Abstract)\b", normalized)
+    if match is None:
+        return None
+    prefix = normalized[: match.start()].strip()
+    remainder = normalized[match.end() :].strip(" -:;,.")
+    if not remainder or not _looks_like_academic_prose_lead(remainder):
+        return None
+    if prefix:
+        lowered_prefix = prefix.casefold()
+        frontmatterish = any(
+            cue in lowered_prefix
+            for cue in (
+                "@",
+                "department",
+                "university",
+                "research",
+                "institute",
+                "laboratory",
+                "college",
+                "school",
+                "arxiv:",
+            )
+        )
+        if not frontmatterish and _looks_like_academic_prose_lead(prefix):
+            return None
+    return prefix, "Abstract", remainder
+
+
 def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | None:
     tokens = candidate_text.split()
     if not tokens:
         return None
     title_tokens: list[str] = []
     content_tokens = 0
-    for token in tokens:
+    for index, token in enumerate(tokens):
         stripped = token.strip("()[]{}.,;:")
         lowered = stripped.casefold()
+        remaining = " ".join(tokens[index:]).strip()
         if (
             title_tokens
             and lowered in _ACADEMIC_BODY_STARTER_WORDS
@@ -1119,6 +1174,8 @@ def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | No
                 or (content_tokens == 1 and title_tokens[0].strip("()[]{}.,;:").casefold() in _ACADEMIC_SINGLE_TOKEN_HEADING_WORDS)
             )
         ):
+            break
+        if title_tokens and lowered in _ACADEMIC_BODY_STARTER_WORDS and _looks_like_academic_prose_lead(remaining):
             break
         if lowered in _ACADEMIC_HEADING_CONNECTOR_WORDS and title_tokens:
             title_tokens.append(token)
@@ -1399,7 +1456,7 @@ def _next_academic_inline_heading(text: str) -> tuple[int, str, str, dict[str, A
         if cleaned is None:
             continue
         heading_text, cleaned_remainder = cleaned
-        return start, heading_text, cleaned_remainder, {"heading_kind": "numbered", "section_level": label.count(".") + 1}
+        return start, heading_text, cleaned_remainder, {"heading_kind": "numbered", "section_level": label.count(".") + 2}
     return None
 
 
@@ -2239,6 +2296,11 @@ def _looks_like_table(line_count: int, lines: list[str]) -> bool:
     token_counts = [len(_normalize_text(line).split()) for line in nonempty_lines[:6]]
     if len(token_counts) < 2:
         return False
+    prose_like_lines = sum(
+        1
+        for line in nonempty_lines[:6]
+        if _looks_like_academic_prose_lead(line) and len(_normalize_text(line).split()) >= 5
+    )
     separator_lines = sum(
         1
         for line in nonempty_lines[:6]
@@ -2263,6 +2325,8 @@ def _looks_like_table(line_count: int, lines: list[str]) -> bool:
             or _TABLE_ID_EQUALS_PATTERN.search(line)
         )
     )
+    if prose_like_lines >= 2 and separator_lines == 0:
+        return False
     if dense_numeric_lines >= 3 and _looks_like_flattened_table_text(" ".join(nonempty_lines)):
         return True
     return False
@@ -2276,6 +2340,11 @@ def _looks_like_flattened_table_text(text: str) -> bool:
         return False
     if normalized.endswith((".", "?", "!")) and "±" not in normalized:
         return False
+    leading_sample = " ".join(normalized.split()[:18])
+    if _looks_like_academic_prose_lead(leading_sample):
+        sentence_punctuation_hits = normalized.count(".") + normalized.count("?") + normalized.count("!")
+        if sentence_punctuation_hits >= 1 and "±" not in normalized and "|" not in normalized:
+            return False
 
     numeric_hits = len(re.findall(r"\b\d+(?:\.\d+)?\b", normalized))
     if numeric_hits < 6:
@@ -2302,6 +2371,13 @@ def _looks_like_numeric_table_fragment(lines: list[str]) -> bool:
     nonempty_lines = [_normalize_text(line) for line in lines if _normalize_text(line)]
     if len(nonempty_lines) < 6:
         return False
+    prose_like_lines = sum(
+        1
+        for line in nonempty_lines[:6]
+        if _looks_like_academic_prose_lead(line) and len(line.split()) >= 5
+    )
+    if prose_like_lines >= 2:
+        return False
 
     numeric_only_lines = sum(
         1 for line in nonempty_lines if re.fullmatch(r"\d+(?:\.\d+)?", line)
@@ -2319,10 +2395,17 @@ def _looks_like_numeric_table_fragment(lines: list[str]) -> bool:
     header_cue_lines = sum(
         1 for line in nonempty_lines[:8] if _TABLE_HEADER_CUE_PATTERN.search(line)
     )
+    complexity_value_lines = sum(
+        1
+        for line in nonempty_lines
+        if re.search(r"\bO\s*\(", line) or re.search(r"\b\d+(?:\.\d+)?\b", line)
+    )
 
     if numeric_only_lines >= 4 and short_value_lines >= 6:
         return True
     if header_cue_lines >= 1 and short_value_lines >= 5 and label_like_lines >= 2:
+        return True
+    if header_cue_lines >= 2 and complexity_value_lines >= 2 and label_like_lines >= 4:
         return True
     return False
 
@@ -2376,7 +2459,10 @@ def _looks_like_equation(
 
     variable_hits = len(_EQUATION_VARIABLE_PATTERN.findall(normalized))
     digit_hits = len(re.findall(r"\b\d+(?:\.\d+)?\b", normalized))
-    if variable_hits < 3 and digit_hits < 1:
+    function_style_identity = bool(
+        re.match(r"^[A-Za-z][A-Za-z0-9_]*(?:\([^)]{1,60}\))?\s*=\s*\S+", normalized)
+    )
+    if variable_hits < 3 and digit_hits < 1 and not function_style_identity:
         return False
 
     block_center = (bbox[0] + bbox[2]) / 2.0
@@ -2504,6 +2590,113 @@ def _looks_like_contextual_image_legend_text(text: str) -> bool:
     return any(char.isdigit() for char in normalized)
 
 
+def _book_heading_level(text: str, *, fallback: int | None = None) -> int | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return fallback
+    if _CHAPTER_PREFIX_PATTERN.match(normalized) or _HEADING_PATTERN.match(normalized):
+        return 1
+    appendix_subheading = _appendix_section_subheading_candidate(normalized)
+    if appendix_subheading is not None:
+        return 2 + int(appendix_subheading.get("depth", 0) or 0)
+    numbered = re.match(r"^(?P<label>\d+(?:\.\d+)*)\b", normalized)
+    if numbered is not None:
+        return max(2, len(numbered.group("label").split(".")))
+    return fallback
+
+
+def _looks_like_book_prose_lead(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    tokens = normalized.split()
+    if not tokens:
+        return False
+    first = re.sub(r"[^A-Za-z'-]", "", tokens[0]).casefold()
+    second = re.sub(r"[^A-Za-z'-]", "", tokens[1]).casefold() if len(tokens) > 1 else ""
+    if first in _PROSE_CONTINUATION_STOPWORDS or first in _PROSE_CONTINUATION_START_WORDS:
+        return True
+    if second in _PROSE_CONTINUATION_STOPWORDS:
+        return True
+    if tokens[0].endswith(",") and second in _PROSE_CONTINUATION_STOPWORDS:
+        return True
+    return False
+
+
+def _is_plausible_book_heading_candidate(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized or normalized.endswith((",", ";", ":")):
+        return False
+    if any(token.endswith(",") for token in normalized.split()):
+        return False
+    return True
+
+
+def _leading_numbered_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
+    normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
+    if not normalized or _LEADING_SECTION_NUMBER_PATTERN.match(normalized) is None:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 8:
+        return None
+    for boundary in range(3, min(len(tokens) - 5, 12) + 1):
+        heading_text = " ".join(tokens[:boundary]).strip()
+        remainder = " ".join(tokens[boundary:]).strip()
+        if not remainder:
+            continue
+        remainder_first = re.sub(r"[^A-Za-z'-]", "", tokens[boundary]).casefold()
+        heading_last = re.sub(r"[^A-Za-z'-]", "", tokens[boundary - 1]).casefold()
+        if remainder_first in (_HEADING_CONTINUATION_START_WORDS - {"the"}):
+            continue
+        if heading_last in _HEADING_CONTINUATION_START_WORDS or heading_last in {"a", "an", "the"}:
+            continue
+        if not _is_plausible_book_heading_candidate(heading_text):
+            continue
+        if not _looks_like_visual_heading(heading_text, 1):
+            continue
+        if not _looks_like_book_prose_lead(remainder):
+            continue
+        if not _looks_like_book_prose_fragment(remainder):
+            continue
+        level = _book_heading_level(heading_text, fallback=2) or 2
+        normalized_heading = _normalize_multiline_text(heading_text)
+        normalized_remainder = _normalize_multiline_text(remainder)
+        if len(normalized_heading.split()) < 4:
+            continue
+        return normalized_heading, normalized_remainder, level
+    return None
+
+
+def _leading_all_caps_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
+    normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
+    if not normalized:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 7:
+        return None
+    for boundary in range(min(len(tokens) - 4, 10), 2, -1):
+        heading_text = " ".join(tokens[:boundary]).strip()
+        remainder = " ".join(tokens[boundary:]).strip()
+        alpha_tokens = [re.sub(r"[^A-Za-z]", "", token) for token in heading_text.split()]
+        alpha_tokens = [token for token in alpha_tokens if token]
+        if not alpha_tokens:
+            continue
+        if any(not token.isupper() for token in alpha_tokens):
+            continue
+        if not _is_plausible_book_heading_candidate(heading_text):
+            continue
+        if not _looks_like_book_prose_lead(remainder):
+            continue
+        if not _looks_like_book_prose_fragment(remainder):
+            continue
+        normalized_heading = _normalize_multiline_text(heading_text)
+        normalized_remainder = _normalize_multiline_text(remainder)
+        if len(normalized_heading.split()) < 4:
+            continue
+        return normalized_heading, normalized_remainder, 4
+    return None
+
+
 def _page_has_multi_column_signature(page: "PdfPage") -> bool:
     candidate_blocks = [
         block
@@ -2606,6 +2799,16 @@ def _page_has_asymmetric_academic_first_page_signal(page: "PdfPage", document_ti
             right_continuation_blocks += 1
 
     return left_abstract_blocks >= 1 and right_continuation_blocks >= 1
+
+
+def _page_has_single_column_academic_first_page_signal(page: "PdfPage", document_title: str | None) -> bool:
+    if page.page_number != 1:
+        return False
+    if not (_page_has_centered_title_signal(page) or _page_has_title_overlap_signal(page, document_title)):
+        return False
+    if not _page_has_abstract_signal(page):
+        return False
+    return _page_first_numbered_section_heading_top(page) is not None
 
 
 @dataclass(slots=True, frozen=True)
@@ -2853,6 +3056,14 @@ class PyMuPDFTextExtractor:
                         )
                     )
 
+                image_blocks.extend(
+                    self._extract_vector_drawing_blocks(
+                        page,
+                        page_number=page_index + 1,
+                        start_block_number=len(text_dict.get("blocks", [])) + 1,
+                    )
+                )
+
                 pages.append(
                     PdfPage(
                         page_number=page_index + 1,
@@ -2872,6 +3083,128 @@ class PyMuPDFTextExtractor:
             )
         finally:
             document.close()
+
+    def _extract_vector_drawing_blocks(
+        self,
+        page: Any,
+        *,
+        page_number: int,
+        start_block_number: int,
+    ) -> list[PdfImageBlock]:
+        try:
+            drawings = page.get_drawings()
+        except Exception:
+            return []
+
+        page_width = float(page.rect.width)
+        page_height = float(page.rect.height)
+        drawing_bboxes: list[tuple[float, float, float, float]] = []
+        for drawing in drawings:
+            rect = drawing.get("rect")
+            if rect is None:
+                continue
+            bbox = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
+            if not self._looks_like_vector_drawing_figure_bbox(bbox, page_width, page_height):
+                continue
+            drawing_bboxes.append(bbox)
+
+        image_blocks: list[PdfImageBlock] = []
+        for offset, bbox in enumerate(
+            self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
+        ):
+            image_blocks.append(
+                PdfImageBlock(
+                    page_number=page_number,
+                    block_number=start_block_number + offset,
+                    bbox=self._expand_vector_drawing_bbox(bbox, page_width, page_height),
+                    image_type="vector_drawing",
+                )
+            )
+        return image_blocks
+
+    def _looks_like_vector_drawing_figure_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        page_width: float,
+        page_height: float,
+    ) -> bool:
+        width = max(0.0, bbox[2] - bbox[0])
+        height = max(0.0, bbox[3] - bbox[1])
+        area = width * height
+        if width < 18.0 or height < 18.0:
+            return False
+        if area < max(1800.0, page_width * page_height * 0.0025):
+            return False
+        if width >= page_width * 0.92 and height <= page_height * 0.035:
+            return False
+        if height >= page_height * 0.92 and width <= page_width * 0.035:
+            return False
+        return True
+
+    def _cluster_vector_drawing_bboxes(
+        self,
+        bboxes: list[tuple[float, float, float, float]],
+        page_width: float,
+        page_height: float,
+    ) -> list[tuple[float, float, float, float]]:
+        if not bboxes:
+            return []
+
+        clusters: list[tuple[float, float, float, float]] = []
+        x_threshold = max(24.0, page_width * 0.08)
+        y_threshold = max(24.0, page_height * 0.08)
+
+        for bbox in sorted(bboxes, key=lambda item: (round(item[1], 2), round(item[0], 2))):
+            merged = False
+            for index, cluster in enumerate(clusters):
+                horizontal_gap = max(cluster[0] - bbox[2], bbox[0] - cluster[2], 0.0)
+                vertical_gap = max(cluster[1] - bbox[3], bbox[1] - cluster[3], 0.0)
+                center_delta_x = abs(((cluster[0] + cluster[2]) / 2.0) - ((bbox[0] + bbox[2]) / 2.0))
+                if horizontal_gap <= x_threshold and vertical_gap <= y_threshold and center_delta_x <= page_width * 0.45:
+                    clusters[index] = self._union_drawing_bbox(cluster, bbox)
+                    merged = True
+                    break
+            if not merged:
+                clusters.append(bbox)
+
+        filtered_clusters: list[tuple[float, float, float, float]] = []
+        min_cluster_area = max(12000.0, page_width * page_height * 0.018)
+        for cluster in clusters:
+            width = max(0.0, cluster[2] - cluster[0])
+            height = max(0.0, cluster[3] - cluster[1])
+            if width * height < min_cluster_area:
+                continue
+            if width < page_width * 0.22 and height < page_height * 0.12:
+                continue
+            filtered_clusters.append(cluster)
+        return filtered_clusters
+
+    def _expand_vector_drawing_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        page_width: float,
+        page_height: float,
+    ) -> tuple[float, float, float, float]:
+        x_pad = min(48.0, page_width * 0.08)
+        y_pad = min(40.0, page_height * 0.06)
+        return (
+            max(0.0, bbox[0] - x_pad),
+            max(0.0, bbox[1] - y_pad),
+            min(page_width, bbox[2] + x_pad),
+            min(page_height, bbox[3] + y_pad),
+        )
+
+    def _union_drawing_bbox(
+        self,
+        left: tuple[float, float, float, float],
+        right: tuple[float, float, float, float],
+    ) -> tuple[float, float, float, float]:
+        return (
+            min(left[0], right[0]),
+            min(left[1], right[1]),
+            max(left[2], right[2]),
+            max(left[3], right[3]),
+        )
 
     def _extract_outline(self, document: Any) -> list[PdfOutlineEntry]:
         outline_entries: list[PdfOutlineEntry] = []
@@ -3504,6 +3837,13 @@ class PdfFileProfiler:
                 or _page_has_title_overlap_signal(first_page, extraction.title)
             )
         )
+        single_column_pymupdf_academic_signal = bool(
+            extractor_kind == "pymupdf"
+            and first_page is not None
+            and len(multi_column_pages) <= 1
+            and trailing_reference_page_count >= 2
+            and _page_has_single_column_academic_first_page_signal(first_page, extraction.title)
+        )
         academic_paper_candidate = bool(
             pdf_kind == "text_pdf"
             and page_count <= 24
@@ -3516,7 +3856,11 @@ class PdfFileProfiler:
                 )
                 or (
                     extractor_kind == "pymupdf"
-                    and (len(multi_column_pages) >= 2 or bool(extraction.outline_entries))
+                    and (
+                        len(multi_column_pages) >= 2
+                        or bool(extraction.outline_entries)
+                        or single_column_pymupdf_academic_signal
+                    )
                     and (first_page_title_signal or bool(extraction.title))
                 )
             )
@@ -3651,6 +3995,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._recover_embedded_page_heading_blocks(recovered_blocks)
         recovered_blocks = self._recover_document_title_heading_blocks(recovered_blocks, extraction.title)
         recovered_blocks = self._recover_academic_section_blocks(recovered_blocks, profile)
+        recovered_blocks = self._populate_missing_heading_levels(recovered_blocks)
         recovered_blocks = self._merge_adjacent_heading_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._repair_prose_artifact_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._merge_same_anchor_code_continuations(recovered_blocks)
@@ -4227,7 +4572,7 @@ class PdfStructureRecoveryService:
             context = contexts[page.page_number]
             updated_context = context
             if context.page_family == "body":
-                if context.content_family == "references":
+                if context.content_family == "references" and not context.has_strong_heading:
                     updated_context = replace(
                         context,
                         page_family=context.content_family,
@@ -4458,6 +4803,8 @@ class PdfStructureRecoveryService:
         ):
             if zone != "bottom":
                 return "heading"
+        if _looks_like_table(raw_block.line_count, raw_block.line_texts) or _looks_like_numeric_table_fragment(raw_block.line_texts):
+            return "table_like"
         if _looks_like_equation(text, raw_block.line_count, raw_block.bbox, page.width):
             return "equation"
         if _looks_like_list_item(text, raw_block.line_count):
@@ -4466,8 +4813,6 @@ class PdfStructureRecoveryService:
             return "code_like"
         if raw_block.font_names and _has_monospace_font(raw_block.font_names) and raw_block.line_count >= 2:
             return "code_like"
-        if _looks_like_table(raw_block.line_count, raw_block.line_texts):
-            return "table_like"
         return "body"
 
     def _block_type_for_role(self, role: str) -> BlockType:
@@ -4521,6 +4866,15 @@ class PdfStructureRecoveryService:
             metadata["detected_by"] = "text_heuristic"
         if role == "list_item":
             metadata["detected_by"] = "bullet_pattern"
+        if role == "heading":
+            heading_level = _book_heading_level(text)
+            if heading_level is None:
+                if text.casefold() in _REFERENCES_HEADING_TITLES or page_context.page_family == "references":
+                    heading_level = 2
+                elif page_context.page_family == "body":
+                    heading_level = 1 if _looks_like_paper_title(text) else 2
+            if heading_level is not None:
+                metadata["heading_level"] = heading_level
 
         if role != "toc_entry":
             return metadata, flags
@@ -5145,6 +5499,8 @@ class PdfStructureRecoveryService:
         block = recovered_blocks[index]
         if block.role != "body" or block.block_type != BlockType.PARAGRAPH:
             return False
+        if "embedded_abstract_heading_recovered" in block.flags:
+            return False
         if block.page_end < block.page_start or block.page_end - block.page_start > 1:
             return False
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
@@ -5152,6 +5508,8 @@ class PdfStructureRecoveryService:
 
         normalized_lines = _expanded_code_candidate_lines(block.text)
         if not normalized_lines:
+            return False
+        if _looks_like_table(len(normalized_lines), normalized_lines) or _looks_like_numeric_table_fragment(normalized_lines):
             return False
         if _looks_like_code("\n".join(normalized_lines), max(2, len(normalized_lines))):
             return True
@@ -5546,6 +5904,51 @@ class PdfStructureRecoveryService:
                 split_blocks.append(segment)
         return split_blocks
 
+    def _populate_missing_heading_levels(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+    ) -> list[_RecoveredBlock]:
+        first_substantive_anchor_by_page: dict[int, str] = {}
+        for block in recovered_blocks:
+            if (
+                block.role not in {"header", "footer", "toc_entry", "footnote"}
+                and block.page_start not in first_substantive_anchor_by_page
+            ):
+                first_substantive_anchor_by_page[block.page_start] = block.anchor
+
+        normalized_blocks: list[_RecoveredBlock] = []
+        for block in recovered_blocks:
+            if block.role != "heading":
+                normalized_blocks.append(block)
+                continue
+            metadata = dict(block.metadata)
+            if isinstance(metadata.get("heading_level"), int):
+                normalized_blocks.append(block)
+                continue
+
+            heading_level = _book_heading_level(block.text)
+            normalized_text = _normalize_text(block.text)
+            page_family = str(metadata.get("pdf_page_family") or "body")
+            if heading_level is None:
+                if normalized_text.casefold() in _REFERENCES_HEADING_TITLES or page_family == "references":
+                    heading_level = 2
+                elif (
+                    block.page_start == 1
+                    and first_substantive_anchor_by_page.get(block.page_start) == block.anchor
+                    and _looks_like_paper_title(normalized_text)
+                ):
+                    heading_level = 1
+                elif page_family == "body":
+                    heading_level = 2
+
+            if heading_level is None:
+                normalized_blocks.append(block)
+                continue
+
+            metadata["heading_level"] = heading_level
+            normalized_blocks.append(replace(block, metadata=metadata))
+        return normalized_blocks
+
     def _promote_inline_book_heading_blocks(
         self,
         recovered_blocks: list[_RecoveredBlock],
@@ -5557,6 +5960,9 @@ class PdfStructureRecoveryService:
                 continue
             metadata = dict(block.metadata)
             metadata["pdf_heading_recovery_source"] = "inline_book_heading"
+            heading_level = _book_heading_level(block.text, fallback=2)
+            if heading_level is not None:
+                metadata["heading_level"] = heading_level
             promoted_block = replace(
                 block,
                 role="heading",
@@ -5578,9 +5984,16 @@ class PdfStructureRecoveryService:
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
             return False
         next_body = self._next_book_body_candidate(recovered_blocks, index)
-        if next_body is None:
+        if next_body is not None:
+            return self._should_keep_inline_book_heading_separate(block, next_body)
+        if not _looks_like_inline_book_heading_text(block.text):
             return False
-        return self._should_keep_inline_book_heading_separate(block, next_body)
+        if block.page_start != block.page_end:
+            return False
+        if not block.bbox_regions:
+            return False
+        top = float(block.bbox_regions[0]["bbox"][1])
+        return top <= 140.0
 
     def _next_book_body_candidate(
         self,
@@ -5629,21 +6042,102 @@ class PdfStructureRecoveryService:
         page_has_heading: bool,
     ) -> list[_RecoveredBlock]:
         if (
-            block.role != "body"
-            or block.block_type != BlockType.PARAGRAPH
+            block.role not in {"body", "code_like"}
+            or block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE}
         ):
             return [replace(block)]
+
+        if (
+            block.page_start == 1
+            and block.page_end == 1
+            and block.role == "body"
+            and str(block.metadata.get("pdf_page_family") or "body") == "body"
+        ):
+            abstract_segments = _embedded_academic_abstract_segments(block.text)
+            if abstract_segments is not None:
+                prefix, heading_text, remainder = abstract_segments
+                shared_flags = list(dict.fromkeys([*block.flags, "embedded_abstract_heading_recovered"]))
+                prefix_metadata = dict(block.metadata)
+                prefix_metadata["pdf_heading_recovery_source"] = "embedded_abstract_heading_recovered"
+                heading_metadata = dict(block.metadata)
+                heading_metadata["pdf_heading_recovery_source"] = "embedded_abstract_heading_recovered"
+                heading_metadata["heading_level"] = 2
+                body_metadata = dict(block.metadata)
+                body_metadata["pdf_heading_recovery_source"] = "embedded_abstract_heading_recovered"
+                segments: list[_RecoveredBlock] = []
+                segment_index = 0
+                normalized_prefix = _normalize_multiline_text(prefix)
+                if normalized_prefix:
+                    segment_index += 1
+                    segments.append(
+                        _RecoveredBlock(
+                            role="body",
+                            block_type=BlockType.PARAGRAPH,
+                            text=normalized_prefix,
+                            page_start=block.page_start,
+                            page_end=block.page_end,
+                            bbox_regions=list(block.bbox_regions),
+                            reading_order_index=block.reading_order_index,
+                            parse_confidence=block.parse_confidence,
+                            flags=shared_flags,
+                            metadata=prefix_metadata,
+                            font_size_avg=block.font_size_avg,
+                            source_path=block.source_path,
+                            anchor=f"{block.anchor}-s{segment_index}",
+                        )
+                    )
+                segment_index += 1
+                segments.append(
+                    _RecoveredBlock(
+                        role="heading",
+                        block_type=BlockType.HEADING,
+                        text=heading_text,
+                        page_start=block.page_start,
+                        page_end=block.page_end,
+                        bbox_regions=list(block.bbox_regions),
+                        reading_order_index=block.reading_order_index,
+                        parse_confidence=block.parse_confidence,
+                        flags=shared_flags,
+                        metadata=heading_metadata,
+                        font_size_avg=block.font_size_avg,
+                        source_path=block.source_path,
+                        anchor=f"{block.anchor}-s{segment_index}",
+                    )
+                )
+                normalized_remainder = _normalize_multiline_text(remainder)
+                if normalized_remainder:
+                    segment_index += 1
+                    segments.append(
+                        _RecoveredBlock(
+                            role="body",
+                            block_type=BlockType.PARAGRAPH,
+                            text=normalized_remainder,
+                            page_start=block.page_start,
+                            page_end=block.page_end,
+                            bbox_regions=list(block.bbox_regions),
+                            reading_order_index=block.reading_order_index,
+                            parse_confidence=block.parse_confidence,
+                            flags=shared_flags,
+                            metadata=body_metadata,
+                            font_size_avg=block.font_size_avg,
+                            source_path=block.source_path,
+                            anchor=f"{block.anchor}-s{segment_index}",
+                        )
+                    )
+                if segments:
+                    return segments
 
         heading_text: str | None = None
         remainder: str | None = None
         recovery_flag: str | None = None
+        recovered_heading_level: int | None = None
         metadata = dict(block.metadata)
         page_family = str(metadata.get("pdf_page_family") or "body")
-        if page_family == "references":
-            reference_heading = _leading_reference_heading_and_remainder(block.text)
-            if reference_heading is not None:
-                heading_text, remainder = reference_heading
-                recovery_flag = "embedded_references_heading_recovered"
+        reference_heading = _leading_reference_heading_and_remainder(block.text)
+        if reference_heading is not None:
+            heading_text, remainder = reference_heading
+            recovery_flag = "embedded_references_heading_recovered"
+            recovered_heading_level = 2
         elif (
             block.page_start == 1
             and block.page_end == 1
@@ -5655,6 +6149,27 @@ class PdfStructureRecoveryService:
             if paper_title is not None:
                 heading_text, remainder = paper_title
                 recovery_flag = "embedded_document_title_recovered"
+                recovered_heading_level = 1
+        elif (
+            page_family == "body"
+            and block.page_start == block.page_end
+            and block.role in {"body", "code_like"}
+        ):
+            academic_heading = _next_academic_inline_heading(_normalize_multiline_text(block.text))
+            if academic_heading is not None and academic_heading[0] == 0:
+                _start_index, heading_text, remainder, heading_meta = academic_heading
+                recovered_heading_level = int(heading_meta.get("section_level") or 0) or None
+                recovery_flag = "academic_section_heading_recovered"
+            else:
+                numbered_book_heading = _leading_numbered_book_heading_and_remainder(block.text)
+                if numbered_book_heading is not None:
+                    heading_text, remainder, recovered_heading_level = numbered_book_heading
+                    recovery_flag = "embedded_book_heading_recovered"
+                else:
+                    inline_caps_heading = _leading_all_caps_book_heading_and_remainder(block.text)
+                    if inline_caps_heading is not None:
+                        heading_text, remainder, recovered_heading_level = inline_caps_heading
+                        recovery_flag = "embedded_book_subheading_recovered"
 
         if heading_text is None or recovery_flag is None:
             return [replace(block)]
@@ -5662,6 +6177,8 @@ class PdfStructureRecoveryService:
         shared_flags = list(dict.fromkeys([*block.flags, recovery_flag]))
         heading_metadata = dict(metadata)
         heading_metadata["pdf_heading_recovery_source"] = recovery_flag
+        if recovered_heading_level is not None:
+            heading_metadata["heading_level"] = recovered_heading_level
         segments = [
             _RecoveredBlock(
                 role="heading",
@@ -5685,8 +6202,8 @@ class PdfStructureRecoveryService:
             body_metadata["pdf_heading_recovery_source"] = recovery_flag
             segments.append(
                 _RecoveredBlock(
-                    role=block.role,
-                    block_type=block.block_type,
+                    role="body",
+                    block_type=BlockType.PARAGRAPH,
                     text=normalized_remainder,
                     page_start=block.page_start,
                     page_end=block.page_end,
@@ -6024,17 +6541,21 @@ class PdfStructureRecoveryService:
 
         below_candidates: list[tuple[float, float, int, int]] = []
         above_candidates: list[tuple[float, float, int, int]] = []
+        next_page_candidates: list[tuple[float, float, int, int]] = []
         for candidate_index, candidate in enumerate(recovered_blocks):
             if candidate_index == artifact_index or candidate_index in claimed_caption_indexes:
                 continue
             if candidate.role != "caption":
                 continue
-            if candidate.page_start != artifact_block.page_start or candidate.page_end != artifact_block.page_end:
-                continue
             artifact_role = self._normalized_artifact_caption_role(artifact_block)
             if not self._caption_candidate_matches_artifact_role(candidate, artifact_role):
                 continue
-            candidate_bbox = self._page_bbox(candidate, artifact_block.page_start)
+            if candidate.page_start == artifact_block.page_start and candidate.page_end == artifact_block.page_end:
+                candidate_bbox = self._page_bbox(candidate, artifact_block.page_start)
+            elif candidate.page_start == artifact_block.page_end + 1 and candidate.page_start == candidate.page_end:
+                candidate_bbox = self._page_bbox(candidate, candidate.page_start)
+            else:
+                continue
             if candidate_bbox is None:
                 continue
             overlap_ratio = self._horizontal_overlap_ratio(artifact_bbox, candidate_bbox)
@@ -6045,7 +6566,8 @@ class PdfStructureRecoveryService:
                 - ((artifact_bbox[0] + artifact_bbox[2]) / 2.0)
             )
             below_gap = candidate_bbox[1] - artifact_bbox[3]
-            if -12.0 <= below_gap <= 120.0:
+            below_lower_bound = -48.0 if artifact_role == "image" else -12.0
+            if below_lower_bound <= below_gap <= 120.0:
                 below_candidates.append(
                     (
                         max(below_gap, 0.0),
@@ -6065,10 +6587,26 @@ class PdfStructureRecoveryService:
                         candidate_index,
                     )
                 )
+                continue
+            if (
+                candidate.page_start == artifact_block.page_end + 1
+                and candidate_bbox[1] <= 220.0
+                and artifact_bbox[3] >= artifact_bbox[1] + 120.0
+            ):
+                next_page_candidates.append(
+                    (
+                        candidate_bbox[1],
+                        center_distance,
+                        abs(candidate.reading_order_index - artifact_block.reading_order_index),
+                        candidate_index,
+                    )
+                )
         if below_candidates:
             return min(below_candidates)[3]
         if above_candidates:
             return min(above_candidates)[3]
+        if next_page_candidates:
+            return min(next_page_candidates)[3]
         return None
 
     def _caption_candidate_matches_artifact_role(

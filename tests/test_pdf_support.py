@@ -53,12 +53,22 @@ from book_agent.domain.structure.pdf import (
     PyMuPDFTextExtractor,
     _RecoveredBlock,
     _detect_backmatter_cue,
+    _embedded_academic_abstract_segments,
+    _book_heading_level,
+    _leading_all_caps_book_heading_and_remainder,
+    _leading_numbered_book_heading_and_remainder,
+    _leading_reference_heading_and_remainder,
     _infer_appendix_intro_title,
     _infer_appendix_nested_subheading_title,
     _infer_appendix_subheading_title,
     _infer_intro_page_title,
+    _next_academic_inline_heading,
     _looks_like_code,
+    _looks_like_equation,
+    _looks_like_figure_caption,
     _looks_like_code_continuation_line,
+    _looks_like_numeric_table_fragment,
+    _looks_like_visual_heading,
     _looks_like_reference_entry,
     _looks_like_table,
     _normalize_multiline_text,
@@ -2989,6 +2999,133 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
         self.assertTrue(profile.academic_paper_candidate)
         self.assertTrue(profile.outline_present)
 
+    def test_profiler_recognizes_single_column_pymupdf_academic_paper_without_outline(self) -> None:
+        reference_text = (
+            "[1] Ashish Vaswani, Noam Shazeer, and Niki Parmar. 2017. Attention Is All You Need. "
+            "[2] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. 2015. Neural machine translation."
+        )
+        extraction = PdfExtraction(
+            title="Attention Is All You Need",
+            author="Test Author",
+            metadata={"pdf_extractor": "pymupdf"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Attention Is All You Need",
+                            bbox=(180.0, 92.0, 432.0, 118.0),
+                            line_texts=["Attention Is All You Need"],
+                            span_count=36,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=20.0,
+                            font_size_avg=19.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text="Abstract",
+                            bbox=(280.0, 320.0, 332.0, 336.0),
+                            line_texts=["Abstract"],
+                            span_count=10,
+                            line_count=1,
+                            font_size_min=11.0,
+                            font_size_max=12.0,
+                            font_size_avg=11.5,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=3,
+                            text=(
+                                "The abstract summarizes the architecture and explains why the model "
+                                "scales well across sequence transduction tasks."
+                            ),
+                            bbox=(120.0, 344.0, 492.0, 420.0),
+                            line_texts=[
+                                "The abstract summarizes the architecture and explains why the model",
+                                "scales well across sequence transduction tasks.",
+                            ],
+                            span_count=84,
+                            line_count=2,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=4,
+                            text="1\nIntroduction",
+                            bbox=(108.0, 520.0, 206.0, 544.0),
+                            line_texts=["1", "Introduction"],
+                            span_count=16,
+                            line_count=2,
+                            font_size_min=11.0,
+                            font_size_max=12.0,
+                            font_size_avg=11.5,
+                        ),
+                    ],
+                ),
+                *[
+                    PdfPage(
+                        page_number=index,
+                        width=612.0,
+                        height=792.0,
+                        blocks=[
+                            PdfTextBlock(
+                                page_number=index,
+                                block_number=1,
+                                text="attention " * 520,
+                                bbox=(108.0, 120.0, 504.0, 720.0),
+                                line_texts=["attention " * 520],
+                                span_count=1600,
+                                line_count=38,
+                                font_size_min=9.0,
+                                font_size_max=10.0,
+                                font_size_avg=9.5,
+                            )
+                        ],
+                    )
+                    for index in (2, 3)
+                ],
+                *[
+                    PdfPage(
+                        page_number=index,
+                        width=612.0,
+                        height=792.0,
+                        blocks=[
+                            PdfTextBlock(
+                                page_number=index,
+                                block_number=1,
+                                text=reference_text,
+                                bbox=(108.0, 120.0, 504.0, 720.0),
+                                line_texts=[reference_text],
+                                span_count=220,
+                                line_count=8,
+                                font_size_min=9.0,
+                                font_size_max=10.0,
+                                font_size_avg=9.5,
+                            )
+                        ],
+                    )
+                    for index in (4, 5)
+                ],
+            ],
+        )
+
+        profile = PdfFileProfiler().profile_from_extraction(extraction)
+
+        self.assertEqual(profile.extractor_kind, "pymupdf")
+        self.assertEqual(profile.layout_risk, "medium")
+        self.assertEqual(profile.recovery_lane, "academic_paper")
+        self.assertTrue(profile.academic_paper_candidate)
+        self.assertEqual(profile.multi_column_page_count, 0)
+
     def test_bootstrap_pipeline_waits_for_same_page_outline_heading_in_academic_paper(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "academic-outlined-columns.pdf"
@@ -3848,6 +3985,342 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
 
 
 class BasicPdfOutlineRecoveryTests(unittest.TestCase):
+    def test_helper_recognizes_numbered_book_heading_with_embedded_body(self) -> None:
+        result = _leading_numbered_book_heading_and_remainder(
+            "2.2.2 Controlling vocabulary size in tokenization GPT-NeoX, a publicly available LLM, takes about 10 GB to store its vocabulary on disk."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "2.2.2 Controlling vocabulary size in tokenization",
+                "GPT-NeoX, a publicly available LLM, takes about 10 GB to store its vocabulary on disk.",
+                3,
+            ),
+        )
+
+    def test_helper_recognizes_all_caps_book_subheading_with_embedded_body(self) -> None:
+        result = _leading_all_caps_book_heading_and_remainder(
+            "IDENTIFYING SUBWORDS WITH BYTE-PAIR ENCODING The general theme of LLMs is to do less feature engineering by hand."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "IDENTIFYING SUBWORDS WITH BYTE-PAIR ENCODING",
+                "The general theme of LLMs is to do less feature engineering by hand.",
+                4,
+            ),
+        )
+
+    def test_helper_recognizes_figure_caption_without_space_after_fig_prefix(self) -> None:
+        self.assertTrue(
+            _looks_like_figure_caption(
+                "Fig.1: Agentic AI functions as an intelligent assistant, continuously learning through experience."
+            )
+        )
+
+    def test_helper_recognizes_references_and_notes_heading_with_numeric_entries(self) -> None:
+        result = _leading_reference_heading_and_remainder(
+            "References and Notes\n1. M. E. Raichle et al., Proc. Natl. Acad. Sci. U.S.A. 98, 676 (2001)."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "References and Notes",
+                "1. M. E. Raichle etal., Proc. Natl. Acad. Sci. U.S.A. 98, 676 (2001)",
+            ),
+        )
+
+    def test_helper_allows_question_style_visual_heading(self) -> None:
+        self.assertTrue(_looks_like_visual_heading("What makes an AI system an Agent?", 1))
+
+    def test_recovery_splits_embedded_numbered_heading_from_code_like_block(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="code_like",
+            block_type=BlockType.CODE,
+            text=(
+                "2.2.3 Tokenization in detail The normalization and segmentation steps in the "
+                "tokenization process largely determine the vocabulary size."
+            ),
+            page_start=42,
+            page_end=42,
+            bbox_regions=[{"page_number": 42, "bbox": [72.0, 120.0, 540.0, 220.0]}],
+            reading_order_index=1,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "code_like"},
+            font_size_avg=12.0,
+            source_path="pdf://page/42",
+            anchor="p42-b254",
+        )
+
+        repaired = service._split_embedded_page_heading_segments(
+            block,
+            is_first_substantive_page_block=True,
+            page_has_heading=False,
+        )
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "heading")
+        self.assertEqual(repaired[0].block_type, BlockType.HEADING)
+        self.assertEqual(repaired[0].metadata["heading_level"], 3)
+        self.assertEqual(repaired[0].text, "2.2.3 Tokenization in detail")
+        self.assertEqual(repaired[1].role, "body")
+        self.assertEqual(repaired[1].block_type, BlockType.PARAGRAPH)
+        self.assertTrue(repaired[1].text.startswith("The normalization and segmentation steps"))
+
+    def test_recovery_prefers_academic_heading_split_for_embedded_numbered_section(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "3.2 Attention An attention function can be described as mapping a query "
+                "and a set of key-value pairs to an output."
+            ),
+            page_start=3,
+            page_end=3,
+            bbox_regions=[{"page_number": 3, "bbox": [108.0, 601.0, 504.0, 640.0]}],
+            reading_order_index=1,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=11.0,
+            source_path="pdf://page/3",
+            anchor="p3-b33",
+        )
+
+        repaired = service._split_embedded_page_heading_segments(
+            block,
+            is_first_substantive_page_block=False,
+            page_has_heading=True,
+        )
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "heading")
+        self.assertEqual(repaired[0].text, "3.2 Attention")
+        self.assertEqual(repaired[0].metadata["heading_level"], 3)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertTrue(repaired[1].text.startswith("An attention function can be described"))
+
+    def test_recovery_splits_embedded_first_page_abstract_heading_from_academic_frontmatter(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "Shunyu Yao, Jeffrey Zhao Department of Computer Science, Princeton University "
+                "Google Research, Brain Team arXiv:2210.03629v3 [cs.CL] 10 Mar 2023 ABSTRACT "
+                "While large language models have demonstrated impressive performance across tasks, "
+                "their reasoning and acting abilities have primarily been studied as separate topics."
+            ),
+            page_start=1,
+            page_end=1,
+            bbox_regions=[{"page_number": 1, "bbox": [108.0, 140.0, 504.0, 483.0]}],
+            reading_order_index=1,
+            parse_confidence=0.9,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/1",
+            anchor="p1-b3",
+        )
+
+        repaired = service._split_embedded_page_heading_segments(
+            block,
+            is_first_substantive_page_block=False,
+            page_has_heading=True,
+        )
+
+        self.assertEqual(len(repaired), 3)
+        self.assertEqual(repaired[0].role, "body")
+        self.assertIn("Princeton University", repaired[0].text)
+        self.assertEqual(repaired[1].role, "heading")
+        self.assertEqual(repaired[1].text, "Abstract")
+        self.assertEqual(repaired[1].metadata["heading_level"], 2)
+        self.assertEqual(repaired[2].role, "body")
+        self.assertTrue(repaired[2].text.startswith("While large language models"))
+
+    def test_recovery_populates_default_level_for_generic_body_heading(self) -> None:
+        service = PdfStructureRecoveryService()
+        heading = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="Prompt Chaining Pattern Overview",
+            page_start=21,
+            page_end=21,
+            bbox_regions=[{"page_number": 21, "bbox": [72.0, 120.0, 540.0, 170.0]}],
+            reading_order_index=1,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=14.0,
+            source_path="pdf://page/21",
+            anchor="p21-b139",
+        )
+
+        normalized = service._populate_missing_heading_levels([heading])
+
+        self.assertEqual(normalized[0].metadata["heading_level"], 2)
+
+    def test_helper_recovers_academic_top_level_numbered_heading_and_level(self) -> None:
+        result = _next_academic_inline_heading(
+            "2 Background The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                0,
+                "2 Background",
+                "The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU.",
+                {"heading_kind": "numbered", "section_level": 2},
+            ),
+        )
+
+    def test_helper_stops_academic_numbered_heading_before_sentence_like_tail(self) -> None:
+        result = _next_academic_inline_heading(
+            "3.2 Attention An attention function can be described as mapping a query and a set of key-value pairs to an output."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                0,
+                "3.2 Attention",
+                "An attention function can be described as mapping a query and a set of key-value pairs to an output.",
+                {"heading_kind": "numbered", "section_level": 3},
+            ),
+        )
+
+    def test_helper_recovers_embedded_academic_abstract_segments(self) -> None:
+        result = _embedded_academic_abstract_segments(
+            "Author Name Department of Computer Science, Princeton University arXiv:2210.03629v3 [cs.CL] ABSTRACT "
+            "While large language models have demonstrated impressive performance across tasks, their abilities remain uneven."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "Author Name Department of Computer Science, Princeton University arXiv:2210.03629v3 [cs.CL]",
+                "Abstract",
+                "While large language models have demonstrated impressive performance across tasks, their abilities remain uneven",
+            ),
+        )
+
+    def test_helper_assigns_deeper_level_to_lettered_appendix_subheading(self) -> None:
+        self.assertEqual(_book_heading_level("E.1 SUCCESS AND FAILURE MODES ANALYSIS"), 3)
+
+    def test_helper_detects_function_style_equation_line(self) -> None:
+        self.assertTrue(
+            _looks_like_equation(
+                "PE(pos,2i) = sin(pos/10000^(2i/d_model))",
+                1,
+                (235.509, 287.551, 386.307, 301.089),
+                612.0,
+            )
+        )
+
+    def test_helper_rejects_prose_column_as_numeric_table_fragment(self) -> None:
+        lines = [
+            "nlike other animals, human beings spend",
+            "a lot of time thinking about what is not",
+            "going on around them, contemplating",
+            "events that happened in the past, might happen",
+            "in the future, or will never happen at all. Indeed,",
+            "42.5% of samples were pleasant and 26.5% were unpleasant.",
+        ]
+
+        self.assertFalse(_looks_like_numeric_table_fragment(lines))
+
+    def test_recovery_classifies_numeric_table_fragment_as_table(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Academic Table Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "pymupdf"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Table 1: Maximum path lengths and complexity.",
+                            bbox=(108.0, 96.0, 504.0, 132.0),
+                            line_texts=["Table 1: Maximum path lengths and complexity."],
+                            span_count=40,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=2,
+                            text=(
+                                "Layer Type\n"
+                                "Complexity per Layer\n"
+                                "Sequential Operations\n"
+                                "Self-Attention\n"
+                                "O(n2 · d)\n"
+                                "O(1)\n"
+                                "Recurrent\n"
+                                "O(n · d2)\n"
+                                "O(n)\n"
+                            ),
+                            bbox=(108.0, 150.0, 420.0, 360.0),
+                            line_texts=[
+                                "Layer Type",
+                                "Complexity per Layer",
+                                "Sequential Operations",
+                                "Self-Attention",
+                                "O(n2 · d)",
+                                "O(1)",
+                                "Recurrent",
+                                "O(n · d2)",
+                                "O(n)",
+                            ],
+                            span_count=120,
+                            line_count=9,
+                            font_size_min=9.0,
+                            font_size_max=9.0,
+                            font_size_avg=9.0,
+                        ),
+                    ],
+                )
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=1,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="medium",
+            ocr_required=False,
+            extractor_kind="pymupdf",
+            recovery_lane="academic_paper",
+            trailing_reference_page_count=1,
+            academic_paper_candidate=True,
+        )
+
+        parsed = recovery_service.recover("academic-table-sample.pdf", extraction, profile)
+
+        table_blocks = [
+            block
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.TABLE.value
+        ]
+        self.assertTrue(table_blocks)
+        self.assertIn("Layer Type", table_blocks[0].text)
+
     def test_basic_extractor_reads_outline_entries_and_parser_uses_bookmarks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "outline.pdf"
@@ -4380,6 +4853,105 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
         self.assertTrue(caption_block.metadata["caption_for_source_anchor"].endswith(image_block.anchor))
         self.assertEqual(caption_block.metadata["caption_for_role"], "image")
         self.assertIn("image_caption_linked", caption_block.metadata["recovery_flags"])
+
+    def test_recovery_links_pdf_image_blocks_to_next_page_caption_blocks(self) -> None:
+        recovery_service = PdfStructureRecoveryService()
+        extraction = PdfExtraction(
+            title="Cross Page Figure Sample",
+            author="Test Author",
+            metadata={"pdf_extractor": "basic"},
+            outline_entries=[],
+            pages=[
+                PdfPage(
+                    page_number=1,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=1,
+                            block_number=1,
+                            text="Chapter 1 Model Comparison",
+                            bbox=(72.0, 96.0, 360.0, 124.0),
+                            line_texts=["Chapter 1 Model Comparison"],
+                            span_count=24,
+                            line_count=1,
+                            font_size_min=18.0,
+                            font_size_max=18.0,
+                            font_size_avg=18.0,
+                        ),
+                    ],
+                    image_blocks=[
+                        PdfImageBlock(
+                            page_number=1,
+                            block_number=2,
+                            bbox=(72.0, 220.0, 420.0, 690.0),
+                            width_px=1024,
+                            height_px=768,
+                            image_ext="png",
+                        )
+                    ],
+                ),
+                PdfPage(
+                    page_number=2,
+                    width=612.0,
+                    height=792.0,
+                    blocks=[
+                        PdfTextBlock(
+                            page_number=2,
+                            block_number=1,
+                            text="Figure 1. System overview diagram.",
+                            bbox=(96.0, 92.0, 396.0, 116.0),
+                            line_texts=["Figure 1. System overview diagram."],
+                            span_count=18,
+                            line_count=1,
+                            font_size_min=10.0,
+                            font_size_max=10.0,
+                            font_size_avg=10.0,
+                        ),
+                    ],
+                    image_blocks=[],
+                ),
+            ],
+        )
+        profile = PdfFileProfile(
+            pdf_kind="text_pdf",
+            page_count=2,
+            has_extractable_text=True,
+            outline_present=False,
+            layout_risk="low",
+            ocr_required=False,
+            extractor_kind="basic",
+        )
+
+        parsed = recovery_service.recover("cross-page-image-sample.pdf", extraction, profile)
+
+        image_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.IMAGE.value)
+        caption_block = next(block for block in parsed.chapters[0].blocks if block.block_type == BlockType.CAPTION.value)
+        self.assertEqual(image_block.metadata["linked_caption_text"], "Figure 1. System overview diagram.")
+        self.assertTrue(image_block.metadata["linked_caption_source_anchor"].endswith(caption_block.anchor))
+        self.assertTrue(caption_block.metadata["caption_for_source_anchor"].endswith(image_block.anchor))
+        self.assertEqual(caption_block.metadata["caption_for_role"], "image")
+
+    def test_pymupdf_extractor_clusters_vector_drawings_into_image_blocks(self) -> None:
+        extractor = PyMuPDFTextExtractor()
+
+        class DummyPage:
+            rect = SimpleNamespace(width=612.0, height=792.0)
+
+            def get_drawings(self) -> list[dict[str, tuple[float, float, float, float]]]:
+                return [
+                    {"rect": (120.0, 180.0, 280.0, 300.0)},
+                    {"rect": (122.0, 318.0, 282.0, 430.0)},
+                    {"rect": (60.0, 308.0, 540.0, 320.0)},
+                ]
+
+        image_blocks = extractor._extract_vector_drawing_blocks(DummyPage(), page_number=1, start_block_number=10)
+
+        self.assertEqual(len(image_blocks), 1)
+        self.assertEqual(image_blocks[0].image_type, "vector_drawing")
+        self.assertEqual(image_blocks[0].block_number, 10)
+        self.assertLessEqual(image_blocks[0].bbox[0], 80.0)
+        self.assertGreaterEqual(image_blocks[0].bbox[2], 320.0)
 
     def test_recovery_links_pdf_table_blocks_to_nearby_caption_blocks(self) -> None:
         recovery_service = PdfStructureRecoveryService()
@@ -8186,8 +8758,153 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 refreshed_asset = output_dir / asset_map[block_id]
                 self.assertEqual(refreshed_asset.read_bytes(), b"fresh-hires-pdf-crop")
                 self.assertEqual(Path(reloaded_bundle.document_images[0].storage_path).read_bytes(), b"fresh-hires-pdf-crop")
-                self.assertEqual(reloaded_bundle.document_images[0].metadata_json["materialized_version"], 2)
+                self.assertEqual(reloaded_bundle.document_images[0].metadata_json["materialized_version"], 3)
                 self.assertGreaterEqual(reloaded_bundle.document_images[0].metadata_json["materialized_render_scale"], 2.0)
+        finally:
+            if original_fitz is None:
+                sys.modules.pop("fitz", None)
+            else:
+                sys.modules["fitz"] = original_fitz
+
+    def test_pdf_export_prefers_original_embedded_image_bytes_when_available(self) -> None:
+        class _StubPdfParser:
+            def parse(self, _file_path, profile=None):
+                return ParsedDocument(
+                    title="Image Sample",
+                    author="Test Author",
+                    language="en",
+                    chapters=[
+                        ParsedChapter(
+                            chapter_id="pdf-chapter-original-asset-001",
+                            href="pdf://page/1",
+                            title="Image Sample",
+                            blocks=[
+                                ParsedBlock(
+                                    block_type=BlockType.IMAGE.value,
+                                    text="[Image]",
+                                    source_path="pdf://page/1",
+                                    ordinal=1,
+                                    anchor="p1-img1",
+                                    metadata={
+                                        "source_page_start": 1,
+                                        "source_page_end": 1,
+                                        "source_bbox_json": {
+                                            "regions": [
+                                                {"page_number": 1, "bbox": [72.0, 240.0, 420.0, 520.0]}
+                                            ]
+                                        },
+                                        "image_type": "embedded_image",
+                                        "image_ext": "jpg",
+                                        "image_width_px": 1200,
+                                        "image_height_px": 900,
+                                        "image_alt": "Embedded original figure",
+                                    },
+                                    parse_confidence=0.97,
+                                )
+                            ],
+                            metadata={"source_page_start": 1, "source_page_end": 1},
+                        )
+                    ],
+                    metadata={},
+                )
+
+        class _FakeRect:
+            def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.x0 = x0
+                self.y0 = y0
+                self.x1 = x1
+                self.y1 = y1
+                self.width = x1 - x0
+                self.height = y1 - y0
+
+        class _FakePage:
+            def get_images(self, full=False):
+                self.last_get_images_full = full
+                return [(17,)]
+
+            def get_image_rects(self, xref: int):
+                assert xref == 17
+                return [_FakeRect(72.0, 240.0, 420.0, 520.0)]
+
+            def get_pixmap(self, clip=None, alpha=False, matrix=None):
+                raise AssertionError("embedded original image should avoid pixmap fallback")
+
+        class _FakeDocument:
+            page_count = 1
+
+            def load_page(self, index: int):
+                self.last_index = index
+                return _FakePage()
+
+            def extract_image(self, xref: int):
+                assert xref == 17
+                return {"image": b"original-jpeg-binary", "ext": "jpg"}
+
+            def close(self) -> None:
+                return None
+
+        class _FakeFitz:
+            @staticmethod
+            def open(_path: str):
+                return _FakeDocument()
+
+            @staticmethod
+            def Rect(x0: float, y0: float, x1: float, y1: float):
+                return _FakeRect(x0, y0, x1, y1)
+
+        original_fitz = sys.modules.get("fitz")
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                sys.modules["fitz"] = _FakeFitz()
+                source_pdf = Path(tmpdir) / "source.pdf"
+                source_pdf.write_bytes(b"%PDF-1.4 fake")
+                output_dir = Path(tmpdir) / "exports"
+
+                now = datetime.now(timezone.utc)
+                document = Document(
+                    id="67676767-6767-4676-8676-676767676767",
+                    source_type=SourceType.PDF_TEXT,
+                    file_fingerprint="fingerprint-original-image-test",
+                    source_path=str(source_pdf),
+                    status=DocumentStatus.INGESTED,
+                    metadata_json={"pdf_profile": {"pdf_kind": "text_pdf", "layout_risk": "low"}},
+                    created_at=now,
+                    updated_at=now,
+                )
+                parse_artifacts = ParseService(pdf_parser=_StubPdfParser()).parse(document, str(source_pdf))
+                artifacts = BootstrapArtifacts(
+                    document=parse_artifacts.document,
+                    chapters=parse_artifacts.chapters,
+                    blocks=parse_artifacts.blocks,
+                    sentences=[],
+                    document_images=parse_artifacts.document_images,
+                )
+
+                with self.session_factory() as session:
+                    BootstrapRepository(session).save(artifacts)
+                    session.commit()
+
+                    export_repository = ExportRepository(session)
+                    export_service = ExportService(export_repository, output_root=output_dir)
+                    chapter_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+                    asset_map = export_service._export_epub_assets_for_chapter_bundle(chapter_bundle, output_dir)
+                    session.commit()
+
+                    reloaded_bundle = export_repository.load_chapter_bundle(parse_artifacts.chapters[0].id)
+
+                block_id = parse_artifacts.blocks[0].id
+                self.assertEqual(asset_map[block_id], f"assets/pdf-images/{block_id}.jpg")
+                exported_asset = output_dir / asset_map[block_id]
+                self.assertTrue(exported_asset.exists())
+                self.assertEqual(exported_asset.read_bytes(), b"original-jpeg-binary")
+
+                reloaded_image = reloaded_bundle.document_images[0]
+                self.assertTrue(Path(reloaded_image.storage_path).exists())
+                self.assertTrue(str(reloaded_image.storage_path).endswith(".jpg"))
+                self.assertEqual(Path(reloaded_image.storage_path).read_bytes(), b"original-jpeg-binary")
+                self.assertEqual(reloaded_image.metadata_json["materialized_via"], "pdf_original_image")
+                self.assertEqual(reloaded_image.metadata_json["materialized_version"], 3)
+                self.assertNotIn("materialized_render_scale", reloaded_image.metadata_json)
         finally:
             if original_fitz is None:
                 sys.modules.pop("fitz", None)

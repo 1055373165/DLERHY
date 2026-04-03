@@ -18,6 +18,7 @@ class ControllerReconcileStats:
     created_packet_tasks: int = 0
     created_review_sessions: int = 0
     mirrored_packet_tasks: int = 0
+    projected_packet_lane_health: int = 0
 
 
 class ControllerRunner:
@@ -54,6 +55,7 @@ class ControllerRunner:
 
         packet_controller = PacketController(session=session)
         stats.mirrored_packet_tasks += packet_controller.mirror_bind_work_items(run_id=run_id)
+        stats.projected_packet_lane_health += packet_controller.project_lane_health(run_id=run_id)
 
         runtime_repo = RuntimeResourcesRepository(session)
         runtime_repo.upsert_checkpoint(
@@ -66,6 +68,7 @@ class ControllerRunner:
                 "created_packet_tasks": stats.created_packet_tasks,
                 "created_review_sessions": stats.created_review_sessions,
                 "mirrored_packet_tasks": stats.mirrored_packet_tasks,
+                "projected_packet_lane_health": stats.projected_packet_lane_health,
             },
             generation=1,
         )

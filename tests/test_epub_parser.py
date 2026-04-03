@@ -126,6 +126,22 @@ print(run_agent())</pre>
 </html>
 """
 
+NESTED_HEADING_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <div class="chapter">
+      <h1>Chapter 6. Prompt Engineering</h1>
+      <div id="using_text_generation_models">
+        <h1>Using Text Generation Models</h1>
+      </div>
+      <div id="choosing_a_text_generation_model">
+        <h2>Choosing a Text Generation Model</h2>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
 IMAGE_ONLY_FIGURE_XHTML = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
@@ -283,12 +299,14 @@ class EPUBParserTests(unittest.TestCase):
             parsed = EPUBParser().parse(epub_path)
 
         chapter = parsed.chapters[0]
-        self.assertEqual([block.block_type for block in chapter.blocks], ["heading", "caption", "table", "code"])
+        self.assertEqual([block.block_type for block in chapter.blocks], ["heading", "figure", "caption", "table", "code"])
         self.assertEqual(chapter.blocks[1].metadata["image_src"], "images/agent-loop.png")
         self.assertEqual(chapter.blocks[1].metadata["image_path"], "OEBPS/images/agent-loop.png")
         self.assertEqual(chapter.blocks[1].metadata["image_alt"], "Agent loop architecture")
-        self.assertEqual(chapter.blocks[2].metadata["tag"], "table")
-        self.assertEqual(chapter.blocks[3].metadata["tag"], "math")
+        self.assertEqual(chapter.blocks[1].metadata["linked_caption_source_anchor"], "OEBPS/chapter1.xhtml#fig-1-caption")
+        self.assertEqual(chapter.blocks[2].metadata["caption_for_source_anchor"], "OEBPS/chapter1.xhtml#fig-1-figure")
+        self.assertEqual(chapter.blocks[3].metadata["tag"], "table")
+        self.assertEqual(chapter.blocks[4].metadata["tag"], "math")
 
     def test_parse_epub_with_malformed_table_fallback_preserves_table_structure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -330,6 +348,24 @@ class EPUBParserTests(unittest.TestCase):
             chapter.blocks[1].text,
             'def run_agent():\n    return "ok"\n\nprint(run_agent())',
         )
+
+    def test_parse_epub_normalizes_nested_heading_levels_within_chapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample-nested-headings.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", CONTENT_OPF)
+                archive.writestr("OEBPS/nav.xhtml", NAV_XHTML)
+                archive.writestr("OEBPS/chapter1.xhtml", NESTED_HEADING_XHTML)
+
+            parsed = EPUBParser().parse(epub_path)
+
+        chapter = parsed.chapters[0]
+        heading_levels = [block.metadata.get("heading_level") for block in chapter.blocks if block.block_type == "heading"]
+        self.assertEqual(heading_levels, [1, 2, 3])
+        heading_anchors = [block.anchor for block in chapter.blocks if block.block_type == "heading"]
+        self.assertEqual(heading_anchors, [None, "using_text_generation_models", "choosing_a_text_generation_model"])
 
     def test_parse_epub_marks_image_only_figure_as_nontranslatable(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

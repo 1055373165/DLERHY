@@ -1,5 +1,5 @@
 Book Agent Mainline Handoff
-Last Updated: 2026-03-31 16:50:55 +0800
+Last Updated: 2026-04-02 15:22:11 +0800
 
 1. 高层需求
 
@@ -20,7 +20,7 @@ Last Updated: 2026-03-31 16:50:55 +0800
 - 单仓库、单 live 工作树开发；不要再开第二个 worktree。
 - 优先推进主线闭环，不阻断用户使用的增强项统一放到 docs/optimization-backlog.md。
 - 当前主线优先 runtime self-heal 闭环，不再让 reviewer/operator 前端继续占用最核心节奏。
-- 当前 repo 的真实进度以代码、docs/mainline-progress.md 和后续 .forge live state 为准，不以聊天记忆为准。
+- 当前 repo 的真实进度以代码、`.forge/` live state、docs/mainline-progress.md 为准，不以聊天记忆为准。
 
 3. 已完成的主线能力
 
@@ -129,67 +129,277 @@ Last Updated: 2026-03-31 16:50:55 +0800
   - export misrouting repair plan 现在会显式落成 `execution_mode=agent_backed`
   - `REPAIR` lane 会通过 `python_subprocess_repair_executor` 拉起独立 Python repair runner
   - repair dispatch result 里会保留 subprocess executor metadata，证明这条 lane 已经可以把修复任务交给独立执行体，而不只是本地 in-process 类
-- 这意味着当前已经从“只有 repair plan”推进到“runtime 自己持有 repair dispatch / execution lineage + 可领取 repair work-item surface + executor-owned repair lane + 明确 repair worker contract + 显式 repair worker registry + genuinely distinct repair worker implementations + explicit repair-agent adapter contract + explicit repair-executor contract + 第一条 agent-backed subprocess repair lane”
+- 在这次推进后，又进一步补上了 repair transport contract
+  - repair dispatch input bundle 现在明确包含 `transport_hint / transport_contract_version`
+  - repair executor 现在会先按 executor contract 选执行器，再按 transport contract 选 transport
+  - export misrouting repair 现在会显式落成 `execution_mode=transport_backed` + `executor_hint=python_transport_repair_executor` + `transport_hint=python_subprocess_repair_transport`
+  - unknown transport hint / unsupported transport version 也会在 `REPAIR` lane 内部落成确定性的 terminal failure，不会绕过 work-item 审计链
+- 在这次推进后，又进一步把 review deadlock repair 也切到了 transport-backed executor
+  - review deadlock repair plan 现在也会显式落成 `execution_mode=transport_backed` + `executor_hint=python_transport_repair_executor` + `transport_hint=python_subprocess_repair_transport`
+  - `REQ-MX-01` 现在与 `REQ-EX-02` 一样，都通过独立 subprocess transport 执行 repair lane
+  - transport-backed self-heal 不再只覆盖 export misrouting，而是已经覆盖两条真实 repair lane
+- 在这次推进后，又进一步把 transport-backed repair 从“写死 subprocess transport”推进成了“可配置 command transport + run 级 transport override”
+  - repair transport 现在新增 `configured_command_repair_transport`
+  - 配置项 `BOOK_AGENT_RUNTIME_REPAIR_TRANSPORT_COMMAND` 可以把 repair handoff 路由到外部命令执行体，而不改 REPAIR lane 生命周期
+  - review/export controller 现在会读取 `runtime_v2.preferred_repair_transport_hint` / `preferred_repair_transport_contract_version`
+  - export misrouting lane 已经验证：run 级 transport override 能真正落到 proposal dispatch、repair work item 和最终 repair result 上
+- 在这次推进后，又进一步把 transport-backed repair 从“本地命令扩展点”推进成了“远端 HTTP transport”
+  - repair transport 现在新增 `http_repair_transport`
+  - 配置项 `BOOK_AGENT_RUNTIME_REPAIR_TRANSPORT_HTTP_URL` / `..._TIMEOUT_SECONDS` / `..._BEARER_TOKEN` 可以把 repair handoff POST 到远端执行端点
+  - export misrouting lane 已经验证：run 级 `preferred_repair_transport_hint=http_repair_transport` 能让 repair dispatch、repair work item 和最终 repair result 全部落成 HTTP transport 语义
+- 在这次推进后，又进一步把 run 级 repair routing 从“只支持 transport override”推进成了“支持 executor + transport override”
+  - review/export controller 现在都会读取 `preferred_repair_execution_mode` / `preferred_repair_executor_hint` / `preferred_repair_executor_contract_version`
+  - planner dispatch contract 现在会显式反映 executor 路由，并且只在 `transport_backed` 模式下附带 transport metadata
+  - export misrouting 已验证：run 级 `agent_backed + python_subprocess_repair_executor` override 能 end-to-end 落到 repair dispatch、repair work item 和最终 repair result
+  - review deadlock 已验证：
+    - `http_repair_transport`
+    - `configured_command_repair_transport`
+    - `agent_backed + python_subprocess_repair_executor`
+  - 这意味着当前两条 bounded self-heal lane 已经在 executor/transport routing 语义上形成对称
+- 在这次推进后，又进一步把 `packet_runtime_defect` 提升成了第三条 bounded repair lane
+  - packet controller 现在会在 translation-family runtime defect 达到 incident threshold 且尚未 chapter-hold 时，自动打开 packet-scoped incident、生成 repair plan、seed repair dispatch，并通过 `REPAIR` lane 绑定 packet-scope replay
+  - controller runner 现在会在 runtime reconcile 期间自动 project packet lane health，而不是把 packet repair 留在显式 controller 调用路径里
+  - packet lane 已验证：
+    - direct controller path:
+      - `in_process`
+      - `agent_backed + python_subprocess_repair_executor`
+      - `configured_command_repair_transport`
+      - `http_repair_transport`
+    - automatic `ControllerRunner -> REPAIR lane` path:
+      - `http_repair_transport`
+      - `configured_command_repair_transport`
+      - `agent_backed + python_subprocess_repair_executor`
+- 在这次推进后，又进一步把 external repair agent 所需 payload 收成了显式 contract
+  - 新增 `runtime_repair_contract.py`
+  - `REPAIR` work-item input 现在包含稳定的 request contract：
+    - `repair_request_contract_version`
+    - full `repair_dispatch_json`
+    - full `repair_plan_json`
+    - `owned_files`
+    - `validation_json`
+    - `bundle_json`
+    - `replay_json`
+  - repair result 现在也有稳定的 result contract：
+    - `repair_result_contract_version`
+    - executor metadata
+    - transport metadata
+    - runner status / pid
+  - 这意味着 transport 和 future repair agent 已经不需要再猜 ad hoc dict shape 才能理解修复任务
+- 在这次推进后，又进一步把 remote / transport-backed repair result 变成了硬校验 contract
+  - `agent_backed` 与 `transport_backed` executor 现在都会显式校验 `repair_result_contract_version`
+  - 如果远端 repair agent 返回的 payload 不满足 result contract，executor 边界会 deterministic 地拒绝，而不是把坏 payload 当成成功结果写回 incident lineage
+  - 这意味着真正独立的 repair agent 接入时，runtime 不会再默默吞掉格式错误的“伪成功”
+- 在这次推进后，又进一步把真正独立的 repair agent path 落到了可执行路径
+  - 新增 `runtime_repair_contract_runner`
+  - 新增 contract-backed agent/transport executors
+  - export / review deadlock / packet runtime defect 三条 bounded lane 现在都能通过 remote contract path 执行
+  - 当全局 remote endpoint 已配置时，controller 会默认选择 `python_contract_transport_repair_executor + http_contract_repair_transport`
+- 在这次推进后，又进一步把远端执行 provenance 收进了 repair result contract
+  - `repair_agent_execution_id`
+  - `repair_agent_execution_status`
+  - `repair_agent_execution_started_at`
+  - `repair_agent_execution_completed_at`
+  - `repair_transport_endpoint`
+- 在这次推进后，又进一步把 repair agent decision 变成了显式 contract
+  - bounded repair payload 现在明确携带 `repair_agent_decision=publish_bundle_and_replay`
+  - 同时会保留 `repair_agent_decision_reason`
+  - runtime repair worker 现在会 deterministic 地拒绝未知 decision，而不是继续依赖隐式 side effect
+- 在这次推进后，又进一步把 explicit remote decision 真正接进了 `REPAIR` lane handling
+  - `manual_escalation_required` 现在会落成显式的 terminal repair outcome，而不是 generic failure
+  - `retry_later` 现在会落成显式的 retryable repair outcome，而不是 generic failure
+  - export misrouting 已验证 manual escalation path
+  - review deadlock 已验证 retry-later path
+- 在这次推进后，又进一步把 decision-aware repair result 推进成了 explicit follow-up lineage
+  - repair dispatch 现在会显式记录：
+    - `next_action`
+    - `retryable`
+    - `retry_after_seconds`
+    - `next_retry_after`
+  - packet runtime defect 现在也已验证 retry-later path
+  - 这意味着三条 bounded repair lane 都已经共享 decision-aware repair dispatch semantics
+- 这意味着当前已经从“只有 repair plan”推进到“runtime 自己持有 repair dispatch / execution lineage + 可领取 repair work-item surface + executor-owned repair lane + 明确 repair worker contract + 显式 repair worker registry + genuinely distinct repair worker implementations + explicit repair-agent adapter contract + explicit repair-executor contract + 第一条 agent-backed subprocess repair lane + 显式 repair-transport contract + 两条真实 transport-backed repair lane + 可配置 command transport + HTTP transport + run 级 transport override”
 
 5. 最近一次验证基线
 
 runtime self-heal 当前验证结果：
 
 - 命令：
-  .venv/bin/python -m unittest tests.test_runtime_repair_executor tests.test_runtime_repair_registry tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal tests.test_req_ex_02_export_misrouting_self_heal tests.test_run_execution.RunExecutionServiceTests.test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_worker_hint tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_executor_hint
-  结果：Ran 20 tests, OK
+  .venv/bin/python -m unittest tests.test_runtime_repair_contract tests.test_runtime_repair_contract_runner tests.test_runtime_repair_remote_agent tests.test_runtime_repair_transport tests.test_runtime_repair_planner tests.test_runtime_repair_executor tests.test_runtime_repair_registry tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal tests.test_req_ex_02_export_misrouting_self_heal tests.test_packet_runtime_repair tests.test_runtime_lane_health tests.test_controller_runner tests.test_controller_runner_packet_repair tests.test_run_execution.RunExecutionServiceTests.test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_worker_hint tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_executor_hint tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_transport_hint
+  结果：Ran 88 tests, OK
 
 - 命令：
-  .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_agent_adapter.py src/book_agent/services/runtime_repair_executor.py src/book_agent/services/runtime_repair_registry.py src/book_agent/services/runtime_repair_planner.py src/book_agent/services/runtime_repair_worker.py src/book_agent/services/run_execution.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py src/book_agent/app/runtime/document_run_executor.py src/book_agent/services/workflows.py src/book_agent/tools/runtime_repair_runner.py tests/test_runtime_repair_executor.py tests/test_runtime_repair_registry.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py tests/test_req_mx_01_review_deadlock_self_heal.py tests/test_req_ex_02_export_misrouting_self_heal.py tests/test_run_execution.py
+  .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_contract.py src/book_agent/services/runtime_repair_transport.py src/book_agent/services/runtime_repair_worker.py src/book_agent/services/runtime_repair_remote_agent.py src/book_agent/tools/runtime_repair_contract_runner.py src/book_agent/app/runtime/document_run_executor.py src/book_agent/app/runtime/controllers/incident_controller.py tests/test_runtime_repair_contract.py tests/test_runtime_repair_contract_runner.py tests/test_runtime_repair_transport.py tests/test_runtime_repair_remote_agent.py tests/test_export_controller.py tests/test_req_mx_01_review_deadlock_self_heal.py tests/test_packet_runtime_repair.py
   结果：passed
 
 6. 当前主线判断
 
-最近几轮主要在推进 Chapter Workbench，这对 operator 产品面有价值，但和“runtime 发现故障后能自决策、自修复、继续拉起失败任务”的核心目标相比，已经发生主线偏移。
+当前已经不是“是否能理解 repair decision”的阶段，而是：
 
-现在已经重新校准为：
+- 继续保持 runtime self-heal 闭环稳定
+- 把 blockage truth 投影到真正会被调用的 workflow/API surface
+- 把这些新 surface 纳入默认 Forge v2 resume smoke
+- 保持人类 handoff 文档与 `.forge` live truth 同步
 
-Runtime Self-Heal 主线收敛阶段
+最近已验证的连续批次是：
 
-当前最重要的，是把 runtime incident + repair-executor contract 从第一条 agent-backed subprocess lane 继续推进成更广的独立 repair agent 执行闭环，而不是继续加前端 lane 说明卡。
+- `batch-43`: Forge v2 `SPEC.md / FEATURES.json / init.sh` bootstrap
+- `batch-44`: run/document/export detail blockage summary parity
+- `batch-45`: export dashboard blockage summary parity
+- `batch-46`: document summary/history latest-run blockage parity beyond export-only context
+- `batch-47`: `.forge/init.sh` widened to `Ran 41 tests, OK`
+- `batch-48`: human-facing handoff docs reconciled to verified `.forge` truth
+- `batch-49`: packet latest-run workflow parity gained explicit API regression coverage
+- `batch-50`: `.forge/init.sh` widened again to `Ran 42 tests, OK`
+- `batch-51`: Forge v2 governance now formally covers branch intake, single-ledger branch writeback, and stop-legality audit
+- `batch-52`: default Forge v2 smoke now also validates governance drift through a lightweight script
+- `batch-53`: fully green inventory now triggers a continuation scan for the next credible `change_request`
+- `batch-54`: default smoke no longer emits the FastAPI lifecycle deprecation warning
+- `batch-55`: default smoke no longer emits sqlite `ResourceWarning: unclosed database`
+- `batch-56`: default smoke now hard-fails if either warning class returns
+- `batch-57`: governance validation now proves the warning-hygiene gate is still wired and still forbids the known warning classes
+- `batch-58`: governance validation now proves the latest verified checkpoint artifacts exist and STATE mainline fields remain aligned
+- `batch-59`: governance validation now derives the latest verified checkpoint markers dynamically from `.forge` truth
+- `batch-60`: governance validation no longer hardcodes the current smoke test count
+- `batch-61`: governance validation now derives the current checkpoint shape dynamically from `.forge/STATE.md`
+- `batch-62`: governance validation now derives and validates the full STATE checkpoint tuple
 
-7. 建议交给 Forge 的下一刀
+7. 当前验证基线
 
-batch-1 到 batch-23 已经完成。下一批最自然的主线，不是继续增加前端 lane 卡片，而是把 repair-executor contract 从第一条 agent-backed subprocess lane 继续推进成更广的 runtime repair agent lane：
+当前仍然保留的 widened baseline：
 
-- 目标：
-  让 runtime 从“已经有一条 agent-backed subprocess export repair lane”继续走到“更多 repair lane 可按 execution_mode / executor_hint / executor_contract_version 被不同 transport-backed executors 选中并领取 repair work-item”，为真正的自修复执行器做准备。
+- `.venv/bin/python -m unittest ...`
+  - `Ran 95 tests, OK`
 
-- 期望效果：
-  incident 不只是记录问题、提案和 dispatch lineage，而是能明确告诉系统：下一步由哪个 repair agent 领取、修哪类 surface、用什么验证、发布到哪条 rollout scope、回放哪一级失败任务。
+当前默认 Forge v2 resume smoke：
 
-- 建议范围：
-  - src/book_agent/app/runtime/controllers/incident_controller.py
-  - src/book_agent/services/runtime_repair_planner.py
-  - src/book_agent/services/runtime_repair_worker.py
-  - src/book_agent/services/runtime_repair_registry.py
-  - src/book_agent/services/runtime_repair_agent_adapter.py
-  - src/book_agent/services/runtime_repair_executor.py
-  - src/book_agent/tools/runtime_repair_runner.py
-  - src/book_agent/services/run_execution.py
-  - src/book_agent/infra/repositories/run_control.py
-  - src/book_agent/app/runtime/document_run_executor.py
-  - src/book_agent/services/workflows.py
-  - tests/test_runtime_repair_executor.py
-  - tests/test_runtime_repair_registry.py
-  - tests/test_incident_controller.py
-  - tests/test_run_execution.py
-  - tests/test_req_mx_01_review_deadlock_self_heal.py
-  - tests/test_req_ex_02_export_misrouting_self_heal.py
-  - docs/mainline-progress.md
+- `bash .forge/init.sh`
+  - `Ran 42 tests, OK`
+  - `smoke warning hygiene validated`
+  - `governance contract validated`
+  - no FastAPI lifecycle deprecation warning
+  - no sqlite unclosed-database resource warning
 
-- 验收门：
-  - .venv/bin/python -m unittest tests.test_runtime_repair_executor tests.test_runtime_repair_registry tests.test_runtime_repair_planner tests.test_export_controller tests.test_incident_controller tests.test_req_mx_01_review_deadlock_self_heal tests.test_req_ex_02_export_misrouting_self_heal tests.test_run_execution.RunExecutionServiceTests.test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_worker_hint tests.test_run_execution.RunExecutionServiceTests.test_executor_fails_repair_work_item_for_unknown_executor_hint
-  - .venv/bin/python -m py_compile src/book_agent/services/runtime_repair_agent_adapter.py src/book_agent/services/runtime_repair_executor.py src/book_agent/services/runtime_repair_registry.py src/book_agent/services/runtime_repair_planner.py src/book_agent/services/runtime_repair_worker.py src/book_agent/services/run_execution.py src/book_agent/app/runtime/controllers/incident_controller.py src/book_agent/app/runtime/controllers/export_controller.py src/book_agent/app/runtime/controllers/review_controller.py src/book_agent/app/runtime/document_run_executor.py src/book_agent/services/workflows.py src/book_agent/tools/runtime_repair_runner.py tests/test_runtime_repair_executor.py tests/test_runtime_repair_registry.py tests/test_runtime_repair_planner.py tests/test_export_controller.py tests/test_incident_controller.py tests/test_req_mx_01_review_deadlock_self_heal.py tests/test_req_ex_02_export_misrouting_self_heal.py tests/test_run_execution.py
+这条默认 smoke 现在已经覆盖：
+
+- controller/runtime self-heal baseline
+- run summary blockage parity
+- export self-heal blockage parity
+- export dashboard blockage parity
+- document summary/history blockage parity
+- packet latest-run workflow parity
+- governance contract drift across skill / spec / decisions / handoff docs
 
 8. Forge 交接说明
 
-本次 handoff 已同步初始化 .forge live state，作为后续 Forge 接管的唯一运行面。
+本仓库当前仍以 `.forge/` 为唯一 live truth。
 
-progress.txt 负责高层需求与主线进度说明；
-.forge/STATE.md、.forge/DECISIONS.md、.forge/batches/、.forge/reports/、.forge/log.md 负责后续可执行交接。
+推荐接管顺序：
+
+1. 先读 `snapshot.md`
+2. 再读 `.forge/STATE.md`
+3. 再读 `.forge/log.md`、`.forge/DECISIONS.md`、`.forge/spec/FEATURES.json`
+4. 跑 `bash .forge/init.sh`
+5. 如果需要更高置信度，再跑 `95 tests` widened baseline
+6. 如果要继续做新事，以 `change_request` 模式接到现有 `.forge/` truth 上
+
+9. 当前主线状态
+
+当前 active batch 已经清空。
+
+当前 `.forge/STATE.md` 已明确写成：
+
+- `current_step: mainline_complete`
+- `active_batch: none`
+- `no next dependency-closed slice remains`
+
+当前 `FEATURES.json` 也已全绿：
+
+- `F001` ~ `F029` 全部 passing
+
+10. 当前 repo 真相摘要
+
+- runtime self-heal 主线仍然是唯一主线
+- 三条 bounded repair lane 仍然是：
+  - `review_deadlock`
+  - `export_misrouting`
+  - `packet_runtime_defect`
+- 非 happy-path repair decision 仍然已经闭环：
+  - `retry_later`
+  - `manual_escalation_required`
+  - explicit resume / override
+- blockage truth 现在已经能从这些 surface 直接读取：
+  - run summary
+  - document summary
+  - document history latest-run context
+  - export action result
+  - export detail
+  - export dashboard records
+- Forge v2 默认 smoke 现在是：
+  - `bash .forge/init.sh`
+  - `Ran 42 tests, OK`
+  - `governance contract validated`
+- Forge v2 当前还额外保证：
+  - mid-run 新分叉必须被分类为 `mainline_required / mainline_adjacent / out_of_band`
+  - accepted / deferred / rejected branch 都必须写回单一 `.forge/` ledger
+  - verified batch 后必须先完成 branch intake 与 stop-legality audit，再决定继续还是停止
+
+11. 2026-04-02 15:22:11 +0800 更新
+
+- `batch-50` 已完成并验证：
+  - `.forge/init.sh` 已扩大为 42-test smoke baseline
+  - 默认 smoke 现在也覆盖 packet latest-run workflow parity
+- `batch-51` 已完成并验证：
+  - Forge v2 已正式定义 branch intake / single-ledger branch transaction / stop-legality audit
+- `batch-52` 已完成并验证：
+  - 默认 Forge v2 smoke 现在还会自动校验 governance drift
+  - 不再只靠 report 里的 ad hoc 文本断言守住自治规则
+- `batch-53` 已完成并验证：
+  - fully green inventory 现在会触发 post-completion continuation scan
+  - 不再允许在 full takeover 下因为“当前 inventory 已经全绿”而自然停机
+- `batch-54` 已完成并验证：
+  - app 生命周期已经改成 lifespan-managed path
+  - 默认 smoke 不再出现 FastAPI `on_event` deprecation warning
+- `batch-55` 已完成并验证：
+  - sqlite backfill helper 和代表性 smoke tests 现在会干净释放资源
+  - 默认 smoke 不再出现 `ResourceWarning: unclosed database`
+- `batch-56` 已完成并验证：
+  - 默认 `.forge/init.sh` 现在会自己校验 warning hygiene
+  - 如果 FastAPI lifecycle warning 或 sqlite unclosed-database warning 回来，默认 smoke 会直接失败
+- `batch-57` 已完成并验证：
+  - governance validator 现在会证明 `.forge/init.sh` 仍然接着 warning-hygiene gate
+  - governance validator 现在也会证明 warning-hygiene script 仍然禁止那两类已知 warning
+- `batch-58` 已完成并验证：
+  - governance validator 现在会证明最新 verified batch/report artifacts 确实还在磁盘上
+  - governance validator 现在也会证明 `.forge/STATE.md` 仍然保持显式的 mainline checkpoint 字段
+- `batch-59` 已完成并验证：
+  - governance validator 现在会从 `.forge` truth 动态推断最新 passing feature 与最新 batch/report checkpoint
+  - 未来新的 verified checkpoint 不再需要为了追最新 marker id 再补一次 validator self-patch
+- `batch-60` 已完成并验证：
+  - governance validator 现在会验证默认 `bash .forge/init.sh` contract 与其后置校验输出
+  - 不再依赖固定的 `Ran 42 tests` 标记
+- `batch-61` 已完成并验证：
+  - governance validator 现在会从 `.forge/STATE.md` 动态推断 `current_step` 与 `active_batch`
+  - 未来下一次进入 active change_request batch 时，不再需要为了状态形态再补一次 validator self-patch
+- `batch-62` 已完成并验证：
+  - governance validator 现在会从 `.forge/STATE.md` 动态推断并校验 `authoritative_batch_contract` 与 `expected_report_path`
+  - 当前 checkpoint tuple 现在是语义上受保护，而不只是字段存在
+- `batch-63` 已完成并验证：
+  - 剩余开发任务现在已显式委托给 Forge v2 的 `change_request` intake
+  - 后续新工作必须先接到现有 `.forge/` truth，而不是伪造一个旧 batch 继续跑
+- 当前 `.forge` 状态：
+  - `current_step: mainline_complete`
+  - `active_batch: none`
+- 当前 feature inventory：
+  - `F001` ~ `F029` 已 passing
+
+12. 剩余开发任务委托
+
+- 当前没有开放中的 product/runtime batch
+- 剩余开发任务已经统一委托给 Forge v2：
+  - 入口模式：`change_request`
+  - 唯一 live truth：现有 `.forge/`
+  - 执行动作：先做 branch intake，再决定是否冻结下一刀
+- 未来如果出现新需求、回归、或中途发现的新分叉：
+  - 先分类为 `mainline_required / mainline_adjacent / out_of_band`
+  - 再改写 `.forge/spec/*`、`.forge/DECISIONS.md`、`.forge/STATE.md`
+  - 最后才冻结新的 dependency-closed batch

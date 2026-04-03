@@ -264,11 +264,26 @@ class RunControlApiTests(unittest.TestCase):
             run.runtime_bundle_revision_id = stable_revision_id
             run.status_detail_json = {
                 "runtime_v2": {
+                    "pending_export_route_repair": {
+                        "incident_id": "incident-1",
+                        "proposal_id": "proposal-1",
+                        "repair_work_item_id": "repair-work-item-1",
+                        "repair_blockage": {
+                            "state": "manual_escalation_waiting",
+                            "blocked": True,
+                            "reason": "manual_escalation_required",
+                        },
+                    },
                     "last_export_route_recovery": {
                         "incident_id": "incident-1",
                         "proposal_id": "proposal-1",
                         "bundle_revision_id": bad_revision_id,
                         "bound_work_item_ids": ["work-item-1"],
+                        "repair_blockage": {
+                            "state": "ready_to_continue",
+                            "blocked": False,
+                            "reason": "repair_completed",
+                        },
                     },
                     "recovered_lineage": [
                         {
@@ -293,6 +308,9 @@ class RunControlApiTests(unittest.TestCase):
             runtime_v2["last_export_route_recovery"]["active_bundle_revision_id"],
             stable_revision_id,
         )
+        self.assertEqual(runtime_v2["repair_blockage_state"], "ready_to_continue")
+        self.assertFalse(runtime_v2["repair_blocked"])
+        self.assertEqual(runtime_v2["repair_blockage_source"], "last_export_route_recovery")
         self.assertEqual(len(runtime_v2["recovered_lineage"]), 1)
         self.assertEqual(runtime_v2["recovered_lineage"][0]["proposal_id"], "proposal-1")
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from sqlalchemy.engine.url import make_url
@@ -15,7 +16,7 @@ def ensure_sqlite_schema_compat(database_url: str) -> int:
     if database_path is None or not database_path.exists():
         return 0
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.execute("PRAGMA busy_timeout=30000")
         connection.row_factory = sqlite3.Row
         if not _has_table(connection, "documents"):

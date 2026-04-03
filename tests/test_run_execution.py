@@ -308,12 +308,32 @@ class RunExecutionServiceTests(unittest.TestCase):
                     "lane": "runtime.repair",
                     "worker_hint": "review_deadlock_repair_agent",
                     "worker_contract_version": 1,
-                    "execution_mode": "in_process",
-                    "executor_hint": "python_repair_executor",
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_transport_repair_executor",
                     "executor_contract_version": 1,
+                    "transport_hint": "python_subprocess_repair_transport",
+                    "transport_contract_version": 1,
                     "validation_command": "uv run pytest tests/test_incident_controller.py",
                     "bundle_revision_name": "bundle-repair-1",
                     "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "chapter",
+                        "scope_id": "chapter-1",
+                        "boundary": "review_session",
+                    },
+                },
+                repair_plan_json={
+                    "goal": "Repair repeated review deadlock and replay the minimal chapter review scope.",
+                    "owned_files": ["src/book_agent/app/runtime/controllers/review_controller.py"],
+                    "validation": {
+                        "command": "uv run pytest tests/test_incident_controller.py",
+                        "scope": "review_deadlock",
+                    },
+                    "bundle": {
+                        "revision_name": "bundle-repair-1",
+                        "manifest_json": {"code": {"surface": "review_deadlock"}},
+                        "rollout_scope_json": {"mode": "dev"},
+                    },
                     "replay": {
                         "scope_type": "chapter",
                         "scope_id": "chapter-1",
@@ -333,9 +353,11 @@ class RunExecutionServiceTests(unittest.TestCase):
                     "lane": "runtime.repair",
                     "worker_hint": "review_deadlock_repair_agent",
                     "worker_contract_version": 1,
-                    "execution_mode": "in_process",
-                    "executor_hint": "python_repair_executor",
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_transport_repair_executor",
                     "executor_contract_version": 1,
+                    "transport_hint": "python_subprocess_repair_transport",
+                    "transport_contract_version": 1,
                     "validation_command": "uv run pytest tests/test_incident_controller.py",
                     "bundle_revision_name": "bundle-repair-1",
                     "rollout_scope_json": {"mode": "dev"},
@@ -360,9 +382,32 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(work_item.input_version_bundle_json["dispatch_lane"], "runtime.repair")
         self.assertEqual(work_item.input_version_bundle_json["worker_hint"], "review_deadlock_repair_agent")
         self.assertEqual(work_item.input_version_bundle_json["worker_contract_version"], 1)
-        self.assertEqual(work_item.input_version_bundle_json["execution_mode"], "in_process")
-        self.assertEqual(work_item.input_version_bundle_json["executor_hint"], "python_repair_executor")
+        self.assertEqual(work_item.input_version_bundle_json["execution_mode"], "transport_backed")
+        self.assertEqual(work_item.input_version_bundle_json["executor_hint"], "python_transport_repair_executor")
         self.assertEqual(work_item.input_version_bundle_json["executor_contract_version"], 1)
+        self.assertEqual(work_item.input_version_bundle_json["transport_hint"], "python_subprocess_repair_transport")
+        self.assertEqual(work_item.input_version_bundle_json["transport_contract_version"], 1)
+        self.assertEqual(work_item.input_version_bundle_json["repair_request_contract_version"], 1)
+        self.assertEqual(
+            work_item.input_version_bundle_json["repair_goal"],
+            "Repair repeated review deadlock and replay the minimal chapter review scope.",
+        )
+        self.assertEqual(
+            work_item.input_version_bundle_json["owned_files"],
+            ["src/book_agent/app/runtime/controllers/review_controller.py"],
+        )
+        self.assertEqual(
+            work_item.input_version_bundle_json["validation_json"]["scope"],
+            "review_deadlock",
+        )
+        self.assertEqual(
+            work_item.input_version_bundle_json["bundle_json"]["manifest_json"]["code"]["surface"],
+            "review_deadlock",
+        )
+        self.assertEqual(
+            work_item.input_version_bundle_json["repair_plan_json"]["replay"]["scope_id"],
+            "chapter-1",
+        )
 
     def test_executor_fails_repair_work_item_for_unknown_worker_hint(self) -> None:
         run_id = self._create_running_run()
@@ -483,6 +528,338 @@ class RunExecutionServiceTests(unittest.TestCase):
                 "unknown_repair_executor",
                 str((work_item.error_detail_json or {}).get("message") or ""),
             )
+
+    def test_executor_fails_repair_work_item_for_unknown_transport_hint(self) -> None:
+        run_id = self._create_running_run()
+        proposal_id = str(uuid4())
+        incident_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.ensure_repair_dispatch_work_item(
+                run_id=run_id,
+                proposal_id=proposal_id,
+                incident_id=incident_id,
+                repair_dispatch_json={
+                    "dispatch_id": str(uuid4()),
+                    "patch_surface": "runtime_bundle",
+                    "claim_mode": "runtime_owned",
+                    "claim_target": "runtime_patch_proposal",
+                    "lane": "runtime.repair",
+                    "worker_hint": "review_deadlock_repair_agent",
+                    "worker_contract_version": 1,
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_transport_repair_executor",
+                    "executor_contract_version": 1,
+                    "transport_hint": "unknown_repair_transport",
+                    "transport_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_incident_controller.py",
+                    "bundle_revision_name": "bundle-repair-unknown-transport",
+                    "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "chapter",
+                        "scope_id": "chapter-unknown-transport",
+                        "boundary": "review_session",
+                    },
+                },
+            )
+            claimed = execution.claim_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            session.commit()
+
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+        executor._execute_repair_work_item(run_id, claimed)
+
+        with self.session_factory() as session:
+            work_item = session.get(WorkItem, work_item_id)
+            self.assertIsNotNone(work_item)
+            assert work_item is not None
+            self.assertEqual(work_item.status, WorkItemStatus.TERMINAL_FAILED)
+            self.assertEqual(work_item.error_class, "UnsupportedRuntimeRepairTransportError")
+            self.assertIn(
+                "unknown_repair_transport",
+                str((work_item.error_detail_json or {}).get("message") or ""),
+            )
+
+    def test_retry_later_repair_work_item_respects_retry_after_before_reclaim(self) -> None:
+        run_id = self._create_running_run()
+        proposal_id = str(uuid4())
+        incident_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.ensure_repair_dispatch_work_item(
+                run_id=run_id,
+                proposal_id=proposal_id,
+                incident_id=incident_id,
+                repair_dispatch_json={
+                    "dispatch_id": str(uuid4()),
+                    "patch_surface": "runtime_bundle",
+                    "claim_mode": "runtime_owned",
+                    "claim_target": "runtime_patch_proposal",
+                    "lane": "runtime.repair",
+                    "worker_hint": "review_deadlock_repair_agent",
+                    "worker_contract_version": 1,
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_contract_transport_repair_executor",
+                    "executor_contract_version": 1,
+                    "transport_hint": "http_contract_repair_transport",
+                    "transport_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_incident_controller.py",
+                    "bundle_revision_name": "bundle-repair-retry-later",
+                    "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "chapter",
+                        "scope_id": "chapter-retry-later",
+                        "boundary": "review_session",
+                    },
+                },
+            )
+            claimed = execution.claim_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            execution.complete_work_item_failure(
+                lease_token=claimed.lease_token,
+                error_class="RuntimeRepairRetryLater",
+                error_detail_json={
+                    "repair_agent_decision": "retry_later",
+                    "repair_result_json": {
+                        "repair_agent_decision": "retry_later",
+                        "repair_agent_retry_after_seconds": 300,
+                    },
+                },
+                retryable=True,
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            self.assertEqual(
+                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
+                [],
+            )
+            self.assertIsNone(
+                execution.claim_next_work_item(
+                    run_id=run_id,
+                    stage=WorkItemStage.REPAIR,
+                    worker_name="app.run.repair",
+                    worker_instance_id="app.repair:test-2",
+                    lease_seconds=60,
+                )
+            )
+            work_item = session.get(WorkItem, work_item_id)
+            self.assertIsNotNone(work_item)
+            assert work_item is not None
+            work_item.finished_at = datetime.now(timezone.utc) - timedelta(seconds=301)
+            session.add(work_item)
+            session.commit()
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            self.assertEqual(
+                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
+                [work_item_id],
+            )
+            reclaimed = execution.claim_next_work_item(
+                run_id=run_id,
+                stage=WorkItemStage.REPAIR,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test-3",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(reclaimed)
+            assert reclaimed is not None
+            self.assertEqual(reclaimed.work_item_id, work_item_id)
+
+    def test_manual_escalation_repair_work_item_requires_explicit_resume_before_reclaim(self) -> None:
+        run_id = self._create_running_run()
+        proposal_id = str(uuid4())
+        incident_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.ensure_repair_dispatch_work_item(
+                run_id=run_id,
+                proposal_id=proposal_id,
+                incident_id=incident_id,
+                repair_dispatch_json={
+                    "dispatch_id": str(uuid4()),
+                    "patch_surface": "runtime_bundle",
+                    "claim_mode": "runtime_owned",
+                    "claim_target": "runtime_patch_proposal",
+                    "lane": "runtime.repair",
+                    "worker_hint": "export_routing_repair_agent",
+                    "worker_contract_version": 1,
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_contract_transport_repair_executor",
+                    "executor_contract_version": 1,
+                    "transport_hint": "http_contract_repair_transport",
+                    "transport_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_export_controller.py",
+                    "bundle_revision_name": "bundle-repair-manual-escalation",
+                    "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "packet",
+                        "scope_id": "packet-manual-escalation",
+                        "boundary": "packet_task",
+                    },
+                },
+            )
+            claimed = execution.claim_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            execution.complete_work_item_failure(
+                lease_token=claimed.lease_token,
+                error_class="RuntimeRepairManualEscalationRequired",
+                error_detail_json={
+                    "repair_agent_decision": "manual_escalation_required",
+                    "repair_agent_decision_reason": "requires_operator_review",
+                    "repair_result_json": {
+                        "repair_agent_decision": "manual_escalation_required",
+                        "repair_agent_decision_reason": "requires_operator_review",
+                    },
+                },
+                retryable=False,
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            self.assertEqual(
+                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
+                [],
+            )
+            self.assertIsNone(
+                execution.claim_next_work_item(
+                    run_id=run_id,
+                    stage=WorkItemStage.REPAIR,
+                    worker_name="app.run.repair",
+                    worker_instance_id="app.repair:block",
+                    lease_seconds=60,
+                )
+            )
+            resumed = execution.resume_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                actor_id="ops-user",
+                note="manual approval granted",
+            )
+            self.assertEqual(resumed.status, WorkItemStatus.PENDING)
+            self.assertEqual(resumed.attempt, 2)
+            session.commit()
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            self.assertEqual(
+                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
+                [work_item_id],
+            )
+            reclaimed = execution.claim_next_work_item(
+                run_id=run_id,
+                stage=WorkItemStage.REPAIR,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:resumed",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(reclaimed)
+            assert reclaimed is not None
+            self.assertEqual(reclaimed.work_item_id, work_item_id)
+            self.assertEqual(reclaimed.attempt, 2)
+
+    def test_manual_escalation_repair_item_blocks_reseed_until_resumed(self) -> None:
+        run_id = self._create_running_run()
+        proposal_id = str(uuid4())
+        incident_id = str(uuid4())
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            work_item_id = execution.ensure_repair_dispatch_work_item(
+                run_id=run_id,
+                proposal_id=proposal_id,
+                incident_id=incident_id,
+                repair_dispatch_json={
+                    "dispatch_id": str(uuid4()),
+                    "patch_surface": "runtime_bundle",
+                    "claim_mode": "runtime_owned",
+                    "claim_target": "runtime_patch_proposal",
+                    "lane": "runtime.repair",
+                    "worker_hint": "review_deadlock_repair_agent",
+                    "worker_contract_version": 1,
+                    "execution_mode": "transport_backed",
+                    "executor_hint": "python_contract_transport_repair_executor",
+                    "executor_contract_version": 1,
+                    "transport_hint": "http_contract_repair_transport",
+                    "transport_contract_version": 1,
+                    "validation_command": "uv run pytest tests/test_incident_controller.py",
+                    "bundle_revision_name": "bundle-repair-manual-reseed",
+                    "rollout_scope_json": {"mode": "dev"},
+                    "replay": {
+                        "scope_type": "chapter",
+                        "scope_id": "chapter-manual-escalation",
+                        "boundary": "review_session",
+                    },
+                },
+            )
+            claimed = execution.claim_repair_dispatch_work_item(
+                work_item_id=work_item_id,
+                worker_name="app.run.repair",
+                worker_instance_id="app.repair:test",
+                lease_seconds=60,
+            )
+            self.assertIsNotNone(claimed)
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            execution.complete_work_item_failure(
+                lease_token=claimed.lease_token,
+                error_class="RuntimeRepairManualEscalationRequired",
+                error_detail_json={
+                    "repair_agent_decision": "manual_escalation_required",
+                    "repair_result_json": {
+                        "repair_agent_decision": "manual_escalation_required",
+                    },
+                },
+                retryable=False,
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            ensured_ids = execution.ensure_scope_replay_work_items(
+                run_id=run_id,
+                stage=WorkItemStage.REPAIR,
+                scope_type=WorkItemScopeType.ISSUE_ACTION,
+                scope_ids=[proposal_id],
+                input_version_bundle_by_scope_id={
+                    proposal_id: {
+                        "proposal_id": proposal_id,
+                        "incident_id": incident_id,
+                    }
+                },
+            )
+            self.assertEqual(ensured_ids, [work_item_id])
+            work_items = session.query(WorkItem).filter(WorkItem.run_id == run_id).all()
+            self.assertEqual(len(work_items), 1)
 
     def test_executor_reclaims_expired_leases_before_stage_progression(self) -> None:
         run_id = self._create_running_run(

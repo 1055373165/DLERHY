@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,11 +83,12 @@ def _discover_candidates(scan_root: Path, target_db_path: Path) -> list[LegacyDa
 
 
 def _load_candidates_from_database(source_db_path: Path) -> list[LegacyDatabaseCandidate]:
-    with sqlite3.connect(f"file:{source_db_path}?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(f"file:{source_db_path}?mode=ro", uri=True)) as connection:
         connection.row_factory = sqlite3.Row
         if not _has_required_tables(connection, {"documents", "exports"}):
             return []
-        rows = connection.execute(
+        rows = _fetchall(
+            connection,
             """
             SELECT
               d.id AS document_id,
@@ -101,33 +103,34 @@ def _load_candidates_from_database(source_db_path: Path) -> list[LegacyDatabaseC
             LEFT JOIN exports AS e
               ON e.document_id = d.id
             GROUP BY d.id, d.updated_at
-            """
-        ).fetchall()
-    return [
-        LegacyDatabaseCandidate(
-            source_db_path=source_db_path,
-            document_id=str(row["document_id"]),
-            updated_at=str(row["updated_at"] or ""),
-            merged_export_count=int(row["merged_export_count"] or 0),
-            chapter_export_count=int(row["chapter_export_count"] or 0),
-            succeeded_export_count=int(row["succeeded_export_count"] or 0),
+            """,
         )
-        for row in rows
-    ]
+        return [
+            LegacyDatabaseCandidate(
+                source_db_path=source_db_path,
+                document_id=str(row["document_id"]),
+                updated_at=str(row["updated_at"] or ""),
+                merged_export_count=int(row["merged_export_count"] or 0),
+                chapter_export_count=int(row["chapter_export_count"] or 0),
+                succeeded_export_count=int(row["succeeded_export_count"] or 0),
+            )
+            for row in rows
+        ]
 
 
 def _has_required_tables(connection: sqlite3.Connection, table_names: set[str]) -> bool:
-    rows = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-    ).fetchall()
+    rows = _fetchall(
+        connection,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    )
     available = {str(row[0]) for row in rows}
     return table_names.issubset(available)
 
 
 def _load_existing_document_ids(target_db_path: Path) -> set[str]:
-    with sqlite3.connect(target_db_path) as connection:
-        rows = connection.execute("SELECT id FROM documents").fetchall()
-    return {str(row[0]) for row in rows}
+    with closing(sqlite3.connect(target_db_path)) as connection:
+        rows = _fetchall(connection, "SELECT id FROM documents")
+        return {str(row[0]) for row in rows}
 
 
 def _select_best_candidates(
@@ -154,7 +157,7 @@ def _candidate_rank(candidate: LegacyDatabaseCandidate) -> tuple[int, int, int, 
 
 
 def _import_legacy_database(target_db_path: Path, source_db_path: Path) -> None:
-    with sqlite3.connect(target_db_path) as connection:
+    with closing(sqlite3.connect(target_db_path)) as connection:
         connection.execute("PRAGMA busy_timeout=30000")
         connection.execute("PRAGMA foreign_keys=OFF")
         connection.execute("ATTACH DATABASE ? AS legacy", (str(source_db_path),))
@@ -181,22 +184,36 @@ def _import_legacy_database(target_db_path: Path, source_db_path: Path) -> None:
 
 
 def _shared_table_names(connection: sqlite3.Connection) -> list[str]:
-    main_rows = connection.execute(
-        "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-    ).fetchall()
-    legacy_rows = connection.execute(
-        "SELECT name FROM legacy.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-    ).fetchall()
+    main_rows = _fetchall(
+        connection,
+        "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    )
+    legacy_rows = _fetchall(
+        connection,
+        "SELECT name FROM legacy.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    )
     main_tables = {str(row[0]) for row in main_rows}
     legacy_tables = {str(row[0]) for row in legacy_rows}
     return sorted((main_tables & legacy_tables) - _SKIP_TABLES)
 
 
 def _common_columns(connection: sqlite3.Connection, table_name: str) -> list[str]:
-    main_rows = connection.execute(f"PRAGMA main.table_info({_quote_string(table_name)})").fetchall()
-    legacy_rows = connection.execute(f"PRAGMA legacy.table_info({_quote_string(table_name)})").fetchall()
+    main_rows = _fetchall(connection, f"PRAGMA main.table_info({_quote_string(table_name)})")
+    legacy_rows = _fetchall(connection, f"PRAGMA legacy.table_info({_quote_string(table_name)})")
     legacy_columns = {str(row[1]) for row in legacy_rows}
     return [str(row[1]) for row in main_rows if str(row[1]) in legacy_columns]
+
+
+def _fetchall(
+    connection: sqlite3.Connection,
+    query: str,
+    parameters: tuple[object, ...] = (),
+) -> list[sqlite3.Row | tuple]:
+    cursor = connection.execute(query, parameters)
+    try:
+        return cursor.fetchall()
+    finally:
+        cursor.close()
 
 
 def _quote_identifier(value: str) -> str:
