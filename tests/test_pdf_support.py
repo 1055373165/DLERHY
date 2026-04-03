@@ -8704,11 +8704,21 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 self.last_index = index
                 return _FakePage()
 
+            def get_image_rects(self, _xref: int):
+                return []
+
+            def extract_image(self, _xref: int):
+                return {}
+
             def close(self) -> None:
                 return None
 
         class _FakeRect:
             def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.x0 = x0
+                self.y0 = y0
+                self.x1 = x1
+                self.y1 = y1
                 self.width = x1 - x0
                 self.height = y1 - y0
 
@@ -8929,6 +8939,10 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 self.assertTrue(str(reloaded_image.storage_path).endswith(".jpg"))
                 self.assertEqual(Path(reloaded_image.storage_path).read_bytes(), b"original-jpeg-binary")
                 self.assertEqual(reloaded_image.metadata_json["materialized_via"], "pdf_original_image")
+                self.assertEqual(
+                    reloaded_image.metadata_json["original_asset_availability"],
+                    "single_embedded_image",
+                )
                 self.assertEqual(reloaded_image.metadata_json["materialized_version"], 3)
                 self.assertNotIn("materialized_render_scale", reloaded_image.metadata_json)
         finally:
@@ -8987,6 +9001,15 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 Path(path).write_bytes(self.payload)
 
         class _FakePage:
+            def get_images(self, full=False):
+                return []
+
+            def get_image_rects(self, _xref: int):
+                return []
+
+            def get_drawings(self):
+                return [object()]
+
             def get_pixmap(self, clip=None, alpha=False):
                 return _FakePixmap(b"fake-pdf-crop")
 
@@ -8997,11 +9020,18 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 self.last_index = index
                 return _FakePage()
 
+            def extract_image(self, _xref: int):
+                return {}
+
             def close(self) -> None:
                 return None
 
         class _FakeRect:
             def __init__(self, x0: float, y0: float, x1: float, y1: float) -> None:
+                self.x0 = x0
+                self.y0 = y0
+                self.x1 = x1
+                self.y1 = y1
                 self.width = x1 - x0
                 self.height = y1 - y0
 
@@ -9067,6 +9097,10 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 self.assertEqual(
                     reloaded_bundle.document_images[0].metadata_json["materialized_via"],
                     "pdf_export_crop",
+                )
+                self.assertEqual(
+                    reloaded_bundle.document_images[0].metadata_json["original_asset_availability"],
+                    "vector_only_page_artifact",
                 )
         finally:
             if original_fitz is None:

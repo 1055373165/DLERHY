@@ -1,6 +1,6 @@
 # Mainline Progress
 
-Last Updated: 2026-04-03 11:21 +0800
+Last Updated: 2026-04-03 11:59 +0800
 Status: translate-agent-readiness-mainline
 Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围。
 
@@ -44,6 +44,7 @@ Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围
 - figure / table / equation / caption linkage
 - 高 artifact 密度论文的受保护 artifact 处理
 - PDF 原图优先提取 + 高分辨率 fallback 的正式主链路接入
+- PDF asset provenance 现在会把“向量页/不可抽原图页”与“真正的原图 parity 缺口”区分开
 
 ### 2.3 当前认证结果
 
@@ -76,7 +77,7 @@ Rule: 先用 benchmark 证明可放量，再决定是否扩大整本运行范围
 
 ### P0
 
-- 提升 PDF original-asset extraction parity，减少 `L2 / L6` 对 fallback render 的依赖
+- 提升 fragmented composite PDF figure 的 original-asset extraction parity
 - 以 `slice-first` 模式开始受控整本书 / 整篇论文运行
 
 ### P1

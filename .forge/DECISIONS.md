@@ -27,7 +27,8 @@
 
 6. Current follow-up decision
 - High-risk text PDFs now enter the guarded bootstrap path through the normal product route; bootstrap-gate removal is no longer the active blocker.
-- The closest next slice is now `PDF original-asset extraction parity`, especially where `L2 / L6` still rely on fallback-rendered assets.
+- Vector-only and otherwise non-extractable PDF pages should be recorded as unavailable original-asset opportunities, not counted as original-extraction failures.
+- The closest next slice is now `fragmented composite PDF figure parity`, especially where `L6` still falls back because a single figure is composed from multiple embedded image fragments.
 - After that, the next closest slice is `controlled slice-first whole-document pilots` on certified lanes.
 - After that, the next closest slice is `benchmark corpus expansion`, so readiness claims can extend beyond the current nine-sample set.
 

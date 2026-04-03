@@ -7405,9 +7405,15 @@ class ExportService:
                 if rect.width <= 1 or rect.height <= 1:
                     continue
                 persisted_image = document_image_by_block_id.get(block_id)
-                original_pdf_image = self._extract_pdf_original_image(document, page, rect)
+                original_pdf_asset = self._probe_pdf_original_asset(document, page, rect)
+                original_pdf_image = (
+                    (original_pdf_asset["image_bytes"], original_pdf_asset["extension"])
+                    if isinstance(original_pdf_asset.get("image_bytes"), (bytes, bytearray))
+                    and isinstance(original_pdf_asset.get("extension"), str)
+                    else None
+                )
                 asset_suffix = self._normalize_asset_extension(
-                    original_pdf_image[1]
+                    str(original_pdf_asset.get("extension") or "")
                     if original_pdf_image is not None
                     else self._document_image_asset_suffix(persisted_image, default_ext=".png")
                 )
@@ -7426,12 +7432,12 @@ class ExportService:
                         expected_vias={"pdf_export_crop", "pdf_original_image"},
                     )
                     if not materialized_path.exists() or needs_refresh:
-                        materialized_via, render_scale = self._save_pdf_asset(
+                        materialized_via, render_scale, original_asset_availability = self._save_pdf_asset(
                             document,
                             page,
                             rect,
                             materialized_path,
-                            original_image=original_pdf_image,
+                            original_asset=original_pdf_asset,
                             desired_width_px=desired_width_px,
                             desired_height_px=desired_height_px,
                         )
@@ -7440,6 +7446,7 @@ class ExportService:
                             materialized_path,
                             materialized_via=materialized_via,
                             render_scale=render_scale,
+                            original_asset_availability=original_asset_availability,
                         )
                     if not target_path.exists():
                         shutil.copy2(materialized_path, target_path)
@@ -7449,7 +7456,7 @@ class ExportService:
                         page,
                         rect,
                         target_path,
-                        original_image=original_pdf_image,
+                        original_asset=original_pdf_asset,
                         desired_width_px=desired_width_px,
                         desired_height_px=desired_height_px,
                     )
@@ -7841,16 +7848,21 @@ class ExportService:
         rect: object,
         target_path: Path,
         *,
-        original_image: tuple[bytes, str] | None = None,
+        original_asset: dict[str, object] | None = None,
         desired_width_px: int | None = None,
         desired_height_px: int | None = None,
-    ) -> tuple[str, float | None]:
+    ) -> tuple[str, float | None, str | None]:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        if original_image is None:
-            original_image = self._extract_pdf_original_image(document, page, rect)
-        if original_image is not None:
-            target_path.write_bytes(original_image[0])
-            return ("pdf_original_image", None)
+        if original_asset is None:
+            original_asset = self._probe_pdf_original_asset(document, page, rect)
+        original_bytes = original_asset.get("image_bytes")
+        if isinstance(original_bytes, (bytes, bytearray)):
+            target_path.write_bytes(bytes(original_bytes))
+            return (
+                str(original_asset.get("materialized_via") or "pdf_original_image"),
+                None,
+                str(original_asset.get("availability") or "single_embedded_image"),
+            )
         render_scale = self._pdf_crop_render_scale(
             rect,
             desired_width_px=desired_width_px,
@@ -7863,7 +7875,11 @@ class ExportService:
             desired_width_px=desired_width_px,
             desired_height_px=desired_height_px,
         )
-        return ("pdf_export_crop", render_scale)
+        return (
+            "pdf_export_crop",
+            render_scale,
+            str(original_asset.get("availability") or "no_matching_embedded_image"),
+        )
 
     def _save_pdf_crop(
         self,
@@ -7896,29 +7912,41 @@ class ExportService:
         finally:
             pixmap = None
 
-    def _extract_pdf_original_image(
+    def _probe_pdf_original_asset(
         self,
         document: object,
         page: object,
         rect: object,
-    ) -> tuple[bytes, str] | None:
+    ) -> dict[str, object]:
         get_images = getattr(page, "get_images", None)
         get_image_rects = getattr(page, "get_image_rects", None)
         extract_image = getattr(document, "extract_image", None)
         if get_images is None or get_image_rects is None or extract_image is None:
-            return None
+            return {"availability": "no_embedded_image_support"}
         rect_x0 = getattr(rect, "x0", None)
         rect_y0 = getattr(rect, "y0", None)
         rect_x1 = getattr(rect, "x1", None)
         rect_y1 = getattr(rect, "y1", None)
         if not all(isinstance(value, (int, float)) for value in (rect_x0, rect_y0, rect_x1, rect_y1)):
-            return None
+            return {"availability": "invalid_crop_rect"}
         crop_area = max((float(rect_x1) - float(rect_x0)) * (float(rect_y1) - float(rect_y0)), 1.0)
         best_match: tuple[float, int] | None = None
+        overlap_matches: list[tuple[float, int]] = []
         try:
             images = get_images(full=True)
         except Exception:
-            return None
+            return {"availability": "page_image_enumeration_failed"}
+        if not images:
+            drawings_getter = getattr(page, "get_drawings", None)
+            has_drawings = False
+            if drawings_getter is not None:
+                try:
+                    has_drawings = bool(drawings_getter())
+                except Exception:
+                    has_drawings = False
+            return {
+                "availability": "vector_only_page_artifact" if has_drawings else "no_embedded_images_on_page"
+            }
         for image in images or []:
             if not isinstance(image, (list, tuple)) or not image:
                 continue
@@ -7941,20 +7969,47 @@ class ExportService:
                     ],
                 )
                 overlap_ratio = overlap_area / crop_area
+                if overlap_ratio >= 0.01:
+                    overlap_matches.append((overlap_ratio, xref))
                 if overlap_ratio < 0.35:
                     continue
                 if best_match is None or overlap_ratio > best_match[0]:
                     best_match = (overlap_ratio, xref)
         if best_match is None:
-            return None
+            overlap_matches.sort(reverse=True)
+            if len(overlap_matches) >= 2:
+                return {
+                    "availability": "fragmented_embedded_images",
+                    "fragment_count": len({xref for _ratio, xref in overlap_matches}),
+                    "best_overlap_ratio": round(overlap_matches[0][0], 4),
+                }
+            return {"availability": "no_matching_embedded_image"}
         try:
             extracted_image = extract_image(best_match[1])
         except Exception:
-            return None
+            return {"availability": "embedded_image_extract_failed"}
         image_bytes = extracted_image.get("image")
         if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
+            return {"availability": "embedded_image_extract_failed"}
+        return {
+            "image_bytes": bytes(image_bytes),
+            "extension": self._normalize_asset_extension(extracted_image.get("ext") or ".png"),
+            "materialized_via": "pdf_original_image",
+            "availability": "single_embedded_image",
+        }
+
+    def _extract_pdf_original_image(
+        self,
+        document: object,
+        page: object,
+        rect: object,
+    ) -> tuple[bytes, str] | None:
+        original_asset = self._probe_pdf_original_asset(document, page, rect)
+        image_bytes = original_asset.get("image_bytes")
+        extension = original_asset.get("extension")
+        if not isinstance(image_bytes, (bytes, bytearray)) or not isinstance(extension, str):
             return None
-        return (bytes(image_bytes), self._normalize_asset_extension(extracted_image.get("ext") or ".png"))
+        return (bytes(image_bytes), extension)
 
     def _materialized_document_image_path(self, document_image: object, *, suffix: str | None = None) -> Path:
         document_id = str(getattr(document_image, "document_id"))
@@ -7971,6 +8026,7 @@ class ExportService:
         *,
         materialized_via: str,
         render_scale: float | None = None,
+        original_asset_availability: str | None = None,
     ) -> None:
         storage_path = str(materialized_path)
         if getattr(document_image, "storage_path", None) != storage_path:
@@ -7984,6 +8040,8 @@ class ExportService:
                 "materialized_version": _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
             }
         )
+        if original_asset_availability:
+            metadata["original_asset_availability"] = original_asset_availability
         if render_scale is not None:
             metadata["materialized_render_scale"] = round(render_scale, 3)
         else:

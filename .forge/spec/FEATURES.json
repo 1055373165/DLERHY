@@ -143,5 +143,23 @@
       "F008"
     ],
     "passes": true
+  },
+  {
+    "id": "F010",
+    "category": "asset",
+    "priority": "P1",
+    "title": "PDF asset provenance distinguishes unavailable original opportunities from true extraction misses",
+    "description": "Vector-only and otherwise non-extractable PDF pages should be tracked as unavailable original-asset opportunities so fallback usage on those pages does not masquerade as an original-image extraction failure.",
+    "verification": [
+      "Read src/book_agent/services/export.py and confirm PDF asset materialization records original_asset_availability metadata",
+      "Read artifacts/review/scripts/run_translate_agent_benchmark_execution.py and confirm vector-only or non-extractable PDF pages do not count toward eligible original-image opportunities",
+      "Run tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_pdf_export_prefers_original_embedded_image_bytes_when_available and tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_pdf_export_materializes_document_images_for_reuse and confirm they pass"
+    ],
+    "dependencies": [
+      "F006",
+      "F007",
+      "F009"
+    ],
+    "passes": true
   }
 ]

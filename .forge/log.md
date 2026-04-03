@@ -230,3 +230,6 @@
 - 2026-04-03 11:37:41 +0800 | removed the high-risk text-PDF bootstrap rejection so parser-ready documents such as `REACT` now enter the guarded product path with explicit risk metadata instead of requiring a direct parser probe
 - 2026-04-03 11:37:41 +0800 | refreshed current benchmark execution artifacts; `pdf-react-001` now runs through `bootstrap_parse` with `bootstrap_gate_reason = null`
 - 2026-04-03 11:37:41 +0800 | advanced translate-agent handoff truth so the active next todo is now PDF original-asset extraction parity rather than bootstrap-gate removal
+- 2026-04-03 11:59:28 +0800 | hardened PDF asset provenance so vector-only and otherwise non-extractable pages are tracked as unavailable original-image opportunities instead of being counted as original-extraction failures
+- 2026-04-03 11:59:28 +0800 | refreshed benchmark execution + scorecard + lane verdict artifacts after the provenance change; current overall readiness remains `go`
+- 2026-04-03 11:59:28 +0800 | refined translate-agent handoff truth so the next asset-hardening todo is narrowed to fragmented composite PDF figure parity rather than generic fallback-render cleanup

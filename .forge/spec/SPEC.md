@@ -143,7 +143,7 @@ The current mainline is considered successful when:
 ## Initial Delivery Strategy
 
 1. Keep the current benchmark/certification truth as the active mainline baseline.
-2. Remove the high-risk text-PDF bootstrap gate so parser readiness and product-path readiness
-   converge.
-3. Improve original-asset extraction parity on PDF lanes still leaning on fallback assets.
-4. Expand the benchmark corpus before widening readiness claims further.
+2. Keep high-risk text PDFs on the guarded bootstrap path so parser readiness and product-path readiness stay converged.
+3. Distinguish unavailable original-asset opportunities from true parity misses on PDF lanes.
+4. Improve original-asset extraction parity on the remaining fragmented composite PDF figure slices.
+5. Expand the benchmark corpus before widening readiness claims further.
