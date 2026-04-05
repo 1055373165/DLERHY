@@ -1,25 +1,45 @@
-* {
+/* ═══════════════════════════════════════════════════════
+   BOOK-AGENT :: TERMINAL RETRO-FUTURISTIC BASELINE
+   ═══════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html,
 body,
 #root {
-  min-height: 100%;
+  min-height: 100vh;
 }
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #f8fafc 0%, var(--bg-canvas) 100%);
-  color: var(--surface-ink);
+  background: var(--bg-root);
+  color: var(--text-primary);
   font-family: var(--font-body);
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body::before {
-  display: none;
+/* ── CRT Scanline Overlay ── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    oklch(0 0 0 / var(--scanline-opacity)) 2px,
+    oklch(0 0 0 / var(--scanline-opacity)) 4px
+  );
 }
 
 #root {
@@ -27,83 +47,143 @@ body::before {
   isolation: isolate;
 }
 
+/* ── Typography Reset ── */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  text-shadow: var(--glow-text);
+}
+
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+
+p {
+  margin: 0 0 var(--sp-3);
+}
+
+/* ── Form Elements ── */
 button,
 input,
 select,
+textarea,
 summary {
   font: inherit;
+  letter-spacing: inherit;
 }
 
 a {
-  color: inherit;
+  color: var(--phosphor);
   text-decoration: none;
+  transition: color 120ms ease, text-shadow 120ms ease;
+}
+
+a:hover {
+  color: var(--phosphor-bright);
+  text-shadow: var(--glow-text);
 }
 
 button {
   cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
 }
 
 button:disabled {
   cursor: not-allowed;
+  opacity: 0.4;
 }
 
-summary {
-  cursor: pointer;
-}
-
-button,
-input,
-select,
-a {
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease,
-    box-shadow 160ms ease;
-}
-
+/* ── Focus Indicator ── */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 2px solid rgba(44, 91, 131, 0.28);
+  outline: 1px solid var(--phosphor-dim);
   outline-offset: 2px;
 }
 
-summary {
-  list-style: none;
-}
-
-summary::-webkit-details-marker {
-  display: none;
-}
-
+/* ── Selection ── */
 ::selection {
-  background: rgba(44, 91, 131, 0.16);
-  color: var(--surface-ink);
+  background: var(--bg-selection);
+  color: var(--phosphor-bright);
 }
 
-@keyframes panel-rise {
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.30 0.01 200 / 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.40 0.04 145 / 0.6);
+}
+
+/* ── Animations ── */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes scan-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
+    filter: blur(1px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
+@keyframes flicker {
+  0%, 97%, 100% { opacity: 1; }
+  98% { opacity: 0.85; }
+}
+
+/* ── Utility Classes ── */
+.text-phosphor { color: var(--phosphor); }
+.text-amber { color: var(--amber); }
+.text-cyan { color: var(--cyan); }
+.text-red { color: var(--red); }
+.text-muted { color: var(--text-muted); }
+.text-bright { color: var(--text-bright); text-shadow: var(--glow-text); }
+
+.glow-phosphor { text-shadow: var(--glow-text); }
+
+/* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  body::after {
+    display: none;
   }
 }

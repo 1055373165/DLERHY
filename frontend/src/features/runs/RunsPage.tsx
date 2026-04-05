@@ -20,7 +20,9 @@ import {
   statusLabel,
   translateProgress,
 } from "../../lib/workflow";
-import styles from "./RunsPage.module.css";
+import s from "./RunsPage.module.css";
+
+type Feedback = { tone: "success" | "error"; text: string } | null;
 
 export function RunsPage() {
   const {
@@ -32,115 +34,125 @@ export function RunsPage() {
     refreshCurrentDocument,
     downloadChapterAsset,
   } = useWorkspace();
-  const [message, setMessage] = useState<string | null>(null);
 
-  const primaryAction = getPrimaryRunAction(currentDocument, currentRun);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+
+  const action = getPrimaryRunAction(currentDocument, currentRun);
   const badge = documentBadge(currentDocument, currentRun);
   const focusChapters = getFocusChapters(currentDocument);
   const failedStage = failedPipelineStage(currentDocument, currentRun);
   const currentStage = currentStageKey(currentRun);
   const progress = translateProgress(currentDocument, currentRun);
-  const progressPercent = Math.round(progress.ratio * 100);
+  const pct = Math.round(progress.ratio * 100);
 
-  async function handlePrimaryAction() {
+  async function handleAction() {
     try {
       const run = await runPrimaryAction();
-      setMessage(`已推进 run ${run.run_id.slice(0, 6)}。页面会自动同步阶段变化。`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "运行操作失败。");
+      setFeedback({ tone: "success", text: `[OK] run ${run.run_id.slice(0, 6)} pushed` });
+    } catch (err) {
+      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Action failed"}` });
     }
   }
 
   async function handleChapterDownload(chapterId: string) {
     try {
       const filename = await downloadChapterAsset(chapterId);
-      setMessage(`已开始下载 ${filename}。`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "章节下载失败。");
+      setFeedback({ tone: "success", text: `[OK] ${filename}` });
+    } catch (err) {
+      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Download failed"}` });
     }
   }
 
   return (
-    <div className={styles.layout}>
+    <div className={s.layout}>
+      {/* ══════════════ RUN OVERVIEW ══════════════ */}
       <Surface
-        eyebrow="运行"
+        eyebrow="RUN"
         title="运行总览"
-        description="围绕当前 run 的阶段、状态和下一次可执行操作。"
         aside={currentDocument ? <StatusBadge tone={badge.tone} label={badge.label} /> : null}
       >
         {currentRun && currentDocument ? (
           <>
-            <div className={styles.summaryGrid}>
-              <div className={styles.summaryCard}>
-                <div className={styles.summaryLabel}>当前阶段</div>
-                <div className={styles.summaryValue}>
-                  {pipelineStageLabel(currentStageKey(currentRun))}
-                </div>
-                <div className={styles.summaryNote}>状态 {statusLabel(failedStage?.status || currentRun.status)}</div>
+            <div className={s.summaryGrid}>
+              <div className={s.summaryCard}>
+                <span className={s.label}>STAGE</span>
+                <span className={s.value}>{pipelineStageLabel(currentStage)}</span>
+                <span className={s.note}>{statusLabel(failedStage?.status || currentRun.status)}</span>
               </div>
-              <div className={styles.summaryCard}>
-                <div className={styles.summaryLabel}>Run ID</div>
-                <div className={styles.summaryValue}>{currentRun.run_id.slice(0, 6)}</div>
-                <div className={styles.summaryNote}>更新时间 {formatDate(currentRun.updated_at)}</div>
+              <div className={s.summaryCard}>
+                <span className={s.label}>RUN</span>
+                <span className={s.value}>{currentRun.run_id.slice(0, 6)}</span>
+                <span className={s.note}>{formatDate(currentRun.updated_at)}</span>
               </div>
-              <div className={styles.summaryCard}>
-                <div className={styles.summaryLabel}>翻译进度</div>
-                <div className={styles.summaryValue}>
-                  {formatNumber(progress.completed)} / {formatNumber(progress.total)}
-                </div>
-                <div className={styles.summaryNote}>
-                  worker leases {formatNumber(currentRun.worker_leases.total_count)}
-                </div>
+              <div className={s.summaryCard}>
+                <span className={s.label}>PROGRESS</span>
+                <span className={s.value}>
+                  {formatNumber(progress.completed)}/{formatNumber(progress.total)}
+                </span>
+                <span className={s.note}>
+                  leases {formatNumber(currentRun.worker_leases.total_count)}
+                </span>
               </div>
             </div>
-            <div className={styles.progressPanel}>
-              <div className={styles.progressHead}>
-                <div className={styles.progressMeta}>
-                  <div className={styles.progressLabel}>翻译进度</div>
-                  <div className={styles.progressValue}>{progressPercent}%</div>
-                </div>
-                <p className={styles.progressCopy}>
-                  已完成 {formatNumber(progress.completed)} / {formatNumber(progress.total)} 个 packet
-                </p>
+
+            {/* Progress Bar */}
+            <div className={s.progressPanel}>
+              <div className={s.progressHead}>
+                <span className={s.label}>TRANSLATE</span>
+                <span className={s.progressPct}>{pct}%</span>
               </div>
-              <div className={styles.progressTrack}>
+              <div className={s.progressTrack}>
                 <span
-                  className={styles.progressFill}
+                  className={s.progressFill}
                   style={{
-                    width: `${progress.total ? Math.max(progressPercent, progress.completed > 0 ? 6 : 0) : 0}%`,
+                    width: `${progress.total ? Math.max(pct, progress.completed > 0 ? 6 : 0) : 0}%`,
                   }}
                 />
               </div>
+              <span className={s.note}>
+                {formatNumber(progress.completed)} / {formatNumber(progress.total)} packets
+              </span>
             </div>
-            <div className={styles.actions}>
+
+            {/* Actions */}
+            <div className={s.actionBar}>
               <button
-                className={styles.button}
-                type="button"
-                disabled={primaryAction.disabled || runActionPending}
-                onClick={handlePrimaryAction}
+                className={s.btnAction}
+                disabled={action.disabled || runActionPending}
+                onClick={handleAction}
               >
-                {runActionPending ? "处理中…" : primaryAction.label}
+                {runActionPending ? "EXECUTING..." : `$ ${action.label}`}
               </button>
-              <button className={styles.ghostButton} type="button" onClick={() => void refreshCurrentDocument()}>
-                刷新状态
+              <button
+                className={s.btnSmall}
+                onClick={() => void refreshCurrentDocument()}
+              >
+                REFRESH
               </button>
             </div>
-            {message ? <div className={styles.message}>{message}</div> : null}
-            <div className={styles.stepList}>
-              {PIPELINE_STEPS.map((step, index) => {
+
+            {feedback && (
+              <div className={s.feedback} data-tone={feedback.tone}>
+                {feedback.text}
+              </div>
+            )}
+
+            {/* Pipeline Steps */}
+            <div className={s.stepList}>
+              {PIPELINE_STEPS.map((step, idx) => {
                 const state = stageStatus(currentDocument, currentRun, step.key);
                 return (
-                  <article
+                  <div
                     key={step.key}
-                    className={styles.stepCard}
+                    className={s.stepCard}
                     data-current={currentStage === step.key}
                     data-state={state}
                   >
-                    <div className={styles.stepIndex}>{index + 1}</div>
-                    <div className={styles.stepMeta}>
-                      <h3 className={styles.stepTitle}>{step.label}</h3>
-                      <p className={styles.stepCopy}>{step.description}</p>
-                      <p className={styles.stepCopy}>{pipelineMeta(currentDocument, currentRun, step.key)}</p>
+                    <span className={s.stepIndex}>{idx + 1}</span>
+                    <div className={s.stepBody}>
+                      <span className={s.stepTitle}>{step.label}</span>
+                      <span className={s.stepDesc}>{step.description}</span>
+                      <span className={s.stepMeta}>{pipelineMeta(currentDocument, currentRun, step.key)}</span>
                     </div>
                     <StatusBadge
                       tone={
@@ -156,89 +168,76 @@ export function RunsPage() {
                       }
                       label={statusLabel(state)}
                     />
-                  </article>
+                  </div>
                 );
               })}
             </div>
           </>
         ) : (
-          <div className={styles.emptyState}>
-            <strong>当前还没有活跃 run。</strong>
-            <span>先在工作台上传书稿并启动整书转换，这里才会成为你的主监控页。</span>
+          <div className={s.emptyState}>
+            <span className={s.prompt}>$</span> NO ACTIVE RUN — BOOTSTRAP A DOCUMENT FIRST
+            <span className={s.cursor} />
           </div>
         )}
       </Surface>
 
-      <div className={styles.splitGrid}>
-        <div className={styles.listCard}>
-          <div className={styles.listHeader}>
-            <h3 className={styles.listTitle}>重点章节</h3>
-            <p className={styles.listCopy}>
-              只列当前最有行动价值的章节。
-            </p>
-          </div>
+      {/* ══════════════ SPLIT: CHAPTERS + EVENTS ══════════════ */}
+      <div className={s.splitGrid}>
+        {/* Focus Chapters */}
+        <div className={s.section}>
+          <h4 className={s.sectionTitle}>FOCUS CHAPTERS</h4>
           {focusChapters.length ? (
-            <div className={styles.chapterList}>
-              {focusChapters.map((chapter) => (
-                <article key={chapter.chapter_id} className={styles.chapterRow}>
-                  <div className={styles.chapterTop}>
-                    <div className={styles.chapterMeta}>
-                      <h4 className={styles.chapterTitle}>
-                        第 {chapter.ordinal} 章 · {chapter.title_src || "未命名章节"}
-                      </h4>
-                      <p className={styles.chapterCopy}>
-                        状态 {statusLabel(chapter.status)} · open issue {formatNumber(chapter.open_issue_count)} · packet{" "}
-                        {formatNumber(chapter.packet_count)}
-                      </p>
-                    </div>
-                    <button
-                      className={styles.smallButton}
-                      type="button"
-                      disabled={!chapter.bilingual_export_ready}
-                      onClick={() => void handleChapterDownload(chapter.chapter_id)}
-                    >
-                      {chapter.bilingual_export_ready ? "下载双语章节" : "等待导出"}
-                    </button>
+            <div className={s.cardList}>
+              {focusChapters.map((ch) => (
+                <div key={ch.chapter_id} className={s.card}>
+                  <div className={s.cardTop}>
+                    <span className={s.cardOrd}>CH.{ch.ordinal}</span>
+                    <StatusBadge
+                      tone={ch.open_issue_count > 0 ? "warning" : "success"}
+                      label={statusLabel(ch.status)}
+                    />
                   </div>
-                </article>
+                  <span className={s.cardTitle}>{ch.title_src || "Untitled"}</span>
+                  <span className={s.cardMeta}>
+                    issues {formatNumber(ch.open_issue_count)} | packets {formatNumber(ch.packet_count)}
+                  </span>
+                  <button
+                    className={s.btnSmall}
+                    disabled={!ch.bilingual_export_ready}
+                    onClick={() => void handleChapterDownload(ch.chapter_id)}
+                  >
+                    {ch.bilingual_export_ready ? "DOWNLOAD" : "PENDING"}
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
-            <div className={styles.emptyState}>
+            <div className={s.emptyState}>
               {currentDocument
-                ? `《${preferredTitle(currentDocument)}》当前还没有需要额外关注的章节。`
-                : "载入当前书籍后，这里会自动聚焦最值得处理的章节。"}
+                ? `No focus chapters for ${preferredTitle(currentDocument)}`
+                : "Load a document to see focus chapters."}
             </div>
           )}
         </div>
 
-        <div className={styles.listCard}>
-          <div className={styles.listHeader}>
-            <h3 className={styles.listTitle}>最近事件</h3>
-            <p className={styles.listCopy}>用最近事件判断系统刚刚完成了什么。</p>
-          </div>
+        {/* Recent Events */}
+        <div className={s.section}>
+          <h4 className={s.sectionTitle}>RECENT EVENTS</h4>
           {currentRunEvents.length ? (
-            <div className={styles.eventList}>
-              {currentRunEvents.map((entry) => (
-                <article key={entry.event_id} className={styles.eventCard}>
-                  <div className={styles.eventTop}>
-                    <div className={styles.eventMeta}>
-                      <h4 className={styles.eventTitle}>{eventTitle(entry.event_type)}</h4>
-                      <p className={styles.eventCopy}>
-                        {entry.event_type} · {formatDate(entry.created_at)}
-                      </p>
-                    </div>
-                    <StatusBadge tone="muted" label={entry.actor_type || "system"} />
-                  </div>
-                  <p className={styles.eventCopy}>
-                    event {entry.event_id.slice(0, 6)}
-                    {entry.work_item_id ? ` · work item ${entry.work_item_id.slice(0, 6)}` : ""}
-                  </p>
-                </article>
+            <div className={s.eventList}>
+              {currentRunEvents.map((ev) => (
+                <div key={ev.event_id} className={s.eventRow}>
+                  <span className={s.eventKind}>{eventTitle(ev.event_type)}</span>
+                  <span className={s.eventText}>
+                    {ev.event_type}
+                    {ev.work_item_id ? ` :: ${ev.work_item_id.slice(0, 6)}` : ""}
+                  </span>
+                  <span className={s.eventDate}>{formatDate(ev.created_at)}</span>
+                </div>
               ))}
             </div>
           ) : (
-            <div className={styles.emptyState}>当前没有可展示的 run 事件。</div>
+            <div className={s.emptyState}>No run events yet.</div>
           )}
         </div>
       </div>

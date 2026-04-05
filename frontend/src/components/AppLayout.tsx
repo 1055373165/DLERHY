@@ -2,121 +2,130 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useWorkspace } from "../app/WorkspaceContext";
+import { SERVICE_LINKS } from "../lib/api";
 import { nextMilestoneText, preferredTitle } from "../lib/workflow";
-import styles from "./AppLayout.module.css";
+import s from "./AppLayout.module.css";
 
 const NAV_ITEMS = [
-  { to: "/", label: "工作台", hint: "上传书稿、确认当前书籍和下一步。" },
-  { to: "/runs", label: "运行", hint: "查看阶段进度、事件和重点章节。" },
-  { to: "/deliverables", label: "交付", hint: "下载产物并理解导出阻塞。" },
-  { to: "/library", label: "书库", hint: "检索历史书籍并重新打开。" },
-];
+  { to: "/", label: "WORK", icon: ">", zh: "工作台" },
+  { to: "/runs", label: "RUNS", icon: "#", zh: "运行" },
+  { to: "/deliverables", label: "SHIP", icon: "%", zh: "交付" },
+  { to: "/library", label: "LIB", icon: "~", zh: "书库" },
+] as const;
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const {
-    health,
-    healthLoading,
     currentDocument,
     currentRun,
     currentExports,
-    serviceLinks,
+    health,
+    healthLoading,
   } = useWorkspace();
 
-  const activeItem =
-    NAV_ITEMS.find((item) =>
-      item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to)
+  const docTitle = currentDocument ? preferredTitle(currentDocument) : null;
+  const milestone = currentDocument
+    ? nextMilestoneText(currentDocument, currentRun ?? undefined, currentExports ?? undefined)
+    : null;
+
+  const activeNav =
+    NAV_ITEMS.find((n) =>
+      n.to === "/" ? location.pathname === "/" : location.pathname.startsWith(n.to),
     ) ?? NAV_ITEMS[0];
-  const currentTitle = currentDocument ? preferredTitle(currentDocument) : "等待载入书稿";
-  const currentNote = nextMilestoneText(currentDocument, currentRun, currentExports);
 
   return (
-    <div className={styles.chrome} data-nav-open={navOpen}>
+    <div className={s.shell} data-nav-open={navOpen}>
+      {/* Mobile backdrop */}
       <button
-        className={styles.mobileBackdrop}
+        className={s.backdrop}
         type="button"
         aria-label="Close navigation"
         onClick={() => setNavOpen(false)}
       />
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <div className={styles.brandEyebrow}>整书译制工作台</div>
-          <h1 className={styles.brandTitle}>Book Agent</h1>
-          <p className={styles.brandCopy}>
-            上传、运行、复核、交付。
-          </p>
+
+      {/* ── Sidebar ── */}
+      <aside className={s.sidebar}>
+        <div className={s.logo}>
+          <span className={s.logoGlyph}>[</span>
+          <span className={s.logoText}>BOOK-AGENT</span>
+          <span className={s.logoGlyph}>]</span>
         </div>
-        <nav className={styles.nav} aria-label="Primary">
+        <div className={s.logoSub}>Translation Terminal v2.0</div>
+
+        <nav className={s.nav}>
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === "/"}
               className={({ isActive }) =>
-                `${styles.navLink} ${isActive ? styles.navLinkActive : ""}`
+                `${s.navItem} ${isActive ? s.navActive : ""}`
               }
               onClick={() => setNavOpen(false)}
             >
-              <span className={styles.navLabel}>{item.label}</span>
-              <span className={styles.navHint}>{item.hint}</span>
+              <span className={s.navIcon}>{item.icon}</span>
+              <span className={s.navLabel}>{item.label}</span>
+              <span className={s.navZh}>{item.zh}</span>
             </NavLink>
           ))}
         </nav>
-        <div className={styles.sidebarFooter}>
-          <span>只保留会影响操作判断的信息。</span>
+
+        <div className={s.sidebarFooter}>
+          <div className={s.divider}>{"─".repeat(28)}</div>
+          <div className={s.systemLinks}>
+            <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
+              [api-docs]
+            </a>
+            <a href={SERVICE_LINKS.openapi} target="_blank" rel="noopener" className={s.sysLink}>
+              [openapi]
+            </a>
+          </div>
+          <div className={s.healthRow}>
+            <span
+              className={s.healthDot}
+              data-status={healthLoading ? "check" : health?.status === "ok" ? "ok" : "down"}
+            />
+            <span className={s.healthLabel}>
+              {healthLoading ? "CHECKING..." : health?.status === "ok" ? "SYS.ONLINE" : "SYS.OFFLINE"}
+            </span>
+          </div>
         </div>
       </aside>
 
-      <main className={styles.main}>
-        <header className={styles.topbar}>
-          <div className={styles.topbarMeta}>
-            <div className={styles.topbarEyebrow}>当前页面</div>
-            <h2 className={styles.topbarTitle}>{activeItem.label}</h2>
-            <p className={styles.topbarCopy}>
-              {currentDocument ? `《${currentTitle}》 · ${currentNote}` : activeItem.hint}
-            </p>
+      {/* ── Main Content ── */}
+      <div className={s.main}>
+        <header className={s.topbar}>
+          <button
+            className={s.mobileToggle}
+            type="button"
+            onClick={() => setNavOpen((o) => !o)}
+            aria-label="Toggle navigation"
+          >
+            {navOpen ? "[-]" : "[=]"}
+          </button>
+          <div className={s.topbarLeft}>
+            <span className={s.prompt}>$</span>
+            <span className={s.pageName}>{activeNav.label}</span>
+            {docTitle && (
+              <>
+                <span className={s.separator}>::</span>
+                <span className={s.docTitle}>{docTitle}</span>
+              </>
+            )}
           </div>
-          <div className={styles.toolbar}>
-            <button
-              className={styles.mobileToggle}
-              type="button"
-              onClick={() => setNavOpen((open) => !open)}
-            >
-              导航
-            </button>
-            <div className={styles.health}>
-              <span
-                className={`${styles.healthDot} ${
-                  healthLoading ? "" : health?.status === "ok" ? styles.healthActive : styles.healthError
-                }`}
-              />
-              <span>{healthLoading ? "检查服务中" : health?.status === "ok" ? "服务在线" : "服务异常"}</span>
+          {milestone && (
+            <div className={s.topbarRight}>
+              <span className={s.milestone}>{milestone}</span>
+              <span className={s.cursor} />
             </div>
-            <details className={styles.menu}>
-              <summary className={styles.menuSummary}>系统</summary>
-              <div className={styles.menuPanel}>
-                <a className={styles.menuLink} href={serviceLinks.docs} target="_blank" rel="noreferrer">
-                  <span className={styles.menuLabel}>API Docs</span>
-                  <span className={styles.menuMeta}>{serviceLinks.docs}</span>
-                </a>
-                <a className={styles.menuLink} href={serviceLinks.openapi} target="_blank" rel="noreferrer">
-                  <span className={styles.menuLabel}>OpenAPI</span>
-                  <span className={styles.menuMeta}>{serviceLinks.openapi}</span>
-                </a>
-                <a className={styles.menuLink} href={serviceLinks.health} target="_blank" rel="noreferrer">
-                  <span className={styles.menuLabel}>健康检查</span>
-                  <span className={styles.menuMeta}>{serviceLinks.health}</span>
-                </a>
-              </div>
-            </details>
-          </div>
+          )}
         </header>
 
-        <div className={styles.content}>
+        <div className={s.content}>
           <Outlet />
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,48 +1,97 @@
 :root {
-  color-scheme: light;
-  --bg-canvas: #eef2f5;
-  --bg-tint: #dce3ea;
-  --bg-field: #f7f9fb;
-  --surface-page: rgba(247, 249, 251, 0.92);
-  --surface-raised: rgba(255, 255, 255, 0.96);
-  --surface-soft: #f6f8fa;
-  --surface-strong: #ffffff;
-  --surface-ink: #17222e;
-  --surface-ink-soft: #5d6876;
-  --surface-ink-faint: #8a95a3;
-  --surface-inverse: #f8fafc;
-  --rail-bg: #eef3f7;
-  --rail-bg-strong: #e7edf3;
-  --accent: #2c5b83;
-  --accent-strong: #1f4564;
-  --accent-soft: rgba(44, 91, 131, 0.08);
-  --accent-line: rgba(44, 91, 131, 0.16);
-  --success: #1f6b57;
-  --success-soft: rgba(31, 107, 87, 0.1);
-  --warning: #8f6a2d;
-  --warning-soft: rgba(143, 106, 45, 0.12);
-  --danger: #a04f45;
-  --danger-soft: rgba(160, 79, 69, 0.12);
-  --line: rgba(23, 34, 46, 0.09);
-  --line-strong: rgba(23, 34, 46, 0.16);
-  --shadow-page: 0 16px 40px rgba(15, 23, 42, 0.04);
-  --shadow-panel: 0 10px 30px rgba(15, 23, 42, 0.035);
-  --shadow-float: 0 18px 38px rgba(15, 23, 42, 0.08);
-  --radius-page: 24px;
-  --radius-panel: 20px;
-  --radius-card: 16px;
+  color-scheme: dark;
+
+  /* ── Core Palette ── */
+  --black: oklch(0.08 0.005 240);
+  --black-pure: #000000;
+  --void: oklch(0.06 0.008 240);
+  --phosphor: oklch(0.82 0.19 145);
+  --phosphor-dim: oklch(0.62 0.14 145);
+  --phosphor-bright: oklch(0.92 0.22 145);
+  --amber: oklch(0.78 0.16 75);
+  --amber-dim: oklch(0.58 0.12 75);
+  --cyan: oklch(0.80 0.14 200);
+  --cyan-dim: oklch(0.55 0.10 200);
+  --red: oklch(0.65 0.22 25);
+  --red-dim: oklch(0.45 0.15 25);
+  --magenta: oklch(0.65 0.20 330);
+
+  /* ── Semantic Surfaces ── */
+  --bg-root: var(--void);
+  --bg-panel: oklch(0.10 0.006 240);
+  --bg-panel-alt: oklch(0.12 0.008 240);
+  --bg-input: oklch(0.08 0.005 240);
+  --bg-hover: oklch(0.14 0.01 240);
+  --bg-active: oklch(0.16 0.015 145);
+  --bg-selection: oklch(0.20 0.06 145 / 0.4);
+
+  /* ── Text ── */
+  --text-primary: oklch(0.88 0.02 145);
+  --text-secondary: oklch(0.62 0.01 200);
+  --text-muted: oklch(0.42 0.008 200);
+  --text-bright: var(--phosphor-bright);
+  --text-amber: var(--amber);
+  --text-cyan: var(--cyan);
+  --text-red: var(--red);
+  --text-inverse: var(--black);
+
+  /* ── Borders & Lines ── */
+  --border: oklch(0.25 0.01 200 / 0.5);
+  --border-strong: oklch(0.35 0.02 145 / 0.6);
+  --border-glow: oklch(0.60 0.12 145 / 0.3);
+  --border-amber: oklch(0.50 0.10 75 / 0.4);
+
+  /* ── Glow Effects ── */
+  --glow-phosphor: 0 0 8px oklch(0.70 0.16 145 / 0.3), 0 0 24px oklch(0.60 0.12 145 / 0.1);
+  --glow-amber: 0 0 8px oklch(0.65 0.14 75 / 0.3), 0 0 24px oklch(0.55 0.10 75 / 0.1);
+  --glow-cyan: 0 0 8px oklch(0.65 0.12 200 / 0.3), 0 0 24px oklch(0.55 0.10 200 / 0.1);
+  --glow-red: 0 0 8px oklch(0.55 0.18 25 / 0.3);
+  --glow-text: 0 0 4px oklch(0.70 0.16 145 / 0.25);
+
+  /* ── Status Colors ── */
+  --status-active: var(--phosphor);
+  --status-success: var(--cyan);
+  --status-warning: var(--amber);
+  --status-danger: var(--red);
+  --status-muted: var(--text-muted);
+
+  /* ── Spacing (8px base grid) ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 48px;
+  --sp-10: 64px;
+  --sp-12: 80px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
   --radius-pill: 999px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-7: 32px;
-  --space-8: 40px;
-  --space-9: 48px;
-  --space-10: 64px;
-  --aside-width: 272px;
-  --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
-  --font-display: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+
+  /* ── Typography ── */
+  --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Noto Sans Mono CJK SC", "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --font-cjk: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-body: var(--font-mono);
+  --font-display: var(--font-mono);
+
+  /* ── Font Sizes (modular scale 1.2) ── */
+  --text-xs: 0.694rem;
+  --text-sm: 0.833rem;
+  --text-base: 1rem;
+  --text-md: 1.1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.074rem;
+
+  /* ── Layout ── */
+  --sidebar-width: 240px;
+  --topbar-height: 48px;
+  --scanline-opacity: 0.03;
 }

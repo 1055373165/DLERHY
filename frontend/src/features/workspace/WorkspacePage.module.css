@@ -1,1177 +1,568 @@
-.grid {
+/* ═══════════════════════════════════════════════════════
+   WorkspacePage :: Terminal Command Center
+   ═══════════════════════════════════════════════════════ */
+
+.layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.34fr) minmax(320px, 0.86fr);
-  gap: 24px;
-  align-items: start;
+  gap: var(--sp-6);
 }
 
-.summaryStack,
-.uploadStack,
-.reviewStack,
-.hero,
-.heroAside,
-.message,
-.emptyState,
-.documentMeta,
-.metaStrip,
-.statGrid,
-.statCard,
-.nextStep,
-.reviewHeader,
-.reviewMetricGrid,
-.reviewMetric,
-.reviewControlBar,
-.reviewLayout,
-.reviewColumn,
-.reviewSectionHeader,
-.modeSwitch,
-.modeSwitchControls,
-.sessionDigest,
-.sessionDigestGrid,
-.sessionDigestCard,
-.sessionTrail,
-.sessionTrailList,
-.sessionTrailCard,
-.focusBanner,
-.focusActions,
-.handoffStepList,
-.proposalList,
-.proposalCard,
-.proposalTop,
-.proposalActions,
-.timelineList,
-.timelineCard,
-.timelineTop {
-  display: grid;
-}
-
-.summaryStack,
-.uploadStack,
-.reviewStack {
-  gap: 24px;
-}
-
-.reviewStack {
-  grid-column: 1 / -1;
-}
-
-.message {
-  gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-soft);
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.messageSuccess {
-  border-color: rgba(31, 107, 87, 0.16);
-  background: var(--success-soft);
-  color: var(--success);
-}
-
-.messageError {
-  border-color: rgba(160, 79, 69, 0.16);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.hero {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 336px);
-  gap: 24px;
-  align-items: start;
-}
-
-.documentMeta {
-  gap: 16px;
-}
-
-.documentTitle {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(2.2rem, 4vw, 3.2rem);
-  line-height: 0.94;
-  letter-spacing: -0.06em;
-  font-weight: 700;
-}
-
-.metaStrip {
+/* ── Upload Zone ── */
+.uploadZone {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-}
-
-.metaStrip span {
-  display: inline-flex;
+  gap: var(--sp-3);
   align-items: center;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-soft);
-  color: var(--surface-ink-soft);
-  font-size: 12px;
-  font-weight: 600;
 }
 
-.documentCopy {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.heroAside {
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.nextStep {
-  gap: 8px;
-}
-
-.nextStepLabel {
-  color: var(--surface-ink-faint);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.nextStepText {
-  margin: 0;
-  color: var(--surface-ink);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.72;
-}
-
-.statGrid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.statCard {
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.statLabel,
-.reviewMetricLabel,
-.inlineFieldLabel,
-.proposalEyebrow,
-.timelineTag,
 .fileLabel {
-  color: var(--surface-ink-faint);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  flex: 1;
+  cursor: pointer;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fileText {
+  display: block;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.fileLabel:hover .fileText,
+.fileInput:focus + .fileText {
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
+}
+
+.feedback {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--text-xs);
+  border-left: 2px solid var(--phosphor);
+  background: oklch(0.12 0.02 145 / 0.2);
+  color: var(--phosphor);
+}
+
+.feedback[data-tone="error"] {
+  border-left-color: var(--red);
+  background: oklch(0.12 0.02 25 / 0.15);
+  color: var(--red);
+}
+
+/* ── Buttons ── */
+.btnPrimary,
+.btnAction,
+.btnSmall,
+.btnApprove,
+.btnReject {
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
+  white-space: nowrap;
+}
+
+.btnPrimary:hover:not(:disabled),
+.btnAction:hover:not(:disabled) {
+  background: var(--bg-active);
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor-bright);
+  box-shadow: var(--glow-phosphor);
+}
+
+.btnSmall {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--text-xs);
+}
+
+.btnSmall:hover:not(:disabled) {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.btnApprove {
+  border-color: oklch(0.40 0.08 145 / 0.5);
+  color: var(--phosphor);
+}
+
+.btnApprove:hover:not(:disabled) {
+  background: oklch(0.14 0.04 145 / 0.3);
+  box-shadow: var(--glow-phosphor);
+}
+
+.btnReject {
+  border-color: oklch(0.40 0.10 25 / 0.4);
+  color: var(--red);
+}
+
+.btnReject:hover:not(:disabled) {
+  background: oklch(0.14 0.04 25 / 0.2);
+  box-shadow: var(--glow-red);
+}
+
+/* ── Stat Grid ── */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--sp-3);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+}
+
+.stat[data-inline="true"] {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .statValue {
-  font-size: 1.45rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-
-.fileField {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.fileInput {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--surface-ink-soft);
-}
-
-.fileInput::file-selector-button {
-  margin-right: 12px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-strong);
-  color: var(--surface-ink);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.fileNote {
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.buttonRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.button,
-.ghostButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.button {
-  background: var(--surface-ink);
-  color: var(--surface-inverse);
-}
-
-.ghostButton {
-  border-color: var(--line);
-  background: var(--surface-strong);
-  color: var(--surface-ink);
-}
-
-.button:hover,
-.ghostButton:hover {
-  transform: translateY(-1px);
-}
-
-.button:disabled,
-.ghostButton:disabled {
-  color: var(--surface-ink-faint);
-}
-
-.emptyState,
-.reviewEmpty {
-  padding: 20px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-  color: var(--surface-ink-soft);
-  line-height: 1.72;
-}
-
-.reviewHeader {
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.reviewSelectField,
-.inlineField {
-  display: grid;
-  gap: 10px;
-}
-
-.reviewSelect,
-.inlineInput {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-strong);
-  color: var(--surface-ink);
-}
-
-.reviewMetricGrid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.reviewMetric {
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.reviewMetricValue {
-  font-size: 1.3rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-
-.reviewControlBar {
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  gap: 12px;
-}
-
-.inlineFieldWide {
-  min-width: 0;
-}
-
-.reviewLayout {
-  grid-template-columns: minmax(0, 1.04fr) minmax(320px, 0.96fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.reviewColumn {
-  gap: 16px;
-}
-
-.reviewSectionHeader {
-  gap: 8px;
-}
-
-.reviewSectionTitle,
-.proposalTitle,
-.timelineTitle {
-  margin: 0;
-}
-
-.reviewSectionTitle {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.reviewSectionCopy,
-.proposalMeta,
-.timelineDetail,
-.timelineNote {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.proposalList,
-.sessionDigest,
-.sessionTrail,
-.timelineList,
-.timelineGroupList,
-.timelineGroup,
-.timelineGroupHeader,
-.sessionTrailMeta,
-.executionCard,
-.executionGrid,
-.executionMetric,
-.queueInspector,
-.queueInspectorGrid,
-.queueInspectorCard,
-.filterChipRow,
-.ownerSnapshotGrid,
-.ownerSnapshotCard,
-.flowHandoffCard,
-.focusedPriorityList,
-.focusedPriorityCard,
-.changeCard,
-.deltaGrid,
-.deltaCard,
-.nextStepCard,
-.nextStepActions,
-.nextQueueCard,
-.focusTitle {
-  gap: 10px;
-}
-
-.proposalCard,
-.sessionDigestCard,
-.sessionTrailCard,
-.timelineCard,
-.executionCard,
-.flowHandoffCard,
-.focusedPriorityCard,
-.changeCard,
-.nextStepCard {
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.proposalTop,
-.timelineTop {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-}
-
-.timelineTopMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.proposalTitle,
-.timelineTitle {
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.proposalStatus {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-strong);
-  color: var(--surface-ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.proposalActions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.timelineDate {
-  color: var(--surface-ink-faint);
-  font-size: 12px;
+  font-size: var(--text-sm);
+  color: var(--phosphor);
   font-weight: 600;
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
 }
 
-.timelineNote {
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
+.stat[data-inline="true"] .statValue {
+  font-size: var(--text-xs);
 }
 
-.timelineGroupHeader {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.timelineGroupTitle {
-  margin: 0;
-  font-size: 0.96rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.timelineGroupCount {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  color: var(--surface-ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.executionCard {
-  margin-top: 12px;
-  background: color-mix(in srgb, var(--surface-strong) 72%, white);
-}
-
-.flowHandoffCard {
-  border-color: color-mix(in srgb, var(--surface-ink) 14%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 76%, white);
-}
-
-.handoffStepLane {
-  gap: 14px;
-}
-
-.handoffStepList {
-  gap: 12px;
-}
-
-.handoffStepCard {
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
-}
-
-.handoffStepCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
-}
-
-.handoffStepAction {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  color: var(--surface-ink-soft);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.handoffQueuedSteps {
+/* ── Action Bar ── */
+.actionBar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
 }
 
-.handoffQueuedStep {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-strong) 86%, white);
-}
-
-.focusedDecisionStrip {
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid color-mix(in srgb, var(--surface-ink) 16%, var(--line));
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-strong) 88%, white);
-}
-
-.focusedDecisionContent {
-  gap: 10px;
-}
-
-.focusedDecisionActions {
-  gap: 14px;
-}
-
-.focusedPriorityList {
-  gap: 12px;
-}
-
-.focusedPriorityCard {
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
-}
-
-.focusedPriorityCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
-}
-
-.focusedPriorityCardPrimary {
-  border-color: color-mix(in srgb, var(--surface-ink) 18%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 84%, white);
-}
-
-.focusedPriorityAction {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  color: var(--surface-ink-soft);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.executionGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.executionMetric {
-  padding: 14px;
-  border: 1px dashed var(--line);
-  border-radius: 14px;
-  background: var(--surface-strong);
-}
-
-.focusBanner {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--surface-ink) 18%, var(--line));
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-strong) 78%, white);
-}
-
-.focusTitle {
-  display: block;
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.focusActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.modeSwitch {
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--surface-ink) 12%, var(--line));
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-soft) 72%, white);
-}
-
-.modeSwitchControls {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.modeSwitchButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-strong);
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.modeSwitchButtonActive {
-  border-color: color-mix(in srgb, var(--surface-ink) 18%, var(--line));
-  background: var(--surface-ink);
-  color: var(--surface-inverse);
-}
-
-.sessionDigestGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.sessionDigestCard {
-  background: color-mix(in srgb, var(--surface-strong) 84%, white);
-}
-
-.sessionTrail {
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--surface-ink) 14%, var(--line));
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-strong) 84%, white);
-}
-
-.sessionTrailList {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.sessionTrailCard {
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
-}
-
-.sessionTrailCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
-}
-
-.sessionTrailCardActive {
-  border-color: color-mix(in srgb, var(--surface-ink) 22%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 88%, white);
-}
-
-.sessionTrailMeta {
-  gap: 6px;
-}
-
-.sessionTrailChain {
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.sessionTrailHint {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.queueInspector {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.queueInspectorGrid,
-.ownerSnapshotGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.queueInspectorCard,
-.ownerSnapshotCard {
-  padding: 14px;
-  border: 1px dashed var(--line);
-  border-radius: 14px;
-  background: var(--surface-strong);
-}
-
-.filterChipRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.filterChip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-strong);
-  color: var(--surface-ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.focusSection {
-  border-radius: var(--radius-card);
-  outline: 2px solid color-mix(in srgb, var(--surface-ink) 18%, transparent);
-  outline-offset: 4px;
-}
-
-.focusCard {
-  border-color: color-mix(in srgb, var(--surface-ink) 24%, var(--line));
-  background: var(--surface-strong);
-}
-
-.timelineEventButton {
-  text-align: left;
-  cursor: pointer;
-}
-
-.timelineEventButton:hover {
-  border-color: var(--line-strong);
-}
-
-.timelineCardActive {
-  border-color: color-mix(in srgb, var(--surface-ink) 22%, var(--line));
-  background: var(--surface-strong);
-}
-
-.timelineCardRecentChange {
-  border-color: color-mix(in srgb, var(--success) 28%, var(--line));
-  background: color-mix(in srgb, var(--success-soft) 45%, var(--surface-soft));
-}
-
-.workbenchShell,
-.queueRail,
-.queueRailHeader,
-.queueSummaryGrid,
-.queueFilterPanel,
-.queueSummaryCard,
-.ownerRail,
-.ownerCard,
-.queueList,
-.queueCard,
-.queueCardTop,
-.queueStatRow,
-.workbenchMain,
-.assignmentBar,
-.assignmentActions,
-.focusBanner,
-.changeCard,
-.infoPanel,
-.handoffStepLane,
-.handoffStepList,
-.focusedDecisionStrip,
-.focusedDecisionContent,
-.focusedDecisionActions,
-.contextGrid,
-.contextCard,
-.signalGrid,
-.signalCard,
-.signalHeader,
-.signalList,
-.signalItem,
-.signalActions {
+/* ── Workbench (Queue + Detail) ── */
+.workbench {
   display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--sp-5);
+  min-height: 500px;
 }
 
-.workbenchShell {
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.queueRail,
-.workbenchMain,
-.queueRailHeader,
-.queueSummaryGrid,
-.queueFilterPanel,
-.ownerRail,
-.queueList,
-.assignmentBar,
-.infoPanel,
-.contextGrid,
-.signalGrid,
-.signalList {
-  gap: 14px;
-}
-
+/* ── Queue Rail ── */
 .queueRail {
-  padding-right: 4px;
-}
-
-.queueSummaryGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.queueFilterPanel {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 10px;
-  align-items: end;
-}
-
-.queueSummaryCard,
-.contextCard,
-.signalCard,
-.ownerCard {
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
-}
-
-.ownerRail {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.ownerCard {
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
-}
-
-.ownerCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
-}
-
-.ownerCardActive {
-  border-color: color-mix(in srgb, var(--surface-ink) 22%, var(--line));
-  background: var(--surface-strong);
-}
-
-.ownerName {
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.ownerMeta {
-  color: var(--surface-ink-soft);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.changeCard {
-  border-color: color-mix(in srgb, var(--surface-ink) 14%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 82%, white);
-}
-
-.deltaGrid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.deltaCard {
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--line);
-  border-radius: 14px;
-  background: var(--surface-strong);
-}
-
-.nextStepCard {
-  border-color: color-mix(in srgb, var(--surface-ink) 12%, var(--line));
-  background: color-mix(in srgb, var(--warning-soft) 42%, var(--surface-strong));
-}
-
-.nextStepActions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  flex-direction: column;
+  gap: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  padding: var(--sp-4);
+  max-height: 80vh;
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--sp-6));
 }
 
-.nextQueueCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 14px;
-  border: 1px dashed var(--line);
-  border-radius: 14px;
-  background: var(--surface-strong);
-}
-
-.deltaLabel {
-  color: var(--surface-ink-faint);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.deltaValue {
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-.queueRankRow {
+.queueHeader {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
+  justify-content: space-between;
 }
 
+.queueTitle {
+  font-size: var(--text-sm);
+  color: var(--phosphor);
+  text-shadow: var(--glow-text);
+  margin: 0;
+}
+
+.queueCount {
+  font-size: var(--text-xs);
+  color: var(--amber);
+  font-weight: 600;
+  padding: 1px 8px;
+  border: 1px solid var(--border-amber);
+  border-radius: var(--radius-sm);
+}
+
+/* ── Queue Filters ── */
+.queueFilters {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.filterSelect:focus {
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
+}
+
+.filterClear {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--red);
+  border: 1px solid oklch(0.40 0.10 25 / 0.3);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+/* ── Queue List ── */
 .queueList {
-  max-height: 860px;
-  overflow: auto;
-  padding-right: 4px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .queueCard {
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
   text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+  transition: background 100ms ease, border-color 100ms ease;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
 }
 
 .queueCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
-.queueCardActive {
-  border-color: color-mix(in srgb, var(--surface-ink) 22%, var(--line));
-  background: var(--surface-strong);
+.queueCard[data-active="true"] {
+  background: var(--bg-active);
+  border-color: var(--phosphor-dim);
+  box-shadow: inset 2px 0 0 var(--phosphor);
 }
 
 .queueCardTop {
-  grid-template-columns: auto auto;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  align-items: center;
 }
 
-.queueRank,
-.queuePriority {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  color: var(--surface-ink-soft);
-  font-size: 11px;
+.queueOrdinal {
+  font-size: var(--text-xs);
   font-weight: 700;
-}
-
-.changeBadge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid rgba(31, 107, 87, 0.16);
-  border-radius: var(--radius-pill);
-  background: var(--success-soft);
-  color: var(--success);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.changeKindBadge,
-.timelineImpactBadge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--surface-ink) 12%, var(--line));
-  border-radius: var(--radius-pill);
-  background: var(--surface-strong);
-  color: var(--surface-ink-soft);
-  font-size: 10px;
-  font-weight: 800;
+  color: var(--phosphor);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
-.timelineImpactBadge {
-  border-color: rgba(31, 107, 87, 0.16);
-  background: var(--success-soft);
-  color: var(--success);
-}
-
-.queueTitle,
-.signalTitle {
-  margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.queueMeta {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.queueStatRow {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  color: var(--surface-ink-soft);
-  font-size: 12px;
+.queuePriority {
+  font-size: 9px;
   font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
-.queueDeltaHint {
-  margin: 0;
-  color: var(--surface-ink);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.6;
+.queuePriority[data-pri="immediate"] {
+  color: var(--red);
+  border-color: oklch(0.40 0.12 25 / 0.4);
 }
 
-.queueOutcomeMeta {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.6;
+.queuePriority[data-pri="high"] {
+  color: var(--amber);
+  border-color: oklch(0.40 0.10 75 / 0.4);
 }
 
-.queueOutcomeHint {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.6;
+.queueCardTitle {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.assignmentBar {
-  grid-template-columns: minmax(160px, 200px) minmax(160px, 220px) minmax(0, 1fr) auto;
-  align-items: end;
+.queueCardMeta {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
 }
 
-.assignmentActions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.loading {
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--amber);
+  font-size: var(--text-xs);
+  animation: blink 1.5s step-end infinite;
 }
 
-.infoPanel {
-  gap: 16px;
+.emptyQueue {
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 
-.contextGrid,
-.signalGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* ── Detail Panel ── */
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
 }
 
-.signalHeader {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+.detailEmpty {
+  display: flex;
   align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-10);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
 }
 
-.signalList {
-  gap: 10px;
+.prompt {
+  color: var(--phosphor);
+  font-weight: 700;
 }
 
-.signalItem {
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--phosphor);
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+  margin-left: var(--sp-1);
 }
 
-.signalActions {
-  gap: 10px;
-  justify-items: start;
+/* ── Chapter Header ── */
+.chapterHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
 }
 
-.signalItem:first-child {
-  padding-top: 0;
-  border-top: 0;
+.chapterTitle {
+  font-size: var(--text-base);
+  color: var(--phosphor-bright);
+  text-shadow: var(--glow-text);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-@media (max-width: 1080px) {
-  .grid {
+.chapterMeta {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* ── Sections ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+}
+
+.sectionTitle {
+  font-size: var(--text-xs);
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+  margin: 0;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Proposal Cards ── */
+.proposalCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+}
+
+.proposalType {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.proposalContent {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  word-break: break-all;
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+}
+
+.proposalLabel {
+  color: var(--text-muted);
+  margin-right: var(--sp-1);
+}
+
+.proposalActions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+/* ── Issue Cards ── */
+.issueCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+}
+
+.issueTop {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.issueType {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.issueHeadline {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+}
+
+.issueDetail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+/* ── Timeline ── */
+.timelineList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timelineEntry {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.timelineEntry:hover {
+  background: var(--bg-hover);
+}
+
+.timelineKind {
+  flex-shrink: 0;
+  width: 100px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timelineText {
+  flex: 1;
+  color: var(--text-secondary);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timelineDate {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .workbench {
     grid-template-columns: 1fr;
   }
 
-  .hero,
-  .workbenchShell,
-  .reviewHeader,
-  .reviewLayout,
-  .reviewControlBar,
-  .assignmentBar,
-  .focusBanner {
-    grid-template-columns: 1fr;
+  .queueRail {
+    position: static;
+    max-height: 400px;
   }
 
-  .reviewMetricGrid,
-  .sessionDigestGrid,
-  .queueSummaryGrid,
-  .queueFilterPanel,
-  .contextGrid,
-  .signalGrid,
-  .executionGrid,
-  .queueInspectorGrid,
-  .ownerSnapshotGrid,
-  .deltaGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .focusActions {
-    justify-content: stretch;
-  }
-
-  .nextQueueCard {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .statGrid,
-  .reviewMetricGrid,
-  .sessionDigestGrid,
-  .proposalActions,
-  .queueSummaryGrid,
-  .queueFilterPanel,
-  .queueStatRow,
-  .assignmentActions,
-  .contextGrid,
-  .signalGrid,
-  .executionGrid,
-  .queueInspectorGrid,
-  .ownerSnapshotGrid,
-  .deltaGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .buttonRow {
-    flex-direction: column;
-  }
-
-  .button,
-  .ghostButton {
-    width: 100%;
+  .statGrid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   }
 }

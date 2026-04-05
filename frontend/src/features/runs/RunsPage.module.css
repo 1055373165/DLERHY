@@ -1,116 +1,83 @@
-.layout,
-.summaryGrid,
-.summaryCard,
-.progressPanel,
-.stepList,
-.stepCard,
-.stepMeta,
-.splitGrid,
-.listCard,
-.listHeader,
-.chapterList,
-.chapterRow,
-.chapterMeta,
-.eventList,
-.eventCard,
-.eventMeta,
-.message,
-.emptyState {
+/* ═══════════════════════════════════════════════════════
+   RunsPage :: Pipeline Monitor
+   ═══════════════════════════════════════════════════════ */
+
+.layout {
   display: grid;
+  gap: var(--sp-6);
 }
 
-.layout,
-.stepList,
-.chapterList,
-.eventList {
-  gap: 20px;
-}
-
+/* ── Summary Cards ── */
 .summaryGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.summaryCard,
-.progressPanel,
-.stepCard,
-.listCard,
-.chapterRow,
-.eventCard,
-.message,
-.emptyState {
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-raised);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
 }
 
 .summaryCard {
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
 }
 
 .summaryCard:first-child {
-  border-color: var(--accent-line);
+  border-color: var(--phosphor-dim);
 }
 
-.summaryLabel,
-.progressLabel {
-  color: var(--surface-ink-faint);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+.label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.summaryValue {
-  font-size: 1.4rem;
+.value {
+  font-size: var(--text-sm);
+  color: var(--phosphor);
   font-weight: 700;
-  letter-spacing: -0.04em;
+  font-family: var(--font-mono);
 }
 
-.summaryNote {
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.6;
+.note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
 }
 
+/* ── Progress Panel ── */
 .progressPanel {
-  gap: 14px;
-  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
 }
 
 .progressHead {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
 }
 
-.progressMeta {
-  display: grid;
-  gap: 6px;
-}
-
-.progressValue {
-  font-size: clamp(1.9rem, 3vw, 2.4rem);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
+.progressPct {
+  font-size: var(--text-lg);
   font-weight: 700;
-}
-
-.progressCopy {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.65;
-  text-align: right;
+  color: var(--phosphor-bright);
+  text-shadow: var(--glow-text);
+  font-family: var(--font-mono);
 }
 
 .progressTrack {
   position: relative;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(23, 34, 46, 0.08);
+  height: 6px;
+  border-radius: 3px;
+  background: oklch(0.15 0.01 145 / 0.3);
   overflow: hidden;
 }
 
@@ -118,220 +85,314 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor-dim);
+  transition: width 300ms ease;
 }
 
-.actions {
+/* ── Action Bar ── */
+.actionBar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
 }
 
-.button,
-.ghostButton,
-.smallButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  font-weight: 700;
+.btnAction,
+.btnSmall {
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
+  white-space: nowrap;
 }
 
-.button {
-  background: var(--surface-ink);
-  color: var(--surface-inverse);
+.btnAction:hover:not(:disabled) {
+  background: var(--bg-active);
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor-bright);
+  box-shadow: var(--glow-phosphor);
 }
 
-.ghostButton,
-.smallButton {
-  border-color: var(--line);
-  background: var(--surface-strong);
-  color: var(--surface-ink);
+.btnSmall {
+  padding: var(--sp-1) var(--sp-3);
 }
 
-.smallButton {
-  min-height: 36px;
-  padding: 0 12px;
-  font-size: 12px;
+.btnSmall:hover:not(:disabled) {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
 }
 
-.button:disabled,
-.ghostButton:disabled,
-.smallButton:disabled {
-  color: var(--surface-ink-faint);
+.btnAction:disabled,
+.btnSmall:disabled {
+  opacity: 0.4;
 }
 
-.message {
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.65;
+/* ── Feedback ── */
+.feedback {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--text-xs);
+  border-left: 2px solid var(--phosphor);
+  background: oklch(0.12 0.02 145 / 0.2);
+  color: var(--phosphor);
+}
+
+.feedback[data-tone="error"] {
+  border-left-color: var(--red);
+  background: oklch(0.12 0.02 25 / 0.15);
+  color: var(--red);
+}
+
+/* ── Pipeline Steps ── */
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stepCard {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 100ms ease, background 100ms ease;
 }
 
 .stepCard[data-current="true"] {
-  border-color: var(--accent-line);
-  background: rgba(44, 91, 131, 0.04);
+  border-color: var(--phosphor-dim);
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--phosphor);
+}
+
+.stepCard[data-state="succeeded"] {
+  border-color: oklch(0.40 0.08 200 / 0.3);
+}
+
+.stepCard[data-state="failed"] {
+  border-color: oklch(0.40 0.10 25 / 0.4);
 }
 
 .stepIndex {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--surface-soft);
-  color: var(--surface-ink-soft);
-  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: var(--text-xs);
   font-weight: 700;
+  color: var(--text-muted);
 }
 
 .stepCard[data-current="true"] .stepIndex {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor-dim);
 }
 
 .stepCard[data-state="succeeded"] .stepIndex {
-  background: var(--success-soft);
-  color: var(--success);
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
 }
 
-.stepCard[data-state="failed"] .stepIndex,
-.stepCard[data-state="cancelled"] .stepIndex {
-  background: var(--danger-soft);
-  color: var(--danger);
+.stepCard[data-state="failed"] .stepIndex {
+  border-color: oklch(0.45 0.15 25 / 0.4);
+  color: var(--red);
 }
 
-.stepCard[data-state="paused"] .stepIndex {
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.stepMeta {
-  gap: 6px;
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stepTitle {
-  margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-xs);
   font-weight: 700;
+  color: var(--text-primary);
 }
 
-.stepCopy {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.7;
+.stepDesc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
 }
 
+.stepMeta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+}
+
+/* ── Split Grid ── */
 .splitGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-5);
 }
 
-.listCard {
-  gap: 18px;
-}
-
-.listHeader {
-  gap: 8px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.listTitle {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.listCopy {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.68;
-}
-
-.chapterRow,
-.eventCard {
-  gap: 10px;
-  background: var(--surface-soft);
-}
-
-.chapterTop,
-.eventTop {
+.section {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
 }
 
-.chapterMeta,
-.eventMeta {
-  gap: 4px;
-}
-
-.chapterTitle,
-.eventTitle {
+.sectionTitle {
+  font-size: var(--text-xs);
+  color: var(--cyan);
+  letter-spacing: 0.1em;
   margin: 0;
-  font-size: 0.98rem;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Cards ── */
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardOrd {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--phosphor);
+  letter-spacing: 0.06em;
+}
+
+.cardTitle {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.cardMeta {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Event List ── */
+.eventList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.eventRow:hover {
+  background: var(--bg-hover);
+}
+
+.eventKind {
+  flex-shrink: 0;
+  width: 80px;
+  color: var(--amber);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.eventText {
+  flex: 1;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.eventDate {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Empty State ── */
+.emptyState {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-4);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  justify-content: center;
+}
+
+.prompt {
+  color: var(--phosphor);
   font-weight: 700;
 }
 
-.chapterCopy,
-.eventCopy {
-  margin: 0;
-  color: var(--surface-ink-soft);
-  font-size: 13px;
-  line-height: 1.68;
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--phosphor);
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+  margin-left: var(--sp-1);
 }
 
-.emptyState {
-  color: var(--surface-ink-soft);
-  line-height: 1.7;
-}
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
 
-@media (max-width: 1080px) {
-  .summaryGrid,
   .splitGrid {
     grid-template-columns: 1fr;
   }
 
-  .progressHead {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .progressCopy {
-    text-align: left;
-  }
-}
-
-@media (max-width: 640px) {
   .stepCard {
     grid-template-columns: 1fr;
+    gap: var(--sp-2);
   }
 
-  .actions {
-    flex-direction: column;
-  }
-
-  .button,
-  .ghostButton {
-    width: 100%;
-  }
-
-  .chapterTop,
-  .eventTop {
-    flex-direction: column;
+  .stepIndex {
+    display: none;
   }
 }

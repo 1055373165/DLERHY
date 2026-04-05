@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import styles from "./Surface.module.css";
+import s from "./Surface.module.css";
 
 interface SurfaceProps {
   eyebrow: string;
@@ -12,16 +12,21 @@ interface SurfaceProps {
 
 export function Surface({ eyebrow, title, description, aside, children }: SurfaceProps) {
   return (
-    <section className={styles.surface}>
-      <div className={styles.head}>
-        <div className={styles.heading}>
-          <div className={styles.eyebrow}>{eyebrow}</div>
-          <h2 className={styles.title}>{title}</h2>
-          {description ? <p className={styles.description}>{description}</p> : null}
+    <section className={s.surface}>
+      <div className={s.head}>
+        <div className={s.titleBar}>
+          <span className={s.titleDot} />
+          <span className={s.eyebrow}>{eyebrow}</span>
         </div>
-        {aside ? <div className={styles.aside}>{aside}</div> : null}
+        <div className={s.headContent}>
+          <div className={s.heading}>
+            <h2 className={s.title}>{title}</h2>
+            {description ? <p className={s.description}>{description}</p> : null}
+          </div>
+          {aside ? <div className={s.aside}>{aside}</div> : null}
+        </div>
       </div>
-      <div className={styles.body}>{children}</div>
+      <div className={s.body}>{children}</div>
     </section>
   );
 }
