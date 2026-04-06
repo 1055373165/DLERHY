@@ -238,10 +238,10 @@ def extract_images_from_pdf(
         _page_img_rects_cache[page_idx] = result
         return result
 
-    RENDER_DPI = 200  # High-DPI for vector drawings
-    PADDING_PT = 3    # Small padding in points for vector clip regions
-    # Minimum useful image dimensions (skip tiny 3x3 pixel artifacts)
-    MIN_BBOX_AREA = 100  # square points
+    RENDER_DPI = 200  # High-DPI for vector/pixmap rendering
+    VECTOR_PADDING_PT = 8   # Generous padding for vector drawings (borders, labels)
+    EMBED_PADDING_PT = 3    # Smaller padding for embedded image fallback
+    MIN_BBOX_AREA = 50      # Minimum useful bbox area in square points
 
     for block in blocks:
         if block.block_type != "image" or not block.image_meta:
@@ -269,7 +269,7 @@ def extract_images_from_pdf(
         img_bytes = None
         ext = "png"
 
-        # Strategy 1: For embedded images, match by bbox overlap
+        # Strategy 1: For embedded images, match by bbox overlap with xref rects
         if image_type == "embedded_image":
             img_rects = _get_page_image_rects(page_idx)
             best_xref = None
@@ -290,15 +290,15 @@ def extract_images_from_pdf(
                 except Exception:
                     pass
 
-        # Strategy 2: Fallback / vector drawings — render page region as pixmap
+        # Strategy 2: Vector drawings OR embedded fallback — render page region as pixmap
         if img_bytes is None:
+            padding = VECTOR_PADDING_PT if image_type == "vector_drawing" else EMBED_PADDING_PT
             mat = fitz.Matrix(RENDER_DPI / 72, RENDER_DPI / 72)
-            # Add padding and clip to page bounds
             padded = fitz.Rect(
-                x0 - PADDING_PT, y0 - PADDING_PT,
-                x1 + PADDING_PT, y1 + PADDING_PT,
+                x0 - padding, y0 - padding,
+                x1 + padding, y1 + padding,
             )
-            padded = padded & page.rect  # intersect with page to stay in bounds
+            padded = padded & page.rect  # clip to page bounds
             if padded.is_empty:
                 continue
             try:
@@ -1132,23 +1132,15 @@ def main():
     for bt, cnt in type_counts.most_common():
         logger.info("  %s: %d", bt, cnt)
 
-    # Image handling
+    # Image handling — extract ALL images from PDF for accuracy
     image_paths: dict[str, str] = {}
 
-    # Try linking to existing assets first
-    existing_assets = Path("artifacts/review/bilingual-markdown-deliverables/assets")
-    if existing_assets.exists():
-        image_paths = link_existing_assets(blocks, existing_assets, output_dir)
-        logger.info("Linked %d images from existing assets", len(image_paths))
-
-    # Extract missing images from PDF
     if not args.skip_images and source_pdf and Path(source_pdf).exists():
-        image_blocks_without_path = [b for b in blocks if b.block_type == "image" and b.block_id not in image_paths]
-        if image_blocks_without_path:
-            pdf_paths = extract_images_from_pdf(source_pdf, image_blocks_without_path, output_dir)
-            image_paths.update(pdf_paths)
-            logger.info("Total image paths: %d / %d image blocks",
-                       len(image_paths), sum(1 for b in blocks if b.block_type == "image"))
+        image_blocks = [b for b in blocks if b.block_type == "image"]
+        if image_blocks:
+            image_paths = extract_images_from_pdf(source_pdf, image_blocks, output_dir)
+            logger.info("Image paths: %d / %d image blocks",
+                       len(image_paths), len(image_blocks))
 
     # Render Markdown
     md_content = render_markdown(blocks, image_paths, book_title, output_dir)

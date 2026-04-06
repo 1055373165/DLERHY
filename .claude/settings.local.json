@@ -21,7 +21,9 @@
       "Bash(uv run:*)",
       "Bash(chmod +x:*)",
       "Bash(bash -n /Users/smy/project/book-agent/dev.sh)",
-      "Bash(grep -E \"\\\\.sh$|forge|service|dev\")"
+      "Bash(grep -E \"\\\\.sh$|forge|service|dev\")",
+      "Bash(./service.sh status:*)",
+      "Bash(.venv/bin/python:*)"
     ]
   }
 }

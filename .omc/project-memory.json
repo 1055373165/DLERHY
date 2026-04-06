@@ -207,8 +207,8 @@
   "hotPaths": [
     {
       "path": "scripts/run_real_book_live.py",
-      "accessCount": 5,
-      "lastAccessed": 1775503773696,
+      "accessCount": 7,
+      "lastAccessed": 1775503940534,
       "type": "file"
     },
     {
@@ -239,6 +239,12 @@
       "path": "dev.sh",
       "accessCount": 2,
       "lastAccessed": 1775503387744,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/workflows.py",
+      "accessCount": 2,
+      "lastAccessed": 1775505267931,
       "type": "file"
     },
     {
@@ -326,12 +332,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/services/workflows.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503411947,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/workers/translator.py",
       "accessCount": 1,
       "lastAccessed": 1775503416352,
@@ -353,6 +353,12 @@
       "path": "src/book_agent/workers/providers/openai_compatible.py",
       "accessCount": 1,
       "lastAccessed": 1775503426738,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/export.py",
+      "accessCount": 1,
+      "lastAccessed": 1775505267160,
       "type": "file"
     }
   ],
