@@ -23,7 +23,8 @@
       "Bash(bash -n /Users/smy/project/book-agent/dev.sh)",
       "Bash(grep -E \"\\\\.sh$|forge|service|dev\")",
       "Bash(./service.sh status:*)",
-      "Bash(.venv/bin/python:*)"
+      "Bash(.venv/bin/python:*)",
+      "Bash(PYTHONPATH=/Users/smy/project/book-agent .venv/bin/python:*)"
     ]
   }
 }
