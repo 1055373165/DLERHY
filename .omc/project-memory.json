@@ -206,9 +206,27 @@
   },
   "hotPaths": [
     {
+      "path": "src/book_agent/domain/structure/pdf.py",
+      "accessCount": 8,
+      "lastAccessed": 1775506170487,
+      "type": "file"
+    },
+    {
       "path": "scripts/run_real_book_live.py",
       "accessCount": 7,
       "lastAccessed": 1775503940534,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/export.py",
+      "accessCount": 7,
+      "lastAccessed": 1775506166979,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/structure/epub.py",
+      "accessCount": 5,
+      "lastAccessed": 1775506154449,
       "type": "file"
     },
     {
@@ -245,6 +263,12 @@
       "path": "src/book_agent/services/workflows.py",
       "accessCount": 2,
       "lastAccessed": 1775505267931,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/pdf_structure_refresh.py",
+      "accessCount": 2,
+      "lastAccessed": 1775506158012,
       "type": "file"
     },
     {
@@ -320,12 +344,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/domain/structure/epub.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503407660,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/app/api/router.py",
       "accessCount": 1,
       "lastAccessed": 1775503408047,
@@ -356,10 +374,22 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/services/export.py",
+      "path": "src/book_agent/domain/structure/ocr.py",
       "accessCount": 1,
-      "lastAccessed": 1775505267160,
+      "lastAccessed": 1775506138601,
       "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/structure",
+      "accessCount": 1,
+      "lastAccessed": 1775506145359,
+      "type": "directory"
+    },
+    {
+      "path": "src",
+      "accessCount": 1,
+      "lastAccessed": 1775506150798,
+      "type": "directory"
     }
   ],
   "userDirectives": []

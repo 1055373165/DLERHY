@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-06T19:24:28.581Z",
+  "updatedAt": "2026-04-06T20:10:06.284Z",
   "missions": [
     {
       "id": "session:0bcb0a38-d1f5-45ab-911f-2931dbc50d39:none",
@@ -7,15 +7,15 @@
       "name": "none",
       "objective": "Session mission",
       "createdAt": "2026-04-06T19:12:19.789Z",
-      "updatedAt": "2026-04-06T19:24:28.581Z",
+      "updatedAt": "2026-04-06T20:10:06.284Z",
       "status": "done",
-      "workerCount": 1,
+      "workerCount": 2,
       "taskCounts": {
-        "total": 1,
+        "total": 2,
         "pending": 0,
         "blocked": 0,
         "inProgress": 0,
-        "completed": 1,
+        "completed": 2,
         "failed": 0
       },
       "agents": [
@@ -28,6 +28,16 @@
           "latestUpdate": "completed",
           "completedSummary": null,
           "updatedAt": "2026-04-06T19:24:28.581Z"
+        },
+        {
+          "name": "Explore:a904de8",
+          "role": "Explore",
+          "ownership": "a904de8bbd629102c",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-04-06T20:10:06.284Z"
         }
       ],
       "timeline": [
@@ -46,6 +56,22 @@
           "agent": "Explore:a8d1036",
           "detail": "completed",
           "sourceKey": "session-stop:a8d103659bf2e5711"
+        },
+        {
+          "id": "session-start:a904de8bbd629102c:2026-04-06T20:08:44.510Z",
+          "at": "2026-04-06T20:08:44.510Z",
+          "kind": "update",
+          "agent": "Explore:a904de8",
+          "detail": "started Explore:a904de8",
+          "sourceKey": "session-start:a904de8bbd629102c"
+        },
+        {
+          "id": "session-stop:a904de8bbd629102c:2026-04-06T20:10:06.284Z",
+          "at": "2026-04-06T20:10:06.284Z",
+          "kind": "completion",
+          "agent": "Explore:a904de8",
+          "detail": "completed",
+          "sourceKey": "session-stop:a904de8bbd629102c"
         }
       ]
     }
