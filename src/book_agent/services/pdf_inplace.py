@@ -33,9 +33,15 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_MIN_FONT_SIZE_ABSOLUTE = 5.0  # Hard prohibition: never below 5pt
-_BODY_FONT_RATIO_FLOOR = 0.60  # 60% of original size for body text
-_HEADING_FONT_RATIO_FLOOR = 0.70  # 70% for headings (tighter tolerance)
+_MIN_FONT_SIZE_ABSOLUTE = 4.0  # Hard floor: 4pt for footnotes/captions
+_BODY_FONT_RATIO_FLOOR = 0.55  # 55% of original size for body text
+_HEADING_FONT_RATIO_FLOOR = 0.55  # 55% for headings (relaxed for CJK)
+
+# CJK vertical expansion ratios — CJK fonts have ~1.3-1.5x line height vs Latin ~1.2x
+_HEADING_VEXPAND = 0.70  # 70% vertical expansion for headings (whitespace below)
+_BODY_VEXPAND = 0.35  # 35% for body text
+_SMALL_BLOCK_VEXPAND = 1.00  # 100% for small blocks (footnotes/captions need 2 CJK lines)
+_SMALL_BLOCK_HEIGHT_THRESHOLD = 15.0  # blocks below this height get extra expansion
 _FITTER_ITERATIONS = 12  # Binary-search iterations (~0.05pt precision)
 _TEXT_SIMILARITY_THRESHOLD = 0.55  # Fuzzy match threshold (lowered for real-world)
 _BBOX_OVERLAP_THRESHOLD = 0.20  # Minimum bbox overlap ratio
@@ -550,14 +556,20 @@ def build_replacement_plans(
 # Module D: Font Size Fitter
 # ---------------------------------------------------------------------------
 
-def _select_cjk_font(source_font_name: str) -> str:
-    """Select the best CJK font name based on the source font characteristics."""
+def _select_cjk_font(source_font_name: str, font_flags: int = 0) -> str:
+    """Select the best CJK font name based on the source font characteristics.
+
+    font_flags: PyMuPDF flags (bit 1=italic, bit 4=bold, bit 2=serif, bit 3=mono).
+    """
     name_lower = source_font_name.lower()
-    if any(kw in name_lower for kw in _MONO_FONT_KEYWORDS):
+    is_mono = bool(font_flags & 8) or any(kw in name_lower for kw in _MONO_FONT_KEYWORDS)
+    is_sans = any(kw in name_lower for kw in {"sans", "gothic", "helvetica", "arial", "franklin", "gill", "futura", "avenir", "trebuchet", "segoe"})
+
+    if is_mono:
         return _CJK_FONT_MONO
-    if any(kw in name_lower for kw in _SERIF_FONT_KEYWORDS):
-        return _CJK_FONT_SERIF
-    # Default to serif for body text (most books use serif)
+    if is_sans:
+        return _CJK_FONT_SANS
+    # Default serif (most book body text)
     return _CJK_FONT_SERIF
 
 
@@ -604,6 +616,7 @@ def compute_fitting_font_size(
     min_ratio: float = _BODY_FONT_RATIO_FLOOR,
     scratch_doc: fitz.Document | None = None,
     align: int = 0,
+    height_expand_ratio: float = _BODY_VEXPAND,
 ) -> float:
     """Binary search for the largest font size that fits text in bbox.
 
@@ -611,6 +624,7 @@ def compute_fitting_font_size(
     Returns the fitting font size (may be == max_size if text fits).
     Pass scratch_doc to reuse across multiple calls (significant speedup).
     align: fitz.TEXT_ALIGN_LEFT (0), TEXT_ALIGN_CENTER (1), TEXT_ALIGN_RIGHT (2), TEXT_ALIGN_JUSTIFY (3).
+    height_expand_ratio: vertical expansion factor for CJK line height (default 0.35 = 35%).
     """
     min_size = max(max_size * min_ratio, _MIN_FONT_SIZE_ABSOLUTE)
     if min_size >= max_size:
@@ -620,9 +634,10 @@ def compute_fitting_font_size(
     if rect.width < 1 or rect.height < 1:
         return max_size
 
-    # Allow 10% vertical expansion for CJK text fitting measurement
+    # CJK fonts have larger line height (~1.3-1.5x) than Latin (~1.2x).
+    # Expand measurement height to account for this difference.
     width = rect.width
-    height = rect.height * 1.10
+    height = rect.height * (1.0 + height_expand_ratio)
 
     # Quick check: does it fit at max size?
     if _test_textbox_fit(text, width, height, fontname, max_size, scratch_doc, align):
@@ -640,6 +655,132 @@ def compute_fitting_font_size(
             hi = mid
 
     return best
+
+
+# ---------------------------------------------------------------------------
+# Module C: Background Color Detection
+# ---------------------------------------------------------------------------
+
+@dataclass(slots=True)
+class _BgFill:
+    """A filled rectangle on a page that may be a background."""
+    rect: fitz.Rect
+    fill: tuple[float, float, float]
+
+
+def _detect_background_fills(page: fitz.Page) -> list[_BgFill]:
+    """Find non-white filled rectangles on a page (callout boxes, sidebars).
+
+    These indicate areas where redaction fill should match the background
+    rather than using white.
+    """
+    fills: list[_BgFill] = []
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return fills
+
+    for d in drawings:
+        fill = d.get("fill")
+        if not fill or not isinstance(fill, (list, tuple)) or len(fill) < 3:
+            continue
+        # Skip white and near-white fills
+        r, g, b = float(fill[0]), float(fill[1]), float(fill[2])
+        if r > 0.98 and g > 0.98 and b > 0.98:
+            continue
+        # Skip very dark fills (likely borders/lines, not backgrounds)
+        if r < 0.1 and g < 0.1 and b < 0.1:
+            continue
+        # Look for rectangle items (background shapes)
+        for item in d.get("items", []):
+            if item[0] == "re":  # rectangle
+                rect = item[1]
+                # Only consider reasonably sized rectangles (not tiny dots)
+                if isinstance(rect, fitz.Rect) and rect.width > 20 and rect.height > 20:
+                    fills.append(_BgFill(rect=rect, fill=(r, g, b)))
+    return fills
+
+
+def _find_background_color(
+    text_rect: fitz.Rect,
+    bg_fills: list[_BgFill],
+) -> tuple[float, float, float]:
+    """Find the background color behind a text rectangle.
+
+    Returns the fill color of the largest background rectangle that
+    contains or significantly overlaps the text rect.
+    Falls back to white (1, 1, 1) if no background is detected.
+    """
+    best_area = 0.0
+    best_fill = (1.0, 1.0, 1.0)
+
+    for bg in bg_fills:
+        # Check if the text rect is mostly inside this background rect
+        intersection = bg.rect & text_rect  # fitz.Rect intersection
+        if intersection.is_empty:
+            continue
+        overlap_area = intersection.width * intersection.height
+        text_area = max(text_rect.width * text_rect.height, 1.0)
+        # Text must be at least 50% inside the background
+        if overlap_area / text_area > 0.5:
+            bg_area = bg.rect.width * bg.rect.height
+            if bg_area > best_area:
+                best_area = bg_area
+                best_fill = bg.fill
+
+    return best_fill
+
+
+def _translate_bookmarks(
+    doc: fitz.Document,
+    plans: list[ReplacementPlan],
+    warnings: list[str],
+) -> None:
+    """Translate PDF bookmarks (TOC/outline) using heading replacement plans.
+
+    Matches bookmark titles to heading plans by page number and text similarity,
+    then replaces the bookmark text with the Chinese translation.
+    """
+    try:
+        toc = doc.get_toc(simple=True)
+    except Exception:
+        return
+    if not toc:
+        return
+
+    # Build a lookup: page_number → list of heading plans with translations
+    heading_plans_by_page: dict[int, list[ReplacementPlan]] = {}
+    for plan in plans:
+        if plan.is_heading and plan.target_text:
+            # TOC pages are 1-indexed in get_toc()
+            toc_page = plan.page_index + 1
+            heading_plans_by_page.setdefault(toc_page, []).append(plan)
+
+    translated_count = 0
+    new_toc = []
+    for entry in toc:
+        level, title, page = entry[0], entry[1], entry[2]
+        # Try to find a matching heading plan on this page
+        candidates = heading_plans_by_page.get(page, [])
+        best_sim = 0.0
+        best_target = None
+        for hp in candidates:
+            sim = _text_similarity(title, hp.source_text)
+            if sim > best_sim:
+                best_sim = sim
+                best_target = hp.target_text
+
+        if best_target and best_sim > 0.3:
+            new_toc.append([level, best_target, page])
+            translated_count += 1
+        else:
+            new_toc.append([level, title, page])
+
+    if translated_count > 0:
+        try:
+            doc.set_toc(new_toc)
+        except Exception as exc:
+            warnings.append(f"Bookmark translation failed: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -712,21 +853,44 @@ def execute_replacement(
     # Shared scratch document for font-size fitting (avoids creating thousands of temp docs)
     scratch_doc = fitz.open()
 
+    # Page height lookup for clamping expanded rects
+    page_heights: dict[int, float] = {}
+
     # Image count verification (per Hard Prohibition #2)
     for page_idx, page_plans in sorted(plans_by_page.items()):
         page = doc[page_idx]
         images_before = len(page.get_images(full=True))
+        page_height = page.rect.height
+        page_heights[page_idx] = page_height
+
+        # Pre-compute background fills: detect colored rectangles behind text
+        bg_fills = _detect_background_fills(page)
+
+        # Pre-compute vertical expansion ratios per plan
+        # CJK fonts have ~1.3-1.5x line height vs Latin ~1.2x, so we need
+        # more vertical space than the original English bbox provides.
+        def _vexpand_ratio(plan: ReplacementPlan) -> float:
+            if plan.is_heading:
+                return _HEADING_VEXPAND
+            bbox_height = plan.bbox[3] - plan.bbox[1]
+            if bbox_height < _SMALL_BLOCK_HEIGHT_THRESHOLD:
+                return _SMALL_BLOCK_VEXPAND
+            return _BODY_VEXPAND
 
         try:
-            # Step 1: Add redaction annotations for all source text areas
+            # Step 1: Add redaction annotations at ORIGINAL bbox only.
+            # IMPORTANT: Do NOT expand redaction area — expansion is only for
+            # insertion. Expanding redaction clears adjacent untranslated blocks'
+            # text, creating visible damage (e.g., "rn how to" from "learn how to").
             for plan in page_plans:
                 rect = fitz.Rect(plan.bbox)
                 if rect.width < 1 or rect.height < 1:
                     warnings.append(f"Block {plan.block_id}: degenerate bbox on page {page_idx}")
                     continue
+                fill_color = _find_background_color(rect, bg_fills)
                 page.add_redact_annot(
                     quad=rect,
-                    fill=(1, 1, 1),  # white fill
+                    fill=fill_color,
                 )
 
             # Step 2: Apply all redactions — CRITICAL: preserve images
@@ -738,10 +902,13 @@ def execute_replacement(
                 if rect.width < 1 or rect.height < 1:
                     continue
 
-                cjk_font = _select_cjk_font(plan.font_name)
+                cjk_font = _select_cjk_font(plan.font_name, plan.font_flags)
                 min_ratio = _HEADING_FONT_RATIO_FLOOR if plan.is_heading else _BODY_FONT_RATIO_FLOOR
                 # Use JUSTIFY for body text (packs CJK tighter), LEFT for headings
                 text_align = fitz.TEXT_ALIGN_LEFT if plan.is_heading else fitz.TEXT_ALIGN_JUSTIFY
+
+                # Select vertical expansion based on block type
+                vexpand = _vexpand_ratio(plan)
 
                 target_size = compute_fitting_font_size(
                     text=plan.target_text,
@@ -751,6 +918,7 @@ def execute_replacement(
                     min_ratio=min_ratio,
                     scratch_doc=scratch_doc,
                     align=text_align,
+                    height_expand_ratio=vexpand,
                 )
 
                 # Record font reduction
@@ -763,10 +931,10 @@ def execute_replacement(
                         used_size=target_size,
                         reduction_pct=reduction_pct,
                     ))
-                    if target_size < 7.0:
+                    if target_size < _MIN_FONT_SIZE_ABSOLUTE + 1.0:
                         warnings.append(
                             f"Block {plan.block_id}: font reduced to {target_size:.1f}pt "
-                            f"(below 7pt readability threshold)"
+                            f"(near {_MIN_FONT_SIZE_ABSOLUTE}pt floor)"
                         )
 
                 # Determine text color
@@ -780,11 +948,10 @@ def execute_replacement(
                     b = (plan.color & 0xFF) / 255.0
                     color = (r, g, b)
 
-                # For insertion, allow a small vertical expansion (10%)
-                # to accommodate CJK text which is typically wider/taller
+                # Expand insertion rect to match measurement expansion
                 insert_rect = fitz.Rect(rect)
-                height_expand = rect.height * 0.10
-                insert_rect.y1 += height_expand
+                expand_px = rect.height * vexpand
+                insert_rect.y1 = min(insert_rect.y1 + expand_px, page_height)
 
                 try:
                     rc = page.insert_textbox(
@@ -820,6 +987,9 @@ def execute_replacement(
 
     # Clean up scratch doc
     scratch_doc.close()
+
+    # Translate PDF bookmarks/outline (TOC sidebar in PDF readers)
+    _translate_bookmarks(doc, valid_plans, warnings)
 
     # Save with garbage collection and compression
     try:
