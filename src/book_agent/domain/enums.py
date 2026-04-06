@@ -240,6 +240,7 @@ class ExportType(StrEnum):
     REBUILT_EPUB = "rebuilt_epub"
     REBUILT_PDF = "rebuilt_pdf"
     ZH_EPUB = "zh_epub"
+    ZH_PDF = "zh_pdf"
     REVIEW_PACKAGE = "review_package"
     JSONL = "jsonl"
 
