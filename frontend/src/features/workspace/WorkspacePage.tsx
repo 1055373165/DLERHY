@@ -58,19 +58,19 @@ export function WorkspacePage() {
     if (!selectedFile) return;
     try {
       const result = await uploadFile(selectedFile);
-      setFeedback({ tone: "success", text: `[OK] Loaded: ${result.title ?? selectedFile.name}` });
+      setFeedback({ tone: "success", text: `Loaded: ${result.title ?? selectedFile.name}` });
       setSelectedFile(null);
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Upload failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
     }
   }
 
   async function handlePrimaryAction() {
     try {
       await runPrimaryAction();
-      setFeedback({ tone: "success", text: `[OK] ${action.label}` });
+      setFeedback({ tone: "success", text: action.label });
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Action failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Action failed" });
     }
   }
 
@@ -82,9 +82,9 @@ export function WorkspacePage() {
       } else {
         await rejectMemoryProposal(proposalId, payload);
       }
-      setFeedback({ tone: "success", text: `[OK] Proposal ${accept ? "approved" : "rejected"}` });
+      setFeedback({ tone: "success", text: `Proposal ${accept ? "approved" : "rejected"}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Decision failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Decision failed" });
     }
   }
 
@@ -94,19 +94,19 @@ export function WorkspacePage() {
       const ok = result.status === "executed" || result.issue_resolved;
       setFeedback({
         tone: ok ? "success" : "error",
-        text: `[${ok ? "OK" : "ERR"}] action ${result.action_id.slice(0, 8)} :: ${result.status}`,
+        text: `Action ${result.action_id.slice(0, 8)} :: ${result.status}`,
       });
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Execute failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Execute failed" });
     }
   }
 
   async function handleChapterDownload(chapterId: string) {
     try {
       const filename = await downloadChapterAsset(chapterId);
-      setFeedback({ tone: "success", text: `[OK] Downloaded: ${filename}` });
+      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Download failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
     }
   }
 
@@ -120,74 +120,68 @@ export function WorkspacePage() {
 
   return (
     <div className={s.layout}>
-      {/* ══════════════ INGEST PANEL ══════════════ */}
-      <Surface eyebrow="INGEST" title="载入书稿">
-        <div className={s.uploadZone}>
-          <label className={s.fileLabel}>
-            <input
-              type="file"
-              accept=".pdf,.epub"
-              className={s.fileInput}
-              onChange={(e) => {
-                setSelectedFile(e.target.files?.[0] ?? null);
-                setFeedback(null);
-              }}
-            />
-            <span className={s.fileText}>
-              {selectedFile ? `> ${selectedFile.name}` : "[ SELECT .PDF / .EPUB ]"}
-            </span>
-          </label>
-          <button
-            className={s.btnPrimary}
-            disabled={!selectedFile || uploadPending}
-            onClick={handleUpload}
-          >
-            {uploadPending ? "UPLOADING..." : "BOOTSTRAP"}
-          </button>
-        </div>
-        {feedback && (
-          <div className={s.feedback} data-tone={feedback.tone}>
-            {feedback.text}
-          </div>
-        )}
-      </Surface>
-
-      {/* ══════════════ DOCUMENT HERO ══════════════ */}
-      {doc && (
-        <Surface
-          eyebrow="ACTIVE DOCUMENT"
-          title={preferredTitle(doc)}
-          aside={<StatusBadge label={badge.label} tone={badge.tone} />}
+      {/* ── Upload Row ── */}
+      <div className={s.uploadRow}>
+        <label className={s.fileLabel}>
+          <input
+            type="file"
+            accept=".pdf,.epub"
+            className={s.fileInput}
+            onChange={(e) => {
+              setSelectedFile(e.target.files?.[0] ?? null);
+              setFeedback(null);
+            }}
+          />
+          <span className={s.fileText}>
+            {selectedFile ? selectedFile.name : "Select .pdf / .epub"}
+          </span>
+        </label>
+        <button
+          className="btn"
+          disabled={!selectedFile || uploadPending}
+          onClick={handleUpload}
         >
-          <div className={s.statGrid}>
-            <Stat label="STATUS" value={statusLabel(doc.status)} />
-            <Stat label="SOURCE" value={sourceLabel(doc.source_type)} />
-            <Stat label="CHAPTERS" value={formatNumber(doc.chapter_count)} />
-            <Stat label="PACKETS" value={formatNumber(doc.packet_count)} />
-            <Stat label="SENTENCES" value={formatNumber(doc.sentence_count)} />
-          </div>
+          {uploadPending ? "Uploading..." : "Bootstrap"}
+        </button>
+      </div>
 
-          {action.mode !== "disabled" && (
-            <div className={s.actionBar}>
+      {feedback && (
+        <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
+      )}
+
+      {/* ── Document Header (dense row) ── */}
+      {doc && (
+        <div className={s.docHeader}>
+          <div className={s.docHeaderTop}>
+            <h1 className={s.docTitle}>{preferredTitle(doc)}</h1>
+            <StatusBadge label={badge.label} tone={badge.tone} />
+          </div>
+          <div className={s.docStats}>
+            <Stat label="Status" value={statusLabel(doc.status)} />
+            <Stat label="Source" value={sourceLabel(doc.source_type)} />
+            <Stat label="Ch" value={formatNumber(doc.chapter_count)} />
+            <Stat label="Pkt" value={formatNumber(doc.packet_count)} />
+            <Stat label="Sent" value={formatNumber(doc.sentence_count)} />
+            {action.mode !== "disabled" && (
               <button
-                className={s.btnAction}
+                className="btn btn-sm"
                 disabled={action.disabled || runActionPending}
                 onClick={handlePrimaryAction}
               >
-                {runActionPending ? "EXECUTING..." : `$ ${action.label}`}
+                {runActionPending ? "..." : action.label}
               </button>
-            </div>
-          )}
-        </Surface>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* ══════════════ CHAPTER QUEUE + DETAIL ══════════════ */}
+      {/* ── Chapter Workbench ── */}
       {doc && (
         <div className={s.workbench}>
-          {/* ── Queue Rail ── */}
-          <div className={s.queueRail}>
+          {/* Queue Rail */}
+          <aside className={s.queueRail}>
             <div className={s.queueHeader}>
-              <h3 className={s.queueTitle}>CHAPTER QUEUE</h3>
+              <h3 className={s.queueTitle}>Chapters</h3>
               <span className={s.queueCount}>{queueEntries.length}</span>
             </div>
 
@@ -197,30 +191,30 @@ export function WorkspacePage() {
                 value={chapterWorklistFilters.queuePriority}
                 onChange={(e) => setChapterQueuePriorityFilter(e.target.value as "all" | "immediate" | "high" | "medium")}
               >
-                <option value="all">ALL PRI</option>
-                <option value="immediate">IMMEDIATE</option>
-                <option value="high">HIGH</option>
-                <option value="medium">MEDIUM</option>
+                <option value="all">All priority</option>
+                <option value="immediate">Immediate</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
               </select>
               <select
                 className={s.filterSelect}
                 value={chapterWorklistFilters.assignment}
                 onChange={(e) => setChapterAssignmentFilter(e.target.value as "all" | "assigned" | "unassigned")}
               >
-                <option value="all">ALL ASSIGN</option>
-                <option value="assigned">ASSIGNED</option>
-                <option value="unassigned">UNASSIGNED</option>
+                <option value="all">All assign</option>
+                <option value="assigned">Assigned</option>
+                <option value="unassigned">Unassigned</option>
               </select>
               {(chapterWorklistFilters.queuePriority !== "all" ||
                 chapterWorklistFilters.assignment !== "all") && (
                 <button className={s.filterClear} onClick={clearChapterWorklistFilters}>
-                  RESET
+                  Reset
                 </button>
               )}
             </div>
 
             <div className={s.queueList}>
-              {chapterWorklistLoading && <div className={s.loading}>SCANNING...</div>}
+              {chapterWorklistLoading && <div className={s.loading}>Loading...</div>}
               {queueEntries.map((entry) => (
                 <button
                   key={entry.chapter_id}
@@ -242,75 +236,73 @@ export function WorkspacePage() {
                 </button>
               ))}
               {!chapterWorklistLoading && queueEntries.length === 0 && (
-                <div className={s.emptyQueue}>NO CHAPTERS IN QUEUE</div>
+                <div className={s.emptyQueue}>No chapters in queue.</div>
               )}
             </div>
-          </div>
+          </aside>
 
-          {/* ── Detail Panel ── */}
+          {/* Detail Panel */}
           <div className={s.detailPanel}>
             {!selectedReviewChapterId && (
-              <div className={s.detailEmpty}>
-                <span className={s.prompt}>$</span> SELECT A CHAPTER FROM THE QUEUE
-                <span className={s.cursor} />
-              </div>
+              <div className={s.detailEmpty}>Select a chapter from the queue.</div>
             )}
 
             {selectedReviewChapterId && currentChapterReviewLoading && (
-              <div className={s.detailEmpty}>LOADING CHAPTER DATA...</div>
+              <div className={s.detailEmpty}>Loading chapter data...</div>
             )}
 
             {selectedReviewChapterId && detail && (
               <>
                 {/* Chapter Header */}
                 <div className={s.chapterHeader}>
-                  <h3 className={s.chapterTitle}>
-                    CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} :: {detail.title_src}
-                  </h3>
-                  <div className={s.chapterMeta}>
-                    <Stat label="ISSUES" value={String(detail.current_open_issue_count ?? 0)} inline />
-                    <Stat label="PROPOSALS" value={String(proposals.length)} inline />
-                    <Stat label="ACTIONS" value={String(actions.length)} inline />
+                  <div className={s.chapterHeaderTop}>
+                    <h3 className={s.chapterTitle}>
+                      CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} {detail.title_src}
+                    </h3>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => handleChapterDownload(selectedReviewChapterId)}
+                    >
+                      Download bilingual
+                    </button>
                   </div>
-                  <button
-                    className={s.btnSmall}
-                    onClick={() => handleChapterDownload(selectedReviewChapterId)}
-                  >
-                    DOWNLOAD BILINGUAL
-                  </button>
+                  <div className={s.chapterStats}>
+                    <Stat label="Issues" value={String(detail.current_open_issue_count ?? 0)} />
+                    <Stat label="Proposals" value={String(proposals.length)} />
+                    <Stat label="Actions" value={String(actions.length)} />
+                  </div>
                 </div>
 
                 {/* Memory Proposals */}
                 {proposals.length > 0 && (
                   <div className={s.section}>
                     <h4 className={s.sectionTitle}>MEMORY PROPOSALS</h4>
-                    {proposals.map((p) => (
-                      <div key={p.proposal_id} className={s.proposalCard}>
-                        <div className={s.proposalType}>{p.status}</div>
-                        <div className={s.proposalContent}>
-                          <span className={s.proposalLabel}>id:</span> {p.proposal_id.slice(0, 12)}
+                    <div className={s.proposalList}>
+                      {proposals.map((p) => (
+                        <div key={p.proposal_id} className={s.proposalRow}>
+                          <div className={s.proposalInfo}>
+                            <span className={s.proposalId}>{p.proposal_id.slice(0, 10)}</span>
+                            <span className={s.proposalMeta}>pkt {p.packet_id.slice(0, 10)}</span>
+                          </div>
+                          <div className={s.proposalActions}>
+                            <button
+                              className="btn btn-sm btn-approve"
+                              disabled={reviewDecisionPending}
+                              onClick={() => handleProposal(p.proposal_id, true)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="btn btn-sm btn-reject"
+                              disabled={reviewDecisionPending}
+                              onClick={() => handleProposal(p.proposal_id, false)}
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
-                        <div className={s.proposalContent}>
-                          <span className={s.proposalLabel}>packet:</span> {p.packet_id.slice(0, 12)}
-                        </div>
-                        <div className={s.proposalActions}>
-                          <button
-                            className={s.btnApprove}
-                            disabled={reviewDecisionPending}
-                            onClick={() => handleProposal(p.proposal_id, true)}
-                          >
-                            APPROVE
-                          </button>
-                          <button
-                            className={s.btnReject}
-                            disabled={reviewDecisionPending}
-                            onClick={() => handleProposal(p.proposal_id, false)}
-                          >
-                            REJECT
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -318,28 +310,26 @@ export function WorkspacePage() {
                 {issues.length > 0 && (
                   <div className={s.section}>
                     <h4 className={s.sectionTitle}>RECENT ISSUES</h4>
-                    {issues.map((issue) => (
-                      <div key={issue.issue_id} className={s.issueCard}>
-                        <div className={s.issueTop}>
+                    <div className={s.issueList}>
+                      {issues.map((issue) => (
+                        <div key={issue.issue_id} className={s.issueRow}>
                           <StatusBadge
                             label={issue.status}
                             tone={
-                              issue.status === "resolved"
-                                ? "success"
-                                : issue.severity === "blocking"
-                                  ? "danger"
-                                  : "warning"
+                              issue.status === "resolved" ? "success"
+                              : issue.severity === "blocking" ? "danger"
+                              : "warning"
                             }
                           />
                           <span className={s.issueType}>
                             {issue.issue_type} :: {issue.root_cause_layer}
                           </span>
+                          {issue.suggested_action && (
+                            <span className={s.issueSuggestion}>{issue.suggested_action}</span>
+                          )}
                         </div>
-                        {issue.suggested_action && (
-                          <div className={s.issueDetail}>{issue.suggested_action}</div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -347,24 +337,24 @@ export function WorkspacePage() {
                 {actions.length > 0 && (
                   <div className={s.section}>
                     <h4 className={s.sectionTitle}>PENDING ACTIONS</h4>
-                    {actions.map((act) => (
-                      <div key={act.action_id} className={s.issueCard}>
-                        <div className={s.issueTop}>
+                    <div className={s.actionList}>
+                      {actions.map((act) => (
+                        <div key={act.action_id} className={s.actionRow}>
                           <StatusBadge
                             label={act.status}
                             tone={act.status === "executed" ? "success" : "warning"}
                           />
-                          <span className={s.issueType}>{act.action_type}</span>
+                          <span className={s.actionType}>{act.action_type}</span>
+                          <button
+                            className="btn btn-sm"
+                            disabled={actionExecutionPending}
+                            onClick={() => handleAction(act.action_id)}
+                          >
+                            Execute
+                          </button>
                         </div>
-                        <button
-                          className={s.btnSmall}
-                          disabled={actionExecutionPending}
-                          onClick={() => handleAction(act.action_id)}
-                        >
-                          {`> EXECUTE ${act.action_type}`}
-                        </button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -374,7 +364,7 @@ export function WorkspacePage() {
                     <h4 className={s.sectionTitle}>TIMELINE</h4>
                     <div className={s.timelineList}>
                       {timeline.slice(0, 20).map((entry: ChapterWorklistTimelineEntry) => (
-                        <div key={entry.event_id} className={s.timelineEntry}>
+                        <div key={entry.event_id} className={s.timelineRow}>
                           <span className={s.timelineKind}>{entry.source_kind}</span>
                           <span className={s.timelineText}>
                             {entry.event_kind}
@@ -395,12 +385,12 @@ export function WorkspacePage() {
   );
 }
 
-/* ── Stat Helper ── */
-function Stat({ label, value, inline }: { label: string; value: string; inline?: boolean }) {
+/* ── Inline Stat ── */
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className={s.stat} data-inline={inline ?? false}>
+    <span className={s.stat}>
       <span className={s.statLabel}>{label}</span>
       <span className={s.statValue}>{value}</span>
-    </div>
+    </span>
   );
 }

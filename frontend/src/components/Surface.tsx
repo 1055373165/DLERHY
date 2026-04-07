@@ -10,21 +10,13 @@ interface SurfaceProps {
   children: ReactNode;
 }
 
-export function Surface({ eyebrow, title, description, aside, children }: SurfaceProps) {
+export function Surface({ eyebrow, title, aside, children }: SurfaceProps) {
   return (
     <section className={s.surface}>
       <div className={s.head}>
-        <div className={s.titleBar}>
-          <span className={s.titleDot} />
-          <span className={s.eyebrow}>{eyebrow}</span>
-        </div>
-        <div className={s.headContent}>
-          <div className={s.heading}>
-            <h2 className={s.title}>{title}</h2>
-            {description ? <p className={s.description}>{description}</p> : null}
-          </div>
-          {aside ? <div className={s.aside}>{aside}</div> : null}
-        </div>
+        <span className={s.eyebrow}>{eyebrow}</span>
+        <h2 className={s.title}>{title}</h2>
+        {aside ? <div className={s.aside}>{aside}</div> : null}
       </div>
       <div className={s.body}>{children}</div>
     </section>

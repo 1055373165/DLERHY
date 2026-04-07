@@ -1,209 +1,178 @@
-/* ═══════════════════════════════════════════════════════
-   DeliverablesPage :: Asset Delivery
-   ═══════════════════════════════════════════════════════ */
+/* DeliverablesPage :: Compact Asset Delivery */
 
 .layout {
   display: grid;
   gap: var(--sp-6);
 }
 
-/* ── Asset Grid ── */
-.assetGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-3);
-}
-
-.assetCard {
+/* ── Asset List (horizontal rows) ── */
+.assetList {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
 }
 
-.assetCard:first-child {
-  border-color: var(--gray-300);
+.assetRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.assetRow:last-child {
+  border-bottom: none;
 }
 
 .assetLabel {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+  width: 56px;
+  flex-shrink: 0;
 }
 
 .assetTitle {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
   font-family: var(--font-cjk);
+  min-width: 100px;
+  flex-shrink: 0;
 }
 
-.assetDesc {
+.assetAvail {
+  flex: 1;
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-family: var(--font-cjk);
-  line-height: 1.5;
-}
-
-/* ── Buttons ── */
-.btnAction {
-  padding: var(--sp-2) var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  background: var(--bg-panel);
-  color: var(--text-primary);
-  transition: background 100ms ease, border-color 100ms ease;
+  text-overflow: ellipsis;
+  overflow: hidden;
   white-space: nowrap;
-  margin-top: auto;
-}
-
-.btnAction:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--gray-400);
-}
-
-.btnAction:disabled {
-  opacity: 0.4;
 }
 
 /* ── Feedback ── */
 .feedback {
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   font-size: var(--text-xs);
-  border-left: 3px solid var(--blue);
-  background: var(--blue-light);
+  border-left: 2px solid var(--blue);
   color: var(--text-primary);
 }
 
 .feedback[data-tone="error"] {
   border-left-color: var(--red);
-  background: var(--red-light);
   color: var(--red);
 }
 
-/* ── Reason Box ── */
-.label {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+/* ── Gate Row ── */
+.gateRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-panel-alt);
+  border-radius: var(--radius-sm);
+}
+
+.gateLabel {
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
-.reasonBox {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-alt);
-}
-
-.reasonText {
+.gateText {
   font-size: var(--text-xs);
   color: var(--text-primary);
-  font-weight: 500;
   font-family: var(--font-cjk);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* ── Hotspots ── */
 .hotspotList {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
 }
 
-.hotspotCard {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-alt);
-}
-
-.hotspotTitle {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--red);
-}
-
-.hotspotMeta {
-  font-size: 9px;
-  color: var(--text-muted);
-}
-
-/* ── Records ── */
-.recordList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.recordRow {
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-alt);
-}
-
-.recordTop {
+.hotspotRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
 }
 
-.recordMeta {
+.hotspotRow:last-child {
+  border-bottom: none;
+}
+
+.hotspotType {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--red);
+}
+
+.hotspotCounts {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Records (table rows) ── */
+.recordList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+}
+
+.recordRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.recordRow:last-child {
+  border-bottom: none;
 }
 
 .recordType {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  min-width: 120px;
 }
 
-.recordNote {
+.recordDate {
+  flex: 1;
   font-size: var(--text-xs);
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Empty State ── */
 .emptyState {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-8) var(--sp-4);
+  padding: var(--sp-5) var(--sp-3);
   color: var(--text-muted);
   font-size: var(--text-xs);
-  justify-content: center;
-}
-
-.prompt {
-  display: none;
-}
-
-.cursor {
-  display: none;
+  text-align: center;
 }
 
 /* ── Responsive ── */
 @media (max-width: 860px) {
-  .assetGrid {
-    grid-template-columns: 1fr;
+  .assetRow {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+
+  .assetAvail {
+    flex-basis: 100%;
+    order: 4;
   }
 }

@@ -28,15 +28,15 @@ export function DeliverablesPage() {
   async function handleDownload(exportType: "merged_html" | "bilingual_html" | "review_package") {
     try {
       const filename = await downloadAsset(exportType);
-      setFeedback({ tone: "success", text: `[OK] Downloaded: ${filename}` });
+      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: `[ERR] ${err instanceof Error ? err.message : "Download failed"}` });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
     }
   }
 
   return (
     <div className={s.layout}>
-      {/* ══════════════ ASSETS ══════════════ */}
+      {/* ── Assets ── */}
       <Surface
         eyebrow="SHIP"
         title="交付资产"
@@ -44,39 +44,34 @@ export function DeliverablesPage() {
       >
         {currentDocument ? (
           <>
-            <div className={s.assetGrid}>
+            <div className={s.assetList}>
               {DELIVERY_ASSETS.map((asset) => (
-                <div key={asset.key} className={s.assetCard}>
+                <div key={asset.key} className={s.assetRow}>
                   <span className={s.assetLabel}>{asset.label}</span>
                   <span className={s.assetTitle}>{asset.title}</span>
-                  <span className={s.assetDesc}>
+                  <span className={s.assetAvail}>
                     {assetAvailabilityText(asset.key, currentDocument, currentRun, currentExports)}
                   </span>
                   <button
-                    className={s.btnAction}
+                    className="btn btn-sm"
                     disabled={!downloadReady(currentDocument, currentExports, asset.key)}
                     onClick={() => void handleDownload(asset.key)}
                   >
-                    {`> ${asset.buttonText}`}
+                    {asset.buttonText}
                   </button>
                 </div>
               ))}
             </div>
             {feedback && (
-              <div className={s.feedback} data-tone={feedback.tone}>
-                {feedback.text}
-              </div>
+              <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
             )}
           </>
         ) : (
-          <div className={s.emptyState}>
-            <span className={s.prompt}>$</span> LOAD A DOCUMENT TO VIEW DELIVERABLES
-            <span className={s.cursor} />
-          </div>
+          <div className={s.emptyState}>Load a document to view deliverables.</div>
         )}
       </Surface>
 
-      {/* ══════════════ BLOCKER STATUS ══════════════ */}
+      {/* ── Blocker Status ── */}
       <Surface
         eyebrow="GATE"
         title="交付阻塞"
@@ -103,9 +98,9 @@ export function DeliverablesPage() {
       >
         {currentDocument ? (
           <>
-            <div className={s.reasonBox}>
-              <span className={s.label}>DELIVERY STATUS</span>
-              <span className={s.reasonText}>
+            <div className={s.gateRow}>
+              <span className={s.gateLabel}>DELIVERY STATUS</span>
+              <span className={s.gateText}>
                 {deliverableBlockerReason(currentDocument, currentRun, currentExports)}
               </span>
             </div>
@@ -114,15 +109,13 @@ export function DeliverablesPage() {
                 {currentExports.issue_hotspots.slice(0, 3).map((entry) => (
                   <div
                     key={`${entry.issue_type}-${entry.root_cause_layer || "unknown"}`}
-                    className={s.hotspotCard}
+                    className={s.hotspotRow}
                   >
-                    <span className={s.hotspotTitle}>
+                    <span className={s.hotspotType}>
                       {entry.issue_type} :: {entry.root_cause_layer || "unknown"}
                     </span>
-                    <span className={s.hotspotMeta}>
-                      total {formatNumber(entry.issue_count)} | open{" "}
-                      {formatNumber(entry.open_issue_count)} | blocking{" "}
-                      {formatNumber(entry.blocking_issue_count)}
+                    <span className={s.hotspotCounts}>
+                      {formatNumber(entry.issue_count)} total &middot; {formatNumber(entry.open_issue_count)} open &middot; {formatNumber(entry.blocking_issue_count)} blocking
                     </span>
                   </div>
                 ))}
@@ -134,7 +127,7 @@ export function DeliverablesPage() {
         )}
       </Surface>
 
-      {/* ══════════════ EXPORT RECORDS ══════════════ */}
+      {/* ── Export Records ── */}
       <Surface
         eyebrow="LOG"
         title="导出记录"
@@ -144,18 +137,12 @@ export function DeliverablesPage() {
           <div className={s.recordList}>
             {currentExports.records.map((rec) => (
               <div key={rec.export_id} className={s.recordRow}>
-                <div className={s.recordTop}>
-                  <div className={s.recordMeta}>
-                    <span className={s.recordType}>{rec.export_type}</span>
-                    <span className={s.recordNote}>
-                      {statusLabel(rec.status)} :: {formatDate(rec.created_at)}
-                    </span>
-                  </div>
-                  <StatusBadge
-                    tone={rec.status === "succeeded" ? "success" : rec.status === "failed" ? "danger" : "warning"}
-                    label={statusLabel(rec.status)}
-                  />
-                </div>
+                <span className={s.recordType}>{rec.export_type}</span>
+                <span className={s.recordDate}>{formatDate(rec.created_at)}</span>
+                <StatusBadge
+                  tone={rec.status === "succeeded" ? "success" : rec.status === "failed" ? "danger" : "warning"}
+                  label={statusLabel(rec.status)}
+                />
               </div>
             ))}
           </div>

@@ -3,31 +3,53 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useWorkspace } from "../app/WorkspaceContext";
 import { SERVICE_LINKS } from "../lib/api";
-import { nextMilestoneText, preferredTitle } from "../lib/workflow";
+import { preferredTitle } from "../lib/workflow";
 import s from "./AppLayout.module.css";
 
+/* ── Inline SVG Icons (16×16) ── */
+const Icons = {
+  work: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="1.5" width="5" height="5" rx="1" />
+      <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
+      <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
+      <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
+    </svg>
+  ),
+  runs: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="5,2.5 13,8 5,13.5" />
+    </svg>
+  ),
+  ship: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 10.5l1-7h10l1 7" />
+      <rect x="1" y="10.5" width="14" height="3" rx="1" />
+      <path d="M6.5 3.5V1.5h3v2" />
+    </svg>
+  ),
+  lib: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="1.5" width="12" height="3" rx="1" />
+      <rect x="3" y="6.5" width="10" height="3" rx="1" />
+      <rect x="4" y="11.5" width="8" height="3" rx="1" />
+    </svg>
+  ),
+} as const;
+
 const NAV_ITEMS = [
-  { to: "/", label: "WORK", icon: ">", zh: "工作台" },
-  { to: "/runs", label: "RUNS", icon: "#", zh: "运行" },
-  { to: "/deliverables", label: "SHIP", icon: "%", zh: "交付" },
-  { to: "/library", label: "LIB", icon: "~", zh: "书库" },
+  { to: "/", label: "WORK", zh: "工作台", icon: Icons.work },
+  { to: "/runs", label: "RUNS", zh: "运行", icon: Icons.runs },
+  { to: "/deliverables", label: "SHIP", zh: "交付", icon: Icons.ship },
+  { to: "/library", label: "LIB", zh: "书库", icon: Icons.lib },
 ] as const;
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
-  const {
-    currentDocument,
-    currentRun,
-    currentExports,
-    health,
-    healthLoading,
-  } = useWorkspace();
+  const { currentDocument, health, healthLoading } = useWorkspace();
 
   const docTitle = currentDocument ? preferredTitle(currentDocument) : null;
-  const milestone = currentDocument
-    ? nextMilestoneText(currentDocument, currentRun ?? undefined, currentExports ?? undefined)
-    : null;
 
   const activeNav =
     NAV_ITEMS.find((n) =>
@@ -46,8 +68,10 @@ export function AppLayout() {
 
       {/* ── Sidebar ── */}
       <aside className={s.sidebar}>
-        <div className={s.logo}>Book Agent</div>
-        <div className={s.logoSub}>Translation Studio</div>
+        <div className={s.logo}>
+          <span className={s.logoMark}>B</span>
+          <span className={s.logoText}>Book Agent</span>
+        </div>
 
         <nav className={s.nav}>
           {NAV_ITEMS.map((item) => (
@@ -59,6 +83,7 @@ export function AppLayout() {
                 `${s.navItem} ${isActive ? s.navActive : ""}`
               }
               onClick={() => setNavOpen(false)}
+              title={`${item.label} ${item.zh}`}
             >
               <span className={s.navIcon}>{item.icon}</span>
               <span className={s.navLabel}>{item.label}</span>
@@ -70,7 +95,7 @@ export function AppLayout() {
         <div className={s.sidebarFooter}>
           <div className={s.systemLinks}>
             <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
-              API Docs
+              API
             </a>
             <a href={SERVICE_LINKS.openapi} target="_blank" rel="noopener" className={s.sysLink}>
               OpenAPI
@@ -82,7 +107,7 @@ export function AppLayout() {
               data-status={healthLoading ? "check" : health?.status === "ok" ? "ok" : "down"}
             />
             <span className={s.healthLabel}>
-              {healthLoading ? "Checking..." : health?.status === "ok" ? "Online" : "Offline"}
+              {healthLoading ? "..." : health?.status === "ok" ? "Online" : "Offline"}
             </span>
           </div>
         </div>
@@ -97,10 +122,9 @@ export function AppLayout() {
             onClick={() => setNavOpen((o) => !o)}
             aria-label="Toggle navigation"
           >
-            {navOpen ? "✕" : "☰"}
+            {navOpen ? "\u2715" : "\u2630"}
           </button>
           <div className={s.topbarLeft}>
-            <span className={s.prompt}>$</span>
             <span className={s.pageName}>{activeNav.label}</span>
             {docTitle && (
               <>
@@ -109,12 +133,6 @@ export function AppLayout() {
               </>
             )}
           </div>
-          {milestone && (
-            <div className={s.topbarRight}>
-              <span className={s.milestone}>{milestone}</span>
-              <span className={s.cursor} />
-            </div>
-          )}
         </header>
 
         <div className={s.content}>

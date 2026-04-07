@@ -1,93 +1,40 @@
-/* ═══════════════════════════════════════════════════════
-   Surface :: Content Panel
-   ═══════════════════════════════════════════════════════ */
+/* Surface :: Invisible Scaffolding */
 
 .surface {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-panel);
-  overflow: hidden;
+  /* No border, no background — just structure */
 }
 
-/* ── Title Bar ── */
 .head {
-  border-bottom: 1px solid var(--border);
-}
-
-.titleBar {
   display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-4);
-  background: var(--bg-panel-alt);
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
   border-bottom: 1px solid var(--border);
-}
-
-.titleDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--gray-400);
+  margin-bottom: var(--sp-4);
 }
 
 .eyebrow {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-}
-
-.headContent {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--sp-5);
-  padding: var(--sp-4) var(--sp-5);
-}
-
-.heading {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  flex-shrink: 0;
 }
 
 .title {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ink);
 }
 
-.description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  max-width: 52ch;
-  line-height: 1.6;
-  font-family: var(--font-cjk);
-}
-
 .aside {
+  margin-left: auto;
   flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  text-align: right;
 }
 
-/* ── Body ── */
 .body {
-  padding: var(--sp-5);
   display: grid;
   gap: var(--sp-4);
-}
-
-@media (max-width: 640px) {
-  .headContent {
-    flex-direction: column;
-  }
-
-  .aside {
-    text-align: left;
-  }
 }

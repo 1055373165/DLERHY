@@ -1,22 +1,21 @@
-/* ═══════════════════════════════════════════════════════
-   WorkspacePage :: Workspace
-   ═══════════════════════════════════════════════════════ */
+/* WorkspacePage :: Dense Workspace */
 
 .layout {
   display: grid;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
 
-/* ── Upload Zone ── */
-.uploadZone {
+/* ── Upload Row (compact) ── */
+.uploadRow {
   display: flex;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   align-items: center;
 }
 
 .fileLabel {
   flex: 1;
   cursor: pointer;
+  min-width: 0;
 }
 
 .fileInput {
@@ -29,12 +28,15 @@
 
 .fileText {
   display: block;
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   border: 1px dashed var(--gray-300);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: var(--text-sm);
-  transition: border-color 150ms ease, color 150ms ease;
+  font-size: var(--text-xs);
+  transition: border-color 100ms ease, color 100ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fileLabel:hover .fileText,
@@ -43,127 +45,83 @@
   color: var(--text-primary);
 }
 
+/* ── Feedback ── */
 .feedback {
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   font-size: var(--text-xs);
-  border-left: 3px solid var(--blue);
-  background: var(--blue-light);
+  border-left: 2px solid var(--blue);
   color: var(--text-primary);
 }
 
 .feedback[data-tone="error"] {
   border-left-color: var(--red);
-  background: var(--red-light);
   color: var(--red);
 }
 
-/* ── Buttons ── */
-.btnPrimary,
-.btnAction,
-.btnSmall,
-.btnApprove,
-.btnReject {
-  padding: var(--sp-2) var(--sp-4);
+/* ── Document Header (dense) ── */
+.docHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  background: var(--bg-panel);
-  color: var(--text-primary);
-  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.docHeaderTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.docTitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--font-cjk);
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.btnPrimary:hover:not(:disabled),
-.btnAction:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--gray-400);
-}
-
-.btnSmall {
-  padding: var(--sp-1) var(--sp-3);
-  font-size: var(--text-xs);
-}
-
-.btnSmall:hover:not(:disabled) {
-  border-color: var(--blue);
-  color: var(--blue);
-}
-
-.btnApprove {
-  border-color: var(--green);
-  color: var(--green);
-}
-
-.btnApprove:hover:not(:disabled) {
-  background: var(--green-light);
-}
-
-.btnReject {
-  border-color: var(--red);
-  color: var(--red);
-}
-
-.btnReject:hover:not(:disabled) {
-  background: var(--red-light);
-}
-
-/* ── Stat Grid ── */
-.statGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--sp-3);
-}
-
-.stat {
+.docStats {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
 }
 
-.stat[data-inline="true"] {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+/* ── Inline Stat ── */
+.stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
 }
 
 .statLabel {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .statValue {
-  font-size: var(--text-sm);
-  color: var(--ink);
-  font-weight: 600;
-  font-family: var(--font-cjk);
-}
-
-.stat[data-inline="true"] .statValue {
   font-size: var(--text-xs);
-}
-
-/* ── Action Bar ── */
-.actionBar {
-  display: flex;
-  gap: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--ink);
 }
 
 /* ── Workbench (Queue + Detail) ── */
 .workbench {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: var(--sp-5);
-  min-height: 500px;
+  min-height: 480px;
 }
 
 /* ── Queue Rail ── */
@@ -171,13 +129,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
   background: var(--bg-panel);
+  border-radius: var(--radius-md);
   padding: var(--sp-4);
   max-height: 80vh;
   position: sticky;
-  top: calc(var(--topbar-height) + var(--sp-6));
+  top: calc(var(--topbar-height) + var(--content-pad));
+  overflow: hidden;
 }
 
 .queueHeader {
@@ -187,17 +145,19 @@
 }
 
 .queueTitle {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink);
   font-weight: 600;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .queueCount {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
+  font-size: 10px;
+  color: var(--text-muted);
   font-weight: 600;
-  padding: 1px 8px;
+  padding: 1px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -205,7 +165,7 @@
 /* ── Queue Filters ── */
 .queueFilters {
   display: flex;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   flex-wrap: wrap;
 }
 
@@ -217,17 +177,18 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: var(--text-xs);
+  font-size: 10px;
 }
 
 .filterSelect:focus {
   border-color: var(--blue);
   color: var(--text-primary);
+  outline: none;
 }
 
 .filterClear {
   padding: var(--sp-1) var(--sp-2);
-  font-size: var(--text-xs);
+  font-size: 10px;
   color: var(--red);
   border: 1px solid var(--red-light);
   border-radius: var(--radius-sm);
@@ -240,33 +201,36 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .queueCard {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  gap: 3px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
   background: transparent;
   text-align: left;
-  transition: background 100ms ease, border-color 100ms ease;
+  transition: background 80ms ease;
   width: 100%;
   font: inherit;
   color: inherit;
+  border-left: 2px solid transparent;
+  border-right: none;
+  border-top: none;
+}
+
+.queueCard:last-child {
+  border-bottom: none;
 }
 
 .queueCard:hover {
   background: var(--bg-hover);
-  border-color: var(--gray-300);
 }
 
 .queueCard[data-active="true"] {
   background: var(--bg-active);
-  border-color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--ink);
+  border-left-color: var(--ink);
 }
 
 .queueCardTop {
@@ -286,19 +250,14 @@
   font-weight: 500;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
 }
 
 .queuePriority[data-pri="immediate"] {
   color: var(--red);
-  border-color: var(--red-light);
 }
 
 .queuePriority[data-pri="high"] {
   color: var(--amber);
-  border-color: var(--amber-light);
 }
 
 .queueCardTitle {
@@ -320,14 +279,14 @@
 }
 
 .loading {
-  padding: var(--sp-6);
+  padding: var(--sp-4);
   text-align: center;
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
 
 .emptyQueue {
-  padding: var(--sp-8) var(--sp-4);
+  padding: var(--sp-5) var(--sp-3);
   text-align: center;
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -337,39 +296,35 @@
 .detailPanel {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  gap: var(--sp-4);
   min-width: 0;
 }
 
 .detailEmpty {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-10);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
   justify-content: center;
+  padding: var(--sp-9);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
-}
-
-.prompt {
-  display: none;
-}
-
-.cursor {
-  display: none;
 }
 
 /* ── Chapter Header ── */
 .chapterHeader {
   display: flex;
   flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.chapterHeaderTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-panel);
 }
 
 .chapterTitle {
@@ -377,131 +332,166 @@
   color: var(--ink);
   font-weight: 600;
   font-family: var(--font-cjk);
-  text-transform: none;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chapterMeta {
+.chapterStats {
   display: flex;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
+  gap: var(--sp-4);
 }
 
 /* ── Sections ── */
 .section {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-panel);
+  gap: var(--sp-2);
 }
 
 .sectionTitle {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
+  font-size: 10px;
   font-weight: 600;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   margin: 0;
   padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--border);
 }
 
-/* ── Proposal Cards ── */
-.proposalCard {
+/* ── Proposals (compact rows) ── */
+.proposalList {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-alt);
 }
 
-.proposalType {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--amber);
+.proposalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }
 
-.proposalContent {
+.proposalRow:last-child {
+  border-bottom: none;
+}
+
+.proposalInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.proposalId {
   font-size: var(--text-xs);
-  color: var(--text-secondary);
-  word-break: break-all;
-  font-family: var(--font-cjk);
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
-.proposalLabel {
+.proposalMeta {
+  font-size: 10px;
   color: var(--text-muted);
-  margin-right: var(--sp-1);
+  font-family: var(--font-mono);
 }
 
 .proposalActions {
   display: flex;
-  gap: var(--sp-2);
-  margin-top: var(--sp-1);
+  gap: var(--sp-1);
+  flex-shrink: 0;
 }
 
-/* ── Issue Cards ── */
-.issueCard {
+/* ── Issues (flat rows) ── */
+.issueList {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-alt);
 }
 
-.issueTop {
+.issueRow {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.issueRow:last-child {
+  border-bottom: none;
 }
 
 .issueType {
   font-size: var(--text-xs);
   color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.issueHeadline {
-  font-size: var(--text-xs);
-  color: var(--text-primary);
-  font-family: var(--font-cjk);
-}
-
-.issueDetail {
-  font-size: var(--text-xs);
+.issueSuggestion {
+  flex: 1;
+  font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-cjk);
-  line-height: 1.5;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ── Actions (flat rows) ── */
+.actionList {
+  display: flex;
+  flex-direction: column;
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.actionRow:last-child {
+  border-bottom: none;
+}
+
+.actionType {
+  flex: 1;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 /* ── Timeline ── */
 .timelineList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
-.timelineEntry {
+.timelineRow {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--radius-sm);
+  padding: var(--sp-1) var(--sp-2);
   font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border);
 }
 
-.timelineEntry:hover {
+.timelineRow:last-child {
+  border-bottom: none;
+}
+
+.timelineRow:hover {
   background: var(--bg-hover);
 }
 
 .timelineKind {
   flex-shrink: 0;
-  width: 100px;
+  width: 80px;
   color: var(--text-muted);
   text-overflow: ellipsis;
   overflow: hidden;
@@ -521,6 +511,7 @@
   flex-shrink: 0;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  font-size: 10px;
 }
 
 /* ── Responsive ── */
@@ -531,10 +522,18 @@
 
   .queueRail {
     position: static;
-    max-height: 400px;
+    max-height: 360px;
   }
 
-  .statGrid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  .docStats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-2);
+  }
+
+  .issueRow,
+  .actionRow {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
   }
 }

@@ -1,0 +1,312 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775541905825,
+  "projectRoot": "/Users/smy/project/book-agent/frontend",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "19.0.0",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.0.0",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "7.0.0",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "2.1.0",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "tsc && vite build",
+      "preview": "vite preview",
+      "test": "vitest run"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "feature-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "public",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 1,
+      "lastAccessed": 1775541905804,
+      "keyFiles": [
+        "index.html"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 0,
+      "lastAccessed": 1775541905805,
+      "keyFiles": []
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 2,
+      "lastAccessed": 1775541905805,
+      "keyFiles": [
+        "main.tsx",
+        "vite-env.d.ts"
+      ]
+    },
+    "dist/assets": {
+      "path": "dist/assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1775541905805,
+      "keyFiles": [
+        "index-03fgz3pB.css",
+        "index-BOO8U5H4.js"
+      ]
+    },
+    "src/app": {
+      "path": "src/app",
+      "purpose": "Application code",
+      "fileCount": 4,
+      "lastAccessed": 1775541905805,
+      "keyFiles": [
+        "App.test.tsx",
+        "App.tsx",
+        "WorkspaceContext.tsx"
+      ]
+    },
+    "src/components": {
+      "path": "src/components",
+      "purpose": "UI components",
+      "fileCount": 6,
+      "lastAccessed": 1775541905806,
+      "keyFiles": [
+        "AppLayout.module.css",
+        "AppLayout.tsx",
+        "StatusBadge.module.css"
+      ]
+    },
+    "src/lib": {
+      "path": "src/lib",
+      "purpose": "Library code",
+      "fileCount": 2,
+      "lastAccessed": 1775541905806,
+      "keyFiles": [
+        "api.ts",
+        "workflow.ts"
+      ]
+    },
+    "src/test": {
+      "path": "src/test",
+      "purpose": "Test files",
+      "fileCount": 1,
+      "lastAccessed": 1775541905806,
+      "keyFiles": [
+        "setup.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/components/Surface.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1775543194119,
+      "type": "file"
+    },
+    {
+      "path": "src/features/library/LibraryPage.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1775543324378,
+      "type": "file"
+    },
+    {
+      "path": "src/features/deliverables/DeliverablesPage.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1775543361328,
+      "type": "file"
+    },
+    {
+      "path": "src/features/workspace/WorkspacePage.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1775543683705,
+      "type": "file"
+    },
+    {
+      "path": "src/features/runs/RunsPage.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1775543415359,
+      "type": "file"
+    },
+    {
+      "path": "src/components/StatusBadge.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775543130173,
+      "type": "file"
+    },
+    {
+      "path": "src/components/AppLayout.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775543238021,
+      "type": "file"
+    },
+    {
+      "path": "src/styles/tokens.css",
+      "accessCount": 4,
+      "lastAccessed": 1775543075171,
+      "type": "file"
+    },
+    {
+      "path": "src/styles/global.css",
+      "accessCount": 4,
+      "lastAccessed": 1775543111327,
+      "type": "file"
+    },
+    {
+      "path": "src/components/StatusBadge.module.css",
+      "accessCount": 4,
+      "lastAccessed": 1775543158313,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Surface.module.css",
+      "accessCount": 4,
+      "lastAccessed": 1775543197939,
+      "type": "file"
+    },
+    {
+      "path": "src/components/AppLayout.module.css",
+      "accessCount": 4,
+      "lastAccessed": 1775543273129,
+      "type": "file"
+    },
+    {
+      "path": "src/app/App.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775542080777,
+      "type": "file"
+    },
+    {
+      "path": "src/app/WorkspaceContext.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775542081639,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/api.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775542082441,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/workflow.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775542082716,
+      "type": "file"
+    },
+    {
+      "path": "index.html",
+      "accessCount": 3,
+      "lastAccessed": 1775543051796,
+      "type": "file"
+    },
+    {
+      "path": "src/app/queryClient.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775541945632,
+      "type": "file"
+    },
+    {
+      "path": "src/main.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775542103117,
+      "type": "file"
+    },
+    {
+      "path": "src/features/library/LibraryPage.module.css",
+      "accessCount": 2,
+      "lastAccessed": 1775543333495,
+      "type": "file"
+    },
+    {
+      "path": "src/features/deliverables/DeliverablesPage.module.css",
+      "accessCount": 2,
+      "lastAccessed": 1775543371095,
+      "type": "file"
+    },
+    {
+      "path": "src/features/runs/RunsPage.module.css",
+      "accessCount": 2,
+      "lastAccessed": 1775543437781,
+      "type": "file"
+    },
+    {
+      "path": "src/features/workspace/WorkspacePage.module.css",
+      "accessCount": 2,
+      "lastAccessed": 1775543729793,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 1,
+      "lastAccessed": 1775542103991,
+      "type": "file"
+    },
+    {
+      "path": "vite.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775542104377,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

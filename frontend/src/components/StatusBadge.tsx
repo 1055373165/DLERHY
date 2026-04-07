@@ -6,7 +6,7 @@ export function StatusBadge({ label, tone }: { label: string; tone: Tone }) {
   return (
     <span className={`${s.badge} ${s[tone]}`}>
       <span className={s.dot} />
-      {label}
+      <span className={s.label}>{label}</span>
     </span>
   );
 }
