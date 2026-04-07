@@ -824,7 +824,7 @@ async function saveBinaryResponse(response: Response, fallbackName: string): Pro
 
 export async function downloadDocumentExport(
   documentId: string,
-  exportType: "merged_html" | "bilingual_html" | "review_package"
+  exportType: "merged_html" | "bilingual_html" | "merged_markdown" | "bilingual_markdown" | "review_package"
 ): Promise<string> {
   const response = await requestBinary(
     `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(

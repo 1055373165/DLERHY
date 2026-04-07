@@ -242,16 +242,16 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 7,
+      "lastAccessed": 1775546019160,
+      "type": "directory"
+    },
+    {
       "path": "src/book_agent/domain/structure/epub.py",
       "accessCount": 5,
       "lastAccessed": 1775506154449,
       "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 5,
-      "lastAccessed": 1775507165254,
-      "type": "directory"
     },
     {
       "path": "artifacts/real-book-live/principles-ai-agents-v1/exports/markdown/Principles-AI-Agents-zh.md",
@@ -308,6 +308,12 @@
       "type": "file"
     },
     {
+      "path": "src/book_agent",
+      "accessCount": 3,
+      "lastAccessed": 1775545905027,
+      "type": "directory"
+    },
+    {
       "path": "Dockerfile",
       "accessCount": 2,
       "lastAccessed": 1775502749278,
@@ -335,12 +341,6 @@
       "path": "src/book_agent/domain/models",
       "accessCount": 2,
       "lastAccessed": 1775507009821,
-      "type": "directory"
-    },
-    {
-      "path": "src/book_agent",
-      "accessCount": 2,
-      "lastAccessed": 1775507182265,
       "type": "directory"
     },
     {

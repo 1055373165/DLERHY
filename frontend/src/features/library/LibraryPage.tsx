@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useEffect, useDeferredValue, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -18,6 +18,13 @@ import s from "./LibraryPage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
+const DOWNLOAD_OPTIONS = [
+  { label: "中文版 · HTML", exportType: "merged_html" },
+  { label: "中文版 · Markdown", exportType: "merged_markdown" },
+  { label: "对照版 · HTML", exportType: "bilingual_html" },
+  { label: "对照版 · Markdown", exportType: "bilingual_markdown" },
+] as const;
+
 export function LibraryPage() {
   const navigate = useNavigate();
   const { selectDocument } = useWorkspace();
@@ -26,7 +33,21 @@ export function LibraryPage() {
   const [status, setStatus] = useState("");
   const [runStatus, setRunStatus] = useState("");
   const [mergedReady, setMergedReady] = useState<"" | "true" | "false">("");
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const deferredQuery = useDeferredValue(query.trim());
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!openMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [openMenu]);
 
   const historyQuery = useQuery({
     queryKey: ["document-history", "library", deferredQuery, status, runStatus, mergedReady],
@@ -46,9 +67,11 @@ export function LibraryPage() {
     await navigate("/");
   }
 
-  async function handleDownload(documentId: string) {
+  type ExportKey = typeof DOWNLOAD_OPTIONS[number]["exportType"];
+  async function handleDownload(documentId: string, exportType: ExportKey) {
+    setOpenMenu(null);
     try {
-      const filename = await downloadDocumentExport(documentId, "merged_html");
+      const filename = await downloadDocumentExport(documentId, exportType);
       setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
@@ -129,13 +152,28 @@ export function LibraryPage() {
                     <button className="btn btn-sm" onClick={() => void handleOpen(entry.document_id)}>
                       Open
                     </button>
-                    <button
-                      className="btn btn-sm"
-                      disabled={!entry.merged_export_ready}
-                      onClick={() => void handleDownload(entry.document_id)}
-                    >
-                      {entry.merged_export_ready ? "Download" : "—"}
-                    </button>
+                    <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
+                      <button
+                        className="btn btn-sm"
+                        disabled={!entry.merged_export_ready}
+                        onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
+                      >
+                        {entry.merged_export_ready ? "Download ▾" : "—"}
+                      </button>
+                      {openMenu === entry.document_id && (
+                        <div className={s.dlMenu}>
+                          {DOWNLOAD_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.exportType}
+                              className={s.dlOption}
+                              onClick={() => void handleDownload(entry.document_id, opt.exportType)}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
