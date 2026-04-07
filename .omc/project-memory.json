@@ -218,6 +218,12 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 11,
+      "lastAccessed": 1775549767792,
+      "type": "directory"
+    },
+    {
       "path": "src/book_agent/services/bootstrap.py",
       "accessCount": 10,
       "lastAccessed": 1775509690531,
@@ -234,12 +240,6 @@
       "accessCount": 10,
       "lastAccessed": 1775540641278,
       "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 10,
-      "lastAccessed": 1775548535880,
-      "type": "directory"
     },
     {
       "path": "src/book_agent/app/api/routes/documents.py",
@@ -266,6 +266,12 @@
       "type": "file"
     },
     {
+      "path": "src/book_agent",
+      "accessCount": 5,
+      "lastAccessed": 1775549791927,
+      "type": "directory"
+    },
+    {
       "path": "frontend/src/styles/tokens.css",
       "accessCount": 4,
       "lastAccessed": 1775541217026,
@@ -276,12 +282,6 @@
       "accessCount": 4,
       "lastAccessed": 1775544636029,
       "type": "file"
-    },
-    {
-      "path": "src/book_agent",
-      "accessCount": 4,
-      "lastAccessed": 1775547184087,
-      "type": "directory"
     },
     {
       "path": "src/book_agent/services/workflows.py",
@@ -360,6 +360,12 @@
       "accessCount": 2,
       "lastAccessed": 1775544706559,
       "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/models/document.py",
+      "accessCount": 2,
+      "lastAccessed": 1775549804408,
+      "type": "directory"
     },
     {
       "path": "compose.yaml",
@@ -461,12 +467,6 @@
       "path": "src/book_agent/domain/structure",
       "accessCount": 1,
       "lastAccessed": 1775506145359,
-      "type": "directory"
-    },
-    {
-      "path": "src/book_agent/domain/models/document.py",
-      "accessCount": 1,
-      "lastAccessed": 1775506720516,
       "type": "directory"
     },
     {
