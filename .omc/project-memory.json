@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775483790054,
+  "lastScanned": 1775571748548,
   "projectRoot": "/Users/smy/project/book-agent",
   "techStack": {
     "languages": [
@@ -45,7 +45,6 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
-      "docs",
       "scripts",
       "src",
       "tests"
@@ -61,7 +60,7 @@
       "path": "alembic",
       "purpose": null,
       "fileCount": 4,
-      "lastAccessed": 1775483790006,
+      "lastAccessed": 1775571748521,
       "keyFiles": [
         "README",
         "env.py",
@@ -72,7 +71,7 @@
       "path": "artifacts",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1775483790006,
+      "lastAccessed": 1775571748522,
       "keyFiles": [
         "book-agent.db",
         "book_agent.db",
@@ -84,51 +83,16 @@
       "path": "books",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1775483790007,
+      "lastAccessed": 1775571748523,
       "keyFiles": [
         "build-an-ai-agent.epub"
-      ]
-    },
-    "docs": {
-      "path": "docs",
-      "purpose": "Documentation",
-      "fileCount": 42,
-      "lastAccessed": 1775483790008,
-      "keyFiles": [
-        "agent-runtime-v2-round2-backport-execution-plan.md",
-        "agent-runtime-v2-round2-mainline-backport-plan.md",
-        "backlog.md",
-        "chapter-local-translation-memory-design.md",
-        "classic-philosophy-reading-pilot-design.md"
-      ]
-    },
-    "forge": {
-      "path": "forge",
-      "purpose": null,
-      "fileCount": 7,
-      "lastAccessed": 1775483790009,
-      "keyFiles": [
-        "ARTIFACTS.md",
-        "EVOLUTION_LOG.md",
-        "MIGRATION_PLAN.md",
-        "OPERATING_MODEL.md",
-        "RUNBOOK.md"
-      ]
-    },
-    "forge-v2": {
-      "path": "forge-v2",
-      "purpose": null,
-      "fileCount": 1,
-      "lastAccessed": 1775483790010,
-      "keyFiles": [
-        "SKILL.md"
       ]
     },
     "frontend": {
       "path": "frontend",
       "purpose": null,
       "fileCount": 9,
-      "lastAccessed": 1775483790010,
+      "lastAccessed": 1775571748524,
       "keyFiles": [
         "index.html",
         "package-lock.json",
@@ -140,28 +104,28 @@
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
-      "fileCount": 27,
-      "lastAccessed": 1775483790010,
+      "fileCount": 31,
+      "lastAccessed": 1775571748525,
       "keyFiles": [
+        "audit_and_fix_images.py",
         "backfill_chapter_memory.py",
         "compare_packet_experiments.py",
         "export_packet_debug.py",
-        "export_zh_pdf_inplace.py",
-        "extract_pdf_images.py"
+        "export_zh_pdf_inplace.py"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 0,
-      "lastAccessed": 1775483790011,
+      "lastAccessed": 1775571748526,
       "keyFiles": []
     },
     "tests": {
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 68,
-      "lastAccessed": 1775483790015,
+      "lastAccessed": 1775571748527,
       "keyFiles": [
         "__init__.py",
         "test_api_deps.py",
@@ -174,7 +138,7 @@
       "path": "frontend/dist",
       "purpose": "Distribution/build output",
       "fileCount": 1,
-      "lastAccessed": 1775483790024,
+      "lastAccessed": 1775571748530,
       "keyFiles": [
         "index.html"
       ]
@@ -183,44 +147,34 @@
       "path": "frontend/node_modules",
       "purpose": "Dependencies",
       "fileCount": 1,
-      "lastAccessed": 1775483790031,
+      "lastAccessed": 1775571748531,
       "keyFiles": []
     },
     "frontend/public": {
       "path": "frontend/public",
       "purpose": "Public files",
       "fileCount": 0,
-      "lastAccessed": 1775483790031,
+      "lastAccessed": 1775571748532,
       "keyFiles": []
-    },
-    "frontend/src": {
-      "path": "frontend/src",
-      "purpose": "Source code",
-      "fileCount": 2,
-      "lastAccessed": 1775483790031,
-      "keyFiles": [
-        "main.tsx",
-        "vite-env.d.ts"
-      ]
     }
   },
   "hotPaths": [
     {
       "path": "src/book_agent/domain/structure/pdf.py",
-      "accessCount": 66,
-      "lastAccessed": 1775540393986,
+      "accessCount": 67,
+      "lastAccessed": 1775571918444,
       "type": "file"
     },
     {
       "path": "src/book_agent/services/export.py",
-      "accessCount": 58,
-      "lastAccessed": 1775552299151,
+      "accessCount": 59,
+      "lastAccessed": 1775571917557,
       "type": "file"
     },
     {
       "path": "src/book_agent/app/api/routes/documents.py",
-      "accessCount": 26,
-      "lastAccessed": 1775552954052,
+      "accessCount": 27,
+      "lastAccessed": 1775571916484,
       "type": "file"
     },
     {
@@ -272,27 +226,33 @@
       "type": "directory"
     },
     {
+      "path": ".env",
+      "accessCount": 8,
+      "lastAccessed": 1775571885845,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/components/AppLayout.tsx",
       "accessCount": 7,
       "lastAccessed": 1775541204273,
       "type": "file"
     },
     {
-      "path": ".env",
-      "accessCount": 6,
-      "lastAccessed": 1775566378843,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/domain/structure/epub.py",
-      "accessCount": 5,
-      "lastAccessed": 1775506154449,
+      "accessCount": 6,
+      "lastAccessed": 1775571919069,
       "type": "file"
     },
     {
       "path": "artifacts/real-book-live/principles-ai-agents-v1/exports/markdown/Principles-AI-Agents-zh.md",
       "accessCount": 5,
       "lastAccessed": 1775509893550,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/core/config.py",
+      "accessCount": 5,
+      "lastAccessed": 1775571897085,
       "type": "file"
     },
     {
@@ -314,10 +274,16 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/core/config.py",
+      "path": "src/book_agent/app/main.py",
       "accessCount": 4,
-      "lastAccessed": 1775566259169,
+      "lastAccessed": 1775571896183,
       "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/models/document.py",
+      "accessCount": 4,
+      "lastAccessed": 1775571902288,
+      "type": "directory"
     },
     {
       "path": "service.sh",
@@ -338,33 +304,39 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/domain/models/document.py",
-      "accessCount": 3,
-      "lastAccessed": 1775552885682,
-      "type": "directory"
-    },
-    {
-      "path": "src/book_agent/app/main.py",
-      "accessCount": 3,
-      "lastAccessed": 1775566200923,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/domain/models",
       "accessCount": 3,
       "lastAccessed": 1775566207911,
       "type": "directory"
     },
     {
+      "path": "pyproject.toml",
+      "accessCount": 3,
+      "lastAccessed": 1775571885439,
+      "type": "file"
+    },
+    {
       "path": "Dockerfile",
-      "accessCount": 2,
-      "lastAccessed": 1775502749278,
+      "accessCount": 3,
+      "lastAccessed": 1775571886949,
       "type": "file"
     },
     {
       "path": "dev.sh",
-      "accessCount": 2,
-      "lastAccessed": 1775503387744,
+      "accessCount": 3,
+      "lastAccessed": 1775571887166,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/workers/factory.py",
+      "accessCount": 3,
+      "lastAccessed": 1775571899026,
+      "type": "file"
+    },
+    {
+      "path": "frontend/package.json",
+      "accessCount": 3,
+      "lastAccessed": 1775571916816,
       "type": "file"
     },
     {
@@ -374,21 +346,9 @@
       "type": "file"
     },
     {
-      "path": "frontend/package.json",
-      "accessCount": 2,
-      "lastAccessed": 1775540921793,
-      "type": "file"
-    },
-    {
       "path": "frontend/src/features/runs/RunsPage.tsx",
       "accessCount": 2,
       "lastAccessed": 1775544706559,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/workers/factory.py",
-      "accessCount": 2,
-      "lastAccessed": 1775553799952,
       "type": "file"
     },
     {
@@ -398,21 +358,51 @@
       "type": "file"
     },
     {
-      "path": "pyproject.toml",
-      "accessCount": 2,
-      "lastAccessed": 1775566195216,
-      "type": "file"
-    },
-    {
       "path": "compose.yaml",
-      "accessCount": 1,
-      "lastAccessed": 1775483843729,
+      "accessCount": 2,
+      "lastAccessed": 1775571886257,
       "type": "file"
     },
     {
       "path": "start.sh",
-      "accessCount": 1,
-      "lastAccessed": 1775483845227,
+      "accessCount": 2,
+      "lastAccessed": 1775571888001,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/app/api/router.py",
+      "accessCount": 2,
+      "lastAccessed": 1775571897033,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/workers/contracts.py",
+      "accessCount": 2,
+      "lastAccessed": 1775571898356,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/workers/providers/openai_compatible.py",
+      "accessCount": 2,
+      "lastAccessed": 1775571901227,
+      "type": "file"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775571931718,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/cli.py",
+      "accessCount": 2,
+      "lastAccessed": 1775571933545,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1775571951768,
       "type": "file"
     },
     {
@@ -422,39 +412,9 @@
       "type": "file"
     },
     {
-      "path": "README.md",
-      "accessCount": 1,
-      "lastAccessed": 1775502749163,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/cli.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503392430,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/workers/contracts.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503399451,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/app/api/router.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503408047,
-      "type": "file"
-    },
-    {
       "path": "docs/translation-agent-system-design.md",
       "accessCount": 1,
       "lastAccessed": 1775503423750,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/workers/providers/openai_compatible.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503426738,
       "type": "file"
     },
     {
@@ -474,12 +434,6 @@
       "accessCount": 1,
       "lastAccessed": 1775540334943,
       "type": "directory"
-    },
-    {
-      "path": "frontend/vite.config.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775540921945,
-      "type": "file"
     },
     {
       "path": "frontend/src/main.tsx",

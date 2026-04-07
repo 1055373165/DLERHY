@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, text, MetaData
 from sqlalchemy.orm import Session
 
 SQLITE_URL = "sqlite+pysqlite:///./artifacts/book-agent.db"
-PG_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/book_agent"
+PG_URL = "postgresql+psycopg://postgres:postgres@localhost:5433/book_agent"
 
 BATCH_SIZE = 500
 
@@ -104,6 +104,31 @@ def migrate():
                 text(f'ALTER TABLE {tname} ADD CONSTRAINT "{cname}" {definition} NOT VALID')
             )
         conn.commit()
+
+    # Fix double-encoded JSONB: SQLite stores JSON as text, so values
+    # get wrapped as JSON strings when inserted into JSONB columns.
+    # Use #>> '{}' to unwrap the string layer.
+    print("\n  Fixing double-encoded JSONB values...")
+    with pg_engine.connect() as conn:
+        jsonb_cols = conn.execute(text("""
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND data_type IN ('json', 'jsonb')
+            ORDER BY table_name, column_name
+        """)).fetchall()
+
+        total_fixed = 0
+        for tbl, col in jsonb_cols:
+            result = conn.execute(text(f"""
+                UPDATE "{tbl}"
+                SET "{col}" = ("{col}" #>> '{{}}')::jsonb
+                WHERE "{col}" IS NOT NULL
+                  AND jsonb_typeof("{col}") = 'string'
+            """))
+            if result.rowcount > 0:
+                total_fixed += result.rowcount
+        conn.commit()
+        print(f"  Fixed {total_fixed} double-encoded JSONB values")
 
     print("\nMigration complete!")
 
