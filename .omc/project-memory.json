@@ -213,8 +213,8 @@
     },
     {
       "path": "src/book_agent/services/export.py",
-      "accessCount": 36,
-      "lastAccessed": 1775540426797,
+      "accessCount": 44,
+      "lastAccessed": 1775548223953,
       "type": "file"
     },
     {
@@ -242,6 +242,12 @@
       "type": "directory"
     },
     {
+      "path": "src/book_agent/app/api/routes/documents.py",
+      "accessCount": 8,
+      "lastAccessed": 1775548301354,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/components/AppLayout.tsx",
       "accessCount": 7,
       "lastAccessed": 1775541204273,
@@ -257,12 +263,6 @@
       "path": "artifacts/real-book-live/principles-ai-agents-v1/exports/markdown/Principles-AI-Agents-zh.md",
       "accessCount": 5,
       "lastAccessed": 1775509893550,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/app/api/routes/documents.py",
-      "accessCount": 5,
-      "lastAccessed": 1775547183709,
       "type": "file"
     },
     {

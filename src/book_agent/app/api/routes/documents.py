@@ -1552,10 +1552,18 @@ def download_document_export(
 ) -> FileResponse:
     workflow = _workflow_service(request, session)
     document = workflow.export_repository.get_document(document_id)
+
+    # Bilingual document downloads reuse merged exports (which already contain both languages)
+    _BILINGUAL_TO_MERGED = {
+        ExportType.BILINGUAL_HTML: ExportType.MERGED_HTML,
+        ExportType.BILINGUAL_MARKDOWN: ExportType.MERGED_MARKDOWN,
+    }
+    lookup_type = _BILINGUAL_TO_MERGED.get(export_type, export_type)
+
     try:
         primary_records = workflow.export_repository.list_document_exports_filtered(
             document_id,
-            export_type=export_type,
+            export_type=lookup_type,
             status=ExportStatus.SUCCEEDED,
         )
     except ValueError as exc:
@@ -1572,6 +1580,7 @@ def download_document_export(
         ExportType.MERGED_HTML: "中文阅读稿",
         ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
         ExportType.BILINGUAL_HTML: "中英文对照",
+        ExportType.BILINGUAL_MARKDOWN: "中英文对照-Markdown",
         ExportType.REBUILT_EPUB: "重建EPUB",
         ExportType.REBUILT_PDF: "重建PDF",
         ExportType.REVIEW_PACKAGE: "审校包",
