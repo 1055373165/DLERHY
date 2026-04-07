@@ -186,7 +186,7 @@ def _build_export_archive(
     export_type: ExportType,
     files: list[ArchiveInput],
     *,
-    include_related_exports: bool = False,
+    folder_name: str | None = None,
 ) -> Path:
     temp_file = tempfile.NamedTemporaryFile(
         prefix=f"book-agent-{document_id}-{export_type.value}-",
@@ -195,11 +195,8 @@ def _build_export_archive(
     )
     archive_path = Path(temp_file.name)
     temp_file.close()
-    folder_name = _build_export_bundle_filename(
-        document_id,
-        export_type,
-        include_related_exports=include_related_exports,
-    ).removesuffix(".zip")
+    if not folder_name:
+        folder_name = f"{document_id}-{export_type.value}"
     common_root = Path(os.path.commonpath([str(file.path) for file in files]))
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         seen_names: set[str] = set()
@@ -1601,56 +1598,57 @@ def download_document_export(
             detail=f"No successful {export_type.value} exports are available for download.",
         )
 
-    related_records = []
-    include_related_exports = export_type == ExportType.MERGED_HTML
-    if include_related_exports:
-        related_records = workflow.export_repository.list_document_exports_filtered(
-            document_id,
-            export_type=ExportType.BILINGUAL_HTML,
-            status=ExportStatus.SUCCEEDED,
-        )
+    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
+    label_map = {
+        ExportType.MERGED_HTML: "中文阅读稿",
+        ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
+        ExportType.BILINGUAL_HTML: "中英文对照",
+        ExportType.REBUILT_EPUB: "重建EPUB",
+        ExportType.REBUILT_PDF: "重建PDF",
+        ExportType.REVIEW_PACKAGE: "审校包",
+    }
+    label = label_map.get(export_type, export_type.value)
 
     artifact_roots = _artifact_roots(request)
     files = [
         _resolve_artifact_path(record.file_path, roots=artifact_roots)
-        for record in [*primary_records, *related_records]
+        for record in primary_records
     ]
+
+    # Use the latest (last) primary record only — deliver a single merged file
+    file_path = files[-1]
+    ext = file_path.suffix or ""
+    main_filename = f"{book_title}-{label}{ext}"
+
     archive_inputs: list[ArchiveInput] = []
     seen_paths: set[str] = set()
-    for record, file_path in zip([*primary_records, *related_records], files, strict=False):
-        _append_archive_input(
-            archive_inputs,
-            seen_paths,
-            file_path,
-            preferred_archive_name=_preferred_archive_name(record.file_path, file_path),
-        )
-    if len(files) == 1 and len(archive_inputs) == 1 and not include_related_exports:
-        file_path = files[0]
+    _append_archive_input(
+        archive_inputs,
+        seen_paths,
+        file_path,
+        preferred_archive_name=main_filename,
+    )
+
+    # Single file with no sidecar assets → return directly
+    if len(archive_inputs) == 1:
         return FileResponse(
             path=file_path,
             media_type=_artifact_media_type(file_path),
-            filename=_document_export_download_filename(
-                document,
-                export_type,
-                file_suffix=file_path.suffix or "",
-            ),
+            filename=main_filename,
         )
 
+    # Multiple files (main + assets/) → zip with book-title folder
+    archive_folder = f"{book_title}-{label}"
     archive_path = _build_export_archive(
         document_id,
         export_type,
         archive_inputs,
-        include_related_exports=include_related_exports,
+        folder_name=archive_folder,
     )
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=_document_export_download_filename(
-            document,
-            export_type,
-            file_suffix=".zip",
-            include_related_exports=include_related_exports,
-        ),
+        filename=f"{archive_folder}.zip",
         background=BackgroundTask(_cleanup_path, archive_path),
     )
 
