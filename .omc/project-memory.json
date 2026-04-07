@@ -236,6 +236,12 @@
       "type": "file"
     },
     {
+      "path": "frontend/src/components/AppLayout.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1775541204273,
+      "type": "file"
+    },
+    {
       "path": "src/book_agent/domain/structure/epub.py",
       "accessCount": 5,
       "lastAccessed": 1775506154449,
@@ -260,6 +266,12 @@
       "type": "file"
     },
     {
+      "path": "frontend/src/styles/tokens.css",
+      "accessCount": 4,
+      "lastAccessed": 1775541217026,
+      "type": "file"
+    },
+    {
       "path": "service.sh",
       "accessCount": 3,
       "lastAccessed": 1775503388657,
@@ -276,6 +288,24 @@
       "accessCount": 3,
       "lastAccessed": 1775540478779,
       "type": "directory"
+    },
+    {
+      "path": "frontend/src/styles/global.css",
+      "accessCount": 3,
+      "lastAccessed": 1775541106114,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/AppLayout.module.css",
+      "accessCount": 3,
+      "lastAccessed": 1775541141675,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/Surface.module.css",
+      "accessCount": 3,
+      "lastAccessed": 1775541147653,
+      "type": "file"
     },
     {
       "path": "Dockerfile",
@@ -314,6 +344,12 @@
       "type": "directory"
     },
     {
+      "path": "frontend/package.json",
+      "accessCount": 2,
+      "lastAccessed": 1775540921793,
+      "type": "file"
+    },
+    {
       "path": "compose.yaml",
       "accessCount": 1,
       "lastAccessed": 1775483843729,
@@ -329,12 +365,6 @@
       "path": "start.sh",
       "accessCount": 1,
       "lastAccessed": 1775483845227,
-      "type": "file"
-    },
-    {
-      "path": "frontend/package.json",
-      "accessCount": 1,
-      "lastAccessed": 1775483860960,
       "type": "file"
     },
     {
@@ -432,6 +462,48 @@
       "accessCount": 1,
       "lastAccessed": 1775540334943,
       "type": "directory"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775540921945,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540928214,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/app/App.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540932212,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/Surface.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540936131,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/StatusBadge.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540936605,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/features/runs/RunsPage.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540943677,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/features/workspace/WorkspacePage.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775540944045,
+      "type": "file"
     }
   ],
   "userDirectives": []
