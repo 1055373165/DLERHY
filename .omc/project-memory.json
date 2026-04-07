@@ -254,10 +254,22 @@
       "type": "file"
     },
     {
+      "path": "src/book_agent",
+      "accessCount": 10,
+      "lastAccessed": 1775553815540,
+      "type": "directory"
+    },
+    {
       "path": "src/book_agent/services/workflows.py",
-      "accessCount": 8,
-      "lastAccessed": 1775552905057,
+      "accessCount": 9,
+      "lastAccessed": 1775553797592,
       "type": "file"
+    },
+    {
+      "path": "src/book_agent/services",
+      "accessCount": 8,
+      "lastAccessed": 1775553826893,
+      "type": "directory"
     },
     {
       "path": "frontend/src/components/AppLayout.tsx",
@@ -278,12 +290,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent",
-      "accessCount": 5,
-      "lastAccessed": 1775549791927,
-      "type": "directory"
-    },
-    {
       "path": "frontend/src/styles/tokens.css",
       "accessCount": 4,
       "lastAccessed": 1775541217026,
@@ -293,6 +299,12 @@
       "path": "frontend/src/components/AppLayout.module.css",
       "accessCount": 4,
       "lastAccessed": 1775544636029,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/translation.py",
+      "accessCount": 4,
+      "lastAccessed": 1775553823837,
       "type": "file"
     },
     {
@@ -306,12 +318,6 @@
       "accessCount": 3,
       "lastAccessed": 1775503475338,
       "type": "file"
-    },
-    {
-      "path": "src/book_agent/services",
-      "accessCount": 3,
-      "lastAccessed": 1775540478779,
-      "type": "directory"
     },
     {
       "path": "frontend/src/styles/global.css",
@@ -368,6 +374,30 @@
       "type": "file"
     },
     {
+      "path": "src/book_agent/app/main.py",
+      "accessCount": 2,
+      "lastAccessed": 1775553793791,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/core/config.py",
+      "accessCount": 2,
+      "lastAccessed": 1775553797781,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/workers/factory.py",
+      "accessCount": 2,
+      "lastAccessed": 1775553799952,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/workers/translator.py",
+      "accessCount": 2,
+      "lastAccessed": 1775553800161,
+      "type": "file"
+    },
+    {
       "path": "compose.yaml",
       "accessCount": 1,
       "lastAccessed": 1775483843729,
@@ -404,45 +434,15 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/app/main.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503395139,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/core/config.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503395343,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/workers/contracts.py",
       "accessCount": 1,
       "lastAccessed": 1775503399451,
       "type": "file"
     },
     {
-      "path": "src/book_agent/workers/factory.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503399482,
-      "type": "file"
-    },
-    {
       "path": "src/book_agent/app/api/router.py",
       "accessCount": 1,
       "lastAccessed": 1775503408047,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/workers/translator.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503416352,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/services/translation.py",
-      "accessCount": 1,
-      "lastAccessed": 1775503416626,
       "type": "file"
     },
     {
