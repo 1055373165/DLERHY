@@ -158,6 +158,12 @@
   },
   "hotPaths": [
     {
+      "path": "src/lib/api.ts",
+      "accessCount": 10,
+      "lastAccessed": 1775553101698,
+      "type": "file"
+    },
+    {
       "path": "src/features/library/LibraryPage.tsx",
       "accessCount": 9,
       "lastAccessed": 1775546141177,
@@ -170,27 +176,21 @@
       "type": "file"
     },
     {
+      "path": "src/features/workspace/WorkspacePage.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1775553108455,
+      "type": "file"
+    },
+    {
       "path": "src/features/deliverables/DeliverablesPage.tsx",
       "accessCount": 7,
       "lastAccessed": 1775543361328,
       "type": "file"
     },
     {
-      "path": "src/features/workspace/WorkspacePage.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1775543683705,
-      "type": "file"
-    },
-    {
       "path": "src/features/runs/RunsPage.tsx",
       "accessCount": 6,
       "lastAccessed": 1775543415359,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/api.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775546127851,
       "type": "file"
     },
     {

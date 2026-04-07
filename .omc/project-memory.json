@@ -219,8 +219,8 @@
     },
     {
       "path": "src/book_agent/app/api/routes/documents.py",
-      "accessCount": 18,
-      "lastAccessed": 1775552404536,
+      "accessCount": 26,
+      "lastAccessed": 1775552954052,
       "type": "file"
     },
     {
@@ -245,6 +245,18 @@
       "path": "artifacts/real-book-live/gen-ai-software-dev-v1/exports/markdown/GenAI-Software-Dev-zh.md",
       "accessCount": 10,
       "lastAccessed": 1775540641278,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/features/workspace/WorkspacePage.tsx",
+      "accessCount": 10,
+      "lastAccessed": 1775553068858,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/services/workflows.py",
+      "accessCount": 8,
+      "lastAccessed": 1775552905057,
       "type": "file"
     },
     {
@@ -284,12 +296,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/services/workflows.py",
-      "accessCount": 4,
-      "lastAccessed": 1775548510156,
-      "type": "file"
-    },
-    {
       "path": "service.sh",
       "accessCount": 3,
       "lastAccessed": 1775503388657,
@@ -318,6 +324,12 @@
       "accessCount": 3,
       "lastAccessed": 1775541147653,
       "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/models/document.py",
+      "accessCount": 3,
+      "lastAccessed": 1775552885682,
+      "type": "directory"
     },
     {
       "path": "Dockerfile",
@@ -350,22 +362,10 @@
       "type": "file"
     },
     {
-      "path": "frontend/src/features/workspace/WorkspacePage.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775544677849,
-      "type": "file"
-    },
-    {
       "path": "frontend/src/features/runs/RunsPage.tsx",
       "accessCount": 2,
       "lastAccessed": 1775544706559,
       "type": "file"
-    },
-    {
-      "path": "src/book_agent/domain/models/document.py",
-      "accessCount": 2,
-      "lastAccessed": 1775549804408,
-      "type": "directory"
     },
     {
       "path": "compose.yaml",

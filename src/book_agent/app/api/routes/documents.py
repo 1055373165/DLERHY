@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
@@ -1370,6 +1371,35 @@ def get_document_exports(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_export_dashboard_response(dashboard)
+
+
+@router.get("/{document_id}/chapters")
+def list_document_chapters(
+    document_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    """List all chapters for a document (lightweight, no issue/worklist data)."""
+    from book_agent.domain.models.document import Chapter
+    chapters = (
+        session.execute(
+            select(Chapter)
+            .where(Chapter.document_id == document_id)
+            .order_by(Chapter.ordinal)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "chapter_id": ch.id,
+            "ordinal": ch.ordinal,
+            "title_src": ch.title_src,
+            "title_tgt": ch.title_tgt,
+            "status": ch.status.value if hasattr(ch.status, "value") else str(ch.status),
+        }
+        for ch in chapters
+    ]
 
 
 @router.get("/{document_id}/chapters/worklist", response_model=DocumentChapterWorklistResponse)

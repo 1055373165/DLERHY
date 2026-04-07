@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
+import { listDocumentChapters } from "../../lib/api";
 import {
   documentBadge,
   formatDate,
@@ -51,6 +53,14 @@ export function WorkspacePage() {
   const action = getPrimaryRunAction(doc, currentRun);
   const badge = documentBadge(doc, currentRun);
   const queueEntries = chapterWorklist?.entries ?? [];
+
+  // Fetch all chapters so users can browse even when worklist is empty
+  const allChaptersQuery = useQuery({
+    queryKey: ["document-chapters", doc?.document_id],
+    queryFn: () => listDocumentChapters(doc!.document_id),
+    enabled: !!doc,
+  });
+  const allChapters = allChaptersQuery.data ?? [];
 
   /* ── Handlers ── */
 
@@ -228,7 +238,7 @@ export function WorkspacePage() {
           <aside className={s.queueRail}>
             <div className={s.queueHeader}>
               <h3 className={s.queueTitle}>Chapters</h3>
-              <span className={s.queueCount}>{queueEntries.length}</span>
+              <span className={s.queueCount}>{queueEntries.length || allChapters.length}</span>
             </div>
 
             <div className={s.queueFilters}>
@@ -281,8 +291,23 @@ export function WorkspacePage() {
                   </div>
                 </button>
               ))}
-              {!chapterWorklistLoading && queueEntries.length === 0 && (
-                <div className={s.emptyQueue}>No chapters in queue.</div>
+              {!chapterWorklistLoading && queueEntries.length === 0 && allChapters.length > 0 && (
+                allChapters.map((ch) => (
+                  <button
+                    key={ch.chapter_id}
+                    className={s.queueCard}
+                    data-active={ch.chapter_id === selectedReviewChapterId}
+                    onClick={() => selectReviewChapter(ch.chapter_id)}
+                  >
+                    <div className={s.queueCardTop}>
+                      <span className={s.queueOrdinal}>CH.{ch.ordinal}</span>
+                    </div>
+                    <div className={s.queueCardTitle}>{ch.title_tgt || ch.title_src || `Chapter ${ch.ordinal}`}</div>
+                  </button>
+                ))
+              )}
+              {!chapterWorklistLoading && queueEntries.length === 0 && allChapters.length === 0 && (
+                <div className={s.emptyQueue}>No chapters found.</div>
               )}
             </div>
           </aside>

@@ -622,6 +622,22 @@ export async function getDocumentChapterWorklistDetail(
   );
 }
 
+export interface ChapterListItem {
+  chapter_id: string;
+  ordinal: number;
+  title_src: string | null;
+  title_tgt: string | null;
+  status: string;
+}
+
+export async function listDocumentChapters(
+  documentId: string
+): Promise<ChapterListItem[]> {
+  return requestJson<ChapterListItem[]>(
+    `/documents/${encodeURIComponent(documentId)}/chapters`
+  );
+}
+
 export async function getDocumentChapterWorklist(
   documentId: string,
   filters: DocumentChapterWorklistFilters = {}
