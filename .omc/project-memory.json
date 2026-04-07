@@ -340,6 +340,12 @@
       "type": "file"
     },
     {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1775572020098,
+      "type": "file"
+    },
+    {
       "path": "src/book_agent/services/pdf_structure_refresh.py",
       "accessCount": 2,
       "lastAccessed": 1775506158012,
@@ -397,12 +403,6 @@
       "path": "src/book_agent/cli.py",
       "accessCount": 2,
       "lastAccessed": 1775571933545,
-      "type": "file"
-    },
-    {
-      "path": "README.md",
-      "accessCount": 2,
-      "lastAccessed": 1775571951768,
       "type": "file"
     },
     {
