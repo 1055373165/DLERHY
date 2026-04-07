@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"python3 -c \\\"\\nimport sqlite3, json\\nconn = sqlite3.connect('artifacts/book-agent.db')\\nc = conn.cursor()\\ndoc_id = '003b7864d84b50aea54ccc48858ea57e'\\n\\n# Check blocks with image-related ...",
-  "error": "Exit code 1\nTraceback (most recent call last):\n  File \"<string>\", line 8, in <module>\n    c.execute('''\n    ~~~~~~~~~^^^^\n        SELECT b.block_type, b.source_metadata_json, b.id\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        LIMIT 10\n        ^^^^^^^^\n    ''', (doc_id,))\n    ^^^^^^^^^^^^^^^\nsqlite3.OperationalError: no such column: b.source_metadata_json",
-  "timestamp": "2026-04-07T09:00:33.783Z",
-  "retry_count": 2
+  "tool_input_preview": "{\"command\":\"/Users/smy/project/book-agent/.venv/bin/python -c \\\"\\nfrom book_agent.app.runtime.document_run_executor import DocumentRunExecutor\\nexecutor = DocumentRunExecutor.__new__(DocumentRunExecut...",
+  "error": "Exit code 1\nTraceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    print(f'default_max_parallel_workers: {executor.default_max_parallel_workers}')\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'DocumentRunExecutor' object has no attribute 'default_max_parallel_workers'",
+  "timestamp": "2026-04-07T12:56:43.539Z",
+  "retry_count": 1
 }

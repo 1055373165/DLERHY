@@ -230,6 +230,12 @@
       "type": "directory"
     },
     {
+      "path": "src/book_agent",
+      "accessCount": 13,
+      "lastAccessed": 1775566221623,
+      "type": "directory"
+    },
+    {
       "path": "src/book_agent/services/bootstrap.py",
       "accessCount": 10,
       "lastAccessed": 1775509690531,
@@ -254,12 +260,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent",
-      "accessCount": 10,
-      "lastAccessed": 1775553815540,
-      "type": "directory"
-    },
-    {
       "path": "src/book_agent/services/workflows.py",
       "accessCount": 9,
       "lastAccessed": 1775553797592,
@@ -275,6 +275,12 @@
       "path": "frontend/src/components/AppLayout.tsx",
       "accessCount": 7,
       "lastAccessed": 1775541204273,
+      "type": "file"
+    },
+    {
+      "path": ".env",
+      "accessCount": 6,
+      "lastAccessed": 1775566378843,
       "type": "file"
     },
     {
@@ -308,15 +314,15 @@
       "type": "file"
     },
     {
-      "path": "service.sh",
-      "accessCount": 3,
-      "lastAccessed": 1775503388657,
+      "path": "src/book_agent/core/config.py",
+      "accessCount": 4,
+      "lastAccessed": 1775566259169,
       "type": "file"
     },
     {
-      "path": ".env",
+      "path": "service.sh",
       "accessCount": 3,
-      "lastAccessed": 1775503475338,
+      "lastAccessed": 1775503388657,
       "type": "file"
     },
     {
@@ -338,6 +344,18 @@
       "type": "directory"
     },
     {
+      "path": "src/book_agent/app/main.py",
+      "accessCount": 3,
+      "lastAccessed": 1775566200923,
+      "type": "file"
+    },
+    {
+      "path": "src/book_agent/domain/models",
+      "accessCount": 3,
+      "lastAccessed": 1775566207911,
+      "type": "directory"
+    },
+    {
       "path": "Dockerfile",
       "accessCount": 2,
       "lastAccessed": 1775502749278,
@@ -356,12 +374,6 @@
       "type": "file"
     },
     {
-      "path": "src/book_agent/domain/models",
-      "accessCount": 2,
-      "lastAccessed": 1775507009821,
-      "type": "directory"
-    },
-    {
       "path": "frontend/package.json",
       "accessCount": 2,
       "lastAccessed": 1775540921793,
@@ -371,18 +383,6 @@
       "path": "frontend/src/features/runs/RunsPage.tsx",
       "accessCount": 2,
       "lastAccessed": 1775544706559,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/app/main.py",
-      "accessCount": 2,
-      "lastAccessed": 1775553793791,
-      "type": "file"
-    },
-    {
-      "path": "src/book_agent/core/config.py",
-      "accessCount": 2,
-      "lastAccessed": 1775553797781,
       "type": "file"
     },
     {
@@ -398,15 +398,15 @@
       "type": "file"
     },
     {
-      "path": "compose.yaml",
-      "accessCount": 1,
-      "lastAccessed": 1775483843729,
+      "path": "pyproject.toml",
+      "accessCount": 2,
+      "lastAccessed": 1775566195216,
       "type": "file"
     },
     {
-      "path": "pyproject.toml",
+      "path": "compose.yaml",
       "accessCount": 1,
-      "lastAccessed": 1775483844671,
+      "lastAccessed": 1775483843729,
       "type": "file"
     },
     {
