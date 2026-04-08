@@ -161,8 +161,8 @@
   "hotPaths": [
     {
       "path": "src/book_agent/services/export.py",
-      "accessCount": 74,
-      "lastAccessed": 1775627064895,
+      "accessCount": 77,
+      "lastAccessed": 1775642522834,
       "type": "file"
     },
     {
@@ -227,8 +227,8 @@
     },
     {
       "path": "src/book_agent/app/main.py",
-      "accessCount": 9,
-      "lastAccessed": 1775638173889,
+      "accessCount": 10,
+      "lastAccessed": 1775639652165,
       "type": "file"
     },
     {
@@ -289,6 +289,12 @@
       "path": "pyproject.toml",
       "accessCount": 4,
       "lastAccessed": 1775638149602,
+      "type": "file"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775639704832,
       "type": "file"
     },
     {
@@ -391,12 +397,6 @@
       "path": "src/book_agent/workers/providers/openai_compatible.py",
       "accessCount": 2,
       "lastAccessed": 1775571901227,
-      "type": "file"
-    },
-    {
-      "path": "frontend/vite.config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775571931718,
       "type": "file"
     },
     {

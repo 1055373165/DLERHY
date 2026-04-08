@@ -7392,6 +7392,7 @@ class ExportService:
                 if archive_path is None:
                     continue
                 archive_path_by_block_id[block.block_id] = archive_path
+            _logging.getLogger(__name__).warning("_export_epub_archive_assets: archive_path_by_block_id=%d", len(archive_path_by_block_id))
             if not archive_path_by_block_id:
                 return {}
 

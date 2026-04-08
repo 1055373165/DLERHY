@@ -438,18 +438,35 @@ class _FallbackHTMLBlockExtractor(HTMLParser):
             self._append_text(self.get_starttag_text() or f"<{tag}>")
             return
 
-        if self._active_block is not None and tag == "img":
-            metadata = self._active_block["metadata"]
-            assert isinstance(metadata, dict)
-            source_path = self._active_block["source_path"]
-            assert isinstance(source_path, str)
+        if tag == "img":
             src = attr_map.get("src", "")
             alt = _normalize_text(attr_map.get("alt", ""))
-            if src:
-                metadata["image_src"] = src
-                metadata["image_path"] = _join_path(posixpath.dirname(source_path), src)
-            if alt:
-                metadata["image_alt"] = alt
+            if self._active_block is not None:
+                metadata = self._active_block["metadata"]
+                assert isinstance(metadata, dict)
+                source_path = self._active_block["source_path"]
+                assert isinstance(source_path, str)
+                if src:
+                    metadata["image_src"] = src
+                    metadata["image_path"] = _join_path(posixpath.dirname(source_path), src)
+                if alt:
+                    metadata["image_alt"] = alt
+            elif src:
+                # Standalone <img> outside any block — create a paragraph block for it.
+                img_metadata: dict[str, str | int] = {"tag": "p"}
+                img_metadata["image_src"] = src
+                img_metadata["image_path"] = _join_path(posixpath.dirname(self.href), src)
+                if alt:
+                    img_metadata["image_alt"] = alt
+                self._active_block = {
+                    "tag": "p",
+                    "block_type": "paragraph",
+                    "anchor": attr_map.get("id"),
+                    "metadata": img_metadata,
+                    "text_parts": [],
+                    "source_path": self.href,
+                }
+                self._flush_active_block()
             return
 
         if self._active_block is not None and str(self._active_block.get("block_type")) == "table":
@@ -878,6 +895,31 @@ class EPUBParser:
                         )
                     )
                     return
+
+            # Standalone <img> outside any recognised block container —
+            # emit a synthetic paragraph so the image is preserved in exports.
+            if local == "img":
+                src = _normalize_text(element.attrib.get("src"))
+                if src:
+                    alt = _normalize_text(element.attrib.get("alt", ""))
+                    img_metadata: dict[str, object] = {"tag": "p"}
+                    img_metadata["image_src"] = src
+                    img_metadata["image_path"] = _join_path(posixpath.dirname(href), src)
+                    if alt:
+                        img_metadata["image_alt"] = alt
+                    _mark_image_only_metadata_nontranslatable(img_metadata)
+                    img_metadata["image_caption_generated"] = "alt" if alt else "placeholder"
+                    blocks.append(
+                        ParsedBlock(
+                            block_type="paragraph",
+                            text=alt or "[Image]",
+                            source_path=href,
+                            ordinal=len(blocks) + 1,
+                            anchor=current_anchor,
+                            metadata=img_metadata,
+                        )
+                    )
+                return
 
             for child in list(element):
                 visit(child, current_anchor)

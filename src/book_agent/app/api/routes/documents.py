@@ -1651,6 +1651,8 @@ def download_document_export(
         file_path,
         preferred_archive_name=main_filename,
     )
+    for sidecar_path in _export_sidecar_paths(file_path):
+        _append_archive_input(archive_inputs, seen_paths, sidecar_path)
 
     # Single file with no sidecar assets → return directly
     if len(archive_inputs) == 1:
