@@ -2955,7 +2955,7 @@ class ExportService:
             parts = [list_markdown or (target_text or source_text)]
 
         if source_text and target_text and source_text != target_text:
-            parts.append(self._markdown_blockquote(source_text, label="Source"))
+            parts.append(self._markdown_details_source(source_text))
         return "\n\n".join(part for part in parts if part)
 
     def _normalize_markdown_code_artifact_text(
@@ -3008,6 +3008,12 @@ class ExportService:
         for line in normalized.splitlines() if normalized else []:
             lines.append(f"> {line}" if line else ">")
         return "\n".join(lines) if lines else f"> {label}"
+
+    def _markdown_details_source(self, text: str) -> str:
+        normalized = (text or "").strip()
+        if not normalized:
+            return ""
+        return f"<details>\n<summary>原文</summary>\n\n{normalized}\n\n</details>"
 
     def _markdown_list_text(self, text: str) -> str | None:
         raw_lines = [line.rstrip() for line in str(text or "").splitlines() if line.strip()]

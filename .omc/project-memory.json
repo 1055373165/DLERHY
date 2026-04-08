@@ -161,8 +161,8 @@
   "hotPaths": [
     {
       "path": "src/book_agent/services/export.py",
-      "accessCount": 86,
-      "lastAccessed": 1775656590526,
+      "accessCount": 102,
+      "lastAccessed": 1775664079815,
       "type": "file"
     },
     {
