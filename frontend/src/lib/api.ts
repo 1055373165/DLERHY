@@ -847,7 +847,15 @@ export async function downloadDocumentExport(
       exportType
     )}`
   );
-  return saveBinaryResponse(response, `book-agent-${exportType}.zip`);
+  const extMap: Record<string, string> = {
+    merged_markdown: ".md",
+    bilingual_markdown: ".md",
+    merged_html: ".html",
+    bilingual_html: ".html",
+    review_package: ".zip",
+  };
+  const ext = extMap[exportType] ?? ".zip";
+  return saveBinaryResponse(response, `book-agent-${exportType}${ext}`);
 }
 
 export async function downloadChapterExport(
