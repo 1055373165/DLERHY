@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"docker exec book-agent-postgres psql -U postgres -d book_agent -c \\\"\\n-- Close the 2 false-positive issues\\nUPDATE review_issues\\nSET status = 'dismissed', resolution_note = 'False positiv...",
-  "error": "Exit code 1\nERROR:  new row for relation \"review_issues\" violates check constraint \"review_issues_status_check\"\nDETAIL:  Failing row contains (d80fbaee-c9c1-54d6-ad55-48256c124805, 6f9d15ea-9262-5768-9cfb-416b1b501876, 99c4e2e1-a6f6-5b8b-8086-dffe3c09e2a9, null, 1c9a47cc-8bb1-534d-b2b7-0c6858f5afb9, d1e5978f-2e79-59c2-a5d0-aea153a01ef6, FORMAT_POLLUTION, translation, medium, f, rule, 1.000, {\"block_type\": \"paragraph\", \"actual_target_text\": \"乍看之下..., dismissed, null, False positive: source text l...",
-  "timestamp": "2026-04-08T15:22:27.401Z",
-  "retry_count": 6
-}
