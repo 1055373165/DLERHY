@@ -1,4 +1,4 @@
-# Book Agent
+# LLM-powered Translation Agent
 
 **LLM-powered translation agent for English books → Chinese.** Ingests EPUB/PDF, translates via any OpenAI-compatible API, exports bilingual or Chinese-only EPUB/PDF/HTML with sentence-level alignment and multi-dimensional QA.
 
