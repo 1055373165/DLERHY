@@ -1,4 +1,4 @@
-# Book Agent
+# LLM-powered Translation Agent
 
 **Whole-book English → Chinese translation agent.** EPUB or PDF in, bilingual or Chinese-only HTML / Markdown / EPUB / PDF out — with packet-level retries, Kubernetes-style reconciliation, and a self-healing runtime.
 
