@@ -25,6 +25,11 @@ def _wake_executor(request: Request, run_id: str) -> None:
     ensure_document_run_executor(request.app).wake(run_id)
 
 
+def _wake_executor_for_active_summary(request: Request, summary: DocumentRunSummary) -> None:
+    if summary.status in {"running", "draining"}:
+        _wake_executor(request, summary.run_id)
+
+
 def _service(session: Session) -> RunControlService:
     return RunControlService(RunControlRepository(session))
 
@@ -133,6 +138,7 @@ def create_run(
 
 @router.get("/{run_id}", response_model=DocumentRunSummaryResponse)
 def get_run_summary(
+    request: Request,
     run_id: str,
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
@@ -140,6 +146,7 @@ def get_run_summary(
         summary = _service(session).get_run_summary(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    _wake_executor_for_active_summary(request, summary)
     return _to_run_summary_response(summary)
 
 

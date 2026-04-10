@@ -19,6 +19,7 @@ if str(SRC) not in sys.path:
 from book_agent.app.main import create_app
 from book_agent.domain.enums import (
     ActorType,
+    DocumentRunStatus,
     DocumentRunType,
     DocumentStatus,
     SourceType,
@@ -35,7 +36,11 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 
 
 class _NoopDocumentRunExecutor:
+    def __init__(self) -> None:
+        self.wake_calls: list[str | None] = []
+
     def wake(self, _run_id: str | None = None) -> None:
+        self.wake_calls.append(_run_id)
         return None
 
     def stop(self) -> None:
@@ -58,7 +63,8 @@ class RunControlApiTests(unittest.TestCase):
         self.session_factory = build_session_factory(engine=self.engine)
         self.app = create_app()
         self.app.state.session_factory = self.session_factory
-        self.app.state.document_run_executor = _NoopDocumentRunExecutor()
+        self.executor = _NoopDocumentRunExecutor()
+        self.app.state.document_run_executor = self.executor
         self.client = TestClient(self.app)
         self.addCleanup(self.client.close)
 
@@ -243,6 +249,31 @@ class RunControlApiTests(unittest.TestCase):
         self.assertEqual(summary_data["worker_leases"]["status_counts"]["active"], 1)
         self.assertIsNotNone(summary_data["worker_leases"]["latest_heartbeat_at"])
         self.assertEqual(summary_data["events"]["event_count"], 2)
+
+    def test_run_summary_wakes_executor_for_active_run(self) -> None:
+        document_id = self._create_document()
+        create_response = self.client.post(
+            "/v1/runs",
+            json={
+                "document_id": document_id,
+                "run_type": DocumentRunType.TRANSLATE_FULL.value,
+                "requested_by": "ops-user",
+            },
+        )
+        run_id = create_response.json()["run_id"]
+
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            run = repository.get_run(run_id)
+            run.status = DocumentRunStatus.RUNNING
+            session.commit()
+
+        self.executor.wake_calls.clear()
+
+        summary_response = self.client.get(f"/v1/runs/{run_id}")
+
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(self.executor.wake_calls, [run_id])
 
     def test_run_summary_surfaces_active_bundle_revision_and_recovered_lineage(self) -> None:
         document_id = self._create_document()

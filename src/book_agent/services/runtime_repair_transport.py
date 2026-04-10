@@ -169,8 +169,8 @@ class SubprocessRuntimeRepairTransport(RuntimeRepairTransport):
         database_url = str(bind.url)
         if database_url.endswith("/:memory:") or database_url.endswith("://"):
             raise RuntimeRepairTransportInvocationError(
-                "Subprocess repair transport requires a file-backed database URL; in-memory "
-                "SQLite cannot be shared with a subprocess repair agent."
+                "Subprocess repair transport requires a valid database URL; "
+                "in-memory databases cannot be shared with a subprocess repair agent."
             )
         return database_url
 

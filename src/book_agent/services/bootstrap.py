@@ -568,6 +568,10 @@ class SegmentationService:
             block.block_type,
             block.source_span_json,
         )
+        # Pure image anchors should remain renderable at block level, but they should not
+        # inflate sentence counts or participate in downstream sentence-based workflows.
+        if not translatable and str((block.source_span_json or {}).get("image_src") or "").strip():
+            return []
         parse_revision_id = block.parse_revision_id or (block.source_span_json or {}).get("parse_revision_id")
         block_canonical_node_id = block.canonical_node_id or (block.source_span_json or {}).get("canonical_node_id")
         output: list[Sentence] = []

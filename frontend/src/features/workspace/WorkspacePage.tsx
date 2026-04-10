@@ -24,6 +24,7 @@ export function WorkspacePage() {
     currentDocument,
     currentRun,
     currentExports,
+    returnToHome,
     chapterWorklist,
     chapterWorklistLoading,
     chapterWorklistFilters,
@@ -120,6 +121,12 @@ export function WorkspacePage() {
     }
   }
 
+  function handleReturnHome() {
+    setSelectedFile(null);
+    setFeedback(null);
+    returnToHome();
+  }
+
   /* ── Derived ── */
   const detail = currentChapterReviewDetail;
   const proposals = detail?.memory_proposals?.pending_proposals ?? [];
@@ -178,27 +185,29 @@ export function WorkspacePage() {
       {/* ── Compact upload (when document already loaded) ── */}
       {doc && (
         <div className={s.compactUpload}>
-          <label className={s.fileLabel}>
-            <input
-              type="file"
-              accept=".pdf,.epub"
-              className={s.fileInput}
-              onChange={(e) => {
-                setSelectedFile(e.target.files?.[0] ?? null);
-                setFeedback(null);
-              }}
-            />
-            <span className={s.fileTextSmall}>
-              {selectedFile ? selectedFile.name : "Select new file..."}
-            </span>
-          </label>
-          <button
-            className="btn btn-sm"
-            disabled={!selectedFile || uploadPending}
-            onClick={handleUpload}
-          >
-            {uploadPending ? "..." : "Bootstrap"}
-          </button>
+          <div className={s.compactUploadGroup}>
+            <label className={s.fileLabel}>
+              <input
+                type="file"
+                accept=".pdf,.epub"
+                className={s.fileInput}
+                onChange={(e) => {
+                  setSelectedFile(e.target.files?.[0] ?? null);
+                  setFeedback(null);
+                }}
+              />
+              <span className={s.fileTextSmall}>
+                {selectedFile ? selectedFile.name : "Select new file..."}
+              </span>
+            </label>
+            <button
+              className="btn btn-sm"
+              disabled={!selectedFile || uploadPending}
+              onClick={handleUpload}
+            >
+              {uploadPending ? "..." : "Bootstrap"}
+            </button>
+          </div>
           {feedback && (
             <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
           )}
@@ -210,7 +219,12 @@ export function WorkspacePage() {
         <div className={s.docHeader}>
           <div className={s.docHeaderTop}>
             <h1 className={s.docTitle}>{preferredTitle(doc)}</h1>
-            <StatusBadge label={badge.label} tone={badge.tone} />
+            <div className={s.docHeaderAside}>
+              <StatusBadge label={badge.label} tone={badge.tone} />
+              <button className={`btn btn-sm ${s.homeButton}`} onClick={handleReturnHome}>
+                回到首页上传新书
+              </button>
+            </div>
           </div>
           <div className={s.docStats}>
             <Stat label="Status" value={statusLabel(doc.status)} />

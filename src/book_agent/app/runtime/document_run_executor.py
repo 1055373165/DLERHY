@@ -200,15 +200,10 @@ class DocumentRunExecutor:
         try:
             runner.reconcile_run(run_id=run_id)
         except OperationalError:
-            # Common in sqlite + multi-threaded execution; treat as best-effort scaffold.
             return
         except Exception:
             # Keep Phase A wiring strictly non-invasive (no behavior change to V1 runner).
             return
-
-    def _is_sqlite_session(self, session: Session) -> bool:
-        bind = session.get_bind()
-        return bind is not None and bind.dialect.name == "sqlite"
 
     def start(self) -> None:
         with self._lock:
@@ -425,15 +420,28 @@ class DocumentRunExecutor:
             run = repository.get_run(run_id)
             document_id = run.document_id
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            if self._reconcile_translate_work_items(
+                session=session,
+                run_id=run_id,
+                document_id=document_id,
+                translate_items=translate_items,
+            ):
+                translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            active_translate_items = [
+                item for item in translate_items if item.status != WorkItemStatus.CANCELLED
+            ]
             seeded_packet_ids = self._seed_translate_frontier_work_items(
                 session=session,
                 execution=execution,
                 run_id=run_id,
                 document_id=document_id,
-                translate_items=translate_items,
+                translate_items=active_translate_items,
             )
             if seeded_packet_ids:
                 translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+                active_translate_items = [
+                    item for item in translate_items if item.status != WorkItemStatus.CANCELLED
+                ]
                 self._update_pipeline_stage(
                     run_id,
                     "translate",
@@ -445,7 +453,7 @@ class DocumentRunExecutor:
                     current_stage="translate",
                     session=session,
                 )
-            if not translate_items:
+            if not active_translate_items:
                 packet_ids = self._list_pending_packet_ids(session, document_id)
                 current_stage = "translate" if packet_ids else "review"
                 execution.seed_translate_work_items(
@@ -466,17 +474,20 @@ class DocumentRunExecutor:
                 )
                 return bool(packet_ids)
 
-            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in translate_items):
+            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in active_translate_items):
                 return False
 
             claimed_items: list[ClaimedRunWorkItem] = []
-            if any(item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED} for item in translate_items):
+            if any(
+                item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}
+                for item in active_translate_items
+            ):
                 self._update_pipeline_stage(run_id, "translate", status="running", current_stage="translate", session=session)
                 claimed_items = self._claim_translate_work_items(
                     session=session,
                     execution=execution,
                     run_id=run_id,
-                    translate_items=translate_items,
+                    translate_items=active_translate_items,
                 )
 
         if claimed_items:
@@ -489,7 +500,7 @@ class DocumentRunExecutor:
                 )
             return True
 
-        if translate_items and all(item.status == WorkItemStatus.SUCCEEDED for item in translate_items):
+        if active_translate_items and all(item.status == WorkItemStatus.SUCCEEDED for item in active_translate_items):
             self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage="review")
         return False
 
@@ -1397,9 +1408,127 @@ class DocumentRunExecutor:
                 return max(1, int(budget.max_parallel_workers))
             except (TypeError, ValueError):
                 return self.default_max_parallel_workers
-        if self._is_sqlite_session(session):
-            return 1
         return self.default_max_parallel_workers
+
+    def _reconcile_translate_work_items(
+        self,
+        *,
+        session: Session,
+        run_id: str,
+        document_id: str,
+        translate_items: list[WorkItem],
+    ) -> bool:
+        if not translate_items:
+            return False
+
+        document_packet_ids = set(self._list_all_packet_ids(session, document_id))
+        if not document_packet_ids:
+            return False
+
+        packet_map = {
+            str(packet.id): packet
+            for packet in session.scalars(
+                select(TranslationPacket).where(TranslationPacket.id.in_(list(document_packet_ids)))
+            ).all()
+        }
+        packet_metadata = self._packet_lane_metadata_map(session, list(document_packet_ids))
+        updated = False
+
+        for item in translate_items:
+            if item.scope_type != WorkItemScopeType.PACKET:
+                continue
+
+            resolved_packet_id = self._resolve_translate_item_packet_id(
+                item=item,
+                document_packet_ids=document_packet_ids,
+            )
+            if not resolved_packet_id:
+                if item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}:
+                    self._cancel_translate_item(
+                        item,
+                        reason="stale_translate_packet_reference",
+                        detail={
+                            "scope_id": str(item.scope_id),
+                            "input_packet_id": str((item.input_version_bundle_json or {}).get("packet_id") or ""),
+                            "document_id": document_id,
+                            "run_id": run_id,
+                        },
+                    )
+                    updated = True
+                continue
+
+            if str(item.scope_id) != resolved_packet_id:
+                item.scope_id = resolved_packet_id
+                updated = True
+
+            bundle = dict(item.input_version_bundle_json or {})
+            metadata = packet_metadata.get(resolved_packet_id, {})
+            normalized_bundle = dict(bundle)
+            normalized_bundle["packet_id"] = resolved_packet_id
+            if metadata.get("chapter_id") is not None:
+                normalized_bundle["chapter_id"] = str(metadata["chapter_id"])
+            if metadata.get("packet_ordinal") is not None:
+                normalized_bundle["packet_ordinal"] = int(metadata["packet_ordinal"])
+            runtime_substate = metadata.get("runtime_substate")
+            if runtime_substate:
+                normalized_bundle["packet_runtime_substate"] = str(runtime_substate)
+            if normalized_bundle != bundle:
+                item.input_version_bundle_json = normalized_bundle
+                updated = True
+
+            packet = packet_map.get(resolved_packet_id)
+            if (
+                packet is not None
+                and item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}
+                and packet.status == PacketStatus.TRANSLATED
+            ):
+                self._cancel_translate_item(
+                    item,
+                    reason="obsolete_translate_work_item_for_translated_packet",
+                    detail={
+                        "packet_id": resolved_packet_id,
+                        "document_id": document_id,
+                        "run_id": run_id,
+                    },
+                )
+                updated = True
+
+        if updated:
+            session.flush()
+        return updated
+
+    def _resolve_translate_item_packet_id(
+        self,
+        *,
+        item: WorkItem,
+        document_packet_ids: set[str],
+    ) -> str | None:
+        scope_packet_id = str(item.scope_id or "").strip()
+        if scope_packet_id in document_packet_ids:
+            return scope_packet_id
+
+        bundle_packet_id = str((item.input_version_bundle_json or {}).get("packet_id") or "").strip()
+        if bundle_packet_id in document_packet_ids:
+            return bundle_packet_id
+        return None
+
+    def _cancel_translate_item(
+        self,
+        item: WorkItem,
+        *,
+        reason: str,
+        detail: dict[str, Any],
+    ) -> None:
+        item.status = WorkItemStatus.CANCELLED
+        item.lease_owner = None
+        item.lease_expires_at = None
+        item.last_heartbeat_at = None
+        item.started_at = None
+        item.finished_at = _utcnow()
+        item.updated_at = _utcnow()
+        item.error_class = reason
+        item.error_detail_json = detail
+        item.output_artifact_refs_json = dict(item.output_artifact_refs_json or {})
 
     def _translate_input_versions(
         self,
@@ -1713,18 +1842,8 @@ class DocumentRunExecutor:
             self._do_update_pipeline_stage(session, run_id, stage_key, status, extra, current_stage)
             return
 
-        attempts = 3 if session is None else 1
-        for attempt in range(attempts):
-            try:
-                with session_scope(self.session_factory) as s:
-                    self._do_update_pipeline_stage(s, run_id, stage_key, status, extra, current_stage)
-                return
-            except OperationalError as exc:
-                if "database is locked" not in str(exc).lower():
-                    raise
-                if attempt == attempts - 1:
-                    return
-            time.sleep(0.1 * (attempt + 1))
+        with session_scope(self.session_factory) as s:
+            self._do_update_pipeline_stage(s, run_id, stage_key, status, extra, current_stage)
 
     def _do_update_pipeline_stage(
         self,

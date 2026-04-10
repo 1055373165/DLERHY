@@ -4,35 +4,33 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.engine.url import make_url
 
 from book_agent.app.api.router import api_router
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.app.ui.router import router as ui_router
 from book_agent.core.config import get_settings
 from book_agent.core.logging import configure_logging
-from book_agent.infra.db.base import Base
-from book_agent.infra.db.legacy_backfill import backfill_legacy_history
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
-from book_agent.infra.db.sqlite_schema_backfill import ensure_sqlite_schema_compat
+from book_agent.workers.providers import ProviderHTTPError, ProviderNetworkError, ProviderTransportError
 from book_agent.workers.factory import build_translation_worker
 
 
-def _database_error_detail(*, dialect_name: str, exc: OperationalError) -> str:
-    if dialect_name == "sqlite" and "database is locked" in str(exc).lower():
-        return (
-            "SQLite is busy with another write. Wait for the active run to finish or retry in a "
-            "moment, or switch to PostgreSQL for concurrent long-running work."
-        )
+def _database_error_detail(*, exc: OperationalError) -> str:
     return (
-        "Database unavailable. Start PostgreSQL if you configured one, "
-        "or remove BOOK_AGENT_DATABASE_URL to use the local SQLite default."
+        "Database unavailable. Ensure PostgreSQL is running and "
+        "BOOK_AGENT_DATABASE_URL is configured correctly."
     )
 
 
-def _database_dialect_name(database_url: str) -> str:
-    return make_url(database_url).drivername.split("+", 1)[0]
+def _provider_error_status_code(exc: ProviderTransportError) -> int:
+    if isinstance(exc, ProviderNetworkError):
+        return 503
+    if isinstance(exc, ProviderHTTPError):
+        if exc.code in {408, 409, 429} or 500 <= exc.code <= 599:
+            return 503
+        return 502
+    return 502
 
 
 def _ensure_database_state(app: FastAPI, *, settings) -> None:
@@ -40,10 +38,6 @@ def _ensure_database_state(app: FastAPI, *, settings) -> None:
         return
 
     engine = build_engine(database_url=settings.database_url)
-    if engine.dialect.name == "sqlite":
-        Base.metadata.create_all(engine)
-        ensure_sqlite_schema_compat(settings.database_url)
-        backfill_legacy_history(settings.database_url)
     app.state.engine = engine
     app.state.database_dialect_name = engine.dialect.name
     app.state.session_factory = build_session_factory(engine=engine)
@@ -85,7 +79,7 @@ def create_app() -> FastAPI:
             expose_headers=["Content-Disposition"],
         )
     app.state.engine = None
-    app.state.database_dialect_name = _database_dialect_name(settings.database_url)
+    app.state.database_dialect_name = "postgresql"
     app.state.session_factory = None
     app.state.ensure_database_state = lambda: _ensure_database_state(app, settings=settings)
     app.state.export_root = str(settings.export_root)
@@ -99,11 +93,15 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=503,
             content={
-                "detail": _database_error_detail(
-                    dialect_name=getattr(app.state, "database_dialect_name", "sqlite"),
-                    exc=_exc,
-                )
+                "detail": _database_error_detail(exc=_exc)
             },
+        )
+
+    @app.exception_handler(ProviderTransportError)
+    async def handle_provider_transport_error(_request, _exc: ProviderTransportError) -> JSONResponse:
+        return JSONResponse(
+            status_code=_provider_error_status_code(_exc),
+            content={"detail": str(_exc)},
         )
 
     app.include_router(ui_router)

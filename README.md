@@ -337,7 +337,7 @@ Only `OPENAI_API_KEY` is required. See `.env.example` for the full list.
 | `OPENAI_API_KEY` | **Yes** | — | Any OpenAI-compatible provider |
 | `OPENAI_BASE_URL` | No | `https://api.deepseek.com/v1` | Change this to swap providers |
 | `BOOK_AGENT_TRANSLATION_MODEL` | No | `deepseek-chat` | — |
-| `BOOK_AGENT_DATABASE_URL` | No | `postgresql+psycopg://postgres:postgres@localhost:5433/book_agent` | Docker mode uses port `55432` |
+| `BOOK_AGENT_DATABASE_URL` | No | `postgresql+psycopg://postgres:postgres@localhost:55432/book_agent` | `./dev.sh` local development and Docker Compose both use `55432` |
 | `BOOK_AGENT_TRANSLATION_TIMEOUT_SECONDS` | No | `120` | Per-request timeout |
 | Per-run `max_parallel_workers` | No | `8` | Set via run budget field |
 

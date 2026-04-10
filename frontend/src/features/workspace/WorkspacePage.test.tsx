@@ -849,6 +849,27 @@ describe("Workspace page", () => {
     expect(screen.getAllByText("Systems Thinking").length).toBeGreaterThan(0);
   });
 
+  it("can return from an opened document to the upload homepage", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    installFetchMock();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "回到首页上传新书" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "回到首页上传新书" }));
+
+    expect(await screen.findByRole("heading", { name: "载入书稿" })).toBeInTheDocument();
+    expect(screen.getByText("Upload a PDF or EPUB to begin translation")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "回到首页上传新书" })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(STORAGE_KEY_DOCUMENT)).toBeNull();
+  });
+
   it("approves a pending proposal from the workbench and refreshes the timeline", async () => {
     window.localStorage.setItem("book-agent.current-document-id", "doc-123");
     const fetchMock = installFetchMock();

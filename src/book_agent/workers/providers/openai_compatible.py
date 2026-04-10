@@ -180,15 +180,11 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     payload=payload,
                     timeout_seconds=self.timeout_seconds,
                 )
-            except ProviderHTTPError as exc:
-                if not self._should_retry_http(exc.code) or attempt >= self.max_retries:
-                    raise RuntimeError(str(exc)) from exc
-            except ProviderNetworkError as exc:
-                if attempt >= self.max_retries:
-                    raise RuntimeError(str(exc)) from exc
             except ProviderTransportError as exc:
+                if isinstance(exc, ProviderHTTPError) and not self._should_retry_http(exc.code):
+                    raise
                 if attempt >= self.max_retries:
-                    raise RuntimeError(str(exc)) from exc
+                    raise
             attempt += 1
             time.sleep(self.retry_backoff_seconds * (2 ** (attempt - 1)))
 

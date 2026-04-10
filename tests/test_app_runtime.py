@@ -288,6 +288,21 @@ class AppRuntimeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn("Database unavailable", response.json()["detail"])
 
+    def test_health_returns_503_when_database_is_unavailable(self) -> None:
+        self._set_env(
+            "BOOK_AGENT_DATABASE_URL",
+            "postgresql+psycopg://postgres:postgres@localhost:9/book_agent",
+        )
+
+        app = create_app()
+        client = TestClient(app)
+        self.addCleanup(client.close)
+
+        response = client.get("/v1/health")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Database unavailable", response.json()["detail"])
+
     def test_create_app_backfills_best_legacy_history_records_into_empty_sqlite_db(self) -> None:
         db_path = Path(self.tempdir.name) / "runtime.sqlite"
         legacy_root = Path(self.tempdir.name) / "real-book-live"

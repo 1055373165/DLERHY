@@ -177,19 +177,19 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### Using PostgreSQL (Optional)
+### Local Development Database
 
-By default the app uses SQLite. For concurrent workloads or production use, switch to PostgreSQL:
+`./dev.sh` 本地开发现在统一使用 Docker Compose 里的 PostgreSQL：
 
 ```bash
-# Start with PostgreSQL via Docker
-./dev.sh pg
+# Start local development
+./dev.sh
 ```
 
-This starts a PostgreSQL container and runs Alembic migrations automatically. Or configure manually:
+脚本会自动启动 `postgres` 容器并运行 Alembic 迁移。对应连接串为：
 
 ```dotenv
-BOOK_AGENT_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5433/book_agent
+BOOK_AGENT_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/book_agent
 ```
 
 ### Docker Compose (Production)

@@ -276,7 +276,8 @@ def _chapter_smoke_command(
     packet_limit: int,
 ) -> tuple[list[str], Path]:
     report_path = _next_report_path(root)
-    database_path = root / "book-agent.db"
+    settings = get_settings()
+    database_url = settings.database_url
     export_root = root / "exports"
     command = [
         sys.executable,
@@ -284,7 +285,7 @@ def _chapter_smoke_command(
         "--source-path",
         source_path,
         "--database-url",
-        f"sqlite+pysqlite:///{database_path.resolve()}",
+        database_url,
         "--export-root",
         str(export_root.resolve()),
         "--report-path",

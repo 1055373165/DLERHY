@@ -78,7 +78,11 @@ from book_agent.workers.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
-from book_agent.workers.providers.openai_compatible import OpenAICompatibleTranslationClient, UrllibJSONTransport
+from book_agent.workers.providers.openai_compatible import (
+    OpenAICompatibleTranslationClient,
+    ProviderNetworkError,
+    UrllibJSONTransport,
+)
 from book_agent.workers.translator import (
     LLMTranslationWorker,
     TranslationPromptRequest,
@@ -192,6 +196,21 @@ class FakeJSONTransport:
             }
         )
         return self.response
+
+
+class FailingJSONTransport:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def post_json(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, object],
+        timeout_seconds: int,
+    ) -> dict:
+        raise self.exc
 
 
 class LooseSchemaClient:
@@ -3546,6 +3565,29 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
         self.assertEqual(mocked_urlopen.call_count, 2)
+
+    def test_openai_compatible_client_preserves_provider_network_error_type(self) -> None:
+        client = OpenAICompatibleTranslationClient(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            timeout_seconds=45,
+            max_retries=0,
+            transport=FailingJSONTransport(ProviderNetworkError("[Errno 61] Connection refused")),
+        )
+
+        with self.assertRaises(ProviderNetworkError) as context:
+            client.generate_translation(
+                TranslationPromptRequest(
+                    packet_id="pkt_1",
+                    model_name="deepseek-chat",
+                    prompt_version="p0.llm.v1",
+                    system_prompt="system",
+                    user_prompt="user",
+                    response_schema=TranslationWorkerOutput.model_json_schema(),
+                )
+            )
+
+        self.assertIn("Connection refused", str(context.exception))
 
     def test_openai_compatible_client_salvages_fenced_chat_completion_json(self) -> None:
         transport = FakeJSONTransport(

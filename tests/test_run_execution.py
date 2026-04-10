@@ -1114,6 +1114,54 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertTrue(executor._reclaim_expired_leases(run_id))
 
+    def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_review(self) -> None:
+        document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
+        packet_id = packet_ids_by_chapter[0][0]
+        run_id = self._create_running_run_for_document(document_id)
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory,
+            export_root="/tmp",
+            translation_worker=None,
+        )
+
+        with self.session_factory() as session:
+            packet = session.get(TranslationPacket, packet_id)
+            self.assertIsNotNone(packet)
+            assert packet is not None
+            packet.status = PacketStatus.TRANSLATED
+            packet.packet_json = {
+                **dict(packet.packet_json or {}),
+                "runtime_state": {
+                    "stage": "translate",
+                    "substate": "translated",
+                    "packet_ordinal": 1,
+                },
+            }
+            session.add(
+                WorkItem(
+                    run_id=run_id,
+                    stage=WorkItemStage.TRANSLATE,
+                    scope_type=WorkItemScopeType.PACKET,
+                    scope_id=document_id,
+                    priority=50,
+                    status=WorkItemStatus.RETRYABLE_FAILED,
+                    input_version_bundle_json={"packet_id": "pkt-1"},
+                )
+            )
+            session.commit()
+
+        progressed = executor._process_translate_stage(run_id)
+        self.assertFalse(progressed)
+
+        with self.session_factory() as session:
+            stale_item = session.query(WorkItem).filter(WorkItem.run_id == run_id).one()
+            summary = RunControlService(RunControlRepository(session)).get_run_summary(run_id)
+
+        self.assertEqual(stale_item.status, WorkItemStatus.CANCELLED)
+        self.assertEqual(stale_item.error_class, "stale_translate_packet_reference")
+        self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "review")
+        self.assertEqual(summary.status_detail_json["pipeline"]["stages"]["translate"]["status"], "succeeded")
+
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))
             refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)

@@ -1386,26 +1386,25 @@ class ExportService:
                     issue_ids=[issue.id for issue in blocking_issues],
                     followup_actions=followup_actions,
                 )
-            if is_pdf_source:
-                export_alignment_artifacts = self._sync_export_alignment_issues(bundle)
-                if export_alignment_artifacts.issues:
-                    raise ExportGateError(
-                        "Chapter "
-                        f"{bundle.chapter.id} has export-time misalignment anomalies and cannot be exported. "
-                        f"Review issues created: {', '.join(issue.id for issue in export_alignment_artifacts.issues)}.",
-                        chapter_id=bundle.chapter.id,
-                        issue_ids=[issue.id for issue in export_alignment_artifacts.issues],
-                        followup_actions=[
-                            ExportFollowupAction(
-                                action_id=action.id,
-                                issue_id=action.issue_id,
-                                action_type=action.action_type.value,
-                                scope_type=action.scope_type.value,
-                                scope_id=action.scope_id,
-                            )
-                            for action in export_alignment_artifacts.actions
-                        ],
-                    )
+            export_alignment_artifacts = self._sync_export_alignment_issues(bundle)
+            if export_alignment_artifacts.issues:
+                raise ExportGateError(
+                    "Chapter "
+                    f"{bundle.chapter.id} has export-time misalignment anomalies and cannot be exported. "
+                    f"Review issues created: {', '.join(issue.id for issue in export_alignment_artifacts.issues)}.",
+                    chapter_id=bundle.chapter.id,
+                    issue_ids=[issue.id for issue in export_alignment_artifacts.issues],
+                    followup_actions=[
+                        ExportFollowupAction(
+                            action_id=action.id,
+                            issue_id=action.issue_id,
+                            action_type=action.action_type.value,
+                            scope_type=action.scope_type.value,
+                            scope_id=action.scope_id,
+                        )
+                        for action in export_alignment_artifacts.actions
+                    ],
+                )
             render_blocks = self._render_blocks_for_chapter(bundle)
             if is_pdf_source:
                 export_layout_artifacts = self._sync_export_layout_issues(bundle, render_blocks)
@@ -3346,6 +3345,8 @@ class ExportService:
             title_text = self._resolved_chapter_title_text(chapter_bundle, render_blocks)
             if not title_text and not render_blocks:
                 continue
+            if self._should_skip_merged_frontmatter_chapter(chapter_bundle, render_blocks, title_text):
+                continue
 
             href = str((chapter_bundle.chapter.metadata_json or {}).get("href") or "").strip()
             normalized_href = href.casefold()
@@ -3435,6 +3436,21 @@ class ExportService:
             for index, group in enumerate(grouped)
         ]
 
+    def _should_skip_merged_frontmatter_chapter(
+        self,
+        chapter_bundle: ChapterExportBundle,
+        render_blocks: list[MergedRenderBlock],
+        title_text: str | None,
+    ) -> bool:
+        source_title = self._source_title_for_chapter(chapter_bundle, title_text)
+        if source_title and not self._looks_like_frontmatter_title(source_title):
+            return False
+        if any(sentence.translatable for sentence in chapter_bundle.sentences):
+            return False
+        if not render_blocks:
+            return True
+        return all(block.render_mode == "image_anchor_with_translated_caption" for block in render_blocks)
+
     def _resolved_chapter_title_text(
         self,
         chapter_bundle: ChapterExportBundle,
@@ -3446,7 +3462,6 @@ class ExportService:
                 for candidate in (
                     chapter_bundle.chapter.title_tgt,
                     chapter_bundle.chapter.title_src,
-                    chapter_bundle.chapter.id,
                 )
                 if str(candidate or "").strip()
             ),
@@ -3561,7 +3576,7 @@ class ExportService:
                 for grouped_block_id in artifact_group_context_ids.get(block.id, [])
                 if grouped_block_id in blocks_by_id
             ]
-            if effective_block_type == BlockType.IMAGE and linked_caption_block is not None:
+            if effective_block_type in {BlockType.IMAGE, BlockType.FIGURE} and linked_caption_block is not None:
                 if linked_caption_block.block_type == BlockType.CAPTION:
                     caption_sentences = sentences_by_block.get(linked_caption_block.id, [])
                     grouped_context_sentences = [
@@ -3830,6 +3845,10 @@ class ExportService:
             return "figure"
         if effective_block_type == BlockType.EQUATION:
             return "equation"
+        if effective_block_type == BlockType.CODE:
+            if tag in {"math", "svg"}:
+                return "equation"
+            return "code"
         if self._is_code_like_block(
             block,
             effective_source_metadata,
@@ -3837,10 +3856,6 @@ class ExportService:
             source_text=effective_source_text,
             document=document,
         ):
-            return "code"
-        if effective_block_type == BlockType.CODE:
-            if tag in {"math", "svg"}:
-                return "equation"
             return "code"
         if effective_block_type == BlockType.TABLE:
             return "table"
@@ -6292,7 +6307,7 @@ class ExportService:
         body = "".join(body_lines)
 
         return (
-            "<div class='artifact-table-shell'>"
+            f"<div class='artifact-table-shell' data-source-text='{html.escape(text)}'>"
             "<table class='artifact-table'>"
             f"<thead><tr>{thead}</tr></thead>"
             f"<tbody>{body}</tbody>"

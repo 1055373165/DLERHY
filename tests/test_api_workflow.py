@@ -61,6 +61,7 @@ from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.workers.providers.openai_compatible import ProviderNetworkError
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
 
@@ -437,6 +438,19 @@ class StyleDriftWorker:
             target_segments=target_segments,
             alignment_suggestions=alignments,
         )
+
+
+class ProviderRefusedWorker:
+    def metadata(self) -> TranslationWorkerMetadata:
+        return TranslationWorkerMetadata(
+            worker_name="ProviderRefusedWorker",
+            model_name="provider-refused-test",
+            prompt_version="test.provider-refused.v1",
+            runtime_config={"mode": "test"},
+        )
+
+    def translate(self, task: TranslationTask) -> TranslationWorkerOutput:
+        raise ProviderNetworkError("[Errno 61] Connection refused")
 
 
 class RepairLoopBrokenWorker:
@@ -2172,6 +2186,45 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertIn("termbase", [item["snapshot_type"] for item in action_data["rebuilt_snapshots"]])
         self.assertGreater(action_data["termbase_version"], 1)
 
+    def test_execute_action_with_followup_returns_503_when_provider_is_unavailable(self) -> None:
+        epub_path = self._write_epub()
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        document_id = bootstrap.json()["document_id"]
+
+        translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
+        self.assertEqual(translate.status_code, 200)
+
+        with self.session_factory() as session:
+            sentence_id = session.scalars(
+                select(Sentence.id).where(Sentence.source_text.like("Pricing power%"))
+            ).one()
+            session.add(
+                TermEntry(
+                    id="00000000-0000-0000-0000-000000000012",
+                    document_id=document_id,
+                    scope_type=MemoryScopeType.GLOBAL,
+                    scope_id=None,
+                    source_term="pricing power",
+                    target_term="定价权",
+                    term_type=TermType.CONCEPT,
+                    lock_level=LockLevel.LOCKED,
+                    status=TermStatus.ACTIVE,
+                    evidence_sentence_id=sentence_id,
+                    version=1,
+                )
+            )
+            session.commit()
+
+        review = self.client.post(f"/v1/documents/{document_id}/review")
+        self.assertEqual(review.status_code, 200)
+        with self.session_factory() as session:
+            action_id = session.query(IssueAction.id).first()[0]
+
+        self.app.state.translation_worker = ProviderRefusedWorker()
+        action = self.client.post(f"/v1/actions/{action_id}/execute?run_followup=true")
+        self.assertEqual(action.status_code, 503)
+        self.assertEqual(action.json()["detail"], "Provider request failed: [Errno 61] Connection refused")
+
     def test_execute_action_with_followup_rebuilds_chapter_brief(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
@@ -2808,7 +2861,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertIn("<img class='artifact-image'", merged_html)
         self.assertIn(asset_relative_path, merged_html)
         self.assertIn("Figure 1.1 Agent loop architecture", merged_html)
-        self.assertIn("代码保持原样", merged_html)
+        self.assertIn("公式保持原样", merged_html)
         self.assertIn("x=1", merged_html)
         self.assertIn("保留原始结构，优先保证可复制与结构保真", merged_html)
         self.assertIn("<th style='text-align:left'>Tier</th>", merged_html)

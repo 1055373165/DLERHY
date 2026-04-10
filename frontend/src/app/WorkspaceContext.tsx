@@ -52,6 +52,7 @@ interface WorkspaceContextValue {
   serviceLinks: typeof SERVICE_LINKS;
   selectedDocumentId: string | null;
   selectDocument: (documentId: string | null) => void;
+  returnToHome: () => void;
   health: HealthResponse | null;
   healthLoading: boolean;
   currentDocument: DocumentSummary | null;
@@ -310,6 +311,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function returnToHome(): void {
+    startTransition(() => {
+      setSelectedDocumentId(null);
+      setSelectedReviewChapterId(null);
+    });
+  }
+
   function selectReviewChapter(chapterId: string | null): void {
     startTransition(() => {
       setSelectedReviewChapterId(chapterId);
@@ -534,6 +542,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     serviceLinks: SERVICE_LINKS,
     selectedDocumentId,
     selectDocument,
+    returnToHome,
     health: healthQuery.data ?? null,
     healthLoading: healthQuery.isLoading,
     currentDocument: currentDocumentQuery.data ?? null,

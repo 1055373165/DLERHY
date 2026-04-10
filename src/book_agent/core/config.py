@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/v1"
     log_level: str = "INFO"
     database_url: str = Field(
-        default="sqlite+pysqlite:///./artifacts/book-agent.db",
+        default="postgresql+psycopg://postgres:postgres@localhost:55432/book_agent",
     )
     docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
