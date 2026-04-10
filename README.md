@@ -25,7 +25,7 @@ Docker Compose brings up PostgreSQL 16 and the app container. Uploads persist in
 ### Local (macOS)
 
 ```bash
-git clone <repo-url> && cd book-agent
+git clone [<repo-url>](https://github.com/1055373165/DLERHY.git) && cd book-agent
 cp .env.example .env   # set OPENAI_API_KEY=sk-...
 ./dev.sh               # → http://localhost:4173
 ```
