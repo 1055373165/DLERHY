@@ -31,6 +31,10 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class PatchAwaitingReviewError(RuntimeError):
+    """Raised when a validated patch is blocked on human approval."""
+
+
 class IncidentController:
     def __init__(
         self,
@@ -387,6 +391,10 @@ class IncidentController:
         proposal = self._runtime_repo.get_runtime_patch_proposal(proposal_id)
         if proposal.status != RuntimePatchProposalStatus.VALIDATED:
             raise ValueError(f"RuntimePatchProposal is not validated: {proposal_id}")
+        if proposal.requires_human_review and proposal.approved_by is None:
+            raise PatchAwaitingReviewError(
+                f"Patch proposal {proposal_id} awaits human review; call POST /v1/patches/{proposal_id}/approve first."
+            )
 
         incident = self._runtime_repo.get_runtime_incident(proposal.incident_id)
         bundle_record = self._bundle_service.publish_bundle(

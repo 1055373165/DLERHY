@@ -314,7 +314,7 @@ Text-based PDFs are stable. Scanned PDFs go through an experimental OCR pipeline
 - [x] Streaming SSE for live progress (replacing 2.5 s poll) — `GET /v1/runs/{id}/stream` over Postgres `LISTEN`
 - [ ] RAG-assisted term resolution from a user glossary
 - [x] Cost dashboard with per-chapter attribution — `GET /v1/runs/{id}/cost` over `cost_rollup_*` matviews
-- [ ] Self-hosted `PatchProposal` review workflow
+- [x] Self-hosted `PatchProposal` review workflow — `GET/POST /v1/patches` with `requires_human_review` gate on `publish_validated_patch`
 
 ---
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -368,6 +368,11 @@ class RuntimePatchProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     proposed_by: Mapped[str | None] = mapped_column(Text)
     approved_by: Mapped[str | None] = mapped_column(Text)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_by: Mapped[str | None] = mapped_column(Text)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    requires_human_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     patch_surface: Mapped[str | None] = mapped_column(Text)
     diff_manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     validation_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

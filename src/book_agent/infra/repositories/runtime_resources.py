@@ -487,6 +487,30 @@ class RuntimeResourcesRepository:
             raise ValueError(f"RuntimePatchProposal not found: {proposal_id}")
         return proposal
 
+    def list_runtime_patch_proposals(
+        self,
+        *,
+        statuses: list[str] | None = None,
+        run_id: str | None = None,
+        requires_human_review: bool | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[tuple[RuntimePatchProposal, RuntimeIncident]]:
+        stmt = (
+            select(RuntimePatchProposal, RuntimeIncident)
+            .join(RuntimeIncident, RuntimeIncident.id == RuntimePatchProposal.incident_id)
+            .order_by(RuntimePatchProposal.created_at.desc(), RuntimePatchProposal.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if statuses:
+            stmt = stmt.where(RuntimePatchProposal.status.in_(statuses))
+        if run_id is not None:
+            stmt = stmt.where(RuntimeIncident.run_id == run_id)
+        if requires_human_review is not None:
+            stmt = stmt.where(RuntimePatchProposal.requires_human_review == requires_human_review)
+        return [(row[0], row[1]) for row in self.session.execute(stmt).all()]
+
     def record_chapter_hold(
         self,
         *,
