@@ -50,91 +50,103 @@ cp .env.example .env   # set OPENAI_API_KEY=sk-...
 ## Architecture
 
 ```d2
-direction: right
+direction: down
 
-# ── State Source (single source of truth) ──────────────────
+# ── Data Plane ─────────────────────────────────────────
+
+pipeline: Data Plane {
+  direction: right
+  style.fill: "#e8f5e9"
+  style.stroke: "#a5d6a7"
+  style.font-size: 14
+  style.bold: true
+
+  parse: Parse\n(EPUB / PDF) {style.fill: "#fff"}
+  translate: Translate\n(x8 workers) {style.fill: "#fff"}
+  review: Review\n(5-dim QA) {style.fill: "#fff"}
+  fix: Fix Loop\n(12 rules) {style.fill: "#fff"}
+  export: Export\n(multi-format) {style.fill: "#fff"}
+
+  parse -> translate -> review -> fix -> export
+}
+
+# ── LLM Backends ───────────────────────────────────────
+
+llm: LLM Backends {
+  shape: cloud
+  style.fill: "#ede7f6"
+  style.font-size: 13
+  DeepSeek; OpenAI; vLLM
+}
+
+# ── Self-Healing ───────────────────────────────────────
+
+heal: Self-Healing {
+  direction: right
+  style.fill: "#fce4ec"
+  style.stroke: "#ef9a9a"
+  style.font-size: 14
+  style.bold: true
+
+  classify: Classify\n(retry / pause / incident) {style.fill: "#fff"}
+  detect: Blockage\nDetector {style.fill: "#fff"}
+  patch: Patch\nProposal {style.fill: "#fff"}
+
+  classify -> patch
+  detect -> patch
+}
+
+# ── Control Plane ──────────────────────────────────────
+
+control: Control Plane (6 Controllers) {
+  style.fill: "#e8eaf6"
+  style.stroke: "#9fa8da"
+  style.font-size: 14
+  style.bold: true
+}
+
+# ── PostgreSQL (single source of truth) ────────────────
+
 pg: PostgreSQL 16 {
   shape: cylinder
   style.fill: "#336791"
-  style.font-color: "#ffffff"
-  documents
-  chapters
-  packets
-  work_items
-  incidents
-  audit_events
+  style.font-color: "#fff"
+  style.font-size: 16
+  style.bold: true
+  docs: documents / chapters / packets {style.font-color: "#fff"}
+  work: work_items / incidents {style.font-color: "#fff"}
+  events: audit_events {style.font-color: "#fff"}
 }
 
-# ── Control Plane ──────────────────────────────────────────
-control: Control Plane {
-  style.fill: "#f0f4ff"
-  run: RunController
-  chapter: ChapterController
-  packet: PacketController
-  review: ReviewController
-  export: ExportController
-  incident: IncidentController
-}
+# ── Packet State Machine ──────────────────────────────
 
-# ── Data Plane (stateless workers) ─────────────────────────
-data: Data Plane {
-  style.fill: "#f5fff5"
-  parser: Parser\n(EPUB / PDF / OCR)
-  segmenter: Segmenter
-  context: Context Compiler
-  pool: Translator Pool\n(×8 parallel)
-  reviewer: Reviewer\n(5-dim QA)
-  rules: Rule Engine\n(12 action types)
-  exporter: Exporter\n(HTML / MD / EPUB / PDF)
-
-  parser -> segmenter -> context -> pool
-  pool -> reviewer -> rules -> exporter
-}
-
-# ── Packet State Machine (the core insight) ────────────────
-packet_sm: Packet State Machine {
+packet: Packet State Machine {
+  direction: right
   style.fill: "#fff8e1"
   style.stroke: "#f9a825"
-  built: BUILT {style.fill: "#e3f2fd"}
-  running: RUNNING {style.fill: "#fff9c4"}
-  translated: TRANSLATED {style.fill: "#c8e6c9"}
-  failed: RETRYABLE_FAILED {style.fill: "#ffcdd2"}
+  style.font-size: 14
+  style.bold: true
+  style.border-radius: 8
 
-  built -> running: lease
-  running -> translated: success
-  running -> failed: error
-  failed -> built: next tick
+  b: BUILT {style.fill: "#e3f2fd"; style.font-size: 13}
+  r: RUNNING {style.fill: "#fff9c4"; style.font-size: 13}
+  t: TRANSLATED {style.fill: "#c8e6c9"; style.font-size: 13}
+
+  b -> r: lease
+  r -> t: ok
+  r -> b: fail, retry {style.stroke: "#e53935"; style.stroke-dash: 3}
 }
 
-# ── Self-Healing Loop ─────────────────────────────────────
-heal: Self-Healing {
-  style.fill: "#fce4ec"
-  classifier: Exception Classifier\n(retry / pause / incident)
-  blockage: Blockage Detector\n(stalled leases)
-  repair: Repair Registry
-  patch: Patch Proposals
+# ── Connections ────────────────────────────────────────
 
-  classifier -> repair
-  blockage -> repair
-  repair -> patch
-}
-
-# ── LLM Backends ──────────────────────────────────────────
-llm: LLM Backends {
-  shape: cloud
-  deepseek: DeepSeek
-  openai: OpenAI
-  vllm: local vLLM
-}
-
-# ── Connections ───────────────────────────────────────────
-control -> pg: watch + reconcile {style.stroke-dash: 3}
-control -> data: lease work items
-data -> pg: report results
-data -> heal: exceptions
-heal -> control.incident: apply within budget
-data.pool -> llm: any OpenAI-compatible
-pg -> packet_sm: per-packet state
+pipeline.translate -> llm: OpenAI-compatible API {style.stroke: "#7b1fa2"}
+pipeline -> heal: exceptions {style.stroke: "#c62828"}
+heal -> control: apply / escalate {style.stroke: "#c62828"; style.stroke-dash: 3}
+control -> pipeline: lease work items {style.stroke: "#2e7d32"}
+control -> pg: watch + reconcile {style.stroke-dash: 3; style.stroke: "#5c6bc0"}
+pg -> control: read state {style.stroke: "#5c6bc0"}
+pipeline -> pg: report results {style.stroke: "#2e7d32"}
+pg -> packet: drives per-packet state {style.stroke-dash: 3; style.stroke: "#9e9e9e"}
 ```
 
 **The key insight:** nothing in the data plane holds state. Kill any worker, any controller, any backend process — the next reconcile tick reads PostgreSQL, sees what's missing, and resumes. No orchestration bus, no task queue, no in-memory state to lose.
