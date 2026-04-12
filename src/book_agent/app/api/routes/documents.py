@@ -18,7 +18,7 @@ from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
 from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
-from book_agent.infra.db.legacy_backfill import backfill_legacy_history
+
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
@@ -1329,11 +1329,9 @@ def list_document_history(
 def backfill_document_history(
     session: Session = Depends(get_db_session),
 ) -> DocumentHistoryBackfillResponse:
-    bind = session.get_bind()
-    database_url = str(bind.url) if bind is not None else get_settings().database_url
-    session.close()
+    # Legacy SQLite backfill removed — PostgreSQL is the sole backend.
     return DocumentHistoryBackfillResponse(
-        imported_document_count=backfill_legacy_history(database_url),
+        imported_document_count=0,
     )
 
 
