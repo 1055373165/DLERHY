@@ -6,7 +6,12 @@ import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
-from book_agent.domain.event_kinds import PACKET_TRANSLATED
+from book_agent.domain.event_kinds import (
+    LLM_CALL_COMPLETED,
+    LLM_CALL_FAILED,
+    LLM_CALL_STARTED,
+    PACKET_TRANSLATED,
+)
 from book_agent.domain.models import MemorySnapshot, Sentence
 from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunStatus, SegmentType, SentenceStatus, TargetSegmentStatus
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
@@ -283,6 +288,7 @@ class TranslationService:
         compile_options: ChapterContextCompileOptions | None = None,
         rerun_hints: tuple[str, ...] = (),
         auto_commit_memory: bool | None = None,
+        run_id: str | None = None,
     ) -> TranslationExecutionArtifacts:
         effective_auto_commit_memory = (
             self.default_auto_commit_memory if auto_commit_memory is None else auto_commit_memory
@@ -295,13 +301,76 @@ class TranslationService:
         )
         chapter_memory_snapshot = compiled_context_result.chapter_memory_snapshot
         compiled_context_packet = compiled_context_result.context
-        worker_result = self._coerce_worker_result(
-            self.worker.translate(
-                TranslationTask(
-                    context_packet=compiled_context_packet,
-                    current_sentences=bundle.current_sentences,
+        worker_metadata = self.worker.metadata()
+        call_id = stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp()))
+        correlation_id = f"packet:{bundle.packet.id}"
+        emit_event(
+            self.repository.session,
+            kind=LLM_CALL_STARTED,
+            run_id=run_id,
+            chapter_id=bundle.packet.chapter_id,
+            packet_id=bundle.packet.id,
+            actor_kind="agent",
+            actor_id=f"worker.{worker_metadata.worker_name}",
+            correlation_id=correlation_id,
+            payload={
+                "call_id": call_id,
+                "backend": worker_metadata.worker_name,
+                "model": worker_metadata.model_name,
+                "sentence_count": len(bundle.current_sentences),
+            },
+        )
+        _call_started_at = _utcnow()
+        try:
+            worker_result = self._coerce_worker_result(
+                self.worker.translate(
+                    TranslationTask(
+                        context_packet=compiled_context_packet,
+                        current_sentences=bundle.current_sentences,
+                    )
                 )
             )
+        except Exception as exc:
+            emit_event(
+                self.repository.session,
+                kind=LLM_CALL_FAILED,
+                run_id=run_id,
+                chapter_id=bundle.packet.chapter_id,
+                packet_id=bundle.packet.id,
+                actor_kind="agent",
+                actor_id=f"worker.{worker_metadata.worker_name}",
+                correlation_id=correlation_id,
+                payload={
+                    "call_id": call_id,
+                    "backend": worker_metadata.worker_name,
+                    "model": worker_metadata.model_name,
+                    "error_class": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                    "elapsed_ms": int((_utcnow() - _call_started_at).total_seconds() * 1000),
+                },
+            )
+            raise
+        _usage = worker_result.usage
+        emit_event(
+            self.repository.session,
+            kind=LLM_CALL_COMPLETED,
+            run_id=run_id,
+            chapter_id=bundle.packet.chapter_id,
+            packet_id=bundle.packet.id,
+            actor_kind="agent",
+            actor_id=f"worker.{worker_metadata.worker_name}",
+            correlation_id=correlation_id,
+            payload={
+                "call_id": call_id,
+                "backend": worker_metadata.worker_name,
+                "model": worker_metadata.model_name,
+                "token_in": int(_usage.token_in or 0),
+                "token_out": int(_usage.token_out or 0),
+                "total_tokens": int(_usage.total_tokens or 0),
+                "cost_usd": float(_usage.cost_usd) if _usage.cost_usd is not None else None,
+                "latency_ms": int(_usage.latency_ms or 0),
+                "provider_request_id": _usage.provider_request_id,
+            },
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet)
         self.repository.save_translation_artifacts(
@@ -314,6 +383,7 @@ class TranslationService:
         emit_event(
             self.repository.session,
             kind=PACKET_TRANSLATED,
+            run_id=run_id,
             chapter_id=bundle.packet.chapter_id,
             packet_id=bundle.packet.id,
             actor_kind="system",

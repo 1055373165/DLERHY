@@ -663,7 +663,7 @@ class DocumentRunExecutor:
         self._execute_claimed_work_item(
             run_id=run_id,
             claimed=claimed,
-            worker_fn=lambda: self._translate_single_packet(claimed.scope_id),
+            worker_fn=lambda: self._translate_single_packet(claimed.scope_id, run_id=run_id),
             on_success=self._complete_translate_success,
             lease_seconds=self.lease_seconds,
         )
@@ -920,7 +920,7 @@ class DocumentRunExecutor:
                 stage_key=stage_key or claimed.stage,
             )
 
-    def _translate_single_packet(self, packet_id: str) -> dict[str, Any]:
+    def _translate_single_packet(self, packet_id: str, *, run_id: str | None = None) -> dict[str, Any]:
         with session_scope(self.session_factory) as session:
             workflow = self._workflow_service(session)
             packet = session.get(TranslationPacket, packet_id)
@@ -938,6 +938,7 @@ class DocumentRunExecutor:
             artifacts = workflow.translation_service.execute_packet(
                 packet_id,
                 auto_commit_memory=False,
+                run_id=run_id,
             )
             translation_run = artifacts.translation_run
             return {
