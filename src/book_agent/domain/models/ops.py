@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -509,3 +509,30 @@ class RunAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
     actor_id: Mapped[str | None] = mapped_column(Text)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class Event(Base):
+    """Append-only event bus (Phase 4 CC-1).
+
+    Single source for SSE fan-out, cost telemetry, glossary/patch lifecycle.
+    INSERT fires pg_notify('events_channel', id) via DB trigger. BIGSERIAL id
+    gives monotonic ordering; consumers resume by last seen id.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.clock_timestamp(),
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    run_id: Mapped[str | None] = mapped_column(Text)
+    chapter_id: Mapped[str | None] = mapped_column(Text)
+    packet_id: Mapped[str | None] = mapped_column(Text)
+    actor_kind: Mapped[str] = mapped_column(Text, nullable=False, default="system")
+    actor_id: Mapped[str] = mapped_column(Text, nullable=False, default="system")
+    org_id: Mapped[str] = mapped_column(Text, nullable=False, default="default")
+    correlation_id: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

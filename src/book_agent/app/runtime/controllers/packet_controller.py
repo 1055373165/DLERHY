@@ -21,6 +21,8 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models import Document
 from book_agent.domain.models.ops import ChapterRun, DocumentRun, PacketTask, RuntimePatchProposal, WorkItem
+from book_agent.domain.event_kinds import PACKET_FAILED
+from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
 from book_agent.services.incident_triage import IncidentTriageService
 from book_agent.services.recovery_matrix import RecoveryDecision, RecoveryMatrixService
@@ -296,7 +298,27 @@ class PacketController:
             decision_payload = _decision_payload(decision, evaluated_at=observed_at)
             if decision_payload is not None:
                 status_patch["runtime_v2"]["recovery_decision"] = decision_payload
+            prior_terminal = bool(
+                ((task.status_detail_json or {}).get("runtime_v2") or {}).get("lane_health", {}).get("terminal")
+            )
             self._runtime_repo.merge_packet_task_status_detail(task.id, status_patch)
+            if result.terminal and not prior_terminal:
+                emit_event(
+                    self._session,
+                    kind=PACKET_FAILED,
+                    run_id=run_id,
+                    chapter_id=chapter_run.chapter_id,
+                    packet_id=task.packet_id,
+                    actor_kind="system",
+                    actor_id="runtime.packet-controller",
+                    payload={
+                        "packet_task_id": task.id,
+                        "chapter_run_id": chapter_run.id,
+                        "attempt_count": projection.attempt_count,
+                        "lane_health": _lane_health_payload(result, observed_at=observed_at),
+                        "recovery_decision": decision_payload,
+                    },
+                )
             self._runtime_repo.upsert_checkpoint(
                 run_id=run_id,
                 scope_type=JobScopeType.PACKET,
