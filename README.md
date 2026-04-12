@@ -312,7 +312,6 @@ Text-based PDFs are stable. Scanned PDFs go through an experimental OCR pipeline
 ## 🗺 Roadmap
 
 - [ ] Streaming SSE for live progress (replacing 2.5 s poll)
-- [ ] Multi-target languages (ZH → JP, ZH → EN)
 - [ ] RAG-assisted term resolution from a user glossary
 - [ ] Cost dashboard with per-chapter attribution
 - [ ] Self-hosted `PatchProposal` review workflow
