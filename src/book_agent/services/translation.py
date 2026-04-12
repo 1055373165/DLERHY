@@ -6,10 +6,12 @@ import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.event_kinds import PACKET_TRANSLATED
 from book_agent.domain.models import MemorySnapshot, Sentence
 from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunStatus, SegmentType, SentenceStatus, TargetSegmentStatus
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
+from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
@@ -308,6 +310,20 @@ class TranslationService:
             alignment_edges=artifacts.alignment_edges,
             updated_sentences=artifacts.updated_sentences,
             packet=bundle.packet,
+        )
+        emit_event(
+            self.repository.session,
+            kind=PACKET_TRANSLATED,
+            chapter_id=bundle.packet.chapter_id,
+            packet_id=bundle.packet.id,
+            actor_kind="system",
+            actor_id="services.translation",
+            payload={
+                "translation_run_id": artifacts.translation_run.id,
+                "attempt": artifacts.translation_run.attempt,
+                "target_segment_count": len(artifacts.target_segments),
+                "sentence_count": len(bundle.current_sentences),
+            },
         )
         proposed_content_json = self._build_chapter_memory_content_json(
             bundle=bundle,

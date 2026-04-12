@@ -92,6 +92,18 @@ class OpsRepository:
         chapter = self.get_chapter(packet.chapter_id)
         chapter.status = ChapterStatus.PACKET_BUILT
         self.session.merge(chapter)
+        from book_agent.domain.event_kinds import PACKET_BUILT
+        from book_agent.infra.repositories.events import emit_event
+
+        emit_event(
+            self.session,
+            kind=PACKET_BUILT,
+            chapter_id=packet.chapter_id,
+            packet_id=packet.id,
+            actor_kind="system",
+            actor_id="infra.ops.rerun",
+            payload={"reason": "rerun_ready"},
+        )
         return packet
 
     def list_packet_bundles_for_chapter(self, chapter_id: str) -> list[PacketInvalidationBundle]:

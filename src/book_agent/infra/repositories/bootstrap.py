@@ -89,6 +89,7 @@ class BootstrapRepository:
 
         self._merge_collection(artifacts.translation_packets)
         self.session.flush()
+        self._emit_packet_built_for(artifacts.translation_packets)
 
         self._merge_collection(artifacts.packet_sentence_maps)
         self._merge_collection(artifacts.job_runs)
@@ -98,6 +99,23 @@ class BootstrapRepository:
     def _merge_collection(self, collection: list[object]) -> None:
         for item in collection:
             self.session.merge(item)
+
+    def _emit_packet_built_for(self, packets: list[TranslationPacket]) -> None:
+        if not packets:
+            return
+        from book_agent.domain.event_kinds import PACKET_BUILT
+        from book_agent.infra.repositories.events import emit_event
+
+        for packet in packets:
+            emit_event(
+                self.session,
+                kind=PACKET_BUILT,
+                chapter_id=packet.chapter_id,
+                packet_id=packet.id,
+                actor_kind="system",
+                actor_id="infra.bootstrap",
+                payload={"packet_type": getattr(packet.packet_type, "value", str(packet.packet_type))},
+            )
 
     def load_document_bundle(self, document_id: str) -> PersistedDocumentBundle:
         document = self.session.get(Document, document_id)

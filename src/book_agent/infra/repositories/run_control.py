@@ -353,6 +353,24 @@ class RunControlRepository:
         )
         self.session.add(worker_lease)
         self.session.flush()
+        if work_item.scope_type == WorkItemScopeType.PACKET and work_item.stage == WorkItemStage.TRANSLATE:
+            from book_agent.domain.event_kinds import PACKET_LEASED
+            from book_agent.infra.repositories.events import emit_event
+
+            emit_event(
+                self.session,
+                kind=PACKET_LEASED,
+                run_id=work_item.run_id,
+                packet_id=work_item.scope_id,
+                actor_kind="agent",
+                actor_id=worker_instance_id,
+                payload={
+                    "work_item_id": work_item.id,
+                    "attempt": int(work_item.attempt or 0),
+                    "lease_token": lease_token,
+                    "lease_expires_at": lease_expires_at.isoformat(),
+                },
+            )
         return ClaimedWorkItemBundle(work_item=work_item, worker_lease=worker_lease)
 
     def _is_work_item_claimable(self, work_item: WorkItem, *, now: datetime) -> bool:
