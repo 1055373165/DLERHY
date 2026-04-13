@@ -375,7 +375,7 @@ class DocumentRunExecutor:
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
                     summary = execution.reconcile_run_terminal_state(run_id=run_id)
-                    self._sync_pipeline_status(run_id, summary.status)
+                self._sync_pipeline_status(run_id, summary.status)
                 if summary.status in {"succeeded", "failed", "paused", "cancelled"}:
                     return
             except Exception as exc:  # pragma: no cover - defensive safety net
@@ -569,9 +569,12 @@ class DocumentRunExecutor:
             active_translate_items = [
                 item for item in translate_items if item.status != WorkItemStatus.CANCELLED
             ]
-            if not active_translate_items or any(
-                item.status != WorkItemStatus.SUCCEEDED for item in active_translate_items
-            ):
+            if active_translate_items:
+                if any(
+                    item.status != WorkItemStatus.SUCCEEDED for item in active_translate_items
+                ):
+                    return False
+            elif self._pipeline_stage_status(run, "translate") != "succeeded":
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
             if not review_items:
@@ -618,18 +621,24 @@ class DocumentRunExecutor:
             active_review_items = [
                 item for item in review_items if item.status != WorkItemStatus.CANCELLED
             ]
-            if not active_review_items or any(
-                item.status != WorkItemStatus.SUCCEEDED for item in active_review_items
-            ):
+            if active_review_items:
+                if any(
+                    item.status != WorkItemStatus.SUCCEEDED for item in active_review_items
+                ):
+                    return False
+            elif self._pipeline_stage_status(run, "review") != "succeeded":
                 return False
             if export_type == ExportType.MERGED_HTML:
                 bilingual_items = self._list_export_items(session, run_id, ExportType.BILINGUAL_HTML)
                 active_bilingual_items = [
                     item for item in bilingual_items if item.status != WorkItemStatus.CANCELLED
                 ]
-                if not active_bilingual_items or any(
-                    item.status != WorkItemStatus.SUCCEEDED for item in active_bilingual_items
-                ):
+                if active_bilingual_items:
+                    if any(
+                        item.status != WorkItemStatus.SUCCEEDED for item in active_bilingual_items
+                    ):
+                        return False
+                elif self._pipeline_stage_status(run, "bilingual_html") != "succeeded":
                     return False
 
             export_items = self._list_export_items(session, run_id, export_type)
@@ -1841,6 +1850,20 @@ class DocumentRunExecutor:
             self.default_max_blocker_repair_rounds,
             self._max_auto_followup_attempts(session, run_id),
         )
+
+    def _pipeline_stage_status(self, run: DocumentRun, stage_key: str) -> str | None:
+        detail = run.status_detail_json or {}
+        pipeline = detail.get("pipeline") if isinstance(detail, dict) else None
+        if not isinstance(pipeline, dict):
+            return None
+        stages = pipeline.get("stages")
+        if not isinstance(stages, dict):
+            return None
+        stage = stages.get(stage_key)
+        if not isinstance(stage, dict):
+            return None
+        status = stage.get("status")
+        return status if isinstance(status, str) else None
 
     def _update_pipeline_stage(
         self,
