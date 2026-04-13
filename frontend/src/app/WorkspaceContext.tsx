@@ -3,6 +3,7 @@ import {
   startTransition,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -243,8 +244,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     writeStoredDocumentId(selectedDocumentId);
   }, [selectedDocumentId]);
 
+  const initialDocumentRestoreAttemptedRef = useRef(false);
   useEffect(() => {
-    if (selectedDocumentId || !bootstrapHistoryQuery.data?.entries.length) {
+    if (initialDocumentRestoreAttemptedRef.current) {
+      return;
+    }
+    if (!bootstrapHistoryQuery.data) {
+      return;
+    }
+    initialDocumentRestoreAttemptedRef.current = true;
+    if (selectedDocumentId) {
       return;
     }
     const activeEntry = bootstrapHistoryQuery.data.entries.find((entry) =>
