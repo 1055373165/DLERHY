@@ -579,7 +579,7 @@ class DocumentRunExecutor:
                         run.document_id: {"document_id": run.document_id},
                     },
                 )
-                self._update_pipeline_stage(run_id, "review", status="pending", current_stage="review", session=session)
+                self._update_pipeline_stage(run_id, "review", status="running", current_stage="review", session=session)
                 return True
             if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in review_items):
                 return False
@@ -634,7 +634,7 @@ class DocumentRunExecutor:
                         }
                     },
                 )
-                self._update_pipeline_stage(run_id, pipeline_key, status="pending", current_stage=pipeline_key, session=session)
+                self._update_pipeline_stage(run_id, pipeline_key, status="running", current_stage=pipeline_key, session=session)
                 return True
             if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in export_items):
                 return False
