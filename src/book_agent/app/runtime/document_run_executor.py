@@ -566,7 +566,12 @@ class DocumentRunExecutor:
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
-            if any(item.status != WorkItemStatus.SUCCEEDED for item in translate_items):
+            active_translate_items = [
+                item for item in translate_items if item.status != WorkItemStatus.CANCELLED
+            ]
+            if not active_translate_items or any(
+                item.status != WorkItemStatus.SUCCEEDED for item in active_translate_items
+            ):
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
             if not review_items:
@@ -610,13 +615,21 @@ class DocumentRunExecutor:
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
-            if not review_items:
-                return False
-            if any(item.status != WorkItemStatus.SUCCEEDED for item in review_items):
+            active_review_items = [
+                item for item in review_items if item.status != WorkItemStatus.CANCELLED
+            ]
+            if not active_review_items or any(
+                item.status != WorkItemStatus.SUCCEEDED for item in active_review_items
+            ):
                 return False
             if export_type == ExportType.MERGED_HTML:
                 bilingual_items = self._list_export_items(session, run_id, ExportType.BILINGUAL_HTML)
-                if not bilingual_items or any(item.status != WorkItemStatus.SUCCEEDED for item in bilingual_items):
+                active_bilingual_items = [
+                    item for item in bilingual_items if item.status != WorkItemStatus.CANCELLED
+                ]
+                if not active_bilingual_items or any(
+                    item.status != WorkItemStatus.SUCCEEDED for item in active_bilingual_items
+                ):
                     return False
 
             export_items = self._list_export_items(session, run_id, export_type)
