@@ -11,11 +11,10 @@ from book_agent.core.config import get_settings
 def build_engine(database_url: str | None = None, **kwargs) -> Engine:
     settings = get_settings()
     url = database_url or settings.database_url
-    default_kwargs: dict[str, object] = {
-        "pool_pre_ping": True,
-        "pool_size": 10,
-        "max_overflow": 20,
-    }
+    default_kwargs: dict[str, object] = {"pool_pre_ping": True}
+    if not url.startswith("sqlite"):
+        default_kwargs["pool_size"] = 10
+        default_kwargs["max_overflow"] = 20
     default_kwargs.update(kwargs)
     return create_engine(url, **default_kwargs)
 

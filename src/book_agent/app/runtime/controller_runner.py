@@ -9,6 +9,7 @@ from book_agent.app.runtime.controllers.packet_controller import PacketControlle
 from book_agent.app.runtime.controllers.run_controller import RunController
 from book_agent.domain.enums import JobScopeType
 from book_agent.domain.models.ops import DocumentRun
+from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
 
 
@@ -36,7 +37,7 @@ class ControllerRunner:
         self._session_factory = session_factory
 
     def reconcile_run(self, *, run_id: str) -> ControllerReconcileStats:
-        with self._session_factory() as session:
+        with session_scope(self._session_factory) as session:
             return self._reconcile_run_with_session(session=session, run_id=run_id)
 
     def _reconcile_run_with_session(self, *, session: Session, run_id: str) -> ControllerReconcileStats:
@@ -94,5 +95,4 @@ class ControllerRunner:
                 generation=int(chapter_run.generation or 1),
             )
 
-        session.commit()
         return stats

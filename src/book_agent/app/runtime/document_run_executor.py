@@ -1911,10 +1911,48 @@ class DocumentRunExecutor:
 
     def _sync_pipeline_status(self, run_id: str, run_status: str) -> None:
         if run_status == "succeeded":
-            self._update_pipeline_stage(run_id, "pipeline", status="succeeded", current_stage="completed")
+            with session_scope(self.session_factory) as session:
+                self._finalize_stage_snapshots_on_success(session, run_id)
+                self._do_update_pipeline_stage(
+                    session, run_id, "pipeline", "succeeded", None, "completed"
+                )
             return
         if run_status in {"failed", "paused", "cancelled"}:
             self._update_pipeline_stage(run_id, "pipeline", status=run_status, current_stage=run_status)
+
+    def _finalize_stage_snapshots_on_success(self, session: Session, run_id: str) -> None:
+        repository = RunControlRepository(session)
+        run = repository.get_run(run_id)
+        detail = dict(run.status_detail_json or {})
+        pipeline = dict(detail.get("pipeline") or {})
+        stages = dict(pipeline.get("stages") or {})
+        if not stages:
+            return
+        now = _utcnow().isoformat()
+        changed = False
+        for stage_key, stage_detail in list(stages.items()):
+            if stage_key == "pipeline":
+                continue
+            if not isinstance(stage_detail, dict):
+                continue
+            current_status = stage_detail.get("status")
+            if current_status == "succeeded":
+                continue
+            if current_status in {"failed", "paused", "cancelled"}:
+                continue
+            updated = dict(stage_detail)
+            updated["status"] = "succeeded"
+            updated["updated_at"] = now
+            if stage_key == "translate":
+                updated["pending_packet_count"] = 0
+            stages[stage_key] = updated
+            changed = True
+        if not changed:
+            return
+        pipeline["stages"] = stages
+        detail["pipeline"] = pipeline
+        run.status_detail_json = detail
+        repository.save_run(run)
 
     def _fail_run(self, run_id: str, *, stop_reason: str, exc: Exception) -> None:
         with session_scope(self.session_factory) as session:
