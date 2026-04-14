@@ -253,11 +253,20 @@ export function translateProgress(
       run?.work_items.stage_counts.translate ??
       0
   );
-  const completed = Number(run?.status_detail_json?.control_counters?.completed_work_item_count ?? 0);
+  const rawCompleted = Number(run?.status_detail_json?.control_counters?.completed_work_item_count ?? 0);
+  const runStatus = run?.status;
+  const translateStageStatus = detail?.status;
+  const isTerminalSuccess =
+    runStatus === "succeeded" ||
+    translateStageStatus === "succeeded" ||
+    Boolean(document?.merged_export_ready);
+  if (isTerminalSuccess && total > 0) {
+    return { total, completed: total, ratio: 1 };
+  }
   return {
     total,
-    completed,
-    ratio: total > 0 ? Math.max(0, Math.min(1, completed / total)) : 0,
+    completed: rawCompleted,
+    ratio: total > 0 ? Math.max(0, Math.min(1, rawCompleted / total)) : 0,
   };
 }
 
