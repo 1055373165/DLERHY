@@ -395,7 +395,7 @@ print_status() {
     if backend_running; then
         info "Backend:  running (PID: $(read_pid "$BACKEND_PID_FILE"))"
         info "          ${CYAN}http://${HOST}:${PORT}${NC}"
-        info "          docs -> ${CYAN}http://${HOST}:${PORT}/v1/docs${NC}"
+        info "          docs -> ${CYAN}http://${HOST}:${PORT}/docs${NC}"
         info "          logs -> $BACKEND_LOG_FILE"
     else
         warn "Backend:  stopped"
@@ -429,7 +429,7 @@ start_all() {
     echo ""
     info "${BOLD}book-agent services are running${NC}"
     info "  Backend:  ${CYAN}http://${HOST}:${PORT}${NC}"
-    info "  API Docs: ${CYAN}http://${HOST}:${PORT}/v1/docs${NC}"
+    info "  API Docs: ${CYAN}http://${HOST}:${PORT}/docs${NC}"
     info "  Logs:     $BACKEND_LOG_FILE"
     if frontend_configured; then
         info "  Frontend: ${CYAN}${FRONTEND_URL}${NC}"
