@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -33,6 +33,9 @@ from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepo
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.reconciler import Reconciler
+from book_agent.orchestrator.stage_gate import StageGateKeeper
+from book_agent.orchestrator.stage_status import StageTransitionLogger
 from book_agent.orchestrator.state_machine import (
     PACKET_RUNTIME_SUBSTATE_LEASED,
     PACKET_RUNTIME_SUBSTATE_RETRYABLE_FAILED,
@@ -148,6 +151,7 @@ class DocumentRunExecutor:
         translation_worker: TranslationWorker | None,
         poll_interval_seconds: float = 1.0,
         controller_reconcile_interval_seconds: float = 10.0,
+        state_reconciler_interval_seconds: float = 30.0,
         enable_controller_runner: bool = True,
         lease_seconds: int = 120,
         review_lease_seconds: int = 1800,
@@ -163,6 +167,10 @@ class DocumentRunExecutor:
         self.controller_reconcile_interval_seconds = max(0.0, float(controller_reconcile_interval_seconds))
         self._controller_runner = ControllerRunner(session_factory) if enable_controller_runner else None
         self._controller_last_reconcile_at_by_run: dict[str, float] = {}
+        self.state_reconciler_interval_seconds = max(
+            0.0, float(state_reconciler_interval_seconds)
+        )
+        self._state_reconciler_last_at_by_run: dict[str, float] = {}
         self.lease_seconds = lease_seconds
         self.review_lease_seconds = max(self.lease_seconds, int(review_lease_seconds))
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
@@ -203,6 +211,31 @@ class DocumentRunExecutor:
             return
         except Exception:
             # Keep Phase A wiring strictly non-invasive (no behavior change to V1 runner).
+            return
+
+    def _maybe_reconcile_state(self, run_id: str) -> None:
+        """Throttled read-only drift scan over stage cache vs physical state.
+
+        The Reconciler never mutates rows — it only appends a
+        ``stage_transitions`` audit row per drift finding. Findings are
+        forensic signal; the run-loop's own gates keep bad states from
+        advancing. This exists to detect writes that bypass the logger,
+        so a postmortem can bisect when a cache-vs-physics lie started.
+        """
+        interval = self.state_reconciler_interval_seconds
+        if interval <= 0:
+            return
+        now = time.monotonic()
+        last = self._state_reconciler_last_at_by_run.get(run_id)
+        if last is not None and (now - last) < interval:
+            return
+        self._state_reconciler_last_at_by_run[run_id] = now
+        try:
+            with session_scope(self.session_factory) as session:
+                Reconciler(session).check_and_audit(run_id)
+        except OperationalError:
+            return
+        except Exception:
             return
 
     def start(self) -> None:
@@ -361,6 +394,7 @@ class DocumentRunExecutor:
 
             try:
                 self._maybe_reconcile_controllers(run_id)
+                self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
                 if self._process_repair_stage(run_id):
                     continue
@@ -565,16 +599,9 @@ class DocumentRunExecutor:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
-            translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
-            active_translate_items = [
-                item for item in translate_items if item.status != WorkItemStatus.CANCELLED
-            ]
-            if active_translate_items:
-                if any(
-                    item.status != WorkItemStatus.SUCCEEDED for item in active_translate_items
-                ):
-                    return False
-            elif self._pipeline_stage_status(run, "translate") != "succeeded":
+            if not StageGateKeeper(session).can_start(
+                run_id, run.document_id, "review"
+            ):
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
             if not review_items:
@@ -617,29 +644,10 @@ class DocumentRunExecutor:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
-            review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
-            active_review_items = [
-                item for item in review_items if item.status != WorkItemStatus.CANCELLED
-            ]
-            if active_review_items:
-                if any(
-                    item.status != WorkItemStatus.SUCCEEDED for item in active_review_items
-                ):
-                    return False
-            elif self._pipeline_stage_status(run, "review") != "succeeded":
+            if not StageGateKeeper(session).can_start(
+                run_id, run.document_id, pipeline_key
+            ):
                 return False
-            if export_type == ExportType.MERGED_HTML:
-                bilingual_items = self._list_export_items(session, run_id, ExportType.BILINGUAL_HTML)
-                active_bilingual_items = [
-                    item for item in bilingual_items if item.status != WorkItemStatus.CANCELLED
-                ]
-                if active_bilingual_items:
-                    if any(
-                        item.status != WorkItemStatus.SUCCEEDED for item in active_bilingual_items
-                    ):
-                        return False
-                elif self._pipeline_stage_status(run, "bilingual_html") != "succeeded":
-                    return False
 
             export_items = self._list_export_items(session, run_id, export_type)
             if not export_items:
@@ -744,6 +752,18 @@ class DocumentRunExecutor:
                         "total_issue_count": result.total_issue_count,
                         "total_action_count": result.total_action_count,
                         "chapter_count": len(result.chapter_results),
+                        "examined_chapter_count": result.examined_chapter_count,
+                        "skipped_chapter_count": result.skipped_chapter_count,
+                        "total_chapter_count": result.total_chapter_count,
+                        "skipped_chapters": [
+                            {
+                                "chapter_id": s.chapter_id,
+                                "reason": s.reason,
+                                "pending_packet_count": s.pending_packet_count,
+                                "failed_packet_count": s.failed_packet_count,
+                            }
+                            for s in result.skipped_chapters
+                        ],
                         "auto_followup_requested": initial_result.auto_followup_requested,
                         "auto_followup_applied": initial_result.auto_followup_applied,
                         "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
@@ -780,10 +800,18 @@ class DocumentRunExecutor:
                     },
                     payload_json=payload,
                 )
+            # Skip visibility (Phase 3): if any chapters were excluded from
+            # review because their translate packets weren't TRANSLATED, mark
+            # the stage as ``partial`` so the UI does not claim "done" for
+            # content that was never examined.
+            stage_status = (
+                "partial" if int(payload.get("skipped_chapter_count") or 0) > 0
+                else "succeeded"
+            )
             self._update_pipeline_stage(
                 run_id,
                 "review",
-                status="succeeded",
+                status=stage_status,
                 extra=payload,
                 current_stage="bilingual_html",
             )
@@ -1897,6 +1925,7 @@ class DocumentRunExecutor:
         pipeline = dict(detail.get("pipeline") or {})
         stages = dict(pipeline.get("stages") or {})
         stage_detail = dict(stages.get(stage_key) or {})
+        previous_status = stage_detail.get("status", "unknown")
         stage_detail["status"] = status
         stage_detail["updated_at"] = _utcnow().isoformat()
         if extra:
@@ -1908,6 +1937,15 @@ class DocumentRunExecutor:
         detail["pipeline"] = pipeline
         run.status_detail_json = detail
         repository.save_run(run)
+        if previous_status != status:
+            StageTransitionLogger(session).record(
+                run_id=run_id,
+                stage=stage_key,
+                from_status=str(previous_status),
+                to_status=str(status),
+                triggered_by="main_loop",
+                reason="pipeline_stage_cache_update",
+            )
 
     def _sync_pipeline_status(self, run_id: str, run_status: str) -> None:
         if run_status == "succeeded":

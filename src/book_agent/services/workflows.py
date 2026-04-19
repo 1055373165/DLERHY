@@ -302,16 +302,43 @@ class ChapterReviewResult:
 
 
 @dataclass(slots=True)
+class ChapterReviewSkip:
+    """Why a chapter was excluded from review.
+
+    Phase 3 (state-consistency refactor) made the silent ``continue`` in
+    ``_review_document_impl`` explicit: every skipped chapter now surfaces
+    its reason and the packet-level counts so the UI can render a
+    ``partial`` review state rather than pretending the chapter was
+    ``succeeded`` with zero issues.
+    """
+
+    chapter_id: str
+    reason: str
+    pending_packet_count: int
+    failed_packet_count: int
+
+
+@dataclass(slots=True)
 class DocumentReviewResult:
     document_id: str
     total_issue_count: int
     total_action_count: int
     chapter_results: list[ChapterReviewResult]
+    skipped_chapters: list[ChapterReviewSkip] = field(default_factory=list)
+    total_chapter_count: int = 0
     auto_followup_requested: bool = False
     auto_followup_applied: bool = False
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list["ReviewAutoFollowupExecution"] | None = None
+
+    @property
+    def examined_chapter_count(self) -> int:
+        return len(self.chapter_results)
+
+    @property
+    def skipped_chapter_count(self) -> int:
+        return len(self.skipped_chapters)
 
 
 @dataclass(slots=True)
@@ -1340,11 +1367,31 @@ class DocumentWorkflowService:
     ) -> DocumentReviewResult:
         auto_followup_executions: list[ReviewAutoFollowupExecution] = []
         attempted_action_ids: set[str] = set()
+        skipped_chapters: list[ChapterReviewSkip] = []
 
         for chapter_bundle in bundle.chapters:
             if chapter_bundle.translation_packets and not all(
                 packet.status == PacketStatus.TRANSLATED for packet in chapter_bundle.translation_packets
             ):
+                pending = sum(
+                    1 for p in chapter_bundle.translation_packets
+                    if p.status != PacketStatus.TRANSLATED and p.status != PacketStatus.FAILED
+                )
+                failed = sum(
+                    1 for p in chapter_bundle.translation_packets
+                    if p.status == PacketStatus.FAILED
+                )
+                skipped_chapters.append(
+                    ChapterReviewSkip(
+                        chapter_id=chapter_bundle.chapter.id,
+                        reason=(
+                            "translate_incomplete" if failed == 0
+                            else "translate_failed"
+                        ),
+                        pending_packet_count=pending,
+                        failed_packet_count=failed,
+                    )
+                )
                 continue
 
             artifacts: ReviewArtifacts = self.review_service.review_chapter(chapter_bundle.chapter.id)
@@ -1382,6 +1429,8 @@ class DocumentWorkflowService:
             total_issue_count=total_issue_count,
             total_action_count=total_action_count,
             chapter_results=chapter_results,
+            skipped_chapters=skipped_chapters,
+            total_chapter_count=len(bundle.chapters),
             auto_followup_requested=auto_execute_packet_followups,
             auto_followup_applied=bool(auto_followup_executions),
             auto_followup_attempt_count=len(auto_followup_executions),

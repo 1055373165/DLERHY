@@ -11,6 +11,7 @@ export type RunStatus =
   | "running"
   | "draining"
   | "succeeded"
+  | "partial"
   | "failed"
   | "paused"
   | "cancelled"
@@ -96,6 +97,15 @@ export interface RunStageDetail {
   total_action_count?: number | null;
   chapter_export_count?: number | null;
   total_packet_count?: number | null;
+  examined_chapter_count?: number | null;
+  skipped_chapter_count?: number | null;
+  total_chapter_count?: number | null;
+  skipped_chapters?: Array<{
+    chapter_id: string;
+    reason: string;
+    pending_packet_count: number;
+    failed_packet_count: number;
+  }> | null;
 }
 
 export interface RunPipelineDetail {

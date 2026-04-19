@@ -495,6 +495,35 @@ class RunBudget(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     runtime_bundle_revision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
 
 
+class StageTransition(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """Append-only audit of pipeline stage / work_item status transitions.
+
+    Every state change (stage cache update, work_item.status flip, reconcile
+    detected drift) must insert one row in the same transaction as the
+    change itself. No audit row ⇒ state change is considered illegal and
+    Reconciler raises a P0 event on next scan.
+    """
+
+    __tablename__ = "stage_transitions"
+
+    run_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    stage: Mapped[str] = mapped_column(Text, nullable=False)
+    work_item_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("work_items.id", ondelete="SET NULL"),
+    )
+    from_status: Mapped[str] = mapped_column(Text, nullable=False)
+    to_status: Mapped[str] = mapped_column(Text, nullable=False)
+    triggered_by: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    caused_by_code: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
 class RunAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "run_audit_events"
 

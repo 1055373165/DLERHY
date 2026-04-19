@@ -82,6 +82,7 @@ const STATUS_LABELS: Record<string, string> = {
   running: "进行中",
   draining: "收尾中",
   succeeded: "已完成",
+  partial: "部分完成",
   failed: "失败",
   retryable_failed: "待重试",
   paused: "已暂停",
@@ -409,7 +410,14 @@ export function pipelineMeta(
     return `已完成 ${formatNumber(progress.completed)} / ${formatNumber(progress.total)} 个 packet`;
   }
   if (stepKey === "review") {
-    return `issues ${formatNumber(detail.total_issue_count)} · actions ${formatNumber(detail.total_action_count)}`;
+    const examined = Number(detail.examined_chapter_count ?? 0);
+    const skipped = Number(detail.skipped_chapter_count ?? 0);
+    const total = Number(detail.total_chapter_count ?? 0);
+    const coverage = total > 0
+      ? `已检查 ${formatNumber(examined)}/${formatNumber(total)}${skipped > 0 ? ` · 跳过 ${formatNumber(skipped)}` : ""}`
+      : "";
+    const core = `issues ${formatNumber(detail.total_issue_count)} · actions ${formatNumber(detail.total_action_count)}`;
+    return coverage ? `${coverage} · ${core}` : core;
   }
   if (stepKey === "bilingual_html" || stepKey === "merged_html") {
     return detail.chapter_export_count

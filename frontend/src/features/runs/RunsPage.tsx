@@ -147,6 +147,7 @@ export function RunsPage() {
                       tone={
                         state === "failed" ? "danger"
                         : state === "succeeded" ? "success"
+                        : state === "partial" ? "warning"
                         : state === "paused" ? "warning"
                         : state === "running" || state === "queued" || state === "draining" ? "active"
                         : "muted"
