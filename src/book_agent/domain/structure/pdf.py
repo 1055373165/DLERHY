@@ -1044,6 +1044,22 @@ def _looks_like_frontmatter_signal(text: str) -> bool:
     return any(stripped.startswith(title) for title in _FRONTMATTER_SIGNAL_TITLES)
 
 
+def _looks_like_title_page_metadata_signal(text: str) -> bool:
+    normalized = _normalize_text(text).casefold()
+    if not normalized:
+        return False
+    return any(
+        cue in normalized
+        for cue in (
+            "available at",
+            "version was published on",
+            "leanpub",
+            "copyright",
+            "©",
+        )
+    )
+
+
 def _looks_like_reference_entry(text: str) -> bool:
     normalized = _normalize_text(text)
     if len(normalized) < 24:
@@ -1905,16 +1921,56 @@ _LIST_BULLET_PATTERN = re.compile(
     r")",
     re.IGNORECASE,
 )
-
-
 def _looks_like_list_item(text: str, line_count: int) -> bool:
     """Return True if text starts with a list bullet/number pattern."""
     normalized = _normalize_text(text)
     if not normalized:
         return False
+    if _dense_toc_line_count(text) >= 3:
+        return True
     if line_count > 8:
         return False
     return bool(_LIST_BULLET_PATTERN.match(normalized))
+
+
+def _dense_toc_line_count(text: str) -> int:
+    if "\n" not in text:
+        return 0
+
+    count = 0
+    for raw_line in text.splitlines():
+        line = _normalize_text(raw_line)
+        if not line or len(line) > 180:
+            continue
+        parts = line.rsplit(" ", 1)
+        if len(parts) != 2:
+            continue
+        prefix, trailing_page = parts[0].strip(), parts[1].strip("()[]{}")
+        if not prefix or not _PAGE_NUMBER_PATTERN.match(trailing_page):
+            continue
+        raw_trimmed = raw_line.strip()
+        has_dotted_leader = raw_trimmed.count(".") >= 3
+        has_dense_gap = bool(re.search(r"\S\s{2,}\S", raw_trimmed))
+        if not has_dotted_leader and not has_dense_gap:
+            continue
+        if prefix.endswith(_TERMINAL_PUNCTUATION) and not has_dotted_leader:
+            continue
+        count += 1
+        if count >= 3:
+            return count
+    return count
+
+
+def _looks_like_dense_toc_block(text: str, line_count: int) -> bool:
+    if line_count < 2 and "\n" not in text:
+        return False
+    normalized = _normalize_text(text)
+    if not normalized or len(normalized) > 1600:
+        return False
+    if _dense_toc_line_count(text) >= 1:
+        return True
+    page_token_hits = len(re.findall(r"\b(?:\d+|[ivxlcdm]+)\b", normalized, re.IGNORECASE))
+    return text.count(".") >= 10 and page_token_hits >= 3
 
 
 def _looks_like_code(text: str, line_count: int) -> bool:
@@ -2751,6 +2807,42 @@ def _leading_all_caps_book_heading_and_remainder(text: str) -> tuple[str, str, i
         if len(normalized_heading.split()) < 4:
             continue
         return normalized_heading, normalized_remainder, 4
+    return None
+
+
+def _leading_plain_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
+    normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
+    if not normalized:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 6:
+        return None
+    max_boundary = min(len(tokens) - 4, 6)
+    for boundary in range(max_boundary, 0, -1):
+        heading_text = " ".join(tokens[:boundary]).strip()
+        remainder = " ".join(tokens[boundary:]).strip()
+        if not heading_text or not remainder:
+            continue
+        if not _looks_like_visual_heading(heading_text, 1):
+            continue
+        if _looks_like_caption_text(heading_text) or _HEADING_PATTERN.match(heading_text):
+            continue
+        if _looks_like_code(heading_text, 1) or _looks_like_table(1, [heading_text]):
+            continue
+        alpha_tokens = [re.sub(r"[^A-Za-z-]", "", token) for token in heading_text.split()]
+        alpha_tokens = [token for token in alpha_tokens if token]
+        if not 1 <= len(alpha_tokens) <= _BOOK_INLINE_HEADING_MAX_WORDS:
+            continue
+        heading_last = alpha_tokens[-1].casefold()
+        if heading_last in _PROSE_CONTINUATION_STOPWORDS or heading_last in _PROSE_CONTINUATION_START_WORDS:
+            continue
+        if not _looks_like_book_prose_fragment(remainder):
+            continue
+        if not (_looks_like_book_prose_lead(remainder) or _looks_like_sentence_prose_line(remainder)):
+            continue
+        if len(alpha_tokens) == 2 and alpha_tokens[0].casefold() == alpha_tokens[1].casefold():
+            heading_text = alpha_tokens[0]
+        return _normalize_multiline_text(heading_text), _normalize_multiline_text(remainder), 2
     return None
 
 
@@ -4934,6 +5026,8 @@ class PdfStructureRecoveryService:
         backmatter_cue_source: str | None = None
         has_strong_heading = False
         content_texts: list[str] = []
+        dense_toc_line_total = 0
+        dense_toc_block_count = 0
         for block in ordered_blocks:
             text = _normalize_text(block.text)
             if not text:
@@ -4945,6 +5039,9 @@ class PdfStructureRecoveryService:
                 has_strong_heading = True
             if _looks_like_toc_heading(text):
                 heading_present = True
+            dense_toc_line_total += _dense_toc_line_count(block.text)
+            if _looks_like_dense_toc_block(block.text, block.line_count):
+                dense_toc_block_count += 1
             if family_heading is None and len(text) <= 120 and block.font_size_avg >= page_font_median * 1.15:
                 family = _page_family_for_heading(text, page.page_number)
                 if family is not None:
@@ -4972,7 +5069,13 @@ class PdfStructureRecoveryService:
                     page_family = inline_family
                     family_source = "inline_heading"
                     family_heading = inline_title
-        is_toc_page = (heading_present and bool(toc_entries_by_text)) or len(toc_entries_by_text) >= 3
+        is_toc_page = (
+            (heading_present and bool(toc_entries_by_text))
+            or len(toc_entries_by_text) >= 3
+            or dense_toc_line_total >= 3
+            or (heading_present and dense_toc_block_count >= 1)
+            or dense_toc_block_count >= 2
+        )
         reference_like_count = sum(1 for text in content_texts if _looks_like_reference_entry(text))
         index_like_count = sum(1 for text in content_texts if _looks_like_index_entry(text))
         index_like_ratio = (index_like_count / len(content_texts)) if content_texts else 0.0
@@ -5042,9 +5145,9 @@ class PdfStructureRecoveryService:
         if zone == "top" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
             if _FOOTNOTE_PATTERN.match(text):
                 return "footnote"
-        if page_context.is_toc_page and (
-            _looks_like_toc_heading(text) or text.casefold() in page_context.toc_entries_by_text
-        ):
+        if page_context.is_toc_page and _looks_like_toc_heading(text):
+            return "heading"
+        if page_context.is_toc_page and text.casefold() in page_context.toc_entries_by_text:
             return "toc_entry"
         if zone == "bottom" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
             if _FOOTNOTE_PATTERN.match(text):
@@ -5066,6 +5169,8 @@ class PdfStructureRecoveryService:
             return "table_like"
         if _looks_like_equation(text, raw_block.line_count, raw_block.bbox, page.width):
             return "equation"
+        if page_context.is_toc_page and _looks_like_dense_toc_block(raw_block.text, raw_block.line_count):
+            return "list_item"
         if _looks_like_list_item(text, raw_block.line_count):
             return "list_item"
         if _looks_like_code(text, raw_block.line_count):
@@ -5223,7 +5328,7 @@ class PdfStructureRecoveryService:
         previous: _RecoveredBlock,
         current: _RecoveredBlock,
     ) -> bool:
-        if previous.page_start != current.page_start or previous.page_end != current.page_end:
+        if previous.page_start != current.page_start:
             return False
         if previous.page_start != previous.page_end:
             return False
@@ -6188,28 +6293,76 @@ class PdfStructureRecoveryService:
                 first_substantive_anchor_by_page[block.page_start] = block.anchor
 
         normalized_blocks: list[_RecoveredBlock] = []
+        last_body_heading_level: int | None = None
+        last_body_heading_page: int | None = None
         for block in recovered_blocks:
             if block.role != "heading":
                 normalized_blocks.append(block)
                 continue
             metadata = dict(block.metadata)
-            if isinstance(metadata.get("heading_level"), int):
-                normalized_blocks.append(block)
-                continue
-
-            heading_level = _book_heading_level(block.text)
+            existing_heading_level = metadata.get("heading_level")
             normalized_text = _normalize_text(block.text)
             page_family = str(metadata.get("pdf_page_family") or "body")
+            is_first_substantive_on_page = first_substantive_anchor_by_page.get(block.page_start) == block.anchor
+            if isinstance(existing_heading_level, int):
+                if (
+                    existing_heading_level == 1
+                    and block.page_start > 1
+                    and page_family == "body"
+                    and not (
+                        is_first_substantive_on_page
+                        and len(normalized_text.split()) >= 4
+                        and _looks_like_visual_heading(normalized_text, 1)
+                    )
+                    and not _CHAPTER_PREFIX_PATTERN.match(normalized_text)
+                    and not _HEADING_PATTERN.match(normalized_text)
+                    and _LEADING_SECTION_NUMBER_PATTERN.match(normalized_text) is None
+                    and metadata.get("pdf_heading_recovery_source") != "embedded_document_title_recovered"
+                ):
+                    metadata["heading_level"] = 2
+                elif normalized_text.casefold() in _TOC_HEADING_TITLES:
+                    metadata["heading_level"] = 1
+                elif (
+                    existing_heading_level == 2
+                    and is_first_substantive_on_page
+                    and page_family == "body"
+                    and normalized_text.casefold() in {"introduction", "overview", "conclusion"}
+                ):
+                    metadata["heading_level"] = 1
+                elif (
+                    existing_heading_level == 2
+                    and metadata.get("pdf_heading_recovery_source") == "embedded_book_plain_heading_recovered"
+                    and len({token.casefold() for token in re.findall(r"[A-Za-z][A-Za-z'-]*", normalized_text)}) == 1
+                    and last_body_heading_level == 2
+                    and last_body_heading_page is not None
+                    and block.page_start - last_body_heading_page <= 1
+                    and not is_first_substantive_on_page
+                ):
+                    metadata["heading_level"] = 3
+                normalized_block = replace(block, metadata=metadata)
+                normalized_blocks.append(normalized_block)
+                last_body_heading_level = int(metadata.get("heading_level") or existing_heading_level)
+                last_body_heading_page = block.page_start
+                continue
+            heading_level = _book_heading_level(block.text)
             if heading_level is None:
                 if normalized_text.casefold() in _REFERENCES_HEADING_TITLES or page_family == "references":
                     heading_level = 2
+                elif normalized_text.casefold() in _TOC_HEADING_TITLES:
+                    heading_level = 1
                 elif (
                     block.page_start == 1
-                    and first_substantive_anchor_by_page.get(block.page_start) == block.anchor
+                    and is_first_substantive_on_page
                     and _looks_like_paper_title(normalized_text)
                 ):
                     heading_level = 1
-                elif page_family == "body":
+                elif (
+                    page_family == "body"
+                    and is_first_substantive_on_page
+                    and normalized_text.casefold() in {"introduction", "overview", "conclusion"}
+                ):
+                    heading_level = 1
+                else:
                     heading_level = 2
 
             if heading_level is None:
@@ -6217,7 +6370,10 @@ class PdfStructureRecoveryService:
                 continue
 
             metadata["heading_level"] = heading_level
-            normalized_blocks.append(replace(block, metadata=metadata))
+            normalized_block = replace(block, metadata=metadata)
+            normalized_blocks.append(normalized_block)
+            last_body_heading_level = heading_level
+            last_body_heading_page = block.page_start
         return normalized_blocks
 
     def _promote_inline_book_heading_blocks(
@@ -6254,6 +6410,11 @@ class PdfStructureRecoveryService:
             return False
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
             return False
+        if _normalize_text(block.text).casefold() in _TOC_HEADING_TITLES:
+            if block.page_start != block.page_end or not block.bbox_regions:
+                return False
+            top = float(block.bbox_regions[0]["bbox"][1])
+            return top <= 220.0
         next_body = self._next_book_body_candidate(recovered_blocks, index)
         if next_body is not None:
             return self._should_keep_inline_book_heading_separate(block, next_body)
@@ -6441,6 +6602,11 @@ class PdfStructureRecoveryService:
                     if inline_caps_heading is not None:
                         heading_text, remainder, recovered_heading_level = inline_caps_heading
                         recovery_flag = "embedded_book_subheading_recovered"
+                    else:
+                        plain_heading = _leading_plain_book_heading_and_remainder(block.text)
+                        if plain_heading is not None:
+                            heading_text, remainder, recovered_heading_level = plain_heading
+                            recovery_flag = "embedded_book_plain_heading_recovered"
 
         if heading_text is None or recovery_flag is None:
             return [replace(block)]
@@ -7128,10 +7294,15 @@ class PdfStructureRecoveryService:
                 and chapter_start.source in {"outline", "toc"}
                 and current_blocks[-1].page_end < chapter_start.page_number
             ):
-                current_blocks = []
-                current_title = None
-                current_section_family = None
-                current_start_page = None
+                if self._looks_like_frontmatter_chunk(current_blocks):
+                    current_title = "Front Matter"
+                    current_section_family = "frontmatter"
+                    flush_current()
+                else:
+                    current_blocks = []
+                    current_title = None
+                    current_section_family = None
+                    current_start_page = None
             elif (
                 should_start_new
                 and current_blocks
@@ -7671,13 +7842,20 @@ class PdfStructureRecoveryService:
 
     def _looks_like_frontmatter_chunk(self, blocks: list[_RecoveredBlock]) -> bool:
         signal_count = 0
+        heading_count = 0
         for block in blocks:
             if block.role not in {"body", "heading"}:
                 continue
+            if block.role == "heading":
+                heading_count += 1
             if _looks_like_frontmatter_signal(block.text):
+                signal_count += 1
+            if _looks_like_title_page_metadata_signal(block.text):
                 signal_count += 1
             if signal_count >= 2:
                 return True
+        if heading_count >= 2 and signal_count >= 1:
+            return True
         return False
 
     def _chapter_section_family(self, blocks: list[_RecoveredBlock]) -> str:

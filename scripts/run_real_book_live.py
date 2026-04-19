@@ -78,6 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-total-token-out", type=int, default=None)
     parser.add_argument("--max-retry-count-per-work-item", type=int, default=2)
     parser.add_argument("--max-consecutive-failures", type=int, default=20)
+    parser.add_argument("--max-completed-packets", type=int, default=None)
     parser.add_argument("--auto-review-followups", action="store_true")
     parser.add_argument("--skip-final-export", action="store_true")
     parser.add_argument("--auto-followup-on-gate", action="store_true")
@@ -519,6 +520,25 @@ def _run_translate_payload(
     }
 
 
+def _slice_target_reached(run_summary: DocumentRunSummary, *, max_completed_packets: int | None) -> bool:
+    if max_completed_packets is None or max_completed_packets <= 0:
+        return False
+    translated_packet_count = int(run_summary.work_items.status_counts.get("succeeded", 0))
+    return translated_packet_count >= max_completed_packets
+
+
+def _slice_claim_budget_exhausted(
+    run_summary: DocumentRunSummary,
+    *,
+    max_completed_packets: int | None,
+    inflight_count: int,
+) -> bool:
+    if max_completed_packets is None or max_completed_packets <= 0:
+        return False
+    translated_packet_count = int(run_summary.work_items.status_counts.get("succeeded", 0))
+    return (translated_packet_count + max(0, inflight_count)) >= max_completed_packets
+
+
 def _translate_single_packet(*, session_factory, export_root: str, packet_id: str) -> dict[str, Any]:
     with session_scope(session_factory) as session:
         service = _new_service(session, export_root=export_root)
@@ -813,6 +833,7 @@ def main(argv: list[str] | None = None) -> int:
             "translation_model": settings.translation_model,
             "translate_batch_size": args.translate_batch_size,
             "parallel_workers": args.parallel_workers,
+            "max_completed_packets": args.max_completed_packets,
             "auto_review_followups": args.auto_review_followups,
             "auto_followup_on_gate": args.auto_followup_on_gate,
             "max_auto_followup_attempts": args.max_auto_followup_attempts,
@@ -987,6 +1008,17 @@ def main(argv: list[str] | None = None) -> int:
                         last_housekeeping_at = now_monotonic
 
                     while len(inflight) < effective_parallel_workers:
+                        if _slice_claim_budget_exhausted(
+                            run_summary,
+                            max_completed_packets=args.max_completed_packets,
+                            inflight_count=len(inflight),
+                        ):
+                            break
+                        if _slice_target_reached(
+                            run_summary,
+                            max_completed_packets=args.max_completed_packets,
+                        ):
+                            break
                         with session_scope(session_factory) as session:
                             run_execution = _new_run_execution_service(session)
                             claimed = run_execution.claim_next_translate_work_item(
@@ -1050,6 +1082,31 @@ def main(argv: list[str] | None = None) -> int:
                             total_packet_count=len(packet_ids),
                             recent_results=recent_results,
                         )
+                        if (
+                            _slice_target_reached(
+                                run_summary,
+                                max_completed_packets=args.max_completed_packets,
+                            )
+                            and run_summary.status not in {"failed", "paused", "cancelled", "succeeded"}
+                        ):
+                            with session_scope(session_factory) as session:
+                                run_control = _new_run_control_service(session)
+                                run_summary = run_control.pause_run_system(
+                                    run_id,
+                                    stop_reason="pilot.slice_target_reached",
+                                    detail_json={
+                                        "requested_by": args.requested_by,
+                                        "max_completed_packets": args.max_completed_packets,
+                                        "translated_packet_count": report["translate"]["translated_packet_count"],
+                                    },
+                                )
+                            _refresh_run_report(
+                                report=report,
+                                report_path=report_path,
+                                run_summary=run_summary,
+                                total_packet_count=len(packet_ids),
+                                recent_results=recent_results,
+                            )
                         print(
                             json.dumps(
                                 {

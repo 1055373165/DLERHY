@@ -1,0 +1,250 @@
+[
+  {
+    "id": "F001",
+    "category": "benchmark",
+    "priority": "P0",
+    "title": "Translate-agent benchmark corpus exists for the active certified lanes",
+    "description": "The current readiness corpus covers L1, L2, L3, and L6 with executable benchmark samples.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-manifest-current.yaml",
+      "Confirm the active manifest includes L1, L2, L3, and L6 samples",
+      "Confirm the current scorecard reports sample_count > 0 for each active lane"
+    ],
+    "dependencies": [],
+    "passes": true
+  },
+  {
+    "id": "F002",
+    "category": "benchmark",
+    "priority": "P0",
+    "title": "Gold labels exist for the current benchmark corpus",
+    "description": "Current benchmark execution is grounded in explicit gold labels rather than impression-based comparison.",
+    "verification": [
+      "Inspect artifacts/review/gold-labels/",
+      "Confirm the current benchmark samples each have a corresponding gold label JSON",
+      "Confirm current benchmark execution reports executed_sample_count equal to sample_count"
+    ],
+    "dependencies": [
+      "F001"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F003",
+    "category": "parser",
+    "priority": "P0",
+    "title": "EPUB and PDF parser paths preserve protected artifacts on the current certification set",
+    "description": "Protected artifacts such as code, equations, tables, captions, and figures remain out of ordinary prose translation paths on the active benchmark set.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-execution-summary-current.json",
+      "Confirm protected_artifact_recall is passing for the certified lanes",
+      "Confirm catastrophic protected-artifact corruption count is zero on the current certification set"
+    ],
+    "dependencies": [
+      "F002"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F004",
+    "category": "parser",
+    "priority": "P0",
+    "title": "Heading hierarchy and reading order are benchmarked and passing on the certified lanes",
+    "description": "Current parser recovery is strong enough to preserve usable heading hierarchy and reading order for the active certified lanes.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-execution-summary-current.json",
+      "Confirm heading_hierarchy_accuracy passes lane-level thresholds for L1, L2, L3, and L6",
+      "Confirm lane verdicts remain go"
+    ],
+    "dependencies": [
+      "F003"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F005",
+    "category": "artifact",
+    "priority": "P0",
+    "title": "Caption linkage and artifact preservation are passing on the certified lanes",
+    "description": "Figures, tables, equations, and captions remain linked well enough for whole-document execution on the active certification set.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-execution-summary-current.json",
+      "Confirm caption_linkage_success_rate passes lane-level thresholds on the certified lanes",
+      "Confirm artifacts/review/translate-agent-lane-verdicts-current.json still reports overall go"
+    ],
+    "dependencies": [
+      "F003"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F006",
+    "category": "asset",
+    "priority": "P1",
+    "title": "Assets use original-first extraction with measurable fallback legibility",
+    "description": "PDF and EPUB assets prefer original extraction when possible and otherwise use measurable high-resolution fallback rendering.",
+    "verification": [
+      "Inspect src/book_agent/services/export.py",
+      "Read artifacts/review/translate-agent-benchmark-execution-summary-current.json",
+      "Confirm fallback render legibility is measured and passing on the current certified slices"
+    ],
+    "dependencies": [
+      "F002"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F007",
+    "category": "readiness",
+    "priority": "P0",
+    "title": "Current lane certification is overall go for controlled slice-first whole-document execution",
+    "description": "The current benchmark summary, scorecard, and certification report together support whole-document execution on certified lanes in slice-first mode.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-execution-summary-current.json",
+      "Read artifacts/review/translate-agent-lane-verdicts-current.json",
+      "Read artifacts/review/translate-agent-readiness-certification-current.md and confirm overall verdict is go"
+    ],
+    "dependencies": [
+      "F004",
+      "F005",
+      "F006"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F008",
+    "category": "framework",
+    "priority": "P1",
+    "title": "Forge handoff truth is aligned to the active translate-agent mainline",
+    "description": "STATE, DECISIONS, progress, snapshot, and mainline-progress all describe translate-agent readiness as the active mainline rather than the completed runtime-self-heal line.",
+    "verification": [
+      "Read .forge/STATE.md and confirm the active mainline is translate-agent readiness",
+      "Read .forge/DECISIONS.md and confirm the mainline and next todo stack are translate-agent specific",
+      "Read progress.txt, snapshot.md, and docs/mainline-progress.md and confirm the same truth is reflected there"
+    ],
+    "dependencies": [
+      "F007"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F009",
+    "category": "product-path",
+    "priority": "P0",
+    "title": "High-risk text PDFs can enter the guarded bootstrap path with explicit risk metadata",
+    "description": "Parser-ready high-risk text PDFs should bootstrap through the normal product route instead of requiring a direct parser probe or being rejected up front.",
+    "verification": [
+      "Read src/book_agent/services/bootstrap.py and confirm ParseService no longer rejects text PDFs solely because layout_risk is high",
+      "Read src/book_agent/app/api/routes/documents.py and confirm the document contract describes guarded high-risk text-PDF bootstrap rather than rejection",
+      "Run tests.test_pdf_support.PdfApiWorkflowTests.test_bootstrap_document_accepts_high_risk_layout_pdf_with_explicit_risk and confirm it passes"
+    ],
+    "dependencies": [
+      "F007",
+      "F008"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F010",
+    "category": "asset",
+    "priority": "P1",
+    "title": "PDF asset provenance distinguishes unavailable original opportunities from true extraction misses",
+    "description": "Vector-only and otherwise non-extractable PDF pages should be tracked as unavailable original-asset opportunities so fallback usage on those pages does not masquerade as an original-image extraction failure.",
+    "verification": [
+      "Read src/book_agent/services/export.py and confirm PDF asset materialization records original_asset_availability metadata",
+      "Read artifacts/review/scripts/run_translate_agent_benchmark_execution.py and confirm vector-only or non-extractable PDF pages do not count toward eligible original-image opportunities",
+      "Run tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_pdf_export_prefers_original_embedded_image_bytes_when_available and tests.test_pdf_support.PdfDocumentImagePersistenceTests.test_pdf_export_materializes_document_images_for_reuse and confirm they pass"
+    ],
+    "dependencies": [
+      "F006",
+      "F007",
+      "F009"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F011",
+    "category": "pilot-control",
+    "priority": "P1",
+    "title": "Slice-first whole-document pilots use a directly executable pack and honor strict packet caps under concurrency",
+    "description": "Certified-lane pilot commands should run through the normal product path, pause with `pilot.slice_target_reached`, and stop at the configured slice cap without overshooting because of extra in-flight work.",
+    "verification": [
+      "Read artifacts/review/translate-agent-pilot-pack-current.json and confirm pilot commands use the repo `.venv` with `PYTHONPATH=src:.`",
+      "Read artifacts/real-book-live/translate-agent-pilot-epub-hands-on-llm-001/report.json and confirm the first real L1 pilot paused with `pilot.slice_target_reached`",
+      "Read artifacts/real-book-live/translate-agent-pilot-epub-hands-on-llm-001-strict-cap-smoke/report.json and confirm `max_completed_packets = 2` ends with `translated_packet_count = 2`",
+      "Run tests.test_real_book_live_reporting.RealBookLiveReportingTests.test_slice_claim_budget_counts_inflight_packets_against_limit and confirm it passes"
+    ],
+    "dependencies": [
+      "F007",
+      "F008",
+      "F009"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F012",
+    "category": "pilot-evidence",
+    "priority": "P1",
+    "title": "Every certified lane has first-pass slice-first whole-document pilot evidence",
+    "description": "The current certified lanes should not rely on benchmark truth alone; each lane should also have at least one real whole-document pilot run paused legally via `pilot.slice_target_reached` on the normal product path.",
+    "verification": [
+      "Read the pilot reports for `L1`, `L2`, `L3`, and `L6` under `artifacts/real-book-live/translate-agent-pilot-*/report.json`",
+      "Confirm each report has `run.status = paused` and `run.stop_reason = pilot.slice_target_reached`",
+      "Confirm no certified-lane pilot was stopped by bootstrap failure, parser rejection, or provider exhaustion"
+    ],
+    "dependencies": [
+      "F007",
+      "F011"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F013",
+    "category": "pilot-evidence",
+    "priority": "P1",
+    "title": "Current pilot evidence is summarized and used to choose the next default slice",
+    "description": "After first-pass pilots complete on all certified lanes, their run-level evidence should be summarized into a reusable artifact and the mainline should explicitly choose whether deeper resumes or benchmark corpus expansion is the better next move.",
+    "verification": [
+      "Read artifacts/review/translate-agent-pilot-summary-current.json and confirm it covers `L1`, `L2`, `L3`, and `L6`",
+      "Confirm the summary records that all current pilot runs paused via `pilot.slice_target_reached` with no retryable or terminal failures",
+      "Read .forge/STATE.md and .forge/DECISIONS.md and confirm the default next slice is benchmark corpus expansion rather than immediate deeper resume"
+    ],
+    "dependencies": [
+      "F012"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F014",
+    "category": "benchmark-expansion",
+    "priority": "P1",
+    "title": "Benchmark corpus expansion is seeded with a concrete draft and candidate gold-label stubs",
+    "description": "Once first-pass certified-lane pilots complete, the next benchmark wave should begin from a concrete expansion draft with identified candidate documents, lane targets, and stub gold labels rather than from ad hoc sample picking.",
+    "verification": [
+      "Read artifacts/review/translate-agent-benchmark-corpus-expansion-draft.yaml and confirm it lists concrete candidate samples and lane targets",
+      "Confirm the draft introduces `L4` and `L5` as uncertified expansion lanes",
+      "Confirm the referenced stub gold labels exist under artifacts/review/gold-labels/"
+    ],
+    "dependencies": [
+      "F013"
+    ],
+    "passes": true
+  },
+  {
+    "id": "F015",
+    "category": "benchmark-expansion",
+    "priority": "P1",
+    "title": "The first expansion-wave pair is annotated and measured to go before any new pilot token spend",
+    "description": "Corpus expansion should move from sample-picking to measured parser/export evidence by annotating the first PDF tech-book and mixed-layout candidates, probing them without translation-token spend, and turning that probe into reusable measured `go` evidence before widening pilots further.",
+    "verification": [
+      "Read artifacts/review/gold-labels/pdf-building-ai-agents-001.json and confirm status is `annotated_v1`",
+      "Read artifacts/review/gold-labels/pdf-173140-001.json and confirm status is `annotated_v1`",
+      "Read artifacts/review/translate-agent-benchmark-expansion-wave1-execution-summary.json and confirm `sample_count = 2`, `executed_sample_count = 2`, and `overall_verdict = go`",
+      "Read artifacts/review/translate-agent-benchmark-expansion-wave1-lane-verdicts.json and confirm `L2` and `L5` both report `go`"
+    ],
+    "dependencies": [
+      "F014"
+    ],
+    "passes": true
+  }
+]

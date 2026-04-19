@@ -1,0 +1,133 @@
+Translate Agent Mainline Handoff
+Last Updated: 2026-04-03 21:10:52 +0800
+
+1. 高层目标
+
+当前主线已经不再是 runtime self-heal backend 继续扩写，而是：
+
+- 让 translate agent 在 `PDF 书籍 / EPUB 书籍 / PDF 论文` 上具备可证明的高保真翻译 readiness
+- 在真正大规模翻译整本书之前，先完成 parser / export / artifact preservation / benchmark 的放量前认证
+- 让“能不能放心跑整本”这件事由 benchmark 结果决定，而不是由主观印象决定
+
+一句话概括：
+
+当前主线 = `translate-agent 高保真整本文档翻译 readiness` + `受控 slice-first 放量能力`
+
+2. 当前进度结论
+
+当前 translate-agent readiness benchmark 已经收口到 `overall = go`。
+
+权威依据是：
+
+- `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-execution-summary-current.json`
+- `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-scorecard-current.json`
+- `/Users/smy/project/book-agent/artifacts/review/translate-agent-lane-verdicts-current.json`
+- `/Users/smy/project/book-agent/artifacts/review/translate-agent-readiness-certification-current.md`
+
+当前已认证 lane：
+
+- `L1` `EPUB-reflowable-tech-book` -> `go`
+- `L2` `PDF-text-tech-book` -> `go`
+- `L3` `PDF-text-academic-paper` -> `go`
+- `L6` `High-artifact-density-paper` -> `go`
+
+这代表：
+
+- 当前 parser/export 栈已经能在 benchmark 样本集上保护代码、公式、表格、图片、caption、标题层级和阅读顺序
+- 当前可以进入 `controlled, slice-first whole-document execution`
+- 当前不应该默认改成 blind full-document rollout
+
+3. 当前 benchmark 边界
+
+虽然 overall 已经是 `go`，但边界必须保持清楚：
+
+- 认证范围只覆盖当前 `9` 个 benchmark 样本
+- 高风险 text PDF 现在已经能走正式 guarded bootstrap path，不再需要 direct parser probe 旁路
+- `L2 / L6` 的部分图片 slice 仍然依赖高分辨率 fallback render；当前已经能区分“向量页/不可抽原图页”“非 canonical 的 fragmented composite figure”以及“真正的原图 parity 缺口”
+- `L6` 的认证语义是 `Tier C`：优先保证内容与 artifact 保真，并在必要时显式降级，而不是伪装成完全版式无损
+
+4. 已完成的关键工作
+
+- 建好了 translate-agent benchmark manifest / gold labels / scorecard / lane verdict / certification 文档
+- EPUB parser 已补上 heading level、caption linkage、protected artifact 识别等关键能力
+- PDF parser 已补上：
+  - 标题与正文混块拆分
+  - academic abstract/frontmatter 拆分
+  - appendix heading level 恢复
+  - figure / caption / table / equation 保护与 linkage
+  - 高 artifact 密度论文的受控判定
+- benchmark execution 现在已经不只看 parse success，也会看：
+  - protected artifact recall
+  - heading hierarchy accuracy
+  - caption linkage
+  - reading order
+  - asset extraction / fallback legibility
+
+5. 下一阶段 Todo
+
+### P0
+
+- 继续扩 benchmark corpus，扩大当前 readiness claim 的适用边界
+- 先标注并探测第一个 `L4` OCR-heavy 样本，再决定是否建立新的 uncertified lane pilot
+- 在 `L1` 扩充样本与 `L4` 新 lane 之间，优先选择 token 零开销的 parser/export probe
+- 只有在后续抽样 spot check 暴露 concrete lane-specific issue 时，再对已认证 lane 做 deeper resume
+
+### P1
+
+- 如果后续新文档暴露出“确实存在可抽原图但主链路仍错过”的 case，再重新打开 asset parity hardening
+- 把 benchmark 与整本运行后的 spot check 结果继续并入 current certification truth
+- 补齐更极端的 mixed / scanned / unusual-layout 样本，决定哪些 lane 该升级，哪些应该继续显式降级
+
+6. 当前最新推进
+
+- pilot pack 已生成：
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-pilot-pack-current.json`
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-pilot-pack-current.md`
+- 四条 certified lane 的首轮 pilot 都已经通过正常产品路径跑到 slice-first 暂停点：
+  - `L1`: `/Users/smy/project/book-agent/artifacts/real-book-live/translate-agent-pilot-epub-hands-on-llm-001/report.json`
+    - run_id: `a7a94e52-fdac-4678-a4bb-ba16ab17583f`
+    - translated_packet_count: `15`
+    - usage: `token_in 19817 / token_out 4072 / cost_usd 0.00613001`
+  - `L2`: `/Users/smy/project/book-agent/artifacts/real-book-live/translate-agent-pilot-pdf-agentic-design-001/report.json`
+    - run_id: `57715183-7bf7-4249-81e2-1bc12411b147`
+    - translated_packet_count: `10`
+    - usage: `token_in 13222 / token_out 2364 / cost_usd 0.00361444`
+  - `L3`: `/Users/smy/project/book-agent/artifacts/real-book-live/translate-agent-pilot-pdf-attention-paper-001/report.json`
+    - run_id: `4660a21a-e925-419d-99df-8ab03e53e4eb`
+    - translated_packet_count: `8`
+    - usage: `token_in 10909 / token_out 2365 / cost_usd 0.00320914`
+  - `L6`: `/Users/smy/project/book-agent/artifacts/real-book-live/translate-agent-pilot-pdf-epiplexity-001/report.json`
+    - run_id: `bc66c33f-4a61-4d13-bbe5-08023c54c5a9`
+    - translated_packet_count: `6`
+    - usage: `token_in 8561 / token_out 2016 / cost_usd 0.00263092`
+- 上述四条 pilot 的共同事实是：
+  - `run.status = paused`
+  - `stop_reason = pilot.slice_target_reached`
+  - 没有被 bootstrap / parser / provider 问题打断
+- pilot summary 已正式生成：
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-pilot-summary-current.json`
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-pilot-summary-current.md`
+- 基于这份 pilot summary，当前主线已经把默认下一刀切到 `benchmark corpus expansion`，而不是继续在已认证 lane 上立即 deeper resume。
+- corpus expansion draft 也已正式生成：
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-corpus-expansion-draft.yaml`
+- 该 draft 已经为下一轮扩充样本种下 6 份 gold-label stub，并明确新增两个候选 lane：
+  - `L4 = PDF-ocr-heavy-book`
+  - `L5 = PDF-mixed-layout-book`
+- 首批 expansion pair 已经不再是 stub：
+  - `/Users/smy/project/book-agent/artifacts/review/gold-labels/pdf-building-ai-agents-001.json`
+  - `/Users/smy/project/book-agent/artifacts/review/gold-labels/pdf-173140-001.json`
+- 最小 expansion wave probe 已实测完成：
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-expansion-wave1.yaml`
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-expansion-wave1-scorecard.json`
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-expansion-wave1-execution-summary.json`
+  - `/Users/smy/project/book-agent/artifacts/review/translate-agent-benchmark-expansion-wave1-lane-verdicts.json`
+- 这轮 probe 的结论现在是：
+  - `pdf-building-ai-agents-001` (`L2`)：`go`
+  - `pdf-173140-001` (`L5`)：`go`
+- 因此当前主线已经从“先修 measured L2/L5 parser hardening”切回“继续扩 corpus / 探测新 lane”，而不是继续磨已经过线的 expansion pair。
+- 这次正式 pilot 同时暴露了一个控制面缺口：并发下 `max_completed_packets` 会因为 in-flight work item 而 overshoot。
+- 该缺口已修复到 `scripts/run_real_book_live.py`，新逻辑按 `completed + inflight` 共同约束 claim budget。
+- 严格上限 smoke 已验证修复生效：
+  - `/Users/smy/project/book-agent/artifacts/real-book-live/translate-agent-pilot-epub-hands-on-llm-001-strict-cap-smoke/report.json`
+  - `max_completed_packets = 2`
+  - final translated_packet_count = `2`

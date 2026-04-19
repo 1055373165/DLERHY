@@ -6,15 +6,93 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
+from book_agent.services.run_control import DocumentRunSummary, RunBudgetSummary, RunEventSummary, RunLeaseSummary, RunWorkItemSummary
 from scripts.real_book_live_reporting_common import (
     CURRENT_TELEMETRY_GENERATION,
     build_telemetry_compatibility,
 )
-from scripts.run_real_book_live import _enrich_report_runtime_snapshot, main
+from scripts.run_real_book_live import (
+    _enrich_report_runtime_snapshot,
+    _slice_claim_budget_exhausted,
+    _slice_target_reached,
+    main,
+)
 from scripts.watch_real_book_live import _build_monitor_snapshot
 
 
 class RealBookLiveReportingTests(unittest.TestCase):
+    def test_slice_target_reached_only_when_succeeded_packets_hit_limit(self) -> None:
+        summary = DocumentRunSummary(
+            run_id="run-1",
+            document_id="doc-1",
+            run_type="translate_full",
+            status="running",
+            backend="stub",
+            model_name="stub-model",
+            requested_by="tester",
+            priority=100,
+            resume_from_run_id=None,
+            stop_reason=None,
+            status_detail_json={},
+            created_at="2026-04-03T00:00:00+00:00",
+            updated_at="2026-04-03T00:00:00+00:00",
+            started_at="2026-04-03T00:00:00+00:00",
+            finished_at=None,
+            budget=RunBudgetSummary(None, None, None, None, None, None, None, None, None),
+            work_items=RunWorkItemSummary(
+                total_count=5,
+                status_counts={"succeeded": 3, "pending": 2},
+                stage_counts={"translate": 5},
+            ),
+            worker_leases=RunLeaseSummary(total_count=0, status_counts={}, latest_heartbeat_at=None),
+            events=RunEventSummary(event_count=0, latest_event_at=None),
+        )
+
+        self.assertFalse(_slice_target_reached(summary, max_completed_packets=None))
+        self.assertFalse(_slice_target_reached(summary, max_completed_packets=4))
+        self.assertTrue(_slice_target_reached(summary, max_completed_packets=3))
+        self.assertTrue(_slice_target_reached(summary, max_completed_packets=2))
+
+    def test_slice_claim_budget_counts_inflight_packets_against_limit(self) -> None:
+        summary = DocumentRunSummary(
+            run_id="run-1",
+            document_id="doc-1",
+            run_type="translate_full",
+            status="running",
+            backend="stub",
+            model_name="stub-model",
+            requested_by="tester",
+            priority=100,
+            resume_from_run_id=None,
+            stop_reason=None,
+            status_detail_json={},
+            created_at="2026-04-03T00:00:00+00:00",
+            updated_at="2026-04-03T00:00:00+00:00",
+            started_at="2026-04-03T00:00:00+00:00",
+            finished_at=None,
+            budget=RunBudgetSummary(None, None, None, None, None, None, None, None, None),
+            work_items=RunWorkItemSummary(
+                total_count=8,
+                status_counts={"succeeded": 10, "pending": 2},
+                stage_counts={"translate": 8},
+            ),
+            worker_leases=RunLeaseSummary(total_count=0, status_counts={}, latest_heartbeat_at=None),
+            events=RunEventSummary(event_count=0, latest_event_at=None),
+        )
+
+        self.assertFalse(
+            _slice_claim_budget_exhausted(summary, max_completed_packets=None, inflight_count=2)
+        )
+        self.assertFalse(
+            _slice_claim_budget_exhausted(summary, max_completed_packets=12, inflight_count=1)
+        )
+        self.assertTrue(
+            _slice_claim_budget_exhausted(summary, max_completed_packets=12, inflight_count=2)
+        )
+        self.assertTrue(
+            _slice_claim_budget_exhausted(summary, max_completed_packets=11, inflight_count=1)
+        )
+
     def test_enrich_report_runtime_snapshot_persists_ocr_and_db_counters(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

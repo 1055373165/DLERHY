@@ -55,6 +55,7 @@ from book_agent.domain.structure.pdf import (
     _detect_backmatter_cue,
     _embedded_academic_abstract_segments,
     _book_heading_level,
+    _leading_plain_book_heading_and_remainder,
     _leading_all_caps_book_heading_and_remainder,
     _leading_numbered_book_heading_and_remainder,
     _leading_reference_heading_and_remainder,
@@ -67,6 +68,8 @@ from book_agent.domain.structure.pdf import (
     _looks_like_equation,
     _looks_like_figure_caption,
     _looks_like_code_continuation_line,
+    _looks_like_dense_toc_block,
+    _looks_like_list_item,
     _looks_like_numeric_table_fragment,
     _looks_like_visual_heading,
     _looks_like_reference_entry,
@@ -4264,6 +4267,20 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
             ),
         )
 
+    def test_helper_recognizes_plain_book_heading_with_embedded_body(self) -> None:
+        result = _leading_plain_book_heading_and_remainder(
+            "Benefits and Applications of Multimodal Models Multimodal language models offer several benefits and enable a wide range of applications."
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "Benefits and Applications of Multimodal Models",
+                "Multimodal language models offer several benefits and enable a wide range of applications.",
+                2,
+            ),
+        )
+
     def test_helper_recognizes_figure_caption_without_space_after_fig_prefix(self) -> None:
         self.assertTrue(
             _looks_like_figure_caption(
@@ -4416,6 +4433,256 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
         normalized = service._populate_missing_heading_levels([heading])
 
         self.assertEqual(normalized[0].metadata["heading_level"], 2)
+
+    def test_recovery_demotes_nonfirst_page_titleish_heading_to_level_two(self) -> None:
+        service = PdfStructureRecoveryService()
+        intro = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="Earlier body content that should keep the later titleish heading from behaving like a chapter opener.",
+            page_start=42,
+            page_end=42,
+            bbox_regions=[{"page_number": 42, "bbox": [72.0, 180.0, 520.0, 230.0]}],
+            reading_order_index=1,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=11.0,
+            source_path="pdf://page/42",
+            anchor="p42-b353",
+        )
+        heading = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="Core Components of Agent Systems",
+            page_start=42,
+            page_end=42,
+            bbox_regions=[{"page_number": 42, "bbox": [72.0, 280.0, 291.2, 305.3]}],
+            reading_order_index=2,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body", "heading_level": 1},
+            font_size_avg=14.0,
+            source_path="pdf://page/42",
+            anchor="p42-b354",
+        )
+
+        normalized = service._populate_missing_heading_levels([intro, heading])
+
+        self.assertEqual(normalized[1].metadata["heading_level"], 2)
+
+    def test_recovery_splits_plain_book_heading_from_body_paragraph(self) -> None:
+        service = PdfStructureRecoveryService()
+        block = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text=(
+                "Provider Ecosystems When it comes to incorporating large language models "
+                "(LLMs) into applications, you have a growing range of options to choose from."
+            ),
+            page_start=41,
+            page_end=41,
+            bbox_regions=[{"page_number": 41, "bbox": [108.0, 642.1, 504.0, 690.0]}],
+            reading_order_index=1,
+            parse_confidence=0.92,
+            flags=[],
+            metadata={"pdf_page_family": "body", "pdf_block_role": "body"},
+            font_size_avg=11.0,
+            source_path="pdf://page/41",
+            anchor="p41-b1001",
+        )
+
+        repaired = service._split_embedded_page_heading_segments(
+            block,
+            is_first_substantive_page_block=False,
+            page_has_heading=False,
+        )
+
+        self.assertEqual(len(repaired), 2)
+        self.assertEqual(repaired[0].role, "heading")
+        self.assertEqual(repaired[0].text, "Provider Ecosystems")
+        self.assertEqual(repaired[0].metadata["heading_level"], 2)
+        self.assertEqual(repaired[1].role, "body")
+        self.assertTrue(repaired[1].text.startswith("When it comes to incorporating"))
+
+    def test_recovery_promotes_single_word_embedded_plain_heading_to_level_three_after_section_heading(self) -> None:
+        service = PdfStructureRecoveryService()
+        previous = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="Provider Ecosystems",
+            page_start=41,
+            page_end=41,
+            bbox_regions=[{"page_number": 41, "bbox": [108.0, 642.0, 229.0, 655.2]}],
+            reading_order_index=1,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body", "heading_level": 2},
+            font_size_avg=13.15,
+            source_path="pdf://page/41",
+            anchor="p41-b1001",
+        )
+        page_header = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="Introduction 21",
+            page_start=42,
+            page_end=42,
+            bbox_regions=[{"page_number": 42, "bbox": [108.0, 72.0, 200.0, 84.0]}],
+            reading_order_index=2,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=10.0,
+            source_path="pdf://page/42",
+            anchor="p42-header",
+        )
+        heading = _RecoveredBlock(
+            role="heading",
+            block_type=BlockType.HEADING,
+            text="OpenAI OpenAI",
+            page_start=42,
+            page_end=42,
+            bbox_regions=[{"page_number": 42, "bbox": [108.0, 187.9, 145.9, 198.9]}],
+            reading_order_index=3,
+            parse_confidence=0.95,
+            flags=[],
+            metadata={
+                "pdf_page_family": "body",
+                "heading_level": 2,
+                "pdf_heading_recovery_source": "embedded_book_plain_heading_recovered",
+            },
+            font_size_avg=13.15,
+            source_path="pdf://page/42",
+            anchor="p42-b1009-s1",
+        )
+
+        normalized = service._populate_missing_heading_levels([previous, page_header, heading])
+
+        self.assertEqual(normalized[2].metadata["heading_level"], 3)
+
+    def test_helper_treats_dense_toc_block_as_list_signal(self) -> None:
+        self.assertTrue(
+            _looks_like_list_item(
+                "Preface . . . . . . . . . . . . . . . . . . . i\n"
+                "About the Book . . . . . . . . . . . . . . iii\n"
+                "Introduction . . . . . . . . . . . . . . . . 1",
+                3,
+            )
+        )
+        self.assertTrue(
+            _looks_like_dense_toc_block(
+                "Preface . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i\n"
+                "About the Book . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . iii\n"
+                "Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 1",
+                3,
+            )
+        )
+
+    def test_helper_does_not_treat_large_body_block_as_dense_toc_signal(self) -> None:
+        self.assertFalse(
+            _looks_like_list_item(
+                "Large language models rely on tokenization to convert text into model-digestible units.\n"
+                "The tokenizer must balance vocabulary size, storage cost, and downstream coverage.\n"
+                "In practice, this means engineers evaluate tradeoffs between compression efficiency and fidelity.",
+                3,
+            )
+        )
+        self.assertFalse(
+            _looks_like_dense_toc_block(
+                "Large language models rely on tokenization to convert text into model-digestible units.\n"
+                "The tokenizer must balance vocabulary size, storage cost, and downstream coverage.\n"
+                "In practice, this means engineers evaluate tradeoffs between compression efficiency and fidelity.",
+                3,
+            )
+        )
+
+    def test_helper_keeps_inline_book_heading_separate_when_body_continues_across_page(self) -> None:
+        service = PdfStructureRecoveryService()
+        heading = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="Provider Ecosystems",
+            page_start=41,
+            page_end=41,
+            bbox_regions=[{"page_number": 41, "bbox": [108.0, 642.0, 229.0, 655.2]}],
+            reading_order_index=1,
+            parse_confidence=0.9,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=13.15,
+            source_path="pdf://page/41",
+            anchor="pdf://page/41#p41-b1001",
+        )
+        body = _RecoveredBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="When it comes to incorporating large language models into applications, you have a growing range of options.",
+            page_start=41,
+            page_end=42,
+            bbox_regions=[{"page_number": 41, "bbox": [107.45, 676.7, 505.36, 690.02]}],
+            reading_order_index=2,
+            parse_confidence=0.9,
+            flags=[],
+            metadata={"pdf_page_family": "body"},
+            font_size_avg=10.96,
+            source_path="pdf://page/41",
+            anchor="pdf://page/41#p41-b1002",
+        )
+
+        self.assertTrue(service._should_keep_inline_book_heading_separate(heading, body))
+
+    def test_helper_detects_title_page_metadata_as_frontmatter_chunk(self) -> None:
+        service = PdfStructureRecoveryService()
+        blocks = [
+            _RecoveredBlock(
+                role="heading",
+                block_type=BlockType.HEADING,
+                text="Patterns of Application Development Using AI",
+                page_start=2,
+                page_end=2,
+                bbox_regions=[{"page_number": 2, "bbox": [108.0, 88.2, 496.0, 107.1]}],
+                reading_order_index=1,
+                parse_confidence=0.9,
+                flags=[],
+                metadata={"pdf_page_family": "body"},
+                font_size_avg=18.9,
+                source_path="pdf://page/2",
+                anchor="pdf://page/2#p2-b1",
+            ),
+            _RecoveredBlock(
+                role="body",
+                block_type=BlockType.PARAGRAPH,
+                text="This book is available at http://leanpub.com/patterns-of-application-development-using-ai",
+                page_start=2,
+                page_end=2,
+                bbox_regions=[{"page_number": 2, "bbox": [108.0, 172.2, 462.2, 205.9]}],
+                reading_order_index=2,
+                parse_confidence=0.9,
+                flags=[],
+                metadata={"pdf_page_family": "body"},
+                font_size_avg=10.9,
+                source_path="pdf://page/2",
+                anchor="pdf://page/2#p2-b3",
+            ),
+            _RecoveredBlock(
+                role="body",
+                block_type=BlockType.PARAGRAPH,
+                text="This version was published on 2024-10-23",
+                page_start=2,
+                page_end=2,
+                bbox_regions=[{"page_number": 2, "bbox": [107.6, 227.1, 320.1, 240.3]}],
+                reading_order_index=3,
+                parse_confidence=0.9,
+                flags=[],
+                metadata={"pdf_page_family": "body"},
+                font_size_avg=10.9,
+                source_path="pdf://page/2",
+                anchor="pdf://page/2#p2-b5",
+            ),
+        ]
+
+        self.assertTrue(service._looks_like_frontmatter_chunk(blocks))
 
     def test_helper_recovers_academic_top_level_numbered_heading_and_level(self) -> None:
         result = _next_academic_inline_heading(
