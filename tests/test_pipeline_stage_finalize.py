@@ -74,7 +74,15 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
             run = RunControlRepository(session).get_run(run_id)
             return dict((run.status_detail_json or {}).get("pipeline", {}).get("stages") or {})
 
-    def test_sync_pipeline_status_finalizes_stale_stage_snapshots(self) -> None:
+    def test_sync_pipeline_status_mirrors_derived_status_without_fabricating_success(self) -> None:
+        # Contract (post state-consistency refactor): the stage cache must
+        # faithfully reflect :class:`StageStatusCalculator` output. When the
+        # physical ledger shows no work (no translation_packets, no
+        # work_items), every stage derives to NOT_STARTED and the cache must
+        # say ``pending`` — NOT ``succeeded`` just because the run happened
+        # to be marked succeeded at the orchestration layer. This test pins
+        # down the fix for the production bug where 344 BUILT packets
+        # remained but the run still reported translate=succeeded.
         run_id = self._seed_run(
             stages={
                 "translate": {"status": "running", "pending_packet_count": 1},
@@ -87,14 +95,22 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
         self.executor._sync_pipeline_status(run_id, "succeeded")
 
         stages = self._read_stages(run_id)
-        self.assertEqual(stages["translate"]["status"], "succeeded")
-        self.assertEqual(stages["translate"]["pending_packet_count"], 0)
-        self.assertEqual(stages["review"]["status"], "succeeded")
-        self.assertEqual(stages["bilingual_html"]["status"], "succeeded")
-        self.assertEqual(stages["merged_html"]["status"], "succeeded")
+        self.assertEqual(stages["translate"]["status"], "pending")
+        self.assertEqual(stages["review"]["status"], "pending")
+        self.assertEqual(stages["bilingual_html"]["status"], "pending")
+        self.assertEqual(stages["merged_html"]["status"], "pending")
+        # The aggregate ``pipeline`` entry is still driven by the run
+        # transition — it is the orchestration flag, not a per-stage
+        # derivation.
         self.assertEqual(stages["pipeline"]["status"], "succeeded")
 
-    def test_finalize_preserves_terminal_non_success_statuses(self) -> None:
+    def test_finalize_overwrites_stale_non_success_labels_with_derived_truth(self) -> None:
+        # Before the refactor, ``_finalize_stage_snapshots_on_success``
+        # "preserved" any prior ``failed``/``cancelled`` label while
+        # force-setting everything else to ``succeeded``. Both behaviors
+        # are now incorrect: the cache must mirror derived truth. With
+        # no seeded physical state, the correct answer is ``pending``
+        # uniformly, regardless of what the cache used to claim.
         run_id = self._seed_run(
             stages={
                 "translate": {"status": "succeeded", "pending_packet_count": 0},
@@ -107,11 +123,10 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
         self.executor._sync_pipeline_status(run_id, "succeeded")
 
         stages = self._read_stages(run_id)
-        self.assertEqual(stages["translate"]["status"], "succeeded")
-        self.assertEqual(stages["review"]["status"], "failed")
-        self.assertEqual(stages["review"]["failure_reason"], "boom")
-        self.assertEqual(stages["bilingual_html"]["status"], "cancelled")
-        self.assertEqual(stages["merged_html"]["status"], "succeeded")
+        self.assertEqual(stages["translate"]["status"], "pending")
+        self.assertEqual(stages["review"]["status"], "pending")
+        self.assertEqual(stages["bilingual_html"]["status"], "pending")
+        self.assertEqual(stages["merged_html"]["status"], "pending")
         self.assertEqual(stages["pipeline"]["status"], "succeeded")
 
     def test_finalize_is_no_op_when_pipeline_stages_missing(self) -> None:

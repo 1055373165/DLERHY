@@ -7,6 +7,12 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.stage_status import (
+    PIPELINE_STAGES,
+    StageStatus,
+    StageStatusCalculator,
+    stage_status_to_cache_label,
+)
 from book_agent.services.runtime_repair_blockage import summarize_runtime_repair_blockage
 
 
@@ -215,6 +221,7 @@ class RunControlService:
         blockage_summary = summarize_runtime_repair_blockage(status_detail_json["runtime_v2"])
         if blockage_summary is not None:
             status_detail_json["runtime_v2"].update(blockage_summary)
+        self._project_derived_stage_status(status_detail_json, run_id, run.document_id)
         return DocumentRunSummary(
             run_id=run.id,
             document_id=run.document_id,
@@ -410,7 +417,7 @@ class RunControlService:
             DocumentRunStatus.DRAINING.value,
         }:
             return False
-        if self._first_failed_pipeline_stage(summary.status_detail_json) is None:
+        if self._first_failed_pipeline_stage(run_id) is None:
             return False
 
         freshest_signal = (
@@ -421,14 +428,48 @@ class RunControlService:
             return False
         return (_utcnow() - freshest_signal) >= _STALE_FAILED_STAGE_RETRY_AFTER
 
-    def _first_failed_pipeline_stage(self, status_detail_json: dict[str, Any] | None) -> str | None:
-        pipeline = status_detail_json.get("pipeline") if isinstance(status_detail_json, dict) else None
-        stages = pipeline.get("stages") if isinstance(pipeline, dict) else None
+    def _project_derived_stage_status(
+        self,
+        status_detail_json: dict[str, Any],
+        run_id: str,
+        document_id: str,
+    ) -> None:
+        # Every API read should see physical-state truth, never the cached
+        # payload alone. The stage cache is still written by the executor
+        # for observability, but we override its ``status`` field on read
+        # using :class:`StageStatusCalculator` so drift never reaches the UI.
+        pipeline = status_detail_json.get("pipeline")
+        if not isinstance(pipeline, dict):
+            return
+        stages = pipeline.get("stages")
         if not isinstance(stages, dict):
-            return None
-        for stage_name, stage_detail in stages.items():
-            if isinstance(stage_detail, dict) and stage_detail.get("status") in {"failed", "cancelled"}:
-                return stage_name
+            return
+        calculator = StageStatusCalculator(self.repository.session)
+        for stage_name in PIPELINE_STAGES:
+            stage_detail = stages.get(stage_name)
+            if not isinstance(stage_detail, dict):
+                continue
+            try:
+                derived = calculator.stage_status(run_id, document_id, stage_name)
+            except ValueError:
+                continue
+            stage_detail["status"] = stage_status_to_cache_label(derived)
+
+    def _first_failed_pipeline_stage(self, run_id: str) -> str | None:
+        # Evidence-driven: derive stage status from translation_packets +
+        # work_items. The earlier cache-reading variant trusted
+        # status_detail_json.pipeline.stages.*.status, which drifts when
+        # any write path forgets to refresh the cache. Calculator reads
+        # the authoritative physical state every time.
+        run = self.repository.get_run(run_id)
+        calculator = StageStatusCalculator(self.repository.session)
+        for stage in PIPELINE_STAGES:
+            try:
+                status = calculator.stage_status(run_id, run.document_id, stage)
+            except ValueError:
+                continue
+            if status == StageStatus.FAILED:
+                return stage
         return None
 
     def _parse_iso_datetime(self, value: str | None) -> datetime | None:

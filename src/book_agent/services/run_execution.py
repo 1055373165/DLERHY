@@ -16,6 +16,11 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models.ops import RunAuditEvent, WorkItem
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
+from book_agent.orchestrator.stage_status import (
+    PIPELINE_STAGES,
+    StageStatus,
+    StageStatusCalculator,
+)
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
 from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
 
@@ -728,6 +733,20 @@ class RunExecutionService:
         )
 
     def reconcile_run_terminal_state(self, *, run_id: str) -> DocumentRunSummary:
+        # Evidence-driven terminal transition.
+        #
+        # Prior implementation decided run terminal state from work_item
+        # counts alone. That was unsound under the frontier-seeding pattern:
+        # when only one packet per chapter is seeded at a time, all
+        # work_items can be SUCCEEDED while hundreds of BUILT packets
+        # remain unseeded — and the run was wrongly marked succeeded.
+        #
+        # The fix is to consult :class:`StageStatusCalculator`, which
+        # derives stage status from translation_packets + work_items
+        # together. A stage is only SUCCEEDED when every packet reached
+        # a terminal status that aligns with the work-item ledger. The
+        # run may only transition to SUCCEEDED when *every* pipeline
+        # stage derives to SUCCEEDED.
         run = self.repository.get_run(run_id)
         if run.status in {
             DocumentRunStatus.SUCCEEDED,
@@ -738,12 +757,10 @@ class RunExecutionService:
             return self.control_service.get_run_summary(run_id)
 
         inflight_count = self.repository.count_inflight_work_items(run_id)
-        claimable_count = self.repository.count_claimable_work_items(run_id)
-        terminal_failed_count = self.repository.count_terminal_failed_work_items(run_id)
-
         if inflight_count > 0:
             return self.control_service.get_run_summary(run_id)
 
+        claimable_count = self.repository.count_claimable_work_items(run_id)
         if run.status == DocumentRunStatus.DRAINING and claimable_count > 0:
             return self.control_service.pause_run_system(
                 run_id,
@@ -751,18 +768,41 @@ class RunExecutionService:
                 detail_json={"remaining_claimable_work_items": claimable_count},
             )
 
-        if claimable_count == 0:
-            if terminal_failed_count > 0:
-                return self.control_service.fail_run_system(
-                    run_id,
-                    stop_reason="run.terminal_failed_items_present",
-                    detail_json={"terminal_failed_work_item_count": terminal_failed_count},
-                )
-            return self.control_service.succeed_run_system(
+        calculator = StageStatusCalculator(self.repository.session)
+        stage_status_by_name: dict[str, StageStatus] = {
+            stage: calculator.stage_status(run_id, run.document_id, stage)
+            for stage in PIPELINE_STAGES
+        }
+        stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
+
+        failed_stages = [
+            name for name, status in stage_status_by_name.items() if status == StageStatus.FAILED
+        ]
+        if failed_stages:
+            return self.control_service.fail_run_system(
                 run_id,
-                detail_json={"completed_work_item_count": self.repository.count_succeeded_work_items(run_id)},
+                stop_reason="stage.evidence_failed",
+                detail_json={
+                    "failed_stages": failed_stages,
+                    "stage_status": stage_status_snapshot,
+                    "terminal_failed_work_item_count": self.repository.count_terminal_failed_work_items(run_id),
+                },
             )
 
+        if all(status == StageStatus.SUCCEEDED for status in stage_status_by_name.values()):
+            return self.control_service.succeed_run_system(
+                run_id,
+                detail_json={
+                    "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
+                    "stage_status": stage_status_snapshot,
+                },
+            )
+
+        # At least one stage is still RUNNING or NOT_STARTED while no work
+        # items are inflight. The stage processors (translate frontier
+        # seeding, review seeding, export seeding) will make progress on
+        # the next main-loop iteration. Deliberately do NOT decide run
+        # terminal state here — let the caller loop.
         return self.control_service.get_run_summary(run_id)
 
     def _bump_success_progress(

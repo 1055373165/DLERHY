@@ -35,7 +35,12 @@ from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.orchestrator.reconciler import Reconciler
 from book_agent.orchestrator.stage_gate import StageGateKeeper
-from book_agent.orchestrator.stage_status import StageTransitionLogger
+from book_agent.orchestrator.stage_status import (
+    StageStatus,
+    StageStatusCalculator,
+    StageTransitionLogger,
+    stage_status_to_cache_label,
+)
 from book_agent.orchestrator.state_machine import (
     PACKET_RUNTIME_SUBSTATE_LEASED,
     PACKET_RUNTIME_SUBSTATE_RETRYABLE_FAILED,
@@ -1879,20 +1884,6 @@ class DocumentRunExecutor:
             self._max_auto_followup_attempts(session, run_id),
         )
 
-    def _pipeline_stage_status(self, run: DocumentRun, stage_key: str) -> str | None:
-        detail = run.status_detail_json or {}
-        pipeline = detail.get("pipeline") if isinstance(detail, dict) else None
-        if not isinstance(pipeline, dict):
-            return None
-        stages = pipeline.get("stages")
-        if not isinstance(stages, dict):
-            return None
-        stage = stages.get(stage_key)
-        if not isinstance(stage, dict):
-            return None
-        status = stage.get("status")
-        return status if isinstance(status, str) else None
-
     def _update_pipeline_stage(
         self,
         run_id: str,
@@ -1959,6 +1950,16 @@ class DocumentRunExecutor:
             self._update_pipeline_stage(run_id, "pipeline", status=run_status, current_stage=run_status)
 
     def _finalize_stage_snapshots_on_success(self, session: Session, run_id: str) -> None:
+        # Refresh the pipeline.stages cache to mirror derived truth.
+        #
+        # The prior implementation force-set every non-terminal stage to
+        # "succeeded" when the run finished, which printed lies to the UI
+        # whenever the executor's terminal decision itself was wrong
+        # (e.g. translate physically still RUNNING while the run was
+        # marked SUCCEEDED by a stale work-item count). We now consult
+        # :class:`StageStatusCalculator` and only persist the derived
+        # status — the cache becomes a snapshot of truth, never a
+        # fabrication.
         repository = RunControlRepository(session)
         run = repository.get_run(run_id)
         detail = dict(run.status_detail_json or {})
@@ -1966,6 +1967,7 @@ class DocumentRunExecutor:
         stages = dict(pipeline.get("stages") or {})
         if not stages:
             return
+        calculator = StageStatusCalculator(session)
         now = _utcnow().isoformat()
         changed = False
         for stage_key, stage_detail in list(stages.items()):
@@ -1973,15 +1975,18 @@ class DocumentRunExecutor:
                 continue
             if not isinstance(stage_detail, dict):
                 continue
-            current_status = stage_detail.get("status")
-            if current_status == "succeeded":
+            try:
+                derived = calculator.stage_status(run_id, run.document_id, stage_key)
+            except ValueError:
                 continue
-            if current_status in {"failed", "paused", "cancelled"}:
+            derived_label = stage_status_to_cache_label(derived)
+            current_status = stage_detail.get("status")
+            if current_status == derived_label:
                 continue
             updated = dict(stage_detail)
-            updated["status"] = "succeeded"
+            updated["status"] = derived_label
             updated["updated_at"] = now
-            if stage_key == "translate":
+            if stage_key == "translate" and derived == StageStatus.SUCCEEDED:
                 updated["pending_packet_count"] = 0
             stages[stage_key] = updated
             changed = True

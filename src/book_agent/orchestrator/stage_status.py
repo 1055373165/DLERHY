@@ -64,6 +64,25 @@ class StageStatus(str, Enum):
     PARTIAL = "partial"
 
 
+# Legacy stage-cache labels used by ``pipeline.stages.*.status`` inside
+# ``document_runs.status_detail_json``. Every read/write path that touches
+# the cache must translate between :class:`StageStatus` (derived) and the
+# cache vocabulary so the UI sees a stable contract even as the derivation
+# layer evolves.
+_STAGE_STATUS_TO_CACHE_LABEL: dict["StageStatus", str] = {
+    StageStatus.NOT_STARTED: "pending",
+    StageStatus.RUNNING: "running",
+    StageStatus.SUCCEEDED: "succeeded",
+    StageStatus.FAILED: "failed",
+    StageStatus.PARTIAL: "partial",
+}
+
+
+def stage_status_to_cache_label(status: "StageStatus") -> str:
+    """Translate a derived :class:`StageStatus` to the legacy cache label."""
+    return _STAGE_STATUS_TO_CACHE_LABEL.get(status, status.value)
+
+
 @dataclass(frozen=True)
 class StageEvidence:
     """Raw counts behind a derived status decision (for debug / audit)."""
@@ -358,4 +377,5 @@ __all__ = [
     "StageStatus",
     "StageStatusCalculator",
     "StageTransitionLogger",
+    "stage_status_to_cache_label",
 ]
