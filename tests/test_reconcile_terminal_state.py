@@ -146,14 +146,15 @@ class ReconcileTerminalStateTests(unittest.TestCase):
 
         self.assertEqual(summary.status, "running")
 
-    def test_run_succeeds_when_every_packet_translated(self) -> None:
-        # Happy path: every packet terminal TRANSLATED, every work_item
-        # terminal SUCCEEDED, no optional stages in play. Calculator
-        # derives all stages to SUCCEEDED (translate by packet ledger;
-        # review/export by absence-of-work_items → NOT_STARTED, which
-        # currently blocks succeeded). Adjust expectation once the
-        # optional-stage layer (P0.2) lands. For now assert the run is
-        # still RUNNING because review/export did not execute.
+    def test_run_stays_running_when_translate_green_but_other_stages_not_started(self) -> None:
+        # Translate is terminal-green (every packet TRANSLATED, every
+        # work_item SUCCEEDED) but review / bilingual_html / merged_html
+        # have no work_items at all → Calculator derives them to
+        # NOT_STARTED. Under the current "every pipeline stage required"
+        # policy the reconciler must refuse the succeeded transition and
+        # leave the run RUNNING. P0.2 will relax this once optional-stage
+        # classification lands; until then this test pins the guard that
+        # prevents a premature terminal transition.
         _, run_id = self._seed(
             translated_packet_count=1,
             built_packet_count=0,
@@ -162,12 +163,43 @@ class ReconcileTerminalStateTests(unittest.TestCase):
 
         summary = self._reconcile(run_id)
 
-        # With all four pipeline stages currently treated as required,
-        # a translate-only dataset derives to NOT_STARTED for review /
-        # bilingual_html / merged_html. The reconciler refuses to mark
-        # the run succeeded until every stage is SUCCEEDED. This pins
-        # the guard until P0.2 introduces optional-stage classification.
         self.assertEqual(summary.status, "running")
+
+    def test_draining_run_pauses_when_claimable_work_remains(self) -> None:
+        # DRAINING transitions are distinct from RUNNING: once the operator
+        # has asked the system to drain, any still-claimable work means the
+        # drain itself cannot be declared clean. ``reconcile`` must flip the
+        # run to PAUSED with the drain-specific stop reason rather than
+        # continuing to treat it as live.
+        _, run_id = self._seed(
+            translated_packet_count=0,
+            built_packet_count=1,
+            translate_work_item_statuses=[WorkItemStatus.PENDING],
+            run_status=DocumentRunStatus.DRAINING,
+        )
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "paused")
+        self.assertEqual(summary.stop_reason, "run.drain_complete_with_pending_items")
+
+    def test_draining_run_fails_when_stage_evidence_failed(self) -> None:
+        # Evidence-driven failure must fire regardless of whether the run was
+        # RUNNING or DRAINING at the time the reconciler ran: a TERMINAL_FAILED
+        # work item makes the translate stage FAILED, and a drained run that
+        # hit a stage-level failure should land in FAILED (not PAUSED) with
+        # the same stop_reason as the RUNNING-path counterpart.
+        _, run_id = self._seed(
+            translated_packet_count=0,
+            built_packet_count=1,
+            translate_work_item_statuses=[WorkItemStatus.TERMINAL_FAILED],
+            run_status=DocumentRunStatus.DRAINING,
+        )
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "failed")
+        self.assertEqual(summary.stop_reason, "stage.evidence_failed")
 
     def test_run_fails_when_translate_work_item_terminal_failed(self) -> None:
         # Evidence-driven failure: TERMINAL_FAILED work_item makes

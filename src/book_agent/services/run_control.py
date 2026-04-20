@@ -438,6 +438,13 @@ class RunControlService:
         # payload alone. The stage cache is still written by the executor
         # for observability, but we override its ``status`` field on read
         # using :class:`StageStatusCalculator` so drift never reaches the UI.
+        #
+        # Caller passes ``status_detail_json = dict(run.status_detail_json)``
+        # — a *shallow* copy. The nested ``pipeline.stages.<name>`` dicts are
+        # still ORM-attached references, so naive ``stage_detail[...] = v``
+        # would mutate the session-tracked run row and silently persist the
+        # projection on the next flush. We rebuild the ``pipeline.stages``
+        # branch with fresh dicts to keep this method a read-side projection.
         pipeline = status_detail_json.get("pipeline")
         if not isinstance(pipeline, dict):
             return
@@ -445,15 +452,21 @@ class RunControlService:
         if not isinstance(stages, dict):
             return
         calculator = StageStatusCalculator(self.repository.session)
+        projected_stages = dict(stages)
         for stage_name in PIPELINE_STAGES:
-            stage_detail = stages.get(stage_name)
+            stage_detail = projected_stages.get(stage_name)
             if not isinstance(stage_detail, dict):
                 continue
             try:
                 derived = calculator.stage_status(run_id, document_id, stage_name)
             except ValueError:
                 continue
-            stage_detail["status"] = stage_status_to_cache_label(derived)
+            new_detail = dict(stage_detail)
+            new_detail["status"] = stage_status_to_cache_label(derived)
+            projected_stages[stage_name] = new_detail
+        projected_pipeline = dict(pipeline)
+        projected_pipeline["stages"] = projected_stages
+        status_detail_json["pipeline"] = projected_pipeline
 
     def _first_failed_pipeline_stage(self, run_id: str) -> str | None:
         # Evidence-driven: derive stage status from translation_packets +
