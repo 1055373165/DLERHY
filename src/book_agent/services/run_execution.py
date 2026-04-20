@@ -17,9 +17,13 @@ from book_agent.domain.enums import (
 from book_agent.domain.models.ops import RunAuditEvent, WorkItem
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
 from book_agent.orchestrator.stage_status import (
+    OPTIONAL_PIPELINE_STAGES,
     PIPELINE_STAGES,
+    REQUIRED_PIPELINE_STAGES,
+    RunOutcome,
     StageStatus,
     StageStatusCalculator,
+    classify_run_outcome,
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
 from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
@@ -775,34 +779,57 @@ class RunExecutionService:
         }
         stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
 
-        failed_stages = [
-            name for name, status in stage_status_by_name.items() if status == StageStatus.FAILED
-        ]
-        if failed_stages:
+        outcome = classify_run_outcome(stage_status_by_name)
+
+        if outcome == RunOutcome.FAILED:
+            failed_required_stages = [
+                name
+                for name, status in stage_status_by_name.items()
+                if status == StageStatus.FAILED and name in REQUIRED_PIPELINE_STAGES
+            ]
+            failed_optional_stages = [
+                name
+                for name, status in stage_status_by_name.items()
+                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+            ]
             return self.control_service.fail_run_system(
                 run_id,
                 stop_reason="stage.evidence_failed",
                 detail_json={
-                    "failed_stages": failed_stages,
+                    "failed_required_stages": failed_required_stages,
+                    "failed_optional_stages": failed_optional_stages,
+                    # ``failed_stages`` preserved for UIs / tests that read
+                    # the flat list; P0.0 pinned this key-name contract.
+                    "failed_stages": failed_required_stages + failed_optional_stages,
                     "stage_status": stage_status_snapshot,
                     "terminal_failed_work_item_count": self.repository.count_terminal_failed_work_items(run_id),
                 },
             )
 
-        if all(status == StageStatus.SUCCEEDED for status in stage_status_by_name.values()):
-            return self.control_service.succeed_run_system(
-                run_id,
-                detail_json={
-                    "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
-                    "stage_status": stage_status_snapshot,
-                },
-            )
+        if outcome in (RunOutcome.SUCCEEDED, RunOutcome.SUCCEEDED_WITH_WARNINGS):
+            detail: dict[str, Any] = {
+                "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
+                "stage_status": stage_status_snapshot,
+                "run_outcome": outcome.value,
+            }
+            if outcome == RunOutcome.SUCCEEDED_WITH_WARNINGS:
+                # Optional stages failed while every required stage is green.
+                # Until P0.2c introduces DocumentRunStatus.SUCCEEDED_WITH_WARNINGS,
+                # the run terminal state stays ``SUCCEEDED`` and the warning
+                # signal lives in status_detail_json so the UI and downstream
+                # consumers can distinguish clean success from degraded success.
+                detail["has_warnings"] = True
+                detail["failed_optional_stages"] = [
+                    name
+                    for name, status in stage_status_by_name.items()
+                    if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+                ]
+            return self.control_service.succeed_run_system(run_id, detail_json=detail)
 
-        # At least one stage is still RUNNING or NOT_STARTED while no work
-        # items are inflight. The stage processors (translate frontier
-        # seeding, review seeding, export seeding) will make progress on
-        # the next main-loop iteration. Deliberately do NOT decide run
-        # terminal state here — let the caller loop.
+        # RunOutcome.RUNNING — at least one required stage has not reached
+        # SUCCEEDED, or an optional stage is still running. Leave the run
+        # in its current non-terminal status and let the main loop advance
+        # the frontier.
         return self.control_service.get_run_summary(run_id)
 
     def _bump_success_progress(

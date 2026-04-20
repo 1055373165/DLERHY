@@ -146,19 +146,45 @@ class ReconcileTerminalStateTests(unittest.TestCase):
 
         self.assertEqual(summary.status, "running")
 
-    def test_run_stays_running_when_translate_green_but_other_stages_not_started(self) -> None:
-        # Translate is terminal-green (every packet TRANSLATED, every
-        # work_item SUCCEEDED) but review / bilingual_html / merged_html
-        # have no work_items at all → Calculator derives them to
-        # NOT_STARTED. Under the current "every pipeline stage required"
-        # policy the reconciler must refuse the succeeded transition and
-        # leave the run RUNNING. P0.2 will relax this once optional-stage
-        # classification lands; until then this test pins the guard that
-        # prevents a premature terminal transition.
+    def test_run_succeeds_when_only_required_stage_translate_is_green(self) -> None:
+        # Post-P0.2a behaviour: translate is the sole *required* stage;
+        # review / bilingual_html / merged_html are optional and, when
+        # they have no work_items at all, ``StageStatusCalculator`` derives
+        # them to NOT_STARTED which is interpreted as "not requested". With
+        # translate terminal-green and nothing requested beyond it, the
+        # reconciler must allow the run to reach SUCCEEDED. This pins the
+        # classifier routing added in P0.2a.
         _, run_id = self._seed(
             translated_packet_count=1,
             built_packet_count=0,
             translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+        )
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "succeeded")
+        last_control_detail = (
+            (summary.status_detail_json.get("last_control") or {}).get("detail_json") or {}
+        )
+        self.assertEqual(last_control_detail.get("run_outcome"), "succeeded")
+        # Optional stages that were never requested must not be reported
+        # as failed — only required-stage failures and optional-stage
+        # failures are surfaced in the control-detail payload.
+        self.assertNotIn("has_warnings", last_control_detail)
+
+    def test_run_stays_running_when_no_physical_evidence_has_landed(self) -> None:
+        # Liveness guard: a run with zero packets and zero work_items is
+        # in the startup window where the frontier seeder has not yet
+        # produced evidence. The reconciler must leave it RUNNING so the
+        # seeder can make progress on the next loop iteration; otherwise
+        # every newly-queued run would race to SUCCEEDED before any work
+        # is scheduled. Protects against the reviewer-flagged regression
+        # in commit 609fe59 (translate-optional + zero evidence would
+        # otherwise classify as SUCCEEDED).
+        _, run_id = self._seed(
+            translated_packet_count=0,
+            built_packet_count=0,
+            translate_work_item_statuses=[],
         )
 
         summary = self._reconcile(run_id)

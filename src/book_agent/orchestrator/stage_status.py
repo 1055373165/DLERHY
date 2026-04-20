@@ -29,7 +29,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -46,6 +46,25 @@ from book_agent.domain.models.translation import TranslationPacket
 
 
 PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
+
+# Stage classification (spec Phase 2). A *required* stage must reach
+# ``SUCCEEDED`` before the run can reach ``SUCCEEDED`` / ``SUCCEEDED_WITH_WARNINGS``;
+# a failure in any required stage makes the run ``FAILED``. An *optional*
+# stage can remain ``NOT_STARTED`` (the operator / run config never requested
+# it) without blocking the terminal transition, and an optional-stage
+# ``FAILED`` downgrades the run to ``SUCCEEDED_WITH_WARNINGS`` instead of
+# failing the whole pipeline.
+#
+# Today ``translate`` is the only strictly required stage — without a
+# translated ledger there is no artifact to hand off. Review and the two
+# export stages are treated as optional because the operator may not have
+# requested them (single-lang output, HTML-only, etc.). P0.2b/P0.2c will
+# widen this to per-run configuration once the UI can surface the choice;
+# until then, "missing work_items ⇒ not requested" is the single rule.
+REQUIRED_PIPELINE_STAGES: frozenset[str] = frozenset({"translate"})
+OPTIONAL_PIPELINE_STAGES: frozenset[str] = frozenset(
+    {"review", "bilingual_html", "merged_html"}
+)
 
 
 class StageStatus(str, Enum):
@@ -358,6 +377,98 @@ class StageTransitionLogger:
         return transition
 
 
+class RunOutcome(str, Enum):
+    """Classification of a run's terminal-transition intent, derived purely
+    from per-stage :class:`StageStatus` values.
+
+    This is the *decision* layer that sits between
+    :class:`StageStatusCalculator` (physical-truth derivation) and the
+    run-control services that actually flip ``document_runs.status``. It
+    is deliberately side-effect-free so the same mapping can be unit
+    tested in isolation and reused by read-side summaries without
+    committing any transition.
+
+    Values:
+
+    * :data:`RUNNING` — at least one required stage is not yet terminally
+      successful, or an optional stage is still running. The reconciler
+      must leave the run in its current non-terminal status and loop.
+    * :data:`SUCCEEDED` — every required stage is ``SUCCEEDED`` and no
+      optional stage failed.
+    * :data:`SUCCEEDED_WITH_WARNINGS` — every required stage is
+      ``SUCCEEDED`` but at least one optional stage is ``FAILED``. The
+      terminal transition today still targets ``DocumentRunStatus.SUCCEEDED``
+      (P0.2c introduces the dedicated enum value), but the classifier
+      flags the degraded outcome so run-control can record it in
+      ``status_detail_json``.
+    * :data:`FAILED` — at least one required stage is ``FAILED``.
+    """
+
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    SUCCEEDED_WITH_WARNINGS = "succeeded_with_warnings"
+    FAILED = "failed"
+
+
+def classify_run_outcome(
+    stage_status_by_name: Mapping[str, StageStatus],
+) -> RunOutcome:
+    """Pure-function reduction of per-stage status → run terminal intent.
+
+    Decision order (a required failure is always authoritative; a
+    still-running optional blocks a soft-success transition to preserve
+    the invariant that SUCCEEDED_WITH_WARNINGS is a *terminal* label, not
+    a transient one):
+
+    1. Any required stage ``FAILED`` ⇒ ``FAILED``.
+    2. Any required stage not ``SUCCEEDED`` ⇒ ``RUNNING``.
+    3. Any optional stage ``RUNNING`` ⇒ ``RUNNING``.
+    4. Any optional stage ``FAILED`` ⇒ ``SUCCEEDED_WITH_WARNINGS``.
+    5. Otherwise ⇒ ``SUCCEEDED``.
+
+    ``PARTIAL`` is not produced by the calculator today and is treated
+    as ``RUNNING`` at every step so the classifier gracefully no-ops if
+    Phase 3 introduces it before the classifier gets taught about it.
+    """
+
+    def status_of(stage: str) -> StageStatus | None:
+        return stage_status_by_name.get(stage)
+
+    required_failed = [
+        stage
+        for stage in REQUIRED_PIPELINE_STAGES
+        if status_of(stage) == StageStatus.FAILED
+    ]
+    if required_failed:
+        return RunOutcome.FAILED
+
+    required_not_succeeded = [
+        stage
+        for stage in REQUIRED_PIPELINE_STAGES
+        if status_of(stage) != StageStatus.SUCCEEDED
+    ]
+    if required_not_succeeded:
+        return RunOutcome.RUNNING
+
+    optional_running = [
+        stage
+        for stage in OPTIONAL_PIPELINE_STAGES
+        if status_of(stage) == StageStatus.RUNNING
+    ]
+    if optional_running:
+        return RunOutcome.RUNNING
+
+    optional_failed = [
+        stage
+        for stage in OPTIONAL_PIPELINE_STAGES
+        if status_of(stage) == StageStatus.FAILED
+    ]
+    if optional_failed:
+        return RunOutcome.SUCCEEDED_WITH_WARNINGS
+
+    return RunOutcome.SUCCEEDED
+
+
 def _caller_site() -> str:
     """Return ``filename:lineno`` of the call site two frames up.
 
@@ -372,10 +483,14 @@ def _caller_site() -> str:
 
 
 __all__ = [
+    "OPTIONAL_PIPELINE_STAGES",
     "PIPELINE_STAGES",
+    "REQUIRED_PIPELINE_STAGES",
+    "RunOutcome",
     "StageEvidence",
     "StageStatus",
     "StageStatusCalculator",
     "StageTransitionLogger",
+    "classify_run_outcome",
     "stage_status_to_cache_label",
 ]
