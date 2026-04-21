@@ -35,7 +35,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--database-url",
         default=None,
-        help="PostgreSQL database URL. Defaults to BOOK_AGENT_DATABASE_URL from .env.",
+        help=(
+            "Explicit database URL for the smoke run. Defaults to an "
+            "isolated SQLite file under the run output dir — prod "
+            "DATABASE_URL is NEVER picked up implicitly, because smoke "
+            "writes ExportRecords that would pollute prod with tempdir "
+            "file_path values."
+        ),
+    )
+    parser.add_argument(
+        "--allow-shared-db",
+        action="store_true",
+        help=(
+            "Opt-in flag required to write into any non-sqlite DB URL. "
+            "Without it, --database-url pointing at Postgres is rejected."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -50,14 +64,44 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_smoke_database_url(
+    requested_url: str | None,
+    case_dir: Path,
+    *,
+    allow_shared_db: bool,
+) -> str:
+    # Smoke runs write ExportRecord rows whose file_path points at
+    # artifacts under case_dir (a per-run tempdir-ish folder). If those
+    # rows land in a shared DB, downstream downloads will 404 because
+    # the tempdir gets cleaned up. Default hard-isolates to a SQLite
+    # file that lives and dies with the run.
+    if requested_url is None:
+        return f"sqlite+pysqlite:///{case_dir / '_smoke.sqlite3'}"
+    if requested_url.startswith("sqlite"):
+        return requested_url
+    if not allow_shared_db:
+        raise SystemExit(
+            "Refusing to run smoke against a non-sqlite DB without "
+            "--allow-shared-db. Shared DBs receive ExportRecords with "
+            "tempdir file_path values that break production downloads. "
+            "Pass --allow-shared-db only when you understand the "
+            "pollution risk and have a plan to clean up."
+        )
+    return requested_url
+
+
 def _run_case(
     case_name: str,
     source_path: Path,
     case_dir: Path,
     *,
     database_url: str | None,
+    allow_shared_db: bool = False,
 ) -> dict[str, Any]:
-    engine = build_engine(database_url)
+    resolved_url = _resolve_smoke_database_url(
+        database_url, case_dir, allow_shared_db=allow_shared_db
+    )
+    engine = build_engine(resolved_url)
     Base.metadata.create_all(engine)
     session_factory = build_session_factory(engine=engine)
     export_root = case_dir / "exports"
@@ -131,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
             result = _run_case(
                 case, source_path, run_root / case,
                 database_url=args.database_url,
+                allow_shared_db=args.allow_shared_db,
             )
             results.append(result)
             print(f"  ✅ {case.upper()} — ALL 5 STAGES PASSED")

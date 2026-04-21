@@ -140,12 +140,43 @@ def _is_within_any_root(path: Path, roots: tuple[Path, ...]) -> bool:
     return False
 
 
-def _resolve_artifact_path(candidate: str | Path, *, roots: tuple[Path, ...]) -> Path:
+def _by_basename_under_document(
+    basename: str,
+    document_id: str,
+    roots: tuple[Path, ...],
+) -> Path | None:
+    # Phase-2 self-heal: a stored file_path can point at a path that is
+    # no longer reachable (e.g. a tempdir produced by a smoke run that
+    # leaked into prod DB). The physical artifact is often still present
+    # under the canonical layout <root>/[exports/]<document_id>/<basename>.
+    # Try both layouts for each configured root.
+    for root in roots:
+        for candidate in (
+            root / document_id / basename,
+            root / "exports" / document_id / basename,
+        ):
+            resolved = candidate.resolve()
+            if _is_within_any_root(resolved, roots) and resolved.exists():
+                return resolved
+    return None
+
+
+def _resolve_artifact_path(
+    candidate: str | Path,
+    *,
+    roots: tuple[Path, ...],
+    document_id: str | None = None,
+) -> Path:
     resolved = Path(candidate).resolve()
     fallback_candidates = [resolved, *_artifact_fallback_candidates(resolved)]
     for fallback_path in fallback_candidates:
         if _is_within_any_root(fallback_path, roots) and fallback_path.exists():
             return fallback_path
+    # Phase 2: canonical-layout fallback keyed by (document_id, basename).
+    if document_id:
+        healed = _by_basename_under_document(resolved.name, document_id, roots)
+        if healed is not None:
+            return healed
     allowed_root_label = ", ".join(str(root) for root in roots)
     if any(_is_within_any_root(fallback_path, roots) for fallback_path in fallback_candidates):
         raise HTTPException(
@@ -1539,7 +1570,9 @@ def download_document_chapter_export(
         )
 
     artifact_roots = _artifact_roots(request)
-    file_path = _resolve_artifact_path(chapter_record.file_path, roots=artifact_roots)
+    file_path = _resolve_artifact_path(
+        chapter_record.file_path, roots=artifact_roots, document_id=document_id
+    )
     archive_inputs = [
         ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
         *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(file_path)],
@@ -1632,7 +1665,9 @@ def download_document_export(
 
     artifact_roots = _artifact_roots(request)
     files = [
-        _resolve_artifact_path(record.file_path, roots=artifact_roots)
+        _resolve_artifact_path(
+            record.file_path, roots=artifact_roots, document_id=document_id
+        )
         for record in primary_records
     ]
 
