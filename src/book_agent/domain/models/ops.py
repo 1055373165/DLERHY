@@ -110,6 +110,28 @@ class ChapterWorklistAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DocumentRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "document_runs"
+    # Partial UNIQUE on active runs per document. Prevents two runs
+    # from simultaneously holding the QUEUED / RUNNING / DRAINING
+    # "currently doing work" slot for the same document — catches
+    # accidental double-submit, retry-on-retry, and resume races at
+    # the DB layer. PAUSED is excluded on purpose: a retry can create
+    # a new active run while an older run stays PAUSED; resuming the
+    # paused one while the new one is active will fail loudly (right
+    # behavior — operator has to pick one). Terminal states are
+    # excluded because lineage chains keep them around forever.
+    __table_args__ = (
+        Index(
+            "uq_document_runs_active_per_document",
+            "document_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued','running','draining')"
+            ),
+            sqlite_where=text(
+                "status IN ('queued','running','draining')"
+            ),
+        ),
+    )
 
     document_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
