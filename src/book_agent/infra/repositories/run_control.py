@@ -520,24 +520,39 @@ class RunControlRepository:
         error_detail_json: dict | None = None,
     ) -> WorkItem:
         lease = self.get_active_lease_by_token(lease_token)
-        work_item = self.session.get(WorkItem, lease.work_item_id)
-        if work_item is None:
-            raise ValueError(f"Work item not found for lease token: {lease_token}")
-        work_item.status = status
-        work_item.finished_at = released_at
-        work_item.last_heartbeat_at = released_at
-        work_item.lease_owner = None
-        work_item.lease_expires_at = None
+        # CAS: only overwrite the work_item status when it is still in
+        # an owned state. If the lease reaper has already flipped it to
+        # RETRYABLE_FAILED (or some other terminal), preserve that decision
+        # — the worker's late release must not clobber it. The lease row
+        # still moves to RELEASED so the reaper stops re-firing.
+        values: dict[str, object] = {
+            "status": status,
+            "finished_at": released_at,
+            "last_heartbeat_at": released_at,
+            "lease_owner": None,
+            "lease_expires_at": None,
+        }
         if output_artifact_refs_json is not None:
-            work_item.output_artifact_refs_json = output_artifact_refs_json
+            values["output_artifact_refs_json"] = output_artifact_refs_json
         if error_class is not None:
-            work_item.error_class = error_class
+            values["error_class"] = error_class
         if error_detail_json is not None:
-            work_item.error_detail_json = error_detail_json
+            values["error_detail_json"] = error_detail_json
+        self.session.execute(
+            update(WorkItem)
+            .where(
+                WorkItem.id == lease.work_item_id,
+                WorkItem.status.in_([WorkItemStatus.LEASED, WorkItemStatus.RUNNING]),
+            )
+            .values(**values)
+        )
         lease.status = WorkerLeaseStatus.RELEASED
         lease.last_heartbeat_at = released_at
         lease.released_at = released_at
         self.session.flush()
+        work_item = self.session.get(WorkItem, lease.work_item_id)
+        if work_item is None:
+            raise ValueError(f"Work item not found for lease token: {lease_token}")
         return work_item
 
     def expire_lease(
@@ -551,24 +566,32 @@ class RunControlRepository:
         lease = self.session.get(WorkerLease, lease_id)
         if lease is None or lease.status != WorkerLeaseStatus.ACTIVE:
             return None
-        work_item = self.session.get(WorkItem, lease.work_item_id)
+        # CAS: only flip the work_item to RETRYABLE_FAILED if it is
+        # still in an owned state. Racing the worker's release_work_item
+        # (which may have just flipped it to SUCCEEDED) must not
+        # resurrect a dead-letter status.
+        result = self.session.execute(
+            update(WorkItem)
+            .where(
+                WorkItem.id == lease.work_item_id,
+                WorkItem.status.in_([WorkItemStatus.LEASED, WorkItemStatus.RUNNING]),
+            )
+            .values(
+                status=WorkItemStatus.RETRYABLE_FAILED,
+                last_heartbeat_at=expired_at,
+                lease_owner=None,
+                lease_expires_at=None,
+                error_class=error_class,
+                error_detail_json=error_detail_json,
+            )
+        )
         lease.status = WorkerLeaseStatus.EXPIRED
         lease.last_heartbeat_at = expired_at
         lease.released_at = expired_at
-        if work_item is None:
-            self.session.flush()
-            return None
-        if work_item.status not in {WorkItemStatus.LEASED, WorkItemStatus.RUNNING}:
-            self.session.flush()
-            return None
-        work_item.status = WorkItemStatus.RETRYABLE_FAILED
-        work_item.last_heartbeat_at = expired_at
-        work_item.lease_owner = None
-        work_item.lease_expires_at = None
-        work_item.error_class = error_class
-        work_item.error_detail_json = error_detail_json
         self.session.flush()
-        return work_item
+        if result.rowcount != 1:
+            return None
+        return self.session.get(WorkItem, lease.work_item_id)
 
     def list_expired_active_leases(self, run_id: str, *, expired_before: datetime) -> list[WorkerLease]:
         return self.session.scalars(
