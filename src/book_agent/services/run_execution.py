@@ -754,6 +754,7 @@ class RunExecutionService:
         run = self.repository.get_run(run_id)
         if run.status in {
             DocumentRunStatus.SUCCEEDED,
+            DocumentRunStatus.SUCCEEDED_WITH_WARNINGS,
             DocumentRunStatus.FAILED,
             DocumentRunStatus.CANCELLED,
             DocumentRunStatus.PAUSED,
@@ -806,25 +807,31 @@ class RunExecutionService:
                 },
             )
 
-        if outcome in (RunOutcome.SUCCEEDED, RunOutcome.SUCCEEDED_WITH_WARNINGS):
-            detail: dict[str, Any] = {
-                "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
-                "stage_status": stage_status_snapshot,
-                "run_outcome": outcome.value,
-            }
-            if outcome == RunOutcome.SUCCEEDED_WITH_WARNINGS:
-                # Optional stages failed while every required stage is green.
-                # Until P0.2c introduces DocumentRunStatus.SUCCEEDED_WITH_WARNINGS,
-                # the run terminal state stays ``SUCCEEDED`` and the warning
-                # signal lives in status_detail_json so the UI and downstream
-                # consumers can distinguish clean success from degraded success.
-                detail["has_warnings"] = True
-                detail["failed_optional_stages"] = [
-                    name
-                    for name, status in stage_status_by_name.items()
-                    if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
-                ]
-            return self.control_service.succeed_run_system(run_id, detail_json=detail)
+        if outcome == RunOutcome.SUCCEEDED:
+            return self.control_service.succeed_run_system(
+                run_id,
+                detail_json={
+                    "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
+                    "stage_status": stage_status_snapshot,
+                    "run_outcome": outcome.value,
+                },
+            )
+
+        if outcome == RunOutcome.SUCCEEDED_WITH_WARNINGS:
+            failed_optional_stages = [
+                name
+                for name, status in stage_status_by_name.items()
+                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+            ]
+            return self.control_service.succeed_run_with_warnings_system(
+                run_id,
+                detail_json={
+                    "completed_work_item_count": self.repository.count_succeeded_work_items(run_id),
+                    "stage_status": stage_status_snapshot,
+                    "run_outcome": outcome.value,
+                    "failed_optional_stages": failed_optional_stages,
+                },
+            )
 
         # RunOutcome.RUNNING — at least one required stage has not reached
         # SUCCEEDED, or an optional stage is still running. Leave the run

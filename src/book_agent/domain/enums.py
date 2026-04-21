@@ -295,6 +295,12 @@ class DocumentRunStatus(StrEnum):
     PAUSED = "paused"
     DRAINING = "draining"
     SUCCEEDED = "succeeded"
+    # Degraded-terminal state: every *required* pipeline stage reached
+    # SUCCEEDED but at least one *optional* stage (see
+    # ``book_agent.orchestrator.stage_status.OPTIONAL_PIPELINE_STAGES``)
+    # ended in FAILED. Emitted by :func:`classify_run_outcome`; persisted
+    # through :meth:`RunControlService.succeed_run_with_warnings_system`.
+    SUCCEEDED_WITH_WARNINGS = "succeeded_with_warnings"
     FAILED = "failed"
     CANCELLED = "cancelled"
 

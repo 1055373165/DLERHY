@@ -397,10 +397,11 @@ class RunOutcome(str, Enum):
       optional stage failed.
     * :data:`SUCCEEDED_WITH_WARNINGS` — every required stage is
       ``SUCCEEDED`` but at least one optional stage is ``FAILED``. The
-      terminal transition today still targets ``DocumentRunStatus.SUCCEEDED``
-      (P0.2c introduces the dedicated enum value), but the classifier
-      flags the degraded outcome so run-control can record it in
-      ``status_detail_json``.
+      reconciler routes this outcome to
+      :meth:`RunControlService.succeed_run_with_warnings_system`, which
+      persists :data:`DocumentRunStatus.SUCCEEDED_WITH_WARNINGS` (added in
+      P0.2c) and carries the list of failed optional stages in
+      ``status_detail_json.last_control.detail_json``.
     * :data:`FAILED` — at least one required stage is ``FAILED``.
     """
 

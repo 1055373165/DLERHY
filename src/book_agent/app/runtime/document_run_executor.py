@@ -415,7 +415,13 @@ class DocumentRunExecutor:
                     execution = self._run_execution_service(session)
                     summary = execution.reconcile_run_terminal_state(run_id=run_id)
                 self._sync_pipeline_status(run_id, summary.status)
-                if summary.status in {"succeeded", "failed", "paused", "cancelled"}:
+                if summary.status in {
+                    "succeeded",
+                    "succeeded_with_warnings",
+                    "failed",
+                    "paused",
+                    "cancelled",
+                }:
                     return
             except Exception as exc:  # pragma: no cover - defensive safety net
                 self._fail_run(run_id, stop_reason="runner.unhandled_exception", exc=exc)
@@ -1939,11 +1945,11 @@ class DocumentRunExecutor:
             )
 
     def _sync_pipeline_status(self, run_id: str, run_status: str) -> None:
-        if run_status == "succeeded":
+        if run_status in {"succeeded", "succeeded_with_warnings"}:
             with session_scope(self.session_factory) as session:
                 self._finalize_stage_snapshots_on_success(session, run_id)
                 self._do_update_pipeline_stage(
-                    session, run_id, "pipeline", "succeeded", None, "completed"
+                    session, run_id, "pipeline", run_status, None, "completed"
                 )
             return
         if run_status in {"failed", "paused", "cancelled"}:

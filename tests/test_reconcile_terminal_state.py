@@ -227,6 +227,40 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         self.assertEqual(summary.status, "failed")
         self.assertEqual(summary.stop_reason, "stage.evidence_failed")
 
+    def test_run_soft_succeeds_when_optional_stage_failed_while_translate_green(self) -> None:
+        # P0.2c: a translate-green run whose optional review stage failed
+        # must land on DocumentRunStatus.SUCCEEDED_WITH_WARNINGS, not on
+        # SUCCEEDED + has_warnings=true flag (the P0.2a interim). The
+        # failed optional stage is still recorded in the last-control
+        # payload so the UI can surface a degraded-completion badge.
+        _, run_id = self._seed(
+            translated_packet_count=1,
+            built_packet_count=0,
+            translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+        )
+        with self.session_factory() as session:
+            session.add(
+                WorkItem(
+                    run_id=run_id,
+                    stage=WorkItemStage.REVIEW,
+                    scope_type=WorkItemScopeType.PACKET,
+                    scope_id=str(uuid4()),
+                    status=WorkItemStatus.TERMINAL_FAILED,
+                    attempt=1,
+                    priority=100,
+                )
+            )
+            session.commit()
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "succeeded_with_warnings")
+        last_control = summary.status_detail_json.get("last_control") or {}
+        self.assertEqual(last_control.get("action"), "run.succeeded_with_warnings")
+        detail = last_control.get("detail_json") or {}
+        self.assertEqual(detail.get("run_outcome"), "succeeded_with_warnings")
+        self.assertEqual(detail.get("failed_optional_stages"), ["review"])
+
     def test_run_fails_when_translate_work_item_terminal_failed(self) -> None:
         # Evidence-driven failure: TERMINAL_FAILED work_item makes
         # :class:`StageStatusCalculator` return FAILED for translate,

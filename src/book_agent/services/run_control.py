@@ -561,6 +561,35 @@ class RunControlService:
             actor_type=ActorType.SYSTEM,
         )
 
+    def succeed_run_with_warnings_system(
+        self,
+        run_id: str,
+        *,
+        detail_json: dict[str, Any] | None = None,
+    ) -> DocumentRunSummary:
+        # Degraded-terminal landing: every required pipeline stage reached
+        # SUCCEEDED but at least one optional stage ended in FAILED. This
+        # is still a *terminal* state — callers should not attempt to
+        # re-run the pipeline in place; a retry is a fresh run (see P0.3).
+        # The allowed_from set matches :meth:`succeed_run_system`; only a
+        # live / draining run can soft-succeed, not one that was paused
+        # by the operator or otherwise held.
+        run = self.repository.get_run(run_id)
+        if run.status == DocumentRunStatus.SUCCEEDED_WITH_WARNINGS:
+            return self.get_run_summary(run_id)
+        if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
+            return self.get_run_summary(run_id)
+        return self._transition_run(
+            run_id=run_id,
+            allowed_from={DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING},
+            next_status=DocumentRunStatus.SUCCEEDED_WITH_WARNINGS,
+            event_type="run.succeeded_with_warnings",
+            actor_id="system.run-control",
+            note=None,
+            detail_json=detail_json or {},
+            actor_type=ActorType.SYSTEM,
+        )
+
     def fail_run_system(
         self,
         run_id: str,
@@ -641,7 +670,12 @@ class RunControlService:
         run.status = next_status
         if next_status == DocumentRunStatus.RUNNING and run.started_at is None:
             run.started_at = now
-        if next_status in {DocumentRunStatus.CANCELLED, DocumentRunStatus.FAILED, DocumentRunStatus.SUCCEEDED}:
+        if next_status in {
+            DocumentRunStatus.CANCELLED,
+            DocumentRunStatus.FAILED,
+            DocumentRunStatus.SUCCEEDED,
+            DocumentRunStatus.SUCCEEDED_WITH_WARNINGS,
+        }:
             run.finished_at = now
         else:
             run.finished_at = None
