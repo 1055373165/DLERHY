@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -414,6 +414,28 @@ class RuntimeBundleRevision(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class WorkItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "work_items"
+    # Partial UNIQUE index on *active* rows: at most one work_item per
+    # (run_id, stage, scope_type, scope_id) can be in a live status at
+    # a time. Terminal rows (succeeded/terminal_failed/cancelled) are
+    # excluded so the REPAIR stage can reseed after a prior attempt
+    # terminates. Backs the app-layer dedupe in
+    # RunExecutionService.seed_work_items against concurrent seeders.
+    __table_args__ = (
+        Index(
+            "uq_work_items_active_scope",
+            "run_id",
+            "stage",
+            "scope_type",
+            "scope_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending','leased','running','retryable_failed')"
+            ),
+            sqlite_where=text(
+                "status IN ('pending','leased','running','retryable_failed')"
+            ),
+        ),
+    )
 
     run_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
