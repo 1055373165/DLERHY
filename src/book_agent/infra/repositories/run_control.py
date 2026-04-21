@@ -58,6 +58,15 @@ class RunControlRepository:
             raise ValueError(f"Document run not found: {run_id}")
         return run
 
+    def list_runs_for_document(self, document_id: str) -> list[DocumentRun]:
+        return list(
+            self.session.scalars(
+                select(DocumentRun)
+                .where(DocumentRun.document_id == document_id)
+                .order_by(DocumentRun.created_at.asc(), DocumentRun.id.asc())
+            ).all()
+        )
+
     def get_work_item(self, work_item_id: str) -> WorkItem:
         work_item = self.session.get(WorkItem, work_item_id)
         if work_item is None:

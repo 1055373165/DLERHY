@@ -88,6 +88,30 @@ class DocumentRunSummary:
 
 
 @dataclass(slots=True)
+class RunLineageNode:
+    run_id: str
+    document_id: str
+    run_type: str
+    status: str
+    resume_from_run_id: str | None
+    requested_by: str | None
+    stop_reason: str | None
+    created_at: str
+    updated_at: str
+    started_at: str | None
+    finished_at: str | None
+
+
+@dataclass(slots=True)
+class RunLineageChain:
+    focus_run_id: str
+    root_run_id: str
+    document_id: str
+    node_count: int
+    nodes: list[RunLineageNode]
+
+
+@dataclass(slots=True)
 class RunAuditEventRecord:
     event_id: str
     run_id: str
@@ -274,6 +298,62 @@ class RunControlService:
                 event_count=event_count,
                 latest_event_at=self._isoformat(latest_event_at),
             ),
+        )
+
+    def get_run_lineage(self, run_id: str) -> RunLineageChain:
+        # Walk the resume_from_run_id chain. Retry produces a new row
+        # pointing at its predecessor (see retry_run), so lineage is a
+        # tree rooted at whichever run has resume_from_run_id=None.
+        # Callers want to see the whole chain for the focus run — both
+        # ancestors (one per generation) and descendants (possibly
+        # branching, since an operator could retry the same predecessor
+        # twice). We materialize every run for the document once, then
+        # walk the graph in memory instead of issuing per-row queries.
+        focus = self.repository.get_run(run_id)
+        runs = self.repository.list_runs_for_document(focus.document_id)
+        by_id: dict[str, DocumentRun] = {r.id: r for r in runs}
+        children_by_parent: dict[str | None, list[DocumentRun]] = {}
+        for run in runs:
+            children_by_parent.setdefault(run.resume_from_run_id, []).append(run)
+
+        root = focus
+        while root.resume_from_run_id and root.resume_from_run_id in by_id:
+            root = by_id[root.resume_from_run_id]
+
+        collected: dict[str, DocumentRun] = {}
+        queue: list[DocumentRun] = [root]
+        while queue:
+            current = queue.pop(0)
+            if current.id in collected:
+                continue
+            collected[current.id] = current
+            queue.extend(children_by_parent.get(current.id, []))
+
+        ordered = sorted(
+            collected.values(),
+            key=lambda r: (r.created_at or datetime.min.replace(tzinfo=timezone.utc), r.id),
+        )
+        return RunLineageChain(
+            focus_run_id=focus.id,
+            root_run_id=root.id,
+            document_id=focus.document_id,
+            node_count=len(ordered),
+            nodes=[self._to_lineage_node(r) for r in ordered],
+        )
+
+    def _to_lineage_node(self, run: DocumentRun) -> RunLineageNode:
+        return RunLineageNode(
+            run_id=run.id,
+            document_id=run.document_id,
+            run_type=run.run_type.value,
+            status=run.status.value,
+            resume_from_run_id=run.resume_from_run_id,
+            requested_by=run.requested_by,
+            stop_reason=run.stop_reason,
+            created_at=self._isoformat(run.created_at),
+            updated_at=self._isoformat(run.updated_at),
+            started_at=self._isoformat(run.started_at),
+            finished_at=self._isoformat(run.finished_at),
         )
 
     def get_run_events(

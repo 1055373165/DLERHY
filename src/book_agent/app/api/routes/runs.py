@@ -9,6 +9,7 @@ from book_agent.schemas.run_control import (
     DocumentRunSummaryResponse,
     RunAuditEventPageResponse,
     RunControlRequest,
+    RunLineageResponse,
 )
 from book_agent.services.run_control import (
     DocumentRunSummary,
@@ -16,6 +17,7 @@ from book_agent.services.run_control import (
     RunBudgetSummary,
     RunControlService,
     RunControlTransitionError,
+    RunLineageChain,
 )
 
 router = APIRouter()
@@ -149,6 +151,43 @@ def get_run_summary(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     _wake_executor_for_active_summary(request, summary)
     return _to_run_summary_response(summary)
+
+
+def _to_run_lineage_response(chain: RunLineageChain) -> RunLineageResponse:
+    return RunLineageResponse(
+        focus_run_id=chain.focus_run_id,
+        root_run_id=chain.root_run_id,
+        document_id=chain.document_id,
+        node_count=chain.node_count,
+        nodes=[
+            {
+                "run_id": node.run_id,
+                "document_id": node.document_id,
+                "run_type": node.run_type,
+                "status": node.status,
+                "resume_from_run_id": node.resume_from_run_id,
+                "requested_by": node.requested_by,
+                "stop_reason": node.stop_reason,
+                "created_at": node.created_at,
+                "updated_at": node.updated_at,
+                "started_at": node.started_at,
+                "finished_at": node.finished_at,
+            }
+            for node in chain.nodes
+        ],
+    )
+
+
+@router.get("/{run_id}/lineage", response_model=RunLineageResponse)
+def get_run_lineage(
+    run_id: str,
+    session: Session = Depends(get_db_session),
+) -> RunLineageResponse:
+    try:
+        chain = _service(session).get_run_lineage(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _to_run_lineage_response(chain)
 
 
 @router.get("/{run_id}/events", response_model=RunAuditEventPageResponse)

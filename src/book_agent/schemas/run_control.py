@@ -89,6 +89,28 @@ class DocumentRunSummaryResponse(BaseSchema):
     events: RunEventSummaryResponse
 
 
+class RunLineageNodeResponse(BaseSchema):
+    run_id: str
+    document_id: str
+    run_type: str
+    status: str
+    resume_from_run_id: str | None = None
+    requested_by: str | None = None
+    stop_reason: str | None = None
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class RunLineageResponse(BaseSchema):
+    focus_run_id: str
+    root_run_id: str
+    document_id: str
+    node_count: int
+    nodes: list[RunLineageNodeResponse] = Field(default_factory=list)
+
+
 class RunAuditEventResponse(BaseSchema):
     event_id: str
     run_id: str
