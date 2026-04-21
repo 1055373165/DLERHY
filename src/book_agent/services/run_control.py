@@ -38,6 +38,10 @@ class RunBudgetSummary:
     max_parallel_workers: int | None
     max_parallel_requests_per_provider: int | None
     max_auto_followup_attempts: int | None
+    # No-progress guardrail (P0.2b). Kept optional so existing callers
+    # (pydantic request models, API clients) continue to work unchanged
+    # until they opt into configuring it.
+    max_no_progress_seconds: int | None = None
 
 
 @dataclass(slots=True)
@@ -802,12 +806,14 @@ class RunControlService:
                 budget.max_parallel_workers,
                 budget.max_parallel_requests_per_provider,
                 budget.max_auto_followup_attempts,
+                budget.max_no_progress_seconds,
             )
         ):
             return None
         return RunBudget(
             run_id="",
             max_wall_clock_seconds=budget.max_wall_clock_seconds,
+            max_no_progress_seconds=budget.max_no_progress_seconds,
             max_total_cost_usd=budget.max_total_cost_usd,
             max_total_token_in=budget.max_total_token_in,
             max_total_token_out=budget.max_total_token_out,
@@ -823,6 +829,7 @@ class RunControlService:
             return None
         return RunBudgetSummary(
             max_wall_clock_seconds=budget.max_wall_clock_seconds,
+            max_no_progress_seconds=budget.max_no_progress_seconds,
             max_total_cost_usd=(float(budget.max_total_cost_usd) if budget.max_total_cost_usd is not None else None),
             max_total_token_in=budget.max_total_token_in,
             max_total_token_out=budget.max_total_token_out,

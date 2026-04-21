@@ -8,6 +8,7 @@ from book_agent.schemas.common import BaseSchema
 
 class RunBudgetRequest(BaseSchema):
     max_wall_clock_seconds: int | None = Field(default=None, ge=1)
+    max_no_progress_seconds: int | None = Field(default=None, ge=1)
     max_total_cost_usd: float | None = Field(default=None, ge=0)
     max_total_token_in: int | None = Field(default=None, ge=1)
     max_total_token_out: int | None = Field(default=None, ge=1)
@@ -38,6 +39,7 @@ class RunControlRequest(BaseSchema):
 
 class RunBudgetResponse(BaseSchema):
     max_wall_clock_seconds: int | None = None
+    max_no_progress_seconds: int | None = None
     max_total_cost_usd: float | None = None
     max_total_token_in: int | None = None
     max_total_token_out: int | None = None

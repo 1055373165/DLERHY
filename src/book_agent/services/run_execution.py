@@ -682,6 +682,34 @@ class RunExecutionService:
             )
             return RunBudgetGuardrailResult(summary, True, "budget.wall_clock_exceeded")
 
+        if budget.max_no_progress_seconds is not None:
+            last_progress_at = self._last_progress_at(
+                detail=detail, run_started_at=baseline_started_at
+            )
+            no_progress_seconds = int((now - last_progress_at).total_seconds())
+            if no_progress_seconds >= budget.max_no_progress_seconds:
+                # Stuck detection: the frontier hasn't produced a
+                # successful work item for the configured window. The
+                # most common cause is every remaining work item cycling
+                # in RETRYABLE_FAILED without ever succeeding — surface
+                # that count so operators can diagnose, but pause rather
+                # than fail so a ``resume_run`` after a provider fix
+                # doesn't need a clean-retry cold start.
+                stuck_retryable_failed = self.repository.count_work_items_in_status(
+                    run_id, WorkItemStatus.RETRYABLE_FAILED
+                )
+                summary = self.control_service.pause_run_system(
+                    run_id,
+                    stop_reason="budget.no_progress_exceeded",
+                    detail_json={
+                        "no_progress_seconds": no_progress_seconds,
+                        "max_no_progress_seconds": budget.max_no_progress_seconds,
+                        "last_progress_at": last_progress_at.isoformat(),
+                        "stuck_retryable_failed_work_item_count": stuck_retryable_failed,
+                    },
+                )
+                return RunBudgetGuardrailResult(summary, True, "budget.no_progress_exceeded")
+
         total_cost_usd = float(usage.get("cost_usd", 0.0) or 0.0)
         if budget.max_total_cost_usd is not None and total_cost_usd >= float(budget.max_total_cost_usd):
             summary = self.control_service.pause_run_system(
@@ -838,6 +866,33 @@ class RunExecutionService:
         # in its current non-terminal status and let the main loop advance
         # the frontier.
         return self.control_service.get_run_summary(run_id)
+
+    def _last_progress_at(
+        self, *, detail: dict[str, Any], run_started_at: datetime
+    ) -> datetime:
+        """Timestamp of the most recent successful work-item completion.
+
+        Falls back to ``run_started_at`` when no progress has been
+        recorded yet, so a run that stalls before its first success
+        still trips the no-progress guardrail. The upstream writer
+        (:meth:`_bump_success_progress`) always stores the timestamp as
+        an ISO-8601 string in ``status_detail_json.last_progress.completed_at``;
+        if parsing fails or the field is missing, we conservatively use
+        ``run_started_at`` rather than crash the guardrail.
+        """
+        progress = detail.get("last_progress")
+        if isinstance(progress, dict):
+            raw = progress.get("completed_at")
+            if isinstance(raw, str) and raw:
+                try:
+                    parsed = datetime.fromisoformat(raw)
+                except ValueError:
+                    parsed = None
+                if parsed is not None:
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    return parsed.astimezone(timezone.utc)
+        return run_started_at
 
     def _bump_success_progress(
         self,

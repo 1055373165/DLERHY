@@ -54,6 +54,7 @@ def _to_run_summary_response(summary: DocumentRunSummary) -> DocumentRunSummaryR
         budget=(
             {
                 "max_wall_clock_seconds": summary.budget.max_wall_clock_seconds,
+                "max_no_progress_seconds": summary.budget.max_no_progress_seconds,
                 "max_total_cost_usd": summary.budget.max_total_cost_usd,
                 "max_total_token_in": summary.budget.max_total_token_in,
                 "max_total_token_out": summary.budget.max_total_token_out,

@@ -229,6 +229,14 @@ class RunControlRepository:
             )
         ) or 0
 
+    def count_work_items_in_status(self, run_id: str, status: WorkItemStatus) -> int:
+        return self.session.scalar(
+            select(func.count(WorkItem.id)).where(
+                WorkItem.run_id == run_id,
+                WorkItem.status == status,
+            )
+        ) or 0
+
     def count_built_packets_for_document(self, document_id: str) -> int:
         return self.session.scalar(
             select(func.count(TranslationPacket.id))

@@ -484,6 +484,14 @@ class RunBudget(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         unique=True,
     )
     max_wall_clock_seconds: Mapped[int | None] = mapped_column(Integer)
+    # Maximum seconds since the last successful work-item completion
+    # (``status_detail_json.last_progress.completed_at``), falling back
+    # to ``run.started_at`` if nothing has succeeded yet. When the window
+    # elapses, ``enforce_budget_guardrails`` flips the run to PAUSED with
+    # ``stop_reason="budget.no_progress_exceeded"`` — a softer guardrail
+    # than ``max_wall_clock_seconds`` because it automatically rolls
+    # forward each time the frontier makes progress. See P0.2b.
+    max_no_progress_seconds: Mapped[int | None] = mapped_column(Integer)
     max_total_cost_usd: Mapped[float | None] = mapped_column(Numeric(12, 6))
     max_total_token_in: Mapped[int | None] = mapped_column(Integer)
     max_total_token_out: Mapped[int | None] = mapped_column(Integer)
