@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -18,6 +18,7 @@ from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
 from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
+from book_agent.infra.concurrency.rebuild_lock import try_acquire_rebuild_lock
 
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
@@ -161,12 +162,44 @@ def _by_basename_under_document(
     return None
 
 
+_UNRECOVERABLE_SCHEME = "unrecoverable://"
+
+
+def _assert_record_serviceable(record: Any) -> None:
+    # Short-circuit deterministic 410 Gone when the row is known-stale.
+    # This is set either by the M1 legacy backfill migration (for old
+    # tempdir-rooted rows) or by future verifier/reaper jobs. Doing this
+    # check BEFORE filesystem resolution means we never accidentally
+    # serve a half-healed artifact when the metadata says the row is
+    # poisoned.
+    stale = getattr(record, "stale_reason", None)
+    file_path = getattr(record, "file_path", "") or ""
+    if stale or file_path.startswith(_UNRECOVERABLE_SCHEME):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                f"Export artifact is permanently unavailable "
+                f"(reason: {stale or 'unrecoverable_sentinel'}). "
+                "Re-export the document to generate a fresh artifact."
+            ),
+        )
+
+
 def _resolve_artifact_path(
     candidate: str | Path,
     *,
     roots: tuple[Path, ...],
     document_id: str | None = None,
 ) -> Path:
+    # Belt-and-suspenders: even if a caller forgot to run
+    # _assert_record_serviceable, an `unrecoverable://…` path must never
+    # be interpreted as a filesystem path.
+    candidate_str = str(candidate)
+    if candidate_str.startswith(_UNRECOVERABLE_SCHEME):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Export artifact is permanently unavailable (unrecoverable sentinel).",
+        )
     resolved = Path(candidate).resolve()
     fallback_candidates = [resolved, *_artifact_fallback_candidates(resolved)]
     for fallback_path in fallback_candidates:
@@ -1569,6 +1602,7 @@ def download_document_chapter_export(
             detail=f"No successful {export_type.value} export is available for chapter {chapter_id}.",
         )
 
+    _assert_record_serviceable(chapter_record)
     artifact_roots = _artifact_roots(request)
     file_path = _resolve_artifact_path(
         chapter_record.file_path, roots=artifact_roots, document_id=document_id
@@ -1663,13 +1697,64 @@ def download_document_export(
     }
     label = label_map.get(export_type, export_type.value)
 
+    # If every matching record is marked stale, fail fast with a
+    # consistent 410 rather than letting _resolve_artifact_path bubble
+    # a 404 and confuse operators.
+    for record in primary_records:
+        _assert_record_serviceable(record)
     artifact_roots = _artifact_roots(request)
-    files = [
-        _resolve_artifact_path(
-            record.file_path, roots=artifact_roots, document_id=document_id
-        )
-        for record in primary_records
-    ]
+    try:
+        files = [
+            _resolve_artifact_path(
+                record.file_path, roots=artifact_roots, document_id=document_id
+            )
+            for record in primary_records
+        ]
+    except HTTPException as exc:
+        # Records exist but file is missing on disk. This is the M1.3
+        # self-heal path: attempt one idempotent rebuild under a
+        # two-layer try-lock (process + pg advisory). The lock makes
+        # concurrent downloads of the same (doc, type) NOT thundering-
+        # herd ``export_document`` and race to overwrite the output.
+        if exc.status_code != status.HTTP_404_NOT_FOUND:
+            raise
+        with try_acquire_rebuild_lock(
+            session, document_id, lookup_type.value
+        ) as acquired:
+            if not acquired:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Export rebuild in progress for this document; retry shortly.",
+                    headers={"Retry-After": "5"},
+                ) from exc
+            try:
+                workflow.export_document(document_id, lookup_type)
+                session.flush()
+            except HTTPException:
+                raise
+            except Exception as rebuild_exc:
+                # Export gates (chapter not reviewed, review package stale,
+                # etc.) surface here. The artifact is genuinely gone and
+                # cannot be regenerated under current state — a 422 points
+                # the operator at the gate they need to clear, rather than
+                # the useless 404 they'd get without this branch.
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Export rebuild failed: {rebuild_exc}",
+                ) from rebuild_exc
+            primary_records = workflow.export_repository.list_document_exports_filtered(
+                document_id,
+                export_type=lookup_type,
+                status=ExportStatus.SUCCEEDED,
+            )
+        for record in primary_records:
+            _assert_record_serviceable(record)
+        files = [
+            _resolve_artifact_path(
+                record.file_path, roots=artifact_roots, document_id=document_id
+            )
+            for record in primary_records
+        ]
 
     # Use the latest (last) primary record only — deliver a single merged file
     file_path = files[-1]

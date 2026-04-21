@@ -7,6 +7,10 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.pipeline_stage_cache import (
+    read_cached_stages,
+    write_cached_stages,
+)
 from book_agent.orchestrator.stage_status import (
     PIPELINE_STAGES,
     StageStatus,
@@ -530,10 +534,8 @@ class RunControlService:
         # projection on the next flush. We rebuild the ``pipeline.stages``
         # branch with fresh dicts to keep this method a read-side projection.
         pipeline = status_detail_json.get("pipeline")
-        if not isinstance(pipeline, dict):
-            return
-        stages = pipeline.get("stages")
-        if not isinstance(stages, dict):
+        stages = read_cached_stages(pipeline)
+        if stages is None:
             return
         calculator = StageStatusCalculator(self.repository.session)
         projected_stages = dict(stages)
@@ -549,7 +551,7 @@ class RunControlService:
             new_detail["status"] = stage_status_to_cache_label(derived)
             projected_stages[stage_name] = new_detail
         projected_pipeline = dict(pipeline)
-        projected_pipeline["stages"] = projected_stages
+        write_cached_stages(projected_pipeline, projected_stages)
         status_detail_json["pipeline"] = projected_pipeline
 
     def _first_failed_pipeline_stage(self, run_id: str) -> str | None:
@@ -860,15 +862,16 @@ class RunControlService:
         if isinstance(pipeline, dict):
             pipeline_copy = dict(pipeline)
             pipeline_copy["current_stage"] = "translate"
-            stages = pipeline_copy.get("stages")
-            if isinstance(stages, dict):
-                pipeline_copy["stages"] = {
+            stages = read_cached_stages(pipeline_copy)
+            if stages is not None:
+                reset_stages = {
                     stage_name: {
                         **(stage_value if isinstance(stage_value, dict) else {}),
                         "status": "pending",
                     }
                     for stage_name, stage_value in stages.items()
                 }
+                write_cached_stages(pipeline_copy, reset_stages)
             merged["pipeline"] = pipeline_copy
         return merged
 

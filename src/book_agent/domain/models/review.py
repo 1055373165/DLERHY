@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, Numeric, Text, Uuid
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -118,6 +119,24 @@ class IssueAction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "exports"
+    __table_args__ = (
+        # Structural guardrail: reject the exact pollution pattern that
+        # caused the M0 incident — file_path pointing at an OS tempdir
+        # that will be cleaned up out from under us. A route-level check
+        # alone is insufficient because any writer (including a new
+        # test harness) could still INSERT a tempdir path. This CHECK
+        # makes that class of pollution impossible to land in the first
+        # place. The `unrecoverable://<basename>` scheme is a deliberate
+        # sentinel for rows whose artifact is known-gone (set by the M1
+        # migration backfill); it does NOT match the regex.
+        CheckConstraint(
+            "file_path NOT LIKE '/var/folders/%' "
+            "AND file_path NOT LIKE '/private/var/folders/%' "
+            "AND file_path NOT LIKE '/tmp/%' "
+            "AND file_path NOT LIKE '/private/tmp/%'",
+            name="exports_file_path_no_tempdir_check",
+        ),
+    )
 
     document_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
@@ -134,6 +153,15 @@ class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_value_type(ExportStatus, name="export_status"),
         nullable=False,
     )
+    # M1: artifact integrity fields. sha256 + byte_count let a verifier
+    # detect tampering or silent corruption; last_verified_at supports
+    # lazy re-verification on reads; stale_reason marks rows whose
+    # artifact is known-gone so the download route can return 410 Gone
+    # deterministically instead of re-inferring from a missing file.
+    content_sha256: Mapped[str | None] = mapped_column(Text)
+    byte_count: Mapped[int | None] = mapped_column(BigInteger)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stale_reason: Mapped[str | None] = mapped_column(Text)
 
     @property
     def runtime_v2_context(self) -> dict[str, Any] | None:

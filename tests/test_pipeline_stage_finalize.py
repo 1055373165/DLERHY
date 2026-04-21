@@ -72,7 +72,14 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
     def _read_stages(self, run_id: str) -> dict:
         with self.session_factory() as session:
             run = RunControlRepository(session).get_run(run_id)
-            return dict((run.status_detail_json or {}).get("pipeline", {}).get("stages") or {})
+            pipeline = (run.status_detail_json or {}).get("pipeline") or {}
+            # Writes migrate the fixture's legacy ``stages`` key to
+            # ``_cached_pipeline_stages``; tests that read after a write
+            # must target the new key to see what the executor persisted.
+            cached = pipeline.get("_cached_pipeline_stages")
+            if isinstance(cached, dict):
+                return dict(cached)
+            return dict(pipeline.get("stages") or {})
 
     def test_sync_pipeline_status_mirrors_derived_status_without_fabricating_success(self) -> None:
         # Contract (post state-consistency refactor): the stage cache must
@@ -163,7 +170,8 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
             run = RunControlRepository(session).get_run(run_id)
             detail = run.status_detail_json or {}
             pipeline = detail.get("pipeline") or {}
-            self.assertEqual(pipeline.get("stages", {}).get("pipeline", {}).get("status"), "succeeded")
+            cached = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
+            self.assertEqual(cached.get("pipeline", {}).get("status"), "succeeded")
 
     def test_sync_pipeline_status_propagates_non_success_terminal(self) -> None:
         run_id = self._seed_run(

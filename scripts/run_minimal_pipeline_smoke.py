@@ -13,6 +13,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# Pin scope BEFORE importing anything from book_agent — Settings is
+# lru_cached, and AppScope.SMOKE is what allows build_engine to block
+# a stray non-sqlite URL. Without this, any contributor who runs the
+# smoke with a leftover BOOK_AGENT_DATABASE_URL in .env will silently
+# re-introduce the M0 pollution class.
+os.environ.setdefault("BOOK_AGENT_APP_SCOPE", "smoke")
 os.environ.setdefault("BOOK_AGENT_TRANSLATION_BACKEND", "echo")
 os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 
@@ -98,6 +104,9 @@ def _run_case(
     database_url: str | None,
     allow_shared_db: bool = False,
 ) -> dict[str, Any]:
+    # case_dir must exist before we hand its path to sqlite — otherwise
+    # "unable to open database file" before any of our guards get a say.
+    case_dir.mkdir(parents=True, exist_ok=True)
     resolved_url = _resolve_smoke_database_url(
         database_url, case_dir, allow_shared_db=allow_shared_db
     )

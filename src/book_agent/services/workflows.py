@@ -43,6 +43,7 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
 from book_agent.orchestrator.rerun import build_rerun_plan, packet_scope_ids_for_issue
 from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts
@@ -261,7 +262,7 @@ def _history_run_progress(run: DocumentRun | None) -> tuple[str | None, int | No
         return None, None, None
     detail = dict(run.status_detail_json or {})
     pipeline = dict(detail.get("pipeline") or {})
-    stages = dict(pipeline.get("stages") or {})
+    stages = dict(read_cached_stages(pipeline) or {})
     translate = dict(stages.get("translate") or {})
     counters = dict(detail.get("control_counters") or {})
     current_stage = pipeline.get("current_stage")

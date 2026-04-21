@@ -34,6 +34,10 @@ from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.orchestrator.frontier_plan import TranslateFrontierPlan
+from book_agent.orchestrator.pipeline_stage_cache import (
+    read_cached_stages,
+    write_cached_stages,
+)
 from book_agent.orchestrator.reconciler import Reconciler
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
@@ -1954,7 +1958,7 @@ class DocumentRunExecutor:
         run = repository.get_run(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
-        stages = dict(pipeline.get("stages") or {})
+        stages = dict(read_cached_stages(pipeline) or {})
         stage_detail = dict(stages.get(stage_key) or {})
         previous_status = stage_detail.get("status", "unknown")
         stage_detail["status"] = status
@@ -1962,7 +1966,7 @@ class DocumentRunExecutor:
         if extra:
             stage_detail.update(extra)
         stages[stage_key] = stage_detail
-        pipeline["stages"] = stages
+        write_cached_stages(pipeline, stages)
         if current_stage is not None:
             pipeline["current_stage"] = current_stage
         detail["pipeline"] = pipeline
@@ -2004,7 +2008,7 @@ class DocumentRunExecutor:
         run = repository.get_run(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
-        stages = dict(pipeline.get("stages") or {})
+        stages = dict(read_cached_stages(pipeline) or {})
         if not stages:
             return
         calculator = StageStatusCalculator(session)
@@ -2032,7 +2036,7 @@ class DocumentRunExecutor:
             changed = True
         if not changed:
             return
-        pipeline["stages"] = stages
+        write_cached_stages(pipeline, stages)
         detail["pipeline"] = pipeline
         run.status_detail_json = detail
         repository.save_run(run)

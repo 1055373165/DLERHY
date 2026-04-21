@@ -8,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 from book_agent.app.api.router import api_router
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.app.ui.router import router as ui_router
-from book_agent.core.config import get_settings
+from book_agent.core.config import get_settings, validate_app_scope
 from book_agent.core.logging import configure_logging
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
@@ -45,6 +45,7 @@ def _ensure_database_state(app: FastAPI, *, settings) -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    validate_app_scope(settings)
     configure_logging(settings.log_level)
 
     @asynccontextmanager

@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
@@ -7,6 +8,34 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
+
+
+class AppScope(str, Enum):
+    """Isolation scope for a running instance.
+
+    Binds (Settings × Session factory × artifact roots) to a single
+    declared identity so a smoke/e2e harness cannot accidentally be
+    pointed at a shared (non-sqlite) DB — which was the root cause of
+    the tempdir-poisoned ExportRecords fixed in M0.
+
+    Enforcement rules (see ``validate_app_scope``):
+
+    * ``SMOKE`` — REFUSES non-sqlite DB URLs. Smoke writes ExportRecord
+      rows whose file_path points at per-run tempdirs; those rows are
+      garbage the moment the tempdir is cleaned up, so they must never
+      land in a shared DB.
+    * ``E2E`` — same restriction as SMOKE by default; e2e fixtures are
+      tempdir-rooted too.
+    * ``DEV`` — permissive; dev compose uses Postgres on :55432.
+    * ``PROD`` — permissive in the positive direction (any URL allowed),
+      but WARN-logged if sqlite is detected since prod on sqlite is
+      almost certainly a misconfiguration.
+    """
+
+    PROD = "prod"
+    DEV = "dev"
+    SMOKE = "smoke"
+    E2E = "e2e"
 
 
 class _SanitizedEnvSettingsSource:
@@ -25,6 +54,7 @@ class Settings(BaseSettings):
     app_name: str = "book-agent"
     app_version: str = "0.1.0"
     environment: str = "development"
+    app_scope: AppScope = AppScope.DEV
     api_prefix: str = "/v1"
     log_level: str = "INFO"
     database_url: str = Field(
@@ -111,3 +141,22 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+class AppScopeViolation(RuntimeError):
+    """Raised when the declared AppScope is incompatible with the DB URL."""
+
+
+def validate_app_scope(settings: Settings) -> None:
+    # SMOKE/E2E fixtures write ExportRecord rows whose file_path points
+    # at tempdirs; that state is meaningless to anyone else and actively
+    # poisons downloads if it lands in a shared DB. Block at startup so
+    # the failure surfaces in the import-time traceback, not at the
+    # first stray INSERT hours into a run.
+    url = settings.database_url
+    if settings.app_scope in {AppScope.SMOKE, AppScope.E2E} and not url.startswith("sqlite"):
+        raise AppScopeViolation(
+            f"app_scope={settings.app_scope.value} requires a sqlite database_url "
+            f"(got {url!r}). Non-sqlite URLs are refused to prevent "
+            "tempdir-rooted ExportRecords from polluting shared databases."
+        )

@@ -1160,7 +1160,9 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(stale_item.status, WorkItemStatus.CANCELLED)
         self.assertEqual(stale_item.error_class, "stale_translate_packet_reference")
         self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "review")
-        self.assertEqual(summary.status_detail_json["pipeline"]["stages"]["translate"]["status"], "succeeded")
+        pipeline = summary.status_detail_json["pipeline"]
+        cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
+        self.assertEqual(cached_stages["translate"]["status"], "succeeded")
 
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))

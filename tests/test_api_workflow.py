@@ -1191,7 +1191,8 @@ class ApiWorkflowTests(unittest.TestCase):
             self.assertIsNotNone(run)
             assert run is not None
             pipeline = dict((run.status_detail_json or {}).get("pipeline") or {})
-            review_stage = dict((pipeline.get("stages") or {}).get("review") or {})
+            cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
+            review_stage = dict(cached_stages.get("review") or {})
             self.assertEqual(review_stage.get("status"), "succeeded")
             self.assertTrue(review_stage.get("blocker_repair_requested"))
             self.assertTrue(review_stage.get("blocker_repair_applied"))
@@ -1298,7 +1299,8 @@ class ApiWorkflowTests(unittest.TestCase):
             self.assertIsNotNone(run)
             assert run is not None
             pipeline = dict((run.status_detail_json or {}).get("pipeline") or {})
-            review_stage = dict((pipeline.get("stages") or {}).get("review") or {})
+            cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
+            review_stage = dict(cached_stages.get("review") or {})
             self.assertEqual(review_stage.get("status"), "failed")
             self.assertTrue(review_stage.get("blocker_repair_requested"))
             self.assertTrue(review_stage.get("blocker_repair_applied"))

@@ -607,11 +607,23 @@ class Event(Base):
 
     __tablename__ = "events"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        # sqlite autoincrement only works on INTEGER PRIMARY KEY (ROWID
+        # alias), not BIGINT. Use the dialect variant so Postgres still
+        # gets BIGINT (matching prod migrations) while the smoke sqlite
+        # schema gets a working autoincrement.
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.clock_timestamp(),
+        # Was func.clock_timestamp() (Postgres-only, per-row real-time
+        # clock). Swapped to current_timestamp() — ANSI SQL, works in
+        # sqlite. Consumers resume by id, so per-row clock granularity
+        # was cosmetic.
+        server_default=func.current_timestamp(),
     )
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     run_id: Mapped[str | None] = mapped_column(Text)

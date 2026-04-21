@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
 from book_agent.orchestrator.stage_status import (
     PIPELINE_STAGES,
     StageStatus,
@@ -150,10 +151,8 @@ class Reconciler:
 def _cache_status(run: DocumentRun, stage_key: str) -> str | None:
     detail = run.status_detail_json or {}
     pipeline = detail.get("pipeline") if isinstance(detail, dict) else None
-    if not isinstance(pipeline, dict):
-        return None
-    stages = pipeline.get("stages")
-    if not isinstance(stages, dict):
+    stages = read_cached_stages(pipeline)
+    if stages is None:
         return None
     stage = stages.get(stage_key)
     if not isinstance(stage, dict):
