@@ -1008,12 +1008,12 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))
-            seedable = executor._list_seedable_translate_packet_ids(
+            seedable = executor._plan_translate_frontier(
                 session=session,
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=[],
-            )
+            ).packet_ids
             self.assertEqual(set(seedable), {chapter_one_first, chapter_two_first})
 
             execution.seed_translate_work_items(
@@ -1024,12 +1024,12 @@ class RunExecutionServiceTests(unittest.TestCase):
             translate_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             self.assertEqual(len(translate_items), 2)
 
-            blocked_seedable = executor._list_seedable_translate_packet_ids(
+            blocked_seedable = executor._plan_translate_frontier(
                 session=session,
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=translate_items,
-            )
+            ).packet_ids
             self.assertEqual(blocked_seedable, [])
 
             completed_item = next(item for item in translate_items if str(item.scope_id) == chapter_one_first)
@@ -1051,12 +1051,12 @@ class RunExecutionServiceTests(unittest.TestCase):
             session.commit()
 
             refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
-            next_seedable = executor._list_seedable_translate_packet_ids(
+            next_seedable = executor._plan_translate_frontier(
                 session=session,
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=refreshed_items,
-            )
+            ).packet_ids
             self.assertEqual(next_seedable, [chapter_one_second])
             self.assertNotIn(chapter_two_second, next_seedable)
 
@@ -1169,12 +1169,12 @@ class RunExecutionServiceTests(unittest.TestCase):
             self.assertEqual(refreshed_items[0].status, WorkItemStatus.RETRYABLE_FAILED)
             self.assertEqual(str(refreshed_items[0].scope_id), first_packet_id)
 
-            blocked_seedable = executor._list_seedable_translate_packet_ids(
+            blocked_seedable = executor._plan_translate_frontier(
                 session=session,
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=refreshed_items,
-            )
+            ).packet_ids
             self.assertEqual(blocked_seedable, [])
 
             reclaimed_claim = executor._claim_translate_work_items(

@@ -33,6 +33,7 @@ from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepo
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.frontier_plan import TranslateFrontierPlan
 from book_agent.orchestrator.reconciler import Reconciler
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
@@ -590,20 +591,24 @@ class DocumentRunExecutor:
         document_id: str,
         translate_items: list[WorkItem],
     ) -> list[str]:
-        packet_ids = self._list_seedable_translate_packet_ids(
+        # DECIDE (read-only planner) → EXECUTE (single-writer seed).
+        # Keep the two halves textually adjacent so any future tweak
+        # that adds a read can't accidentally sneak a write into the
+        # DECIDE half.
+        plan = self._plan_translate_frontier(
             session=session,
             run_id=run_id,
             document_id=document_id,
             translate_items=translate_items,
         )
-        if not packet_ids:
+        if plan.is_empty:
             return []
         execution.seed_translate_work_items(
             run_id=run_id,
-            packet_ids=packet_ids,
-            input_version_bundle_by_packet_id=self._translate_input_versions(session, packet_ids),
+            packet_ids=plan.packet_ids,
+            input_version_bundle_by_packet_id=self._translate_input_versions(session, plan.packet_ids),
         )
-        return packet_ids
+        return plan.packet_ids
 
     def _process_review_stage(self, run_id: str) -> bool:
         with session_scope(self.session_factory) as session:
@@ -1698,14 +1703,32 @@ class DocumentRunExecutor:
             }
         return metadata
 
-    def _list_seedable_translate_packet_ids(
+    def _plan_translate_frontier(
         self,
         *,
         session: Session,
         run_id: str,
         document_id: str,
         translate_items: list[WorkItem] | None = None,
-    ) -> list[str]:
+    ) -> TranslateFrontierPlan:
+        """DECIDE-phase planner: pick next TRANSLATE work_item targets.
+
+        Pure read-only. Must not call session.add / session.flush /
+        session.commit. The caller (seed_translate_frontier_work_items)
+        owns the EXECUTE phase and is the single writer — this
+        separation is what keeps double-seeds and status races out
+        of the main loop. See P0.1 spec.
+
+        Invariants enforced here:
+        - At most one seeded packet per chapter ("one-packet-per-chapter
+          frontier"): any chapter with a live TRANSLATE work_item
+          (pending/leased/running/retryable_failed) is excluded.
+        - No duplicate seed: packets already represented by a work_item
+          in any status are excluded.
+        - Deterministic ordering: results sorted by (packet_ordinal,
+          packet_id) so two concurrent planners observing the same DB
+          snapshot return the same list.
+        """
         stage_items = translate_items if translate_items is not None else self._list_stage_items(
             session,
             run_id,
@@ -1721,11 +1744,17 @@ class DocumentRunExecutor:
                 WorkItemStatus.RUNNING,
             }
         ]
-        blocked_chapter_ids = set(self._translate_item_chapter_id_map(session, chapter_blocking_items).values())
-        represented_packet_ids = {str(item.scope_id) for item in stage_items}
+        blocked_chapter_ids = frozenset(
+            self._translate_item_chapter_id_map(session, chapter_blocking_items).values()
+        )
+        represented_packet_ids = frozenset(str(item.scope_id) for item in stage_items)
         candidate_packet_ids = self._list_pending_packet_ids(session, document_id)
         if not candidate_packet_ids:
-            return []
+            return TranslateFrontierPlan(
+                packet_ids=[],
+                blocked_chapter_ids=blocked_chapter_ids,
+                represented_packet_ids=represented_packet_ids,
+            )
 
         candidate_metadata = self._packet_lane_metadata_map(session, candidate_packet_ids)
         frontier_by_chapter: dict[str, str] = {}
@@ -1747,12 +1776,17 @@ class DocumentRunExecutor:
             ):
                 frontier_by_chapter[chapter_id] = packet_id
 
-        return sorted(
+        packet_ids = sorted(
             frontier_by_chapter.values(),
             key=lambda packet_id: self._packet_lane_sort_key(
                 packet_id,
                 candidate_metadata.get(packet_id, {}),
             ),
+        )
+        return TranslateFrontierPlan(
+            packet_ids=packet_ids,
+            blocked_chapter_ids=blocked_chapter_ids,
+            represented_packet_ids=represented_packet_ids,
         )
 
     def _packet_lane_sort_key(
