@@ -735,7 +735,7 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             self.assertIn("Back to top", merged_html)
             self.assertIn("href='#chapter-", merged_html)
             self.assertIn("ZH::Use the example carefully.", merged_html)
-            self.assertIn("代码保持原样", merged_html)
+            self.assertNotIn("代码保持原样", merged_html)
             self.assertIn("python agent.py --dry-run", merged_html)
             self.assertEqual(export.chapter_results, [])
 

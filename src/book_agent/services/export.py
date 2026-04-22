@@ -2798,27 +2798,52 @@ class ExportService:
         # that confuses readers. Fall back to an ordinal-only heading
         # only when the chapter has no title at all.
         heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
-        # Merged reading edition is Chinese-only ("中文阅读稿"); the English
-        # source title line is dropped so readers don't see bilingual
-        # clutter they didn't ask for. Bilingual comparison is a
-        # separate export type.
+        body_blocks = self._merged_body_blocks(render_blocks, title)
         lines = [heading, ""]
-        for block in render_blocks:
-            block_markdown = self._render_block_markdown(block, asset_path_by_block_id)
+        for block in body_blocks:
+            block_markdown = self._render_block_markdown(
+                block, asset_path_by_block_id, include_notice=False
+            )
             if not block_markdown:
                 continue
             lines.append(block_markdown)
             lines.append("")
         return lines
 
+    def _merged_body_blocks(
+        self,
+        render_blocks: list[MergedRenderBlock],
+        chapter_title: str,
+    ) -> list[MergedRenderBlock]:
+        if not chapter_title:
+            return list(render_blocks)
+        normalized_title = _normalize_render_text(chapter_title)
+        body: list[MergedRenderBlock] = []
+        dropped_title_heading = False
+        for block in render_blocks:
+            if (
+                not dropped_title_heading
+                and block.block_type == BlockType.HEADING.value
+            ):
+                candidate = _normalize_render_text(
+                    block.target_text or block.source_text or ""
+                )
+                if candidate and candidate == normalized_title:
+                    dropped_title_heading = True
+                    continue
+            body.append(block)
+        return body
+
     def _render_block_markdown(
         self,
         block: MergedRenderBlock,
         asset_path_by_block_id: dict[str, str] | None = None,
+        *,
+        include_notice: bool = True,
     ) -> str:
         source_text = block.source_text or ""
         target_text = block.target_text or ""
-        notice = str(block.notice or "").strip()
+        notice = str(block.notice or "").strip() if include_notice else ""
         asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "").strip()
         image_alt_text = str(block.source_metadata.get("image_alt") or block.source_text or "Embedded image").strip()
 
@@ -3240,11 +3265,17 @@ class ExportService:
         title_text: str | None,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
+        body_blocks = self._merged_body_blocks(
+            list(render_blocks), str(title_text or "").strip()
+        )
         blocks_html = "".join(
             self._render_block_html(
-                block, asset_path_by_block_id, include_source_toggle=False
+                block,
+                asset_path_by_block_id,
+                include_source_toggle=False,
+                include_notice=False,
             )
-            for block in render_blocks
+            for block in body_blocks
         )
         if not title_text and not blocks_html:
             return ""
@@ -6053,11 +6084,9 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
         *,
         include_source_toggle: bool = True,
+        include_notice: bool = True,
     ) -> str:
-        # include_source_toggle=False is used by the merged reading
-        # edition ("中文阅读稿"), which is Chinese-only and must not
-        # emit the "<details><summary>Source</summary>" toggle carrying
-        # English source text. Bilingual HTML keeps it (True default).
+        notice_text = str(block.notice or "") if include_notice else ""
         source_html = self._format_inline_text(block.source_text)
         target_html = self._format_inline_text(block.target_text or "")
         if block.render_mode == "source_artifact_full_width":
@@ -6065,7 +6094,7 @@ class ExportService:
             if asset_path_by_block_id is not None:
                 asset_src = str(asset_path_by_block_id.get(block.block_id) or "")
             if asset_src and block.artifact_kind in {"image", "figure"}:
-                note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
+                note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
                 image_alt_text = str(block.source_metadata.get("image_alt") or "PDF image")
                 source_caption = "" if block.source_text in {"", "[Image]"} else source_html
                 body = (
@@ -6084,10 +6113,10 @@ class ExportService:
                 body = f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
             else:
                 body = f"<div class='artifact-body'>{source_html}</div>"
-            note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
+            note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             return f"<section class='block artifact {html.escape(block.block_type)}'>{note}{body}</section>"
         if block.render_mode == "translated_wrapper_with_preserved_artifact":
-            note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
+            note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             translated = f"<div class='zh'>{target_html}</div>" if block.target_text else ""
             if block.artifact_kind == "equation":
                 body = self._render_math_html(block.source_text)
@@ -6103,7 +6132,7 @@ class ExportService:
                 f"{translated}{note}{body}</section>"
             )
         if block.render_mode == "image_anchor_with_translated_caption":
-            note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
+            note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             translated = f"<div class='zh'>{target_html}</div>" if block.target_text else ""
             asset_src = ""
             if asset_path_by_block_id is not None:
@@ -6142,7 +6171,7 @@ class ExportService:
                 f"{body}{caption_html}</section>"
             )
         if block.render_mode == "reference_preserve_with_translated_label":
-            note = f"<div class='artifact-note'>{html.escape(block.notice or '')}</div>" if block.notice else ""
+            note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             translated = (
                 f"<div class='zh'>{target_html}</div>"
                 if block.target_text and block.target_text != block.source_text

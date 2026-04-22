@@ -2597,7 +2597,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertIn("Back to top", merged_html)
         self.assertIn("href='#chapter-", merged_html)
         self.assertIn("ZH::Use the example carefully.", merged_html)
-        self.assertIn("代码保持原样", merged_html)
+        self.assertNotIn("代码保持原样", merged_html)
         self.assertIn("def run_agent():\n    return &quot;ok&quot;\n\nprint(run_agent())", merged_html)
         self.assertIn("align-self:start;min-width:0;inline-size:100%;max-inline-size:100%;overflow:hidden;", merged_html)
         self.assertIn(".toc-list{list-style:none;padding:0;margin:0;display:grid;gap:10px;min-width:0;}", merged_html)
