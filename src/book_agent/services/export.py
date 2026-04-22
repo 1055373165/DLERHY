@@ -2664,8 +2664,6 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
         visible_chapters = self._visible_merged_chapters(bundle)
-        render_summary = self._merged_render_summary(visible_chapters)
-        usage_summary = self._translation_usage_summary_from_runs([run for chapter in bundle.chapters for run in chapter.translation_runs])
         chapters_html = "".join(
             self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
             for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
@@ -2674,18 +2672,6 @@ class ExportService:
         author_value = _display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
         author_html = f"<div class='meta'>{author}</div>" if author else ""
-        chapter_count = render_summary["chapter_count"]
-        protected_count = render_summary["expected_source_only_block_count"]
-        total_cost = usage_summary.get("total_cost_usd")
-        latest_run_at = usage_summary.get("latest_run_at")
-        summary_chips = [
-            f"<span class='meta-chip'>{chapter_count} chapters</span>",
-            f"<span class='meta-chip'>{protected_count} preserved artifacts</span>",
-        ]
-        if total_cost is not None:
-            summary_chips.append(f"<span class='meta-chip'>${float(total_cost):.3f} provider cost</span>")
-        if latest_run_at:
-            summary_chips.append(f"<span class='meta-chip'>Last run {html.escape(str(latest_run_at)[:10])}</span>")
         return (
             "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
             f"<title>{title}</title>"
@@ -2751,13 +2737,8 @@ class ExportService:
             "<div class='page-shell'>"
             "<main class='book-main'>"
             "<header class='hero' id='top'>"
-            "<div class='hero-kicker'>Merged Reading Edition</div>"
             f"<h1>{title}</h1>"
             f"{author_html}"
-            "<div class='hero-summary'>"
-            "这是一份面向长时阅读的合并导出稿。正文以中文为主，必要时可展开原文；代码、公式、表格与引用性工件会按可读且可复制的方式保留。"
-            "</div>"
-            f"<div class='meta-row'>{''.join(summary_chips)}</div>"
             "</header>"
             f"{chapters_html}"
             "</main>"
@@ -2777,34 +2758,16 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
         visible_chapters = self._visible_merged_chapters(bundle)
-        render_summary = self._merged_render_summary(visible_chapters)
-        usage_summary = self._translation_usage_summary_from_runs([run for chapter in bundle.chapters for run in chapter.translation_runs])
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
         author = _display_author_value(bundle.document.author)
-        chapter_count = render_summary["chapter_count"]
-        protected_count = render_summary["expected_source_only_block_count"]
-        total_cost = usage_summary.get("total_cost_usd")
-        latest_run_at = usage_summary.get("latest_run_at")
 
+        # Chinese reading edition — only the book's own front matter
+        # (title + author). No "Merged Reading Edition" kicker, no
+        # "Document Summary" bullet list, no chapter TOC. Synthetic
+        # export metadata doesn't belong in a reader-facing file.
         lines: list[str] = [f"# {title}", ""]
         if author:
             lines.extend([f"_Author: {author}_", ""])
-        lines.extend(
-            [
-                "> Merged Reading Edition",
-                "> 这是一份面向长时阅读的合并导出稿。正文以中文为主；代码、公式、表格与图片工件按可读且可复制的方式保留。",
-                "",
-                "## Document Summary",
-                "",
-                f"- Chapters: {chapter_count}",
-                f"- Preserved artifacts: {protected_count}",
-            ]
-        )
-        if total_cost is not None:
-            lines.append(f"- Provider cost (USD): {float(total_cost):.3f}")
-        if latest_run_at:
-            lines.append(f"- Last run: {str(latest_run_at)[:10]}")
-        lines.append("")
 
         for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
             lines.extend(
