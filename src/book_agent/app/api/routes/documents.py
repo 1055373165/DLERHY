@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 import mimetypes
 import os
+import re
 import shutil
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -266,6 +268,33 @@ def _canonical_artifact_path(
         )
     except HTTPException:
         return None
+
+
+_ASCII_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._\-]+")
+
+
+def _ascii_fallback_name(filename: str) -> str:
+    # RFC 6266 §4.3 asks for an ASCII ``filename=`` token alongside the
+    # ``filename*=`` UTF-8 form. Browsers that parse the extended form
+    # happily use the Chinese title; browsers that do not (some Safari
+    # releases on macOS notoriously drop the extension when consuming
+    # only ``filename*=``) need a clean ASCII fallback so the saved
+    # file keeps its ``.html`` / ``.md`` / ``.pdf`` suffix.
+    stem = Path(filename).stem
+    ext = Path(filename).suffix
+    ascii_stem = re.sub(r"-+", "-", _ASCII_FILENAME_UNSAFE.sub("-", stem)).strip("-")
+    ascii_stem = ascii_stem or "export"
+    return f"{ascii_stem}{ext}" if ext else ascii_stem
+
+
+def _content_disposition(filename: str) -> str:
+    # Produce a dual-form Content-Disposition header per RFC 6266.
+    # Starlette only emits one form; when the payload name is non-ASCII
+    # it drops the ``filename=`` alternative entirely, which loses the
+    # extension on at least macOS Safari downloads.
+    ascii_name = _ascii_fallback_name(filename)
+    encoded = quote(filename, safe="")
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
 
 
 def _canonical_basename(file_path: str | Path) -> str:
@@ -1721,29 +1750,31 @@ def download_document_chapter_export(
         *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(canonical_path)],
     ]
     if len(archive_inputs) == 1:
+        dl_name = _chapter_export_download_filename(
+            chapter_bundle.document,
+            chapter_bundle.chapter,
+            export_type,
+            file_suffix=canonical_suffix,
+        )
         return FileResponse(
             path=file_path,
             media_type=mimetypes.guess_type(canonical_basename)[0]
             or "application/octet-stream",
-            filename=_chapter_export_download_filename(
-                chapter_bundle.document,
-                chapter_bundle.chapter,
-                export_type,
-                file_suffix=canonical_suffix,
-            ),
+            headers={"content-disposition": _content_disposition(dl_name)},
         )
 
     archive_path = _build_export_archive(document_id, export_type, archive_inputs)
+    dl_name = _chapter_export_download_filename(
+        chapter_bundle.document,
+        chapter_bundle.chapter,
+        export_type,
+        file_suffix=".zip",
+        archive=True,
+    )
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=_chapter_export_download_filename(
-            chapter_bundle.document,
-            chapter_bundle.chapter,
-            export_type,
-            file_suffix=".zip",
-            archive=True,
-        ),
+        headers={"content-disposition": _content_disposition(dl_name)},
         background=BackgroundTask(_cleanup_path, archive_path),
     )
 
@@ -1914,7 +1945,7 @@ def download_document_export(
             path=file_path,
             media_type=mimetypes.guess_type(canonical_basename)[0]
             or "application/octet-stream",
-            filename=main_filename,
+            headers={"content-disposition": _content_disposition(main_filename)},
         )
 
     # Multiple files (main + assets/) → zip with book-title folder
@@ -1925,10 +1956,11 @@ def download_document_export(
         archive_inputs,
         folder_name=archive_folder,
     )
+    zip_name = f"{archive_folder}.zip"
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
-        filename=f"{archive_folder}.zip",
+        headers={"content-disposition": _content_disposition(zip_name)},
         background=BackgroundTask(_cleanup_path, archive_path),
     )
 
