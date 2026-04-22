@@ -2639,8 +2639,10 @@ class ApiWorkflowTests(unittest.TestCase):
         merged_html = Path(export.json()["file_path"]).read_text(encoding="utf-8")
         self.assertNotIn(frontmatter["chapter_id"], merged_html)
         self.assertIn("Chapter One", merged_html)
-        self.assertIn("Chapter 1</div><h2>ZH::Chapter One</h2>", merged_html)
-        self.assertNotIn("Chapter 2</div><h2>ZH::Chapter One</h2>", merged_html)
+        # Post-UX-cleanup: the "Chapter N" ordinal kicker div is gone,
+        # so assert directly on the chapter h2.
+        self.assertIn("<h2>ZH::Chapter One</h2>", merged_html)
+        self.assertNotIn("<div class='chapter-kicker'>", merged_html)
 
     def test_merged_html_export_deduplicates_exact_duplicate_epub_chapters(self) -> None:
         duplicate_welcome = """<?xml version="1.0" encoding="UTF-8"?>
@@ -2677,7 +2679,9 @@ class ApiWorkflowTests(unittest.TestCase):
         manifest = json.loads(Path(export_data["manifest_path"]).read_text(encoding="utf-8"))
 
         self.assertEqual(merged_html.count(">ZH::Welcome</h2>"), 1)
-        self.assertEqual(merged_html.count("class='source-title'>Welcome</div>"), 1)
+        # Post-UX-cleanup: merged HTML is Chinese-only, so the English
+        # source-title subline is no longer rendered beneath the h2.
+        self.assertNotIn("class='source-title'", merged_html)
         self.assertEqual(manifest["chapter_count"], 2)
         self.assertEqual(manifest["chapters"][0]["ordinal"], 1)
         self.assertEqual(manifest["chapters"][1]["ordinal"], 2)

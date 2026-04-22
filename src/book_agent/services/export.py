@@ -2835,9 +2835,11 @@ class ExportService:
         # that confuses readers. Fall back to an ordinal-only heading
         # only when the chapter has no title at all.
         heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
+        # Merged reading edition is Chinese-only ("中文阅读稿"); the English
+        # source title line is dropped so readers don't see bilingual
+        # clutter they didn't ask for. Bilingual comparison is a
+        # separate export type.
         lines = [heading, ""]
-        if title and bundle.chapter.title_src and title != bundle.chapter.title_src:
-            lines.extend([f"_Source title: {bundle.chapter.title_src}_", ""])
         for block in render_blocks:
             block_markdown = self._render_block_markdown(block, asset_path_by_block_id)
             if not block_markdown:
@@ -2942,8 +2944,9 @@ class ExportService:
         else:
             parts = [list_markdown or (target_text or source_text)]
 
-        if source_text and target_text and source_text != target_text:
-            parts.append(self._markdown_details_source(source_text))
+        # Merged reading edition is Chinese-only; no "<details><summary>原文</summary>"
+        # toggle with the English source. Bilingual comparison is a
+        # separate export type.
         return "\n\n".join(part for part in parts if part)
 
     def _normalize_markdown_code_artifact_text(
@@ -3275,23 +3278,19 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
         blocks_html = "".join(
-            self._render_block_html(block, asset_path_by_block_id)
+            self._render_block_html(
+                block, asset_path_by_block_id, include_source_toggle=False
+            )
             for block in render_blocks
         )
         if not title_text and not blocks_html:
             return ""
         title = html.escape(title_text) if title_text else ""
-        source_title = (
-            f"<div class='source-title'>{html.escape(bundle.chapter.title_src)}</div>"
-            if title_text and bundle.chapter.title_src and title_text != bundle.chapter.title_src
-            else ""
-        )
-        # No "Chapter N" kicker — it duplicates the native heading
-        # (e.g. "第一章") and reads as noise alongside it.
+        # No "Chapter N" kicker and no English source-title subline —
+        # the merged reading edition is Chinese-only.
         chapter_head = (
             "<div class='chapter-head'>"
             f"<h2>{title}</h2>"
-            f"{source_title}"
             "</div>"
             if title
             else ""
@@ -6089,7 +6088,13 @@ class ExportService:
         self,
         block: MergedRenderBlock,
         asset_path_by_block_id: dict[str, str] | None = None,
+        *,
+        include_source_toggle: bool = True,
     ) -> str:
+        # include_source_toggle=False is used by the merged reading
+        # edition ("中文阅读稿"), which is Chinese-only and must not
+        # emit the "<details><summary>Source</summary>" toggle carrying
+        # English source text. Bilingual HTML keeps it (True default).
         source_html = self._format_inline_text(block.source_text)
         target_html = self._format_inline_text(block.target_text or "")
         if block.render_mode == "source_artifact_full_width":
@@ -6187,7 +6192,10 @@ class ExportService:
             )
         source_details = (
             f"<details><summary>Source</summary><div class='source'>{source_html}</div></details>"
-            if block.source_text and block.target_text and block.source_text != block.target_text
+            if include_source_toggle
+            and block.source_text
+            and block.target_text
+            and block.source_text != block.target_text
             else ""
         )
         block_class = "quote" if block.block_type == BlockType.QUOTE.value else block.block_type

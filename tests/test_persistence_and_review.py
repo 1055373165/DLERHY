@@ -2637,10 +2637,12 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertEqual(manifest["export_type"], "merged_markdown")
         self.assertEqual(manifest["markdown_path"], str(markdown_path))
         self.assertIn("# Business Strategy Handbook", markdown_text)
-        # Post-UX-cleanup: no "Reading Map" TOC, no "Chapter N:" prefix.
+        # Post-UX-cleanup: no "Reading Map" TOC, no "Chapter N:" prefix,
+        # no English "_Source title:_" addendum — the merged reading
+        # edition is Chinese-only.
         self.assertNotIn("## Reading Map", markdown_text)
         self.assertNotIn("## Chapter 1:", markdown_text)
-        self.assertIn("_Source title: Chapter One_", markdown_text)
+        self.assertNotIn("_Source title:", markdown_text)
         self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
         self.assertIn("```python", markdown_text)
         self.assertIn('return "ok"', markdown_text)
@@ -2793,9 +2795,10 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertTrue(markdown_path.exists())
             markdown_text = markdown_path.read_text(encoding="utf-8")
 
-        # Post-UX-cleanup: no "Chapter N:" ordinal prefix.
+        # Post-UX-cleanup: no "Chapter N:" ordinal prefix, no English
+        # "_Source title:_" addendum.
         self.assertNotIn("## Chapter 1:", markdown_text)
-        self.assertIn("_Source title: Chapter One_", markdown_text)
+        self.assertNotIn("_Source title:", markdown_text)
         self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
 
     def test_visible_merged_chapters_group_pdf_auxiliary_sections_under_real_top_level_titles(self) -> None:
@@ -3370,8 +3373,10 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
         self.assertEqual(len(visible), 1)
         self.assertEqual(visible[0][3], "介绍")
-        self.assertIn("Chapter 1", merged_html)
+        # Post-UX-cleanup: "Chapter N" kicker is gone; the chapter <h2>
+        # still carries the fallen-back title verbatim.
         self.assertIn(">介绍</h2>", merged_html)
+        self.assertNotIn("<div class='chapter-kicker'>", merged_html)
         self.assertNotIn("Chapter 1</div><h2>什么是智能体系统？</h2>", merged_html)
 
     def test_export_service_does_not_treat_academic_prose_as_code_artifact(self) -> None:
