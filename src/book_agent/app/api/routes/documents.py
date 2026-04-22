@@ -247,6 +247,35 @@ def _emit_export_blobs(
         )
 
 
+def _canonical_artifact_path(
+    candidate: str | Path,
+    *,
+    roots: tuple[Path, ...],
+    document_id: str | None = None,
+) -> Path | None:
+    # Non-raising variant of ``_resolve_artifact_path`` that intentionally
+    # does NOT consult the CAS blob tree. We use it whenever we need the
+    # writer-layout directory (for sidecar asset discovery) or the
+    # original filename (which the blob tree has replaced with a sha).
+    try:
+        return _resolve_artifact_path(
+            candidate,
+            roots=roots,
+            document_id=document_id,
+            content_sha256=None,
+        )
+    except HTTPException:
+        return None
+
+
+def _canonical_basename(file_path: str | Path) -> str:
+    # The record's stored ``file_path`` is authoritative for naming even
+    # when we serve bytes from the CAS tree — the blob on disk is named
+    # by its sha256, so ``resolved.suffix`` would be empty and user
+    # downloads would land without an extension.
+    return Path(file_path).name
+
+
 def _resolve_artifact_path(
     candidate: str | Path,
     *,
@@ -1682,19 +1711,25 @@ def download_document_chapter_export(
         document_id=document_id,
         content_sha256=chapter_record.content_sha256,
     )
+    canonical_basename = _canonical_basename(chapter_record.file_path)
+    canonical_suffix = Path(canonical_basename).suffix or ""
+    canonical_path = _canonical_artifact_path(
+        chapter_record.file_path, roots=artifact_roots, document_id=document_id
+    ) or file_path
     archive_inputs = [
         ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
-        *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(file_path)],
+        *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(canonical_path)],
     ]
     if len(archive_inputs) == 1:
         return FileResponse(
             path=file_path,
-            media_type=_artifact_media_type(file_path),
+            media_type=mimetypes.guess_type(canonical_basename)[0]
+            or "application/octet-stream",
             filename=_chapter_export_download_filename(
                 chapter_bundle.document,
                 chapter_bundle.chapter,
                 export_type,
-                file_suffix=file_path.suffix or "",
+                file_suffix=canonical_suffix,
             ),
         )
 
@@ -1851,8 +1886,16 @@ def download_document_export(
 
     # Use the latest (last) primary record only — deliver a single merged file
     file_path = files[-1]
-    ext = file_path.suffix or ""
+    primary_record = primary_records[-1]
+    canonical_basename = _canonical_basename(primary_record.file_path)
+    ext = Path(canonical_basename).suffix or ""
     main_filename = f"{book_title}-{label}{ext}"
+    # Sidecar assets (images, CSS) live beside the canonical writer
+    # output, not the blob. Probe the canonical layout; fall back to
+    # the served path (still correct for rows with no blob preference).
+    canonical_path = _canonical_artifact_path(
+        primary_record.file_path, roots=artifact_roots, document_id=document_id
+    ) or file_path
 
     archive_inputs: list[ArchiveInput] = []
     seen_paths: set[str] = set()
@@ -1862,14 +1905,15 @@ def download_document_export(
         file_path,
         preferred_archive_name=main_filename,
     )
-    for sidecar_path in _export_sidecar_paths(file_path):
+    for sidecar_path in _export_sidecar_paths(canonical_path):
         _append_archive_input(archive_inputs, seen_paths, sidecar_path)
 
     # Single file with no sidecar assets → return directly
     if len(archive_inputs) == 1:
         return FileResponse(
             path=file_path,
-            media_type=_artifact_media_type(file_path),
+            media_type=mimetypes.guess_type(canonical_basename)[0]
+            or "application/octet-stream",
             filename=main_filename,
         )
 
