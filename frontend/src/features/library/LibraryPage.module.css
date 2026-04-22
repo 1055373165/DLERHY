@@ -267,13 +267,130 @@
   max-width: 320px;
 }
 
+/* ── Pagination ── */
+.paginationBar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.paginationInfo {
+  color: var(--text-muted);
+}
+
+.paginationInfo strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.pageBtn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+}
+
+.pageBtn:hover:not(:disabled):not([data-active="true"]) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pageBtn[data-active="true"] {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+  font-weight: 600;
+}
+
+.pageEllipsis {
+  padding: 0 4px;
+  color: var(--text-muted);
+}
+
+.jumpForm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jumpLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.jumpInput {
+  width: 56px;
+  height: 28px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.jumpInput:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.jumpInput::-webkit-inner-spin-button,
+.jumpInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.jumpTotal {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.pageSizeLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 860px) {
   .filterRow {
     flex-wrap: wrap;
   }
 
-  .searchInput {
+  .searchWrap {
     flex-basis: 100%;
   }
 
@@ -289,5 +406,16 @@
 
   .bookActions {
     margin-left: auto;
+  }
+
+  .paginationBar {
+    gap: var(--sp-2);
+  }
+
+  .paginationControls {
+    margin-left: 0;
+    order: 2;
+    flex-basis: 100%;
+    justify-content: center;
   }
 }
