@@ -2815,11 +2815,9 @@ class ExportService:
         render_blocks: list[MergedRenderBlock],
         chapter_title: str,
     ) -> list[MergedRenderBlock]:
-        if not chapter_title:
-            return list(render_blocks)
-        normalized_title = _normalize_render_text(chapter_title)
+        normalized_title = _normalize_render_text(chapter_title) if chapter_title else ""
         body: list[MergedRenderBlock] = []
-        dropped_title_heading = False
+        dropped_title_heading = not normalized_title
         for block in render_blocks:
             if (
                 not dropped_title_heading
@@ -2831,8 +2829,38 @@ class ExportService:
                 if candidate and candidate == normalized_title:
                     dropped_title_heading = True
                     continue
+            if self._is_code_language_label_block(block):
+                continue
             body.append(block)
         return body
+
+    _CODE_LANGUAGE_LABELS: frozenset[str] = frozenset(
+        {
+            "python", "javascript", "typescript", "js", "ts", "java", "c", "c++",
+            "cpp", "c#", "csharp", "go", "golang", "rust", "ruby", "php", "swift",
+            "kotlin", "scala", "r", "shell", "bash", "zsh", "sh", "sql", "html",
+            "css", "scss", "sass", "less", "json", "jsonc", "yaml", "yml", "toml",
+            "xml", "perl", "lua", "dart", "julia", "haskell", "clojure", "elixir",
+            "erlang", "f#", "fsharp", "ocaml", "objective-c", "objectivec", "cobol",
+            "fortran", "nim", "zig", "pascal", "lisp", "scheme", "groovy", "matlab",
+            "vb", "vba", "powershell", "pwsh", "makefile", "dockerfile", "ini",
+            "nginx", "apache", "markdown", "md", "tex", "latex", "graphql", "gql",
+            "protobuf", "proto", "solidity", "asm", "assembly",
+        }
+    )
+
+    def _is_code_language_label_block(self, block: MergedRenderBlock) -> bool:
+        if block.block_type not in {
+            BlockType.PARAGRAPH.value,
+            BlockType.CAPTION.value,
+            BlockType.QUOTE.value,
+        }:
+            return False
+        text = str(block.target_text or block.source_text or "").strip()
+        if not text or len(text) > 32:
+            return False
+        candidate = text.strip("*_`\"'()[]<> 　\t").strip().casefold()
+        return bool(candidate) and candidate in self._CODE_LANGUAGE_LABELS
 
     def _render_block_markdown(
         self,
@@ -2920,6 +2948,11 @@ class ExportService:
             # paragraphs starting with "Chapter N, ...") should render as body.
             if len(heading_text) <= 150:
                 return f"### {heading_text}".strip()
+        if block.block_type == BlockType.TABLE.value:
+            table_source = target_text or source_text
+            markdown_table = self._markdown_table_from_source_text(table_source)
+            if markdown_table:
+                return markdown_table
         list_markdown = self._markdown_list_text(target_text or source_text)
         if block.block_type == BlockType.QUOTE.value:
             parts = [list_markdown or self._markdown_blockquote(target_text or source_text)]
@@ -3054,20 +3087,13 @@ class ExportService:
         if len(normalized_rows) < 2:
             return None
 
-        column_count = len(normalized_rows[0])
+        column_count = max(len(row) for row in normalized_rows)
         if column_count < 2 or column_count > 12:
             return None
-        # Allow rows with slightly mismatched column counts by padding/truncating
-        padded_rows: list[list[str]] = []
-        for row in normalized_rows:
-            if len(row) == column_count:
-                padded_rows.append(row)
-            elif len(row) < column_count:
-                padded_rows.append(row + [""] * (column_count - len(row)))
-            elif len(row) <= column_count + 1:
-                padded_rows.append(row[:column_count])
-            else:
-                return None  # Too many columns — not a table
+        padded_rows: list[list[str]] = [
+            row + [""] * (column_count - len(row)) if len(row) < column_count else row
+            for row in normalized_rows
+        ]
 
         header = padded_rows[0]
         body_rows = padded_rows[1:]
@@ -6182,6 +6208,15 @@ class ExportService:
                 f"<section class='block artifact reference {html.escape(block.block_type)}'>"
                 f"{translated}{note}{body}</section>"
             )
+        if block.block_type == BlockType.TABLE.value:
+            table_source = block.target_text or block.source_text or ""
+            table_html = self._render_structured_table_html(table_source)
+            if table_html:
+                return (
+                    f"<section class='block artifact {html.escape(block.block_type)}'>"
+                    f"<div class='artifact-body artifact-table-body'>{table_html}</div>"
+                    "</section>"
+                )
         source_details = (
             f"<details><summary>Source</summary><div class='source'>{source_html}</div></details>"
             if include_source_toggle
