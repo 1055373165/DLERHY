@@ -2666,7 +2666,6 @@ class ExportService:
         visible_chapters = self._visible_merged_chapters(bundle)
         render_summary = self._merged_render_summary(visible_chapters)
         usage_summary = self._translation_usage_summary_from_runs([run for chapter in bundle.chapters for run in chapter.translation_runs])
-        toc_items = self._build_merged_toc(visible_chapters)
         chapters_html = "".join(
             self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
             for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
@@ -2695,7 +2694,7 @@ class ExportService:
             "--font-body:'Iowan Old Style','Palatino Linotype','Book Antiqua',Georgia,serif;--font-display:'Avenir Next Condensed','Gill Sans','Trebuchet MS',sans-serif;--font-ui:'Helvetica Neue','Segoe UI',sans-serif;}"
             "*{box-sizing:border-box;}html{scroll-behavior:smooth;}body{margin:0;color:var(--ink);background:linear-gradient(180deg,var(--paper) 0%,#fbf8f2 35%,#f4efe4 100%);font-family:var(--font-body);line-height:1.75;}"
             "a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}"
-            ".page-shell{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:32px;max-width:1400px;margin:0 auto;padding:28px 22px 64px;}"
+            ".page-shell{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;max-width:1100px;margin:0 auto;padding:28px 22px 64px;}"
             ".sidebar{position:sticky;top:18px;align-self:start;min-width:0;inline-size:100%;max-inline-size:100%;max-height:calc(100vh - 36px);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;background:rgba(255,253,248,.82);backdrop-filter:blur(10px);border:1px solid rgba(213,199,179,.85);border-radius:22px;padding:22px 18px;box-shadow:var(--shadow);}"
             ".sidebar-kicker,.hero-kicker,.chapter-kicker{font-family:var(--font-ui);letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--accent);font-weight:700;}"
             ".toc-title{margin:10px 0 14px;font-family:var(--font-display);font-size:22px;line-height:1.1;color:#17313a;}"
@@ -2750,11 +2749,6 @@ class ExportService:
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
             "</head><body>"
             "<div class='page-shell'>"
-            "<aside class='sidebar'>"
-            "<div class='sidebar-kicker'>Reading Map</div>"
-            "<div class='toc-title'>Chapters</div>"
-            f"{toc_items}"
-            "</aside>"
             "<main class='book-main'>"
             "<header class='hero' id='top'>"
             "<div class='hero-kicker'>Merged Reading Edition</div>"
@@ -2800,17 +2794,6 @@ class ExportService:
                 "> Merged Reading Edition",
                 "> 这是一份面向长时阅读的合并导出稿。正文以中文为主；代码、公式、表格与图片工件按可读且可复制的方式保留。",
                 "",
-                "## Reading Map",
-                "",
-            ]
-        )
-        for visible_ordinal, _chapter_bundle, _render_blocks, title_text in visible_chapters:
-            if not title_text:
-                continue
-            lines.append(f"{visible_ordinal}. {title_text}")
-        lines.extend(
-            [
-                "",
                 "## Document Summary",
                 "",
                 f"- Chapters: {chapter_count}",
@@ -2846,7 +2829,13 @@ class ExportService:
         if not title_text and not render_blocks:
             return []
         title = str(title_text or "").strip()
-        lines = [f"## Chapter {visible_ordinal}: {title}" if title else f"## Chapter {visible_ordinal}", ""]
+        # Use the chapter's own heading verbatim — re-prefixing with
+        # "Chapter N: " on top of an already-numbered source title
+        # (e.g. "第一章") just yields the redundant "Chapter 1: 第一章"
+        # that confuses readers. Fall back to an ordinal-only heading
+        # only when the chapter has no title at all.
+        heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
+        lines = [heading, ""]
         if title and bundle.chapter.title_src and title != bundle.chapter.title_src:
             lines.extend([f"_Source title: {bundle.chapter.title_src}_", ""])
         for block in render_blocks:
@@ -3297,9 +3286,10 @@ class ExportService:
             if title_text and bundle.chapter.title_src and title_text != bundle.chapter.title_src
             else ""
         )
+        # No "Chapter N" kicker — it duplicates the native heading
+        # (e.g. "第一章") and reads as noise alongside it.
         chapter_head = (
             "<div class='chapter-head'>"
-            f"<div class='chapter-kicker'>Chapter {visible_ordinal}</div>"
             f"<h2>{title}</h2>"
             f"{source_title}"
             "</div>"

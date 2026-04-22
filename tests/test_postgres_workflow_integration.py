@@ -730,7 +730,8 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             self.assertIsNotNone(export.file_path)
             assert export.file_path is not None
             merged_html = Path(export.file_path).read_text(encoding="utf-8")
-            self.assertIn("Reading Map", merged_html)
+            # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
+            self.assertNotIn(">Reading Map<", merged_html)
             self.assertIn("Back to top", merged_html)
             self.assertIn("href='#chapter-", merged_html)
             self.assertIn("ZH::Use the example carefully.", merged_html)

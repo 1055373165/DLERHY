@@ -76,6 +76,11 @@ AUTO_FOLLOWUP_EXECUTION_AUDIT_ACTIONS = {
 }
 
 
+class DocumentBusyError(RuntimeError):
+    """Raised when a destructive operation targets a document whose run
+    is still in the orchestrator's hot active set (RUNNING/DRAINING)."""
+
+
 @dataclass(slots=True)
 class ChapterSummary:
     chapter_id: str
@@ -1023,6 +1028,29 @@ class DocumentWorkflowService:
             runtime_v2_context=runtime_v2_context,
             chapters=chapter_summaries,
         )
+
+    def delete_document(self, document_id: str) -> None:
+        """Hard-delete a document and all dependent rows via FK CASCADE.
+
+        Refuses to delete while a run is in the hot active set
+        ({RUNNING, DRAINING}) to avoid yanking the rug under the
+        orchestrator. Terminal and dormant states (QUEUED, PAUSED,
+        SUCCEEDED, FAILED, …) are safe to clean up.
+        """
+        document = self.session.get(Document, document_id)
+        if document is None:
+            raise ValueError(f"Document not found: {document_id}")
+        latest_run = self._latest_document_run(document_id)
+        if latest_run is not None and latest_run.status in {
+            DocumentRunStatus.RUNNING,
+            DocumentRunStatus.DRAINING,
+        }:
+            raise DocumentBusyError(
+                f"Document {document_id} has an active run ({latest_run.status.value}); "
+                "pause or cancel it before deletion."
+            )
+        self.session.delete(document)
+        self.session.flush()
 
     def list_document_history(
         self,

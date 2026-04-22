@@ -10,7 +10,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -61,6 +61,7 @@ from book_agent.services.workflows import (
     ChapterMemoryProposalDecisionAuditSummary,
     ChapterMemoryProposalSummary,
     ChapterWorklistTimelineEntry,
+    DocumentBusyError,
     DocumentExportResult,
     DocumentReviewResult,
     DocumentSummary,
@@ -1540,6 +1541,21 @@ def get_document(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_document_summary_response(summary)
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> Response:
+    try:
+        _workflow_service(request, session).delete_document(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentBusyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{document_id}/exports", response_model=DocumentExportDashboardResponse)

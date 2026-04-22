@@ -617,6 +617,15 @@ export async function getDocument(documentId: string): Promise<DocumentSummary> 
   return requestJson<DocumentSummary>(`/documents/${encodeURIComponent(documentId)}`);
 }
 
+export async function deleteDocument(documentId: string): Promise<void> {
+  const response = await fetch(withApiBase(`/documents/${encodeURIComponent(documentId)}`), {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+}
+
 export async function getDocumentExports(documentId: string): Promise<DocumentExportDashboard> {
   return requestJson<DocumentExportDashboard>(
     `/documents/${encodeURIComponent(documentId)}/exports?limit=5&offset=0`

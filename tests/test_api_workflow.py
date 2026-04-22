@@ -2592,7 +2592,8 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(export_data["document_status"], "exported")
         self.assertIsNotNone(export_data["file_path"])
         merged_html = Path(export_data["file_path"]).read_text(encoding="utf-8")
-        self.assertIn("Reading Map", merged_html)
+        # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
+        self.assertNotIn(">Reading Map<", merged_html)
         self.assertIn("Back to top", merged_html)
         self.assertIn("href='#chapter-", merged_html)
         self.assertIn("ZH::Use the example carefully.", merged_html)

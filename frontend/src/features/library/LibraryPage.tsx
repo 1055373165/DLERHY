@@ -1,11 +1,11 @@
 import { useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
-import { downloadDocumentExport, listDocumentHistory } from "../../lib/api";
+import { deleteDocument, downloadDocumentExport, listDocumentHistory } from "../../lib/api";
 import {
   formatDate,
   historyBadge,
@@ -44,6 +44,7 @@ function buildPageWindow(current: number, total: number): (number | "…")[] {
 
 export function LibraryPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { selectDocument } = useWorkspace();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [query, setQuery] = useState("");
@@ -54,6 +55,8 @@ export function LibraryPage() {
   const [pageSize, setPageSize] = useState<PageSize>(12);
   const [jumpValue, setJumpValue] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deferredQuery = useDeferredValue(query.trim());
 
@@ -109,6 +112,21 @@ export function LibraryPage() {
       setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await deleteDocument(pendingDelete.id);
+      setFeedback({ tone: "success", text: `Deleted: ${pendingDelete.title}` });
+      setPendingDelete(null);
+      await queryClient.invalidateQueries({ queryKey: ["document-history"] });
+    } catch (err) {
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Delete failed" });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -250,6 +268,14 @@ export function LibraryPage() {
                           </div>
                         )}
                       </div>
+                      <button
+                        className={`btn btn-sm ${s.deleteBtn}`}
+                        onClick={() => setPendingDelete({ id: entry.document_id, title: preferredTitle(entry) })}
+                        aria-label={`Delete ${preferredTitle(entry)}`}
+                        title="Delete"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 );
@@ -369,6 +395,42 @@ export function LibraryPage() {
           </div>
         )}
       </Surface>
+
+      {pendingDelete && (
+        <div
+          className={s.modalBackdrop}
+          onClick={() => !deleting && setPendingDelete(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 id="delete-modal-title" className={s.modalTitle}>删除这本书?</h3>
+            <p className={s.modalBody}>
+              将永久删除 <strong>{pendingDelete.title}</strong> 及其所有章节、翻译、审阅结果与导出记录。
+              此操作<strong>不可撤销</strong>。
+            </p>
+            <div className={s.modalActions}>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={deleting}
+                onClick={() => setPendingDelete(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${s.dangerBtn}`}
+                disabled={deleting}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? "删除中..." : "确认删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
