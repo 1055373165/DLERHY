@@ -185,11 +185,28 @@ def _assert_record_serviceable(record: Any) -> None:
         )
 
 
+def _blob_path(content_sha256: str, roots: tuple[Path, ...]) -> Path | None:
+    # M2.2b: the CAS layout populated by scripts/materialize_blob_store.py
+    # lives at ``<artifact_root>/blobs/<aa>/<bb>/<sha>``. We probe every
+    # configured root because tests and prod use different parents, and
+    # only accept a hit that lies under one of them so the existing
+    # _is_within_any_root safety net keeps working.
+    if not content_sha256 or len(content_sha256) < 4:
+        return None
+    relative = Path("blobs") / content_sha256[:2] / content_sha256[2:4] / content_sha256
+    for root in roots:
+        candidate = (root / relative).resolve()
+        if _is_within_any_root(candidate, roots) and candidate.exists():
+            return candidate
+    return None
+
+
 def _resolve_artifact_path(
     candidate: str | Path,
     *,
     roots: tuple[Path, ...],
     document_id: str | None = None,
+    content_sha256: str | None = None,
 ) -> Path:
     # Belt-and-suspenders: even if a caller forgot to run
     # _assert_record_serviceable, an `unrecoverable://…` path must never
@@ -200,6 +217,15 @@ def _resolve_artifact_path(
             status_code=status.HTTP_410_GONE,
             detail="Export artifact is permanently unavailable (unrecoverable sentinel).",
         )
+    # M2.2b: prefer the content-addressable blob when we have its sha.
+    # The blob tree is the authoritative location — its path IS the
+    # hash, so there is no way for it to drift. If the blob is missing
+    # (not yet materialized), we fall through to the canonical path
+    # logic below and everything behaves as before.
+    if content_sha256:
+        blob = _blob_path(content_sha256, roots)
+        if blob is not None:
+            return blob
     resolved = Path(candidate).resolve()
     fallback_candidates = [resolved, *_artifact_fallback_candidates(resolved)]
     for fallback_path in fallback_candidates:
@@ -1605,7 +1631,10 @@ def download_document_chapter_export(
     _assert_record_serviceable(chapter_record)
     artifact_roots = _artifact_roots(request)
     file_path = _resolve_artifact_path(
-        chapter_record.file_path, roots=artifact_roots, document_id=document_id
+        chapter_record.file_path,
+        roots=artifact_roots,
+        document_id=document_id,
+        content_sha256=chapter_record.content_sha256,
     )
     archive_inputs = [
         ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
@@ -1706,7 +1735,10 @@ def download_document_export(
     try:
         files = [
             _resolve_artifact_path(
-                record.file_path, roots=artifact_roots, document_id=document_id
+                record.file_path,
+                roots=artifact_roots,
+                document_id=document_id,
+                content_sha256=record.content_sha256,
             )
             for record in primary_records
         ]
@@ -1751,7 +1783,10 @@ def download_document_export(
             _assert_record_serviceable(record)
         files = [
             _resolve_artifact_path(
-                record.file_path, roots=artifact_roots, document_id=document_id
+                record.file_path,
+                roots=artifact_roots,
+                document_id=document_id,
+                content_sha256=record.content_sha256,
             )
             for record in primary_records
         ]
