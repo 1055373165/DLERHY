@@ -1164,6 +1164,86 @@ class ExportService:
             updated_at=now,
         )
 
+    def _collect_document_translation_runs(self, bundle: "DocumentExportBundle") -> list[object]:
+        return [
+            run
+            for chapter_bundle in bundle.chapters
+            for run in chapter_bundle.translation_runs
+        ]
+
+    def _format_usage_summary_lines(self, runs: list[object]) -> list[tuple[str, str]]:
+        summary = self._translation_usage_summary_from_runs(runs)
+        run_count = int(summary.get("run_count") or 0)
+        if run_count == 0:
+            return []
+        succeeded = int(summary.get("succeeded_run_count") or 0)
+        token_in = int(summary.get("total_token_in") or 0)
+        token_out = int(summary.get("total_token_out") or 0)
+        total_tokens = token_in + token_out
+        cost = float(summary.get("total_cost_usd") or 0.0)
+        avg_latency = summary.get("avg_latency_ms")
+        total_latency_ms = int(summary.get("total_latency_ms") or 0)
+        lines: list[tuple[str, str]] = []
+        lines.append(("翻译调用", f"{run_count:,} 次（成功 {succeeded:,}）"))
+        lines.append((
+            "Token 消耗",
+            f"输入 {token_in:,} · 输出 {token_out:,} · 合计 {total_tokens:,}",
+        ))
+        lines.append(("调用费用", f"US$ {cost:,.4f}"))
+        if avg_latency is not None:
+            lines.append((
+                "延迟",
+                f"平均 {float(avg_latency):,.0f} ms · 累计 {total_latency_ms:,} ms",
+            ))
+        latest_run_at = summary.get("latest_run_at")
+        if latest_run_at:
+            lines.append(("最近一次调用", str(latest_run_at)))
+        return lines
+
+    def _build_usage_summary_markdown(self, runs: list[object]) -> list[str]:
+        rows = self._format_usage_summary_lines(runs)
+        if not rows:
+            return []
+        lines: list[str] = ["> **翻译统计**  "]
+        for index, (label, value) in enumerate(rows):
+            suffix = "  " if index < len(rows) - 1 else ""
+            lines.append(f"> - {label}: {value}{suffix}")
+        lines.append("")
+        return lines
+
+    def _build_usage_summary_html(self, runs: list[object]) -> str:
+        rows = self._format_usage_summary_lines(runs)
+        if not rows:
+            return ""
+        items = "".join(
+            "<li class='usage-row'>"
+            f"<span class='usage-label'>{html.escape(label)}</span>"
+            f"<span class='usage-value'>{html.escape(value)}</span>"
+            "</li>"
+            for label, value in rows
+        )
+        return (
+            "<section class='usage-summary' aria-label='Translation usage summary'>"
+            "<div class='usage-kicker'>翻译统计</div>"
+            f"<ul class='usage-list'>{items}</ul>"
+            "</section>"
+        )
+
+    def _usage_summary_css(self) -> str:
+        return (
+            ".usage-summary{margin:0 0 22px;padding:18px 22px;border:1px solid rgba(184,197,218,.75);"
+            "border-radius:18px;background:linear-gradient(180deg,#fbfdff 0%,#f3f7fc 100%);"
+            "box-shadow:0 6px 18px rgba(60,74,97,.05);}"
+            ".usage-summary .usage-kicker{font-family:var(--font-ui);font-size:11px;letter-spacing:.14em;"
+            "text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:10px;}"
+            ".usage-summary .usage-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;}"
+            ".usage-summary .usage-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--font-ui);"
+            "font-size:14px;color:#314152;}"
+            ".usage-summary .usage-label{color:var(--muted);}"
+            ".usage-summary .usage-value{font-variant-numeric:tabular-nums;color:#17313a;font-weight:600;}"
+            "@media (max-width:600px){.usage-summary .usage-row{flex-direction:column;gap:2px;}}"
+        )
+
     def _translation_usage_summary(self, bundle: ChapterExportBundle) -> dict[str, object]:
         return self._translation_usage_summary_from_runs(bundle.translation_runs)
 
@@ -2672,6 +2752,9 @@ class ExportService:
         author_value = _display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
         author_html = f"<div class='meta'>{author}</div>" if author else ""
+        usage_html = self._build_usage_summary_html(
+            self._collect_document_translation_runs(bundle)
+        )
         return (
             "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
             f"<title>{title}</title>"
@@ -2731,6 +2814,7 @@ class ExportService:
             "@media (max-width: 980px){.page-shell{grid-template-columns:1fr;padding:18px 14px 40px;}.sidebar{position:relative;top:auto;order:-1;}.hero{padding:26px 22px;}.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}"
             "@media print{body{background:#fff;}.page-shell{display:block;max-width:none;padding:0;}.sidebar{display:none;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;break-inside:avoid;}.artifact{box-shadow:none;}}"
             ".math-block{margin:16px 0;text-align:center;}.math-block.equation-text pre{display:inline-block;text-align:left;}"
+            f"{self._usage_summary_css()}"
             "</style>"
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
             "</head><body>"
@@ -2740,6 +2824,7 @@ class ExportService:
             f"<h1>{title}</h1>"
             f"{author_html}"
             "</header>"
+            f"{usage_html}"
             f"{chapters_html}"
             "</main>"
             "</div>"
@@ -2768,6 +2853,11 @@ class ExportService:
         lines: list[str] = [f"# {title}", ""]
         if author:
             lines.extend([f"_Author: {author}_", ""])
+        usage_lines = self._build_usage_summary_markdown(
+            self._collect_document_translation_runs(bundle)
+        )
+        if usage_lines:
+            lines.extend(usage_lines)
 
         for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
             lines.extend(
@@ -2802,7 +2892,10 @@ class ExportService:
         lines = [heading, ""]
         for block in body_blocks:
             block_markdown = self._render_block_markdown(
-                block, asset_path_by_block_id, include_notice=False
+                block,
+                asset_path_by_block_id,
+                include_notice=False,
+                include_source_caption=False,
             )
             if not block_markdown:
                 continue
@@ -2868,6 +2961,7 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
         *,
         include_notice: bool = True,
+        include_source_caption: bool = True,
     ) -> str:
         source_text = block.source_text or ""
         target_text = block.target_text or ""
@@ -2879,7 +2973,11 @@ class ExportService:
             if asset_src and block.artifact_kind in {"image", "figure"}:
                 parts = [self._markdown_blockquote(notice)] if notice else []
                 parts.append(f"![{image_alt_text}]({asset_src})")
-                if source_text and source_text not in {"[Image]", ""}:
+                if (
+                    include_source_caption
+                    and source_text
+                    and source_text not in {"[Image]", ""}
+                ):
                     normalized_source_caption = re.sub(r"\s+", " ", source_text).strip()
                     parts.append(f"*{normalized_source_caption}*")
                 return "\n\n".join(part for part in parts if part)
@@ -2924,13 +3022,17 @@ class ExportService:
             parts: list[str] = []
             if asset_src:
                 parts.append(f"![{image_alt_text}]({asset_src})")
-            elif source_text:
+            elif include_source_caption and source_text:
                 parts.append(self._markdown_blockquote(source_text, label="Image caption"))
             if target_text:
                 parts.append(target_text)
             if notice:
                 parts.append(self._markdown_blockquote(notice))
-            if source_text and source_text != target_text:
+            if (
+                include_source_caption
+                and source_text
+                and source_text != target_text
+            ):
                 normalized_source_caption = re.sub(r"\s+", " ", source_text).strip()
                 parts.append(f"*Source caption: {normalized_source_caption}*")
             return "\n\n".join(part for part in parts if part)
@@ -3300,6 +3402,7 @@ class ExportService:
                 asset_path_by_block_id,
                 include_source_toggle=False,
                 include_notice=False,
+                include_source_caption=False,
             )
             for block in body_blocks
         )
@@ -6111,6 +6214,7 @@ class ExportService:
         *,
         include_source_toggle: bool = True,
         include_notice: bool = True,
+        include_source_caption: bool = True,
     ) -> str:
         notice_text = str(block.notice or "") if include_notice else ""
         source_html = self._format_inline_text(block.source_text)
@@ -6122,7 +6226,11 @@ class ExportService:
             if asset_src and block.artifact_kind in {"image", "figure"}:
                 note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
                 image_alt_text = str(block.source_metadata.get("image_alt") or "PDF image")
-                source_caption = "" if block.source_text in {"", "[Image]"} else source_html
+                source_caption = (
+                    ""
+                    if not include_source_caption or block.source_text in {"", "[Image]"}
+                    else source_html
+                )
                 body = (
                     "<figure class='artifact-figure'>"
                     f"<img class='artifact-image' src='{html.escape(asset_src)}' alt='{html.escape(image_alt_text)}'/>"
@@ -6164,7 +6272,7 @@ class ExportService:
             if asset_path_by_block_id is not None:
                 asset_src = str(asset_path_by_block_id.get(block.block_id) or "")
             image_alt_text = str(block.source_metadata.get("image_alt") or block.source_text or "Embedded image")
-            source_caption = source_html if block.source_text else ""
+            source_caption = source_html if (include_source_caption and block.source_text) else ""
             footer_source_caption = source_caption
             if asset_src:
                 figure_html = (
@@ -6183,6 +6291,8 @@ class ExportService:
                 body = f"<div class='artifact-body'>{''.join(metadata_lines) or source_html}</div>"
                 if not metadata_lines:
                     footer_source_caption = ""
+            if not include_source_caption:
+                footer_source_caption = ""
             caption_html = "".join(
                 part
                 for part in (
@@ -6866,10 +6976,14 @@ class ExportService:
             if chapter_title_target and bundle.chapter.title_src and chapter_title_target != bundle.chapter.title_src
             else ""
         )
+        body_blocks = self._merged_body_blocks(
+            list(render_blocks), str(chapter_title_target or "").strip()
+        )
         blocks_html = "".join(
             self._render_block_html(block, asset_path_by_block_id)
-            for block in render_blocks
+            for block in body_blocks
         )
+        usage_html = self._build_usage_summary_html(list(bundle.translation_runs))
         if not blocks_html:
             blocks_html = "<div class='empty-state'>No renderable blocks in this chapter.</div>"
         return (
@@ -6916,6 +7030,7 @@ class ExportService:
             "@media (max-width: 860px){.page{padding:18px 12px 36px;}.hero,.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}"
             "@media print{body{background:#fff;}.page{max-width:none;padding:0;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;}.artifact{box-shadow:none;}}"
             ".math-block{margin:16px 0;text-align:center;}.math-block.equation-text pre{display:inline-block;text-align:left;}"
+            f"{self._usage_summary_css()}"
             "</style>"
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
             "</head><body>"
@@ -6925,6 +7040,7 @@ class ExportService:
             f"<h1>{html.escape(str(title_text))}</h1>"
             f"{source_title}"
             "</header>"
+            f"{usage_html}"
             "<section class='chapter'>"
             f"{blocks_html}"
             "</section>"
