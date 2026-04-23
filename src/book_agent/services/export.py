@@ -1164,6 +1164,59 @@ class ExportService:
             updated_at=now,
         )
 
+    _MODEL_COST_TABLE_PER_MILLION: dict[str, tuple[float, float]] = {
+        # (input_per_million_usd, output_per_million_usd) — public list prices.
+        "deepseek-chat": (0.27, 1.10),
+        "deepseek-reasoner": (0.55, 2.19),
+        "gpt-4o": (2.50, 10.00),
+        "gpt-4o-mini": (0.15, 0.60),
+        "gpt-4.1": (2.00, 8.00),
+        "gpt-4.1-mini": (0.40, 1.60),
+        "gpt-4.1-nano": (0.10, 0.40),
+        "claude-3-5-sonnet": (3.00, 15.00),
+        "claude-3-5-haiku": (0.80, 4.00),
+        "claude-opus-4": (15.00, 75.00),
+        "claude-sonnet-4": (3.00, 15.00),
+        "claude-haiku-4": (1.00, 5.00),
+    }
+
+    def _estimate_run_cost_usd(self, run: object) -> float | None:
+        stored = getattr(run, "cost_usd", None)
+        if stored is not None:
+            try:
+                return float(stored)
+            except (TypeError, ValueError):
+                pass
+        token_in = int(getattr(run, "token_in", 0) or 0)
+        token_out = int(getattr(run, "token_out", 0) or 0)
+        if token_in == 0 and token_out == 0:
+            return None
+        model_name = str(getattr(run, "model_name", "") or "").strip().lower()
+        if not model_name:
+            return None
+        prices = self._MODEL_COST_TABLE_PER_MILLION.get(model_name)
+        if prices is None:
+            for key, candidate in self._MODEL_COST_TABLE_PER_MILLION.items():
+                if model_name.startswith(key):
+                    prices = candidate
+                    break
+        if prices is None:
+            return None
+        input_price, output_price = prices
+        return round(
+            (token_in / 1_000_000.0) * input_price
+            + (token_out / 1_000_000.0) * output_price,
+            6,
+        )
+
+    def _sum_run_cost_usd(self, runs: list[object]) -> float:
+        total = 0.0
+        for run in runs:
+            estimate = self._estimate_run_cost_usd(run)
+            if estimate is not None:
+                total += estimate
+        return round(total, 6)
+
     def _collect_document_translation_runs(self, bundle: "DocumentExportBundle") -> list[object]:
         return [
             run
@@ -1180,7 +1233,9 @@ class ExportService:
         token_in = int(summary.get("total_token_in") or 0)
         token_out = int(summary.get("total_token_out") or 0)
         total_tokens = token_in + token_out
-        cost = float(summary.get("total_cost_usd") or 0.0)
+        priced_runs = sum(1 for run in runs if self._estimate_run_cost_usd(run) is not None)
+        estimated_cost = self._sum_run_cost_usd(runs)
+        any_stored_cost = any(getattr(run, "cost_usd", None) is not None for run in runs)
         avg_latency = summary.get("avg_latency_ms")
         total_latency_ms = int(summary.get("total_latency_ms") or 0)
         lines: list[tuple[str, str]] = []
@@ -1189,7 +1244,15 @@ class ExportService:
             "Token 消耗",
             f"输入 {token_in:,} · 输出 {token_out:,} · 合计 {total_tokens:,}",
         ))
-        lines.append(("调用费用", f"US$ {cost:,.4f}"))
+        if priced_runs == 0:
+            lines.append(("调用费用", "未配置单价，无法估算"))
+        else:
+            suffix = ""
+            if not any_stored_cost:
+                suffix = "（按公开单价估算）"
+            elif priced_runs < run_count:
+                suffix = f"（{priced_runs:,}/{run_count:,} 次已计费）"
+            lines.append(("调用费用", f"US$ {estimated_cost:,.4f}{suffix}"))
         if avg_latency is not None:
             lines.append((
                 "延迟",
