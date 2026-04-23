@@ -2643,7 +2643,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertNotIn("## Reading Map", markdown_text)
         self.assertNotIn("## Chapter 1:", markdown_text)
         self.assertNotIn("_Source title:", markdown_text)
-        self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
+        self.assertIn("![Agent loop architecture](assets/agent-loop.png)", markdown_text)
         self.assertIn("```python", markdown_text)
         self.assertIn('return "ok"', markdown_text)
         self.assertIn("| Tier | Latency |", markdown_text)
@@ -2679,7 +2679,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertIn("OEBPS/content.opf", names)
         self.assertIn("OEBPS/styles/book.css", names)
         self.assertIn("OEBPS/text/chapter-001.xhtml", names)
-        self.assertIn("OEBPS/assets/OEBPS/images/agent-loop.png", names)
+        self.assertIn("OEBPS/assets/agent-loop.png", names)
         self.assertIn("Chapter One", nav_xhtml)
         self.assertIn("Agent loop architecture", chapter_xhtml)
         self.assertEqual(manifest["export_type"], "rebuilt_epub")
@@ -2799,7 +2799,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
         # "_Source title:_" addendum.
         self.assertNotIn("## Chapter 1:", markdown_text)
         self.assertNotIn("_Source title:", markdown_text)
-        self.assertIn("![Agent loop architecture](assets/OEBPS/images/agent-loop.png)", markdown_text)
+        self.assertIn("![Agent loop architecture](assets/agent-loop.png)", markdown_text)
 
     def test_visible_merged_chapters_group_pdf_auxiliary_sections_under_real_top_level_titles(self) -> None:
         now = datetime.now(timezone.utc)
@@ -8743,9 +8743,9 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
             self.assertEqual(
                 asset_map,
-                {"legacy-epub-figure-caption": "assets/OEBPS/images/ch1/fig1.png"},
+                {"legacy-epub-figure-caption": "assets/fig1.png"},
             )
-            self.assertTrue((output_dir / "assets/OEBPS/images/ch1/fig1.png").is_file())
+            self.assertTrue((output_dir / "assets/fig1.png").is_file())
 
     def test_export_epub_archive_assets_recovers_legacy_figure_image_path_from_malformed_xhtml(self) -> None:
         chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -8797,9 +8797,9 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
             self.assertEqual(
                 asset_map,
-                {"legacy-epub-figure-caption-malformed": "assets/OEBPS/images/ch1/fig1.png"},
+                {"legacy-epub-figure-caption-malformed": "assets/fig1.png"},
             )
-            self.assertTrue((output_dir / "assets/OEBPS/images/ch1/fig1.png").is_file())
+            self.assertTrue((output_dir / "assets/fig1.png").is_file())
 
     def test_export_epub_archive_assets_materializes_original_asset_for_reuse(self) -> None:
         chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -8853,9 +8853,9 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
             self.assertEqual(
                 asset_map,
-                {"legacy-epub-figure-materialized": "assets/OEBPS/images/ch1/fig1.jpg"},
+                {"legacy-epub-figure-materialized": "assets/fig1.jpg"},
             )
-            self.assertEqual((output_dir / "assets/OEBPS/images/ch1/fig1.jpg").read_bytes(), b"fake-jpg-bytes")
+            self.assertEqual((output_dir / "assets/fig1.jpg").read_bytes(), b"fake-jpg-bytes")
             self.assertTrue(Path(document_image.storage_path).exists())
             self.assertEqual(Path(document_image.storage_path).read_bytes(), b"fake-jpg-bytes")
             self.assertEqual(document_image.metadata_json["materialized_via"], "epub_archive_asset")

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import mimetypes
 import posixpath
 import re
 import shutil
+import urllib.parse
 import zipfile
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -3035,7 +3037,7 @@ class ExportService:
         if block.render_mode == "source_artifact_full_width":
             if asset_src and block.artifact_kind in {"image", "figure"}:
                 parts = [self._markdown_blockquote(notice)] if notice else []
-                parts.append(f"![{image_alt_text}]({asset_src})")
+                parts.append(self._markdown_image_reference(image_alt_text, asset_src))
                 if (
                     include_source_caption
                     and source_text
@@ -3084,7 +3086,7 @@ class ExportService:
         if block.render_mode == "image_anchor_with_translated_caption":
             parts: list[str] = []
             if asset_src:
-                parts.append(f"![{image_alt_text}]({asset_src})")
+                parts.append(self._markdown_image_reference(image_alt_text, asset_src))
             elif include_source_caption and source_text:
                 parts.append(self._markdown_blockquote(source_text, label="Image caption"))
             if target_text:
@@ -6296,7 +6298,7 @@ class ExportService:
                 )
                 body = (
                     "<figure class='artifact-figure'>"
-                    f"<img class='artifact-image' src='{html.escape(asset_src)}' alt='{html.escape(image_alt_text)}'/>"
+                    f"<img class='artifact-image' src='{html.escape(self._url_encode_asset_path(asset_src))}' alt='{html.escape(image_alt_text)}'/>"
                     f"{f'<figcaption>{source_caption}</figcaption>' if source_caption else ''}"
                     "</figure>"
                 )
@@ -6340,7 +6342,7 @@ class ExportService:
             if asset_src:
                 figure_html = (
                     "<figure class='artifact-figure'>"
-                    f"<img class='artifact-image' src='{html.escape(asset_src)}' alt='{html.escape(image_alt_text)}'/>"
+                    f"<img class='artifact-image' src='{html.escape(self._url_encode_asset_path(asset_src))}' alt='{html.escape(image_alt_text)}'/>"
                     "</figure>"
                 )
                 body = f"<div class='artifact-body'>{figure_html}</div>"
@@ -7555,6 +7557,51 @@ class ExportService:
             ).as_posix()
         return exported
 
+    _ASSET_FILENAME_SAFE_CHARS: str = (
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "0123456789"
+        "-._~"
+    )
+
+    def _sanitize_asset_basename(self, name: str) -> str:
+        cleaned = re.sub(r"\s+", "-", (name or "").strip()) or "asset"
+        cleaned = "".join(
+            ch if ch in self._ASSET_FILENAME_SAFE_CHARS else "-"
+            for ch in cleaned
+        )
+        cleaned = re.sub(r"-{2,}", "-", cleaned).strip("-.")
+        return cleaned or "asset"
+
+    def _allocate_flat_asset_filename(
+        self,
+        archive_path: str,
+        name_assignments: dict[str, str],
+    ) -> str:
+        if archive_path in name_assignments:
+            return name_assignments[archive_path]
+        base = PurePosixPath(archive_path).name or "asset"
+        suffix = PurePosixPath(base).suffix
+        stem = base[: len(base) - len(suffix)] if suffix else base
+        safe_stem = self._sanitize_asset_basename(stem)
+        safe_suffix = suffix if re.fullmatch(r"\.[A-Za-z0-9]{1,10}", suffix or "") else ""
+        candidate = f"{safe_stem}{safe_suffix}"
+        taken = set(name_assignments.values())
+        if candidate in taken:
+            digest = hashlib.sha1(archive_path.encode("utf-8")).hexdigest()[:8]
+            candidate = f"{safe_stem}-{digest}{safe_suffix}"
+        name_assignments[archive_path] = candidate
+        return candidate
+
+    def _url_encode_asset_path(self, path: str) -> str:
+        if not path:
+            return ""
+        return urllib.parse.quote(path, safe="/-_.~")
+
+    def _markdown_image_reference(self, alt_text: str, path: str) -> str:
+        escaped_alt = re.sub(r"([\[\]\\])", r"\\\1", str(alt_text or ""))
+        return f"![{escaped_alt}]({self._url_encode_asset_path(path)})"
+
     def _export_epub_assets(
         self,
         source_type: SourceType,
@@ -7604,6 +7651,7 @@ class ExportService:
         asset_root = output_dir / "assets"
         asset_root.mkdir(parents=True, exist_ok=True)
         relative_path_by_archive_path: dict[str, str] = {}
+        flat_name_assignments: dict[str, str] = {}
         with zipfile.ZipFile(epub_path) as archive:
             legacy_figure_index_cache: dict[str, dict[str, str]] = {}
             for block in render_blocks:
@@ -7625,13 +7673,16 @@ class ExportService:
                     archive_info = archive.getinfo(archive_path)
                 except KeyError:
                     continue
-                relative_path = PurePosixPath("assets").joinpath(PurePosixPath(archive_path))
-                target_path = asset_root.joinpath(*PurePosixPath(archive_path).parts)
-                target_path.parent.mkdir(parents=True, exist_ok=True)
+                flat_name = self._allocate_flat_asset_filename(
+                    archive_path, flat_name_assignments
+                )
+                target_path = asset_root / flat_name
                 if not target_path.exists():
                     with archive.open(archive_info) as source_handle, target_path.open("wb") as target_handle:
                         shutil.copyfileobj(source_handle, target_handle)
-                relative_path_by_archive_path[archive_path] = relative_path.as_posix()
+                relative_path_by_archive_path[archive_path] = PurePosixPath(
+                    "assets", flat_name
+                ).as_posix()
 
             for block_id, archive_path in archive_path_by_block_id.items():
                 persisted_image = document_image_by_block_id.get(block_id)

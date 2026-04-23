@@ -2862,7 +2862,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(export.status_code, 200)
         merged_html_path = Path(export.json()["file_path"])
         merged_html = merged_html_path.read_text(encoding="utf-8")
-        asset_relative_path = "assets/OEBPS/images/agent-loop.png"
+        asset_relative_path = "assets/agent-loop.png"
         self.assertTrue((merged_html_path.parent / asset_relative_path).exists())
         self.assertIn("图片锚点保留", merged_html)
         self.assertIn("<img class='artifact-image'", merged_html)
@@ -2910,7 +2910,7 @@ class ApiWorkflowTests(unittest.TestCase):
             names = archive.namelist()
 
         self.assertIn(f"{document_id}-analysis-bundle/merged-document.html", names)
-        self.assertIn(f"{document_id}-analysis-bundle/assets/OEBPS/images/agent-loop.png", names)
+        self.assertIn(f"{document_id}-analysis-bundle/assets/agent-loop.png", names)
 
     def test_execute_action_with_followup_realigns_missing_edges(self) -> None:
         epub_path = self._write_epub()
