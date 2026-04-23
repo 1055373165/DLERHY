@@ -367,6 +367,13 @@ def _export_sidecar_paths(file_path: Path) -> list[Path]:
     return sorted(path for path in assets_dir.rglob("*") if path.is_file())
 
 
+def _sidecar_archive_name(sidecar_path: Path, canonical_path: Path) -> str | None:
+    try:
+        return sidecar_path.relative_to(canonical_path.parent).as_posix()
+    except ValueError:
+        return None
+
+
 def _build_export_archive(
     document_id: str,
     export_type: ExportType,
@@ -1763,7 +1770,13 @@ def download_document_chapter_export(
     ) or file_path
     archive_inputs = [
         ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
-        *[ArchiveInput(path=sidecar_path) for sidecar_path in _export_sidecar_paths(canonical_path)],
+        *[
+            ArchiveInput(
+                path=sidecar_path,
+                archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
+            )
+            for sidecar_path in _export_sidecar_paths(canonical_path)
+        ],
     ]
     if len(archive_inputs) == 1:
         dl_name = _chapter_export_download_filename(
@@ -1953,7 +1966,12 @@ def download_document_export(
         preferred_archive_name=main_filename,
     )
     for sidecar_path in _export_sidecar_paths(canonical_path):
-        _append_archive_input(archive_inputs, seen_paths, sidecar_path)
+        _append_archive_input(
+            archive_inputs,
+            seen_paths,
+            sidecar_path,
+            preferred_archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
+        )
 
     # Single file with no sidecar assets → return directly
     if len(archive_inputs) == 1:

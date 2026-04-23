@@ -7602,6 +7602,15 @@ class ExportService:
         escaped_alt = re.sub(r"([\[\]\\])", r"\\\1", str(alt_text or ""))
         return f"![{escaped_alt}]({self._url_encode_asset_path(path)})"
 
+    _ASSET_DIR_PRESERVED_SUBDIRS: frozenset[str] = frozenset({"document-images"})
+
+    def _purge_legacy_nested_asset_dirs(self, asset_root: Path) -> None:
+        if not asset_root.is_dir():
+            return
+        for child in asset_root.iterdir():
+            if child.is_dir() and child.name not in self._ASSET_DIR_PRESERVED_SUBDIRS:
+                shutil.rmtree(child, ignore_errors=True)
+
     def _export_epub_assets(
         self,
         source_type: SourceType,
@@ -7650,6 +7659,7 @@ class ExportService:
         archive_path_by_block_id: dict[str, str] = {}
         asset_root = output_dir / "assets"
         asset_root.mkdir(parents=True, exist_ok=True)
+        self._purge_legacy_nested_asset_dirs(asset_root)
         relative_path_by_archive_path: dict[str, str] = {}
         flat_name_assignments: dict[str, str] = {}
         with zipfile.ZipFile(epub_path) as archive:
