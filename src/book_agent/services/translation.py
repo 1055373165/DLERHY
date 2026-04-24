@@ -7,6 +7,7 @@ from typing import Any
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.event_kinds import (
+    GLOSSARY_VIOLATION,
     LLM_CALL_COMPLETED,
     LLM_CALL_FAILED,
     LLM_CALL_STARTED,
@@ -19,6 +20,8 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
+from book_agent.services.glossary_enforcement import detect_violations
+from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
 from book_agent.workers.contracts import (
@@ -395,6 +398,20 @@ class TranslationService:
                 "sentence_count": len(bundle.current_sentences),
             },
         )
+        # PDF v2 M2.7: post-validate translated artifacts against the
+        # document-level locked glossary. Violations are surfaced as
+        # GLOSSARY_VIOLATION events for review/observability without
+        # blocking the translation run — the principle is "report,
+        # don't crash" so a glossary anomaly never derails throughput.
+        try:
+            self._emit_glossary_violations(
+                bundle=bundle,
+                artifacts=artifacts,
+                run_id=run_id,
+            )
+        except Exception:  # pragma: no cover - defensive guard
+            # Post-validation must never break the translation flow.
+            pass
         proposed_content_json = self._build_chapter_memory_content_json(
             bundle=bundle,
             artifacts=artifacts,
@@ -417,6 +434,55 @@ class TranslationService:
             )
         self.repository.session.flush()
         return artifacts
+
+    def _emit_glossary_violations(
+        self,
+        *,
+        bundle: TranslationPacketBundle,
+        artifacts: "TranslationExecutionArtifacts",
+        run_id: str | None,
+    ) -> None:
+        """Detect locked-term violations in the freshly-translated packet
+        and emit `GLOSSARY_VIOLATION` events. PDF v2 M2.7 worker integration.
+
+        Resolution model: per-document glossary is loaded once per
+        execute_packet call. Source/target text is concatenated across
+        the packet's current sentences and target segments respectively;
+        a single detect_violations pass produces one event per breached
+        rule. Per-sentence pinpointing can come later — first ship the
+        signal in production.
+        """
+        document_id = bundle.context_packet.document_id
+        if not document_id:
+            return
+        glossary_service = GlossaryService(self.repository.session)
+        locked = glossary_service.get_locked_terms(document_id)
+        if not locked:
+            return
+        source_text = "\n".join(s.source_text for s in bundle.current_sentences if s.source_text)
+        target_text = "\n".join(
+            seg.text_zh for seg in artifacts.target_segments if getattr(seg, "text_zh", None)
+        )
+        violations = detect_violations(source_text, target_text, locked)
+        for v in violations:
+            emit_event(
+                self.repository.session,
+                kind=GLOSSARY_VIOLATION,
+                run_id=run_id,
+                chapter_id=bundle.packet.chapter_id,
+                packet_id=bundle.packet.id,
+                actor_kind="system",
+                actor_id="services.translation.glossary_enforcement",
+                payload={
+                    "translation_run_id": artifacts.translation_run.id,
+                    "document_id": document_id,
+                    "source_term": v.source_term,
+                    "expected_target": v.expected_target,
+                    "source_match_count": v.source_match_count,
+                    "target_match_count": v.target_match_count,
+                    "severity_hint": v.severity_hint,
+                },
+            )
 
     def _build_artifacts(
         self,

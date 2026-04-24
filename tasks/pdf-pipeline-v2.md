@@ -239,3 +239,16 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] `tests/test_glossary_enforcement.py` 16 测试:空输入 / 源术语不存在跳过 / 完全遵守 / hard/partial 违规 / 词边界 / case-insensitive 源匹配 / 多术语独立 / 空条目过滤 / CJK 检测 3 种 / leak detector 3 种
 
 **价值**:译文质量的第二道防线,**独立于 worker** 可运行,适合作为 review 阶段 gate 或事件发射触发器。未来任何 worker 替换都不破坏这层。
+
+---
+
+### M2.7 worker 接入 · post-validation 集成(Task #43)✅
+
+- [x] `services/translation.py` 加 `_emit_glossary_violations` 助手:execute_packet 调完 worker 后,从 `bundle.context_packet.document_id` 取 GlossaryService.get_locked_terms,聚合 packet 内 source/target 文本调 detect_violations,每条违规发 `GLOSSARY_VIOLATION` 事件
+- [x] `try/except` 包裹:任何 post-validation 异常都不中断翻译主流程("report, don't crash")
+- [x] payload 携带 source_term / expected_target / severity_hint / source_match_count / target_match_count / document_id / translation_run_id
+- [x] `tests/test_translation_glossary_postvalidation.py` 5 测试:无锁定术语零事件 / 译文遵守零事件 / 违规发事件含完整 payload / 跨文档隔离 / 多术语独立判定
+
+**当前接入**:**Post-validation 即时上线** —— GlossaryService 的锁定术语会在每次 packet 翻译完后自动校验,违规事件入 `events` 表,可通过现有 SSE / 审阅 UI / 遥测消费。
+
+**未做**:**Prompt 注入(M2.7b)** —— 在 LLM 翻译之前把 `locked_glossary` 写入 system prompt 作为权威映射。这需要改 14 个 prompt profile + ContextPacket schema + 多个 worker,影响面大,留作下一独立增量。当前 post-validation 等价于"事后纠错信号";prompt 注入则是"事前预防"。两者互补。
