@@ -157,3 +157,14 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] 顺手修 `derive_translatability` 一致性 bug:之前 `translatable=True` 会错误地让 code/equation 绕过块类型保护,现已对齐 `block_rules.translatability_for_block` 的优先级语义
 
 **价值**:所有后续 PDF 改动在 CI 上都有 5 份可独立生成的 PDF 做结构化断言。每个 fixture 对应一个具体失败模式,回退即触发 red。
+
+---
+
+### M2.3a · OCR 重抽取适配器接口 + 注入(Task #36)✅
+
+- [x] `domain/structure/ocr_reextraction.py`:`OcrReextractionRequest` dataclass(anchor/page/bbox/current_text/failure_reason)+ `OcrReextractionAdapter` Protocol + `NoOpOcrReextractionAdapter` 默认实现
+- [x] `PdfStructureRecoveryService.__init__` 新增 `ocr_reextraction_adapter` kwarg(None=no-op)
+- [x] `recover()` 末尾调 `_apply_ocr_reextraction`:扫描所有 block 的 `confidence_breakdown.sanity_ok is False`,构造 requests,调 adapter,用 `dataclasses.replace` 写回新 text + `provenance=OCR` + `sanity_ok=True` + `reextracted_via=ocr_adapter` 审计痕
+- [x] `tests/test_ocr_reextraction_wiring.py` 5 个测试:默认路径 / NoOp / Fake 全量替换 / Fake 部分替换 / sanity OK 的页面不送 adapter
+
+**价值**:现在 **把 Surya OCR runner 包成一个 OcrReextractionAdapter 实现,就能让 sanity 失败的页面真正走 OCR**。所有上游协议、下游回写逻辑都已就位,只差 M2.3b(Surya adapter 实现)。
