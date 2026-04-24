@@ -182,3 +182,15 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] `tests/test_surya_reextraction_adapter.py` 11 测试:bbox helper(normalize/overlap 5 种)+ adapter 主路径(empty/cost_guard/surya_failure/happy/no_overlap_fallback/nonexistent_page)
 
 **价值**:构造 `PdfStructureRecoveryService(ocr_reextraction_adapter=SuryaOcrReextractionAdapter())` 即可让 sanity-fail 页面真 OCR。 端到端 user-visible 改动的最后一公里已铺通。剩下的是在 bootstrap 层把 adapter 注入到 recovery service,以及在遥测/成本控制层加运营护栏。
+
+---
+
+### M2.3 闭环 · Bootstrap 接入(Task #38)✅
+
+- [x] `domain/structure/pdf.py` 新增 `build_default_recovery_service()` factory + `_sanity_ocr_reextraction_enabled()` env 检查
+- [x] Env flag `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION` 接受 `1/true/yes/on` 作为真值,默认关闭 → 行为完全向后兼容
+- [x] `PDFParser.__init__` 默认从 factory 取 recovery service,显式传入的 `recovery_service=` 仍优先(explicit > env)
+- [x] `OcrPdfParser` 不接入 adapter(扫描路径已全 OCR,再跑一次 reextraction 没意义)
+- [x] `tests/test_pdf_bootstrap_adapter_wiring.py` 8 测试:feature flag 真/假值识别 + factory 两分支 + PDFParser 三种配置组合(默认+off、默认+on、显式 recovery_service 优先)
+
+**价值**:**M2 北极星现已可 opt-in 生效**。运维团队设置 `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION=1` 后,所有 sanity 失败的页面都会走真 Surya OCR 得到修复后的文本;不设则行为与 M1 完全一致。逐步灰度、观察遥测、最终转默认,按运营节奏推进。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import re
 import sys
 import zlib
@@ -8,7 +9,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from statistics import median
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 if TYPE_CHECKING:
     from book_agent.domain.structure.ocr_reextraction import (
@@ -8154,6 +8155,42 @@ class PdfStructureRecoveryService:
         return replace(primary, blocks=merged_blocks, metadata=merged_metadata)
 
 
+# PDF v2 M2.3 closure: single source of truth for the default recovery
+# service used by both the text-layer PDFParser and the scanned
+# OcrPdfParser. When the BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION env flag
+# is enabled ("1" / "true" / "yes"), we inject a SuryaOcrReextractionAdapter
+# so sanity-failed pages route through real OCR at recover() time.
+# The flag defaults to OFF to preserve existing behaviour for all callers
+# that have not yet opted in to the repair pass.
+_SANITY_OCR_FLAG_ENV: Final[str] = "BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION"
+
+
+def _sanity_ocr_reextraction_enabled() -> bool:
+    raw = os.getenv(_SANITY_OCR_FLAG_ENV, "")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_default_recovery_service() -> PdfStructureRecoveryService:
+    """Construct a PdfStructureRecoveryService with env-driven defaults.
+
+    When sanity-driven OCR re-extraction is enabled, we attach a
+    `SuryaOcrReextractionAdapter`; otherwise we return a plain service.
+    Callers that want explicit control can instantiate
+    `PdfStructureRecoveryService(ocr_reextraction_adapter=...)` directly.
+    """
+    if not _sanity_ocr_reextraction_enabled():
+        return PdfStructureRecoveryService()
+    # Lazy import to avoid pulling Surya-runtime deps into every code path
+    # that merely constructs a parser.
+    from book_agent.domain.structure.surya_reextraction import (
+        SuryaOcrReextractionAdapter,
+    )
+
+    return PdfStructureRecoveryService(
+        ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
+    )
+
+
 class PDFParser:
     def __init__(
         self,
@@ -8165,7 +8202,7 @@ class PDFParser:
     ):
         self.extractor = extractor or DefaultPdfTextExtractor(image_output_dir=image_output_dir)
         self.profiler = profiler or PdfFileProfiler(self.extractor)
-        self.recovery_service = recovery_service or PdfStructureRecoveryService()
+        self.recovery_service = recovery_service or build_default_recovery_service()
 
     def parse(
         self,
