@@ -28,6 +28,8 @@ One required variable: `OPENAI_API_KEY`. Everything else has sane defaults.
 
 ---
 
+https://github.com/user-attachments/assets/5d9a9d35-07d6-4543-95b3-59040fb04d43
+
 ## 🚀 Quick Start
 
 ### Option 1 · Docker (recommended, zero setup)
