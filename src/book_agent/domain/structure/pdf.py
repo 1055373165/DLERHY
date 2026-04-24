@@ -8,7 +8,12 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from statistics import median
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from book_agent.domain.structure.ocr_reextraction import (
+        OcrReextractionAdapter,
+    )
 
 from book_agent.domain.document_titles import cleaned_filename_book_title, looks_like_auxiliary_document_title
 from book_agent.domain.enums import BlockType
@@ -4341,6 +4346,16 @@ class _ChapterStartCandidate:
 
 
 class PdfStructureRecoveryService:
+    def __init__(
+        self,
+        *,
+        ocr_reextraction_adapter: "OcrReextractionAdapter | None" = None,
+    ) -> None:
+        # M2.3a: adapter for re-extracting blocks whose source page failed
+        # the text-layer sanity gate. Default None = no re-extraction
+        # (current behavior preserved for all in-tree callers).
+        self._ocr_reextraction_adapter = ocr_reextraction_adapter
+
     def recover(
         self,
         file_path: str | Path,
@@ -4393,6 +4408,16 @@ class PdfStructureRecoveryService:
             profile,
         )
 
+        # PDF v2 M2.3a: re-extract blocks on sanity-failed pages through
+        # the configured OCR adapter. Default adapter is None → no-op,
+        # preserving backward compatibility for callers that haven't
+        # opted in.
+        if self._ocr_reextraction_adapter is not None:
+            chapters = self._apply_ocr_reextraction(
+                chapters,
+                pdf_path=str(file_path),
+            )
+
         inferred_title = self._infer_document_title_from_recovered_blocks(recovered_blocks)
         filename_title = cleaned_filename_book_title(file_path)
         if profile.recovery_lane == "academic_paper":
@@ -4433,6 +4458,105 @@ class PdfStructureRecoveryService:
             chapters=chapters,
             metadata=metadata,
         )
+
+    def _apply_ocr_reextraction(
+        self,
+        chapters: list[ParsedChapter],
+        *,
+        pdf_path: str,
+    ) -> list[ParsedChapter]:
+        """Route blocks with sanity_ok=False through the OCR adapter (M2.3a).
+
+        For each such block the adapter may return a replacement text
+        keyed by the block's anchor; when present, we rebuild the block
+        with the new text, flip `confidence_breakdown.sanity_ok` to True
+        (the new provenance is authoritative), and keep
+        `provenance=PROVENANCE_OCR`. Blocks the adapter omits are left
+        unchanged — silence is "no confident replacement available."
+        """
+        from dataclasses import replace as _replace
+
+        from book_agent.domain.structure.ocr_reextraction import (
+            OcrReextractionRequest,
+        )
+
+        requests: list[OcrReextractionRequest] = []
+        for chapter in chapters:
+            for block in chapter.blocks:
+                if block.confidence_breakdown.get("sanity_ok") is not False:
+                    continue
+                if not block.anchor:
+                    continue
+                page_number = int(
+                    block.metadata.get("source_page_start") or 0
+                )
+                if page_number <= 0:
+                    continue
+                bbox_regions = (
+                    block.metadata.get("source_bbox_json", {}) or {}
+                ).get("regions") or []
+                bbox_value = (
+                    bbox_regions[0].get("bbox")
+                    if bbox_regions and isinstance(bbox_regions[0], dict)
+                    else None
+                )
+                if not bbox_value or len(bbox_value) < 4:
+                    bbox_tuple: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+                else:
+                    bbox_tuple = (
+                        float(bbox_value[0]),
+                        float(bbox_value[1]),
+                        float(bbox_value[2]),
+                        float(bbox_value[3]),
+                    )
+                requests.append(
+                    OcrReextractionRequest(
+                        block_anchor=block.anchor,
+                        page_number=page_number,
+                        bbox=bbox_tuple,
+                        current_text=block.text,
+                        failure_reason=str(
+                            block.confidence_breakdown.get("sanity_reason") or "unknown"
+                        ),
+                    )
+                )
+
+        if not requests:
+            return chapters
+
+        adapter = self._ocr_reextraction_adapter
+        assert adapter is not None  # guarded by caller
+        replacements = adapter.reextract_blocks(pdf_path, requests) or {}
+        if not replacements:
+            return chapters
+
+        new_chapters: list[ParsedChapter] = []
+        for chapter in chapters:
+            rebuilt_blocks: list[ParsedBlock] = []
+            changed = False
+            for block in chapter.blocks:
+                if block.anchor and block.anchor in replacements:
+                    new_text = replacements[block.anchor]
+                    if new_text and new_text != block.text:
+                        new_confidence = dict(block.confidence_breakdown)
+                        new_confidence["sanity_ok"] = True
+                        new_confidence["reextracted_via"] = "ocr_adapter"
+                        rebuilt_blocks.append(
+                            _replace(
+                                block,
+                                text=new_text,
+                                provenance=PROVENANCE_OCR,
+                                confidence_breakdown=new_confidence,
+                            )
+                        )
+                        changed = True
+                        continue
+                rebuilt_blocks.append(block)
+            if changed:
+                new_chapters.append(_replace(chapter, blocks=rebuilt_blocks))
+            else:
+                new_chapters.append(chapter)
+        return new_chapters
 
     def _infer_document_title_from_recovered_blocks(
         self,
