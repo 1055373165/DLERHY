@@ -168,3 +168,17 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] `tests/test_ocr_reextraction_wiring.py` 5 个测试:默认路径 / NoOp / Fake 全量替换 / Fake 部分替换 / sanity OK 的页面不送 adapter
 
 **价值**:现在 **把 Surya OCR runner 包成一个 OcrReextractionAdapter 实现,就能让 sanity 失败的页面真正走 OCR**。所有上游协议、下游回写逻辑都已就位,只差 M2.3b(Surya adapter 实现)。
+
+---
+
+### M2.3b · Surya-backed OCR 适配器(Task #37)✅
+
+- [x] `domain/structure/surya_reextraction.py`:`SuryaOcrReextractionAdapter` 包装已有 `OcrPdfTextExtractor`
+- [x] 子集 PDF 构建(PyMuPDF `doc.insert_pdf(from_page, to_page)`)让 Surya 只 OCR 失败页,成本与失败页数成正比而非文档长度
+- [x] bbox 相对坐标匹配([0,1] 归一化 + 面积交叠比阈值 0.25)避开 DPI 问题;无匹配时回落到全页文本
+- [x] 成本护栏 `max_failed_pages_per_doc=20`(超限直接返回 `{}` 不触发 Surya)
+- [x] 容错:Surya 失败 / subset 失败 / page dims 失败 → 全部降级返 `{}` 并把原因写进 `SuryaAdapterMetrics.error`
+- [x] `last_metrics` 暴露遥测:requests_seen / pages_requested / pages_ocrd / replacements_returned / cost_guard_tripped / error
+- [x] `tests/test_surya_reextraction_adapter.py` 11 测试:bbox helper(normalize/overlap 5 种)+ adapter 主路径(empty/cost_guard/surya_failure/happy/no_overlap_fallback/nonexistent_page)
+
+**价值**:构造 `PdfStructureRecoveryService(ocr_reextraction_adapter=SuryaOcrReextractionAdapter())` 即可让 sanity-fail 页面真 OCR。 端到端 user-visible 改动的最后一公里已铺通。剩下的是在 bootstrap 层把 adapter 注入到 recovery service,以及在遥测/成本控制层加运营护栏。
