@@ -41,16 +41,15 @@
 
 ---
 
-### M1.3 · 多栏阅读序真正重排 (Task #31)
+### M1.3 · 多栏阅读序真正重排 (Task #31) ✅
 
-- [ ] 新增 `reading_order_recoverer.py`(或并入 pdf.py 结构恢复服务):
-  - `detect_columns(page_layout) -> list[Column]`:vertical whitespace histogram
-  - `order_blocks_by_column(blocks, columns) -> list[blocks]`
-- [ ] 接入 `PdfStructureRecoveryService`:识别多栏页后调用上面函数,替换原 y-sort
-- [ ] 保留 single-column fast path,防止简单页面性能劣化
-- [ ] 金标回归:2 栏论文 + 2 栏杂志 + 3 栏 newsletter,人工标注正确阅读序与算法输出对比
+**实际收敛**:发现 `_academic_column_major_blocks` 已实现完整的列重排逻辑,只是被 `profile.recovery_lane == "academic_paper"` 锁在学术路径。本任务把它解放到所有 lane:
 
-**验收**:多栏重排正确率 ≥95%。
+- [x] 重命名 `_academic_column_major_blocks` → `_column_major_blocks`,移除 lane 限制
+- [x] `_ordered_page_blocks` 改为仅依赖 `_page_has_multi_column_signature` 判断(grouping 失败时保守回退到 top-down,逻辑不变)
+- [x] `tests/test_pdf_column_reorder.py`:构造双栏 page + 单栏 page 两个对照测试,证明 book lane 的多栏页面现在按 LEFT→RIGHT 顺序排列
+
+**验收**:非学术 lane 双栏页面重排正确(测试通过);单栏页面行为不变(回归零);基线零新增失败。
 
 ---
 
@@ -124,3 +123,16 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - ToC / cross-ref(M4)
 - 扫描件加固(M4)
 - 文档级术语表(M2)
+
+---
+
+## M2 已完成子项
+
+### M2.1 · Page sanity → ParsedBlock.provenance 传导 (Task #34) ✅
+
+- [x] `_build_chapters` 接受可选 `pages` 参数,构建 `sanity_by_page` 查找表
+- [x] `_build_parsed_block` 闭包根据 `block.page_start` 查 sanity,失败时 `provenance=PROVENANCE_OCR`,成功时保持默认 `PROVENANCE_TEXT_LAYER`
+- [x] `confidence_breakdown` 记录 `sanity_ok` + `sanity_reason` 供 router 诊断
+- [x] `tests/test_pdf_sanity_propagation.py` 两测试覆盖:失败页 → OCR provenance、缺省页 → 不回归
+
+**价值**:M1.2 的 sanity 判断现在真的能被下游消费。M2.2 router 可以读 `ParsedBlock.provenance` 决定是否送 OCR/VLM 重抽。

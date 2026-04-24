@@ -14,6 +14,8 @@ from book_agent.domain.document_titles import cleaned_filename_book_title, looks
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.models import (
+    PROVENANCE_OCR,
+    PROVENANCE_TEXT_LAYER,
     ParsedBlock,
     ParsedChapter,
     ParsedDocument,
@@ -4377,7 +4379,13 @@ class PdfStructureRecoveryService:
             recovered_blocks,
             academic_paper=profile.recovery_lane == "academic_paper",
         )
-        chapters = self._build_chapters(recovered_blocks, extraction.outline_entries, profile, file_path)
+        chapters = self._build_chapters(
+            recovered_blocks,
+            extraction.outline_entries,
+            profile,
+            file_path,
+            pages=ordered_pages,
+        )
         chapters = self._repair_academic_first_page_abstract_continuations(
             chapters,
             ordered_pages,
@@ -4735,14 +4743,16 @@ class PdfStructureRecoveryService:
         profile: PdfFileProfile,
     ) -> list[PdfTextBlock]:
         ordered_blocks = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
-        if profile.recovery_lane != "academic_paper":
-            return ordered_blocks
+        # PDF v2 M1.3: apply column-major reordering on ANY lane when the
+        # multi-column signature is present. The helper already bails out
+        # (returns None) when the page can't be cleanly grouped, so the
+        # top-down fallback remains authoritative for ambiguous layouts.
         if not _page_has_multi_column_signature(page):
             return ordered_blocks
-        column_major_blocks = self._academic_column_major_blocks(page, ordered_blocks)
+        column_major_blocks = self._column_major_blocks(page, ordered_blocks)
         return column_major_blocks or ordered_blocks
 
-    def _academic_column_major_blocks(
+    def _column_major_blocks(
         self,
         page: PdfPage,
         ordered_blocks: list[PdfTextBlock],
@@ -7205,7 +7215,16 @@ class PdfStructureRecoveryService:
         outline_entries: list[PdfOutlineEntry],
         profile: PdfFileProfile,
         file_path: str | Path,
+        *,
+        pages: list[PdfPage] | None = None,
     ) -> list[ParsedChapter]:
+        # Page-level sanity lookup (PDF v2 M2.1). Pages default to empty when
+        # callers haven't wired the new kwarg; in that case every block keeps
+        # its default provenance="text_layer".
+        sanity_by_page: dict[int, dict[str, Any]] = {
+            page.page_number: dict(page.text_layer_sanity or {})
+            for page in (pages or [])
+        }
         chapter_starts = self._chapter_start_candidates(recovered_blocks, outline_entries, profile)
         heading_titles_by_page: dict[int, list[str]] = defaultdict(list)
         for block in recovered_blocks:
@@ -7256,6 +7275,21 @@ class PdfStructureRecoveryService:
                         else None
                     ),
                 }
+                # Propagate per-page sanity verdict into ParsedBlock.provenance
+                # (PDF v2 M2.1). When the text-layer sanity gate rejected the
+                # block's source page, mark provenance advisory-only as
+                # PROVENANCE_OCR — the actual router (M2.2) will read this
+                # field to decide whether to re-extract via OCR/VLM.
+                sanity = sanity_by_page.get(block.page_start, {}) if sanity_by_page else {}
+                provenance_value = PROVENANCE_TEXT_LAYER
+                confidence_breakdown: dict[str, Any] = {}
+                if sanity.get("ok") is False:
+                    provenance_value = PROVENANCE_OCR
+                    confidence_breakdown["sanity_ok"] = False
+                    if sanity.get("reason"):
+                        confidence_breakdown["sanity_reason"] = sanity["reason"]
+                elif sanity.get("ok") is True:
+                    confidence_breakdown["sanity_ok"] = True
                 return ParsedBlock(
                     block_type=block.block_type.value,
                     text=block.text,
@@ -7267,6 +7301,8 @@ class PdfStructureRecoveryService:
                     translatability=derive_translatability(
                         block.block_type.value, block_metadata
                     ),
+                    provenance=provenance_value,
+                    confidence_breakdown=confidence_breakdown,
                 )
 
             parsed_blocks = [
