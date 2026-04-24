@@ -194,3 +194,48 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] `tests/test_pdf_bootstrap_adapter_wiring.py` 8 测试:feature flag 真/假值识别 + factory 两分支 + PDFParser 三种配置组合(默认+off、默认+on、显式 recovery_service 优先)
 
 **价值**:**M2 北极星现已可 opt-in 生效**。运维团队设置 `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION=1` 后,所有 sanity 失败的页面都会走真 Surya OCR 得到修复后的文本;不设则行为与 M1 完全一致。逐步灰度、观察遥测、最终转默认,按运营节奏推进。
+
+---
+
+### M2.8 · DocIR 字段 → Block.source_span_json 持久化(Task #39)✅
+
+- [x] `services/bootstrap.py::ParseService._build_block` 把 DocIR 四字段(translatability/provenance/confidence_breakdown/style_hints)写入 `source_span_json` 的 `docir_*` 键
+- [x] 无 schema 变更,复用既有 JSON 列
+- [x] `tests/test_docir_persistence.py` 4 测试:clean paragraph / code block / sanity-failed block / 既有 metadata 保留
+
+**价值**:DocIR 协议**真正落到数据库**,下游服务(block_rules、worker、export)读 `docir_*` 键即可消费。为 M2.7 提供了稳定的读路径。
+
+---
+
+### M2.5 · Pass A 术语挖掘(Task #40)✅
+
+- [x] `services/terminology_miner.py`:纯函数 `mine_terms(ParsedDocument, top_k, min_frequency, max_ngram) -> list[TermCandidate]`
+- [x] 1/2/3-gram 候选 + 停用词首尾过滤 + 专有名词与缩略语加权 + 定义句式(`X is defined as` / `(ABBR)`)加权
+- [x] `TermCandidate` 携带 provenance(首次出现 chapter/block/ordinal)便于审阅定位
+- [x] `tests/test_terminology_miner.py` 8 测试:bigram 召回 / 停用词剔除 / 代码块不泄漏 / 缩略语加权 / 定义句式低频穿透 / 专名优先 / top_k / provenance
+
+**价值**:文档级 salient term 候选可挖出,作为 M2.6 上游输入。
+
+---
+
+### M2.6 · Glossary 锁服务(Task #41)✅
+
+- [x] `services/glossary_service.py`:发现已有 `TermEntry` 表 + `LockLevel{SUGGESTED, PREFERRED, LOCKED}` + `TermStatus{ACTIVE, SUPERSEDED, REJECTED}` 基础设施,**零 schema 变更**,直接包装
+- [x] API:`upsert_candidates` / `lock_term` / `unlock_term` / `get_locked_terms(document_id)` / `list_document_entries`
+- [x] 版本化 supersede 机制与既有 chapter-concept-lock 统一;session.flush 保证同一事务内多次操作可见
+- [x] `tests/test_glossary_service.py` 11 测试:upsert 幂等 / 已锁定跳过 / 锁定升级 SUGGESTED / idempotent 同值 / 改 target 时 supersede / 空值拒绝 / unlock 保留 target 降级 / 未知 term no-op / get_locked 过滤 SUPERSEDED
+
+**价值**:文档级术语锁生命周期完整,**M2.7 可读 `{source: target}` 做约束。**
+
+---
+
+### M2.7 · 术语违规后校验(Task #42)✅
+
+- [x] `services/glossary_enforcement.py`:纯函数 `detect_violations(source, target, locked_glossary) -> list[GlossaryViolation]`
+- [x] 词边界匹配(`(?<![A-Za-z0-9])...(?![A-Za-z0-9])`)防 "Agent" 命中 "agentic" 的误报
+- [x] CJK target 跳边界、走子串 count
+- [x] Severity 区分:hard(完全缺失)vs partial(出现次数 < 源中次数)
+- [x] 配套 `detect_non_translatable_leaks(blocks)`:检查 translate_none block 的 target 是否混入 CJK(spec §5.1 KPI 3 硬指标)
+- [x] `tests/test_glossary_enforcement.py` 16 测试:空输入 / 源术语不存在跳过 / 完全遵守 / hard/partial 违规 / 词边界 / case-insensitive 源匹配 / 多术语独立 / 空条目过滤 / CJK 检测 3 种 / leak detector 3 种
+
+**价值**:译文质量的第二道防线,**独立于 worker** 可运行,适合作为 review 阶段 gate 或事件发射触发器。未来任何 worker 替换都不破坏这层。

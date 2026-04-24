@@ -386,10 +386,18 @@ class ParseService:
         block_type = BlockType(parsed_block.block_type)
         parse_revision_id = parsed_block.metadata.get("parse_revision_id")
         canonical_node_id = parsed_block.metadata.get("canonical_node_id")
+        # PDF v2 M2.8: persist DocIR fields into source_span_json so
+        # block_rules / worker / export can read the authoritative signals
+        # without re-parsing. Keeps the JSON column as single source of
+        # truth for parser-side contract; no schema change required.
         source_span_json = {
             "source_path": parsed_block.source_path,
             "anchor": parsed_block.anchor,
             **parsed_block.metadata,
+            "docir_translatability": parsed_block.translatability,
+            "docir_provenance": parsed_block.provenance,
+            "docir_confidence_breakdown": dict(parsed_block.confidence_breakdown),
+            "docir_style_hints": dict(parsed_block.style_hints),
         }
         return Block(
             id=stable_id(
