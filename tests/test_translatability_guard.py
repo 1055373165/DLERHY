@@ -80,19 +80,37 @@ class TranslatabilityDeriveTests(unittest.TestCase):
             TRANSLATE_NONE,
         )
 
-    def test_explicit_translatable_metadata_flag_wins(self) -> None:
-        # A parser may have already made the decision and stamped the block.
-        # Honour the explicit bool even on otherwise-protected roles, since
-        # the explicit flag is authoritative by convention in block_rules.
-        metadata_true = {"translatable": True, "pdf_block_role": "header"}
-        self.assertEqual(
-            derive_translatability("paragraph", metadata_true),
-            TRANSLATE_ALL,
-        )
+    def test_explicit_translatable_false_wins(self) -> None:
+        # A parser may have already determined this block is in a non-
+        # translatable region (e.g., header/footer) and stamped translatable
+        # =False. Honour that verdict.
         metadata_false = {"translatable": False}
         self.assertEqual(
             derive_translatability("paragraph", metadata_false),
             TRANSLATE_NONE,
+        )
+
+    def test_explicit_translatable_true_does_not_override_block_type(self) -> None:
+        # Critical invariant (spec §3.1 failure 3): even when the parser
+        # says translatable=True (prose-region), a CODE/EQUATION/etc block
+        # MUST stay non-translatable. Mirrors block_rules.translatability_for_block.
+        metadata_true = {"translatable": True}
+        self.assertEqual(
+            derive_translatability("code", metadata_true),
+            TRANSLATE_NONE,
+        )
+        self.assertEqual(
+            derive_translatability("equation", metadata_true),
+            TRANSLATE_NONE,
+        )
+        self.assertEqual(
+            derive_translatability("table", metadata_true),
+            TRANSLATE_NONE,
+        )
+        # ... and a regular paragraph in a translatable region stays translatable.
+        self.assertEqual(
+            derive_translatability("paragraph", metadata_true),
+            TRANSLATE_ALL,
         )
 
 

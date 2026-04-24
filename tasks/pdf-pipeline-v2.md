@@ -136,3 +136,24 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] `tests/test_pdf_sanity_propagation.py` 两测试覆盖:失败页 → OCR provenance、缺省页 → 不回归
 
 **价值**:M1.2 的 sanity 判断现在真的能被下游消费。M2.2 router 可以读 `ParsedBlock.provenance` 决定是否送 OCR/VLM 重抽。
+
+---
+
+### M2.2 · Block-level Extraction Router (Task #35) ✅
+
+- [x] 新模块 `domain/structure/extraction_router.py`:`RouterDecision` 枚举 {KEEP, ESCALATE_OCR, ESCALATE_VLM, SKIP, NOT_APPLICABLE} + `RouterContext` 策略参数 + 纯函数 `route()` + `summarize()` 做遥测聚合
+- [x] 决策表(按优先级):translate_none→NOT_APPLICABLE → figure/image→SKIP → vlm provenance→KEEP → sanity_fail→ESCALATE_OCR/VLM → ocr provenance 且 sanity ok→KEEP → 默认→KEEP
+- [x] `tests/test_extraction_router.py` 13 个测试覆盖所有决策分支 + summarize 聚合
+
+**价值**:M2.1 埋的 `provenance` + `confidence_breakdown` 现在有消费方。Router 是无副作用的,可以在未接 OCR/VLM 实际调用前先被下游调用记录决策,形成 shadow deployment。
+
+---
+
+### M1 收尾 · 金标回归骨架 ✅
+
+- [x] `tests/golden_pdfs/` 目录 + `__init__.py`(说明为何用程序化生成而非二进制提交)
+- [x] `tests/golden_pdfs/fixtures.py`:5 个生成器 — `make_clean_book` / `make_two_column_paper` / `make_code_block_book` / `make_reference_list` + `corrupted_text_sample()`(文本 fixture 避免构造破坏字体 PDF 的复杂度)
+- [x] `tests/test_golden_pdf_regression.py` 5 个 harness 测试类,每类对应一个规格 §3.1 失败模式
+- [x] 顺手修 `derive_translatability` 一致性 bug:之前 `translatable=True` 会错误地让 code/equation 绕过块类型保护,现已对齐 `block_rules.translatability_for_block` 的优先级语义
+
+**价值**:所有后续 PDF 改动在 CI 上都有 5 份可独立生成的 PDF 做结构化断言。每个 fixture 对应一个具体失败模式,回退即触发 red。

@@ -47,27 +47,41 @@ def derive_translatability(
 ) -> str:
     """Return the DocIR `translatability` value for a parser-side block.
 
-    The logic intentionally mirrors `block_rules.protected_policy_for_block`
-    so DocIR and the DB-backed ProtectedPolicy enum never disagree. Parsers
-    call this when constructing ParsedBlock; downstream consumers (bootstrap,
-    translator gating) can trust the field without re-deriving.
+    Mirrors `block_rules.translatability_for_block` exactly so DocIR and the
+    DB-backed ProtectedPolicy enum cannot disagree. The decision order is:
+
+      1. explicit `translatable=False` in metadata → TRANSLATE_NONE
+         (role/page-family flags set this when the block lives outside
+          translatable regions; we honour the parser's verdict)
+      2. block type inherently non-translatable (code/table/figure/
+         equation/image) → TRANSLATE_NONE, regardless of any explicit
+         `translatable=True` — because a CODE block staying prose is
+         never correct, even in a translatable region.
+      3. role or page-family flagged (legacy path without explicit key) →
+         TRANSLATE_NONE
+      4. otherwise → TRANSLATE_ALL
     """
     md = metadata or {}
 
-    # Explicit override wins (PDF parser sets metadata["translatable"]).
-    if "translatable" in md:
-        return TRANSLATE_ALL if bool(md["translatable"]) else TRANSLATE_NONE
-
-    role = md.get("pdf_block_role")
-    if isinstance(role, str) and role in _NON_TRANSLATABLE_PDF_ROLES:
+    # (1) Explicit False is authoritative — parser knows this block sits in
+    # a non-translatable region (header/footer/toc/backmatter).
+    if md.get("translatable") is False:
         return TRANSLATE_NONE
 
-    family = md.get("pdf_page_family")
-    if isinstance(family, str) and family in _NON_TRANSLATABLE_PAGE_FAMILIES:
-        return TRANSLATE_NONE
-
+    # (2) Block-type protection ALWAYS applies, even when the parser has
+    # stamped translatable=True on an otherwise-translatable region. This
+    # is the invariant block_rules.translatability_for_block encodes.
     if block_type in _NON_TRANSLATABLE_BLOCK_TYPES:
         return TRANSLATE_NONE
+
+    # (3) Legacy path: no explicit translatable key — infer from role/family.
+    if "translatable" not in md:
+        role = md.get("pdf_block_role")
+        if isinstance(role, str) and role in _NON_TRANSLATABLE_PDF_ROLES:
+            return TRANSLATE_NONE
+        family = md.get("pdf_page_family")
+        if isinstance(family, str) and family in _NON_TRANSLATABLE_PAGE_FAMILIES:
+            return TRANSLATE_NONE
 
     return TRANSLATE_ALL
 
