@@ -13,7 +13,13 @@ from typing import Any, Protocol
 from book_agent.domain.document_titles import cleaned_filename_book_title, looks_like_auxiliary_document_title
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
-from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
+from book_agent.domain.structure.models import (
+    ParsedBlock,
+    ParsedChapter,
+    ParsedDocument,
+    derive_translatability,
+)
+from book_agent.domain.structure.text_layer_sanity import assess_text as _assess_text_layer_sanity
 
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _HEADING_PATTERN = re.compile(r"^(chapter|part|appendix)\b", re.IGNORECASE)
@@ -3156,6 +3162,10 @@ class PdfPage:
     height: float
     blocks: list[PdfTextBlock]
     image_blocks: list[PdfImageBlock] = field(default_factory=list)
+    # Text-layer sanity verdict (PDF v2 M1.2). Default empty = not assessed /
+    # assume trustworthy. Populated by PyMuPDFTextExtractor per page and read
+    # by downstream routing to decide whether to fall back to OCR.
+    text_layer_sanity: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -3165,6 +3175,18 @@ class PdfExtraction:
     metadata: dict[str, Any]
     pages: list[PdfPage]
     outline_entries: list[PdfOutlineEntry]
+
+    def sanity_failed_pages(self) -> list[int]:
+        """Page numbers (1-indexed) whose text-layer sanity gate rejected them.
+
+        Downstream routers (M2) consult this to redirect affected pages to
+        OCR/VLM instead of trusting the PyMuPDF text extraction.
+        """
+        return [
+            page.page_number
+            for page in self.pages
+            if page.text_layer_sanity.get("ok") is False
+        ]
 
 
 class PdfTextExtractor(Protocol):
@@ -3310,6 +3332,18 @@ class PyMuPDFTextExtractor:
                     )
                 )
 
+                # Text-layer sanity assessment (PDF v2 M1.2). Runs per page
+                # over the concatenated text of all non-image blocks. A failure
+                # here means the page's text layer should not be trusted and
+                # downstream routing (M1.5/M2) should escalate to OCR.
+                concatenated_page_text = "\n".join(b.text for b in blocks)
+                sanity_report = _assess_text_layer_sanity(concatenated_page_text)
+                page_sanity: dict[str, Any] = {
+                    "ok": sanity_report.ok,
+                    "reason": sanity_report.reason,
+                    "metrics": sanity_report.metrics,
+                }
+
                 pages.append(
                     PdfPage(
                         page_number=page_index + 1,
@@ -3317,6 +3351,7 @@ class PyMuPDFTextExtractor:
                         height=float(page.rect.height),
                         blocks=blocks,
                         image_blocks=image_blocks,
+                        text_layer_sanity=page_sanity,
                     )
                 )
 
@@ -7200,37 +7235,42 @@ class PdfStructureRecoveryService:
             title = current_title or self._fallback_chapter_title(current_blocks, current_chapter_index)
             chapter_id = f"pdf-chapter-{current_chapter_index:03d}"
             href = f"pdf://page/{start_page}"
-            parsed_blocks = [
-                ParsedBlock(
+            def _build_parsed_block(ordinal: int, block) -> ParsedBlock:
+                block_metadata = {
+                    "source_page_start": block.page_start,
+                    "source_page_end": block.page_end,
+                    "source_bbox_json": {"regions": block.bbox_regions},
+                    "reading_order_index": block.reading_order_index,
+                    "pdf_block_role": block.role,
+                    "recovery_flags": block.flags,
+                    **block.metadata,
+                    "translatable": (
+                        block.role not in {"header", "footer", "toc_entry"}
+                        and str(block.metadata.get("pdf_page_family") or "body") != "backmatter"
+                    ),
+                    "nontranslatable_reason": (
+                        f"pdf_{block.role}"
+                        if block.role in {"header", "footer", "toc_entry"}
+                        else "pdf_backmatter"
+                        if str(block.metadata.get("pdf_page_family") or "body") == "backmatter"
+                        else None
+                    ),
+                }
+                return ParsedBlock(
                     block_type=block.block_type.value,
                     text=block.text,
                     source_path=block.source_path,
                     ordinal=ordinal,
                     anchor=block.anchor,
-                    metadata={
-                        "source_page_start": block.page_start,
-                        "source_page_end": block.page_end,
-                        "source_bbox_json": {"regions": block.bbox_regions},
-                        "reading_order_index": block.reading_order_index,
-                        "pdf_block_role": block.role,
-                        "recovery_flags": block.flags,
-                        **block.metadata,
-                        "translatable": (
-                            block.role not in {"header", "footer", "toc_entry"}
-                            and str(block.metadata.get("pdf_page_family") or "body") != "backmatter"
-                        ),
-                        "nontranslatable_reason": (
-                            (
-                                f"pdf_{block.role}"
-                                if block.role in {"header", "footer", "toc_entry"}
-                                else "pdf_backmatter"
-                                if str(block.metadata.get("pdf_page_family") or "body") == "backmatter"
-                                else None
-                            )
-                        ),
-                    },
+                    metadata=block_metadata,
                     parse_confidence=block.parse_confidence,
+                    translatability=derive_translatability(
+                        block.block_type.value, block_metadata
+                    ),
                 )
+
+            parsed_blocks = [
+                _build_parsed_block(ordinal, block)
                 for ordinal, block in enumerate(current_blocks, start=1)
             ]
             chapters.append(

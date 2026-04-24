@@ -11,7 +11,12 @@ from xml.etree import ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
-from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
+from book_agent.domain.structure.models import (
+    ParsedBlock,
+    ParsedChapter,
+    ParsedDocument,
+    derive_translatability,
+)
 from book_agent.domain.document_titles import compose_document_title
 
 _CONTAINER_PATH = "META-INF/container.xml"
@@ -166,6 +171,7 @@ def _normalize_chapter_heading_levels(blocks: list[ParsedBlock]) -> list[ParsedB
                 ordinal=block.ordinal,
                 anchor=block.anchor,
                 metadata=metadata,
+                translatability=derive_translatability(block.block_type, metadata),
             )
         )
     return normalized_blocks
@@ -615,6 +621,7 @@ class _FallbackHTMLBlockExtractor(HTMLParser):
                         else None
                     ),
                     metadata=metadata,
+                    translatability=derive_translatability(block_type, metadata),
                 )
             )
         self._active_block = None
@@ -892,6 +899,7 @@ class EPUBParser:
                             ordinal=len(blocks) + 1,
                             anchor=current_anchor,
                             metadata=metadata,
+                            translatability=derive_translatability(block_type, metadata),
                         )
                     )
                     return
@@ -917,6 +925,7 @@ class EPUBParser:
                             ordinal=len(blocks) + 1,
                             anchor=current_anchor,
                             metadata=img_metadata,
+                            translatability=derive_translatability("paragraph", img_metadata),
                         )
                     )
                 return
@@ -981,6 +990,7 @@ class EPUBParser:
             ordinal=starting_ordinal,
             anchor=figure_anchor,
             metadata=figure_metadata,
+            translatability=derive_translatability("figure", figure_metadata),
         )
 
         blocks = [figure_block]
@@ -993,6 +1003,7 @@ class EPUBParser:
                     ordinal=starting_ordinal + 1,
                     anchor=caption_anchor,
                     metadata=caption_metadata,
+                    translatability=derive_translatability("caption", caption_metadata),
                 )
             )
         return blocks
