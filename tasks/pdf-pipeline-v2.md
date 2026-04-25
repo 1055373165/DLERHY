@@ -264,6 +264,30 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - [x] try/except 包裹:注入失败不阻塞翻译
 - [x] `tests/test_translation_glossary_injection.py` 6 测试:空 glossary 不变 / locked 合并 / 既有项胜 / 空 target 跳过 / prompt 字符串实际包含术语 / locked 排在 suggested 前
 
+### M2.9 · 金标回归集 5 → 15(Task #45)✅
+
+新增 10 个 PDF fixture,每个对应一个 M1+M2 已有的失败模式或保护契约:
+
+| Fixture | 测试断言 |
+|---------|---------|
+| `make_three_column_newsletter` | `_page_has_multi_column_signature` 在 3 栏页面也触发 |
+| `make_figure_with_caption` | "Figure 1.1" 字符串在 recovery 后存活,figure-caption 配对契约 |
+| `make_equation_block_book` | 若 block_type 被分类为 equation,**必须** translatability=translate_none(无泄漏) |
+| `make_inline_url_paragraph` | URL/DOI 字面字符串在抽取后逐字保留 |
+| `make_acronym_definition_paper` | terminology miner 通过 `Foo Bar (FB)` 模式捕获被定义的术语 + definition_boost 标记触发 |
+| `make_repeated_term_doc` | terminology miner 纯频率路径召回 `attention mechanism` |
+| `make_mixed_clean_and_corrupted` | 干净页通过 sanity gate(per-page 独立判断契约) |
+| `make_cross_page_paragraph` | 跨页段落两半在 recovery 后均保留(无内容丢失) |
+| `make_low_density_figure_page` | 仅图无字的页面**不**误触 sanity gate(false-positive 守护) |
+| `make_recurring_header_footer_book` | 反复出现的 running head 不会作为 translate_all body 大量泄漏 |
+| `make_numbered_section_paper` | 学术编号节标题页,每节正文均无丢失 |
+
+加 `GoldenCoverageMatrixTests` 元测试:fixture maker 数 ≥ 15,任何回退即报警。
+
+**到 20 的诚实 gap(5 个)**:扫描书 / 表结构恢复 / 公式 LaTeX 还原 / paper-subtype 分类器 / 多语种混排 — 这五个 fixture 即使建立,断言也只能写"内容存在",**真正的结构断言需要 M3/M4 实现的能力**。把它们提前建会变成形式主义而非保护。M3.x 各项落地后立即对应增加 fixture。
+
+---
+
 **价值**:**M2.7 完整双闭环上线**:
 - **译前**(M2.7b prompt 注入):锁定术语作为权威映射进入 LLM system prompt,LLM 应主动遵守
 - **译后**(M2.7 post-validation):违规时发 `GLOSSARY_VIOLATION` 事件,review/遥测可消费

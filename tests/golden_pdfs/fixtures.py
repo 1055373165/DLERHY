@@ -172,6 +172,332 @@ def make_reference_list() -> bytes:
     return buf.getvalue()
 
 
+def make_three_column_newsletter() -> bytes:
+    """Single-page three-column layout with vertically interleaved blocks.
+
+    Tests that column-major ordering generalizes beyond two columns.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    cols = [(40, 220), (236, 416), (432, 572)]  # x ranges for cols 1/2/3
+    for col_idx, (x0, x1) in enumerate(cols, start=1):
+        for row in range(1, 4):
+            text = (
+                f"COL{col_idx}-R{row}: A column-major reading order test "
+                "block that is long enough to qualify as a column "
+                "candidate under the multi-column signature heuristic."
+            )
+            y0 = 80 + (row - 1) * 200
+            y1 = y0 + 180
+            page.insert_textbox(
+                fitz.Rect(x0, y0, x1, y1), text, fontsize=10, fontname="helv"
+            )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_figure_with_caption() -> bytes:
+    """Page with a paragraph, an image placeholder, and a Figure caption.
+
+    The recovery pipeline should pair the caption with the figure
+    artifact via spatial proximity.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(
+        fitz.Rect(72, 72, 540, 200),
+        (
+            "The introductory paragraph sets the stage for the figure "
+            "below, which depicts the data flow through the pipeline."
+        ),
+        fontsize=11,
+    )
+    # Draw a placeholder rectangle to act as a "figure" region.
+    page.draw_rect(fitz.Rect(150, 220, 462, 460), color=(0.5, 0.5, 0.5))
+    page.insert_textbox(
+        fitz.Rect(72, 470, 540, 510),
+        "Figure 1.1: Data flow from ingestion through translation.",
+        fontsize=10,
+    )
+    page.insert_textbox(
+        fitz.Rect(72, 530, 540, 660),
+        (
+            "The discussion continues after the figure, referring "
+            "back to it as Figure 1.1 to anchor the cross reference."
+        ),
+        fontsize=11,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_equation_block_book() -> bytes:
+    """Page with a display equation surrounded by prose.
+
+    The equation block should be classified as `equation` and inherit
+    `translatability=translate_none`. Recovery's `_looks_like_equation`
+    heuristic looks for `=`, `≤`, etc.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(
+        fitz.Rect(72, 72, 540, 200),
+        (
+            "Energy and mass are related by the famous identity stated "
+            "below. The reader should be familiar with the constants."
+        ),
+        fontsize=11,
+    )
+    page.insert_textbox(
+        fitz.Rect(72, 220, 540, 280),
+        "E = m c^2 + sum_{i=1}^{n} epsilon_i",
+        fontsize=12,
+        fontname="cour",
+    )
+    page.insert_textbox(
+        fitz.Rect(72, 300, 540, 420),
+        (
+            "where epsilon_i denotes the per-particle correction terms. "
+            "These are computed from the spectrum of observations."
+        ),
+        fontsize=11,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_inline_url_paragraph() -> bytes:
+    """Page with prose containing inline URLs and DOIs that must survive
+    translation verbatim. Tests the broader translatability protocol.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(
+        fitz.Rect(72, 72, 540, 720),
+        (
+            "Further reading is available at https://arxiv.org/abs/1706.03762 "
+            "and the source code repository at https://github.com/example/repo. "
+            "The DOI 10.1162/neco.1997.9.8.1735 references the original LSTM "
+            "paper. Reading these together gives a comprehensive overview."
+        ),
+        fontsize=11,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_acronym_definition_paper() -> bytes:
+    """Page introducing several acronyms via the `Foo Bar (FB)` pattern.
+
+    Terminology miner's definition-pattern boost should surface these
+    as candidates regardless of overall frequency.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_textbox(
+        fitz.Rect(72, 72, 540, 720),
+        (
+            "Retrieval-Augmented Generation (RAG) combines language models "
+            "with a vector store. A Vector Store (VS) holds embeddings of "
+            "external documents. The Large Language Model (LLM) consumes "
+            "retrieved snippets as additional context. The term Agent "
+            "Loop is defined as a repeating cycle of plan, act, and "
+            "observe. We call Self-Reflection the process by which the "
+            "agent evaluates its own outputs before final commit."
+        ),
+        fontsize=11,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_repeated_term_doc() -> bytes:
+    """Two-page document where the term `attention mechanism` recurs
+    enough to be mined without any definition pattern. Smoke test for
+    the n-gram frequency path of `terminology_miner`.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    text = (
+        "The attention mechanism scales the contribution of each token. "
+        "An attention mechanism over keys and values produces context. "
+        "Without an attention mechanism, sequences degrade quickly. "
+        "Modern systems treat the attention mechanism as a primitive."
+    )
+    for _ in range(2):
+        page = doc.new_page(width=612, height=792)
+        page.insert_textbox(fitz.Rect(72, 72, 540, 720), text, fontsize=11)
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_mixed_clean_and_corrupted() -> bytes:
+    """A clean page followed by a "corrupted" page (text inserted as a
+    monospace block to keep the bytes valid). Used by sanity-gate
+    multi-page tests via the in-memory text path; the PDF itself still
+    parses cleanly.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    clean_page = doc.new_page(width=612, height=792)
+    clean_page.insert_textbox(
+        fitz.Rect(72, 72, 540, 720),
+        (
+            "Chapter 1. The first page contains clean English prose "
+            "covering the introduction to the subject and remaining "
+            "comfortably above any sanity threshold."
+        ),
+        fontsize=11,
+    )
+    suspicious_page = doc.new_page(width=612, height=792)
+    suspicious_page.insert_textbox(
+        fitz.Rect(72, 72, 540, 720),
+        (
+            "Page two carries normal prose intentionally so PyMuPDF "
+            "extraction stays valid; the multi-page sanity tests "
+            "supply the corrupted text in-memory rather than embedding "
+            "exotic font encodings here."
+        ),
+        fontsize=11,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_cross_page_paragraph() -> bytes:
+    """Single paragraph that breaks across two pages.
+
+    Recovery should stitch the two halves together via cross-page
+    continuation logic. We just check that BOTH halves end up in the
+    final ParsedDocument so no content is dropped.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    half_a = (
+        "The first half of this paragraph ends mid sentence and the "
+        "reader is expected to continue reading on the next page where "
+        "the thought is completed without any indented break in tone or "
+        "narrative voice. The recovery pipeline must recognize that the "
+        "trailing line lacks a sentence terminator and that the next "
+        "page's leading line begins with a lowercase continuation,"
+    )
+    half_b = (
+        "which is a strong signal that the paragraph continues. After "
+        "the merge, downstream consumers see one logical unit, and the "
+        "translation worker receives the paragraph as a single packet."
+    )
+    page1 = doc.new_page(width=612, height=792)
+    page1.insert_textbox(fitz.Rect(72, 600, 540, 720), half_a, fontsize=11)
+    page2 = doc.new_page(width=612, height=792)
+    page2.insert_textbox(fitz.Rect(72, 72, 540, 200), half_b, fontsize=11)
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_low_density_figure_page() -> bytes:
+    """A page consisting almost entirely of a figure with a tiny caption.
+
+    Sanity gate must NOT trip on this: too little text to judge.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.draw_rect(fitz.Rect(72, 72, 540, 700), color=(0.4, 0.4, 0.4))
+    page.insert_textbox(
+        fitz.Rect(72, 720, 540, 760),
+        "Fig. 2.1",
+        fontsize=10,
+    )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_recurring_header_footer_book() -> bytes:
+    """Three pages all carrying the same running header and page number.
+
+    Recovery's repeated-edge-text detection should classify those bands
+    as chrome (non-translatable). Pulled out as a fixture so future
+    changes to the chrome heuristic have a stable ground truth.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    body_template = (
+        "Chapter content for page {n}. The body prose differs across "
+        "pages so the recurring header is the only repeating signal."
+    )
+    for n in range(1, 4):
+        page = doc.new_page(width=612, height=792)
+        page.insert_textbox(
+            fitz.Rect(72, 36, 540, 56),
+            "RUNNING HEAD: BOOK TITLE",
+            fontsize=9,
+        )
+        page.insert_textbox(
+            fitz.Rect(72, 100, 540, 700),
+            body_template.format(n=n),
+            fontsize=11,
+        )
+        page.insert_textbox(
+            fitz.Rect(72, 740, 540, 760),
+            f"— {n} —",
+            fontsize=9,
+        )
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def make_numbered_section_paper() -> bytes:
+    """Single page with numbered academic section headings.
+
+    Exercises the recovery path that promotes lines like `1.1 Introduction`
+    into headings — a common academic-paper structural cue.
+    """
+    fitz = _require_fitz()
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    sections = [
+        ("1 Introduction", "We introduce the topic and motivate the work that follows."),
+        ("1.1 Background", "Prior literature has examined related questions in earlier eras."),
+        ("1.2 Contributions", "Our contributions are summarized in three points outlined below."),
+        ("2 Method", "The method follows a familiar template adapted to our setting."),
+        ("2.1 Notation", "We adopt standard notation throughout to keep equations compact."),
+    ]
+    y = 80
+    for heading, body in sections:
+        page.insert_textbox(fitz.Rect(72, y, 540, y + 22), heading, fontsize=14)
+        page.insert_textbox(fitz.Rect(72, y + 24, 540, y + 100), body, fontsize=11)
+        y += 110
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
 def corrupted_text_sample() -> str:
     """PUA-encoded English sample (text fixture, not a PDF).
 
