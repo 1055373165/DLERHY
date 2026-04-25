@@ -348,3 +348,45 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - **未接入 ParseService 末尾**:四个模态的 doc-level pass 还没 wire 到 `ParseService.parse` 的尾部。引入需要决定执行顺序(建议:references → equations → tables → images)和遥测埋点
 - **未补金标 fixture**:M2.9 留的 5 个 gap 中的 references/tables/equations/images 现在有能力支持更强断言,可以补到金标里
 - **export 层未读新键**:`equation_render_mode` / `table_markdown` 等 metadata 键还没被 merged/bilingual 渲染消费,目前是"模态识别就绪,渲染待接通"
+
+---
+
+## TATR 集成(M3.2 升级路径)
+
+### TATR-a · Adapter shell + protocol(Task #50)✅
+
+- [x] 新协议 `PageImageTableExtractor` —— 接受 page+bbox+pre-extracted text blocks,返回多张 `TableStructure`(与 M3.2 契合)
+- [x] `services/tatr_extractor.py`:
+  - `TatrTableExtractor` 类,`_run_tatr_inference` 钩子留给 TATR-b 真模型
+  - `_ensure_models_loaded` 用 `importlib.util.find_spec` 探 torch/transformers/PIL,**缺依赖即优雅返空**(deps_missing 写进 metrics)
+  - 成本护栏 `max_tables_per_doc=50`,**累计跨调用**生效
+  - 异常 → 返空 + `error` 写 metrics
+  - `_cells_to_grid` / `tatr_table_to_markdown` / `map_cell_text`(bbox-overlap 阈值 0.4)三个纯函数辅助
+- [x] `NoOpPageImageTableExtractor` 默认实现
+- [x] `tests/test_tatr_extractor.py` 16 测试:bbox overlap helper 3 + map_cell_text 4 + markdown 渲染 2 + NoOp 1 + Fake 注入 6(deps-missing / 主路径 / 成本护栏 / 跨调用累积 / 全空丢弃 / 异常)
+
+**价值**:`torch + transformers + PIL` 还没装,但**协议、bbox 映射、成本护栏、降级路径**全部可被测试和审计。TATR-b 落地时只需要:
+1. 在 pyproject.toml 加 `torch`, `transformers`, `pillow` 可选依赖
+2. 实现 `_ensure_models_loaded` 的真模型加载(microsoft/table-transformer-detection + structure-recognition)
+3. 实现 `_run_tatr_inference`:页面光栅化(PyMuPDF `page.get_pixmap(dpi=200)`)→ Image → detection → 每个 table crop → structure recognition → 转 PDF 坐标返回
+4. 已有的 16 个测试 + 现有的 16 个 fake-backend 测试都不需要改
+
+### TATR-b · 真模型落地(待做)
+
+需要的运行时:
+- `torch>=2.0`(~800 MB Linux x86_64,~300 MB Apple Silicon)
+- `transformers>=4.30`(~50 MB)
+- `pillow`(已有大概率)
+- `microsoft/table-transformer-detection` 模型权重(~110 MB)
+- `microsoft/table-transformer-structure-recognition` 模型权重(~110 MB)
+
+实现要点:
+- 模型懒加载,首次调用才下载/加载
+- 页面 DPI 200 渲染足够大多数表;低分辨率用 300
+- detection 模型置信度阈值默认 0.7,可调
+- structure recognition 输出归一化坐标,需乘 image_dim 再除 dpi/72 反算 PDF 点空间
+- GPU 自动检测;CPU fallback 慢但可用
+
+### TATR-c · 接入 ParseService(待做)
+
+env flag `BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1`,默认关闭。开启后在 `ParseService.parse` 末尾对每个 `block_type=table` 的 chapter 调 `TatrTableExtractor.extract`,将返回的 `TableStructure.markdown` 写入 `block.metadata["table_markdown"]`,与 M3.2 heuristic 同 key 同消费方式。
