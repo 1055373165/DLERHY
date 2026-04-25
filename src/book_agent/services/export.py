@@ -3048,7 +3048,11 @@ class ExportService:
                 return "\n\n".join(part for part in parts if part)
             if block.artifact_kind == "equation":
                 parts = [self._markdown_blockquote(notice)] if notice else []
-                parts.append(self._render_math_markdown(source_text))
+                parts.append(
+                    self._render_equation_markdown_metadata_aware(
+                        block.source_metadata, source_text
+                    )
+                )
                 return "\n\n".join(part for part in parts if part)
             artifact_text = source_text
             if block.artifact_kind == "code":
@@ -3067,10 +3071,16 @@ class ExportService:
             if notice:
                 parts.append(self._markdown_blockquote(notice))
             if block.artifact_kind == "equation":
-                parts.append(self._render_math_markdown(source_text))
+                parts.append(
+                    self._render_equation_markdown_metadata_aware(
+                        block.source_metadata, source_text
+                    )
+                )
             else:
                 markdown_table = (
-                    self._markdown_table_from_source_text(source_text)
+                    self._render_table_markdown_metadata_aware(
+                        block.source_metadata, source_text
+                    )
                     if block.artifact_kind == "table"
                     else None
                 )
@@ -6307,7 +6317,9 @@ class ExportService:
                     f"{note}<div class='artifact-body'>{body}</div></section>"
                 )
             if block.artifact_kind == "equation":
-                body = self._render_math_html(block.source_text)
+                body = self._render_equation_html_metadata_aware(
+                    block.source_metadata, block.source_text
+                )
             elif block.artifact_kind == "code":
                 body = f"<pre><code>{self._format_preformatted_text(block.source_text, block=block)}</code></pre>"
             else:
@@ -6318,9 +6330,13 @@ class ExportService:
             note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             translated = f"<div class='zh'>{target_html}</div>" if block.target_text else ""
             if block.artifact_kind == "equation":
-                body = self._render_math_html(block.source_text)
+                body = self._render_equation_html_metadata_aware(
+                    block.source_metadata, block.source_text
+                )
             else:
-                table_html = self._render_structured_table_html(block.source_text) if block.artifact_kind == "table" else None
+                table_html = self._render_table_html_metadata_aware(
+                    block.source_metadata, block.source_text
+                ) if block.artifact_kind == "table" else None
                 body = (
                     f"<div class='artifact-body artifact-table-body'>{table_html}</div>"
                     if table_html is not None
@@ -6515,6 +6531,84 @@ class ExportService:
             "</div>"
         )
 
+    def _render_equation_html_metadata_aware(
+        self,
+        source_metadata: dict[str, object] | None,
+        source_text: str,
+    ) -> str:
+        """PDF v2 M3.3 export wire-up — HTML side."""
+        md = source_metadata or {}
+        if md.get("equation_render_mode") == "latex":
+            latex = str(md.get("equation_latex") or "").strip()
+            if latex:
+                content = html.escape(latex)
+                return (
+                    f"<div class='math-block katex-display' data-render-mode='latex-recovered'>"
+                    f"<span class='katex-source'>{content}</span>"
+                    f"</div>"
+                )
+        return self._render_math_html(source_text)
+
+    def _render_table_html_metadata_aware(
+        self,
+        source_metadata: dict[str, object] | None,
+        source_text: str,
+    ) -> str | None:
+        """PDF v2 M3.2 export wire-up — HTML side.
+
+        When `table_markdown` is present (heuristic or TATR recovery),
+        convert it to an HTML table directly. Otherwise fall back to the
+        source-text-driven structured table heuristic.
+        """
+        md = source_metadata or {}
+        markdown = str(md.get("table_markdown") or "").strip()
+        if markdown:
+            html_table = self._markdown_table_to_html(markdown)
+            if html_table:
+                return html_table
+        return self._render_structured_table_html(source_text)
+
+    def _markdown_table_to_html(self, markdown: str) -> str | None:
+        """Convert a `| a | b |\n| --- | --- |\n| 1 | 2 |` block to HTML.
+
+        Returns None if the input doesn't look like a markdown table.
+        Used by `_render_table_html_metadata_aware` to bridge our M3
+        markdown-table representation into the existing HTML export.
+        """
+        lines = [line.strip() for line in markdown.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return None
+        if not all(line.startswith("|") and line.endswith("|") for line in lines):
+            return None
+        # Separator detection: row 1 (0-indexed) with --- cells.
+        sep_row = lines[1]
+        if "---" not in sep_row:
+            return None
+
+        def _split_row(row: str) -> list[str]:
+            inner = row.strip().strip("|")
+            return [cell.strip() for cell in inner.split("|")]
+
+        header_cells = _split_row(lines[0])
+        body_rows = [_split_row(line) for line in lines[2:]]
+
+        thead = "".join(f"<th>{html.escape(cell)}</th>" for cell in header_cells)
+        body_html = ""
+        for row in body_rows:
+            body_html += (
+                "<tr>"
+                + "".join(f"<td>{html.escape(cell)}</td>" for cell in row)
+                + "</tr>"
+            )
+        return (
+            "<div class='artifact-table-shell' data-source='m3-markdown-table'>"
+            "<table class='artifact-table'>"
+            f"<thead><tr>{thead}</tr></thead>"
+            f"<tbody>{body_html}</tbody>"
+            "</table>"
+            "</div>"
+        )
+
     def _render_math_html(self, text: str) -> str:
         """Wrap equation text in KaTeX-compatible HTML containers."""
         stripped = text.strip()
@@ -6543,6 +6637,43 @@ class ExportService:
         if is_latex:
             return f"$$\n{stripped}\n$$"
         return f"```\n{stripped}\n```"
+
+    def _render_equation_markdown_metadata_aware(
+        self,
+        source_metadata: dict[str, object] | None,
+        source_text: str,
+    ) -> str:
+        """PDF v2 M3.3 export wire-up.
+
+        When the modality pipeline tagged this block with
+        `equation_render_mode == "latex"` and stashed `equation_latex`,
+        render the recovered LaTeX wrapped in `$$...$$`. Otherwise fall
+        back to the historical heuristic in `_render_math_markdown`.
+        """
+        md = source_metadata or {}
+        render_mode = md.get("equation_render_mode")
+        if render_mode == "latex":
+            latex = str(md.get("equation_latex") or "").strip()
+            if latex:
+                return f"$$\n{latex}\n$$"
+        return self._render_math_markdown(source_text)
+
+    def _render_table_markdown_metadata_aware(
+        self,
+        source_metadata: dict[str, object] | None,
+        source_text: str,
+    ) -> str | None:
+        """PDF v2 M3.2 export wire-up.
+
+        When the modality pipeline (heuristic or TATR) recovered a
+        markdown grid into `table_markdown`, surface it directly.
+        Otherwise fall back to the source-text-driven table heuristic.
+        """
+        md = source_metadata or {}
+        markdown = str(md.get("table_markdown") or "").strip()
+        if markdown:
+            return markdown
+        return self._markdown_table_from_source_text(source_text)
 
     def _looks_like_code_artifact_text(self, text: str, *, academic_paper: bool = False) -> bool:
         lines = [line.strip() for line in _expanded_code_candidate_lines(text) if line.strip()]

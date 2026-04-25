@@ -301,9 +301,8 @@ class TatrTableExtractor:
         """Lazy-load the TATR weights via transformers.
 
         Returns False when ML deps are unavailable; the caller degrades
-        gracefully. Real loading is deferred to TATR-b — until then the
-        method just probes for `transformers` availability so tests can
-        exercise the deps-missing path without monkeypatching.
+        gracefully. Subclasses (FakeTatr in tests, future variants)
+        bypass this by setting `_models_loaded=True` directly.
         """
         if self._models_loaded:
             return True
@@ -316,25 +315,240 @@ class TatrTableExtractor:
                 if importlib.util.find_spec(mod) is None:
                     self._models_unavailable = True
                     return False
-        except Exception:
+            # All deps present — TATR-b loads real weights.
+            from transformers import (  # type: ignore
+                AutoImageProcessor,
+                TableTransformerForObjectDetection,
+            )
+
+            self._image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/table-transformer-detection"
+            )
+            self._detection_model = (
+                TableTransformerForObjectDetection.from_pretrained(
+                    "microsoft/table-transformer-detection"
+                )
+            )
+            self._structure_image_processor = (
+                AutoImageProcessor.from_pretrained(
+                    "microsoft/table-transformer-structure-recognition"
+                )
+            )
+            self._structure_model = (
+                TableTransformerForObjectDetection.from_pretrained(
+                    "microsoft/table-transformer-structure-recognition"
+                )
+            )
+            import torch  # type: ignore
+
+            self._torch = torch
+            self._models_loaded = True
+            return True
+        except Exception as exc:  # pragma: no cover - hard to test without real deps
             self._models_unavailable = True
+            self._last_metrics.error = (
+                f"tatr_model_load_failed:{type(exc).__name__}"
+            )
             return False
-        # Deps present — TATR-b fills in actual weight loading here.
-        # Until then we still report "loaded" so subclasses overriding
-        # `_run_tatr_inference` can run real or fake inference.
-        self._models_loaded = True
-        return True
 
     def _run_tatr_inference(
         self, request: PageTableExtractionRequest
     ) -> list[TatrTable]:
-        """Hook: run TATR detection + structure recognition for the page.
+        """Run TATR detection + structure recognition for the page.
 
-        Default returns an empty list (TATR-b will replace this with the
-        actual pipeline). Tests subclass this adapter to inject scripted
-        `TatrTable` results without loading any model weights.
+        TATR-b implementation:
+          1. Render the page (or region_bbox) via PyMuPDF at `self._dpi`.
+          2. Detection model → list of (image-space) table bboxes.
+          3. For each table: crop the image and run the structure
+             recognizer → cells with bboxes.
+          4. Convert image-space bboxes back to PDF user-space.
+
+        Subclasses can override this method to inject scripted output
+        (see `FakeTatr` in tests) without loading any weights — that is
+        the canonical way to unit-test routing/cost-guard logic.
         """
-        return []
+        if not self._models_loaded:
+            return []
+
+        try:
+            import fitz  # type: ignore
+            from PIL import Image  # type: ignore
+        except ImportError:  # pragma: no cover
+            return []
+
+        torch = self._torch  # type: ignore
+
+        # Open page and render.
+        doc = fitz.open(request.pdf_path)
+        try:
+            if request.page_number < 1 or request.page_number > doc.page_count:
+                return []
+            page = doc.load_page(request.page_number - 1)
+            zoom = float(self._dpi) / 72.0
+            matrix = fitz.Matrix(zoom, zoom)
+            clip = (
+                fitz.Rect(*request.region_bbox)
+                if request.region_bbox is not None
+                else None
+            )
+            pix = page.get_pixmap(matrix=matrix, clip=clip, alpha=False)
+            image = Image.frombytes(
+                "RGB", (pix.width, pix.height), pix.samples
+            )
+            image_origin_x = request.region_bbox[0] if request.region_bbox else 0.0
+            image_origin_y = request.region_bbox[1] if request.region_bbox else 0.0
+        finally:
+            doc.close()
+
+        # 1. Detection.
+        det_inputs = self._image_processor(images=image, return_tensors="pt")
+        with torch.no_grad():
+            det_outputs = self._detection_model(**det_inputs)
+        target_sizes = torch.tensor([image.size[::-1]])  # (h, w)
+        det_results = self._image_processor.post_process_object_detection(
+            det_outputs, threshold=0.7, target_sizes=target_sizes
+        )[0]
+
+        tables: list[TatrTable] = []
+        for score, label, box in zip(
+            det_results["scores"].tolist(),
+            det_results["labels"].tolist(),
+            det_results["boxes"].tolist(),
+        ):
+            if self._detection_model.config.id2label.get(int(label), "") != "table":
+                continue
+            x0_img, y0_img, x1_img, y1_img = box
+            table_crop = image.crop((x0_img, y0_img, x1_img, y1_img))
+
+            # 2. Structure recognition on the crop.
+            sr_inputs = self._structure_image_processor(
+                images=table_crop, return_tensors="pt"
+            )
+            with torch.no_grad():
+                sr_outputs = self._structure_model(**sr_inputs)
+            sr_target_sizes = torch.tensor([table_crop.size[::-1]])
+            sr_results = (
+                self._structure_image_processor.post_process_object_detection(
+                    sr_outputs, threshold=0.6, target_sizes=sr_target_sizes
+                )[0]
+            )
+
+            cells = self._structure_results_to_cells(
+                sr_results=sr_results,
+                table_origin_image=(x0_img, y0_img),
+                image_origin_pdf=(image_origin_x, image_origin_y),
+                zoom=zoom,
+                structure_id2label=self._structure_model.config.id2label,
+            )
+            if not cells:
+                continue
+            # Outer table bbox in PDF user-space.
+            table_bbox = self._image_to_pdf_bbox(
+                (x0_img, y0_img, x1_img, y1_img),
+                image_origin=(image_origin_x, image_origin_y),
+                zoom=zoom,
+            )
+            tables.append(
+                TatrTable(
+                    bbox=table_bbox,
+                    cells=tuple(cells),
+                    confidence=float(score),
+                )
+            )
+        return tables
+
+    def _structure_results_to_cells(
+        self,
+        *,
+        sr_results,
+        table_origin_image: tuple[float, float],
+        image_origin_pdf: tuple[float, float],
+        zoom: float,
+        structure_id2label: dict[int, str],
+    ) -> list[TatrCell]:
+        """Convert structure-recognition raw output to row/col-indexed cells.
+
+        TATR's structure model returns rows, columns, and headers as
+        separate detections. We intersect rows × columns to produce
+        cell rectangles, then test header membership for `is_header`.
+        """
+        rows: list[tuple[float, float, float, float]] = []
+        columns: list[tuple[float, float, float, float]] = []
+        header_rects: list[tuple[float, float, float, float]] = []
+        for label, box in zip(
+            sr_results["labels"].tolist(),
+            sr_results["boxes"].tolist(),
+        ):
+            name = structure_id2label.get(int(label), "")
+            if name == "table row":
+                rows.append(tuple(box))
+            elif name == "table column":
+                columns.append(tuple(box))
+            elif name == "table column header":
+                header_rects.append(tuple(box))
+
+        if not rows or not columns:
+            return []
+
+        rows.sort(key=lambda b: b[1])
+        columns.sort(key=lambda b: b[0])
+
+        cells: list[TatrCell] = []
+        for r_idx, row_box in enumerate(rows):
+            for c_idx, col_box in enumerate(columns):
+                cell_x0 = max(row_box[0], col_box[0])
+                cell_y0 = max(row_box[1], col_box[1])
+                cell_x1 = min(row_box[2], col_box[2])
+                cell_y1 = min(row_box[3], col_box[3])
+                if cell_x1 <= cell_x0 or cell_y1 <= cell_y0:
+                    continue
+                # Translate from crop-space → page-image-space → PDF.
+                abs_image_bbox = (
+                    table_origin_image[0] + cell_x0,
+                    table_origin_image[1] + cell_y0,
+                    table_origin_image[0] + cell_x1,
+                    table_origin_image[1] + cell_y1,
+                )
+                pdf_bbox = self._image_to_pdf_bbox(
+                    abs_image_bbox,
+                    image_origin=image_origin_pdf,
+                    zoom=zoom,
+                )
+                is_header = any(
+                    _bbox_overlap_fraction(
+                        (cell_x0, cell_y0, cell_x1, cell_y1), header_rect
+                    )
+                    >= 0.5
+                    for header_rect in header_rects
+                )
+                cells.append(
+                    TatrCell(
+                        row=r_idx,
+                        column=c_idx,
+                        bbox=pdf_bbox,
+                        is_header=is_header,
+                    )
+                )
+        return cells
+
+    def _image_to_pdf_bbox(
+        self,
+        image_bbox: tuple[float, float, float, float],
+        *,
+        image_origin: tuple[float, float],
+        zoom: float,
+    ) -> PdfBbox:
+        """Inverse of `fitz.Matrix(zoom, zoom)` plus the region_bbox offset.
+
+        `image_origin` is the PDF-space top-left of the rendered image
+        (origin (0,0) for a full-page render, region_bbox top-left for
+        a clipped render).
+        """
+        x0_pdf = image_origin[0] + image_bbox[0] / zoom
+        y0_pdf = image_origin[1] + image_bbox[1] / zoom
+        x1_pdf = image_origin[0] + image_bbox[2] / zoom
+        y1_pdf = image_origin[1] + image_bbox[3] / zoom
+        return (x0_pdf, y0_pdf, x1_pdf, y1_pdf)
 
 
 def _cells_to_grid(table: TatrTable) -> tuple[tuple[str, ...], ...]:

@@ -401,6 +401,53 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 
 **TATR 路径**:env `BOOK_AGENT_PDF_MODALITY_TABLES=1` + `BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1` 同时打开后,自动构造 `TatrTableExtractor()`(deps 缺失则优雅返空 + metrics 标 deps_missing),传给 modality pipeline 作 table 后处理。
 
+## Export 层渲染新 metadata 键(Task #52)✅
+
+`services/export.py` 新增 4 个 metadata-aware helper:
+
+- `_render_equation_markdown_metadata_aware` — `equation_render_mode == "latex"` + `equation_latex` → `$$\n…\n$$`,否则回落到既有 heuristic
+- `_render_equation_html_metadata_aware` — 同上,HTML 端发 `<div class='math-block katex-display' data-render-mode='latex-recovered'>`
+- `_render_table_markdown_metadata_aware` — `table_markdown` 直接透传到 markdown 输出
+- `_render_table_html_metadata_aware` + `_markdown_table_to_html` — 把 markdown grid 转 `<table>` 输出
+- 4 处旧调用点(`_render_block_markdown` 2 处 + `_render_block_html` 2 处)替换为新 helper
+- `tests/test_export_modality_rendering.py` 14 测试
+
+**M3 现在端到端兑现**:modality pipeline 写进 metadata → ParseService 持久化到 source_span_json → ExportService 在最终产物里渲染成 `$$…$$` / `<table>`。
+
+---
+
+## TATR-b 真模型(Task #53)✅
+
+- `_ensure_models_loaded` 实现真权重加载:`microsoft/table-transformer-detection` + `microsoft/table-transformer-structure-recognition` 通过 `transformers.AutoImageProcessor` + `TableTransformerForObjectDetection.from_pretrained`
+- `_run_tatr_inference` 实现完整 pipeline:PyMuPDF `page.get_pixmap(matrix=Matrix(zoom, zoom))` 光栅化 → PIL Image → 检测模型(threshold 0.7)→ 每张 table crop → 结构识别(threshold 0.6)→ 行×列交集生成 cells → image-space → PDF user-space 反向变换
+- `_structure_results_to_cells` + `_image_to_pdf_bbox` 两个 helper 处理坐标系转换
+- ML 依赖严格 lazy:模块 import 时不触发 torch/PIL/transformers,只有 `_ensure_models_loaded` 第一次被调用才加载
+- 缺依赖时优雅返空 + `metrics.deps_missing=True`,生产可以安全部署不强制依赖
+- TATR-a 16 测试在 TATR-b 改动后**全部仍过**(FakeTatr 通过 `_models_loaded=True` 绕过模型加载,契约不变)
+
+**生产启用**:
+```bash
+pip install torch transformers pillow
+export BOOK_AGENT_PDF_MODALITY_TABLES=1
+export BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1
+```
+首次调用会下载 ~220 MB 模型权重到 transformers cache(默认 `~/.cache/huggingface/hub/`)。
+
+---
+
+## Pre-existing 测试失败 triage(Task #54)✅
+
+- 单一根因 fix:`tests/__init__.py` 重定向 `TMPDIR` 到项目下 `.test-tmp/`,绕开 `exports_file_path_no_tempdir_check` SQL CHECK 对 macOS `/var/folders/` 的拦截
+- **40 → 24,净 -16**(所有 ERROR 类的 `IntegrityError` 一次清理)
+- 剩余 24 项分类记录在 `tasks/pre-existing-test-debt.md`:
+  - Category A:10 个 recovery heuristic 漂移(`PdfBootstrapPipelineTests`)
+  - Category B:3 个 reflow heuristic 漂移
+  - Category C:3 个 workflow review followup
+  - Category D:8 个杂项
+- 这些**不**在 M-series scope,文档化让后续可独立 sprint 处理
+
+---
+
 **典型生产开关**:
 ```bash
 # Stage A:仅术语 + 图像保护(最小风险)
