@@ -26,6 +26,7 @@ from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
 from book_agent.workers.contracts import (
     CompiledTranslationContext,
+    RelevantTerm,
     TranslationUsage,
     TranslationWorkerOutput,
     TranslationWorkerResult,
@@ -304,6 +305,17 @@ class TranslationService:
         )
         chapter_memory_snapshot = compiled_context_result.chapter_memory_snapshot
         compiled_context_packet = compiled_context_result.context
+        # PDF v2 M2.7b: inject document-level locked glossary into the
+        # compiled context so the prompt builder surfaces it as authoritative
+        # term mappings — defense in depth alongside the M2.7 post-validator.
+        # Failure here is non-fatal: translation must proceed even if the
+        # glossary lookup hiccups.
+        try:
+            compiled_context_packet = self._inject_locked_glossary(
+                compiled_context_packet
+            )
+        except Exception:  # pragma: no cover - defensive
+            pass
         worker_metadata = self.worker.metadata()
         call_id = stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp()))
         correlation_id = f"packet:{bundle.packet.id}"
@@ -434,6 +446,64 @@ class TranslationService:
             )
         self.repository.session.flush()
         return artifacts
+
+    def _inject_locked_glossary(
+        self,
+        compiled_context_packet: CompiledTranslationContext,
+    ) -> CompiledTranslationContext:
+        """Merge document-level locked glossary entries into the compiled
+        context's `relevant_terms`. PDF v2 M2.7b prompt injection.
+
+        The existing prompt builder (`_sorted_term_lines` in workers/translator.py)
+        already renders `relevant_terms` as `- {source} => {target} ({lock_level})`
+        and orders them with locked first — so injecting LOCKED rows here
+        makes them appear at the top of the term mappings the LLM sees,
+        without touching any prompt profile.
+
+        Dedup rule: existing entries (e.g., chapter-scope termbase matches
+        already populated by the context compiler) win over our document
+        scope entries. The compiler's choice was made with packet context;
+        we only fill gaps.
+        """
+        document_id = compiled_context_packet.document_id
+        if not document_id:
+            return compiled_context_packet
+        glossary_service = GlossaryService(self.repository.session)
+        document_terms = glossary_service.list_document_entries(
+            document_id, include_superseded=False
+        )
+        if not document_terms:
+            return compiled_context_packet
+
+        existing_keys = {
+            term.source_term.casefold()
+            for term in compiled_context_packet.relevant_terms
+        }
+        additions: list[RelevantTerm] = []
+        for entry in document_terms:
+            # Skip suggested-only entries with no target — they have no
+            # actionable signal for the translator yet.
+            if not entry.target_term or not entry.target_term.strip():
+                continue
+            key = entry.source_term.casefold()
+            if key in existing_keys:
+                continue
+            additions.append(
+                RelevantTerm(
+                    source_term=entry.source_term,
+                    target_term=entry.target_term,
+                    lock_level=entry.lock_level.value,
+                )
+            )
+            existing_keys.add(key)
+
+        if not additions:
+            return compiled_context_packet
+
+        merged_terms = list(compiled_context_packet.relevant_terms) + additions
+        return compiled_context_packet.model_copy(
+            update={"relevant_terms": merged_terms}
+        )
 
     def _emit_glossary_violations(
         self,

@@ -252,3 +252,20 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 **当前接入**:**Post-validation 即时上线** —— GlossaryService 的锁定术语会在每次 packet 翻译完后自动校验,违规事件入 `events` 表,可通过现有 SSE / 审阅 UI / 遥测消费。
 
 **未做**:**Prompt 注入(M2.7b)** —— 在 LLM 翻译之前把 `locked_glossary` 写入 system prompt 作为权威映射。这需要改 14 个 prompt profile + ContextPacket schema + 多个 worker,影响面大,留作下一独立增量。当前 post-validation 等价于"事后纠错信号";prompt 注入则是"事前预防"。两者互补。
+
+---
+
+### M2.7b · Prompt 注入 — 译前防错(Task #44)✅
+
+- [x] 发现现有 `ContextPacket.relevant_terms: list[RelevantTerm]` 字段已被 `workers/translator._sorted_term_lines` 渲染为 `- {source} => {target} ({lock_level})` 写入 system prompt。**零 schema / prompt profile 变更**
+- [x] `TranslationService._inject_locked_glossary`:在 `execute_packet` 调 worker 前,从 `GlossaryService.list_document_entries` 取所有 ACTIVE 条目(SUGGESTED + PREFERRED + LOCKED),转 `RelevantTerm`,按 source 大小写不敏感 dedup 后合并到 `compiled_context_packet.relevant_terms`
+- [x] **冲突时既有项胜出**:context compiler 已经为某 term 选了 chapter-scope target,document-scope 不覆盖(章节决策更靠近上下文)
+- [x] **空 target 的 SUGGESTED 不下发**(`upsert_candidates` 产生的占位行不污染 prompt)
+- [x] try/except 包裹:注入失败不阻塞翻译
+- [x] `tests/test_translation_glossary_injection.py` 6 测试:空 glossary 不变 / locked 合并 / 既有项胜 / 空 target 跳过 / prompt 字符串实际包含术语 / locked 排在 suggested 前
+
+**价值**:**M2.7 完整双闭环上线**:
+- **译前**(M2.7b prompt 注入):锁定术语作为权威映射进入 LLM system prompt,LLM 应主动遵守
+- **译后**(M2.7 post-validation):违规时发 `GLOSSARY_VIOLATION` 事件,review/遥测可消费
+
+两层互补:prompt 注入是预防(降低违规率),post-validation 是兜底(违规仍会被发现)。开 `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION=1` + 在 review UI 用 `GlossaryService.lock_term` 锁定关键术语,M2 北极星(术语一致性 + sanity OCR 修复)即在生产生效。
