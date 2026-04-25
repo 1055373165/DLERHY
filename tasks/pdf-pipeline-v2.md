@@ -293,3 +293,58 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - **译后**(M2.7 post-validation):违规时发 `GLOSSARY_VIOLATION` 事件,review/遥测可消费
 
 两层互补:prompt 注入是预防(降低违规率),post-validation 是兜底(违规仍会被发现)。开 `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION=1` + 在 review UI 用 `GlossaryService.lock_term` 锁定关键术语,M2 北极星(术语一致性 + sanity OCR 修复)即在生产生效。
+
+---
+
+## M3 模态专家(Tasks #46-#49)✅
+
+| 模态 | 模块 | 测试数 | 实现层次 |
+|------|------|--------|----------|
+| References | `services/references_extractor.py` | 14 | 完整启发式(无外部依赖) |
+| Tables | `services/table_extractor.py` | 15 | 启发式 TSR + Adapter Protocol |
+| Equations | `services/equation_extractor.py` | 11 | Adapter Protocol + verbatim/image-anchor 兜底 |
+| Images | `services/image_modality.py` | 11 | 契约执行器 |
+
+### M3.1 References
+
+- 检测多语种(英文 References / Bibliography / Works Cited / 参考文献 / 引用)
+- 解析 APA/IEEE 风格条目 → `ReferenceEntry`(authors / year / title / venue / DOI / arXiv / urls / raw)
+- `protect_references_section`:整个 section 强制 `translatability=translate_none`(含 heading 本身),终止于 Index/Appendix 等终结性 heading
+- 防止"作者名/会议名被翻译"这一 spec §3.1 失败模式 3 的硬性失误
+
+### M3.2 Tables
+
+- 启发式 TSR:基于行内空白栅格一致性识别列分隔,产出 markdown 表
+- 置信度计算与最低阈值 0.6,低置信不输出表结构(避免半成品)
+- `enhance_block_for_table`:无论是否成功提结构,**block_type=table 一律 translatability=translate_none**(半翻译表比原文还差)
+- `TableExtractorAdapter` Protocol 留口给将来的 TATR/docling 集成
+
+### M3.3 Equations
+
+- `EquationLatexAdapter` Protocol(默认 NoOp 不识别)
+- `enhance_block_for_equation`:三态 render mode
+  - `latex` — adapter 成功还原
+  - `image_anchor` — 失败但有图像资源
+  - `verbatim_text` — 失败且无图像(monospace 显示原文)
+- 任何情况下 `translatability=translate_none`,异常抛出仍然安全降级到 verbatim
+- spec §3.1 失败模式 3 中"公式当散文译"被严格阻断
+
+### M3.4 Images / Figures
+
+- `enhance_block_for_image`:image/figure block 强制 translate_none + 把 `image_alt` 升格为 canonical 显示文本(空文本时填占位)
+- `enhance_caption_block`:caption 强制保持 translate_all(防止上游误判把 caption 锁掉,导致中文产物里没有图注)
+- `enhance_document_image_modality`:文档级 idempotent pass + 遥测摘要(images_protected / captions_re_enabled / alt_text_filled)
+
+### 共享设计决策
+
+1. **Adapter Protocol 模式**(M3.2/M3.3 沿用 M2.3a/M2.3b):每个模态都给真正需要外部权重的实现留接口,默认走启发式 / NoOp,生产风险为零
+2. **失败时永远向"安全 + 不可译"降级**:启发式无法恢复结构 → 至少不让模型乱翻 → translate_none 是最终防线
+3. **纯函数 + 文档级编排器**:每个 modality module 暴露 block-level 函数 + (可选) doc-level pass,方便组合或者 ParseService 末尾按需启用
+4. **零 schema 改动**:全部信息在 `block.metadata` 里(`equation_latex` / `equation_render_mode` / `table_markdown` / `table_confidence` / `image_canonical_alt`),export 层按这些键渲染即可
+
+### M3 仍待完成(诚实记录)
+
+- **未集成实际 ML 实现**:TATR(表)、pix2tex/texify(公式)、GROBID 完整版(参考文献)。Adapter Protocol 已就位,落地时只换实现不动调用方
+- **未接入 ParseService 末尾**:四个模态的 doc-level pass 还没 wire 到 `ParseService.parse` 的尾部。引入需要决定执行顺序(建议:references → equations → tables → images)和遥测埋点
+- **未补金标 fixture**:M2.9 留的 5 个 gap 中的 references/tables/equations/images 现在有能力支持更强断言,可以补到金标里
+- **export 层未读新键**:`equation_render_mode` / `table_markdown` 等 metadata 键还没被 merged/bilingual 渲染消费,目前是"模态识别就绪,渲染待接通"
