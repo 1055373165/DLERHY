@@ -387,6 +387,34 @@ M1.1 是全局前提;M1.3 可并行;M1.4 → M1.5 串行。
 - structure recognition 输出归一化坐标,需乘 image_dim 再除 dpi/72 反算 PDF 点空间
 - GPU 自动检测;CPU fallback 慢但可用
 
-### TATR-c · 接入 ParseService(待做)
+### TATR-c · 接入 ParseService(Task #51)✅
 
-env flag `BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1`,默认关闭。开启后在 `ParseService.parse` 末尾对每个 `block_type=table` 的 chapter 调 `TatrTableExtractor.extract`,将返回的 `TableStructure.markdown` 写入 `block.metadata["table_markdown"]`,与 M3.2 heuristic 同 key 同消费方式。
+- [x] 新模块 `services/modality_pipeline.py`:`ModalityPipelineOptions` 控制 4 个模态独立开关 + 3 个 adapter override(table_extractor / equation_adapter / page_image_table_extractor)
+- [x] `enhance_parsed_document(doc, options)` 编排:references → equations → tables(含 TATR 后处理)→ images,顺序固定,每模态独立可关
+- [x] `ModalityPipelineSummary` 聚合:references/equations/tables(含 TATR 数量)/images 计数 + `skipped_due_to_disabled` 列表
+- [x] `ParseService` 加 `modality_options` 构造参数 + `_apply_modality_pipeline` 助手方法
+- [x] env flag 5 个:`BOOK_AGENT_PDF_MODALITY_REFERENCES/EQUATIONS/TABLES/IMAGES` + `BOOK_AGENT_PDF_TATR_TABLE_RECOVERY`
+- [x] **explicit > env**:构造时传入的 ModalityPipelineOptions 优先,env 只在未传时启用
+- [x] **失败非阻塞**:pipeline 异常 → 原 parsed doc 落下,不破坏 parse 流程
+- [x] `document.metadata_json["modality_pipeline"]` 写遥测摘要(每个模态计数 + skipped 列表)
+- [x] `tests/test_modality_pipeline.py` 9 测试 + `tests/test_parse_service_modality_wiring.py` 11 测试
+
+**TATR 路径**:env `BOOK_AGENT_PDF_MODALITY_TABLES=1` + `BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1` 同时打开后,自动构造 `TatrTableExtractor()`(deps 缺失则优雅返空 + metrics 标 deps_missing),传给 modality pipeline 作 table 后处理。
+
+**典型生产开关**:
+```bash
+# Stage A:仅术语 + 图像保护(最小风险)
+export BOOK_AGENT_PDF_MODALITY_IMAGES=1
+
+# Stage B:加引用保护(防止参考文献被译)
+export BOOK_AGENT_PDF_MODALITY_REFERENCES=1
+
+# Stage C:加公式保护(防止公式被译)
+export BOOK_AGENT_PDF_MODALITY_EQUATIONS=1
+
+# Stage D:启动表格 heuristic 提取
+export BOOK_AGENT_PDF_MODALITY_TABLES=1
+
+# Stage E:加 TATR 真模型(等 TATR-b 落地后)
+export BOOK_AGENT_PDF_TATR_TABLE_RECOVERY=1
+```

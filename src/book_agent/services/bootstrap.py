@@ -4,9 +4,10 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
+import os
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Final, Iterable
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
@@ -46,7 +47,55 @@ from book_agent.domain.structure.epub import EPUBParser
 from book_agent.domain.structure.ocr import OcrPdfParser
 from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler, PdfFileProfile
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
+from book_agent.services.modality_pipeline import (
+    ModalityPipelineOptions,
+    enhance_parsed_document,
+)
 from book_agent.services.parse_ir import ParseIrService
+
+
+# PDF v2 M3 wire-up env flags. Default OFF so behaviour matches legacy
+# until operators opt in. Pattern matches the M2.3 sanity-OCR rollout.
+_MODALITY_FLAG_REFERENCES: Final[str] = "BOOK_AGENT_PDF_MODALITY_REFERENCES"
+_MODALITY_FLAG_EQUATIONS: Final[str] = "BOOK_AGENT_PDF_MODALITY_EQUATIONS"
+_MODALITY_FLAG_TABLES: Final[str] = "BOOK_AGENT_PDF_MODALITY_TABLES"
+_MODALITY_FLAG_IMAGES: Final[str] = "BOOK_AGENT_PDF_MODALITY_IMAGES"
+_MODALITY_FLAG_TATR: Final[str] = "BOOK_AGENT_PDF_TATR_TABLE_RECOVERY"
+
+
+def _flag_is_truthy(name: str) -> bool:
+    raw = os.getenv(name, "")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_modality_options_from_env() -> ModalityPipelineOptions | None:
+    """Return modality options when at least one flag is on, else None.
+
+    Returning None is the explicit "no enhancement requested" signal —
+    callers skip the pipeline entirely so disabled-everywhere stays a
+    zero-cost no-op.
+    """
+    enable_refs = _flag_is_truthy(_MODALITY_FLAG_REFERENCES)
+    enable_eqs = _flag_is_truthy(_MODALITY_FLAG_EQUATIONS)
+    enable_tables = _flag_is_truthy(_MODALITY_FLAG_TABLES)
+    enable_images = _flag_is_truthy(_MODALITY_FLAG_IMAGES)
+    if not (enable_refs or enable_eqs or enable_tables or enable_images):
+        return None
+
+    page_image_table_extractor = None
+    if enable_tables and _flag_is_truthy(_MODALITY_FLAG_TATR):
+        # Lazy import — TATR module probes its own ML deps.
+        from book_agent.services.tatr_extractor import TatrTableExtractor
+
+        page_image_table_extractor = TatrTableExtractor()
+
+    return ModalityPipelineOptions(
+        enable_references=enable_refs,
+        enable_equations=enable_eqs,
+        enable_tables=enable_tables,
+        enable_images=enable_images,
+        page_image_table_extractor=page_image_table_extractor,
+    )
 
 
 @dataclass(slots=True)
@@ -176,11 +225,14 @@ class ParseService:
         parse_ir_service: ParseIrService | None = None,
         *,
         image_output_dir: str | Path | None = None,
+        modality_options: ModalityPipelineOptions | None = None,
     ):
         self.epub_parser = epub_parser or EPUBParser()
         self.pdf_parser = pdf_parser or PDFParser(image_output_dir=image_output_dir)
         self.ocr_pdf_parser = ocr_pdf_parser or OcrPdfParser()
         self.parse_ir_service = parse_ir_service or ParseIrService()
+        # Explicit override > env. None means "consult env at parse time".
+        self._modality_options_override = modality_options
 
     def parse(self, document: Document, file_path: str | Path) -> ParseArtifacts:
         if document.source_type == SourceType.EPUB:
@@ -247,6 +299,11 @@ class ParseService:
                 },
             },
         }
+
+        # PDF v2 M3 wire-up: optionally enhance modalities (references /
+        # equations / tables / images) before downstream block construction
+        # so the persisted DocIR signals reflect the modality contracts.
+        parsed = self._apply_modality_pipeline(parsed, document)
 
         chapters: list[Chapter] = []
         blocks: list[Block] = []
@@ -375,6 +432,58 @@ class ParseService:
             }
         )
         return metadata, risk_level
+
+    def _apply_modality_pipeline(
+        self,
+        parsed: ParsedDocument,
+        document: Document,
+    ) -> ParsedDocument:
+        """Run the M3 modality pipeline if any flag is on (or override given).
+
+        Returns the (possibly rewritten) parsed document. Stamps a
+        `modality_pipeline` block on `document.metadata_json` for telemetry.
+        Failure is non-fatal — original parsed document falls through.
+        """
+        modality_options = (
+            self._modality_options_override
+            if self._modality_options_override is not None
+            else _build_modality_options_from_env()
+        )
+        if modality_options is None:
+            return parsed
+        try:
+            new_parsed, summary = enhance_parsed_document(
+                parsed, options=modality_options
+            )
+        except Exception:  # pragma: no cover - defensive
+            return parsed
+
+        document.metadata_json = {
+            **document.metadata_json,
+            "modality_pipeline": {
+                "skipped_due_to_disabled": list(summary.skipped_due_to_disabled),
+                "equations_enhanced": summary.equations_enhanced,
+                "table_blocks_enhanced": summary.table_blocks_enhanced,
+                "table_markdowns_recovered": summary.table_markdowns_recovered,
+                "tatr_tables_recovered": summary.tatr_tables_recovered,
+                "references_block_count": (
+                    summary.references.block_count
+                    if summary.references is not None
+                    else 0
+                ),
+                "image_blocks_protected": (
+                    summary.images.image_blocks_protected
+                    if summary.images is not None
+                    else 0
+                ),
+                "captions_re_enabled": (
+                    summary.images.captions_re_enabled
+                    if summary.images is not None
+                    else 0
+                ),
+            },
+        }
+        return new_parsed
 
     def _build_block(
         self,
