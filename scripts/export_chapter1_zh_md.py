@@ -43,28 +43,44 @@ OUTPUT_PATH = ROOT / ".test-tmp" / "ch1-export" / "chapter1-zh.md"
 
 
 def _block_zh_text(session, block) -> str:
-    rows = session.execute(
+    sentence_rows = session.execute(
         select(Sentence.id, Sentence.ordinal_in_block, Sentence.source_text)
         .where(Sentence.block_id == block.id)
         .where(Sentence.translatable.is_(True))
         .order_by(Sentence.ordinal_in_block.asc())
     ).all()
-    if not rows:
+    if not sentence_rows:
         return ""
-    parts: list[str] = []
-    for sentence_id, _, source_text in rows:
+
+    # Map each sentence to its non-superseded target_segment; dedupe by
+    # target_segment_id to avoid emitting the same translation multiple
+    # times when one target spans many source sentences (LLM often
+    # produces a single packet-level rendering rather than 1:1 alignment).
+    seen_target_ids: set[str] = set()
+    rendered_chunks: list[tuple[int, str]] = []
+    untranslated_source_texts: list[str] = []
+    for sentence_id, _, source_text in sentence_rows:
         target = session.execute(
-            select(TargetSegment.text_zh, TargetSegment.final_status, TargetSegment.ordinal)
+            select(TargetSegment.id, TargetSegment.text_zh, TargetSegment.ordinal)
             .join(AlignmentEdge, AlignmentEdge.target_segment_id == TargetSegment.id)
             .where(AlignmentEdge.sentence_id == sentence_id)
             .where(TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
             .order_by(TargetSegment.ordinal.asc())
             .limit(1)
         ).first()
-        if target is not None and target[0]:
-            parts.append(target[0])
-        else:
-            parts.append(f"[未翻译: {source_text}]")
+        if target is None or not target[1]:
+            untranslated_source_texts.append(source_text)
+            continue
+        ts_id, text_zh, ts_ordinal = target
+        if ts_id in seen_target_ids:
+            continue
+        seen_target_ids.add(ts_id)
+        rendered_chunks.append((int(ts_ordinal or 0), text_zh))
+
+    rendered_chunks.sort(key=lambda item: item[0])
+    parts: list[str] = [chunk for _, chunk in rendered_chunks]
+    for source in untranslated_source_texts:
+        parts.append(f"[未翻译: {source}]")
     return "\n".join(parts)
 
 
