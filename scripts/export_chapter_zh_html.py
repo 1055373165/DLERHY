@@ -361,7 +361,7 @@ def _render_block(
     image_alt: str | None,
 ) -> str:
     btype = (block.block_type or "paragraph").lower()
-    if btype == "image":
+    if btype in {"image", "figure"}:
         return _image_html(image_data_uri, image_alt)
     if not chunks and not untranslated:
         return ""
@@ -519,7 +519,7 @@ def main() -> int:
             chunks, untranslated = _block_zh_chunks(session, block)
             image_data_uri = None
             image_alt = None
-            if (block.block_type or "").lower() == "image":
+            if (block.block_type or "").lower() in {"image", "figure"}:
                 image_data_uri, image_alt, skip_reason = _block_image_data(
                     session, block
                 )

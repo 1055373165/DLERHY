@@ -99,6 +99,18 @@ class Settings(BaseSettings):
     # client send SSE and reassemble locally.
     translation_openai_streaming: bool = False
 
+    # Figure clustering pass — see book_agent.domain.structure.figure_clustering
+    # for the algorithm and full docstring on each tunable. All distances
+    # in PDF points (1/72 inch).
+    figure_cluster_enabled: bool = True
+    figure_cluster_max_anchor_gap_pt: float = 24.0
+    figure_cluster_label_search_pad_pt: float = 30.0
+    figure_cluster_max_label_chars: int = 200
+    figure_cluster_min_label_size_ratio: float = 0.85
+    figure_cluster_max_prose_neighbors_in_zone: int = 1
+    figure_cluster_inline_absorb_requires_inside_anchor: bool = True
+    figure_cluster_min_anchor_area_pt2: float = 1800.0
+
     model_config = SettingsConfigDict(
         env_prefix="BOOK_AGENT_",
         env_file=ROOT_DIR / ".env",

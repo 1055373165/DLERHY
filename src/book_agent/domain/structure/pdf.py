@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 from book_agent.domain.document_titles import cleaned_filename_book_title, looks_like_auxiliary_document_title
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
+from book_agent.domain.structure.figure_clustering import (
+    FigureClusterConfig,
+    cluster_figure_regions,
+)
 from book_agent.domain.structure.models import (
     PROVENANCE_OCR,
     PROVENANCE_TEXT_LAYER,
@@ -4351,11 +4355,15 @@ class PdfStructureRecoveryService:
         self,
         *,
         ocr_reextraction_adapter: "OcrReextractionAdapter | None" = None,
+        figure_cluster_config: "FigureClusterConfig | None" = None,
     ) -> None:
         # M2.3a: adapter for re-extracting blocks whose source page failed
         # the text-layer sanity gate. Default None = no re-extraction
         # (current behavior preserved for all in-tree callers).
         self._ocr_reextraction_adapter = ocr_reextraction_adapter
+        # Figure clustering config — None means defaults. Wired from
+        # Settings in build_default_recovery_service.
+        self._figure_cluster_config = figure_cluster_config
 
     def recover(
         self,
@@ -4390,6 +4398,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
         recovered_blocks = self._promote_late_table_like_bodies(recovered_blocks)
         recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks, ordered_pages)
+        recovered_blocks = self._apply_figure_clustering(recovered_blocks)
         self._link_artifact_captions(recovered_blocks)
         self._link_artifact_group_contexts(
             recovered_blocks,
@@ -7044,6 +7053,132 @@ class PdfStructureRecoveryService:
                 return candidate
         return None
 
+    def _apply_figure_clustering(
+        self, recovered_blocks: list[_RecoveredBlock]
+    ) -> list[_RecoveredBlock]:
+        """Cluster spatially-adjacent image / vector / label blocks into FIGURE blocks.
+
+        Replaces image/vector_drawing anchors that share a figure region
+        with one ``BlockType.FIGURE`` block whose bbox is the union of
+        all clustered components. Inline diagram labels are absorbed
+        (no separate translation). Caption-pattern text is kept as a
+        separate translatable block but tagged with ``figure_anchor`` so
+        the export layer can render it next to the figure.
+
+        Returns a new list — the input is not mutated.
+        """
+        if not recovered_blocks:
+            return recovered_blocks
+        report = cluster_figure_regions(
+            recovered_blocks, config=self._figure_cluster_config
+        )
+        if not report.clusters:
+            return recovered_blocks
+
+        replaced_indices: set[int] = set()
+        figure_replacement_at: dict[int, _RecoveredBlock] = {}
+        caption_anchor_for_index: dict[int, str] = {}
+
+        for cluster in report.clusters:
+            anchor_indices = sorted(cluster.anchor_indices)
+            if not anchor_indices:
+                continue
+            # Skip clusters that don't actually merge or absorb anything.
+            # A single anchor with no inline labels has no clustering work
+            # to do; the existing _link_artifact_captions pass handles
+            # caption→image linking on its own. Emitting FIGURE blocks for
+            # plain images would needlessly change the type label and
+            # break tests that expect BlockType.IMAGE for single-figure
+            # pages.
+            is_trivial = (
+                len(anchor_indices) == 1 and not cluster.inline_label_indices
+            )
+            if is_trivial:
+                continue
+            primary_index = anchor_indices[0]
+            primary = recovered_blocks[primary_index]
+
+            absorbed_anchors: list[str] = []
+            for label_idx in cluster.inline_label_indices:
+                absorbed_anchors.append(recovered_blocks[label_idx].anchor)
+
+            metadata = dict(primary.metadata)
+            metadata["image_type"] = cluster.image_type or metadata.get(
+                "image_type", "vector_drawing"
+            )
+            metadata["figure_cluster"] = {
+                "anchor_block_anchors": [recovered_blocks[i].anchor for i in anchor_indices],
+                "absorbed_label_anchors": absorbed_anchors,
+                "caption_block_anchor": (
+                    recovered_blocks[cluster.caption_index].anchor
+                    if cluster.caption_index is not None
+                    else None
+                ),
+            }
+            metadata.pop("source_bbox_json", None)
+
+            replacement = _RecoveredBlock(
+                role="figure",
+                block_type=BlockType.FIGURE,
+                text="[Figure]",
+                page_start=cluster.page_number,
+                page_end=cluster.page_number,
+                bbox_regions=[
+                    {
+                        "page_number": cluster.page_number,
+                        "bbox": _bbox_to_json(cluster.bbox),
+                    }
+                ],
+                reading_order_index=primary.reading_order_index,
+                parse_confidence=primary.parse_confidence,
+                flags=list(primary.flags),
+                font_size_avg=0.0,
+                source_path=primary.source_path,
+                anchor=f"p{cluster.page_number}-fig{primary.reading_order_index}",
+                metadata=metadata,
+            )
+            figure_replacement_at[primary_index] = replacement
+            for idx in anchor_indices:
+                replaced_indices.add(idx)
+            for idx in cluster.inline_label_indices:
+                replaced_indices.add(idx)
+            if cluster.caption_index is not None:
+                caption_anchor_for_index[cluster.caption_index] = replacement.anchor
+
+        if not replaced_indices and not caption_anchor_for_index:
+            return recovered_blocks
+
+        new_blocks: list[_RecoveredBlock] = []
+        for index, block in enumerate(recovered_blocks):
+            if index in figure_replacement_at:
+                new_blocks.append(figure_replacement_at[index])
+                continue
+            if index in replaced_indices:
+                continue
+            if index in caption_anchor_for_index:
+                tagged_metadata = dict(block.metadata)
+                tagged_metadata["figure_anchor"] = caption_anchor_for_index[index]
+                new_blocks.append(
+                    _RecoveredBlock(
+                        role=block.role,
+                        block_type=block.block_type,
+                        text=block.text,
+                        page_start=block.page_start,
+                        page_end=block.page_end,
+                        bbox_regions=list(block.bbox_regions),
+                        reading_order_index=block.reading_order_index,
+                        parse_confidence=block.parse_confidence,
+                        flags=list(block.flags),
+                        font_size_avg=block.font_size_avg,
+                        source_path=block.source_path,
+                        anchor=block.anchor,
+                        metadata=tagged_metadata,
+                    )
+                )
+                continue
+            new_blocks.append(block)
+        return new_blocks
+
     def _link_artifact_captions(self, recovered_blocks: list[_RecoveredBlock]) -> None:
         claimed_caption_indexes: set[int] = set()
         for artifact_index, artifact_block in enumerate(recovered_blocks):
@@ -8177,9 +8312,13 @@ def build_default_recovery_service() -> PdfStructureRecoveryService:
     `SuryaOcrReextractionAdapter`; otherwise we return a plain service.
     Callers that want explicit control can instantiate
     `PdfStructureRecoveryService(ocr_reextraction_adapter=...)` directly.
+
+    Figure clustering config is sourced from ``Settings`` lazily so test
+    harnesses that patch settings still reach the parser.
     """
+    figure_config = _resolve_default_figure_cluster_config()
     if not _sanity_ocr_reextraction_enabled():
-        return PdfStructureRecoveryService()
+        return PdfStructureRecoveryService(figure_cluster_config=figure_config)
     # Lazy import to avoid pulling Surya-runtime deps into every code path
     # that merely constructs a parser.
     from book_agent.domain.structure.surya_reextraction import (
@@ -8188,7 +8327,25 @@ def build_default_recovery_service() -> PdfStructureRecoveryService:
 
     return PdfStructureRecoveryService(
         ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
+        figure_cluster_config=figure_config,
     )
+
+
+def _resolve_default_figure_cluster_config() -> FigureClusterConfig | None:
+    """Read figure-cluster knobs from ``Settings`` if importable.
+
+    Falls back to ``None`` (algorithm defaults) if settings can't be
+    loaded — e.g. during tests that import the parser before env is set.
+    """
+    try:
+        from book_agent.core.config import get_settings
+        from book_agent.domain.structure.figure_clustering import (
+            figure_cluster_config_from_settings,
+        )
+
+        return figure_cluster_config_from_settings(get_settings())
+    except Exception:
+        return None
 
 
 class PDFParser:
