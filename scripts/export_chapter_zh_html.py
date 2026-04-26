@@ -394,6 +394,27 @@ def _image_html(data_uri: str | None, alt_text: str | None) -> str:
     return f"<figure class='figure'>{figure_inner}</figure>"
 
 
+def _linked_caption_anchor(block) -> str | None:
+    """Return the source_anchor of the CAPTION block linked to this figure/image.
+
+    Two sources cover both pre- and post-clustering layouts:
+    - ``linked_caption_source_anchor`` is set by ``_link_artifact_captions``
+      for IMAGE blocks emitted by the parser before clustering.
+    - ``figure_cluster.caption_block_anchor`` is set by the figure-clustering
+      pass for FIGURE blocks created from grouped image fragments.
+    """
+    meta = block.source_metadata or {}
+    anchor = meta.get("linked_caption_source_anchor")
+    if isinstance(anchor, str) and anchor:
+        return anchor
+    cluster = meta.get("figure_cluster")
+    if isinstance(cluster, dict):
+        anchor = cluster.get("caption_block_anchor")
+        if isinstance(anchor, str) and anchor:
+            return anchor
+    return None
+
+
 def _render_block(
     block,
     chunks: list[str],
@@ -556,12 +577,35 @@ def main() -> int:
             .all()
         )
         total_blocks = len(blocks)
+
+        # Pre-pass: index CAPTION blocks by source_anchor and identify which
+        # ones are linked to a FIGURE/IMAGE in this rendering window. Linked
+        # captions render *inside* their figure as <figcaption>, so we skip
+        # them when iterating in reading order — otherwise we get the same
+        # caption twice (once English from alt_text, once Chinese as a
+        # standalone paragraph) which is how the Figure-3.2/3.3 mismatch
+        # surfaced visually.
+        caption_by_anchor: dict[str, Block] = {}
+        for blk in blocks:
+            if (blk.block_type or "").lower() in {"caption", "figure_caption"} and blk.source_anchor:
+                caption_by_anchor[blk.source_anchor] = blk
+        consumed_caption_ids: set[str] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            linked_anchor = _linked_caption_anchor(blk)
+            if linked_anchor and linked_anchor in caption_by_anchor:
+                consumed_caption_ids.add(caption_by_anchor[linked_anchor].id)
+
         for block in blocks:
+            btype = (block.block_type or "").lower()
+            if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
+                continue
             chunks, untranslated = _block_zh_chunks(session, block)
             image_data_uri = None
-            image_alt = None
-            if (block.block_type or "").lower() in {"image", "figure"}:
-                image_data_uri, image_alt, skip_reason = _block_image_data(
+            image_alt: str | None = None
+            if btype in {"image", "figure"}:
+                image_data_uri, alt_fallback, skip_reason = _block_image_data(
                     session, block
                 )
                 if image_data_uri:
@@ -570,6 +614,17 @@ def main() -> int:
                     image_skip_reasons[skip_reason] = (
                         image_skip_reasons.get(skip_reason, 0) + 1
                     )
+                # Prefer the linked CAPTION block's *translated* text for the
+                # figcaption — single source of truth, always Chinese, can't
+                # disagree with the surrounding paragraph render.
+                linked_anchor = _linked_caption_anchor(block)
+                if linked_anchor and linked_anchor in caption_by_anchor:
+                    cap_block = caption_by_anchor[linked_anchor]
+                    cap_chunks, _ = _block_zh_chunks(session, cap_block)
+                    if cap_chunks:
+                        image_alt = "  ".join(c.strip() for c in cap_chunks if c.strip())
+                if not image_alt:
+                    image_alt = alt_fallback
             block_html = _render_block(
                 block, chunks, untranslated, image_data_uri, image_alt
             )

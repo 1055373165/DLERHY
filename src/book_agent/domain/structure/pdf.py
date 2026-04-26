@@ -7292,9 +7292,17 @@ class PdfStructureRecoveryService:
             artifact_role = self._normalized_artifact_caption_role(artifact_block)
             if not self._caption_candidate_matches_artifact_role(candidate, artifact_role):
                 continue
-            if candidate.page_start == artifact_block.page_start and candidate.page_end == artifact_block.page_end:
+            same_page = (
+                candidate.page_start == artifact_block.page_start
+                and candidate.page_end == artifact_block.page_end
+            )
+            next_page = (
+                candidate.page_start == artifact_block.page_end + 1
+                and candidate.page_start == candidate.page_end
+            )
+            if same_page:
                 candidate_bbox = self._page_bbox(candidate, artifact_block.page_start)
-            elif candidate.page_start == artifact_block.page_end + 1 and candidate.page_start == candidate.page_end:
+            elif next_page:
                 candidate_bbox = self._page_bbox(candidate, candidate.page_start)
             else:
                 continue
@@ -7307,42 +7315,29 @@ class PdfStructureRecoveryService:
                 ((candidate_bbox[0] + candidate_bbox[2]) / 2.0)
                 - ((artifact_bbox[0] + artifact_bbox[2]) / 2.0)
             )
-            below_gap = candidate_bbox[1] - artifact_bbox[3]
-            below_lower_bound = -48.0 if artifact_role == "image" else -12.0
-            if below_lower_bound <= below_gap <= 120.0:
-                below_candidates.append(
-                    (
-                        max(below_gap, 0.0),
-                        center_distance,
-                        abs(candidate.reading_order_index - artifact_block.reading_order_index),
-                        candidate_index,
+            ordinal_distance = abs(candidate.reading_order_index - artifact_block.reading_order_index)
+            if same_page:
+                below_gap = candidate_bbox[1] - artifact_bbox[3]
+                below_lower_bound = -48.0 if artifact_role == "image" else -12.0
+                if below_lower_bound <= below_gap <= 120.0:
+                    below_candidates.append(
+                        (max(below_gap, 0.0), center_distance, ordinal_distance, candidate_index)
                     )
-                )
-                continue
-            above_gap = artifact_bbox[1] - candidate_bbox[3]
-            if -12.0 <= above_gap <= 80.0:
-                above_candidates.append(
-                    (
-                        max(above_gap, 0.0),
-                        center_distance,
-                        abs(candidate.reading_order_index - artifact_block.reading_order_index),
-                        candidate_index,
+                    continue
+                above_gap = artifact_bbox[1] - candidate_bbox[3]
+                if -12.0 <= above_gap <= 80.0:
+                    above_candidates.append(
+                        (max(above_gap, 0.0), center_distance, ordinal_distance, candidate_index)
                     )
-                )
-                continue
-            if (
-                candidate.page_start == artifact_block.page_end + 1
-                and candidate_bbox[1] <= 220.0
-                and artifact_bbox[3] >= artifact_bbox[1] + 120.0
-            ):
-                next_page_candidates.append(
-                    (
-                        candidate_bbox[1],
-                        center_distance,
-                        abs(candidate.reading_order_index - artifact_block.reading_order_index),
-                        candidate_index,
+                    continue
+            elif next_page:
+                if (
+                    candidate_bbox[1] <= 220.0
+                    and artifact_bbox[3] >= artifact_bbox[1] + 120.0
+                ):
+                    next_page_candidates.append(
+                        (candidate_bbox[1], center_distance, ordinal_distance, candidate_index)
                     )
-                )
         if below_candidates:
             return min(below_candidates)[3]
         if above_candidates:
