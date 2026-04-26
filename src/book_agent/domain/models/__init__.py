@@ -15,6 +15,7 @@ from book_agent.domain.models.ops import (
     WorkItem,
     WorkerLease,
 )
+from book_agent.domain.models.provider_credential import ProviderCredential
 from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import (
     AlignmentEdge,
@@ -47,6 +48,7 @@ __all__ = [
     "JobRun",
     "MemorySnapshot",
     "PacketSentenceMap",
+    "ProviderCredential",
     "RunAuditEvent",
     "RunBudget",
     "RuntimeBundleRevision",

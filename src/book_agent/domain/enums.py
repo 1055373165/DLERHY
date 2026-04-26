@@ -441,3 +441,16 @@ class RuntimeBundleRevisionStatus(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ROLLED_BACK = "rolled_back"
+
+
+class ProviderKind(StrEnum):
+    """Translation provider backends selectable at runtime."""
+
+    OPENAI_COMPATIBLE = "openai_compatible"
+    ECHO = "echo"
+
+
+class ProviderTestStatus(StrEnum):
+    UNKNOWN = "unknown"
+    OK = "ok"
+    FAILED = "failed"

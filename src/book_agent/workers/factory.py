@@ -1,6 +1,27 @@
+from sqlalchemy.orm import Session
+
 from book_agent.core.config import Settings
 from book_agent.workers.providers import OpenAICompatibleTranslationClient
 from book_agent.workers.translator import EchoTranslationWorker, LLMTranslationWorker, TranslationWorker
+
+
+def resolve_translation_worker(
+    session: Session, settings: Settings
+) -> TranslationWorker:
+    """Build the worker from the active stored credential, falling back to .env.
+
+    Imports happen lazily to avoid an import cycle between
+    workers.factory and services.provider_credentials.
+    """
+    from book_agent.services.provider_credentials import (
+        build_worker_from_credential,
+        resolve_active_credential,
+    )
+
+    record = resolve_active_credential(session, settings)
+    if record is not None:
+        return build_worker_from_credential(record)
+    return build_translation_worker(settings)
 
 
 def build_translation_worker(settings: Settings) -> TranslationWorker:

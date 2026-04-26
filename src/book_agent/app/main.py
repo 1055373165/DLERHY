@@ -13,7 +13,7 @@ from book_agent.core.logging import configure_logging
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
 from book_agent.workers.providers import ProviderHTTPError, ProviderNetworkError, ProviderTransportError
-from book_agent.workers.factory import build_translation_worker
+from book_agent.workers.factory import build_translation_worker, resolve_translation_worker
 
 
 def _database_error_detail(*, exc: OperationalError) -> str:
@@ -86,8 +86,32 @@ def create_app() -> FastAPI:
     app.state.export_root = str(settings.export_root)
     app.state.runtime_bundle_root = str(settings.runtime_bundle_root)
     app.state.upload_root = str(settings.upload_root)
-    app.state.translation_worker = build_translation_worker(settings)
+    # Lazily build the translation worker so user-driven provider swaps
+    # (POST /v1/providers/.../activate) take effect on the next request
+    # without restarting the server.
+    app.state.translation_worker = None
+    app.state.translation_worker_revision = -1
     app.state.document_run_executor = None
+
+    def _resolve_translation_worker_state():
+        from book_agent.services.provider_credentials import current_revision
+
+        revision = current_revision()
+        if (
+            app.state.translation_worker is not None
+            and getattr(app.state, "translation_worker_revision", -1) == revision
+        ):
+            return app.state.translation_worker
+        if app.state.session_factory is None:
+            _ensure_database_state(app, settings=settings)
+        with app.state.session_factory() as session:
+            worker = resolve_translation_worker(session, settings)
+            session.commit()
+        app.state.translation_worker = worker
+        app.state.translation_worker_revision = revision
+        return worker
+
+    app.state.resolve_translation_worker = _resolve_translation_worker_state
 
     @app.exception_handler(OperationalError)
     async def handle_operational_error(_request, _exc) -> JSONResponse:

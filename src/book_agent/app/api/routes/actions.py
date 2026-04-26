@@ -5,7 +5,7 @@ from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.schemas.workflow import ExecuteActionResponse
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.factory import build_translation_worker
+from book_agent.workers.factory import build_translation_worker, resolve_translation_worker
 
 router = APIRouter()
 
@@ -18,9 +18,13 @@ def execute_action(
     session: Session = Depends(get_db_session),
 ) -> ExecuteActionResponse:
     try:
-        translation_worker = getattr(request.app.state, "translation_worker", None)
-        if translation_worker is None:
-            translation_worker = build_translation_worker(get_settings())
+        resolver = getattr(request.app.state, "resolve_translation_worker", None)
+        if callable(resolver):
+            translation_worker = resolver()
+        else:
+            translation_worker = getattr(request.app.state, "translation_worker", None)
+            if translation_worker is None:
+                translation_worker = resolve_translation_worker(session, get_settings())
         result = DocumentWorkflowService(
             session,
             export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
