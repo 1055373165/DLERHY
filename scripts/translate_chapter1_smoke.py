@@ -43,8 +43,8 @@ from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.factory import build_translation_worker
 
 
-PACKET_IDS_FILE = Path("/tmp/ch1-packet-ids.json")
-EXPORT_ROOT = ROOT / ".test-tmp" / "ch1-export"
+PACKET_IDS_FILE = Path(os.environ.get("PACKET_IDS_FILE", "/tmp/ch1-packet-ids.json"))
+EXPORT_ROOT = ROOT / ".test-tmp" / os.environ.get("EXPORT_DIR", "ch1-export")
 WORKER_COUNT = int(os.environ.get("CH1_PARALLEL", "4"))
 
 
