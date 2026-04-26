@@ -59,15 +59,44 @@ PDF_PATH = Path(
         "/Users/smy/project/book-agent/artifacts/uploads/8676b71d9dc34225b86939a5ecec92fc/llm-book.pdf",
     )
 )
-# Render PDF page regions at 300 DPI for production-grade text legibility
-# inside figures. 4× area vs the prior 144 DPI default — file size grows but
-# everything is local.
-IMAGE_RENDER_DPI = int(os.environ.get("IMAGE_RENDER_DPI", "300"))
+# Adaptive DPI: pick a render zoom so the longer side of the rendered
+# bitmap doesn't exceed IMAGE_TARGET_MAX_PIXELS. Smaller figures get
+# higher DPI (more detail), larger figures get lower DPI (smaller files).
+# The clamp [IMAGE_MIN_DPI, IMAGE_MAX_DPI] guards both ends:
+#   - min keeps text legible inside small icons
+#   - max keeps full-page figures from blowing up to 30+ MB PNGs
+# Page width in HTML is 760px; we render at ~2x for retina sharpness.
+IMAGE_TARGET_MAX_PIXELS = int(os.environ.get("IMAGE_TARGET_MAX_PIXELS", "1600"))
+IMAGE_MIN_DPI = int(os.environ.get("IMAGE_MIN_DPI", "180"))
+IMAGE_MAX_DPI = int(os.environ.get("IMAGE_MAX_DPI", "360"))
+# Encode threshold: re-encode as JPEG-90 if PNG exceeds this size.
+# Diagrams stay PNG (lossless line art); photos drop to JPEG (4× smaller).
+IMAGE_PNG_TO_JPEG_BYTE_THRESHOLD = int(
+    os.environ.get("IMAGE_PNG_TO_JPEG_BYTE_THRESHOLD", "200000")  # 200 KiB
+)
+IMAGE_JPEG_QUALITY = int(os.environ.get("IMAGE_JPEG_QUALITY", "88"))
 # Page-area fraction above which we treat a stored "image" block as
 # misclassified full-page content (chapter cover pages, drop caps, etc.)
 # and skip rendering. Empirically ~50% catches all the false positives
 # in this corpus without dropping real figures.
 IMAGE_MAX_PAGE_AREA_FRACTION = float(os.environ.get("IMAGE_MAX_PAGE_AREA_FRACTION", "0.5"))
+
+
+def _adaptive_dpi(bbox: tuple[float, float, float, float]) -> int:
+    """Pick a render DPI so output ≤ IMAGE_TARGET_MAX_PIXELS on the long side.
+
+    bbox is in PDF points (1pt = 1/72 inch). The shorter the bbox, the
+    higher the DPI we can afford. Clamped to [IMAGE_MIN_DPI, IMAGE_MAX_DPI]
+    so small icons don't overshoot and full-page figures don't blow up
+    file size.
+    """
+    width_pt = max(0.0, bbox[2] - bbox[0])
+    height_pt = max(0.0, bbox[3] - bbox[1])
+    longer_pt = max(width_pt, height_pt)
+    if longer_pt <= 0:
+        return IMAGE_MAX_DPI
+    target_dpi = IMAGE_TARGET_MAX_PIXELS * 72.0 / longer_pt
+    return int(max(IMAGE_MIN_DPI, min(IMAGE_MAX_DPI, target_dpi)))
 OUTPUT_PATH = Path(
     os.environ.get(
         "OUTPUT_PATH",
@@ -186,11 +215,16 @@ def _render_image_data_uri(
     bbox: list[float] | tuple[float, ...],
     image_type: str | None,
 ) -> tuple[str | None, str | None]:
-    """Render the requested page region as a base64 PNG data URI.
+    """Render the requested page region as a base64 PNG (or JPEG) data URI.
 
     Returns (data_uri, skip_reason). page_number is 1-indexed (DocIR
     convention); we subtract 1 for PyMuPDF. bbox is (x0, y0, x1, y1)
     in PDF point coordinates.
+
+    DPI is chosen adaptively so output pixel dimensions stay within
+    IMAGE_TARGET_MAX_PIXELS on the longer side. Output is PNG by default;
+    photo-like content (PNG > IMAGE_PNG_TO_JPEG_BYTE_THRESHOLD) is
+    re-encoded as JPEG-90 for ~4x size reduction with no visible loss.
     """
     pdf = _open_pdf()
     if pdf is None:
@@ -221,10 +255,17 @@ def _render_image_data_uri(
         clip = clip & page.rect
         if clip.is_empty:
             return None, "clamped-empty"
-        zoom = IMAGE_RENDER_DPI / 72.0
+        clip_tuple = (clip.x0, clip.y0, clip.x1, clip.y1)
+        dpi = _adaptive_dpi(clip_tuple)
+        zoom = dpi / 72.0
         matrix = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=matrix, clip=clip, alpha=False)
         png_bytes = pix.tobytes("png")
+        if len(png_bytes) > IMAGE_PNG_TO_JPEG_BYTE_THRESHOLD:
+            jpeg_bytes = pix.tobytes("jpg", jpg_quality=IMAGE_JPEG_QUALITY)
+            if len(jpeg_bytes) < len(png_bytes):
+                encoded = base64.b64encode(jpeg_bytes).decode("ascii")
+                return f"data:image/jpeg;base64,{encoded}", None
     except Exception as exc:  # pragma: no cover - defensive against PDF quirks
         logger.warning(
             "failed to render image region page=%s bbox=%s err=%s",
@@ -560,7 +601,9 @@ def main() -> int:
         f"skipped_blocks={untranslated_block_count} "
         f"total_blocks={total_blocks}",
         f"[export] images_rendered={image_render_count} "
-        f"images_skipped={sum(image_skip_reasons.values())} dpi={IMAGE_RENDER_DPI}",
+        f"images_skipped={sum(image_skip_reasons.values())} "
+        f"dpi=adaptive[{IMAGE_MIN_DPI}-{IMAGE_MAX_DPI}] "
+        f"max_pixels={IMAGE_TARGET_MAX_PIXELS}",
     ]
     if image_skip_reasons:
         for reason, count in sorted(

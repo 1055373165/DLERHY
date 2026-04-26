@@ -21,3 +21,4 @@ book_agent.db
 artifacts/
 .gstack/
 .omc/
+.test-tmp/
