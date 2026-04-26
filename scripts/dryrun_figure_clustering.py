@@ -97,6 +97,32 @@ def main() -> int:
         if block.block_type == BlockType.FIGURE.value
     ]
     print(f"=== FIGURE blocks emitted: {len(figure_blocks)} ===")
+
+    # Per-page summary so we can see where clustering bites and where it doesn't.
+    page_summary: dict[int, dict[str, int]] = {}
+    for fig in figure_blocks:
+        cluster = fig.metadata.get("figure_cluster") if fig.metadata else None
+        if not cluster:
+            continue
+        page = fig.metadata.get("source_page_start") or 0
+        slot = page_summary.setdefault(page, {"figures": 0, "anchors_merged": 0, "labels_absorbed": 0})
+        slot["figures"] += 1
+        slot["anchors_merged"] += len(cluster.get("anchor_block_anchors", []))
+        slot["labels_absorbed"] += len(cluster.get("absorbed_label_anchors", []))
+
+    page_focus_lo = int(os.environ.get("PAGE_FOCUS_LO", "0"))
+    page_focus_hi = int(os.environ.get("PAGE_FOCUS_HI", "0"))
+    print(f"=== per-page (focus: {page_focus_lo}-{page_focus_hi if page_focus_hi else 'end'}) ===")
+    for page, stats in sorted(page_summary.items()):
+        if page_focus_hi and not (page_focus_lo <= page <= page_focus_hi):
+            continue
+        print(
+            f"  page={page:>3} figures={stats['figures']} "
+            f"anchors_merged={stats['anchors_merged']} labels_absorbed={stats['labels_absorbed']}"
+        )
+
+    print()
+    print("=== sample figure clusters ===")
     for fig in figure_blocks[:20]:
         cluster = fig.metadata.get("figure_cluster") if fig.metadata else None
         if not cluster:
