@@ -94,6 +94,10 @@ class Settings(BaseSettings):
             "OPENAI_BASE_URL",
         ),
     )
+    # Some OpenAI-compatible endpoints (NVIDIA NIM serving deepseek-v3.1)
+    # only respond reliably with stream=true. Enabling this flag makes the
+    # client send SSE and reassemble locally.
+    translation_openai_streaming: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="BOOK_AGENT_",

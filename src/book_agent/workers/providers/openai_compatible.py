@@ -41,6 +41,16 @@ class JSONTransport(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    def post_stream_chat_completion(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        timeout_seconds: int,
+    ) -> dict[str, Any]:
+        ...
+
 
 class UrllibJSONTransport:
     def post_json(
@@ -88,6 +98,111 @@ class UrllibJSONTransport:
         except json.JSONDecodeError as exc:
             raise ProviderTransportError("Provider returned non-JSON response.") from exc
 
+    def post_stream_chat_completion(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        timeout_seconds: int,
+    ) -> dict[str, Any]:
+        # Some providers (e.g. NVIDIA NIM serving deepseek-v3.1) only respond
+        # reliably with stream=true. We POST as SSE, accumulate delta.content
+        # chunks, and reassemble a synthetic non-streaming chat-completion
+        # response so the rest of the client can consume it normally.
+        streaming_payload = dict(payload)
+        streaming_payload["stream"] = True
+        body = json.dumps(streaming_payload).encode("utf-8")
+        request = Request(
+            url=url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+                **headers,
+            },
+            method="POST",
+        )
+        accumulated_content: list[str] = []
+        accumulated_reasoning: list[str] = []
+        finish_reason: str | None = None
+        usage_payload: dict[str, Any] = {}
+        last_id: str | None = None
+        last_model: str | None = None
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if not line.startswith("data:"):
+                        continue
+                    data_chunk = line[len("data:") :].strip()
+                    if not data_chunk or data_chunk == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(data_chunk)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(chunk, dict):
+                        continue
+                    if isinstance(chunk.get("id"), str):
+                        last_id = chunk["id"]
+                    if isinstance(chunk.get("model"), str):
+                        last_model = chunk["model"]
+                    choices = chunk.get("choices")
+                    if isinstance(choices, list):
+                        for choice in choices:
+                            if not isinstance(choice, dict):
+                                continue
+                            delta = choice.get("delta")
+                            if isinstance(delta, dict):
+                                text = delta.get("content")
+                                if isinstance(text, str):
+                                    accumulated_content.append(text)
+                                reasoning = delta.get("reasoning_content")
+                                if isinstance(reasoning, str):
+                                    accumulated_reasoning.append(reasoning)
+                            chunk_finish = choice.get("finish_reason")
+                            if isinstance(chunk_finish, str):
+                                finish_reason = chunk_finish
+                    chunk_usage = chunk.get("usage")
+                    if isinstance(chunk_usage, dict):
+                        usage_payload = chunk_usage
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise ProviderHTTPError(exc.code, detail or str(exc.reason)) from exc
+        except URLError as exc:
+            raise ProviderNetworkError(str(exc.reason)) from exc
+        except (TimeoutError, ConnectionResetError, OSError) as exc:
+            raise ProviderNetworkError(str(exc)) from exc
+        except RemoteDisconnected as exc:
+            raise ProviderTransportError("Provider disconnected before sending a complete response.") from exc
+
+        full_content = "".join(accumulated_content)
+        if not full_content and not usage_payload:
+            raise ProviderTransportError("Streaming provider returned no content.")
+        synthetic_response: dict[str, Any] = {
+            "id": last_id,
+            "model": last_model,
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": full_content,
+                    },
+                    "finish_reason": finish_reason,
+                }
+            ],
+        }
+        if accumulated_reasoning:
+            synthetic_response["choices"][0]["message"]["reasoning_content"] = "".join(
+                accumulated_reasoning
+            )
+        if usage_payload:
+            synthetic_response["usage"] = usage_payload
+        return synthetic_response
+
 
 @dataclass(slots=True)
 class OpenAICompatibleTranslationClient(TranslationModelClient):
@@ -102,6 +217,12 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     output_cost_per_1m_tokens: float | None = None
     transport: JSONTransport = field(default_factory=UrllibJSONTransport)
     extra_headers: dict[str, str] = field(default_factory=dict)
+    # Some OpenAI-compatible endpoints (notably NVIDIA NIM serving
+    # deepseek-v3.1-terminus) only respond reliably to streaming requests;
+    # non-streaming POSTs hang past timeout. Enable this flag to send
+    # stream=true via SSE and reassemble client-side. The flag is opt-in
+    # because OpenAI's own /v1/responses endpoint is fine without it.
+    streaming: bool = False
 
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult:
         endpoint_url, api_mode = self._resolve_endpoint()
@@ -171,13 +292,21 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         url: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        request_payload = self._prepare_request_payload(payload)
         attempt = 0
         while True:
             try:
+                if self.streaming and self._is_chat_completions_url(url):
+                    return self.transport.post_stream_chat_completion(
+                        url=url,
+                        headers=self._headers(),
+                        payload=request_payload,
+                        timeout_seconds=self.timeout_seconds,
+                    )
                 return self.transport.post_json(
                     url=url,
                     headers=self._headers(),
-                    payload=payload,
+                    payload=request_payload,
                     timeout_seconds=self.timeout_seconds,
                 )
             except ProviderTransportError as exc:
@@ -187,6 +316,22 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     raise
             attempt += 1
             time.sleep(self.retry_backoff_seconds * (2 ** (attempt - 1)))
+
+    def _is_chat_completions_url(self, url: str) -> bool:
+        return url.rstrip("/").endswith("/chat/completions")
+
+    def _prepare_request_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # NVIDIA NIM rejects (or hangs on) chat_completions requests that
+        # combine response_format with stream=true. Drop response_format
+        # when streaming; the prompt asks the model to emit JSON and the
+        # client parses fenced or balanced JSON from text.
+        if not self.streaming:
+            return payload
+        if "response_format" not in payload:
+            return payload
+        scrubbed = dict(payload)
+        scrubbed.pop("response_format", None)
+        return scrubbed
 
     def _should_retry_http(self, code: int) -> bool:
         return code in {408, 409, 429} or 500 <= code <= 599

@@ -63,6 +63,32 @@ _MODALITY_FLAG_IMAGES: Final[str] = "BOOK_AGENT_PDF_MODALITY_IMAGES"
 _MODALITY_FLAG_TATR: Final[str] = "BOOK_AGENT_PDF_TATR_TABLE_RECOVERY"
 
 
+def _strip_nul_bytes(value: str) -> str:
+    """Return `value` with any NUL (0x00) bytes removed.
+
+    PyMuPDF occasionally emits NUL bytes when the source PDF has
+    corrupted glyph encoding or embeds binary content into a text run.
+    PostgreSQL TEXT columns reject these bytes outright; rather than
+    fail the entire ingest, we strip them — they carry no rendering
+    semantics. JSON serialization also chokes on raw NULs in some
+    drivers, so we apply the same strip recursively to JSON payloads.
+    """
+    return value.replace("\x00", "") if value else value
+
+
+def _strip_nul_bytes_in_json(payload):
+    """Recursively strip NUL bytes from string leaves of a JSON-shaped dict/list."""
+    if isinstance(payload, str):
+        return _strip_nul_bytes(payload)
+    if isinstance(payload, dict):
+        return {k: _strip_nul_bytes_in_json(v) for k, v in payload.items()}
+    if isinstance(payload, list):
+        return [_strip_nul_bytes_in_json(v) for v in payload]
+    if isinstance(payload, tuple):
+        return tuple(_strip_nul_bytes_in_json(v) for v in payload)
+    return payload
+
+
 def _flag_is_truthy(name: str) -> bool:
     raw = os.getenv(name, "")
     return raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -499,15 +525,17 @@ class ParseService:
         # block_rules / worker / export can read the authoritative signals
         # without re-parsing. Keeps the JSON column as single source of
         # truth for parser-side contract; no schema change required.
-        source_span_json = {
-            "source_path": parsed_block.source_path,
-            "anchor": parsed_block.anchor,
-            **parsed_block.metadata,
-            "docir_translatability": parsed_block.translatability,
-            "docir_provenance": parsed_block.provenance,
-            "docir_confidence_breakdown": dict(parsed_block.confidence_breakdown),
-            "docir_style_hints": dict(parsed_block.style_hints),
-        }
+        source_span_json = _strip_nul_bytes_in_json(
+            {
+                "source_path": parsed_block.source_path,
+                "anchor": parsed_block.anchor,
+                **parsed_block.metadata,
+                "docir_translatability": parsed_block.translatability,
+                "docir_provenance": parsed_block.provenance,
+                "docir_confidence_breakdown": dict(parsed_block.confidence_breakdown),
+                "docir_style_hints": dict(parsed_block.style_hints),
+            }
+        )
         return Block(
             id=stable_id(
                 "block",
@@ -522,8 +550,13 @@ class ParseService:
             block_type=block_type,
             parse_revision_id=str(parse_revision_id) if isinstance(parse_revision_id, str) else None,
             canonical_node_id=str(canonical_node_id) if isinstance(canonical_node_id, str) else None,
-            source_text=parsed_block.text,
-            normalized_text=_normalize_text(parsed_block.text),
+            # PostgreSQL TEXT columns reject NUL (0x00) bytes; PyMuPDF
+            # occasionally emits them when the source PDF carries
+            # corrupted glyph mappings or embedded binary spans. Strip
+            # them before persistence — they have no rendering meaning
+            # and would otherwise crash the DB insert with DataError.
+            source_text=parsed_block.text.replace("\x00", "") if parsed_block.text else parsed_block.text,
+            normalized_text=_normalize_text(parsed_block.text.replace("\x00", "") if parsed_block.text else parsed_block.text),
             source_anchor=_compose_anchor(parsed_block.source_path, parsed_block.anchor),
             source_span_json=source_span_json,
             parse_confidence=parsed_block.parse_confidence if parsed_block.parse_confidence is not None else 1.0,

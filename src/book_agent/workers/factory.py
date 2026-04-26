@@ -27,6 +27,7 @@ def build_translation_worker(settings: Settings) -> TranslationWorker:
             input_cache_hit_cost_per_1m_tokens=settings.translation_input_cache_hit_cost_per_1m_tokens,
             input_cost_per_1m_tokens=settings.translation_input_cost_per_1m_tokens,
             output_cost_per_1m_tokens=settings.translation_output_cost_per_1m_tokens,
+            streaming=settings.translation_openai_streaming,
         )
         return LLMTranslationWorker(
             client,
