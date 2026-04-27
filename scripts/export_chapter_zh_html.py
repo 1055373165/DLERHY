@@ -22,6 +22,7 @@ import html
 import io
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -394,6 +395,51 @@ def _image_html(data_uri: str | None, alt_text: str | None) -> str:
     return f"<figure class='figure'>{figure_inner}</figure>"
 
 
+_REAL_CAPTION_PATTERN = re.compile(
+    # Mirrors the strict parser pattern in `pdf.py::_FIGURE_CAPTION_PATTERN`:
+    # caption-shaped only (uppercase first letter or punctuation separator),
+    # not a body sentence like "Figure 3.1 describes ...". Matches Chinese
+    # captions too, so re-translated rows still pass.
+    r"^\s*(?:"
+    r"(?:figure|fig\.?|table|tab\.?|image|diagram|chart)\s*"
+    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|[A-Z])"
+    r"(?:[.:\-–—]\s+\S+|\s+(?-i:[A-Z])[^\n]{2,}|\s*$)"
+    r"|"
+    r"(?:图|表|示意图|插图)\s*[\d一-鿿]"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _is_real_caption_text(text: str) -> bool:
+    """Reject body-text references masquerading as captions (DB-side legacy)."""
+    return bool(_REAL_CAPTION_PATTERN.match((text or "").strip()))
+
+
+_FIGURE_NUMBER_FROM_SOURCE = re.compile(
+    r"^\s*(?:figure|fig\.?)\s*([A-Z]?\d+(?:[.\-–—]\d+)*[A-Za-z]?)",
+    re.IGNORECASE,
+)
+
+
+def _ensure_figure_prefix(translated: str, source: str) -> str:
+    """Prepend "图 N.M" to a translated caption when the source had it.
+
+    Some translation models treat the "Figure N.M" prefix as metadata and
+    silently drop it. The number is meaningful for the reader, so we re-add
+    it from the source whenever the translation is missing one.
+    """
+    text = (translated or "").strip()
+    if not text:
+        return text
+    if re.match(r"^\s*(?:图|表|示意图|插图|Figure|Fig\.?)\s*\d", text, re.IGNORECASE):
+        return text
+    m = _FIGURE_NUMBER_FROM_SOURCE.match(source or "")
+    if not m:
+        return text
+    return f"图{m.group(1)} {text}"
+
+
 def _linked_caption_anchor(block) -> str | None:
     """Return the source_anchor of the CAPTION block linked to this figure/image.
 
@@ -429,12 +475,75 @@ def _render_block(
     if not chunks and not untranslated:
         return ""
     if btype == "heading" and chunks:
+        # Older parser revisions promoted short/body-fragment text to HEADING
+        # (e.g. "Many LLMs", "Note: ...", figure-internal labels). Keep the
+        # render side robust to those rows by demoting any HEADING whose
+        # source isn't shaped like a section title — leading section number
+        # OR a Chapter/Part/Appendix lead OR ≥60 chars of meaningful prose.
+        # Check both the English source and the translated chunk so a
+        # parser that didn't include the source-side connector still demotes
+        # at render time.
+        if not _looks_like_heading_source(block.source_text or "") or not _looks_like_heading_source(chunks[0]):
+            return _paragraph_html(chunks)
         return _heading_html(chunks[0])
     if btype in {"code", "code_block"}:
         return _code_html(chunks)
     if btype in {"caption", "figure_caption"}:
         return _caption_html(chunks)
     return _paragraph_html(chunks)
+
+
+# Require at least one dot in pure-numeric leads — "3.1 X" is a section
+# title, "2 X" is a list item that the older parser sometimes promoted.
+_HEADING_NUMBERED_LEAD = re.compile(r"^\s*(?:[A-Z]\s*\.|[Cc]hapter|[Pp]art|[Aa]ppendix|\d+\.\d+(?:\.\d+){0,2}\s)")
+# Body-sentence-shaped text the older parser sometimes promoted to HEADING.
+# Reject when the source ends in sentence-final punctuation OR opens with a
+# connector that real titles never use (these are English; the source is
+# always English for this book — translation stays a heading downstream).
+_HEADING_DEMOTE_LEAD = re.compile(
+    r"^\s*(?:"
+    r"although|however|while|whereas|because|since"
+    r"|note\s*[:.]|notes?\s*[:.]"
+    r"|many\s|several\s|most\s|some\s"
+    r"|a\s+key\s|the\s+key\s|one\s+key\s|various\s"
+    # Chinese counterparts — cover the case where the parser already
+    # stored Chinese text (rare) or the demote regex needs to look at
+    # translated chunks downstream.
+    r"|虽然|然而|许多|一些|有些|大多数"
+    r"|注意\s*[：:.]|注\s*[：:.]"
+    r"|一个关键|关键问题"
+    r")",
+    re.IGNORECASE,
+)
+# Bare list-item digits like "2 Random selection" or "3. Add information"
+# slip through the section-numbered guard above (real section titles always
+# carry at least one dot, e.g. "3.1"). Reject anything that looks like a
+# list item — single digit, optional dot, then prose.
+_HEADING_LIST_ITEM_LEAD = re.compile(r"^\s*\d{1,2}\.?\s+[A-Za-z]")
+_HEADING_SENTENCE_TAIL = re.compile(r"[.。!?！？]\s*$")
+
+
+def _looks_like_heading_source(text: str) -> bool:
+    """Filter older-parser HEADINGs that were really body fragments.
+
+    A heading-shaped string here is anything that *isn't* clearly a
+    sentence: numbered section leads, capitalised short phrases, real
+    single-line titles. We only demote when the source text matches the
+    body-fragment shapes we know slip through (sentence-ending punctuation,
+    connector lead-ins like "Although ...", "Many ...", or "Note: ...").
+    """
+    s = (text or "").strip()
+    if not s:
+        return False
+    if _HEADING_NUMBERED_LEAD.match(s):
+        return True
+    if _HEADING_DEMOTE_LEAD.match(s):
+        return False
+    if _HEADING_LIST_ITEM_LEAD.match(s):
+        return False
+    if _HEADING_SENTENCE_TAIL.search(s):
+        return False
+    return True
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -591,12 +700,24 @@ def main() -> int:
             if (blk.block_type or "").lower() in {"caption", "figure_caption"} and blk.source_anchor:
                 caption_by_anchor[blk.source_anchor] = blk
         consumed_caption_ids: set[str] = set()
+        # Reject linkages where the linked caption's source text is actually
+        # body prose (e.g. "Figure 3.1 describes the essential components...")
+        # rather than a real caption (e.g. "Figure 3.1 The basic components...").
+        # The earlier-generation parser used a permissive regex that let body
+        # references through; we strain them out at render time so older DB
+        # rows still produce a clean export.
+        rejected_linkage_ids: set[str] = set()
         for blk in blocks:
             if (blk.block_type or "").lower() not in {"image", "figure"}:
                 continue
             linked_anchor = _linked_caption_anchor(blk)
-            if linked_anchor and linked_anchor in caption_by_anchor:
-                consumed_caption_ids.add(caption_by_anchor[linked_anchor].id)
+            if not linked_anchor or linked_anchor not in caption_by_anchor:
+                continue
+            cap_block = caption_by_anchor[linked_anchor]
+            if not _is_real_caption_text(cap_block.source_text or ""):
+                rejected_linkage_ids.add(blk.id)
+                continue
+            consumed_caption_ids.add(cap_block.id)
 
         for block in blocks:
             btype = (block.block_type or "").lower()
@@ -618,13 +739,26 @@ def main() -> int:
                 # Prefer the linked CAPTION block's *translated* text for the
                 # figcaption — single source of truth, always Chinese, can't
                 # disagree with the surrounding paragraph render.
-                linked_anchor = _linked_caption_anchor(block)
-                if linked_anchor and linked_anchor in caption_by_anchor:
-                    cap_block = caption_by_anchor[linked_anchor]
-                    cap_chunks, _ = _block_zh_chunks(session, cap_block)
-                    if cap_chunks:
-                        image_alt = "  ".join(c.strip() for c in cap_chunks if c.strip())
-                if not image_alt:
+                # Skip rejected linkages (body-text mistakenly identified as
+                # caption by the older parser); render orphan instead.
+                if block.id not in rejected_linkage_ids:
+                    linked_anchor = _linked_caption_anchor(block)
+                    if linked_anchor and linked_anchor in caption_by_anchor:
+                        cap_block = caption_by_anchor[linked_anchor]
+                        cap_chunks, _ = _block_zh_chunks(session, cap_block)
+                        if cap_chunks:
+                            image_alt = "  ".join(c.strip() for c in cap_chunks if c.strip())
+                            # Translator sometimes drops the "Figure N.M"
+                            # prefix when translating captions. Restore it
+                            # so figure numbering is preserved in the export.
+                            image_alt = _ensure_figure_prefix(
+                                image_alt, cap_block.source_text or ""
+                            )
+                # alt_fallback comes from DocumentImage.alt_text, which the
+                # older parser populated with whatever caption text it linked
+                # — including body-text references. Strain those out by the
+                # same caption-shape rule we use for in-window CAPTION blocks.
+                if not image_alt and alt_fallback and _is_real_caption_text(alt_fallback):
                     image_alt = alt_fallback
             block_html = _render_block(
                 block, chunks, untranslated, image_data_uri, image_alt

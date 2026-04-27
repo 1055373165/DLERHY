@@ -2630,7 +2630,10 @@ def _looks_like_equation(
 def _caption_matches_artifact_role(text: str, artifact_role: str) -> bool:
     normalized = _normalize_text(text)
     role = (artifact_role or "").strip().casefold()
-    if role == "image":
+    if role in {"image", "figure"}:
+        # FIGURE blocks emitted by the clustering pass need caption matching
+        # too — without this, the spatial fallback in `_link_artifact_captions`
+        # rejects every candidate and the FIGURE stays orphan.
         return _looks_like_figure_caption(normalized)
     if role in {"table", "table_like"}:
         return _looks_like_table_caption(normalized)
@@ -7279,6 +7282,76 @@ class PdfStructureRecoveryService:
         for index, block in enumerate(recovered_blocks):
             if block.page_start == block.page_end:
                 by_page[block.page_start].append((index, block))
+
+        # First pass: pair each orphan "Figure N.M" caption with an unlinked
+        # FIGURE/IMAGE on the same page above it, even when the spatial gap
+        # exceeds the limits in ``_link_artifact_captions``. Real-world books
+        # sometimes wedge a body paragraph between the figure and its caption
+        # (e.g. the transformer book's Figure 3.1, where intro prose pushes
+        # the caption past the 120pt below-gap limit). Without this pass the
+        # text-only synthesizer below mints a duplicate FIGURE for the labels
+        # near the caption and the actual image stays orphan.
+        for caption_index, caption_block in enumerate(recovered_blocks):
+            if caption_block.role != "caption":
+                continue
+            if (caption_block.metadata or {}).get("caption_for_source_anchor"):
+                continue
+            if not _looks_like_figure_caption(caption_block.text):
+                continue
+            caption_bbox = self._page_bbox(caption_block, caption_block.page_start)
+            if caption_bbox is None:
+                continue
+            page_blocks = by_page.get(caption_block.page_start, [])
+            existing_unlinked: list[tuple[int, _RecoveredBlock, tuple[float, float, float, float]]] = []
+            for idx, blk in page_blocks:
+                if idx == caption_index:
+                    continue
+                if blk.role not in {"image", "figure"}:
+                    continue
+                if (blk.metadata or {}).get("linked_caption_source_anchor"):
+                    continue
+                blk_bbox = self._page_bbox(blk, caption_block.page_start)
+                if blk_bbox is None:
+                    continue
+                # Caption must sit BELOW the figure (typical book layout).
+                if blk_bbox[3] > caption_bbox[1] + 4.0:
+                    continue
+                existing_unlinked.append((idx, blk, blk_bbox))
+            if existing_unlinked:
+                # Pick the figure whose bottom is closest to the caption top —
+                # the natural reading-order parent. With multiple unlinked
+                # figures on a page (e.g. main + sub-figure), the smaller one
+                # right above the caption usually owns the caption.
+                target_idx, target_blk, _ = min(
+                    existing_unlinked,
+                    key=lambda c: abs(caption_bbox[1] - c[2][3]),
+                )
+                caption_anchor = self._source_anchor(caption_block)
+                artifact_anchor = self._source_anchor(target_blk)
+                target_blk.metadata.update(
+                    {
+                        "linked_caption_text": caption_block.text,
+                        "linked_caption_source_anchor": caption_anchor,
+                        "linked_caption_page": caption_block.page_start,
+                    }
+                )
+                if not target_blk.metadata.get("image_alt") and caption_block.text.strip():
+                    target_blk.metadata["image_alt"] = caption_block.text
+                target_blk.flags = list(
+                    dict.fromkeys([*target_blk.flags, "caption_linked"])
+                )
+                caption_block.metadata.update(
+                    {
+                        "caption_for_source_anchor": artifact_anchor,
+                        "caption_for_page": target_blk.page_start,
+                        "caption_for_role": "image",
+                    }
+                )
+                caption_block.flags = list(
+                    dict.fromkeys(
+                        [*caption_block.flags, "image_caption_linked", "caption_linked"]
+                    )
+                )
 
         # Process captions in reading order so multi-caption pages
         # partition labels deterministically (top caption claims first).

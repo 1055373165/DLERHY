@@ -117,11 +117,20 @@ class FigureClusterConfig:
 
 
 CAPTION_LEAD_PATTERN = re.compile(
-    r"^\s*("
-    r"figure|fig\.?|"  # English
-    r"table|tab\.?|"
-    r"图|表|示意图|插图"  # Chinese (defensive — input is English here)
-    r")\s*[\d一-鿿]",
+    # English variant requires the body to look caption-shaped, not body-prose:
+    # the artifact index ("3.1") must be followed by either a punctuation
+    # separator (".:-—") or whitespace + a CAPITAL letter — captions read like
+    # "Figure 3.1 The basic components..." while body refs read like
+    # "Figure 3.1 describes..." (lowercase verb). Without this guard the
+    # clustering pass mis-linked body paragraphs as captions and double-bound
+    # the real caption to a different cluster.
+    r"^\s*(?:"
+    r"(?:figure|fig\.?|table|tab\.?)\s*"
+    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|[A-Z])"
+    r"(?:[.:\-–—]\s+\S+|\s+(?-i:[A-Z])[^\n]{2,}|\s*$)"
+    r"|"
+    r"(?:图|表|示意图|插图)\s*[\d一-鿿]"  # Chinese (defensive — input is English here)
+    r")",
     re.IGNORECASE,
 )
 
