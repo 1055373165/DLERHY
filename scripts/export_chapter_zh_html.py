@@ -402,8 +402,9 @@ def _linked_caption_anchor(block) -> str | None:
       for IMAGE blocks emitted by the parser before clustering.
     - ``figure_cluster.caption_block_anchor`` is set by the figure-clustering
       pass for FIGURE blocks created from grouped image fragments.
+    Note: ``Block`` exposes per-block metadata as ``source_span_json``.
     """
-    meta = block.source_metadata or {}
+    meta = getattr(block, "source_span_json", None) or {}
     anchor = meta.get("linked_caption_source_anchor")
     if isinstance(anchor, str) and anchor:
         return anchor

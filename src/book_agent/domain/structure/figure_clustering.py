@@ -254,6 +254,12 @@ _TEXT_BLOCK_TYPES = frozenset(
         BlockType.PARAGRAPH,
         BlockType.CAPTION,
         BlockType.LIST_ITEM,
+        # HEADING included so the parser's numbered-prefix misclassifications
+        # ("1 Map text", "3 Add information" sitting inside a figure) get
+        # absorbed as inline labels. Real chapter/section headings are
+        # protected by the inside_anchor check (a heading at the top of the
+        # page sits outside any figure's bbox, so absorption is rejected).
+        BlockType.HEADING,
     }
 )
 
@@ -497,6 +503,13 @@ def cluster_figure_regions(
 
             inline_label_indices: list[int] = []
             caption_index: int | None = None
+            # (text_idx, vertical_distance_to_figure_edge, char_count, reason, anchor)
+            # Captures every "caption-pattern" match in the search zone so we
+            # can pick the one closest to the figure rather than the first one
+            # in reading order. Body-text references like "Figure 3.1
+            # describes..." also match the pattern but live far from the
+            # actual figure; a real caption sits directly above or below.
+            caption_candidates: list[tuple[int, float, int, str, str]] = []
             absorbed_local: set[int] = set()
 
             prose_density = _count_prose_neighbors_in_zone(
@@ -531,16 +544,15 @@ def cluster_figure_regions(
                 )
 
                 if kind == "caption":
-                    if caption_index is None:
-                        caption_index = text_idx
-                        decisions.append(
-                            ClusterDecision(
-                                page_number=page_number,
-                                action="link_caption",
-                                block_anchors=[text_block.anchor],
-                                reason=reason,
-                            )
-                        )
+                    # Distance to the closer of the figure's top/bottom edge.
+                    # Real captions sit ≤ ~30pt away; body-text references can
+                    # be hundreds of pt away.
+                    below_gap = max(0.0, text_bbox[1] - cluster_bbox[3])
+                    above_gap = max(0.0, cluster_bbox[1] - text_bbox[3])
+                    edge_distance = min(below_gap, above_gap)
+                    caption_candidates.append(
+                        (text_idx, edge_distance, len(text_block.text or ""), reason, text_block.anchor)
+                    )
                     continue
 
                 if kind != "inline_label":
@@ -573,6 +585,22 @@ def cluster_figure_regions(
                         action="absorb_inline_label",
                         block_anchors=[text_block.anchor],
                         reason=reason,
+                    )
+                )
+
+            if caption_candidates:
+                # Closest-by-edge wins; tie-break by shortest text (body-text
+                # references that lead with "Figure X.Y" are usually full
+                # sentences, while captions are tighter phrases).
+                caption_candidates.sort(key=lambda c: (c[1], c[2]))
+                best = caption_candidates[0]
+                caption_index = best[0]
+                decisions.append(
+                    ClusterDecision(
+                        page_number=page_number,
+                        action="link_caption",
+                        block_anchors=[best[4]],
+                        reason=f"{best[3]} edge_dist={best[1]:.1f} candidates={len(caption_candidates)}",
                     )
                 )
 

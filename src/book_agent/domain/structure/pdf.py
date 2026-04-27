@@ -1507,6 +1507,12 @@ def _next_academic_inline_heading(text: str) -> tuple[int, str, str, dict[str, A
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    # Short blocks ("1 Map text to tokens (chapter 2).") trip the numbered
+    # section pattern but are list items inside a figure or step list, not
+    # academic section headings. Real "1 Introduction"-style sections come
+    # from blocks that contain a full paragraph after the title.
+    if len(normalized) < 60:
+        return None
     leading = _leading_academic_standalone_heading(normalized)
     if leading is not None:
         heading_text, remainder = leading
@@ -1529,6 +1535,23 @@ def _next_academic_inline_heading(text: str) -> tuple[int, str, str, dict[str, A
         if consumed is None:
             continue
         title_body, remainder = consumed
+        # If the remainder starts with a continuation preposition like "to",
+        # "of", "for", the input is almost certainly one list item ("3 Add
+        # information to each embedding ...") that the heading detector
+        # would have wrongly split. _leading_numbered_book_heading_and_remainder
+        # already applies this guard; mirror it here so the academic-inline
+        # path doesn't slip past it.
+        remainder_tokens = remainder.split()
+        if remainder_tokens:
+            raw_first = re.sub(r"[^A-Za-z'-]", "", remainder_tokens[0])
+            first_remainder = raw_first.casefold()
+            # Real academic body usually starts with capitalized "The".
+            # Lowercase "the" is a list-item continuation ("5 Apply the
+            # unembedding layer ...") and should still be rejected.
+            if first_remainder in (_HEADING_CONTINUATION_START_WORDS - {"the"}):
+                continue
+            if first_remainder == "the" and raw_first != "The":
+                continue
         cleaned = _clean_academic_heading_candidate(f"{label} {title_body}", remainder, "numbered")
         if cleaned is None:
             continue
@@ -2831,6 +2854,14 @@ def _leading_all_caps_book_heading_and_remainder(text: str) -> tuple[str, str, i
 def _leading_plain_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
     normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
     if not normalized:
+        return None
+    # Short blocks are almost always single list items or figure labels,
+    # not "heading + body" combos. The numbered-step layout in figures
+    # ("1 Map text to tokens (chapter 2).") triggered a false-positive
+    # split that produced a heading "1 Map text" and a paragraph
+    # "to tokens (chapter 2)." with identical bboxes. A 60-char floor
+    # gates this rule on blocks that actually look like a paragraph.
+    if len(normalized) < 60:
         return None
     tokens = normalized.split()
     if len(tokens) < 6:
@@ -4399,6 +4430,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._promote_late_table_like_bodies(recovered_blocks)
         recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks, ordered_pages)
         recovered_blocks = self._apply_figure_clustering(recovered_blocks)
+        recovered_blocks = self._recover_text_only_figures(recovered_blocks)
         self._link_artifact_captions(recovered_blocks)
         self._link_artifact_group_contexts(
             recovered_blocks,
@@ -7106,16 +7138,41 @@ class PdfStructureRecoveryService:
             metadata["image_type"] = cluster.image_type or metadata.get(
                 "image_type", "vector_drawing"
             )
+            caption_block_anchor = (
+                recovered_blocks[cluster.caption_index].anchor
+                if cluster.caption_index is not None
+                else None
+            )
             metadata["figure_cluster"] = {
                 "anchor_block_anchors": [recovered_blocks[i].anchor for i in anchor_indices],
                 "absorbed_label_anchors": absorbed_anchors,
-                "caption_block_anchor": (
-                    recovered_blocks[cluster.caption_index].anchor
-                    if cluster.caption_index is not None
-                    else None
-                ),
+                "caption_block_anchor": caption_block_anchor,
             }
-            metadata.pop("source_bbox_json", None)
+            # Mirror the bidirectional caption metadata that
+            # ``_link_artifact_captions`` would produce for an IMAGE block,
+            # so downstream consumers (export, refresh, render) treat
+            # clustered FIGURE blocks identically to non-clustered IMAGE
+            # blocks. Without this, clustered figures lose their captions
+            # in the rendered output.
+            if cluster.caption_index is not None:
+                caption_block_for_meta = recovered_blocks[cluster.caption_index]
+                metadata["linked_caption_text"] = caption_block_for_meta.text
+                metadata["linked_caption_source_anchor"] = self._source_anchor(caption_block_for_meta)
+                metadata["linked_caption_page"] = caption_block_for_meta.page_start
+                if not metadata.get("image_alt") and caption_block_for_meta.text.strip():
+                    metadata["image_alt"] = caption_block_for_meta.text
+            # Replace the per-image source_bbox_json with the cluster's
+            # union bbox so bootstrap.py emits a single DocumentImage row
+            # covering the whole figure region (rendered later by the
+            # export pipeline).
+            metadata["source_bbox_json"] = {
+                "regions": [
+                    {
+                        "page_number": cluster.page_number,
+                        "bbox": _bbox_to_json(cluster.bbox),
+                    }
+                ]
+            }
 
             replacement = _RecoveredBlock(
                 role="figure",
@@ -7157,7 +7214,21 @@ class PdfStructureRecoveryService:
                 continue
             if index in caption_anchor_for_index:
                 tagged_metadata = dict(block.metadata)
-                tagged_metadata["figure_anchor"] = caption_anchor_for_index[index]
+                figure_anchor_value = caption_anchor_for_index[index]
+                tagged_metadata["figure_anchor"] = figure_anchor_value
+                # Back-pointer mirroring what ``_link_artifact_captions``
+                # writes onto a CAPTION block. The replacement FIGURE that
+                # owns this caption was constructed with primary.source_path
+                # and anchor=f"p{page}-fig{...}", so build the same
+                # ``source_path#anchor`` form here.
+                tagged_metadata["caption_for_source_anchor"] = (
+                    f"{block.source_path}#{figure_anchor_value}"
+                    if figure_anchor_value
+                    else None
+                )
+                tagged_metadata["caption_for_page"] = block.page_start
+                tagged_metadata["caption_for_role"] = "image"
+                tagged_flags = list(dict.fromkeys([*block.flags, "image_caption_linked", "caption_linked"]))
                 new_blocks.append(
                     _RecoveredBlock(
                         role=block.role,
@@ -7168,7 +7239,214 @@ class PdfStructureRecoveryService:
                         bbox_regions=list(block.bbox_regions),
                         reading_order_index=block.reading_order_index,
                         parse_confidence=block.parse_confidence,
-                        flags=list(block.flags),
+                        flags=tagged_flags,
+                        font_size_avg=block.font_size_avg,
+                        source_path=block.source_path,
+                        anchor=block.anchor,
+                        metadata=tagged_metadata,
+                    )
+                )
+                continue
+            new_blocks.append(block)
+        return new_blocks
+
+    def _recover_text_only_figures(
+        self, recovered_blocks: list[_RecoveredBlock]
+    ) -> list[_RecoveredBlock]:
+        """Synthesize FIGURE blocks for captions whose figure has no image anchor.
+
+        Some figures (word-relation diagrams, conceptual flow charts) are
+        rendered in the source PDF as a constellation of short text and
+        code blocks with no embedded image and no vector_drawing anchor.
+        ``_apply_figure_clustering`` cannot detect them because there is
+        no anchor to start from. The result is an orphan caption ("Figure
+        3.3 ...") and a flock of mis-typed body blocks (heading "Capital
+        Debt -1xcapital", paragraph "Stock Rare", etc.) that get fed into
+        the translator as prose.
+
+        Heuristic: for each unlinked CAPTION block matching the
+        ``Figure N.M`` pattern, look at non-prose blocks above it on the
+        same page. If at least three short blocks cluster within ~200pt
+        above the caption AND there is a clear vertical gap separating
+        them from the surrounding prose, treat them as the figure body
+        and emit a synthetic FIGURE block whose bbox is their union.
+        """
+        if not recovered_blocks:
+            return recovered_blocks
+
+        # Index blocks by page for fast lookup.
+        by_page: dict[int, list[tuple[int, _RecoveredBlock]]] = defaultdict(list)
+        for index, block in enumerate(recovered_blocks):
+            if block.page_start == block.page_end:
+                by_page[block.page_start].append((index, block))
+
+        # Process captions in reading order so multi-caption pages
+        # partition labels deterministically (top caption claims first).
+        # ``already_claimed`` tracks block indices absorbed by a previous
+        # synthesis so a second caption on the same page can pick up the
+        # labels that sit above the first caption but below the second.
+        already_claimed: set[int] = set()
+        synth: list[tuple[int, list[int], list[float]]] = []  # (caption_index, absorbed_indices, union_bbox)
+        for caption_index, caption_block in enumerate(recovered_blocks):
+            if caption_block.role != "caption":
+                continue
+            if (caption_block.metadata or {}).get("caption_for_source_anchor"):
+                continue
+            if not _looks_like_figure_caption(caption_block.text):
+                continue
+            page_blocks = by_page.get(caption_block.page_start, [])
+            if not page_blocks:
+                continue
+            caption_bbox = self._page_bbox(caption_block, caption_block.page_start)
+            if caption_bbox is None:
+                continue
+            caption_top = caption_bbox[1]
+            zone_top = caption_top - 240.0  # search up to 240pt above the caption
+
+            # Candidate filter: small text-like blocks above the caption.
+            candidates: list[tuple[int, _RecoveredBlock, list[float]]] = []
+            for idx, block in page_blocks:
+                if idx == caption_index or idx in already_claimed:
+                    continue
+                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote"}:
+                    continue
+                bbox = self._page_bbox(block, caption_block.page_start)
+                if bbox is None:
+                    continue
+                if not (zone_top <= bbox[1] < caption_top and bbox[3] <= caption_top + 1.0):
+                    continue
+                text_len = len((block.text or "").strip())
+                if text_len == 0 or text_len > 240:
+                    continue
+                candidates.append((idx, block, bbox))
+
+            if len(candidates) < 3:
+                continue
+
+            # Reject if any candidate is wide-format prose — i.e. spans
+            # most of the page width with substantial text. Real figure
+            # labels are narrow.
+            page_widths = {(b[2] - b[0]) for _, _, b in candidates}
+            max_width = max(page_widths) if page_widths else 0.0
+            if max_width > 380.0:
+                continue
+
+            # Verify the candidates are spatially clustered: the
+            # vertical span should be < 240pt and there should be no
+            # large prose paragraph between them (we approximate this by
+            # requiring the topmost candidate's top to sit at least 12pt
+            # below the previous non-candidate prose block on this page).
+            sorted_candidates = sorted(candidates, key=lambda c: c[2][1])
+            top_y = sorted_candidates[0][2][1]
+            bot_y = max(c[2][3] for c in sorted_candidates)
+            if bot_y - top_y > 240.0:
+                continue
+            # Block immediately above the cluster must NOT be a long
+            # paragraph that looks like body prose continuation.
+            preceding = [
+                (i, b, bb) for i, b in page_blocks
+                if (bb := self._page_bbox(b, caption_block.page_start)) is not None
+                and bb[3] <= top_y + 0.5 and i not in {c[0] for c in candidates}
+            ]
+            preceding.sort(key=lambda c: c[2][3])  # by bottom
+            if preceding:
+                last = preceding[-1]
+                gap = top_y - last[2][3]
+                # 6pt is enough of a gap to declare a visual break in
+                # most book layouts; tighter than that and the candidate
+                # is probably a continuation of the preceding paragraph.
+                if gap < 6.0 and len((last[1].text or "").strip()) > 80:
+                    continue
+
+            # Union bbox.
+            ux0 = min(c[2][0] for c in sorted_candidates)
+            uy0 = top_y
+            ux1 = max(c[2][2] for c in sorted_candidates)
+            uy1 = bot_y
+            absorbed_idxs = [c[0] for c in sorted_candidates]
+            already_claimed.update(absorbed_idxs)
+            synth.append((caption_index, absorbed_idxs, [ux0, uy0, ux1, uy1]))
+
+        if not synth:
+            return recovered_blocks
+
+        replaced_indices: set[int] = set()
+        synth_block_at: dict[int, _RecoveredBlock] = {}
+        caption_anchor_for_index: dict[int, str] = {}
+        for caption_index, absorbed, union_bbox in synth:
+            primary_index = absorbed[0]
+            primary = recovered_blocks[primary_index]
+            caption_block = recovered_blocks[caption_index]
+            page_number = caption_block.page_start
+            anchor = f"p{page_number}-tfig{primary.reading_order_index}"
+            metadata = dict(primary.metadata)
+            metadata["image_type"] = "text_only_figure"
+            metadata["figure_cluster"] = {
+                "anchor_block_anchors": [recovered_blocks[i].anchor for i in absorbed],
+                "absorbed_label_anchors": [recovered_blocks[i].anchor for i in absorbed],
+                "caption_block_anchor": caption_block.anchor,
+            }
+            metadata["linked_caption_text"] = caption_block.text
+            metadata["linked_caption_source_anchor"] = self._source_anchor(caption_block)
+            metadata["linked_caption_page"] = caption_block.page_start
+            if caption_block.text.strip():
+                metadata["image_alt"] = caption_block.text
+            # Same as for clustered FIGUREs: emit one DocumentImage row
+            # via the union bbox so the export can render the figure
+            # region from the source PDF.
+            metadata["source_bbox_json"] = {
+                "regions": [{"page_number": page_number, "bbox": list(union_bbox)}]
+            }
+            metadata["source_page_start"] = page_number
+
+            replacement = _RecoveredBlock(
+                role="figure",
+                block_type=BlockType.FIGURE,
+                text="[Figure]",
+                page_start=page_number,
+                page_end=page_number,
+                bbox_regions=[{"page_number": page_number, "bbox": list(union_bbox)}],
+                reading_order_index=primary.reading_order_index,
+                parse_confidence=primary.parse_confidence,
+                flags=list(dict.fromkeys([*primary.flags, "text_only_figure_synthesized"])),
+                font_size_avg=0.0,
+                source_path=primary.source_path,
+                anchor=anchor,
+                metadata=metadata,
+            )
+            synth_block_at[primary_index] = replacement
+            for idx in absorbed:
+                replaced_indices.add(idx)
+            caption_anchor_for_index[caption_index] = anchor
+
+        new_blocks: list[_RecoveredBlock] = []
+        for index, block in enumerate(recovered_blocks):
+            if index in synth_block_at:
+                new_blocks.append(synth_block_at[index])
+                continue
+            if index in replaced_indices:
+                continue
+            if index in caption_anchor_for_index:
+                tagged_metadata = dict(block.metadata)
+                figure_anchor_value = caption_anchor_for_index[index]
+                tagged_metadata["figure_anchor"] = figure_anchor_value
+                tagged_metadata["caption_for_source_anchor"] = (
+                    f"{block.source_path}#{figure_anchor_value}"
+                )
+                tagged_metadata["caption_for_page"] = block.page_start
+                tagged_metadata["caption_for_role"] = "image"
+                tagged_flags = list(dict.fromkeys([*block.flags, "image_caption_linked", "caption_linked"]))
+                new_blocks.append(
+                    _RecoveredBlock(
+                        role=block.role,
+                        block_type=block.block_type,
+                        text=block.text,
+                        page_start=block.page_start,
+                        page_end=block.page_end,
+                        bbox_regions=list(block.bbox_regions),
+                        reading_order_index=block.reading_order_index,
+                        parse_confidence=block.parse_confidence,
+                        flags=tagged_flags,
                         font_size_avg=block.font_size_avg,
                         source_path=block.source_path,
                         anchor=block.anchor,
@@ -7180,9 +7458,20 @@ class PdfStructureRecoveryService:
         return new_blocks
 
     def _link_artifact_captions(self, recovered_blocks: list[_RecoveredBlock]) -> None:
-        claimed_caption_indexes: set[int] = set()
+        # Captions already claimed by figure-clustering must not be
+        # re-claimed by the spatial heuristic — otherwise we double-link
+        # adjacent images on the same page to the same caption.
+        claimed_caption_indexes: set[int] = {
+            index
+            for index, block in enumerate(recovered_blocks)
+            if block.role == "caption"
+            and (block.metadata or {}).get("caption_for_source_anchor")
+        }
         for artifact_index, artifact_block in enumerate(recovered_blocks):
-            if artifact_block.role not in {"image", "table_like", "equation"}:
+            if artifact_block.role not in {"image", "table_like", "equation", "figure"}:
+                continue
+            # Already linked by clustering — leave clustering's choice alone.
+            if (artifact_block.metadata or {}).get("linked_caption_source_anchor"):
                 continue
             caption_index = self._artifact_caption_target(recovered_blocks, artifact_index, claimed_caption_indexes)
             if caption_index is None:
