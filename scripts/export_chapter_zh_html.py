@@ -161,7 +161,14 @@ def _resolve_embedded_image_bbox(page, fallback_bbox):
     return tuple(best) if best else fallback_bbox
 
 
-def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
+def _expand_figure_bbox_to_drawings(
+    page,
+    fallback_bbox,
+    *,
+    page_rect,
+    x_slack: float = 30.0,
+    y_slack: float = 25.0,
+):
     """Compute the figure's true bbox by anchoring on vector drawings.
 
     Strategy: drawings are the spine of a figure; figure-internal text
@@ -200,13 +207,15 @@ def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
         text_blocks = []
 
     fb = fitz.Rect(*fallback_bbox)
-    # Asymmetric slack: horizontal expansion catches diagram extensions
-    # past the label-cluster (Fig 3.7's matrix columns sit ~30pt right of
-    # the rightmost absorbed label), while a tight vertical slack keeps
-    # us from dragging in body paragraphs sandwiched between adjacent
-    # figures (page 61 has Fig 3.8 + Fig 3.9 with drawings spanning both).
-    x_slack = 30.0
-    y_slack = 25.0
+    # Asymmetric slack defaults (text_only_figure): horizontal expansion
+    # catches diagram extensions past the label-cluster (Fig 3.7's matrix
+    # columns sit ~30pt right of the rightmost absorbed label), while a
+    # tight vertical slack keeps us from dragging in body paragraphs
+    # sandwiched between adjacent figures (page 61: Fig 3.8 + Fig 3.9
+    # have drawings spanning both). Vector-drawing parser bboxes are
+    # often missing whole sides of the figure (Fig 3.8 misses the left
+    # query box; Fig 3.11 misses the top step labels and right-side
+    # text), so callers can override with larger slack.
     search = fitz.Rect(
         max(page_rect.x0, fb.x0 - x_slack),
         max(page_rect.y0, fb.y0 - y_slack),
@@ -265,15 +274,21 @@ def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
         # edge can still contribute its near-side coordinates.
         if x1 < search.x0 or x0 > search.x1 or y1 < search.y0 or y0 > search.y1:
             continue
-        # Stricter inside-parser check with a small tolerance: a text
-        # block whose vertical midpoint sits well OUTSIDE the parser's
-        # y range belongs to a neighbouring figure or to body text
-        # sandwiched between two figures (page 61: Fig 3.8 + body
-        # paragraph + Fig 3.9). The 25pt tolerance preserves figure-
-        # internal annotations that extend a row past the parser bbox
-        # (Fig 3.3's "−1×capital ..." caption-line).
+        # Inside-figure check using drawings as a secondary anchor: a
+        # text block whose vertical midpoint sits well OUTSIDE both the
+        # parser y range AND the drawings y range belongs to body
+        # content. The OR-of-mins/maxes keeps figure-internal text alive
+        # when EITHER the parser bbox or the drawings extent vouches
+        # for it. This handles two cases:
+        #   - Fig 3.9 (parser bbox correct, drawings tight): body
+        #     paragraph above must be REJECTED → both bounds reject it.
+        #   - Fig 3.11 (parser bbox missing top, drawings extend up):
+        #     top step "2. A probability ..." has mid_y=138 above
+        #     parser.y0=191.7 but inside drawings.y0=154.7 ± 25 → KEPT.
         mid_y = (y0 + y1) * 0.5
-        if mid_y < fb.y0 - 25.0 or mid_y > fb.y1 + 25.0:
+        y_low = min(fb.y0, anchor_y0) - 25.0
+        y_high = max(fb.y1, anchor_y1) + 25.0
+        if mid_y < y_low or mid_y > y_high:
             continue
         # Drop the official "Figure N.M ..." caption — it's rendered
         # separately as <figcaption>, so including it in the image would
@@ -285,6 +300,9 @@ def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
         # Fig 3.7 that the parser absorbed; visually it's body content,
         # not figure-internal annotation.
         if _is_body_callout_text(text):
+            continue
+        # Drop running page headers/footers.
+        if _looks_like_page_header(text, y0):
             continue
         gap_x, gap_y = _block_gap(x0, y0, x1, y1)
         if gap_x > X_PROX or gap_y > Y_PROX:
@@ -396,7 +414,21 @@ def _render_image_data_uri(
         if kind == "embedded_image":
             clip = fitz.Rect(*_resolve_embedded_image_bbox(page, tuple(bbox)))
         elif "vector" in kind:
-            clip = fitz.Rect(*_resolve_vector_drawing_bbox(page, tuple(bbox)))
+            # The parser's vector-drawing bbox is built from the
+            # drawing-stroke union, but the union sometimes misses
+            # whole sides of the figure: Fig 3.8 omits the left query
+            # box entirely (parser x0=171, drawings extend to x=103);
+            # Fig 3.11 omits the top step labels and right-side
+            # annotation text (parser y range is 191-353, but actual
+            # extent is 128-340 with text reaching x=398). Larger slack
+            # lets the drawings-anchored expander recover them while
+            # the per-block-gap + midpoint guards keep body text out.
+            clip = fitz.Rect(
+                *_expand_figure_bbox_to_drawings(
+                    page, tuple(bbox), page_rect=page.rect,
+                    x_slack=80.0, y_slack=50.0,
+                )
+            )
         elif kind == "text_only_figure":
             # Synthesizer's bbox unions absorbed labels only; expand to
             # cover any drawings + short labels in the same y-band so
@@ -722,6 +754,26 @@ _BODY_CALLOUT_LEAD = re.compile(
 
 def _is_body_callout_text(text: str) -> bool:
     return bool(_BODY_CALLOUT_LEAD.match(text or ""))
+
+
+_PAGE_HEADER_PATTERN = re.compile(
+    # Running headers/footers at the top of every page:
+    #   "34 / CHAPTER 3 / Transformers: How inputs become outputs"
+    #   "3.2 Exploring the transformer architecture in detail / 39"
+    # These are typeset as plain text blocks at y0 ~ 26pt, well above
+    # any figure content. The parser bbox for vector_drawing figures
+    # sometimes extends to y0 ~ 13pt (the page's drawn-stroke union
+    # reaches close to the page edge), and the slack-expanded search
+    # then sweeps these headers in. Catch by content + position.
+    r"^\s*(?:\d+\s*[/\n]\s*CHAPTER\b|CHAPTER\s+\d+\b|\d+(?:\.\d+){1,2}\s+\S.*?[/\n]\s*\d+\s*$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _looks_like_page_header(text: str, y0: float) -> bool:
+    if y0 >= 50.0:
+        return False
+    return bool(_PAGE_HEADER_PATTERN.match((text or "")))
 
 
 _REAL_CAPTION_PATTERN = re.compile(
@@ -1094,6 +1146,17 @@ def main() -> int:
         # combine the ordinal sandwich with bbox containment so wider body
         # paragraphs adjacent to a tall figure aren't accidentally dropped.
         figure_bboxes_by_page: dict[int, list[tuple[float, float, float, float]]] = {}
+        # Reuse the same expander that drives the render path so bbox
+        # containment checks see the figure's actual extent — not just
+        # the parser's drawing-stroke union, which routinely misses
+        # whole sides (Fig 3.8 omits the left query box; Fig 3.11 omits
+        # the top step labels). Without this, figure-internal annotation
+        # text leaks into the body flow as orphan paragraphs.
+        pdf_doc_for_bbox = None
+        try:
+            pdf_doc_for_bbox = _open_pdf()
+        except Exception:
+            pdf_doc_for_bbox = None
         for blk in blocks:
             if (blk.block_type or "").lower() not in {"image", "figure"}:
                 continue
@@ -1112,8 +1175,26 @@ def main() -> int:
                 if not isinstance(page, int):
                     continue
                 use_bbox = list(bbox)
-                if (blk_meta.get("image_type") or "") == "text_only_figure":
+                image_type = (blk_meta.get("image_type") or "").lower()
+                if image_type == "text_only_figure":
                     use_bbox = _widen_text_only_figure_bbox(use_bbox)
+                if pdf_doc_for_bbox is not None and (
+                    image_type == "text_only_figure" or "vector" in image_type
+                ):
+                    try:
+                        pg = pdf_doc_for_bbox[page - 1]
+                        if image_type == "text_only_figure":
+                            expanded = _expand_figure_bbox_to_drawings(
+                                pg, tuple(use_bbox), page_rect=pg.rect
+                            )
+                        else:
+                            expanded = _expand_figure_bbox_to_drawings(
+                                pg, tuple(use_bbox), page_rect=pg.rect,
+                                x_slack=80.0, y_slack=50.0,
+                            )
+                        use_bbox = list(expanded)
+                    except Exception:
+                        pass
                 figure_bboxes_by_page.setdefault(page, []).append(tuple(use_bbox))
 
         # Build the set of ordinals that sit strictly between a figure and
@@ -1181,15 +1262,17 @@ def main() -> int:
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
                 continue
             # Suppress figure-internal text that the parser left outside the
-            # figure cluster: fire only when the block sits in a figure's
-            # ordinal sandwich, its bbox is contained in a figure bbox, AND
-            # the source text looks like fragmented label content rather
-            # than coherent body prose.
+            # figure cluster: fire when the block sits in a figure's ordinal
+            # sandwich AND its bbox is contained in the (expanded) figure
+            # bbox. Text-shape was a previous secondary check, but now that
+            # ``figure_bboxes_by_page`` uses the drawings-anchored expanded
+            # bbox, geographic containment alone is reliable — figure-
+            # internal annotations like Fig 3.8's "We have a list of queries
+            # ..." are full sentences that the old text-shape filter missed.
             if (
                 btype not in {"image", "figure", "caption", "figure_caption"}
                 and block.ordinal in sandwich_ordinals
                 and _block_lies_inside_figure(block, figure_bboxes_by_page)
-                and _looks_like_figure_internal_text(block.source_text or "")
             ):
                 figure_internal_suppressed += 1
                 continue
