@@ -45,7 +45,11 @@ def main() -> int:
     expected_numbers = [f"4.{i}" for i in range(1, 11)]
     found_numbers: set[str] = set()
     for cap in figcap_texts:
-        m = re.match(r"^(?:图|Figure)\s*(4\.\d+)\b", cap)
+        # Use (?!\d) instead of \b so a CJK char after the figure number
+        # ("图4.2展示了...") still terminates the figure number cleanly.
+        # \b is unreliable across CJK because Python's re module treats
+        # Chinese characters as word characters, so there is no boundary.
+        m = re.match(r"^(?:图|Figure)\s*(4\.\d+)(?!\d)", cap)
         if m:
             found_numbers.add(m.group(1))
     missing = [n for n in expected_numbers if n not in found_numbers]

@@ -698,10 +698,46 @@ def _heading_html(text: str) -> str:
 
 
 def _paragraph_html(chunks: list[str]) -> str:
-    parts = []
-    for chunk in chunks:
-        parts.append(f"<p>{html.escape(chunk).replace(chr(10), '<br>')}</p>")
-    return "\n".join(parts)
+    """Render translated sentences belonging to one source paragraph.
+
+    Each ``chunk`` is one translated sentence (the translator splits on
+    sentence boundaries). The source PDF treats them as a flowing
+    paragraph, so concatenate them inside a single ``<p>`` rather than
+    emitting one ``<p>`` per sentence — otherwise every period in the
+    source becomes a paragraph break in the export, which butchers
+    long-form prose readability.
+    """
+    if not chunks:
+        return ""
+    # Strip then join. Chinese prose flows without inter-sentence spaces;
+    # English/mixed text gets a thin space to avoid run-on words at the
+    # boundary. We pick the separator per pair so a Chinese sentence can
+    # follow another Chinese sentence with no gap, while English+English
+    # still reads naturally.
+    cleaned = [c.strip() for c in chunks if c and c.strip()]
+    if not cleaned:
+        return ""
+    pieces: list[str] = [cleaned[0]]
+    for cur in cleaned[1:]:
+        prev = pieces[-1]
+        prev_last = prev[-1] if prev else ""
+        cur_first = cur[:1] if cur else ""
+        # If either side of the boundary is CJK (or punctuation that fits
+        # alongside CJK), join with no separator; otherwise insert a space.
+        def _is_cjk_or_cjk_punct(ch: str) -> bool:
+            if not ch:
+                return False
+            cp = ord(ch)
+            return (
+                0x4E00 <= cp <= 0x9FFF       # CJK Unified Ideographs
+                or 0x3000 <= cp <= 0x303F   # CJK Symbols & Punctuation
+                or 0xFF00 <= cp <= 0xFFEF   # Halfwidth/Fullwidth Forms
+                or 0x3400 <= cp <= 0x4DBF   # CJK Extension A
+            )
+        sep = "" if _is_cjk_or_cjk_punct(prev_last) or _is_cjk_or_cjk_punct(cur_first) else " "
+        pieces.append(sep + cur)
+    body = "".join(pieces)
+    return f"<p>{html.escape(body).replace(chr(10), '<br>')}</p>"
 
 
 def _caption_html(chunks: list[str]) -> str:
@@ -1126,6 +1162,11 @@ def main() -> int:
         # references through; we strain them out at render time so older DB
         # rows still produce a clean export.
         rejected_linkage_ids: set[str] = set()
+        # fallback_caption_for_block lets the render path emit a figcaption
+        # even when the parser left the figure unlinked (Fig 4.2: caption
+        # ord=358 sits BEFORE its image ord=360 in DB ordinal order, which
+        # the parser's forward-only pairing missed).
+        fallback_caption_for_block: dict[str, "Block"] = {}
         for blk in blocks:
             if (blk.block_type or "").lower() not in {"image", "figure"}:
                 continue
@@ -1137,6 +1178,91 @@ def main() -> int:
                 rejected_linkage_ids.add(blk.id)
                 continue
             consumed_caption_ids.add(cap_block.id)
+
+        # Helper: page number of a block (first region's page).
+        def _block_page(b) -> int | None:
+            meta = b.source_span_json or {}
+            payload = meta.get("source_bbox_json") or {}
+            regs = payload.get("regions") if isinstance(payload, dict) else None
+            if isinstance(regs, list) and regs and isinstance(regs[0], dict):
+                pn = regs[0].get("page_number")
+                if isinstance(pn, int):
+                    return pn
+            return None
+
+        # Fallback caption pairing: for each unlinked image/figure, find
+        # the nearest unconsumed real-caption block on the same page within
+        # ±10 ordinals and link them. Picks the closest by ordinal distance.
+        # Resolves Fig 4.2's reverse-order layout AND multi-panel groupings
+        # (Fig 4.7's 6 emoji panels share one caption — only the first
+        # panel claims it; the rest remain unlinked).
+        unconsumed_caption_blocks: list = [
+            b for b in blocks
+            if (b.block_type or "").lower() in {"caption", "figure_caption"}
+            and b.id not in consumed_caption_ids
+            and _is_real_caption_text(b.source_text or "")
+        ]
+        figure_blocks_in_order: list = [
+            b for b in blocks
+            if (b.block_type or "").lower() in {"image", "figure"}
+            and _linked_caption_anchor(b) is None
+        ]
+        for fig in figure_blocks_in_order:
+            fig_page = _block_page(fig)
+            best = None
+            best_dist = 11  # > 10 means "no candidate"
+            for cap in unconsumed_caption_blocks:
+                if cap.id in consumed_caption_ids:
+                    continue
+                if _block_page(cap) != fig_page or fig_page is None:
+                    continue
+                dist = abs(cap.ordinal - fig.ordinal)
+                if dist >= 11 or dist >= best_dist:
+                    continue
+                best = cap
+                best_dist = dist
+            if best is not None:
+                fallback_caption_for_block[fig.id] = best
+                consumed_caption_ids.add(best.id)
+
+        # Detect text-heavy sidebar callouts that the parser misclassified
+        # as figures. Pattern: image_type=vector_drawing, no parser linkage,
+        # no fallback caption, and isolated (no other image block within
+        # ±2 ordinals on the same page). These are Q&A-style boxes like
+        # "How do you handle nonsmooth losses?" — the same text already
+        # appears as separate paragraph blocks, so re-rendering as a
+        # figure crop just duplicates and adds noise. Skip rendering them.
+        sidebar_callout_ids: set[str] = set()
+        image_blocks_by_page: dict[int, list] = {}
+        for b in blocks:
+            if (b.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            page = _block_page(b)
+            if page is None:
+                continue
+            image_blocks_by_page.setdefault(page, []).append(b)
+        for fig in blocks:
+            if (fig.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            if fig.id in fallback_caption_for_block:
+                continue
+            if _linked_caption_anchor(fig) and fig.id not in rejected_linkage_ids:
+                continue
+            meta = fig.source_span_json or {}
+            image_type = (meta.get("image_type") or "").lower()
+            if "vector" not in image_type:
+                continue
+            page = _block_page(fig)
+            if page is None:
+                continue
+            siblings = [
+                b for b in image_blocks_by_page.get(page, [])
+                if b.id != fig.id and abs(b.ordinal - fig.ordinal) <= 2
+            ]
+            if siblings:
+                # Multi-panel figure cluster: keep rendering, just no caption.
+                continue
+            sidebar_callout_ids.add(fig.id)
 
         # Identify the narrow "figure → leaked label → caption" sandwich
         # pattern: a non-figure block whose ordinal sits between a figure and
@@ -1276,6 +1402,13 @@ def main() -> int:
             ):
                 figure_internal_suppressed += 1
                 continue
+            # Skip text-heavy sidebar callouts that the parser misclassified
+            # as figures (e.g. "How do you handle nonsmooth losses?"). The
+            # callout's body text is already covered by the surrounding
+            # paragraph blocks, so re-rendering as a vector crop just
+            # duplicates content.
+            if btype in {"image", "figure"} and block.id in sidebar_callout_ids:
+                continue
             # Skip heading-fragments that we've decided to merge into their
             # next sibling — their text shows up at the start of that block.
             if block.id in skip_render_block_ids:
@@ -1318,6 +1451,16 @@ def main() -> int:
                             image_alt = _ensure_figure_prefix(
                                 image_alt, cap_block.source_text or ""
                             )
+                # Fallback caption pairing for figures the parser left
+                # unlinked (Fig 4.2 reverse-order, multi-panel first-image).
+                if not image_alt and block.id in fallback_caption_for_block:
+                    fb_cap = fallback_caption_for_block[block.id]
+                    cap_chunks, _ = _block_zh_chunks(session, fb_cap)
+                    if cap_chunks:
+                        image_alt = "  ".join(c.strip() for c in cap_chunks if c.strip())
+                        image_alt = _ensure_figure_prefix(
+                            image_alt, fb_cap.source_text or ""
+                        )
                 # alt_fallback comes from DocumentImage.alt_text, which the
                 # older parser populated with whatever caption text it linked
                 # — including body-text references. Strain those out by the
