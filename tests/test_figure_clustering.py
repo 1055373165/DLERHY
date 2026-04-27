@@ -214,28 +214,46 @@ class FigureClusteringTests(unittest.TestCase):
         self.assertEqual(report.clusters, [])
         self.assertEqual(report.decisions, [])
 
-    def test_density_guard_suppresses_absorption_in_prose_block(self) -> None:
-        """If the search zone has multiple long prose paragraphs around the
-        anchor, suppress absorption — anchor is embedded in body text."""
+    def test_density_guard_suppresses_absorption_when_anchor_contains_prose(self) -> None:
+        """Density guard fires when long prose blocks sit *inside* the
+        anchor's own bbox — anchor was probably misclassified as image
+        when it's really a body paragraph region."""
         long_text = "x" * 250
-        # Anchor (100, 200, 400, 220) tiny banner; 30pt pad → zone y in [170, 250].
-        # Place 2 long prose blocks with centers inside the zone:
-        #   prose-above: (100, 175, 400, 195) → center y=185 ∈ [170, 250]
-        #   prose-below: (100, 230, 400, 245) → center y=237 ∈ [170, 250]
+        # Large anchor (100,100,400,400). Place 2 long blocks INSIDE the
+        # anchor bbox so they trip the density guard.
+        blocks = [
+            _image_block((100.0, 100.0, 400.0, 400.0), anchor="img-1"),
+            _text_block(long_text, (110.0, 150.0, 390.0, 200.0), anchor="prose-inside-1"),
+            _text_block(long_text, (110.0, 250.0, 390.0, 300.0), anchor="prose-inside-2"),
+            _text_block("note", (200.0, 320.0, 240.0, 335.0), anchor="lbl"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(len(report.clusters), 1)
+        cluster = report.clusters[0]
+        self.assertEqual(cluster.inline_label_indices, ())
+        density_rejects = [d for d in report.decisions if d.action == "reject_high_prose_density"]
+        self.assertEqual(len(density_rejects), 1)
+
+    def test_density_guard_does_not_fire_for_prose_above_or_below_anchor(self) -> None:
+        """Body paragraphs above / below a real figure must NOT trip the
+        density guard. This was the regression that blocked Figure 3.2's
+        labels from being absorbed — the guard counted surrounding body
+        prose (which is normal book layout) and rejected the cluster."""
+        long_text = "x" * 250
+        # Anchor (100,200,400,220) tiny banner; long blocks ABOVE/BELOW.
         blocks = [
             _image_block((100.0, 200.0, 400.0, 220.0), anchor="img-1"),
             _text_block(long_text, (100.0, 175.0, 400.0, 195.0), anchor="prose-above"),
             _text_block(long_text, (100.0, 230.0, 400.0, 245.0), anchor="prose-below"),
-            # A short label that would normally be absorbed (center inside anchor):
             _text_block("note", (200.0, 205.0, 240.0, 218.0), anchor="lbl"),
         ]
         report = cluster_figure_regions(blocks)
         self.assertEqual(len(report.clusters), 1)
         cluster = report.clusters[0]
-        # The short "note" label is rejected because surrounding prose density is high.
-        self.assertEqual(cluster.inline_label_indices, ())
+        # Short label gets absorbed because density guard didn't fire.
+        self.assertEqual(len(cluster.inline_label_indices), 1)
         density_rejects = [d for d in report.decisions if d.action == "reject_high_prose_density"]
-        self.assertEqual(len(density_rejects), 1)
+        self.assertEqual(len(density_rejects), 0)
 
     def test_b_fallback_requires_inside_anchor_by_default(self) -> None:
         """A short non-caption label that lies outside the anchor bbox but

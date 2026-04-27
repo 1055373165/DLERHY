@@ -512,8 +512,13 @@ def cluster_figure_regions(
             caption_candidates: list[tuple[int, float, int, str, str]] = []
             absorbed_local: set[int] = set()
 
+            # Only blocks centered inside the anchor's actual bbox count
+            # toward prose density. The padded search zone reaches into the
+            # body paragraph above/below the figure, which mis-flagged real
+            # figures (Figure 3.2's surrounding prose) as too prose-dense
+            # and blocked label absorption.
             prose_density = _count_prose_neighbors_in_zone(
-                search_zone, text_entries, absorbed_local, config=cfg
+                cluster_bbox, text_entries, absorbed_local, config=cfg
             )
             density_blocked = prose_density > cfg.max_prose_neighbors_in_zone
 
