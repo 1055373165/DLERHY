@@ -162,18 +162,29 @@ def _resolve_embedded_image_bbox(page, fallback_bbox):
 
 
 def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
-    """Grow a synthesized figure's bbox to capture drawings + short labels
-    that sit outside the parsed bbox but inside the figure's vertical band.
+    """Compute the figure's true bbox by anchoring on vector drawings.
 
-    The synthesizer unions absorbed text labels — when the figure has
-    content rendered as vector graphics (matrices, arrows, callouts) or
-    short numeric labels positioned beyond the labeled region, that
-    content sits outside the bbox and gets cropped out of the rendered
-    image. Real example: Figure 3.7 has three columns of vector matrices
-    on the right side; the right column is outside the parsed bbox, so
-    the rendered crop drops it. Solution: scan drawings + short text
-    blocks whose y-range overlaps the figure's vertical band, take the
-    horizontal union, and pad slightly.
+    Strategy: drawings are the spine of a figure; figure-internal text
+    (annotations, axis labels, side callouts) sits physically close to
+    them. For each text block in a slack-expanded search window, measure
+    its minimum gap to ANY drawing rect; include it iff both axes are
+    within the proximity thresholds.
+
+    Thresholds were calibrated against pages 58–59:
+      - Fig 3.5 top annotation has 7.5pt vertical gap to drawings → keep
+      - Fig 3.6 description "Different ways..." has 35.6pt gap above
+        the small order-indicator boxes → keep
+      - Fig 3.6 right-side speech bubbles have 42pt horizontal gap from
+        the order-indicator boxes (drawings only cluster on the left) → keep
+      - Fig 3.7 NOTE callout sits 30pt above the matrix drawings → drop
+        (excluded by the search-window outer bound)
+      - Official figure captions ("Figure N.M ...") at 16-32pt vertical
+        gap → drop via caption-pattern guard (rendered separately as
+        <figcaption>; including them as part of the image would duplicate)
+
+    A 40pt vertical / 50pt horizontal gate keeps figure-internal text
+    while the caption-pattern guard prevents the official caption from
+    leaking in. Falls back to the parser bbox if no drawings are found.
     """
     try:
         import fitz
@@ -183,60 +194,116 @@ def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
         drawings = page.get_drawings()
     except Exception:
         drawings = []
-    fb = fitz.Rect(*fallback_bbox)
-    # Scan everything within the figure's vertical band, tolerating a few
-    # points of slack on each end for stroke caps + descenders.
-    band_y0 = fb.y0 - 4.0
-    band_y1 = fb.y1 + 4.0
-
-    expand_x0, expand_x1 = fb.x0, fb.x1
-
-    def _fully_inside_band(y0: float, y1: float) -> bool:
-        # Element must sit ENTIRELY within the figure's vertical band so we
-        # don't pick up body paragraphs that merely intersect the band edge.
-        return y0 >= band_y0 and y1 <= band_y1
-
-    for drawing in drawings:
-        rect = drawing.get("rect") if isinstance(drawing, dict) else None
-        if rect is None or rect.is_empty:
-            continue
-        if not _fully_inside_band(rect.y0, rect.y1):
-            continue
-        expand_x0 = min(expand_x0, rect.x0)
-        expand_x1 = max(expand_x1, rect.x1)
-
-    # Short text blocks (matrix entries like "−0.2", arrow labels like "+",
-    # one-word callouts) inside the band are figure-internal too. Skip
-    # body paragraphs — those are long and word-rich.
     try:
         text_blocks = page.get_text("blocks")
     except Exception:
         text_blocks = []
+
+    fb = fitz.Rect(*fallback_bbox)
+    # Asymmetric slack: horizontal expansion catches diagram extensions
+    # past the label-cluster (Fig 3.7's matrix columns sit ~30pt right of
+    # the rightmost absorbed label), while a tight vertical slack keeps
+    # us from dragging in body paragraphs sandwiched between adjacent
+    # figures (page 61 has Fig 3.8 + Fig 3.9 with drawings spanning both).
+    x_slack = 30.0
+    y_slack = 25.0
+    search = fitz.Rect(
+        max(page_rect.x0, fb.x0 - x_slack),
+        max(page_rect.y0, fb.y0 - y_slack),
+        min(page_rect.x1, fb.x1 + x_slack),
+        min(page_rect.y1, fb.y1 + y_slack),
+    )
+
+    # Step 1: drawings anchor the figure. Keep only drawings that lie
+    # entirely inside the search window so vectors from a neighbouring
+    # figure on the same page can't pollute the anchor.
+    drawing_rects: list = []
+    for drawing in drawings:
+        rect = drawing.get("rect") if isinstance(drawing, dict) else None
+        if rect is None or rect.is_empty:
+            continue
+        if not (rect.x0 >= search.x0 and rect.y0 >= search.y0
+                and rect.x1 <= search.x1 and rect.y1 <= search.y1):
+            continue
+        drawing_rects.append(rect)
+
+    if not drawing_rects:
+        return fallback_bbox
+
+    anchor_x0 = min(r.x0 for r in drawing_rects)
+    anchor_y0 = min(r.y0 for r in drawing_rects)
+    anchor_x1 = max(r.x1 for r in drawing_rects)
+    anchor_y1 = max(r.y1 for r in drawing_rects)
+
+    # Step 2: per-text-block proximity gate.
+    Y_PROX = 40.0   # pt — covers Fig 3.6's "Different ways..." description (35.6pt above)
+    X_PROX = 50.0   # pt — covers Fig 3.6's right speech bubbles (42pt right of drawings)
+
+    def _block_gap(tx0, ty0, tx1, ty1):
+        best_x = best_y = float("inf")
+        for d in drawing_rects:
+            dx = max(0.0, max(d.x0 - tx1, tx0 - d.x1))
+            dy = max(0.0, max(d.y0 - ty1, ty0 - d.y1))
+            if dx < best_x:
+                best_x = dx
+            if dy < best_y:
+                best_y = dy
+        return best_x, best_y
+
+    content_x0, content_y0 = anchor_x0, anchor_y0
+    content_x1, content_y1 = anchor_x1, anchor_y1
     for tb in text_blocks:
         if len(tb) < 5:
             continue
         x0, y0, x1, y1, content = tb[0], tb[1], tb[2], tb[3], tb[4]
-        if not _fully_inside_band(y0, y1):
-            continue
         text = (content or "").strip()
         if not text:
             continue
-        if len(text) > 60:
-            # Probably body prose adjacent to the figure, not a label.
+        # Hard outer bound — never reach into far-away body paragraphs
+        # even if a stray drawing happens to be near. Use intersection
+        # rather than strict containment so a block straddling the search
+        # edge can still contribute its near-side coordinates.
+        if x1 < search.x0 or x0 > search.x1 or y1 < search.y0 or y0 > search.y1:
             continue
-        expand_x0 = min(expand_x0, x0)
-        expand_x1 = max(expand_x1, x1)
+        # Stricter inside-parser check with a small tolerance: a text
+        # block whose vertical midpoint sits well OUTSIDE the parser's
+        # y range belongs to a neighbouring figure or to body text
+        # sandwiched between two figures (page 61: Fig 3.8 + body
+        # paragraph + Fig 3.9). The 25pt tolerance preserves figure-
+        # internal annotations that extend a row past the parser bbox
+        # (Fig 3.3's "−1×capital ..." caption-line).
+        mid_y = (y0 + y1) * 0.5
+        if mid_y < fb.y0 - 25.0 or mid_y > fb.y1 + 25.0:
+            continue
+        # Drop the official "Figure N.M ..." caption — it's rendered
+        # separately as <figcaption>, so including it in the image would
+        # duplicate the caption.
+        if _is_real_caption_text(text):
+            continue
+        # Drop body callouts (NOTE / TIP / WARNING ...). Page 59's
+        # Fig 3.7 has a NOTE block sandwiched between Fig 3.6 and
+        # Fig 3.7 that the parser absorbed; visually it's body content,
+        # not figure-internal annotation.
+        if _is_body_callout_text(text):
+            continue
+        gap_x, gap_y = _block_gap(x0, y0, x1, y1)
+        if gap_x > X_PROX or gap_y > Y_PROX:
+            continue
+        content_x0 = min(content_x0, x0)
+        content_y0 = min(content_y0, y0)
+        content_x1 = max(content_x1, x1)
+        content_y1 = max(content_y1, y1)
 
-    pad = 2.0
-    expanded = fitz.Rect(
-        max(0.0, expand_x0 - pad),
-        fb.y0,  # keep parser's y-range — drawings/labels above or below
-        min(page_rect.x1, expand_x1 + pad),
-        fb.y1,  # the band shouldn't drag the figure into body prose.
+    pad = 4.0
+    refined = fitz.Rect(
+        max(page_rect.x0, content_x0 - pad),
+        max(page_rect.y0, content_y0 - pad),
+        min(page_rect.x1, content_x1 + pad),
+        min(page_rect.y1, content_y1 + pad),
     )
-    if expanded.is_empty or expanded.get_area() < fb.get_area():
+    if refined.is_empty:
         return fallback_bbox
-    return tuple(expanded)
+    return tuple(refined)
 
 
 def _resolve_vector_drawing_bbox(page, fallback_bbox):
@@ -641,6 +708,20 @@ def _image_html(data_uri: str | None, alt_text: str | None) -> str:
     if alt_attr:
         figure_inner += f"\n<figcaption>{alt_attr}</figcaption>"
     return f"<figure class='figure'>{figure_inner}</figure>"
+
+
+_BODY_CALLOUT_LEAD = re.compile(
+    # Body callouts ("NOTE / Using multiple dimensions...", "TIP / ...",
+    # "WARNING / ...") sit in the body flow even when they happen to be
+    # geographically near a figure's drawings. The parser sometimes
+    # absorbs them into the figure bbox; this guard drops them before
+    # they widen the rendered crop.
+    r"^\s*(?:NOTE|TIP|WARNING|CAUTION|INFO|IMPORTANT|REMEMBER)\s*\n",
+)
+
+
+def _is_body_callout_text(text: str) -> bool:
+    return bool(_BODY_CALLOUT_LEAD.match(text or ""))
 
 
 _REAL_CAPTION_PATTERN = re.compile(
