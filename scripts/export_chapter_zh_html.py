@@ -161,6 +161,84 @@ def _resolve_embedded_image_bbox(page, fallback_bbox):
     return tuple(best) if best else fallback_bbox
 
 
+def _expand_figure_bbox_to_drawings(page, fallback_bbox, *, page_rect):
+    """Grow a synthesized figure's bbox to capture drawings + short labels
+    that sit outside the parsed bbox but inside the figure's vertical band.
+
+    The synthesizer unions absorbed text labels — when the figure has
+    content rendered as vector graphics (matrices, arrows, callouts) or
+    short numeric labels positioned beyond the labeled region, that
+    content sits outside the bbox and gets cropped out of the rendered
+    image. Real example: Figure 3.7 has three columns of vector matrices
+    on the right side; the right column is outside the parsed bbox, so
+    the rendered crop drops it. Solution: scan drawings + short text
+    blocks whose y-range overlaps the figure's vertical band, take the
+    horizontal union, and pad slightly.
+    """
+    try:
+        import fitz
+    except ImportError:
+        return fallback_bbox
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        drawings = []
+    fb = fitz.Rect(*fallback_bbox)
+    # Scan everything within the figure's vertical band, tolerating a few
+    # points of slack on each end for stroke caps + descenders.
+    band_y0 = fb.y0 - 4.0
+    band_y1 = fb.y1 + 4.0
+
+    expand_x0, expand_x1 = fb.x0, fb.x1
+
+    def _fully_inside_band(y0: float, y1: float) -> bool:
+        # Element must sit ENTIRELY within the figure's vertical band so we
+        # don't pick up body paragraphs that merely intersect the band edge.
+        return y0 >= band_y0 and y1 <= band_y1
+
+    for drawing in drawings:
+        rect = drawing.get("rect") if isinstance(drawing, dict) else None
+        if rect is None or rect.is_empty:
+            continue
+        if not _fully_inside_band(rect.y0, rect.y1):
+            continue
+        expand_x0 = min(expand_x0, rect.x0)
+        expand_x1 = max(expand_x1, rect.x1)
+
+    # Short text blocks (matrix entries like "−0.2", arrow labels like "+",
+    # one-word callouts) inside the band are figure-internal too. Skip
+    # body paragraphs — those are long and word-rich.
+    try:
+        text_blocks = page.get_text("blocks")
+    except Exception:
+        text_blocks = []
+    for tb in text_blocks:
+        if len(tb) < 5:
+            continue
+        x0, y0, x1, y1, content = tb[0], tb[1], tb[2], tb[3], tb[4]
+        if not _fully_inside_band(y0, y1):
+            continue
+        text = (content or "").strip()
+        if not text:
+            continue
+        if len(text) > 60:
+            # Probably body prose adjacent to the figure, not a label.
+            continue
+        expand_x0 = min(expand_x0, x0)
+        expand_x1 = max(expand_x1, x1)
+
+    pad = 2.0
+    expanded = fitz.Rect(
+        max(0.0, expand_x0 - pad),
+        fb.y0,  # keep parser's y-range — drawings/labels above or below
+        min(page_rect.x1, expand_x1 + pad),
+        fb.y1,  # the band shouldn't drag the figure into body prose.
+    )
+    if expanded.is_empty or expanded.get_area() < fb.get_area():
+        return fallback_bbox
+    return tuple(expanded)
+
+
 def _resolve_vector_drawing_bbox(page, fallback_bbox):
     """Tighten the parser's union-bbox to actual drawn shapes within it.
 
@@ -252,6 +330,14 @@ def _render_image_data_uri(
             clip = fitz.Rect(*_resolve_embedded_image_bbox(page, tuple(bbox)))
         elif "vector" in kind:
             clip = fitz.Rect(*_resolve_vector_drawing_bbox(page, tuple(bbox)))
+        elif kind == "text_only_figure":
+            # Synthesizer's bbox unions absorbed labels only; expand to
+            # cover any drawings + short labels in the same y-band so
+            # we don't crop out vector matrices/arrows on the right side
+            # (Figure 3.7's three matrix columns motivate this).
+            clip = fitz.Rect(
+                *_expand_figure_bbox_to_drawings(page, tuple(bbox), page_rect=page.rect)
+            )
         # Clamp to the page so the renderer doesn't error on near-edge bboxes.
         clip = clip & page.rect
         if clip.is_empty:
@@ -409,6 +495,34 @@ def _block_lies_inside_figure(
         if _bbox_is_inside_any(bbox, outers):
             return True
     return False
+
+
+_ORPHAN_LEAD_PATTERN = re.compile(
+    r"^\s*(?:"
+    r"many\s|several\s|most\s|some\s|a\s+key\s|the\s+key\s|one\s+key\s|various\s"
+    r"|although|however|while|whereas|because|since|when|if|but"
+    r"|许多|一些|大多数|然而|虽然"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_orphan_sentence_lead(text: str) -> bool:
+    """True if this short HEADING-marked text is really a body fragment.
+
+    Real subsection titles look like ``Embedding layers``, ``Sampling
+    tokens``, etc. — usually a noun phrase, never an opening connector.
+    Sliced body sentences like ``Many LLMs`` or ``However`` instead lead
+    with a quantifier or contrast word and lack terminal punctuation.
+    """
+    s = (text or "").strip()
+    if not s or len(s) > 30:
+        return False
+    if _HEADING_NUMBERED_LEAD.match(s):
+        return False
+    if _HEADING_SENTENCE_TAIL.search(s):
+        return False
+    return bool(_ORPHAN_LEAD_PATTERN.match(s))
 
 
 def _looks_like_figure_internal_text(text: str) -> bool:
@@ -940,6 +1054,47 @@ def main() -> int:
                 sandwich_ordinals.add(ord_between)
         figure_internal_suppressed = 0
 
+        # Pre-pass: detect heading fragments that the parser sliced off the
+        # start of a body sentence (e.g. ord=204 "Many LLMs" + ord=205 "you
+        # encounter today interpret tokens..."). The parser sees the all-
+        # caps abbreviation "LLMs" as a chunk break and emits a HEADING.
+        # Merge the fragment back into the next block so the body sentence
+        # renders as one paragraph.
+        merge_into_next: dict[str, str] = {}
+        skip_render_block_ids: set[str] = set()
+        block_index_by_ord = {b.ordinal: i for i, b in enumerate(blocks)}
+        for i, blk in enumerate(blocks):
+            btype = (blk.block_type or "").lower()
+            src = (blk.source_text or "").strip()
+            if not src:
+                continue
+            if btype != "heading":
+                continue
+            # Only consider short fragments that don't look like real titles.
+            if not _looks_like_orphan_sentence_lead(src):
+                continue
+            if i + 1 >= len(blocks):
+                continue
+            next_blk = blocks[i + 1]
+            next_src = (next_blk.source_text or "").strip()
+            if not next_src or (next_blk.block_type or "").lower() not in {
+                "paragraph",
+                "list_item",
+            }:
+                continue
+            # Skip when there's a chapter/page break between them — same
+            # source page or contiguous in reading order is required.
+            if (next_blk.ordinal - blk.ordinal) > 1:
+                continue
+            # Continuation marker: next block starts with a lowercase letter
+            # (English) — real subsection headings are followed by capitalised
+            # body text or another heading.
+            first_char = next_src[:1]
+            if not first_char.islower():
+                continue
+            merge_into_next[next_blk.id] = blk.id
+            skip_render_block_ids.add(blk.id)
+
         for block in blocks:
             btype = (block.block_type or "").lower()
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
@@ -957,7 +1112,18 @@ def main() -> int:
             ):
                 figure_internal_suppressed += 1
                 continue
+            # Skip heading-fragments that we've decided to merge into their
+            # next sibling — their text shows up at the start of that block.
+            if block.id in skip_render_block_ids:
+                continue
             chunks, untranslated = _block_zh_chunks(session, block)
+            # When the prior heading-fragment ("Many LLMs") got skipped, the
+            # translator usually already produced a complete sentence for the
+            # follow-on block ("...you encounter today interpret tokens..."
+            # → "你如今遇到的LLM使用一种名为Transformer..."). We don't need
+            # to glue the orphan translation back in — its meaning is already
+            # in the follow-on chunks. Tracked via merge_into_next for
+            # diagnostics and future logic, but no chunk surgery here.
             image_data_uri = None
             image_alt: str | None = None
             if btype in {"image", "figure"}:
