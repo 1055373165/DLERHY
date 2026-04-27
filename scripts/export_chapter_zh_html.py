@@ -279,6 +279,19 @@ def _render_image_data_uri(
     return f"data:image/png;base64,{encoded}", None
 
 
+# Standard content-area envelope for this book (US-letter with ~1in margins
+# and a paragraph-indent on the left). Synthesized text-only figures whose
+# union-of-labels bbox sits well inside this envelope get expanded to it so
+# the rendered image captures the full drawing — not just the labels.
+_CONTENT_BOX_X_MIN = 56.0
+_CONTENT_BOX_X_MAX = 540.0
+# A synthesized figure narrower than this fraction of the content width is
+# treated as label-only and widened. Figures legitimately narrower than half
+# the content width (e.g. icons, sidebar marks) won't carry the
+# ``text_only_figure`` flag, so this widening only fires on the bug case.
+_SYNTHESIZED_FIGURE_WIDTH_FLOOR_RATIO = 0.7
+
+
 def _block_image_data(session, block) -> tuple[str | None, str | None, str | None]:
     """Render this block's image as (data_uri, alt_text, skip_reason)."""
     image_row = session.execute(
@@ -302,12 +315,133 @@ def _block_image_data(session, block) -> tuple[str | None, str | None, str | Non
         return None, image_row.alt_text, "bad-bbox-shape"
     if not isinstance(page_number, int):
         return None, image_row.alt_text, "bad-page-number"
+    bbox_list = list(bbox)
+    image_type = image_row.image_type or ""
+    if image_type == "text_only_figure":
+        bbox_list = _widen_text_only_figure_bbox(bbox_list)
     data_uri, skip_reason = _render_image_data_uri(
         page_number=page_number,
-        bbox=list(bbox),
-        image_type=image_row.image_type,
+        bbox=bbox_list,
+        image_type=image_type,
     )
     return data_uri, image_row.alt_text, skip_reason
+
+
+def _widen_text_only_figure_bbox(bbox: list[float]) -> list[float]:
+    """Expand a label-union bbox to the page content envelope.
+
+    The synthesizer builds a ``text_only_figure``'s bbox from the union of
+    its absorbed text labels. When the underlying drawing is wider than the
+    label cluster (the labels sit on the left side of the figure, or only
+    one row of labels was extracted) the rendered crop misses the boxes,
+    arrows, and right-side text — Figure 3.3 (Stock/Capital/Rare/Debt) and
+    Figure 3.5 (Man/Woman/King/Queen vector traversal) both surfaced this
+    way. If the union is narrower than ~70% of the page content width, snap
+    it to the standard content envelope so the full drawing renders.
+    """
+    if len(bbox) != 4:
+        return bbox
+    x0, y0, x1, y1 = bbox
+    content_width = _CONTENT_BOX_X_MAX - _CONTENT_BOX_X_MIN
+    if content_width <= 0:
+        return bbox
+    if (x1 - x0) >= _SYNTHESIZED_FIGURE_WIDTH_FLOOR_RATIO * content_width:
+        return bbox
+    return [
+        min(x0, _CONTENT_BOX_X_MIN),
+        y0,
+        max(x1, _CONTENT_BOX_X_MAX),
+        y1,
+    ]
+
+
+def _bbox_is_inside_any(
+    inner: list[float] | tuple[float, float, float, float],
+    outers: list[tuple[float, float, float, float]],
+    pad: float = 2.0,
+) -> bool:
+    """True if ``inner`` sits (within ``pad`` slack) inside any ``outer``."""
+    if not isinstance(inner, (list, tuple)) or len(inner) != 4:
+        return False
+    ix0, iy0, ix1, iy1 = inner
+    for ox0, oy0, ox1, oy1 in outers:
+        if (
+            ix0 >= ox0 - pad
+            and iy0 >= oy0 - pad
+            and ix1 <= ox1 + pad
+            and iy1 <= oy1 + pad
+        ):
+            return True
+    return False
+
+
+def _block_lies_inside_figure(
+    block,
+    figure_bboxes_by_page: dict[int, list[tuple[float, float, float, float]]],
+) -> bool:
+    """Drop body blocks whose bbox sits inside a nearby figure's bbox.
+
+    The parser sometimes leaves figure-internal text (Figure 3.2's "Document
+    / Input sequences / Convert to tokens / ..." labels, page-headers, in-
+    figure code captions) outside the figure cluster. Those blocks then get
+    translated and rendered as standalone paragraphs immediately below the
+    figure, which the user sees as garbage prose. We strain them at render
+    time by checking whether each block's source bbox is fully contained in
+    a figure bbox on the same page.
+    """
+    meta = block.source_span_json or {}
+    bbox_payload = meta.get("source_bbox_json") or {}
+    regions = bbox_payload.get("regions") if isinstance(bbox_payload, dict) else None
+    if not isinstance(regions, list) or not regions:
+        return False
+    for region in regions:
+        if not isinstance(region, dict):
+            continue
+        bbox = region.get("bbox")
+        page = region.get("page_number")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            continue
+        if not isinstance(page, int):
+            continue
+        outers = figure_bboxes_by_page.get(page) or []
+        if not outers:
+            continue
+        if _bbox_is_inside_any(bbox, outers):
+            return True
+    return False
+
+
+def _looks_like_figure_internal_text(text: str) -> bool:
+    """Distinguish figure-internal label fragments from coherent body prose.
+
+    Figure-internal text is short, fragmented (many newlines, short lines)
+    and rarely a complete sentence. Body prose has full sentences and a
+    higher chars-per-line ratio. Used together with the figure↔caption
+    ordinal sandwich + bbox containment to avoid suppressing real body
+    paragraphs that just happen to sit on the same page as a tall figure.
+    """
+    s = (text or "").strip()
+    if not s:
+        return False
+    # Real code goes through ``_looks_like_real_code``; if the source is
+    # multi-line indented code or has obvious code syntax, it's almost
+    # certainly figure-internal pseudo-code (Figure 3.11 case).
+    if _looks_like_real_code(s):
+        return True
+    lines = [ln for ln in s.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    # Short, multi-line, fragment-y texts are figure-internal labels.
+    avg_line_len = len(s) / max(len(lines), 1)
+    if len(lines) >= 3 and avg_line_len < 40:
+        return True
+    # Coherent body prose almost always ends in sentence-final punctuation.
+    last = s[-1]
+    if last not in ".!?。！？”\"'":
+        # No terminal punctuation + multi-line ⇒ probably a label group.
+        if len(lines) >= 2:
+            return True
+    return False
 
 
 def _block_zh_chunks(session, block) -> tuple[list[str], list[str]]:
@@ -487,6 +621,14 @@ def _render_block(
             return _paragraph_html(chunks)
         return _heading_html(chunks[0])
     if btype in {"code", "code_block"}:
+        # The parser flags any block that mixes monospace tokens with body
+        # text as CODE — but most of those are body paragraphs that just
+        # happen to mention identifiers like ``stock``/``capital``/``dict``
+        # inline. Demote to a regular paragraph unless the source actually
+        # looks like code (multi-line with leading whitespace or
+        # programming syntax markers).
+        if not _looks_like_real_code(block.source_text or ""):
+            return _paragraph_html(chunks)
         return _code_html(chunks)
     if btype in {"caption", "figure_caption"}:
         return _caption_html(chunks)
@@ -495,6 +637,36 @@ def _render_block(
 
 # Require at least one dot in pure-numeric leads — "3.1 X" is a section
 # title, "2 X" is a list item that the older parser sometimes promoted.
+_REAL_CODE_LINE_PATTERN = re.compile(
+    r"^\s{2,}\S"  # at least 2 leading spaces — typical code indentation
+    r"|^\s*(?:def|class|return|import|from|if|elif|else|for|while|try|except|finally|with|yield|raise|print|let|var|const|function)\b"
+    r"|^\s*[A-Za-z_]\w*\s*[=(]"  # assignment / call at line start
+    r"|^\s*#",  # comment line
+    re.MULTILINE,
+)
+
+
+def _looks_like_real_code(text: str) -> bool:
+    """Distinguish actual code blocks from prose with inline-mono tokens."""
+    s = (text or "").strip()
+    if not s:
+        return False
+    lines = [ln for ln in s.splitlines() if ln.strip()]
+    # Real code is almost always multi-line and structurally code-like.
+    if len(lines) < 2:
+        return False
+    indented_lines = sum(1 for ln in lines if ln.startswith(("  ", "\t")))
+    if indented_lines >= 2:
+        return True
+    # Single-line indent + multi-line code-keyword starts also count.
+    if _REAL_CODE_LINE_PATTERN.search(s):
+        # Require either indentation OR multi-line so a body paragraph that
+        # incidentally starts with "If you ..." doesn't slip back in.
+        if indented_lines >= 1 or sum(1 for ln in lines if _REAL_CODE_LINE_PATTERN.match(ln)) >= 2:
+            return True
+    return False
+
+
 _HEADING_NUMBERED_LEAD = re.compile(r"^\s*(?:[A-Z]\s*\.|[Cc]hapter|[Pp]art|[Aa]ppendix|\d+\.\d+(?:\.\d+){0,2}\s)")
 # Body-sentence-shaped text the older parser sometimes promoted to HEADING.
 # Reject when the source ends in sentence-final punctuation OR opens with a
@@ -719,9 +891,71 @@ def main() -> int:
                 continue
             consumed_caption_ids.add(cap_block.id)
 
+        # Identify the narrow "figure → leaked label → caption" sandwich
+        # pattern: a non-figure block whose ordinal sits between a figure and
+        # its linked caption is almost always figure-internal text the
+        # parser failed to absorb (Figure 3.2's "Document / Convert to
+        # tokens / Word embedding / ..." labels surfaced this way). We
+        # combine the ordinal sandwich with bbox containment so wider body
+        # paragraphs adjacent to a tall figure aren't accidentally dropped.
+        figure_bboxes_by_page: dict[int, list[tuple[float, float, float, float]]] = {}
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            blk_meta = blk.source_span_json or {}
+            payload = blk_meta.get("source_bbox_json") or {}
+            blk_regions = payload.get("regions") if isinstance(payload, dict) else None
+            if not isinstance(blk_regions, list):
+                continue
+            for region in blk_regions:
+                if not isinstance(region, dict):
+                    continue
+                bbox = region.get("bbox")
+                page = region.get("page_number")
+                if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                    continue
+                if not isinstance(page, int):
+                    continue
+                use_bbox = list(bbox)
+                if (blk_meta.get("image_type") or "") == "text_only_figure":
+                    use_bbox = _widen_text_only_figure_bbox(use_bbox)
+                figure_bboxes_by_page.setdefault(page, []).append(tuple(use_bbox))
+
+        # Build the set of ordinals that sit strictly between a figure and
+        # its linked caption (inclusive of neither). These are candidates
+        # for figure-internal-text suppression.
+        block_by_anchor = {b.source_anchor: b for b in blocks if b.source_anchor}
+        sandwich_ordinals: set[int] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            cap_anchor = _linked_caption_anchor(blk)
+            if not cap_anchor:
+                continue
+            cap_block = block_by_anchor.get(cap_anchor) or caption_by_anchor.get(cap_anchor)
+            if cap_block is None:
+                continue
+            lo, hi = sorted([blk.ordinal, cap_block.ordinal])
+            for ord_between in range(lo + 1, hi):
+                sandwich_ordinals.add(ord_between)
+        figure_internal_suppressed = 0
+
         for block in blocks:
             btype = (block.block_type or "").lower()
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
+                continue
+            # Suppress figure-internal text that the parser left outside the
+            # figure cluster: fire only when the block sits in a figure's
+            # ordinal sandwich, its bbox is contained in a figure bbox, AND
+            # the source text looks like fragmented label content rather
+            # than coherent body prose.
+            if (
+                btype not in {"image", "figure", "caption", "figure_caption"}
+                and block.ordinal in sandwich_ordinals
+                and _block_lies_inside_figure(block, figure_bboxes_by_page)
+                and _looks_like_figure_internal_text(block.source_text or "")
+            ):
+                figure_internal_suppressed += 1
                 continue
             chunks, untranslated = _block_zh_chunks(session, block)
             image_data_uri = None
@@ -789,7 +1023,8 @@ def main() -> int:
         f"[export] wrote {OUTPUT_PATH}",
         f"[export] rendered_blocks={rendered_block_count} "
         f"skipped_blocks={untranslated_block_count} "
-        f"total_blocks={total_blocks}",
+        f"total_blocks={total_blocks} "
+        f"figure_internal_suppressed={figure_internal_suppressed}",
         f"[export] images_rendered={image_render_count} "
         f"images_skipped={sum(image_skip_reasons.values())} "
         f"dpi=adaptive[{IMAGE_MIN_DPI}-{IMAGE_MAX_DPI}] "
