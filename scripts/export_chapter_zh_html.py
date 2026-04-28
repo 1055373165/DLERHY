@@ -477,39 +477,56 @@ _CONTENT_BOX_X_MAX = 540.0
 _SYNTHESIZED_FIGURE_WIDTH_FLOOR_RATIO = 0.7
 
 
-def _block_image_data(session, block) -> tuple[str | None, str | None, str | None]:
-    """Render this block's image as (data_uri, alt_text, skip_reason)."""
+def _block_image_data(
+    session,
+    block,
+    *,
+    bbox_override: tuple[float, float, float, float] | None = None,
+    page_number_override: int | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    """Render this block's image as (data_uri, alt_text, skip_reason).
+
+    ``bbox_override`` lets the caller force a different crop region —
+    used by multi-panel image clusters where the union of all panels'
+    bboxes is rendered as ONE crop instead of N separate cuts (Fig 4.7).
+    """
     image_row = session.execute(
         select(DocumentImage)
         .where(DocumentImage.block_id == block.id)
         .order_by(DocumentImage.created_at.asc())
         .limit(1)
     ).scalar_one_or_none()
-    if image_row is None:
+    if image_row is None and bbox_override is None:
         return None, None, "no-document-image-row"
-    bbox_payload = image_row.bbox_json or {}
+    bbox_payload = image_row.bbox_json if image_row is not None else {}
     regions = bbox_payload.get("regions") if isinstance(bbox_payload, dict) else None
-    if not isinstance(regions, list) or not regions:
-        return None, image_row.alt_text, "no-bbox-regions"
-    region = regions[0]
-    if not isinstance(region, dict):
-        return None, image_row.alt_text, "bad-region-shape"
-    bbox = region.get("bbox")
-    page_number = region.get("page_number") or image_row.page_number
+    region = regions[0] if isinstance(regions, list) and regions else None
+    if bbox_override is not None:
+        bbox = list(bbox_override)
+        page_number = page_number_override
+        if page_number is None and isinstance(region, dict):
+            page_number = region.get("page_number")
+        if page_number is None and image_row is not None:
+            page_number = image_row.page_number
+    else:
+        if not isinstance(region, dict):
+            return None, image_row.alt_text if image_row else None, "bad-region-shape"
+        bbox = region.get("bbox")
+        page_number = region.get("page_number") or image_row.page_number
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
-        return None, image_row.alt_text, "bad-bbox-shape"
+        return None, (image_row.alt_text if image_row else None), "bad-bbox-shape"
     if not isinstance(page_number, int):
-        return None, image_row.alt_text, "bad-page-number"
+        return None, (image_row.alt_text if image_row else None), "bad-page-number"
     bbox_list = list(bbox)
-    image_type = image_row.image_type or ""
-    if image_type == "text_only_figure":
+    image_type = (image_row.image_type or "") if image_row else "embedded_image"
+    if image_type == "text_only_figure" and bbox_override is None:
         bbox_list = _widen_text_only_figure_bbox(bbox_list)
     data_uri, skip_reason = _render_image_data_uri(
         page_number=page_number,
         bbox=bbox_list,
-        image_type=image_type,
+        image_type=image_type if bbox_override is None else "vector_drawing",
     )
-    return data_uri, image_row.alt_text, skip_reason
+    return data_uri, (image_row.alt_text if image_row else None), skip_reason
 
 
 def _widen_text_only_figure_bbox(bbox: list[float]) -> list[float]:
@@ -745,9 +762,39 @@ def _caption_html(chunks: list[str]) -> str:
     return f"<p class='caption'><em>{html.escape(text)}</em></p>"
 
 
-def _code_html(chunks: list[str]) -> str:
-    body = "\n".join(chunks)
+def _code_html(chunks: list[str], source_text: str = "") -> str:
+    """Render a code block as ``<pre><code>``.
+
+    Parser code blocks have ``translatable=False``, so the chunks list
+    is empty for them. Fall back to ``source_text`` so the original
+    program is preserved verbatim — readers need to see actual code,
+    not an empty block.
+    """
+    body = "\n".join(c for c in chunks if c)
+    if not body.strip():
+        body = source_text or ""
     return f"<pre><code>{html.escape(body)}</code></pre>"
+
+
+_LISTING_HEADER_PATTERN = re.compile(
+    # "Listing 4.1 / ChatGPT calculating pi in Python" or "Listing N.M ..."
+    r"^\s*(?:Listing|Code|Sample|Example)\s+([A-Z]?\d+(?:\.\d+)+)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_listing_header_text(text: str) -> bool:
+    return bool(_LISTING_HEADER_PATTERN.match((text or "").strip()))
+
+
+def _listing_header_html(translated: str, source: str) -> str:
+    """Render a Listing header as a stand-out caption bar."""
+    text = (translated or source or "").strip()
+    if not text:
+        text = source.strip()
+    return (
+        f"<figcaption class='listing-header'>{html.escape(text)}</figcaption>"
+    )
 
 
 def _untranslated_html(sources: list[str]) -> str:
@@ -912,7 +959,7 @@ def _render_block(
         # programming syntax markers).
         if not _looks_like_real_code(block.source_text or ""):
             return _paragraph_html(chunks)
-        return _code_html(chunks)
+        return _code_html(chunks, source_text=block.source_text or "")
     if btype in {"caption", "figure_caption"}:
         return _caption_html(chunks)
     return _paragraph_html(chunks)
@@ -1064,6 +1111,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   @media (prefers-color-scheme: dark) {{
     figure.figure img {{ background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }}
     figure.figure figcaption {{ color: #aaa; }}
+  }}
+  figure.listing {{
+    margin: 1.75rem 0; padding: 0;
+    border: 1px solid rgba(127,127,127,.18);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fafafa;
+  }}
+  figure.listing figcaption.listing-header {{
+    padding: .55rem .9rem;
+    background: #2a4d8f;
+    color: #fff;
+    font-size: .92rem;
+    font-weight: 600;
+    line-height: 1.45;
+    white-space: pre-line;
+  }}
+  figure.listing pre {{
+    margin: 0;
+    border-radius: 0;
+    background: #f7f7f5;
+    font-size: .9rem;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    figure.listing {{ background: #1c1c1c; border-color: rgba(127,127,127,.25); }}
+    figure.listing pre {{ background: #1f1f1f; }}
+    figure.listing figcaption.listing-header {{ background: #1f3a73; }}
   }}
   details.untranslated {{
     margin: .5rem 0; padding: .5rem .75rem;
@@ -1225,6 +1299,14 @@ def main() -> int:
                 fallback_caption_for_block[fig.id] = best
                 consumed_caption_ids.add(best.id)
 
+        # Cluster state that's filled in after sandwich_ordinals exists
+        # (because the multi-panel detection writes to both
+        # figure_bboxes_by_page AND sandwich_ordinals).
+        cluster_master_id_by_block: dict[str, str] = {}
+        cluster_skip_block_ids: set[str] = set()
+        cluster_bbox_by_master: dict[str, tuple[float, float, float, float]] = {}
+        cluster_page_by_master: dict[str, int] = {}
+
         # Detect text-heavy sidebar callouts that the parser misclassified
         # as figures. Pattern: image_type=vector_drawing, no parser linkage,
         # no fallback caption, and isolated (no other image block within
@@ -1340,6 +1422,142 @@ def main() -> int:
             lo, hi = sorted([blk.ordinal, cap_block.ordinal])
             for ord_between in range(lo + 1, hi):
                 sandwich_ordinals.add(ord_between)
+
+        # ------------------------------------------------------------------
+        # Multi-panel embedded-image cluster detection (Fig 4.7)
+        # ------------------------------------------------------------------
+        # The parser stores each emoji panel + thinking face as a separate
+        # ``embedded_image`` block (Fig 4.7 yields 6 image rows + 2 paragraph
+        # rows of figure-internal text), and only the LAST image gets
+        # paired with the caption. The visual result is 6 disjoint emoji
+        # crops stacked vertically with stray paragraph fragments between
+        # them — totally illegible. Detect such clusters and rewrite them
+        # into ONE figure rendered from the union bbox of all panels +
+        # interspersed text, so the page-crop reproduces the source figure
+        # as the reader saw it. The cluster is anchored by the trailing
+        # caption block.
+        def _block_first_bbox(b):
+            meta = b.source_span_json or {}
+            payload = meta.get("source_bbox_json") or {}
+            regs = payload.get("regions") if isinstance(payload, dict) else None
+            if not isinstance(regs, list) or not regs:
+                return None
+            r = regs[0]
+            if not isinstance(r, dict):
+                return None
+            bbox = r.get("bbox")
+            page = r.get("page_number")
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                return None
+            if not isinstance(page, int):
+                return None
+            return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])), page
+
+        for i, blk in enumerate(blocks):
+            if blk.id in cluster_skip_block_ids or blk.id in cluster_master_id_by_block:
+                continue
+            btype = (blk.block_type or "").lower()
+            if btype not in {"image", "figure"}:
+                continue
+            meta = blk.source_span_json or {}
+            if (meta.get("image_type") or "").lower() != "embedded_image":
+                continue
+            anchor_info = _block_first_bbox(blk)
+            if anchor_info is None:
+                continue
+            anchor_bbox, anchor_page = anchor_info
+            cluster_blocks = [blk]
+            cluster_text_blocks: list = []
+            j = i + 1
+            cap_block = None
+            while j < len(blocks) and j < i + 12:
+                nb = blocks[j]
+                nb_btype = (nb.block_type or "").lower()
+                nb_info = _block_first_bbox(nb)
+                if nb_info is None:
+                    j += 1
+                    continue
+                nb_bbox, nb_page = nb_info
+                if nb_page != anchor_page:
+                    break
+                if nb_btype in {"caption", "figure_caption"}:
+                    if _is_real_caption_text(nb.source_text or ""):
+                        cap_block = nb
+                    break
+                if nb_btype in {"image", "figure"}:
+                    nb_meta = nb.source_span_json or {}
+                    if (nb_meta.get("image_type") or "").lower() == "embedded_image":
+                        cluster_blocks.append(nb)
+                    else:
+                        break
+                elif nb_btype == "paragraph":
+                    # Absorb the paragraph as figure-internal text only if
+                    # another embedded image or the cluster's terminating
+                    # caption follows it on the same page within a few
+                    # blocks. This guards against absorbing real body
+                    # prose that just happens to sit after an image.
+                    has_image_after = False
+                    cap_after = False
+                    for k in range(j + 1, min(j + 6, len(blocks))):
+                        nk = blocks[k]
+                        nk_btype = (nk.block_type or "").lower()
+                        nk_info = _block_first_bbox(nk)
+                        if nk_info is None:
+                            continue
+                        if nk_info[1] != anchor_page:
+                            break
+                        if nk_btype in {"image", "figure"}:
+                            nk_meta = nk.source_span_json or {}
+                            if (nk_meta.get("image_type") or "").lower() == "embedded_image":
+                                has_image_after = True
+                                break
+                            else:
+                                break
+                        if nk_btype in {"caption", "figure_caption"}:
+                            if _is_real_caption_text(nk.source_text or ""):
+                                cap_after = True
+                            break
+                        if nk_btype != "paragraph":
+                            break
+                    if has_image_after or cap_after:
+                        cluster_text_blocks.append(nb)
+                    else:
+                        break
+                else:
+                    break
+                j += 1
+            if len(cluster_blocks) < 2 or cap_block is None:
+                continue
+            xs0 = [_block_first_bbox(b)[0][0] for b in cluster_blocks + cluster_text_blocks]
+            ys0 = [_block_first_bbox(b)[0][1] for b in cluster_blocks + cluster_text_blocks]
+            xs1 = [_block_first_bbox(b)[0][2] for b in cluster_blocks + cluster_text_blocks]
+            ys1 = [_block_first_bbox(b)[0][3] for b in cluster_blocks + cluster_text_blocks]
+            pad = 12.0
+            union = (
+                min(xs0) - pad,
+                min(ys0) - pad,
+                max(xs1) + pad,
+                max(ys1) + pad,
+            )
+            master = cluster_blocks[0]
+            cluster_bbox_by_master[master.id] = union
+            cluster_page_by_master[master.id] = anchor_page
+            for b in cluster_blocks[1:]:
+                cluster_skip_block_ids.add(b.id)
+                cluster_master_id_by_block[b.id] = master.id
+            for b in cluster_text_blocks:
+                cluster_skip_block_ids.add(b.id)
+                cluster_master_id_by_block[b.id] = master.id
+            # Pre-bind the trailing caption to the master image.
+            fallback_caption_for_block[master.id] = cap_block
+            consumed_caption_ids.add(cap_block.id)
+            # Register the union bbox + sandwich for figure-internal
+            # suppression of any blocks the cluster scan didn't catch.
+            figure_bboxes_by_page.setdefault(anchor_page, []).append(union)
+            lo2, hi2 = sorted([master.ordinal, cap_block.ordinal])
+            for ord_between in range(lo2 + 1, hi2):
+                sandwich_ordinals.add(ord_between)
+
         figure_internal_suppressed = 0
 
         # Pre-pass: detect heading fragments that the parser sliced off the
@@ -1383,9 +1601,95 @@ def main() -> int:
             merge_into_next[next_blk.id] = blk.id
             skip_render_block_ids.add(blk.id)
 
+        # ------------------------------------------------------------------
+        # Listing N.M code-block grouping
+        # ------------------------------------------------------------------
+        # The book uses styled blue header bars labelled "Listing 4.1 /
+        # ChatGPT calculating pi in Python" instead of standard CAPTION
+        # blocks. The parser sees the header as a regular PARAGRAPH and
+        # the following code lines as PARAGRAPHs too (Listing 4.2's
+        # Modula-3 code spreads across ord=418..425, mixing code lines
+        # with arrow-callout annotations). Without intervention the
+        # translator turns "MODULE CalculatePi;" into "MODULE
+        # CalculatePi; 缺少 EXPORTS Main;" — half-translated source code
+        # that's both wrong AND ugly.
+        #
+        # Strategy: find paragraphs whose source matches "Listing N.M ...",
+        # mark the header for special styling, then mark the immediately
+        # following paragraphs as "code body" — render them as <pre><code>
+        # with the verbatim source text instead of running them through
+        # the paragraph translator. The listing ends at the first long
+        # body paragraph (≥150 chars OR ≥2 sentence-ending periods), at
+        # any heading/figure/code block, or after a hard 12-block cap.
+        listing_header_ids: set[str] = set()
+        listing_body_ids: set[str] = set()
+        # Per-listing-header → ordered list of body-block source texts
+        # (preserves the original source-line layout when rendered).
+        listing_body_source_by_header: dict[str, list[str]] = {}
+
+        def _is_listing_body_candidate(text: str) -> bool:
+            s = (text or "").strip()
+            if not s:
+                return True  # blank line — keep as code spacer
+            # Real prose paragraphs in this book run to 800+ chars; code
+            # lines (Modula-3's PROCEDURE block tops out near 180) stay
+            # well under 300. Use 300 as the prose cutoff and require
+            # multiple sentence breaks before treating long text as prose.
+            if len(s) >= 300:
+                sentence_breaks = len(re.findall(r"[.!?]\s+[A-Z]", s))
+                if sentence_breaks >= 2:
+                    return False
+            return True
+
+        for i, blk in enumerate(blocks):
+            btype = (blk.block_type or "").lower()
+            if btype != "paragraph":
+                continue
+            src = (blk.source_text or "").strip()
+            if not _is_listing_header_text(src):
+                continue
+            listing_header_ids.add(blk.id)
+            body_sources: list[str] = []
+            # Walk forward, picking up code-shaped paragraphs into the
+            # listing body until we hit a stopper.
+            for j in range(i + 1, min(i + 13, len(blocks))):
+                nb = blocks[j]
+                nb_btype = (nb.block_type or "").lower()
+                if nb_btype == "code" or nb_btype == "code_block":
+                    # Genuine CODE block already in the listing region —
+                    # absorb its source text too.
+                    body_sources.append(nb.source_text or "")
+                    listing_body_ids.add(nb.id)
+                    continue
+                if nb_btype in {
+                    "heading", "figure", "image", "caption", "figure_caption",
+                    "equation",
+                }:
+                    break
+                if nb_btype != "paragraph":
+                    break
+                nb_src = (nb.source_text or "").strip()
+                # Page-header style ("4.3 LLMs and novel tasks / 59")
+                # ends the listing.
+                if _looks_like_page_header(nb_src, 0.0):
+                    break
+                # New listing header ⇒ stop and the outer loop will
+                # pick it up.
+                if _is_listing_header_text(nb_src):
+                    break
+                if not _is_listing_body_candidate(nb_src):
+                    break
+                body_sources.append(nb.source_text or "")
+                listing_body_ids.add(nb.id)
+            listing_body_source_by_header[blk.id] = body_sources
+
         for block in blocks:
             btype = (block.block_type or "").lower()
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
+                continue
+            # Multi-panel cluster: skip slave panels and intervening text
+            # blocks — the master panel renders the union bbox + caption.
+            if block.id in cluster_skip_block_ids:
                 continue
             # Suppress figure-internal text that the parser left outside the
             # figure cluster: fire when the block sits in a figure's ordinal
@@ -1413,6 +1717,28 @@ def main() -> int:
             # next sibling — their text shows up at the start of that block.
             if block.id in skip_render_block_ids:
                 continue
+            # Listing N.M code-block rendering: emit ONE <figure> per
+            # listing — the styled header bar + a <pre><code> containing
+            # the joined source of all body blocks. Subsequent listing-
+            # body blocks are skipped (they were absorbed into the header
+            # render above).
+            if block.id in listing_body_ids:
+                continue
+            if block.id in listing_header_ids:
+                chunks, untranslated = _block_zh_chunks(session, block)
+                translated = ""
+                if chunks:
+                    translated = "  ".join(c.strip() for c in chunks if c.strip())
+                body_sources = listing_body_source_by_header.get(block.id, [])
+                code_body = "\n".join(s for s in body_sources if s).strip()
+                listing_html = "<figure class='listing'>\n"
+                listing_html += _listing_header_html(translated, block.source_text or "")
+                if code_body:
+                    listing_html += "\n" + _code_html([], source_text=code_body)
+                listing_html += "\n</figure>"
+                rendered_blocks_html.append(listing_html)
+                rendered_block_count += 1
+                continue
             chunks, untranslated = _block_zh_chunks(session, block)
             # When the prior heading-fragment ("Many LLMs") got skipped, the
             # translator usually already produced a complete sentence for the
@@ -1424,8 +1750,13 @@ def main() -> int:
             image_data_uri = None
             image_alt: str | None = None
             if btype in {"image", "figure"}:
+                cluster_bbox = cluster_bbox_by_master.get(block.id)
+                cluster_page = cluster_page_by_master.get(block.id)
                 image_data_uri, alt_fallback, skip_reason = _block_image_data(
-                    session, block
+                    session,
+                    block,
+                    bbox_override=cluster_bbox,
+                    page_number_override=cluster_page,
                 )
                 if image_data_uri:
                     image_render_count += 1
