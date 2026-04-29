@@ -1584,12 +1584,36 @@ def main() -> int:
             ys0 = [_block_first_bbox(b)[0][1] for b in cluster_blocks + cluster_text_blocks]
             xs1 = [_block_first_bbox(b)[0][2] for b in cluster_blocks + cluster_text_blocks]
             ys1 = [_block_first_bbox(b)[0][3] for b in cluster_blocks + cluster_text_blocks]
-            pad = 12.0
+            pad_top = 12.0
+            pad_x = 12.0
+            # The bottom of an emoji-panel cluster sits flush with the
+            # thinking-face glyphs; the parser's last bbox row is the
+            # text labels, not the emoji. Push the bottom further to
+            # include the trailing emoji row that otherwise gets clipped
+            # (Fig 4.7 ≈ 18pt of emoji extending below the last panel).
+            pad_bottom = 28.0
+            cap_info = _block_first_bbox(cap_block)
+            cap_top_limit: float | None = None
+            if cap_info is not None:
+                cap_top_limit = cap_info[0][1] - 3.0
+            union_y1 = max(ys1) + pad_bottom
+            if cap_top_limit is not None:
+                # Never overlap the caption — anchor the bottom to just
+                # above it when the padded extension would otherwise
+                # cross into the caption text.
+                union_y1 = min(union_y1, cap_top_limit)
+                # And don't allow the bottom to retreat above the image
+                # rows themselves; if cap_top_limit < max(ys1), the
+                # caption is unusually tight, fall back to the padded
+                # image bottom but cap at cap_top_limit.
+                union_y1 = max(union_y1, max(ys1) + 4.0)
+                if cap_top_limit < union_y1:
+                    union_y1 = cap_top_limit
             union = (
-                min(xs0) - pad,
-                min(ys0) - pad,
-                max(xs1) + pad,
-                max(ys1) + pad,
+                min(xs0) - pad_x,
+                min(ys0) - pad_top,
+                max(xs1) + pad_x,
+                union_y1,
             )
             master = cluster_blocks[0]
             cluster_bbox_by_master[master.id] = union
@@ -1800,12 +1824,120 @@ def main() -> int:
                 if inter_area / cand_area >= 0.8:
                     contained += 1
             if contained >= 2:
-                sidebar_callout_ids.add(fig.id)
-                # Free up any caption paired by fallback so it doesn't
-                # silently disappear with the suppressed sidebar.
-                if fig.id in fallback_caption_for_block:
-                    cap = fallback_caption_for_block.pop(fig.id)
-                    consumed_caption_ids.discard(cap.id)
+                # If the misclassified "figure" still has a fallback
+                # caption pairing, the parser missed the actual figure
+                # entirely (Fig 4.2: parser captured a sidebar rectangle
+                # at y=400-612 instead of the 3-panel graph at y≈70-210).
+                # Synthesize a fresh crop from the page region ABOVE the
+                # caption — that's where the missed figure lives.
+                paired = fallback_caption_for_block.get(fig.id)
+                synthesized = False
+                if paired is not None:
+                    paired_meta = paired.source_span_json or {}
+                    paired_payload = paired_meta.get("source_bbox_json") or {}
+                    paired_regs = paired_payload.get("regions") if isinstance(paired_payload, dict) else None
+                    paired_bbox = (
+                        paired_regs[0].get("bbox")
+                        if isinstance(paired_regs, list)
+                        and paired_regs
+                        and isinstance(paired_regs[0], dict)
+                        else None
+                    )
+                    if isinstance(paired_bbox, (list, tuple)) and len(paired_bbox) == 4:
+                        cap_y0 = float(paired_bbox[1])
+                        # Look for short figure-internal label paragraphs
+                        # immediately above the caption — they're visually
+                        # part of the figure (Fig 4.2's "Smooth / Not
+                        # smooth / Not smooth anywhere"), so the
+                        # synthesized crop should INCLUDE them.
+                        label_y_min = cap_y0
+                        label_y_max = cap_y0
+                        suppress_labels: list = []
+                        for cand in blocks:
+                            if cand.id == fig.id:
+                                continue
+                            if (cand.block_type or "").lower() != "paragraph":
+                                continue
+                            if _block_page(cand) != fig_page:
+                                continue
+                            if abs(cand.ordinal - paired.ordinal) > 4:
+                                continue
+                            cand_meta = cand.source_span_json or {}
+                            cand_payload = cand_meta.get("source_bbox_json") or {}
+                            cand_regs = cand_payload.get("regions") if isinstance(cand_payload, dict) else None
+                            cb = (
+                                cand_regs[0].get("bbox")
+                                if isinstance(cand_regs, list)
+                                and cand_regs
+                                and isinstance(cand_regs[0], dict)
+                                else None
+                            )
+                            if not isinstance(cb, (list, tuple)) or len(cb) != 4:
+                                continue
+                            cb_y0 = float(cb[1])
+                            cb_y1 = float(cb[3])
+                            if cb_y1 > cap_y0:
+                                continue  # below the caption; not a label
+                            src_clean = (cand.source_text or "").strip()
+                            # Page headers ("50\nCHAPTER 4\nHow LLMs learn",
+                            # "4.1 Gradient descent\n47") sit at the top
+                            # of the page and are NOT figure-internal
+                            # labels — skip them so the synthesized
+                            # figure top can sit above them.
+                            if not src_clean:
+                                continue
+                            if _looks_like_page_header(src_clean, cb_y0):
+                                continue
+                            # Label-shape: short, no terminal period, multi-line
+                            # OR very short single-line. Distinguishes from
+                            # body prose continuing into figure region.
+                            looks_label = (
+                                len(src_clean) <= 80
+                                and not src_clean.endswith((".", "。", "!", "?", "！", "？"))
+                            )
+                            if not looks_label:
+                                continue
+                            label_y_min = min(label_y_min, cb_y0)
+                            label_y_max = max(label_y_max, cb_y1)
+                            suppress_labels.append(cand)
+                        # Synthesize a figure bbox covering the page
+                        # region above the labels (or above the caption
+                        # when no labels were found). Use a conservative
+                        # top-of-content margin so we skip the chapter
+                        # header band ("CHAPTER 4 How LLMs learn").
+                        synth_y0 = 55.0
+                        # Include the labels INSIDE the crop (they belong
+                        # to the figure visually). Use label_y_max + 4 as
+                        # the bottom; if no labels found, fall back to a
+                        # conservative top-of-caption boundary.
+                        if label_y_max > cap_y0:
+                            synth_y1 = label_y_max + 4.0
+                        else:
+                            synth_y1 = max(synth_y0 + 30.0, cap_y0 - 4.0)
+                        if synth_y1 - synth_y0 >= 60.0:  # at least 60pt of vertical room
+                            synth_bbox = (
+                                _CONTENT_BOX_X_MIN - 2.0,
+                                synth_y0,
+                                _CONTENT_BOX_X_MAX + 2.0,
+                                synth_y1,
+                            )
+                            cluster_bbox_by_master[fig.id] = synth_bbox
+                            cluster_page_by_master[fig.id] = fig_page
+                            # Suppress the figure-internal labels so the
+                            # ``光滑 不光滑 处处不光滑`` row doesn't repeat
+                            # below the rendered figure crop (it's already
+                            # in the crop visually).
+                            for lab in suppress_labels:
+                                sandwich_ordinals.add(lab.ordinal)
+                            figure_bboxes_by_page.setdefault(fig_page, []).append(synth_bbox)
+                            synthesized = True
+                if not synthesized:
+                    sidebar_callout_ids.add(fig.id)
+                    # Free up any caption paired by fallback so it doesn't
+                    # silently disappear with the suppressed sidebar.
+                    if fig.id in fallback_caption_for_block:
+                        cap = fallback_caption_for_block.pop(fig.id)
+                        consumed_caption_ids.discard(cap.id)
 
         # ------------------------------------------------------------------
         # Listing N.M code-block grouping
