@@ -34,7 +34,10 @@
       "Bash(echo \"PID: $!\")",
       "Bash(env)",
       "Bash(PGPASSWORD=postgres psql:*)",
-      "Bash(docker exec book-agent-postgres:*)"
+      "Bash(docker exec book-agent-postgres:*)",
+      "Bash(awk *)",
+      "Bash(bash scripts/export_chapter4.sh)",
+      "Bash(bash scripts/export_chapter3.sh)"
     ]
   }
 }

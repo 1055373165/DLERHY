@@ -811,6 +811,56 @@ def _untranslated_html(sources: list[str]) -> str:
     )
 
 
+_BULLET_LEADER_PATTERN = re.compile(
+    # "Loss function—You need..." / "Gradient descent—You need..."
+    # The em-dash separates a short term from its definition.
+    r"(?:^|\n)\s*([A-Z][A-Za-z][A-Za-z\s]{1,28})[—–-]\s*[A-Z]"
+)
+
+
+def _is_bullet_list_paragraph(src: str) -> bool:
+    """True if ``src`` looks like ≥2 merged ``Term—Definition`` bullets."""
+    if not src:
+        return False
+    leaders = _BULLET_LEADER_PATTERN.findall(src)
+    return len(leaders) >= 2
+
+
+def _split_translated_bullet_list(joined: str) -> list[str]:
+    """Split a CJK translation that merged a 2-item bullet list back out.
+
+    The translator preserves the source's "Term—Definition" pattern as
+    "术语——定义" (Chinese double em-dash). Sentence boundaries are
+    "。"; a fresh "短语——" near the start of a sentence marks a new
+    bullet item.
+    """
+    if not joined:
+        return []
+    sentences = [s for s in re.split(r"(?<=[。！？])", joined) if s.strip()]
+    items: list[str] = []
+    current = ""
+    item_lead = re.compile(r"^[^——\n。]{1,18}——")
+    for sent in sentences:
+        s = sent.strip()
+        if item_lead.match(s) and current:
+            items.append(current.strip())
+            current = s
+        elif item_lead.match(s):
+            current = s
+        else:
+            current = (current + s).strip() if current else s
+    if current.strip():
+        items.append(current.strip())
+    return [it for it in items if it]
+
+
+def _bullet_list_html(items: list[str]) -> str:
+    if not items:
+        return ""
+    li_html = "\n".join(f"<li>{html.escape(it)}</li>" for it in items)
+    return f"<ul class='bullet-list'>\n{li_html}\n</ul>"
+
+
 def _image_html(data_uri: str | None, alt_text: str | None) -> str:
     alt_clean = (alt_text or "").strip()
     alt_attr = html.escape(alt_clean) if alt_clean else ""
@@ -1081,6 +1131,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: #555; font-size: .92rem; border-radius: 0 4px 4px 0;
   }}
   p {{ margin: .85rem 0; }}
+  ul.bullet-list {{ margin: .85rem 0 .85rem 1.4rem; padding: 0; }}
+  ul.bullet-list li {{ margin: .35rem 0; line-height: 1.7; }}
   pre {{ background: #f3f3f3; padding: .85rem 1rem; border-radius: 6px; overflow-x: auto; font-size: .92rem; }}
   code {{ background: #f3f3f3; padding: 0 .25rem; border-radius: 3px; }}
   pre code {{ background: transparent; padding: 0; }}
@@ -1601,6 +1653,160 @@ def main() -> int:
             merge_into_next[next_blk.id] = blk.id
             skip_render_block_ids.add(blk.id)
 
+        # Pre-pass: merge paragraphs that the parser fragmented mid-sentence.
+        # Pattern: prev paragraph's source ends with a non-terminating
+        # word (lowercase letter, no .!?) and next paragraph's source
+        # starts with a lowercase letter. Real prose paragraphs always
+        # end with a sentence terminator — when they don't, it's the
+        # PDF parser splitting one paragraph across a column or page.
+        # Example: ord=354 "...loss because" + ord=355 "erratic behavior
+        # is problematic..." — should be ONE paragraph.
+        # The continuation chains: head → cont1 → cont2 ...
+        paragraph_continuation_of: dict[str, str] = {}
+        _terminator_chars = set(".!?\"'》”’]）)。！？")
+        for i in range(len(blocks) - 1):
+            prev = blocks[i]
+            nxt = blocks[i + 1]
+            if (prev.block_type or "").lower() != "paragraph":
+                continue
+            if (nxt.block_type or "").lower() != "paragraph":
+                continue
+            prev_src = (prev.source_text or "").rstrip()
+            nxt_src = (nxt.source_text or "").lstrip()
+            if not prev_src or not nxt_src:
+                continue
+            # Skip already-special blocks.
+            if prev.id in skip_render_block_ids or nxt.id in skip_render_block_ids:
+                continue
+            if prev.id in cluster_skip_block_ids or nxt.id in cluster_skip_block_ids:
+                continue
+            last_char = prev_src[-1]
+            first_char = nxt_src[:1]
+            # Prev must end mid-sentence (no terminator) and have a real
+            # word at the end (lowercase). Next must continue with a
+            # lowercase letter (English continuation, not a new sentence).
+            if last_char in _terminator_chars:
+                continue
+            if not last_char.isalpha() or not last_char.islower():
+                continue
+            if not first_char.isalpha() or not first_char.islower():
+                continue
+            # Page-header look-alikes ("4.1 Gradient descent\n47") aren't
+            # legitimate continuation targets.
+            if _looks_like_page_header(prev_src, 0.0) or _looks_like_page_header(
+                nxt_src, 0.0
+            ):
+                continue
+            paragraph_continuation_of[nxt.id] = prev.id
+
+        # Build forward chains and skip continuation blocks during render.
+        prev_to_next: dict[str, str] = {}
+        for nxt_id, prv_id in paragraph_continuation_of.items():
+            prev_to_next[prv_id] = nxt_id
+        join_chain: dict[str, list[str]] = {}
+        for blk in blocks:
+            if blk.id in paragraph_continuation_of:
+                continue
+            if blk.id in prev_to_next:
+                chain: list[str] = []
+                cur_id = blk.id
+                while cur_id in prev_to_next:
+                    nxt_id = prev_to_next[cur_id]
+                    chain.append(nxt_id)
+                    skip_render_block_ids.add(nxt_id)
+                    cur_id = nxt_id
+                join_chain[blk.id] = chain
+        block_by_id: dict[str, "Block"] = {b.id: b for b in blocks}
+
+        # Pre-pass: detect IMAGE blocks whose bbox geographically contains
+        # ≥2 paragraph blocks on the same page. These are sidebar callout
+        # boxes that the parser misclassified as figures (Fig 4.2's "How
+        # do you handle nonsmooth losses?" outer rectangle on page 72:
+        # ord=360 image bbox y=400-612 contains ord=361 sidebar header
+        # AND ord=362 sidebar body). When detected, treat them like
+        # ``sidebar_callout_ids`` — suppress the image render, and free
+        # up any caption that was incorrectly fallback-paired with them.
+        for fig in blocks:
+            if (fig.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            if fig.id in sidebar_callout_ids:
+                continue
+            # A figure with a parser-confirmed caption is always a real
+            # figure (the parser already proved the link).
+            if _linked_caption_anchor(fig) and fig.id not in rejected_linkage_ids:
+                continue
+            fig_page = _block_page(fig)
+            fig_meta = fig.source_span_json or {}
+            fig_payload = fig_meta.get("source_bbox_json") or {}
+            fig_regs = fig_payload.get("regions") if isinstance(fig_payload, dict) else None
+            if not isinstance(fig_regs, list) or not fig_regs:
+                continue
+            fig_bbox = fig_regs[0].get("bbox") if isinstance(fig_regs[0], dict) else None
+            if not isinstance(fig_bbox, (list, tuple)) or len(fig_bbox) != 4:
+                continue
+            fx0, fy0, fx1, fy1 = (float(v) for v in fig_bbox)
+            if (fy1 - fy0) < 50:
+                continue
+            # Fallback-paired figures: if the paired caption is FAR from
+            # the figure's bbox (caption sits >40pt above or below the
+            # figure), the pairing is suspect. Real figures hug their
+            # captions; a wide gap means fallback grabbed an unrelated
+            # caption for what's actually a sidebar callout. Fig 4.2
+            # case: parser-extracted "image" y=400-612 but caption ord=358
+            # y=227-255 — gap=145pt → not a real figure.
+            if fig.id in fallback_caption_for_block:
+                paired_cap = fallback_caption_for_block[fig.id]
+                cap_meta = paired_cap.source_span_json or {}
+                cap_payload = cap_meta.get("source_bbox_json") or {}
+                cap_regs = cap_payload.get("regions") if isinstance(cap_payload, dict) else None
+                cap_bbox = cap_regs[0].get("bbox") if isinstance(cap_regs, list) and cap_regs and isinstance(cap_regs[0], dict) else None
+                cap_close = False
+                if isinstance(cap_bbox, (list, tuple)) and len(cap_bbox) == 4:
+                    _, cy0, _, cy1 = (float(v) for v in cap_bbox)
+                    # Real figures: caption.y0 within ~40pt of figure.y1
+                    # OR caption.y1 within ~40pt of figure.y0.
+                    gap_below = abs(cy0 - fy1)
+                    gap_above = abs(fy0 - cy1)
+                    cap_close = min(gap_below, gap_above) <= 40
+                if cap_close:
+                    continue
+            contained = 0
+            for cand in blocks:
+                if cand.id == fig.id:
+                    continue
+                if (cand.block_type or "").lower() != "paragraph":
+                    continue
+                cand_page = _block_page(cand)
+                if cand_page != fig_page:
+                    continue
+                cand_meta = cand.source_span_json or {}
+                cand_payload = cand_meta.get("source_bbox_json") or {}
+                cand_regs = cand_payload.get("regions") if isinstance(cand_payload, dict) else None
+                if not isinstance(cand_regs, list) or not cand_regs:
+                    continue
+                cb = cand_regs[0].get("bbox") if isinstance(cand_regs[0], dict) else None
+                if not isinstance(cb, (list, tuple)) or len(cb) != 4:
+                    continue
+                cx0, cy0, cx1, cy1 = (float(v) for v in cb)
+                # 80% of the candidate's area must lie within fig_bbox.
+                ix0 = max(fx0, cx0)
+                iy0 = max(fy0, cy0)
+                ix1 = min(fx1, cx1)
+                iy1 = min(fy1, cy1)
+                if ix1 <= ix0 or iy1 <= iy0:
+                    continue
+                inter_area = (ix1 - ix0) * (iy1 - iy0)
+                cand_area = max(1.0, (cx1 - cx0) * (cy1 - cy0))
+                if inter_area / cand_area >= 0.8:
+                    contained += 1
+            if contained >= 2:
+                sidebar_callout_ids.add(fig.id)
+                # Free up any caption paired by fallback so it doesn't
+                # silently disappear with the suppressed sidebar.
+                if fig.id in fallback_caption_for_block:
+                    cap = fallback_caption_for_block.pop(fig.id)
+                    consumed_caption_ids.discard(cap.id)
+
         # ------------------------------------------------------------------
         # Listing N.M code-block grouping
         # ------------------------------------------------------------------
@@ -1747,6 +1953,38 @@ def main() -> int:
             # to glue the orphan translation back in — its meaning is already
             # in the follow-on chunks. Tracked via merge_into_next for
             # diagnostics and future logic, but no chunk surgery here.
+            # Glue continuation paragraphs (parser split one paragraph
+            # mid-sentence across blocks). The continuation block IDs
+            # are already in skip_render_block_ids so they don't render
+            # standalone — we pull their chunks here.
+            if block.id in join_chain:
+                merged_chunks = list(chunks)
+                merged_untranslated = list(untranslated)
+                for cont_id in join_chain[block.id]:
+                    cont_blk = block_by_id.get(cont_id)
+                    if cont_blk is None:
+                        continue
+                    cont_chunks, cont_untrans = _block_zh_chunks(session, cont_blk)
+                    merged_chunks.extend(cont_chunks)
+                    merged_untranslated.extend(cont_untrans)
+                chunks = merged_chunks
+                untranslated = merged_untranslated
+            # Bullet-list rendering: when source has the "Term—Definition"
+            # pattern repeated, render as <ul><li> instead of one merged
+            # <p>. The translator joins both items into one Chinese
+            # paragraph; we split back on the "术语——" leader markers.
+            if btype == "paragraph" and chunks and _is_bullet_list_paragraph(
+                block.source_text or ""
+            ):
+                joined = "".join(c.strip() for c in chunks if c.strip())
+                items = _split_translated_bullet_list(joined)
+                if len(items) >= 2:
+                    bullet_html = _bullet_list_html(items)
+                    untrans_html = _untranslated_html(untranslated)
+                    combined = "\n".join(part for part in (bullet_html, untrans_html) if part)
+                    rendered_blocks_html.append(combined)
+                    rendered_block_count += 1
+                    continue
             image_data_uri = None
             image_alt: str | None = None
             if btype in {"image", "figure"}:
