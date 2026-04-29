@@ -813,9 +813,10 @@ def _untranslated_html(sources: list[str]) -> str:
 
 
 _BULLET_LEADER_PATTERN = re.compile(
-    # "Loss function—You need..." / "Gradient descent—You need..."
-    # The em-dash separates a short term from its definition.
-    r"(?:^|\n)\s*([A-Z][A-Za-z][A-Za-z\s]{1,28})[—–-]\s*[A-Z]"
+    # "Loss function—You need..." / "Encoder-only models—These models..."
+    # The em-dash separates a short term from its definition. Hyphens
+    # are allowed inside the term ("Encoder-only", "Encoder-decoder").
+    r"(?:^|\n)\s*([A-Z][A-Za-z][A-Za-z\s\-]{1,32})[—–]\s*[A-Z]"
 )
 
 
@@ -860,6 +861,34 @@ def _bullet_list_html(items: list[str]) -> str:
         return ""
     li_html = "\n".join(f"<li>{html.escape(it)}</li>" for it in items)
     return f"<ul class='bullet-list'>\n{li_html}\n</ul>"
+
+
+_ORDERED_ITEM_PATTERN = re.compile(r"^\s*(\d+)[.)]?\s+\S")
+
+
+def _ordered_item_number(text: str) -> int | None:
+    """Return the leading integer of an ordered-list item, or None.
+
+    Matches ``"1 Map text..."``, ``"2. Foo"``, ``"3) Bar"``. Used to
+    detect runs of consecutive paragraphs that the parser left as
+    individual blocks but which together form one ``<ol>``.
+    """
+    if not text:
+        return None
+    m = _ORDERED_ITEM_PATTERN.match(text)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _ordered_list_html(items: list[str]) -> str:
+    if not items:
+        return ""
+    li_html = "\n".join(f"<li>{html.escape(it)}</li>" for it in items)
+    return f"<ol class='ordered-list'>\n{li_html}\n</ol>"
 
 
 def _image_html(data_uri: str | None, alt_text: str | None) -> str:
@@ -1134,6 +1163,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   p {{ margin: .85rem 0; }}
   ul.bullet-list {{ margin: .85rem 0 .85rem 1.4rem; padding: 0; }}
   ul.bullet-list li {{ margin: .35rem 0; line-height: 1.7; }}
+  ol.ordered-list {{ margin: .85rem 0 .85rem 1.4rem; padding: 0; }}
+  ol.ordered-list li {{ margin: .35rem 0; line-height: 1.7; }}
   pre {{ background: #f3f3f3; padding: .85rem 1rem; border-radius: 6px; overflow-x: auto; font-size: .92rem; }}
   code {{ background: #f3f3f3; padding: 0 .25rem; border-radius: 3px; }}
   pre code {{ background: transparent; padding: 0; }}
@@ -1420,7 +1451,20 @@ def main() -> int:
                 continue
             if fig.id in fallback_caption_for_block:
                 continue
-            if _linked_caption_anchor(fig) and fig.id not in rejected_linkage_ids:
+            # A "linked" caption only counts when it actually resolves to a
+            # real CAPTION block. The parser sometimes points the linkage
+            # at an arbitrary paragraph anchor (Fig p53-fig312 → p53-b363,
+            # which is a body paragraph, not a caption); those stale
+            # linkages must NOT exempt the figure from sidebar detection.
+            linked_anchor = _linked_caption_anchor(fig)
+            link_resolves = (
+                linked_anchor is not None
+                and linked_anchor in caption_by_anchor
+                and _is_real_caption_text(
+                    caption_by_anchor[linked_anchor].source_text or ""
+                )
+            )
+            if link_resolves and fig.id not in rejected_linkage_ids:
                 continue
             meta = fig.source_span_json or {}
             image_type = (meta.get("image_type") or "").lower()
@@ -1744,44 +1788,75 @@ def main() -> int:
         # The continuation chains: head → cont1 → cont2 ...
         paragraph_continuation_of: dict[str, str] = {}
         _terminator_chars = set(".!?\"'》”’]）)。！？")
-        for i in range(len(blocks) - 1):
-            prev = blocks[i]
-            nxt = blocks[i + 1]
-            if (prev.block_type or "").lower() != "paragraph":
-                continue
-            if (nxt.block_type or "").lower() != "paragraph":
-                continue
-            prev_src = (prev.source_text or "").rstrip()
-            nxt_src = (nxt.source_text or "").lstrip()
+
+        def _is_page_header_block(b) -> bool:
+            if (b.block_type or "").lower() != "paragraph":
+                return False
+            src = (b.source_text or "").strip()
+            return bool(src) and _looks_like_page_header(src, 0.0)
+
+        def _continuation_candidate(prev_src: str, nxt_src: str) -> bool:
             if not prev_src or not nxt_src:
-                continue
-            # Skip already-special blocks.
-            if prev.id in skip_render_block_ids or nxt.id in skip_render_block_ids:
-                continue
-            if prev.id in cluster_skip_block_ids or nxt.id in cluster_skip_block_ids:
-                continue
+                return False
             last_char = prev_src[-1]
             first_char = nxt_src[:1]
-            # Prev must end mid-sentence (no terminator) and have a real
-            # word at the end (lowercase). Next must continue with a
-            # lowercase letter (English continuation, not a new sentence).
             if last_char in _terminator_chars:
-                continue
+                return False
             if not last_char.isalpha() or not last_char.islower():
-                continue
+                return False
             if not first_char.isalpha() or not first_char.islower():
-                continue
-            # Page-header look-alikes ("4.1 Gradient descent\n47") aren't
-            # legitimate continuation targets.
+                return False
             if _looks_like_page_header(prev_src, 0.0) or _looks_like_page_header(
                 nxt_src, 0.0
             ):
+                return False
+            return True
+
+        for i, prev in enumerate(blocks):
+            if (prev.block_type or "").lower() != "paragraph":
+                continue
+            if prev.id in skip_render_block_ids or prev.id in cluster_skip_block_ids:
+                continue
+            prev_src_full = (prev.source_text or "").rstrip()
+            if not prev_src_full or _looks_like_page_header(prev_src_full, 0.0):
+                continue
+            # Walk forward, skipping at most 2 page-header paragraphs
+            # (ord=207 "3.1 Transformer model 31" between ord=206 prev
+            # and ord=208 next — the parser slices the page boundary
+            # into a separate block but the prose flows across it).
+            j = i + 1
+            page_headers_skipped: list = []
+            nxt = None
+            while j < len(blocks) and j <= i + 3:
+                cand = blocks[j]
+                cand_btype = (cand.block_type or "").lower()
+                if _is_page_header_block(cand):
+                    page_headers_skipped.append(cand)
+                    j += 1
+                    continue
+                if cand_btype == "paragraph":
+                    nxt = cand
+                break
+            if nxt is None:
+                continue
+            if nxt.id in skip_render_block_ids or nxt.id in cluster_skip_block_ids:
+                continue
+            nxt_src_full = (nxt.source_text or "").lstrip()
+            if not _continuation_candidate(prev_src_full, nxt_src_full):
                 continue
             paragraph_continuation_of[nxt.id] = prev.id
             repair_stats["paragraph_continuations_merged"] += 1
             repair_details["paragraph_continuations_merged"].append(
-                {"prev_ord": prev.ordinal, "next_ord": nxt.ordinal}
+                {
+                    "prev_ord": prev.ordinal,
+                    "next_ord": nxt.ordinal,
+                    "page_headers_skipped": [b.ordinal for b in page_headers_skipped],
+                }
             )
+            # Suppress the page header block(s) so they don't render
+            # in the middle of the merged prose paragraph.
+            for ph in page_headers_skipped:
+                skip_render_block_ids.add(ph.id)
 
         # Build forward chains and skip continuation blocks during render.
         prev_to_next: dict[str, str] = {}
@@ -1802,6 +1877,66 @@ def main() -> int:
                 join_chain[blk.id] = chain
         block_by_id: dict[str, "Block"] = {b.id: b for b in blocks}
 
+        # Pre-pass: detect runs of consecutive numbered paragraphs that
+        # together form one ordered list. The parser emits each item
+        # ("1 Map text...", "2 Map tokens...", ...) as its own paragraph
+        # block; without grouping they render as separate <p> instead of
+        # one <ol>, which makes step lists harder to scan.
+        # Trigger: ≥3 paragraphs in a row whose first int is the
+        # consecutive sequence (1, 2, 3, ...). Anchor at the first
+        # block (head); subsequent items are skip-rendered and emit
+        # under the head's <ol>.
+        ordered_list_head_to_items: dict[str, list[str]] = {}
+        ordered_list_member_ids: set[str] = set()
+        i = 0
+        while i < len(blocks):
+            blk = blocks[i]
+            if (blk.block_type or "").lower() != "paragraph":
+                i += 1
+                continue
+            if blk.id in skip_render_block_ids or blk.id in cluster_skip_block_ids:
+                i += 1
+                continue
+            num = _ordered_item_number(blk.source_text or "")
+            if num != 1:
+                i += 1
+                continue
+            run = [blk]
+            expected = 2
+            j = i + 1
+            while j < len(blocks):
+                cand = blocks[j]
+                if (cand.block_type or "").lower() != "paragraph":
+                    break
+                if cand.id in skip_render_block_ids or cand.id in cluster_skip_block_ids:
+                    break
+                cnum = _ordered_item_number(cand.source_text or "")
+                if cnum is None or cnum != expected:
+                    break
+                run.append(cand)
+                expected += 1
+                j += 1
+            if len(run) >= 3:
+                head = run[0]
+                ordered_list_head_to_items[head.id] = [b.id for b in run]
+                for b in run[1:]:
+                    ordered_list_member_ids.add(b.id)
+                    skip_render_block_ids.add(b.id)
+                repair_stats.setdefault("ordered_lists_grouped", 0)
+                repair_stats["ordered_lists_grouped"] += 1
+                repair_stats.setdefault("ordered_list_items_absorbed", 0)
+                repair_stats["ordered_list_items_absorbed"] += len(run) - 1
+                repair_details.setdefault("ordered_lists_grouped", []).append(
+                    {
+                        "head_ord": head.ordinal,
+                        "tail_ord": run[-1].ordinal,
+                        "item_count": len(run),
+                    }
+                )
+                i = j
+                continue
+            i += 1
+
         # Pre-pass: detect IMAGE blocks whose bbox geographically contains
         # ≥2 paragraph blocks on the same page. These are sidebar callout
         # boxes that the parser misclassified as figures (Fig 4.2's "How
@@ -1816,8 +1951,18 @@ def main() -> int:
             if fig.id in sidebar_callout_ids:
                 continue
             # A figure with a parser-confirmed caption is always a real
-            # figure (the parser already proved the link).
-            if _linked_caption_anchor(fig) and fig.id not in rejected_linkage_ids:
+            # figure (the parser already proved the link). Stale
+            # linkages that point at body paragraphs (not real captions)
+            # don't count.
+            linked_anchor = _linked_caption_anchor(fig)
+            link_resolves = (
+                linked_anchor is not None
+                and linked_anchor in caption_by_anchor
+                and _is_real_caption_text(
+                    caption_by_anchor[linked_anchor].source_text or ""
+                )
+            )
+            if link_resolves and fig.id not in rejected_linkage_ids:
                 continue
             fig_page = _block_page(fig)
             fig_meta = fig.source_span_json or {}
@@ -2185,6 +2330,39 @@ def main() -> int:
                     merged_untranslated.extend(cont_untrans)
                 chunks = merged_chunks
                 untranslated = merged_untranslated
+            # Ordered-list rendering: a run of paragraphs that begin
+            # with consecutive integers ("1 Map text...", "2 Map tokens...")
+            # was grouped in the pre-pass. The head emits <ol> with each
+            # item's translated chunks; subsequent items are already in
+            # ``skip_render_block_ids`` and won't reach this branch.
+            if block.id in ordered_list_head_to_items and btype == "paragraph":
+                item_ids = ordered_list_head_to_items[block.id]
+                items: list[str] = []
+                merged_untrans: list[str] = list(untranslated)
+                for item_id in item_ids:
+                    item_blk = block_by_id.get(item_id)
+                    if item_blk is None:
+                        continue
+                    item_chunks, item_untrans = _block_zh_chunks(session, item_blk)
+                    item_text = "".join(c.strip() for c in item_chunks if c.strip())
+                    if not item_text:
+                        item_text = (item_blk.source_text or "").strip()
+                    # Strip the leading "1 " / "1. " / "1) " number — the
+                    # <ol> markers replace it.
+                    item_text = re.sub(r"^\s*\d+[.)]?\s+", "", item_text)
+                    if item_text:
+                        items.append(item_text)
+                    if item_blk.id != block.id:
+                        merged_untrans.extend(item_untrans)
+                if items:
+                    ol_html = _ordered_list_html(items)
+                    untrans_html = _untranslated_html(merged_untrans)
+                    combined = "\n".join(
+                        part for part in (ol_html, untrans_html) if part
+                    )
+                    rendered_blocks_html.append(combined)
+                    rendered_block_count += 1
+                    continue
             # Bullet-list rendering: when source has the "Term—Definition"
             # pattern repeated, render as <ul><li> instead of one merged
             # <p>. The translator joins both items into one Chinese
