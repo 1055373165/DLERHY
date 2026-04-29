@@ -615,13 +615,41 @@ def _block_lies_inside_figure(
 
 
 _ORPHAN_LEAD_PATTERN = re.compile(
-    r"^\s*(?:"
+    r"^\s*"
+    # Optional book-style callout label that the parser sliced off the
+    # opening of an inline NOTE/TIP/WARNING paragraph (e.g. "NOTE Many
+    # algorithms" + "can compute the final probabilities..."): allow
+    # the label to precede the usual sentence-lead words.
+    r"(?:(?:NOTE|TIP|WARNING|CAUTION|INFO|IMPORTANT|REMEMBER)\s+)?"
+    r"(?:"
     r"many\s|several\s|most\s|some\s|a\s+key\s|the\s+key\s|one\s+key\s|various\s"
     r"|although|however|while|whereas|because|since|when|if|but"
     r"|许多|一些|大多数|然而|虽然"
     r")",
     re.IGNORECASE,
 )
+
+
+_CALLOUT_LABEL_PATTERN = re.compile(
+    r"^\s*(?:NOTE|TIP|WARNING|CAUTION|INFO|IMPORTANT|REMEMBER)\s+\S",
+    re.IGNORECASE,
+)
+
+
+def _is_callout_lead_heading(text: str) -> bool:
+    """True for inline-callout headings like ``NOTE Many algorithms``.
+
+    Distinct from ``_looks_like_orphan_sentence_lead`` only in that the
+    callout label is the SIGNAL — the parser puts the label + first
+    couple of words on its own line as a "heading", and the rest of
+    the prose follows as a regular paragraph. Renderer needs to glue
+    the heading's translation BACK ONTO the body (so the "注意:"
+    prefix is preserved) instead of just skipping the heading.
+    """
+    s = (text or "").strip()
+    if not s or len(s) > 60:
+        return False
+    return bool(_CALLOUT_LABEL_PATTERN.match(s))
 
 
 def _looks_like_orphan_sentence_lead(text: str) -> bool:
@@ -1742,6 +1770,10 @@ def main() -> int:
         # Merge the fragment back into the next block so the body sentence
         # renders as one paragraph.
         merge_into_next: dict[str, str] = {}
+        # Subset of merge_into_next: callout-style headings (NOTE/TIP/...)
+        # whose translated text MUST be prepended to the next paragraph
+        # (so "注意：" stays in the rendered output) rather than discarded.
+        callout_heading_for_next: dict[str, str] = {}
         skip_render_block_ids: set[str] = set()
         block_index_by_ord = {b.ordinal: i for i, b in enumerate(blocks)}
         for i, blk in enumerate(blocks):
@@ -1776,6 +1808,12 @@ def main() -> int:
             merge_into_next[next_blk.id] = blk.id
             skip_render_block_ids.add(blk.id)
             repair_stats["heading_fragments_merged"] += 1
+            # Callout-prefix headings carry semantic content ("注意:")
+            # that must survive into the merged paragraph.
+            if _is_callout_lead_heading(src):
+                callout_heading_for_next[next_blk.id] = blk.id
+                repair_stats.setdefault("callout_headings_glued", 0)
+                repair_stats["callout_headings_glued"] += 1
 
         # Pre-pass: merge paragraphs that the parser fragmented mid-sentence.
         # Pattern: prev paragraph's source ends with a non-terminating
@@ -2314,6 +2352,20 @@ def main() -> int:
             # to glue the orphan translation back in — its meaning is already
             # in the follow-on chunks. Tracked via merge_into_next for
             # diagnostics and future logic, but no chunk surgery here.
+            # EXCEPT for callout-prefix headings ("NOTE Many algorithms"):
+            # the translator splits the label + first words off the body
+            # ("注意：多种算法" + "可以计算..."), and the body translation
+            # is missing the subject. Prepend the heading translation
+            # back onto the body so the rendered paragraph reads
+            # "注意：多种算法可以计算用于选择生成词汇的最终概率…".
+            if block.id in callout_heading_for_next:
+                heading_id = callout_heading_for_next[block.id]
+                heading_blk = block_by_id.get(heading_id)
+                if heading_blk is not None:
+                    h_chunks, h_untrans = _block_zh_chunks(session, heading_blk)
+                    if h_chunks:
+                        chunks = list(h_chunks) + list(chunks)
+                        untranslated = list(h_untrans) + list(untranslated)
             # Glue continuation paragraphs (parser split one paragraph
             # mid-sentence across blocks). The continuation block IDs
             # are already in skip_render_block_ids so they don't render
