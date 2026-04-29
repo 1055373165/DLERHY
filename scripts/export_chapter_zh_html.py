@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import html
 import io
+import json
 import logging
 import os
 import re
@@ -1248,6 +1249,39 @@ def main() -> int:
     image_skip_reasons: dict[str, int] = {}
     image_render_count = 0
     models_used = ""
+    # Closed-loop QA: each repair pass bumps a counter and (where useful)
+    # records the affected ordinals so the post-export verifier and the
+    # qa_report.json can show what the export actively fixed. Runtime
+    # also collects diagnostic warnings so a strict run can fail loudly.
+    repair_stats: dict[str, int] = {
+        "parser_caption_links": 0,
+        "fallback_caption_pairs": 0,
+        "rejected_caption_linkages": 0,
+        "sidebar_callouts_suppressed": 0,
+        "multi_panel_clusters": 0,
+        "multi_panel_panels_absorbed": 0,
+        "heading_fragments_merged": 0,
+        "paragraph_continuations_merged": 0,
+        "sidebar_misdetections_suppressed": 0,
+        "figure_bbox_synthesized": 0,
+        "listings_detected": 0,
+        "listings_body_blocks_absorbed": 0,
+        "bullet_lists_split": 0,
+        "figure_internal_suppressed": 0,
+    }
+    repair_details: dict[str, list] = {
+        k: [] for k in (
+            "fallback_caption_pairs",
+            "sidebar_callouts_suppressed",
+            "multi_panel_clusters",
+            "paragraph_continuations_merged",
+            "sidebar_misdetections_suppressed",
+            "figure_bbox_synthesized",
+            "listings_detected",
+            "bullet_lists_split",
+        )
+    }
+    qa_warnings: list[str] = []
     with session_scope(factory) as session:
         document = session.get(Document, DOCUMENT_ID)
         chapter = session.get(Chapter, CHAPTER_ID)
@@ -1302,8 +1336,10 @@ def main() -> int:
             cap_block = caption_by_anchor[linked_anchor]
             if not _is_real_caption_text(cap_block.source_text or ""):
                 rejected_linkage_ids.add(blk.id)
+                repair_stats["rejected_caption_linkages"] += 1
                 continue
             consumed_caption_ids.add(cap_block.id)
+            repair_stats["parser_caption_links"] += 1
 
         # Helper: page number of a block (first region's page).
         def _block_page(b) -> int | None:
@@ -1350,6 +1386,10 @@ def main() -> int:
             if best is not None:
                 fallback_caption_for_block[fig.id] = best
                 consumed_caption_ids.add(best.id)
+                repair_stats["fallback_caption_pairs"] += 1
+                repair_details["fallback_caption_pairs"].append(
+                    {"figure_ord": fig.ordinal, "caption_ord": best.ordinal, "page": fig_page, "ord_dist": best_dist}
+                )
 
         # Cluster state that's filled in after sandwich_ordinals exists
         # (because the multi-panel detection writes to both
@@ -1397,6 +1437,10 @@ def main() -> int:
                 # Multi-panel figure cluster: keep rendering, just no caption.
                 continue
             sidebar_callout_ids.add(fig.id)
+            repair_stats["sidebar_callouts_suppressed"] += 1
+            repair_details["sidebar_callouts_suppressed"].append(
+                {"figure_ord": fig.ordinal, "page": page, "rule": "isolated-vector-no-caption"}
+            )
 
         # Identify the narrow "figure → leaked label → caption" sandwich
         # pattern: a non-figure block whose ordinal sits between a figure and
@@ -1627,6 +1671,17 @@ def main() -> int:
             # Pre-bind the trailing caption to the master image.
             fallback_caption_for_block[master.id] = cap_block
             consumed_caption_ids.add(cap_block.id)
+            repair_stats["multi_panel_clusters"] += 1
+            repair_stats["multi_panel_panels_absorbed"] += len(cluster_blocks) - 1
+            repair_details["multi_panel_clusters"].append(
+                {
+                    "master_ord": master.ordinal,
+                    "caption_ord": cap_block.ordinal,
+                    "panel_count": len(cluster_blocks),
+                    "internal_text_blocks": [b.ordinal for b in cluster_text_blocks],
+                    "page": anchor_page,
+                }
+            )
             # Register the union bbox + sandwich for figure-internal
             # suppression of any blocks the cluster scan didn't catch.
             figure_bboxes_by_page.setdefault(anchor_page, []).append(union)
@@ -1676,6 +1731,7 @@ def main() -> int:
                 continue
             merge_into_next[next_blk.id] = blk.id
             skip_render_block_ids.add(blk.id)
+            repair_stats["heading_fragments_merged"] += 1
 
         # Pre-pass: merge paragraphs that the parser fragmented mid-sentence.
         # Pattern: prev paragraph's source ends with a non-terminating
@@ -1722,6 +1778,10 @@ def main() -> int:
             ):
                 continue
             paragraph_continuation_of[nxt.id] = prev.id
+            repair_stats["paragraph_continuations_merged"] += 1
+            repair_details["paragraph_continuations_merged"].append(
+                {"prev_ord": prev.ordinal, "next_ord": nxt.ordinal}
+            )
 
         # Build forward chains and skip continuation blocks during render.
         prev_to_next: dict[str, str] = {}
@@ -1931,8 +1991,22 @@ def main() -> int:
                                 sandwich_ordinals.add(lab.ordinal)
                             figure_bboxes_by_page.setdefault(fig_page, []).append(synth_bbox)
                             synthesized = True
+                            repair_stats["figure_bbox_synthesized"] += 1
+                            repair_details["figure_bbox_synthesized"].append(
+                                {
+                                    "figure_ord": fig.ordinal,
+                                    "caption_ord": paired.ordinal,
+                                    "page": fig_page,
+                                    "synth_bbox": [round(v, 2) for v in synth_bbox],
+                                    "absorbed_label_ords": [l.ordinal for l in suppress_labels],
+                                }
+                            )
                 if not synthesized:
                     sidebar_callout_ids.add(fig.id)
+                    repair_stats["sidebar_misdetections_suppressed"] += 1
+                    repair_details["sidebar_misdetections_suppressed"].append(
+                        {"figure_ord": fig.ordinal, "page": fig_page, "contained_paragraphs": contained}
+                    )
                     # Free up any caption paired by fallback so it doesn't
                     # silently disappear with the suppressed sidebar.
                     if fig.id in fallback_caption_for_block:
@@ -2020,6 +2094,15 @@ def main() -> int:
                 body_sources.append(nb.source_text or "")
                 listing_body_ids.add(nb.id)
             listing_body_source_by_header[blk.id] = body_sources
+            repair_stats["listings_detected"] += 1
+            repair_stats["listings_body_blocks_absorbed"] += len(body_sources)
+            repair_details["listings_detected"].append(
+                {
+                    "header_ord": blk.ordinal,
+                    "body_block_count": len(body_sources),
+                    "header_text": (blk.source_text or "")[:80],
+                }
+            )
 
         for block in blocks:
             btype = (block.block_type or "").lower()
@@ -2043,6 +2126,7 @@ def main() -> int:
                 and _block_lies_inside_figure(block, figure_bboxes_by_page)
             ):
                 figure_internal_suppressed += 1
+                repair_stats["figure_internal_suppressed"] += 1
                 continue
             # Skip text-heavy sidebar callouts that the parser misclassified
             # as figures (e.g. "How do you handle nonsmooth losses?"). The
@@ -2116,6 +2200,10 @@ def main() -> int:
                     combined = "\n".join(part for part in (bullet_html, untrans_html) if part)
                     rendered_blocks_html.append(combined)
                     rendered_block_count += 1
+                    repair_stats["bullet_lists_split"] += 1
+                    repair_details["bullet_lists_split"].append(
+                        {"source_ord": block.ordinal, "item_count": len(items)}
+                    )
                     continue
             image_data_uri = None
             image_alt: str | None = None
@@ -2193,8 +2281,46 @@ def main() -> int:
         body="\n".join(rendered_blocks_html),
     )
     OUTPUT_PATH.write_text(output, encoding="utf-8")
+
+    # Strict QA classifies each non-trivial repair as a "warning" so a
+    # caller can grep the report; image_skip_reasons becomes an "error"
+    # that fails the strict run because a missing figure means the
+    # reader sees a placeholder gap instead of the real artwork.
+    qa_errors: list[str] = []
+    if image_skip_reasons:
+        for reason, count in sorted(image_skip_reasons.items(), key=lambda kv: -kv[1]):
+            qa_errors.append(f"image_skip[{reason}]={count}")
+    if untranslated_block_count > 0 and untranslated_block_count > total_blocks * 0.25:
+        qa_warnings.append(
+            f"high_untranslated_ratio: {untranslated_block_count}/{total_blocks}"
+        )
+
+    qa_report = {
+        "output_path": str(OUTPUT_PATH),
+        "chapter": {"label": CHAPTER_LABEL, "title": CHAPTER_TITLE},
+        "ordinal_range": [ORDINAL_LO, ORDINAL_HI],
+        "totals": {
+            "total_blocks": total_blocks,
+            "rendered_blocks": rendered_block_count,
+            "untranslated_blocks": untranslated_block_count,
+            "images_rendered": image_render_count,
+            "images_skipped": sum(image_skip_reasons.values()),
+        },
+        "repair_stats": repair_stats,
+        "repair_details": repair_details,
+        "image_skip_reasons": image_skip_reasons,
+        "warnings": qa_warnings,
+        "errors": qa_errors,
+        "models_used": models_used,
+    }
+    qa_path = OUTPUT_PATH.with_name(OUTPUT_PATH.stem + ".qa_report.json")
+    qa_path.write_text(
+        json.dumps(qa_report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
     summary_lines = [
         f"[export] wrote {OUTPUT_PATH}",
+        f"[export] wrote {qa_path}",
         f"[export] rendered_blocks={rendered_block_count} "
         f"skipped_blocks={untranslated_block_count} "
         f"total_blocks={total_blocks} "
@@ -2203,13 +2329,29 @@ def main() -> int:
         f"images_skipped={sum(image_skip_reasons.values())} "
         f"dpi=adaptive[{IMAGE_MIN_DPI}-{IMAGE_MAX_DPI}] "
         f"max_pixels={IMAGE_TARGET_MAX_PIXELS}",
+        "[export] repair_stats: "
+        + ", ".join(f"{k}={v}" for k, v in repair_stats.items() if v),
     ]
     if image_skip_reasons:
         for reason, count in sorted(
             image_skip_reasons.items(), key=lambda kv: -kv[1]
         ):
             summary_lines.append(f"  - skip[{reason}]={count}")
+    if qa_warnings:
+        for w in qa_warnings:
+            summary_lines.append(f"[qa-warn] {w}")
+    if qa_errors:
+        for e in qa_errors:
+            summary_lines.append(f"[qa-error] {e}")
     print("\n".join(summary_lines), flush=True)
+
+    # QA_STRICT=1 surfaces any error from `qa_errors` (currently driven
+    # by image_skip_reasons) as a non-zero exit so the finalize script
+    # can stop the pipeline before publishing a degraded export.
+    qa_strict = os.getenv("QA_STRICT", "0").strip() in {"1", "true", "yes", "on"}
+    if qa_strict and qa_errors:
+        print("[qa] STRICT MODE: failing due to errors above", flush=True)
+        return 1
     return 0
 
 

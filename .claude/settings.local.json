@@ -37,7 +37,11 @@
       "Bash(docker exec book-agent-postgres:*)",
       "Bash(awk *)",
       "Bash(bash scripts/export_chapter4.sh)",
-      "Bash(bash scripts/export_chapter3.sh)"
+      "Bash(bash scripts/export_chapter3.sh)",
+      "Bash(bash /Users/smy/project/book-agent/scripts/qa_run_chapter.sh ch4)",
+      "Bash(bash /Users/smy/project/book-agent/scripts/qa_run_chapter.sh ch3)",
+      "Bash(QA_STRICT=1 bash /Users/smy/project/book-agent/scripts/qa_run_chapter.sh ch4)",
+      "Bash(echo \"exit_code=$?\")"
     ]
   }
 }

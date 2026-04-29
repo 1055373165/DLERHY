@@ -23,9 +23,5 @@ CHAPTER_ID="$CHAPTER_ID" ORDINAL_LO="$ORDINAL_LO" ORDINAL_HI="$ORDINAL_HI" \
   .venv/bin/python scripts/translate_orphan_sentences.py || true
 
 echo
-echo "==> [3/4] export chapter 4 HTML"
-bash scripts/export_chapter4.sh
-
-echo
-echo "==> [4/4] verify chapter 4 export"
-.venv/bin/python scripts/verify_ch4_export.py
+echo "==> [3-4/4] export + verify chapter 4 (closed-loop QA)"
+bash scripts/qa_run_chapter.sh ch4

@@ -14,6 +14,7 @@ Exit code: 0 if all checks pass, 1 if any fails.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -178,6 +179,26 @@ def main() -> int:
     print("=== figcaptions inventory ===")
     for cap in figcap_texts:
         print(f"  {cap[:120]}")
+
+    report = {
+        "html_path": str(HTML_PATH),
+        "all_ok": all_ok,
+        "structure": {
+            "h2": len(head_texts),
+            "figcaption": len(figcap_texts),
+            "p": len(para_norm),
+        },
+        "checks": [
+            {"name": name, "ok": ok, "detail": detail}
+            for name, ok, detail in checks
+        ],
+        "figcaptions": figcap_texts,
+    }
+    report_path = HTML_PATH.with_name(HTML_PATH.stem + ".verify_report.json")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"[verify] wrote {report_path}")
 
     return 0 if all_ok else 1
 
