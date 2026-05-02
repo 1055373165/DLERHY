@@ -153,7 +153,8 @@ PIDS=()
 cleanup() {
     echo ""
     info "正在停止所有服务..."
-    for pid in "${PIDS[@]}"; do
+    # bash 3.2 + set -u: 空数组展开会报 unbound，使用 ${arr[@]+...} 防御
+    for pid in ${PIDS[@]+"${PIDS[@]}"}; do
         kill "$pid" 2>/dev/null || true
     done
     wait 2>/dev/null || true
