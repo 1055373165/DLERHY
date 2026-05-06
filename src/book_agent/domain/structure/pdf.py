@@ -8062,7 +8062,18 @@ class PdfStructureRecoveryService:
                 has_started_from_candidate = True
 
             if current_title and block.role == "heading" and _titles_overlap(heading_title, current_title):
-                current_title = heading_title
+                # Preserve the outline-derived chapter-number prefix when the
+                # on-page heading is just the title body (e.g. outline says
+                # "1 Big picture: What are LLMs?" but the heading on page is
+                # "Big picture: What are LLMs?"). Losing the number prefix
+                # later breaks _merge_outlined_book_auxiliary_chapters which
+                # uses _extract_book_main_chapter_number(title) to detect
+                # main chapters and would otherwise fold them into the
+                # previous frontmatter group.
+                outline_has_number = _extract_book_main_chapter_number(current_title) is not None
+                heading_has_number = _extract_book_main_chapter_number(heading_title) is not None
+                if not (outline_has_number and not heading_has_number):
+                    current_title = heading_title
             elif current_title is None and block.role == "heading":
                 current_title = heading_title
 

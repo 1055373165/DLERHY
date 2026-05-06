@@ -233,14 +233,22 @@ def clean_text(value: str | None) -> str:
 @dataclass
 class RenderConfig:
     document_id: str
-    chapter_id: str
-    ordinal_lo: int
-    ordinal_hi: int
     output_path: Path
     db_url: str = DEFAULT_DB_URL
     title: str = "Bilingual export"
     subtitle: str = ""
     author: str = ""
+    # Two scoping modes (mutually exclusive — chapter_ids takes precedence):
+    #   1. chapter_ids: render every block in each listed chapter, in
+    #      chapter-creation order (preferred when the parser produced
+    #      proper chapter boundaries).
+    #   2. chapter_id + ordinal_lo + ordinal_hi: render block-ordinal
+    #      slice within a single chapter (legacy mode for partially-
+    #      mis-parsed documents where chapter boundaries are wrong).
+    chapter_ids: list[str] | None = None
+    chapter_id: str | None = None
+    ordinal_lo: int | None = None
+    ordinal_hi: int | None = None
 
 
 @dataclass
@@ -258,6 +266,35 @@ class RenderStats:
 
 
 def fetch_blocks(conn, cfg: RenderConfig):
+    """Fetch blocks for the configured scope.
+
+    Multi-chapter mode (preferred): ``cfg.chapter_ids`` lists chapters in
+    desired emission order; we fetch each chapter's blocks ordered by
+    block ordinal. Single-chapter slice mode is preserved for backward
+    compatibility with documents whose parser-produced chapter boundaries
+    are wrong.
+    """
+    if cfg.chapter_ids:
+        return conn.execute(
+            text(
+                """
+                SELECT
+                  b.id::text AS id,
+                  b.ordinal,
+                  b.block_type,
+                  b.source_text,
+                  b.normalized_text,
+                  b.source_anchor,
+                  c.ordinal AS chapter_ordinal,
+                  c.title_src AS chapter_title
+                FROM blocks b
+                JOIN chapters c ON b.chapter_id = c.id
+                WHERE b.chapter_id = ANY(:cids)
+                ORDER BY c.ordinal, b.ordinal
+                """
+            ),
+            {"cids": cfg.chapter_ids},
+        ).fetchall()
     return conn.execute(
         text(
             """
@@ -267,7 +304,9 @@ def fetch_blocks(conn, cfg: RenderConfig):
               b.block_type,
               b.source_text,
               b.normalized_text,
-              b.source_anchor
+              b.source_anchor,
+              NULL::int AS chapter_ordinal,
+              NULL::text AS chapter_title
             FROM blocks b
             WHERE b.chapter_id = :cid
               AND b.ordinal BETWEEN :lo AND :hi
@@ -481,11 +520,17 @@ def render(cfg: RenderConfig) -> RenderStats:
     stats = RenderStats()
     engine = create_engine(cfg.db_url)
 
+    if cfg.chapter_ids:
+        scope_line = f"chapter_ids: {cfg.chapter_ids}"
+    else:
+        scope_line = (
+            f"chapter_id: {cfg.chapter_id}\n"
+            f"ordinal_range: [{cfg.ordinal_lo}, {cfg.ordinal_hi}]"
+        )
     front = (
         "---\n"
         f"document_id: {cfg.document_id}\n"
-        f"chapter_id: {cfg.chapter_id}\n"
-        f"ordinal_range: [{cfg.ordinal_lo}, {cfg.ordinal_hi}]\n"
+        f"{scope_line}\n"
         f"rendered_at: {datetime.now(timezone.utc).isoformat()}\n"
         "renderer: scripts/render_bilingual_subset.py\n"
         "---\n\n"
@@ -504,9 +549,24 @@ def render(cfg: RenderConfig) -> RenderStats:
     with engine.connect() as conn:
         blocks = fetch_blocks(conn, cfg)
         last_heading_norm: str | None = None
+        prev_chapter_ordinal: int | None = None
 
-        for blk_id, ordinal, btype, source_text, normalized_text, _anchor in blocks:
+        for row in blocks:
+            blk_id, ordinal, btype, source_text, normalized_text, _anchor = row[:6]
+            chapter_ordinal = row[6] if len(row) > 6 else None
+            chapter_title = row[7] if len(row) > 7 else None
+
             stats.blocks_seen += 1
+
+            # Emit a chapter banner the first time we see each chapter, so the
+            # final document has clear top-level structure when scoped by
+            # multiple chapter_ids.
+            if chapter_ordinal is not None and chapter_ordinal != prev_chapter_ordinal:
+                title_clean = re.sub(r"\s+", " ", (chapter_title or "").strip())
+                if title_clean:
+                    sections.append(f"## {title_clean}\n\n")
+                prev_chapter_ordinal = chapter_ordinal
+                last_heading_norm = None  # don't dedupe across chapter boundaries
 
             run_id = fetch_run_for_block(conn, blk_id)
             sentences = fetch_sentences(conn, blk_id)
@@ -555,11 +615,14 @@ def render(cfg: RenderConfig) -> RenderStats:
 
 
 def main() -> int:
+    # Default invocation: render the v2 document (post-parser-fix) for
+    # book chapters 1 + 2 using the chapter_ids scoping mode.
     cfg = RenderConfig(
         document_id="d71027f0-6537-58d1-8e47-42ef2834fca4",
-        chapter_id="de30483c-ec5f-5d3d-a728-69de943db663",
-        ordinal_lo=34,
-        ordinal_hi=195,
+        chapter_ids=[
+            "b13f7481-d2af-5629-bb8f-52d9c2b9abc9",  # Ch.1 — 1 Big picture: What are LLMs?
+            "732562f6-1d41-5dd6-9520-7fe7068fa760",  # Ch.2 — 2 Tokenizers
+        ],
         output_path=ROOT
         / "artifacts"
         / "exports"
