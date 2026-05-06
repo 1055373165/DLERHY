@@ -60,18 +60,35 @@ _PAGE_HEADER_WITH_CHAPTER = re.compile(
 _TRAILING_PAGE_NUMBER = re.compile(r"\s+\d{1,3}\s*$")
 
 
+# F2 extended: also detect the section-header form used in book interiors:
+#   "1.2 What you will learn 5"
+#   "2.3 Tokenization and LLM capabilities 25"
+# (section-number + section-title + trailing page-number)
+_SECTION_RUNNING_HEADER = re.compile(
+    r"^\s*\d+(?:\.\d+){1,3}\s+\S.+\s+\d{1,3}\s*$"
+)
+
+
 def is_page_running_header(text_value: str) -> bool:
-    """True if a paragraph block is a PDF page running-header artifact (F2)."""
+    """True if a block is a PDF page running-header artifact (F2 / F2-ext).
+
+    Now recognises three forms:
+      1. Lone page number ("14")
+      2. "<page-num> CHAPTER <n> <chapter title...>"
+      3. "<section-num> <section title> <page-num>" — common as a footnote-
+         typed block when the PDF parser confuses the running header with
+         a footnote line.
+    """
     if not text_value:
         return False
     stripped = text_value.strip()
     if _PAGE_NUMBER_ONLY.match(stripped):
         return True
     if _PAGE_HEADER_WITH_CHAPTER.search(stripped):
-        # Allow if there's substantial content after the running-header line.
-        # Real chapter content would be much longer than the running-header line.
         lines = [ln for ln in stripped.splitlines() if ln.strip()]
         return len(lines) <= 3
+    if _SECTION_RUNNING_HEADER.match(stripped):
+        return True
     return False
 
 
@@ -172,6 +189,106 @@ _LEGITIMATE_HEADING_BODY_FIRST_WORDS = {
 }
 
 
+# F7: NOTE / TIP / WARNING callouts mis-classified as headings.
+# The parser sometimes splits a callout block of the form
+#     "NOTE Vision and language are not the only options..."
+# into two blocks:
+#     heading   : "NOTE Vision and language"
+#     paragraph : "are not the only options for generative AI..."
+# Detect the heading half and merge with the next paragraph.
+_NOTE_HEADING_PREFIXES = ("NOTE ", "TIP ", "WARNING ", "CAUTION ", "IMPORTANT ", "DEFINITION ", "EXAMPLE ")
+
+
+def is_note_callout_heading(heading_text: str) -> bool:
+    """True if a heading-typed block looks like the start of a NOTE/TIP/
+    WARNING callout that the parser incorrectly split (F7).
+
+    The label must be all-uppercase in the original text — "Note that..."
+    is just normal prose and should NOT be merged.
+    """
+    if not heading_text:
+        return False
+    stripped = heading_text.lstrip()
+    return any(stripped.startswith(prefix) for prefix in _NOTE_HEADING_PREFIXES)
+
+
+# F8: paragraph blocks that are actually a dump of figure / diagram labels.
+# Diagrams produce label sequences with no grammatical glue:
+#   "Some examples of generative AI include are products built using
+#    ChatGPT Gemini Copilot Claude which use techniques from Artificial
+#    intelligence Large language models Machine learning Natural language
+#    processing is the input and output from are built using Deep
+#    learning Text data Transformers"
+# Signature: many capitalised noun phrases interleaved with stop-word
+# fragments ("are", "is", "from", "using"), and very few sentence
+# terminators relative to length.
+def is_diagram_label_dump(text_value: str) -> bool:
+    """True if a paragraph block is a dump of diagram labels rather than
+    real prose (F8). Conservative: only triggers on long-ish text that
+    has unusually few sentence terminators.
+    """
+    if not text_value:
+        return False
+    stripped = text_value.strip()
+    if len(stripped) < 80:
+        return False
+    # Real prose averages a sentence terminator (`.`, `?`, `!`) every ~120
+    # chars. Diagram label dumps tend to have zero or one for hundreds of
+    # chars.
+    terminators = sum(stripped.count(c) for c in ".!?")
+    if terminators >= max(1, len(stripped) // 120):
+        return False
+    # Also require a high density of capitalised tokens (≥ 25% of tokens
+    # start with an uppercase letter) — diagram boxes are mostly proper
+    # nouns / class names.
+    tokens = re.findall(r"[A-Za-z][A-Za-z]+", stripped)
+    if not tokens:
+        return False
+    capitalised = sum(1 for t in tokens if t[:1].isupper())
+    return (capitalised / len(tokens)) >= 0.25
+
+
+# F9: split a paragraph block into multiple visual paragraphs by detecting
+# "short-tail-line + period" boundaries in the source text.
+#
+# When a PDF parser flattens a multi-paragraph block into one, the original
+# line wrapping is preserved (newlines are kept) but paragraph indentation
+# is lost. The diagnostic signal: a line that ends with sentence-terminal
+# punctuation AND is significantly shorter than the typical line length is
+# almost always the last line of a visual paragraph in justified-text PDFs.
+def split_into_visual_paragraphs(source_text: str) -> list[str]:
+    """Return a list of visual-paragraph chunks from raw source_text (F9).
+
+    A single-paragraph block returns a one-element list; a multi-paragraph
+    block returns the chunks in order. Each chunk is the joined text of
+    the contained lines (with single spaces).
+    """
+    if not source_text:
+        return []
+    lines = source_text.split("\n")
+    # Drop empty and pure-whitespace lines from consideration but keep
+    # them as boundary signals.
+    real_lines = [ln.strip() for ln in lines if ln.strip()]
+    if len(real_lines) <= 1:
+        return [source_text.strip()] if source_text.strip() else []
+    median = sorted(len(ln) for ln in real_lines)[len(real_lines) // 2]
+    short_threshold = max(20, int(median * 0.55))
+
+    chunks: list[list[str]] = [[]]
+    for idx, ln in enumerate(real_lines):
+        chunks[-1].append(ln)
+        is_last = idx == len(real_lines) - 1
+        if is_last:
+            continue
+        ends_terminal = ln.endswith((".", "!", "?", ".”", '."', ".)"))
+        if ends_terminal and len(ln) <= short_threshold:
+            # Open a new paragraph chunk after this short-tail line.
+            chunks.append([])
+
+    paragraphs = [" ".join(c).strip() for c in chunks if c]
+    return [p for p in paragraphs if p]
+
+
 def looks_like_broken_list_item(heading_text: str) -> bool:
     """True if a heading looks like '4 Sincea' / '5 Isit an ethical' (F6).
 
@@ -257,11 +374,17 @@ class RenderStats:
     blocks_emitted: int = 0
     with_translation: int = 0
     no_translation: int = 0
-    page_headers_filtered: int = 0  # F2
+    page_headers_filtered: int = 0  # F2 (paragraph + footnote-typed page hdrs)
     heading_echoes_filtered: int = 0  # F3
     meta_commentary_stripped: int = 0  # F4
     code_to_prose_demotions: int = 0  # F5
     broken_heading_demotions: int = 0  # F6
+    note_callouts_merged: int = 0  # F7
+    diagram_label_dumps_filtered: int = 0  # F8
+    paragraphs_split_visually: int = 0  # F9 (1 increment per *added* split)
+    images_linked: int = 0  # F10
+    images_missing_asset: int = 0  # F10 (placeholder retained)
+    merged_targets_split: int = 0  # F11 (merged_sentence redistributed)
     notes: list[str] = field(default_factory=list)
 
 
@@ -412,6 +535,102 @@ def fetch_targets(conn, run_id: str):
     return {r[0]: r for r in rows}
 
 
+# F11: split a single `merged_sentence` translation into per-sentence
+# chunks. The translator sometimes returns one big paragraph as a single
+# segment (segment_type='merged_sentence') instead of one segment per
+# source sentence. When that happens — and we want to render with
+# paragraph splits (F9) or sentence-aligned interleave — the ZH text
+# needs to be redistributed across source sentence ordinals so each
+# F9 chunk carries its own translated content.
+_CHINESE_SENTENCE_BOUNDARY = re.compile(r"(?<=[。！？])(?=[^」』）)\s])|(?<=[。！？][」』）)])")
+
+
+def split_chinese_sentences(text_zh: str) -> list[str]:
+    """Split a Chinese paragraph into sentence-level chunks.
+
+    Splits at full-width sentence terminators (。！？) including those
+    followed by a closing quote/bracket. Keeps the terminator with the
+    preceding sentence.
+    """
+    if not text_zh:
+        return []
+    parts = _CHINESE_SENTENCE_BOUNDARY.split(text_zh.strip())
+    return [p.strip() for p in parts if p.strip()]
+
+
+def expand_merged_targets(
+    targets: dict, sentences: list
+) -> dict:
+    """If `targets` is a single merged_sentence covering multiple source
+    sentences, split it on Chinese sentence terminators and pair with
+    sentence ordinals 1..N.
+
+    Returns a new dict keyed by sentence.ordinal_in_block. If splitting
+    is not appropriate (counts don't match, etc.), returns the original
+    dict unchanged.
+    """
+    if not targets or len(targets) != 1 or len(sentences) <= 1:
+        return targets
+    only_target = next(iter(targets.values()))
+    text_zh = only_target[1] if only_target else None
+    if not text_zh:
+        return targets
+    zh_parts = split_chinese_sentences(text_zh)
+    # Only redistribute when the split produces exactly one chunk per
+    # source sentence; otherwise we'd be making up alignments.
+    if len(zh_parts) != len(sentences):
+        return targets
+    new_targets: dict = {}
+    for (s_ord, *_), zh in zip(sentences, zh_parts):
+        # Reuse the original tuple shape but substitute the per-sentence
+        # ZH text in slot 1.
+        cloned = list(only_target)
+        cloned[1] = zh
+        new_targets[s_ord] = tuple(cloned)
+    return new_targets
+
+
+# Image-asset linking (F10).
+#   For figure/image-typed blocks, look up the extracted PNG/JPG asset in
+#   `document_images` and emit a Markdown image reference if the file
+#   actually exists on disk. Many entries are "logical_only" — the parser
+#   recorded the bbox but never wrote a PNG; for those we keep the existing
+#   placeholder so the reader knows a figure was here.
+_ARTIFACTS_ROOT = ROOT / "artifacts"
+
+
+def fetch_image_for_block(conn, block_id: str) -> tuple[str, str | None] | None:
+    """Return (relative_md_path, alt_or_ocr_text) if an image asset exists
+    on disk for this block, else None.
+    """
+    rows = conn.execute(
+        text(
+            """
+            SELECT storage_path, alt_text, ocr_text, image_type
+            FROM document_images
+            WHERE block_id = :bid
+            ORDER BY created_at
+            """
+        ),
+        {"bid": block_id},
+    ).fetchall()
+    for storage_path, alt_text, ocr_text, image_type in rows:
+        if not storage_path:
+            continue
+        full_path = _ARTIFACTS_ROOT / storage_path
+        if not full_path.exists():
+            continue
+        # Use a path relative to the rendered Markdown's location.
+        # Renderer writes into artifacts/exports/<doc_id>/, and the image
+        # lives at artifacts/document-images/<doc_id>/<file>.png. Using a
+        # `../../document-images/...` relative reference keeps the artifact
+        # portable when the artifacts/ directory is moved as a unit.
+        rel_path = "../../" + storage_path
+        alt = (alt_text or ocr_text or image_type or "figure").strip()
+        return rel_path, alt
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Renderer.
 # ---------------------------------------------------------------------------
@@ -424,11 +643,17 @@ def render_block(
     targets,
     stats: RenderStats,
     last_heading_norm: str | None,
-) -> tuple[list[str], str | None]:
+    pending_note: dict | None = None,
+    image_md: str | None = None,
+) -> tuple[list[str], str | None, dict | None]:
     """Render one block to MD lines.
 
-    Returns (lines, updated_last_heading_norm).
-    Empty list ⇒ block was filtered out and produced nothing.
+    Returns (lines, updated_last_heading_norm, pending_note).
+    pending_note carries a NOTE/TIP/WARNING heading that the caller asked
+    us to merge into the next paragraph (F7); when set, the heading itself
+    has not yet been emitted and we will fold it into this block.
+
+    Empty `lines` ⇒ block was filtered out and produced nothing.
     """
     lines: list[str] = []
 
@@ -437,10 +662,10 @@ def render_block(
     canonical_source = clean_text(source_normalized) or clean_text(source_raw).replace("\n", " ")
     canonical_source = re.sub(r"\s+", " ", canonical_source).strip()
 
-    if not canonical_source:
-        return lines, last_heading_norm
+    if not canonical_source and btype not in {"figure", "image"}:
+        return lines, last_heading_norm, pending_note
 
-    # Block-type re-routing (F5, F6).
+    # Block-type re-routing (F5, F6, F8).
     effective_type = btype
     if btype == "code" and is_actually_prose(source_raw or canonical_source):
         effective_type = "paragraph"
@@ -449,29 +674,19 @@ def render_block(
         effective_type = "paragraph"
         stats.broken_heading_demotions += 1
 
-    # F2: drop page running-headers tagged as paragraphs.
-    if effective_type == "paragraph" and is_page_running_header(source_raw or canonical_source):
+    # F2 / F2-ext: drop page running-headers tagged as paragraphs OR footnotes.
+    if effective_type in {"paragraph", "footnote"} and is_page_running_header(
+        source_raw or canonical_source
+    ):
         stats.page_headers_filtered += 1
-        return lines, last_heading_norm
+        return lines, last_heading_norm, pending_note
 
-    # F3: heading echoes from page running-headers — strip trailing page
-    # number; if the resulting heading is identical to the previous one,
-    # drop it.
-    if effective_type == "heading":
-        de_paged = strip_trailing_page_number_echo(canonical_source)
-        normalized_for_dedupe = re.sub(r"\s+", " ", de_paged).strip().lower()
-        if last_heading_norm and normalized_for_dedupe == last_heading_norm:
-            stats.heading_echoes_filtered += 1
-            return lines, last_heading_norm
-        canonical_source = de_paged
-        new_last_heading = normalized_for_dedupe
-    else:
-        new_last_heading = last_heading_norm
+    # F8: drop diagram label dumps (paragraphs with no real grammar).
+    if effective_type == "paragraph" and is_diagram_label_dump(canonical_source):
+        stats.diagram_label_dumps_filtered += 1
+        return lines, last_heading_norm, pending_note
 
     # ZH text from sentence-aligned targets, with F4 cleanup.
-    # Translations are always treated as inline text — internal whitespace
-    # is collapsed so that an embedded newline can never escape a
-    # blockquote (footnote/caption) or shatter a paragraph.
     def zh_for_sentence(s_ord: int) -> str:
         tgt = targets.get(s_ord) if targets else None
         if not tgt or not tgt[1]:
@@ -482,10 +697,35 @@ def render_block(
             stats.meta_commentary_stripped += 1
         return re.sub(r"\s+", " ", after).strip()
 
+    # F3: heading echoes from page running-headers — strip trailing page
+    # number; if the resulting heading is identical to the previous one,
+    # drop it.
     if effective_type == "heading":
+        # F7: NOTE/TIP/WARNING callouts get merged with the next paragraph;
+        # signal the caller and emit nothing for this block.
+        if is_note_callout_heading(canonical_source):
+            note_zh = ""
+            for s_ord, _src, _ in sentences:
+                cand = zh_for_sentence(s_ord)
+                if cand:
+                    note_zh = cand
+                    break
+            return (
+                lines,
+                last_heading_norm,
+                {"en_title": canonical_source, "zh_title": note_zh},
+            )
+
+        de_paged = strip_trailing_page_number_echo(canonical_source)
+        normalized_for_dedupe = re.sub(r"\s+", " ", de_paged).strip().lower()
+        if last_heading_norm and normalized_for_dedupe == last_heading_norm:
+            stats.heading_echoes_filtered += 1
+            return lines, last_heading_norm, pending_note
+        canonical_source = de_paged
+        new_last_heading = normalized_for_dedupe
+
         level = heading_level(canonical_source)
         hashes = "#" * level
-        # First non-empty translated sentence wins for heading.
         zh = ""
         for s_ord, _src, _ in sentences:
             zh_candidate = zh_for_sentence(s_ord)
@@ -497,27 +737,31 @@ def render_block(
             lines.append(f"{hashes} {zh}\n\n")
         else:
             lines.append("\n")
-        return lines, new_last_heading
+        return lines, new_last_heading, pending_note
 
     if effective_type in {"figure", "image"}:
-        # Don't emit anything for empty figure placeholders — they're
-        # noise without the actual image asset.
-        if not canonical_source:
-            return lines, last_heading_norm
-        lines.append(f"> _[图/{effective_type}]: {canonical_source[:160]}_\n\n")
-        return lines, last_heading_norm
+        # F10: emit a real Markdown image reference if an asset is on disk;
+        # otherwise keep the placeholder so readers know a figure was here.
+        alt = canonical_source[:120] if canonical_source else effective_type
+        if image_md:
+            stats.images_linked += 1
+            lines.append(image_md + "\n\n")
+        else:
+            stats.images_missing_asset += 1
+            lines.append(f"> _[图/{effective_type} (asset missing)]: {alt}_\n\n")
+        return lines, last_heading_norm, pending_note
 
     if effective_type == "table":
         lines.append(f"> _[表/table]: {canonical_source[:200]}_\n\n")
-        return lines, last_heading_norm
+        return lines, last_heading_norm, pending_note
 
     if effective_type == "equation":
         lines.append(f"$$\n{canonical_source}\n$$\n\n")
-        return lines, last_heading_norm
+        return lines, last_heading_norm, pending_note
 
     if effective_type == "code":
         lines.append("```\n" + (source_raw or canonical_source).strip() + "\n```\n\n")
-        return lines, last_heading_norm
+        return lines, last_heading_norm, pending_note
 
     if effective_type == "caption":
         en = canonical_source
@@ -528,21 +772,87 @@ def render_block(
             lines.append(f"> _图说 (ZH):_ {' '.join(zh_parts)}\n\n")
         else:
             lines.append("\n")
-        return lines, last_heading_norm
+        return lines, last_heading_norm, pending_note
 
-    # paragraph / list_item / footnote / default — interleave per sentence.
-    en_parts: list[str] = []
-    zh_parts: list[str] = []
+    # paragraph / list_item / footnote / default.
+    # F9: split paragraph into visual paragraphs by short-tail-line detection.
+    if effective_type == "paragraph":
+        chunks = split_into_visual_paragraphs(source_raw or canonical_source) if source_raw else [canonical_source]
+        if not chunks:
+            return lines, last_heading_norm, pending_note
+        if len(chunks) > 1:
+            stats.paragraphs_split_visually += len(chunks) - 1
+
+        # Map sentences to chunks via prefix-match against each chunk.
+        # Each sentence must align with exactly one chunk; un-aligned
+        # sentences fall through to the last chunk.
+        sentence_buckets: list[list[tuple[int, str]]] = [[] for _ in chunks]
+        normalized_chunks = [re.sub(r"\s+", " ", c).strip() for c in chunks]
+        cursor = 0
+        for s_ord, s_src, _ in sentences:
+            s_clean = clean_text(s_src)
+            if not s_clean:
+                continue
+            s_norm = re.sub(r"\s+", " ", s_clean).strip()
+            placed = False
+            # Search forward from current cursor — sentences are ordered.
+            for idx in range(cursor, len(normalized_chunks)):
+                if s_norm and s_norm[:40] in normalized_chunks[idx]:
+                    sentence_buckets[idx].append((s_ord, s_clean))
+                    cursor = idx
+                    placed = True
+                    break
+            if not placed:
+                sentence_buckets[cursor].append((s_ord, s_clean))
+
+        # F7: prepend NOTE banner to the FIRST emitted chunk if present.
+        for idx, bucket in enumerate(sentence_buckets):
+            if not bucket and idx >= len(chunks):
+                continue
+            en_parts = [s for _, s in bucket]
+            zh_parts = [zh_for_sentence(o) for o, _ in bucket]
+            zh_parts = [p for p in zh_parts if p]
+            # If sentence buckets are empty for this chunk (no aligned
+            # sentences), fall back to the chunk text itself for EN.
+            if not en_parts and idx < len(chunks):
+                en_parts = [chunks[idx]]
+            en_block = " ".join(en_parts).strip()
+            zh_block = "".join(zh_parts).strip()
+            if not en_block:
+                continue
+
+            if idx == 0 and pending_note:
+                stats.note_callouts_merged += 1
+                en_title = pending_note["en_title"]
+                zh_title = pending_note.get("zh_title") or ""
+                # Markdown blockquote callout: emphasised label + body.
+                lines.append(f"> **{en_title}** — {en_block}\n>\n")
+                if zh_block:
+                    title_clause = f"**{zh_title}** — " if zh_title else ""
+                    lines.append(f"> {title_clause}{zh_block}\n\n")
+                else:
+                    lines.append("\n")
+                pending_note = None
+            else:
+                lines.append(f"{en_block}\n\n")
+                if zh_block:
+                    lines.append(f"{zh_block}\n\n")
+
+        return lines, last_heading_norm, pending_note
+
+    # list_item / footnote / default fallthrough — original behaviour.
+    en_parts2: list[str] = []
+    zh_parts2: list[str] = []
     for s_ord, s_src, _ in sentences:
         s_clean = clean_text(s_src)
         if not s_clean:
             continue
-        en_parts.append(s_clean)
+        en_parts2.append(s_clean)
         zh = zh_for_sentence(s_ord)
         if zh:
-            zh_parts.append(zh)
-    en_block = " ".join(en_parts)
-    zh_block = "".join(zh_parts)
+            zh_parts2.append(zh)
+    en_block = " ".join(en_parts2)
+    zh_block = "".join(zh_parts2)
 
     if effective_type == "list_item":
         lines.append(f"- {en_block}\n")
@@ -556,14 +866,14 @@ def render_block(
             lines.append(f"> ¹ {zh_block}\n\n")
         else:
             lines.append("\n")
-    else:  # paragraph
+    else:
         if not en_block:
-            return lines, last_heading_norm
+            return lines, last_heading_norm, pending_note
         lines.append(f"{en_block}\n\n")
         if zh_block:
             lines.append(f"{zh_block}\n\n")
 
-    return lines, last_heading_norm
+    return lines, last_heading_norm, pending_note
 
 
 def render(cfg: RenderConfig) -> RenderStats:
@@ -605,6 +915,10 @@ def render(cfg: RenderConfig) -> RenderStats:
         # the parser sometimes mis-classifies as paragraph instead of
         # heading — gets suppressed if it duplicates the banner content.
         pending_chapter_dedupe: str | None = None
+        # F7: when a "NOTE …"/"TIP …"/"WARNING …" heading is encountered we
+        # don't emit it; instead we hold the title here and merge it into
+        # the next paragraph as a callout banner.
+        pending_note: dict | None = None
 
         for row in blocks:
             blk_id, ordinal, btype, source_text, normalized_text, _anchor = row[:6]
@@ -667,8 +981,26 @@ def render(cfg: RenderConfig) -> RenderStats:
             sentences = fetch_sentences(conn, blk_id)
             targets = fetch_targets(conn, run_id) if run_id else {}
 
+            # F11: if the translator emitted one big merged_sentence, try
+            # to redistribute it across source-sentence ordinals so that
+            # F9 paragraph splits get matching ZH for each visual chunk.
+            if targets and len(targets) == 1 and len(sentences) > 1:
+                expanded = expand_merged_targets(targets, sentences)
+                if expanded is not targets:
+                    targets = expanded
+                    stats.merged_targets_split += 1
+
+            # F10: resolve image asset for figure/image-typed blocks.
+            image_md: str | None = None
+            if btype in {"figure", "image"}:
+                resolved = fetch_image_for_block(conn, blk_id)
+                if resolved is not None:
+                    rel_path, alt = resolved
+                    safe_alt = (alt or "figure").replace("\n", " ").strip()
+                    image_md = f"![{safe_alt}]({rel_path})"
+
             had_translation = bool(targets)
-            lines, last_heading_norm = render_block(
+            lines, last_heading_norm, pending_note = render_block(
                 btype=btype,
                 source_raw=source_text or "",
                 source_normalized=normalized_text,
@@ -676,6 +1008,8 @@ def render(cfg: RenderConfig) -> RenderStats:
                 targets=targets,
                 stats=stats,
                 last_heading_norm=last_heading_norm,
+                pending_note=pending_note,
+                image_md=image_md,
             )
 
             if lines:
@@ -698,6 +1032,12 @@ def render(cfg: RenderConfig) -> RenderStats:
         f"- meta-commentary stripped (F4): {stats.meta_commentary_stripped}\n"
         f"- code→prose demotions (F5): {stats.code_to_prose_demotions}\n"
         f"- broken heading demotions (F6): {stats.broken_heading_demotions}\n"
+        f"- NOTE callouts merged (F7): {stats.note_callouts_merged}\n"
+        f"- diagram label dumps filtered (F8): {stats.diagram_label_dumps_filtered}\n"
+        f"- paragraphs split visually (F9): {stats.paragraphs_split_visually}\n"
+        f"- images linked (F10): {stats.images_linked}\n"
+        f"- images with missing asset: {stats.images_missing_asset}\n"
+        f"- merged_sentence targets split (F11): {stats.merged_targets_split}\n"
     )
     if stats.notes:
         sections.append("\n### Notes\n\n")

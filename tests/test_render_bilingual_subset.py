@@ -160,6 +160,159 @@ def test_heading_level_subsubsection():
     assert r.heading_level("2.3.1 LLMs are bad at word games") == 4
 
 
+# ---- F2-ext: section-running-header form (footnote-typed) ---------------
+
+def test_f2_ext_section_running_header():
+    """Section running headers like '1.2 What you will learn 5' (often
+    typed as footnote by the parser) should be filtered."""
+    assert r.is_page_running_header("1.2 What you will learn 5")
+    assert r.is_page_running_header("2.3 Tokenization and LLM capabilities 25")
+    assert r.is_page_running_header("3.1.4 Foo Bar 42")
+
+
+def test_f2_ext_keeps_real_footnote():
+    """A real footnote with cite ref + body should NOT be filtered."""
+    real = "[1] Smith et al. 2024. Some paper title. Journal of X 12(3):45-67"
+    assert not r.is_page_running_header(real)
+
+
+# ---- F7: NOTE/TIP/WARNING callout heading detection ---------------------
+
+def test_f7_note_callout_heading_detected():
+    assert r.is_note_callout_heading("NOTE Vision and language")
+    assert r.is_note_callout_heading("TIP Use a separate venv")
+    assert r.is_note_callout_heading("WARNING This may take hours")
+    assert r.is_note_callout_heading("CAUTION Read carefully")
+    assert r.is_note_callout_heading("IMPORTANT Back up first")
+
+
+def test_f7_note_callout_lowercase_or_partial_words_rejected():
+    assert not r.is_note_callout_heading("Note that this is...")  # not all-caps NOTE
+    assert not r.is_note_callout_heading("NOTES on usage")  # NOTES (plural) not in list
+    assert not r.is_note_callout_heading("1.1 Generative AI in context")
+
+
+# ---- F8: diagram label dump detection -----------------------------------
+
+def test_f8_diagram_label_dump_detected():
+    """Figure 1.3-style label dump: capitalised noun phrases interleaved
+    with stop words, no real sentence terminators."""
+    text_value = (
+        "Some examples of generative AI include are products built using "
+        "ChatGPT Gemini Copilot Claude which use techniques from Artificial "
+        "intelligence Large language models Machine learning Natural "
+        "language processing is the input and output from are built using "
+        "Deep learning Text data Transformers"
+    )
+    assert r.is_diagram_label_dump(text_value)
+
+
+def test_f8_real_prose_not_flagged():
+    prose = (
+        "Some researchers have observed that ChatGPT, when prompted with "
+        "ambiguous instructions, tends to fall back on verbose explanations. "
+        "This pattern is consistent across multiple model versions and is "
+        "likely a side effect of the RLHF training process. Future work "
+        "could explore whether instruction-tuning alone could mitigate this."
+    )
+    assert not r.is_diagram_label_dump(prose)
+
+
+def test_f8_short_text_not_flagged():
+    assert not r.is_diagram_label_dump("Short text only")
+    assert not r.is_diagram_label_dump("")
+
+
+# ---- F9: visual paragraph splitting -------------------------------------
+
+def test_f9_splits_at_short_tail_period_line():
+    """The classic case: a multi-paragraph block where the visual
+    paragraph break corresponds to a short last line ending with a period.
+    """
+    src = (
+        "This book aims to help you make sense of this new world by\n"
+        "dispelling the mystery behind what makes ChatGPT and related\n"
+        "technologies work. We will cover the knowledge necessary to\n"
+        "understand their inner workings and how the components (data and\n"
+        "algorithms) stack together to create the tools we use. We'll also\n"
+        "discuss various cases where this technology can form the\n"
+        "cornerstone of a broader system and others where systems based on\n"
+        "large language models (LLMs) may be a poor\n"
+        "choice.\n"
+        "After reading this book, you'll understand what generative AI\n"
+        "like ChatGPT really is, what it can and can't do."
+    )
+    chunks = r.split_into_visual_paragraphs(src)
+    assert len(chunks) == 2
+    assert "This book aims" in chunks[0]
+    assert chunks[0].endswith("choice.")
+    assert chunks[1].startswith("After reading this book")
+
+
+def test_f9_single_paragraph_returns_one_chunk():
+    src = (
+        "First, we need to get more specific about what we are discussing\n"
+        "when we talk about LLMs, GPTs, and the various tools that rely on\n"
+        "them. The GPT in ChatGPT stands for Generative Pretrained Transformer."
+    )
+    chunks = r.split_into_visual_paragraphs(src)
+    assert len(chunks) == 1
+
+
+def test_f9_empty_input_returns_empty_list():
+    assert r.split_into_visual_paragraphs("") == []
+    assert r.split_into_visual_paragraphs("   \n  ") == []
+
+
+# ---- F11: merged_sentence target redistribution ------------------------
+
+def test_f11_split_chinese_sentences_basic():
+    text_zh = "首先这是第一句。然后这是第二句。最后这是第三句。"
+    parts = r.split_chinese_sentences(text_zh)
+    assert len(parts) == 3
+    assert parts[0] == "首先这是第一句。"
+    assert parts[1] == "然后这是第二句。"
+    assert parts[2] == "最后这是第三句。"
+
+
+def test_f11_split_handles_question_and_exclaim():
+    text_zh = "这是吗？是的！这是陈述。"
+    parts = r.split_chinese_sentences(text_zh)
+    assert len(parts) == 3
+
+
+def test_f11_expand_merged_targets_splits_correctly():
+    """The classic block-9 case: 7 source sentences, 1 merged ZH chunk."""
+    fake_target = (1, "首先A。然后B。其次C。再者D。例如E。", "merged_sentence", "draft", 0.9)
+    targets = {1: fake_target}
+    sentences = [(i, f"sentence-{i}", True) for i in range(1, 6)]
+    out = r.expand_merged_targets(targets, sentences)
+    assert len(out) == 5
+    assert out[1][1] == "首先A。"
+    assert out[5][1] == "例如E。"
+
+
+def test_f11_expand_no_change_when_count_mismatch():
+    """If split produces a different count than the source-sentence count,
+    do not reassign — that would be making up alignments."""
+    fake_target = (1, "只有一句话。", "merged_sentence", "draft", 0.9)
+    targets = {1: fake_target}
+    sentences = [(i, f"s-{i}", True) for i in range(1, 4)]  # 3 source sentences
+    out = r.expand_merged_targets(targets, sentences)
+    assert out is targets  # unchanged identity
+
+
+def test_f11_expand_no_change_when_already_per_sentence():
+    """Multi-target dicts are already per-sentence; leave alone."""
+    targets = {
+        1: (1, "句一。", "sentence", "draft", 0.9),
+        2: (2, "句二。", "sentence", "draft", 0.9),
+    }
+    sentences = [(i, f"s-{i}", True) for i in range(1, 3)]
+    out = r.expand_merged_targets(targets, sentences)
+    assert out is targets
+
+
 def test_heading_level_never_skips():
     # MD hierarchy invariant: section level immediately under chapter level.
     chapter = r.heading_level("Big picture")
