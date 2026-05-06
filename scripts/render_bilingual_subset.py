@@ -286,7 +286,8 @@ def fetch_blocks(conn, cfg: RenderConfig):
                   b.normalized_text,
                   b.source_anchor,
                   c.ordinal AS chapter_ordinal,
-                  c.title_src AS chapter_title
+                  c.title_src AS chapter_title,
+                  c.id::text AS chapter_id
                 FROM blocks b
                 JOIN chapters c ON b.chapter_id = c.id
                 WHERE b.chapter_id = ANY(:cids)
@@ -306,7 +307,8 @@ def fetch_blocks(conn, cfg: RenderConfig):
               b.normalized_text,
               b.source_anchor,
               NULL::int AS chapter_ordinal,
-              NULL::text AS chapter_title
+              NULL::text AS chapter_title,
+              NULL::text AS chapter_id
             FROM blocks b
             WHERE b.chapter_id = :cid
               AND b.ordinal BETWEEN :lo AND :hi
@@ -346,6 +348,54 @@ def fetch_sentences(conn, block_id: str):
         ),
         {"bid": block_id},
     ).fetchall()
+
+
+def fetch_chapter_title_zh(conn, chapter_id: str, chapter_title: str | None) -> str | None:
+    """Return the Chinese rendering of the chapter title.
+
+    The PDF parser sometimes mis-classifies the chapter title block as
+    `paragraph` rather than `heading`, so we cannot just take the first
+    heading-typed block. Instead we scan the chapter's blocks in order
+    and pick the first one whose normalized text contains the chapter
+    title body (with the leading "N " number prefix stripped). The
+    matched block's first translated sentence is the chapter title in
+    Chinese.
+    """
+    if not chapter_title:
+        return None
+    title_body = re.sub(r"^\d+\s+", "", chapter_title.strip())
+    if not title_body:
+        return None
+    rows = conn.execute(
+        text(
+            """
+            SELECT b.id::text, b.ordinal, b.normalized_text
+            FROM blocks b
+            WHERE b.chapter_id = :cid
+              AND b.normalized_text IS NOT NULL
+            ORDER BY b.ordinal
+            LIMIT 12
+            """
+        ),
+        {"cid": chapter_id},
+    ).fetchall()
+    title_lower = title_body.lower()
+    for blk_id, _ord, norm in rows:
+        if not norm:
+            continue
+        if title_lower in norm.lower():
+            run_id = fetch_run_for_block(conn, blk_id)
+            if not run_id:
+                continue
+            targets = fetch_targets(conn, run_id)
+            if not targets:
+                continue
+            first_ord = min(targets.keys())
+            raw = targets[first_ord][1]
+            if not raw:
+                continue
+            return re.sub(r"\s+", " ", clean_text(raw)).strip() or None
+    return None
 
 
 def fetch_targets(conn, run_id: str):
@@ -550,23 +600,68 @@ def render(cfg: RenderConfig) -> RenderStats:
         blocks = fetch_blocks(conn, cfg)
         last_heading_norm: str | None = None
         prev_chapter_ordinal: int | None = None
+        # When a chapter banner has just been emitted, hold the title's
+        # number-stripped normalized form so the very-next block — which
+        # the parser sometimes mis-classifies as paragraph instead of
+        # heading — gets suppressed if it duplicates the banner content.
+        pending_chapter_dedupe: str | None = None
 
         for row in blocks:
             blk_id, ordinal, btype, source_text, normalized_text, _anchor = row[:6]
             chapter_ordinal = row[6] if len(row) > 6 else None
             chapter_title = row[7] if len(row) > 7 else None
+            chapter_id = row[8] if len(row) > 8 else None
 
             stats.blocks_seen += 1
 
-            # Emit a chapter banner the first time we see each chapter, so the
-            # final document has clear top-level structure when scoped by
-            # multiple chapter_ids.
+            # Emit a bilingual chapter banner the first time we see each
+            # chapter, so the final document has clear top-level structure
+            # when scoped by multiple chapter_ids.
+            #
+            # The banner carries the outline-form title (with its leading
+            # chapter number, e.g. "1 Big picture: What are LLMs?") which
+            # matches what readers expect from a TOC. The on-page heading
+            # block that follows usually lacks the leading number; we
+            # dedupe it via the F3 path so the heading isn't duplicated.
             if chapter_ordinal is not None and chapter_ordinal != prev_chapter_ordinal:
                 title_clean = re.sub(r"\s+", " ", (chapter_title or "").strip())
                 if title_clean:
-                    sections.append(f"## {title_clean}\n\n")
+                    title_zh = (
+                        fetch_chapter_title_zh(conn, chapter_id, title_clean)
+                        if chapter_id
+                        else None
+                    )
+                    sections.append(f"## {title_clean}\n")
+                    if title_zh:
+                        sections.append(f"## {title_zh}\n\n")
+                    else:
+                        sections.append("\n")
+                    # Normalize for dedupe: drop any leading "N " bare-integer
+                    # chapter prefix so the on-page heading without it
+                    # ("Big picture: What are LLMs?") matches.
+                    dedupe_key = re.sub(r"^\d+\s+", "", title_clean).strip().lower()
+                    last_heading_norm = dedupe_key or None
+                    pending_chapter_dedupe = title_clean.lower()
+                else:
+                    last_heading_norm = None
+                    pending_chapter_dedupe = None
                 prev_chapter_ordinal = chapter_ordinal
-                last_heading_norm = None  # don't dedupe across chapter boundaries
+
+            # One-shot dedupe: suppress the first block of a chapter if its
+            # normalized text matches the banner (handles parser quirk where
+            # the chapter title block was tagged paragraph, not heading).
+            if pending_chapter_dedupe is not None:
+                first_block_text = re.sub(
+                    r"\s+", " ", (normalized_text or source_text or "")
+                ).strip().lower()
+                if first_block_text and (
+                    first_block_text == pending_chapter_dedupe
+                    or first_block_text == re.sub(r"^\d+\s+", "", pending_chapter_dedupe)
+                ):
+                    pending_chapter_dedupe = None
+                    stats.heading_echoes_filtered += 1
+                    continue
+                pending_chapter_dedupe = None
 
             run_id = fetch_run_for_block(conn, blk_id)
             sentences = fetch_sentences(conn, blk_id)

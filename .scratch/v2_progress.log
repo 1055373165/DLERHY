@@ -10,3 +10,7 @@
 [23:07:23] batch 9/14: 8/8 ok in 92.100606s (try 1)
 [23:09:30] batch 10/14: 8/8 ok in 126.316230s (try 1)
 [23:11:42] batch 11/14: 8/8 ok in 132.607452s (try 1)
+[23:14:41] batch 12/14: 8/8 ok in 178.786267s (try 1)
+[23:17:08] batch 13/14: 8/8 ok in 146.508155s (try 1)
+[23:17:40] batch 14/14: 1/1 ok in 31.661728s (try 1)
+[23:17:40] DONE: 105 translated, 0 failed, 1764s total
