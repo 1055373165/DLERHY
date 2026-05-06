@@ -595,11 +595,32 @@ def _normalize_outline_heading_text(text: str) -> str:
     return _normalize_intro_title_artifacts(_normalize_pdf_signal_text(_normalize_text(text)))
 
 
+# Outline-title chapter-number extraction. Two accepted forms:
+#   1. "Chapter N Title..." \u2014 explicit Chapter/Part/Appendix label.
+#   2. "N Title..."         \u2014 bare-integer prefix used by Manning Press
+#                             and other publishers that omit the literal
+#                             word "chapter" in TOC entries.
+# Section-style numbering ("1.1", "2.3.1") is intentionally REJECTED in
+# both patterns because subsections are not chapters.
+_BOOK_OUTLINE_CHAPTER_LABEL_RE = re.compile(
+    r"^\s*chapter\s+(\d+)\b", re.IGNORECASE
+)
+# Bare integer + whitespace + non-digit. The lookahead `(?=\s)` ensures
+# we don't match "1.1" (next char is "." not whitespace) or "1st" (next
+# char is "s" not whitespace).
+_BOOK_OUTLINE_CHAPTER_BARE_RE = re.compile(r"^\s*(\d+)(?=\s)")
+
+
 def _looks_like_book_primary_outline_title(text: str) -> bool:
     normalized = _normalize_outline_heading_text(text)
     if not normalized:
         return False
-    return bool(_HEADING_PATTERN.match(normalized) or _APPENDIX_HEADING_PATTERN.match(normalized))
+    if _HEADING_PATTERN.match(normalized) or _APPENDIX_HEADING_PATTERN.match(normalized):
+        return True
+    # Books that omit "Chapter" in their outline (e.g. Manning's
+    # "1 Big picture: What are LLMs?") would otherwise yield zero
+    # primary outline entries, breaking the chapter-split code path.
+    return _extract_book_main_chapter_number(normalized) is not None
 
 
 def _should_keep_book_top_level_outline_title(text: str) -> bool:
@@ -613,13 +634,30 @@ def _should_keep_book_top_level_outline_title(text: str) -> bool:
 
 
 def _extract_book_main_chapter_number(text: str) -> int | None:
+    """Return the chapter number for a book outline title.
+
+    Accepts either ``"Chapter N Title\u2026"`` or the bare-integer form
+    ``"N Title\u2026"``. Returns ``None`` for section-style numbering
+    (``"1.1 \u2026"``), for titles without a Title-cased word following
+    the number (e.g. lowercase frontmatter labels), or for any input
+    that doesn't fit either pattern.
+    """
     normalized = _normalize_outline_heading_text(text)
-    match = re.match(r"^\s*chapter\s+(\d+)\b", normalized, flags=re.IGNORECASE)
-    if not match:
+    if not normalized:
         return None
-    remainder = normalized[match.end() :]
+
+    match = _BOOK_OUTLINE_CHAPTER_LABEL_RE.match(normalized)
+    if match is None:
+        match = _BOOK_OUTLINE_CHAPTER_BARE_RE.match(normalized)
+        if match is None:
+            return None
+
+    remainder = normalized[match.end():]
     normalized_remainder = remainder.lstrip(" .:_-)\u2013\u2014")
-    if normalized_remainder and not normalized_remainder[:1].isupper():
+    # The character following the number+separator must start a real
+    # title (uppercase letter). This rejects "1 introduction" (lowercase
+    # frontmatter-ish) and "1." standalone entries.
+    if not normalized_remainder or not normalized_remainder[:1].isupper():
         return None
     try:
         return int(match.group(1))
