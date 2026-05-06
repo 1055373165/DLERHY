@@ -1,0 +1,16 @@
+[01:47:13] starting: 104 packets, chunk=8
+[01:47:13] health ok
+[01:49:14] batch 1/14: 8/8 ok in 121.129450s (try 1)
+[01:50:53] batch 2/14: 8/8 ok in 98.463306s (try 1)
+[01:53:01] batch 3/14: 8/8 ok in 127.480271s (try 1)
+[01:55:13] batch 4/14: 8/8 ok in 132.351477s (try 1)
+[01:57:52] batch 5/14: 8/8 ok in 158.649009s (try 1)
+[02:00:11] batch 6/14: 8/8 ok in 138.954414s (try 1)
+[02:02:42] batch 7/14: 8/8 ok in 150.590410s (try 1)
+[02:04:26] batch 8/14: 8/8 ok in 104.359321s (try 1)
+[02:06:15] batch 9/14: 8/8 ok in 108.361545s (try 1)
+[02:08:34] batch 10/14: 8/8 ok in 139.343442s (try 1)
+[02:10:54] batch 11/14: 8/8 ok in 140.272767s (try 1)
+[02:12:40] batch 12/14: 8/8 ok in 105.803779s (try 1)
+[02:14:40] batch 13/14: 8/8 ok in 119.640929s (try 1)
+[02:14:40] DONE: 104 translated, 0 failed, 1647s total
