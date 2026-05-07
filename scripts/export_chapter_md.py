@@ -100,7 +100,23 @@ def _details_source(text: str) -> str:
     return f"<details>\n<summary>英文原文</summary>\n\n{normalized}\n\n</details>"
 
 
-def _render_block_md(block, session) -> str:
+def _build_consumed_caption_ids(blocks, session) -> set:
+    """Identify caption blocks that are linked to a figure block in the
+    chapter; these are rendered INSIDE the figure render and should not
+    be emitted again when we walk the chapter in ordinal order.
+    """
+    by_anchor = {b.source_anchor: b for b in blocks if b.source_anchor}
+    consumed: set[str] = set()
+    for blk in blocks:
+        if (blk.block_type or "").lower() not in {"image", "figure"}:
+            continue
+        linked = zhmod._linked_caption_anchor(blk)
+        if linked and linked in by_anchor:
+            consumed.add(by_anchor[linked].id)
+    return consumed
+
+
+def _render_block_md(block, session, consumed_caption_ids: set) -> str:
     """Render one block to markdown, mirroring legacy _render_block_markdown.
 
     Translatable blocks: visible Chinese body + folded <details> with
@@ -109,6 +125,10 @@ def _render_block_md(block, session) -> str:
     """
     btype = (block.block_type or "").lower()
     src_text = (block.source_text or "").strip()
+
+    # Skip caption blocks already consumed by their linked figure.
+    if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
+        return ""
 
     # Figures: caption-only reference. NO image embed.
     if btype in {"figure", "image"}:
@@ -136,6 +156,16 @@ def _render_block_md(block, session) -> str:
             return "\n\n".join(parts)
         if cap_en:
             return f"*图：{cap_en}*"
+        # No caption AND vector_drawing → almost certainly a text-styled
+        # sidebar callout (chapter intro list, "Optimizing LLMs", "GPU
+        # alternatives") that the parser captured as a figure. Skip
+        # rendering — its body text already exists as separate
+        # paragraph blocks in the chapter, and rendering it as a
+        # figure placeholder pollutes the markdown.
+        meta = block.source_span_json or {}
+        image_type = (meta.get("image_type") or "").lower()
+        if "vector" in image_type:
+            return ""
         return "*（图，无配文）*"
 
     # Code: keep verbatim source as fenced block.
@@ -236,13 +266,14 @@ def main() -> int:
             .all()
         )
         total = len(blocks)
+        consumed_caption_ids = _build_consumed_caption_ids(blocks, session)
 
         # Top heading (single ## per the merged-md convention).
         lines.append(f"## {CHAPTER_LABEL}: {CHAPTER_TITLE}")
         lines.append("")
 
         for block in blocks:
-            md = _render_block_md(block, session)
+            md = _render_block_md(block, session, consumed_caption_ids)
             if not md:
                 skipped_artifact += 1
                 continue

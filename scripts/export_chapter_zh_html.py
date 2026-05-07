@@ -125,6 +125,84 @@ def _open_pdf():
     return _PDF_DOC
 
 
+def _trim_top_body_text_leak(page, bbox, *, max_trim_pt: float = 250.0):
+    """Trim the figure bbox top so body prose above the visible figure
+    isn't included in the rendered crop.
+
+    The parser's image bbox sometimes corresponds to the embedded raster
+    SOURCE rect, which extends above the visually-cropped raster. When
+    rendered, that band shows the previous paragraph's last lines
+    bleeding into the figure (Fig 1.1 haiku, Fig 1.2 Generative AI, Fig
+    1.4 ChatGPT signup, Fig 2.6 tokenization all exhibit this).
+
+    Strategy: query the page's text blocks. For each text block whose
+    horizontal center is inside the figure bbox AND whose y0 sits
+    inside the figure's TOP HALF (or within ``max_trim_pt`` from the
+    figure top), treat it as leaked body content and clamp y0 to
+    just below that block.
+
+    Single-line figure-internal labels (≤16 chars, single line) are
+    preserved — those are part of the figure (e.g. "Tokenization",
+    "Output", "Input", "Gene sequences").
+    """
+    try:
+        import fitz  # noqa: F401
+    except ImportError:
+        return bbox
+    try:
+        text_blocks = page.get_text("blocks")
+    except Exception:
+        return bbox
+    x0, y0, x1, y1 = bbox
+    height = y1 - y0
+    width = x1 - x0
+    if height < 80:
+        return bbox  # tiny figures don't have room for leak
+    # Body-leak zone: the top portion of the figure where leaked
+    # body text would land. We accept a block if its y1 (bottom edge)
+    # lies inside this zone — that's sufficient evidence the block
+    # extends INTO the figure crop (a multi-line paragraph that wraps
+    # right against the figure top). The cap is max_trim_pt below
+    # the figure top to avoid trimming away ACTUAL figure content
+    # that legitimately starts deep in the bbox.
+    zone_y1 = min(y0 + 0.5 * height, y0 + max_trim_pt)
+    # Body prose vs figure-internal label discriminator: page body
+    # text spans most of the page content width (~360pt+ on a typical
+    # 612pt page). Figure-internal labels (Questions, Mathematics,
+    # Articles, Tokenization, Output) are narrow rows under
+    # ~280pt. We DON'T trim labels; we only trim full-width prose.
+    page_rect = page.rect
+    page_content_width = max(1.0, page_rect.x1 - page_rect.x0 - 100.0)
+    body_width_threshold = max(0.55 * page_content_width, 280.0)
+    new_y0 = y0
+    for blk in text_blocks:
+        if len(blk) < 5:
+            continue
+        bx0, by0, bx1, by1, text = blk[:5]
+        # Block must intersect the figure's top zone — its bottom
+        # edge sits between figure_y0 and zone_y1.
+        if by1 <= y0 + 0.1 or by1 > zone_y1:
+            continue
+        # Horizontal: block must overlap with figure horizontally.
+        if bx1 <= x0 + 1 or bx0 >= x1 - 1:
+            continue
+        body = (text or "").strip()
+        # Skip mostly-numeric blocks (page numbers / token IDs).
+        alpha_count = sum(1 for c in body if c.isalpha())
+        if alpha_count < 10:
+            continue
+        # Width-based body discriminator: only block widths >= the
+        # body-width threshold are full-width prose worth trimming.
+        block_width = bx1 - bx0
+        if block_width < body_width_threshold:
+            continue
+        # Treat as body leak — clamp y0 to below this block.
+        candidate = by1 + 3.0
+        if candidate > new_y0:
+            new_y0 = candidate
+    return (x0, new_y0, x1, y1)
+
+
 def _resolve_embedded_image_bbox(page, fallback_bbox):
     """Return PyMuPDF's pixel-perfect bbox for the largest raster on this
     page, intersected with the parser's bbox. This eliminates the prose
@@ -413,7 +491,56 @@ def _render_image_data_uri(
             return None, f"oversized-bbox (>{IMAGE_MAX_PAGE_AREA_FRACTION:.0%} of page)"
         kind = (image_type or "").lower()
         if kind == "embedded_image":
-            clip = fitz.Rect(*_resolve_embedded_image_bbox(page, tuple(bbox)))
+            # Embedded raster: parser bbox follows the raster's native
+            # rect. The page-rendered crop sometimes clips the bottom
+            # frame (haiku conversation rounded rectangle, Fig 1.1) by
+            # 8-12pt because the embedded raster's rect is the image
+            # source rect, not the visible compositing rect that
+            # includes border padding. Add a small all-sides pad so
+            # rounded borders + footer icons are preserved. Caption
+            # text renders separately via <figcaption>.
+            base = _resolve_embedded_image_bbox(page, tuple(bbox))
+            # Trim top if the parser bbox extended above the visible
+            # raster and pulled in a previous paragraph's last lines.
+            base = _trim_top_body_text_leak(page, base)
+            x0, y0, x1, y1 = base
+            pad_top = 4.0
+            pad_bottom = 14.0   # haiku icon row
+            # Side-by-side embeds (Fig 2.8 dual-loss-graph) often have
+            # the right panel sitting outside the parser's bbox by
+            # 50-100pt because the parser's "image" is just the left
+            # raster. Expand horizontally to the page content envelope
+            # when the parser bbox is much narrower than the page.
+            page_width = page.rect.x1 - page.rect.x0
+            parser_width = x1 - x0
+            if parser_width < 0.65 * page_width:
+                # Use generous content envelope for the right edge.
+                x1 = max(x1, _CONTENT_BOX_X_MAX + 4)
+                x0 = min(x0, _CONTENT_BOX_X_MIN - 4)
+                pad_x = 0.0
+            else:
+                pad_x = 8.0
+            clip = fitz.Rect(
+                x0 - pad_x, y0 - pad_top, x1 + pad_x, y1 + pad_bottom
+            )
+        elif kind == "mixed":
+            # 'mixed' = raster + vector composite (Fig 1.2 Generative
+            # AI: DNA strand + math equation + Generative AI circle +
+            # AI-art Image + protein 3D). Parser bbox covers the raster
+            # extent only; the vector arrows + outer labels ("Questions",
+            # "Answers", "Proteins") sit OUTSIDE that rect and get
+            # clipped (right side: "Images" → "Image", "Articles" lines
+            # cut). Expand left/right to a generous content envelope so
+            # the labels survive. Top/bottom kept tight to avoid body
+            # text leak.
+            x0, y0, x1, y1 = bbox
+            x0 = min(x0, _CONTENT_BOX_X_MIN - 4)
+            x1 = max(x1, _CONTENT_BOX_X_MAX + 4)
+            # Trim body-text leak at top.
+            x0, y0, x1, y1 = _trim_top_body_text_leak(
+                page, (x0, y0, x1, y1)
+            )
+            clip = fitz.Rect(x0, y0, x1, y1)
         elif "vector" in kind:
             # The parser's vector-drawing bbox is built from the
             # drawing-stroke union, but the union sometimes misses
@@ -424,20 +551,22 @@ def _render_image_data_uri(
             # extent is 128-340 with text reaching x=398). Larger slack
             # lets the drawings-anchored expander recover them while
             # the per-block-gap + midpoint guards keep body text out.
-            clip = fitz.Rect(
-                *_expand_figure_bbox_to_drawings(
-                    page, tuple(bbox), page_rect=page.rect,
-                    x_slack=80.0, y_slack=50.0,
-                )
+            expanded = _expand_figure_bbox_to_drawings(
+                page, tuple(bbox), page_rect=page.rect,
+                x_slack=80.0, y_slack=50.0,
             )
+            expanded = _trim_top_body_text_leak(page, expanded)
+            clip = fitz.Rect(*expanded)
         elif kind == "text_only_figure":
             # Synthesizer's bbox unions absorbed labels only; expand to
             # cover any drawings + short labels in the same y-band so
             # we don't crop out vector matrices/arrows on the right side
             # (Figure 3.7's three matrix columns motivate this).
-            clip = fitz.Rect(
-                *_expand_figure_bbox_to_drawings(page, tuple(bbox), page_rect=page.rect)
+            expanded = _expand_figure_bbox_to_drawings(
+                page, tuple(bbox), page_rect=page.rect
             )
+            expanded = _trim_top_body_text_leak(page, expanded)
+            clip = fitz.Rect(*expanded)
         # Clamp to the page so the renderer doesn't error on near-edge bboxes.
         clip = clip & page.rect
         if clip.is_empty:

@@ -390,9 +390,73 @@ def main() -> int:
         )
         total_blocks = len(blocks)
 
+        # Pre-pass: identify caption blocks consumed by their linked
+        # figure (rendered as caption-zh inside the figure pair) so we
+        # don't emit them again as standalone caption pairs. Mirrors
+        # the markdown exporter's logic.
+        consumed_caption_ids: set[str] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            linked = zhmod._linked_caption_anchor(blk)
+            if not linked:
+                continue
+            cap = session.execute(
+                select(Block).where(Block.chapter_id == CHAPTER_ID)
+                .where(Block.source_anchor == linked)
+            ).scalars().first()
+            if cap is not None:
+                consumed_caption_ids.add(cap.id)
+
+        # Pre-pass: identify sidebar callouts (vector_drawing image
+        # blocks with no linked caption). The parser captures
+        # text-styled rounded-rectangle callouts ("This chapter
+        # covers", "Optimizing LLMs", "GPU alternatives") as figure
+        # blocks, but their text content is also stored as separate
+        # paragraph blocks. Render the paragraphs, skip the figure.
+        sidebar_callout_ids: set[str] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"image", "figure"}:
+                continue
+            meta = blk.source_span_json or {}
+            image_type = (meta.get("image_type") or "").lower()
+            if "vector" not in image_type:
+                continue
+            linked = zhmod._linked_caption_anchor(blk)
+            if linked:
+                # has caption — real figure, keep
+                continue
+            sidebar_callout_ids.add(blk.id)
+
         for block in blocks:
             btype = (block.block_type or "").lower()
             src_text = (block.source_text or "").strip()
+
+            # Skip consumed captions + sidebar callouts.
+            if block.id in consumed_caption_ids:
+                total_blocks -= 1
+                continue
+            if block.id in sidebar_callout_ids:
+                total_blocks -= 1
+                continue
+            # Skip page-header artifacts (single-digit "1", "2", or
+            # "N CHAPTER X TITLE" patterns) — they're untranslatable
+            # navigation chrome and rendering them as [未译标记] pairs
+            # is just noise. Detect via translatable=False on all
+            # sentences AND brevity / page-header text shape.
+            if _is_untranslatable_block(block, session) and btype == "paragraph":
+                stripped = src_text.replace("\n", " ").strip()
+                # Match "1" / "2 CHAPTER 1 ..." / "Summary 13" etc.
+                if (
+                    len(stripped) <= 80
+                    and (
+                        stripped.isdigit()
+                        or "CHAPTER" in stripped.upper()
+                        or stripped.endswith(tuple("0123456789"))
+                    )
+                ):
+                    total_blocks -= 1
+                    continue
 
             # ---- left column: English source ----
             if btype in {"figure", "image"}:

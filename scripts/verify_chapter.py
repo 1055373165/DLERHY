@@ -102,18 +102,25 @@ def main() -> int:
         )
         figcap_texts: list[str] = []
         for role, en_inner, zh_inner in pairs_html:
-            if role != "caption":
+            # Captions appear in two places in bilingual HTML:
+            #   (a) data-role="caption" pairs — standalone caption.
+            #   (b) data-role="figure" pairs whose right column carries
+            #       a <span class="caption-zh"> with the linked
+            #       caption's translation (default behaviour: caption
+            #       block is consumed by its parent figure render).
+            if role not in {"caption", "figure"}:
                 continue
             zh_text = _norm_ws(re.sub(r"<[^>]+>", " ", zh_inner))
+            en_text = _norm_ws(re.sub(r"<[^>]+>", " ", en_inner))
             if zh_text.startswith(("图", "Figure", "Fig")):
                 figcap_texts.append(zh_text[:200])
-            else:
-                # Some captions are translated without prefix; still
-                # attribute them to the figure number found in en.
-                en_text = _norm_ws(re.sub(r"<[^>]+>", " ", en_inner))
-                m = re.search(r"(?:Figure|Fig\.?)\s*(\d+\.\d+)", en_text)
-                if m:
+                continue
+            m = re.search(r"(?:Figure|Fig\.?)\s*(\d+\.\d+)", en_text)
+            if m:
+                if zh_text and "[图" not in zh_text:
                     figcap_texts.append(f"图{m.group(1)} {zh_text[:180]}")
+                else:
+                    figcap_texts.append(f"Figure {m.group(1)} {en_text[:180]}")
         # Bilingual page has NO real <h2> from the renderer; headings
         # render as <strong> inside heading-role pairs. Use that as the
         # heading proxy.
