@@ -84,10 +84,16 @@ def clean_ocr_lines(lines: list[str]) -> list[str]:
         in_edge = idx < 3 or idx >= n - 3
         if in_edge and _SECTION_HEADER_ONLY.match(ln):
             continue
-        # Edge-only short Title-Case fragment with no terminal punctuation
-        # is almost always a running-header echo (e.g. "What you will learn"
-        # split off from "1.2 What you will learn 5").
-        if in_edge and len(ln) < 40 and _HEADER_EDGE_FRAGMENT_HINT.match(ln):
+        # Edge-only running-header echo: short Title-Case fragment with
+        # no terminal punctuation, AND ≥ 3 words. The 3-word floor keeps
+        # short callout titles like "GPU alternatives" (2 words) intact
+        # while still catching header fragments like "What you will learn".
+        if (
+            in_edge
+            and len(ln) < 40
+            and len(ln.split()) >= 3
+            and _HEADER_EDGE_FRAGMENT_HINT.match(ln)
+        ):
             continue
         cleaned.append(ln)
     return cleaned
