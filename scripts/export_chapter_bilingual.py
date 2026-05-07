@@ -67,95 +67,201 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <title>{title}</title>
 <style>
-  :root {{ color-scheme: light dark; }}
+  /* "护眼" reading palette:
+     - Light mode: warm parchment background (#f4ecd8 family), avoiding
+       pure-white glare. Body text in deep warm brown for high
+       contrast (WCAG AA at 13.5:1).
+     - Dark mode: low-glare charcoal with cream text (12.8:1 contrast).
+     - en column slightly cooler tint, zh column slightly warmer tint
+       so the two channels are visually distinguishable without colored
+       text (which lowers contrast). */
+  :root {{
+    color-scheme: light dark;
+    --bg-page: #f4ecd8;          /* parchment */
+    --bg-block: #fbf6e7;         /* lighter parchment for cards */
+    --bg-en: #fdf9ec;            /* very subtle cool/cream */
+    --bg-zh: #f7eed8;            /* very subtle warm */
+    --bg-heading: #e8dfc4;       /* deeper parchment for h-rows */
+    --bg-figure: #fff5d8;        /* cream for figure rows */
+    --fg-primary: #2c2415;       /* deep warm brown — main reading color */
+    --fg-secondary: #5a4d33;     /* medium warm brown */
+    --fg-muted: #847458;         /* faded sepia */
+    --fg-link: #5b4225;          /* terra-cotta for emphasis */
+    --border: rgba(95, 76, 38, .18);
+    --border-strong: rgba(95, 76, 38, .35);
+    --tag-bg: #e0d4ad;
+    --tag-fg: #5b4225;
+    --missing-fg: #8c5a07;
+    --missing-bg: rgba(140, 90, 7, .14);
+    --code-bg: #efe6cb;
+    --shadow: 0 1px 3px rgba(60, 40, 0, .12);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg-page: #1c1d1e;
+      --bg-block: #232425;
+      --bg-en: #232629;
+      --bg-zh: #2a2725;
+      --bg-heading: #2d3340;
+      --bg-figure: #2a2820;
+      --fg-primary: #e6e1d3;     /* cream-on-dark, easy on eyes */
+      --fg-secondary: #b6ad96;
+      --fg-muted: #8c8472;
+      --fg-link: #c9b88f;
+      --border: rgba(230, 225, 211, .12);
+      --border-strong: rgba(230, 225, 211, .25);
+      --tag-bg: #3a3a3c;
+      --tag-fg: #d6cda9;
+      --missing-fg: #e0a548;
+      --missing-bg: rgba(224, 165, 72, .14);
+      --code-bg: #1a1c1d;
+      --shadow: 0 1px 3px rgba(0, 0, 0, .35);
+    }}
+  }}
+
   body {{
     max-width: 1200px;
     margin: 1.5rem auto;
     padding: 0 1.25rem 4rem;
     font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    font-size: 15px;
-    line-height: 1.7;
-    color: #222;
-    background: #fafafa;
-  }}
-  @media (prefers-color-scheme: dark) {{
-    body {{ color: #ddd; background: #181818; }}
-    h1, h2 {{ color: #f0f0f0; }}
-    blockquote {{ background: #222; color: #aaa; }}
-    .pair {{ border-color: rgba(255,255,255,.08); }}
-    .pair[data-role="figure"] {{ background: #1d1d1d; }}
-    .pair[data-role="heading"] {{ background: #1f2a3a; }}
-    .pair .en {{ background: rgba(255,255,255,.02); }}
-    .pair .zh {{ background: rgba(255,255,255,.04); }}
-    .role-tag {{ background: #333; color: #aaa; }}
-    .missing-translation {{ color: #d9a23b; background: rgba(217,162,59,.12); }}
-    .untranslatable-stub {{ color: #888; }}
-    code, pre {{ background: #1f1f1f; }}
-  }}
-  h1 {{ font-size: 1.8rem; margin: 0 0 .25rem; }}
-  h1 small {{ display: block; font-size: .9rem; color: #666; font-weight: 400; margin-top: .15rem; }}
-  blockquote {{
-    margin: 1rem 0; padding: .55rem .9rem;
-    border-left: 4px solid #888; background: #efefef;
-    color: #555; font-size: .85rem; border-radius: 0 4px 4px 0;
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--fg-primary);
+    background: var(--bg-page);
   }}
 
-  /* Block-pair grid: one row per DB block, two columns en | zh.
-     Hard-aligned: row height grows with the taller column,
-     never reflows. */
+  h1 {{
+    font-size: 1.85rem;
+    margin: 0 0 .35rem;
+    color: var(--fg-primary);
+    font-weight: 700;
+  }}
+  h1 small {{
+    display: block;
+    font-size: .9rem;
+    color: var(--fg-secondary);
+    font-weight: 400;
+    margin-top: .25rem;
+  }}
+  blockquote {{
+    margin: 1rem 0;
+    padding: .65rem 1rem;
+    border-left: 4px solid var(--border-strong);
+    background: var(--bg-block);
+    color: var(--fg-secondary);
+    font-size: .9rem;
+    border-radius: 0 4px 4px 0;
+  }}
+
+  /* Block-pair grid */
   .pair {{
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
-    padding: .75rem 1rem;
-    border-bottom: 1px solid rgba(127,127,127,.18);
+    padding: .85rem 1rem;
+    border-bottom: 1px solid var(--border);
     align-items: start;
+    background: var(--bg-block);
   }}
+  .pair:nth-child(even) {{ background: var(--bg-page); }}
   .pair[data-role="heading"] {{
-    background: #eef4fb;
+    background: var(--bg-heading);
     font-weight: 600;
   }}
   .pair[data-role="figure"] {{
-    background: #fff8ee;
+    background: var(--bg-figure);
     align-items: center;
   }}
   .pair[data-role="caption"] {{
-    font-size: .9rem;
+    font-size: .92rem;
     font-style: italic;
-    color: #555;
+    color: var(--fg-secondary);
   }}
   .pair[data-role="code"] pre,
   .pair[data-role="listing"] pre {{
-    background: #f3f3f3; padding: .6rem .8rem; border-radius: 4px;
-    font-size: .85rem; overflow-x: auto; white-space: pre;
+    background: var(--code-bg);
+    padding: .65rem .85rem;
+    border-radius: 4px;
+    font-size: .88rem;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--fg-primary);
+    border: 1px solid var(--border);
   }}
+
   .pair .en, .pair .zh {{
-    padding: .25rem 0;
+    padding: .35rem .65rem;
+    border-radius: 3px;
     word-wrap: break-word;
     overflow-wrap: anywhere;
+    color: var(--fg-primary);
   }}
-  .pair .en {{ color: #1c2541; font-family: Georgia, serif; }}
-  .pair .zh {{ color: #222; }}
+  .pair .en {{
+    background: var(--bg-en);
+    font-family: Georgia, "Iowan Old Style", "Charter", serif;
+    font-size: 0.96rem;
+  }}
+  .pair .zh {{
+    background: var(--bg-zh);
+    font-size: 1rem;
+  }}
+  /* Inside heading / figure / caption rows the row already has its own
+     bg color — make en/zh subdivs transparent so they don't compete. */
+  .pair[data-role="heading"] .en, .pair[data-role="heading"] .zh,
+  .pair[data-role="figure"] .en, .pair[data-role="figure"] .zh,
+  .pair[data-role="caption"] .en, .pair[data-role="caption"] .zh {{
+    background: transparent;
+  }}
+
   .role-tag {{
-    display: inline-block; font-size: .7rem; padding: 1px 5px;
-    margin-right: .35rem; vertical-align: middle;
-    background: #d9e3ee; color: #345; border-radius: 3px;
-    font-family: ui-monospace, monospace; font-weight: 500;
+    display: inline-block;
+    font-size: .7rem;
+    padding: 1px 6px;
+    margin-right: .4rem;
+    vertical-align: middle;
+    background: var(--tag-bg);
+    color: var(--tag-fg);
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 600;
+    letter-spacing: .02em;
   }}
   .missing-translation {{
-    color: #b08018; background: rgba(176,128,24,.10);
-    padding: 0 4px; border-radius: 3px;
-    font-size: .85rem; font-style: italic;
+    color: var(--missing-fg);
+    background: var(--missing-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: .88rem;
+    font-style: italic;
   }}
-  .untranslatable-stub {{ color: #888; font-style: italic; font-size: .88rem; }}
+  .untranslatable-stub {{
+    color: var(--fg-muted);
+    font-style: italic;
+    font-size: .9rem;
+  }}
+  .caption-source {{
+    color: var(--fg-secondary);
+    font-style: italic;
+    font-size: .88rem;
+  }}
+  .caption-zh {{
+    color: var(--fg-primary);
+    font-size: .94rem;
+  }}
   .pair img {{
-    max-width: 100%; height: auto; border-radius: 4px;
-    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: var(--shadow);
   }}
   footer {{
-    margin-top: 2rem; padding-top: .75rem;
-    border-top: 1px solid rgba(127,127,127,.2);
-    font-size: .8rem; color: #777; text-align: center;
+    margin-top: 2rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--border);
+    font-size: .82rem;
+    color: var(--fg-muted);
+    text-align: center;
   }}
 </style>
 </head>
