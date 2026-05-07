@@ -2486,6 +2486,27 @@ def main() -> int:
                 # same caption-shape rule we use for in-window CAPTION blocks.
                 if not image_alt and alt_fallback and _is_real_caption_text(alt_fallback):
                     image_alt = alt_fallback
+                # Last-ditch source-text fallback for figcaption ONLY: when
+                # both zh translation AND DocumentImage.alt_text are empty,
+                # we still need *some* caption so verifier sees the figure
+                # number and the reader has context. Pull the English source
+                # of the linked or fallback-paired caption block. The block's
+                # body text uses [未译] markers (per spec §决策3); only the
+                # FIGCAPTION position is allowed to fall back to source —
+                # because a figure without a caption is structurally broken
+                # while a paragraph without a translation has a clean placeholder.
+                if not image_alt:
+                    src_cap_block = None
+                    if block.id not in rejected_linkage_ids:
+                        linked_anchor = _linked_caption_anchor(block)
+                        if linked_anchor and linked_anchor in caption_by_anchor:
+                            src_cap_block = caption_by_anchor[linked_anchor]
+                    if src_cap_block is None and block.id in fallback_caption_for_block:
+                        src_cap_block = fallback_caption_for_block[block.id]
+                    if src_cap_block is not None:
+                        src_text = (src_cap_block.source_text or "").strip()
+                        if src_text and _is_real_caption_text(src_text):
+                            image_alt = src_text
             block_html = _render_block(
                 block, chunks, untranslated, image_data_uri, image_alt
             )

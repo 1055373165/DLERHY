@@ -1,0 +1,97 @@
+{
+  "_comment": "Single source of truth for chapter→DB mapping. Drives export shell scripts, verify_chapter.py, and qa_run_chapter.sh. Re-run scripts/regenerate_chapters_config.py when DB ingestion changes.",
+  "document_id": "d71027f0-6537-58d1-8e47-42ef2834fca4",
+  "source_label": "How Large Language Models Work",
+  "chapters": {
+    "ch1": {
+      "chapter_id": "b13f7481-d2af-5629-bb8f-52d9c2b9abc9",
+      "chapter_label": "第 1 章",
+      "chapter_title": "宏观图景：什么是大语言模型？",
+      "ordinal_lo": 1,
+      "ordinal_hi": 69,
+      "figure_prefix": "1",
+      "figure_count": 5,
+      "output_dir": ".test-tmp/ch1-export"
+    },
+    "ch2": {
+      "chapter_id": "732562f6-1d41-5dd6-9520-7fe7068fa760",
+      "chapter_label": "第 2 章",
+      "chapter_title": "分词器：大语言模型如何看待世界",
+      "ordinal_lo": 1,
+      "ordinal_hi": 93,
+      "figure_prefix": "2",
+      "figure_count": 8,
+      "output_dir": ".test-tmp/ch2-export"
+    },
+    "ch3": {
+      "chapter_id": "e55d9240-670f-54a4-9448-f3e25ce69ee0",
+      "chapter_label": "第 3 章",
+      "chapter_title": "Transformer 架构：输入如何转换为输出",
+      "ordinal_lo": 1,
+      "ordinal_hi": 131,
+      "figure_prefix": "3",
+      "figure_count": 11,
+      "output_dir": ".test-tmp/ch3-export-v2"
+    },
+    "ch4": {
+      "chapter_id": "ef60bd3b-f1e6-5a40-9905-5cc783a93c49",
+      "chapter_label": "第 4 章",
+      "chapter_title": "LLM 如何学习",
+      "ordinal_lo": 1,
+      "ordinal_hi": 140,
+      "figure_prefix": "4",
+      "figure_count": 10,
+      "output_dir": ".test-tmp/ch4-export"
+    },
+    "ch5": {
+      "chapter_id": "3aba5820-ccb3-5614-b8ee-5b0b2ada3b01",
+      "chapter_label": "第 5 章",
+      "chapter_title": "如何约束 LLM 的行为",
+      "ordinal_lo": 1,
+      "ordinal_hi": 157,
+      "figure_prefix": "5",
+      "figure_count": 16,
+      "output_dir": ".test-tmp/ch5-export"
+    },
+    "ch6": {
+      "chapter_id": "d38b47bd-236e-5d51-b27d-d1e9fc1d91d3",
+      "chapter_label": "第 6 章",
+      "chapter_title": "超越自然语言处理",
+      "ordinal_lo": 1,
+      "ordinal_hi": 138,
+      "figure_prefix": "6",
+      "figure_count": 24,
+      "output_dir": ".test-tmp/ch6-export"
+    },
+    "ch7": {
+      "chapter_id": "cffe6908-541c-520a-898d-8ab596492401",
+      "chapter_label": "第 7 章",
+      "chapter_title": "LLM 的误解、局限与新兴能力",
+      "ordinal_lo": 1,
+      "ordinal_hi": 105,
+      "figure_prefix": "7",
+      "figure_count": 9,
+      "output_dir": ".test-tmp/ch7-export"
+    },
+    "ch8": {
+      "chapter_id": "f0b4c3ba-3bca-5771-b865-6c75171f9cc0",
+      "chapter_label": "第 8 章",
+      "chapter_title": "用大语言模型设计解决方案",
+      "ordinal_lo": 1,
+      "ordinal_hi": 91,
+      "figure_prefix": "8",
+      "figure_count": 8,
+      "output_dir": ".test-tmp/ch8-export"
+    },
+    "ch9": {
+      "chapter_id": "50593486-936f-5331-b6bb-d6097101e48d",
+      "chapter_label": "第 9 章",
+      "chapter_title": "构建与使用 LLM 的伦理",
+      "ordinal_lo": 1,
+      "ordinal_hi": 187,
+      "figure_prefix": "9",
+      "figure_count": 15,
+      "output_dir": ".test-tmp/ch9-export"
+    }
+  }
+}
