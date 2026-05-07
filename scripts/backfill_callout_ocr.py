@@ -51,17 +51,32 @@ def is_callout_text(text_value: str) -> bool:
 
 # Page running headers and isolated page-numbers slip into OCR; strip them.
 _PAGE_HEADER_LINE = re.compile(
-    r"^\s*(?:\d+(?:\.\d+){0,3}\s+.+?\s+\d+|\d+\s+(?:CHAPTER|Chapter)\s+\d+.*|\d{1,3})\s*$"
+    r"^\s*(?:"
+    r"\d+(?:\.\d+){0,3}\s+.+?\s+\d+"          # "1.2 Title 5"
+    r"|\d+\s+(?:CHAPTER|Chapter)\s+\d+.*"     # "5 CHAPTER 1 Title"
+    r"|\d{1,3}"                               # bare page number
+    r")\s*$"
+)
+# Macos Vision often splits visual line into two — title-only + page-only.
+# Match a section-style header WITHOUT trailing page number when it
+# occurs at the *top* of the OCR output.
+_SECTION_HEADER_ONLY = re.compile(
+    r"^\s*\d+(?:\.\d+){1,3}\s+[A-Z].+$"
 )
 
 
 def clean_ocr_lines(lines: list[str]) -> list[str]:
     cleaned: list[str] = []
-    for ln in lines:
+    for idx, ln in enumerate(lines):
         ln = ln.strip()
         if not ln:
             continue
         if _PAGE_HEADER_LINE.match(ln):
+            continue
+        # First few OCR lines often contain the page running header in
+        # two pieces (title alone, page alone). Drop section-style header
+        # lines that appear in the top 3 lines OR in the bottom 3 lines.
+        if (idx < 3 or idx >= len(lines) - 3) and _SECTION_HEADER_ONLY.match(ln):
             continue
         cleaned.append(ln)
     return cleaned
@@ -125,6 +140,7 @@ def deepseek_translate(en_text: str, *, api_key: str, base_url: str, model: str)
 
 
 def main() -> int:
+    force_reprocess = "--force" in sys.argv
     env_path = ROOT / ".env"
     env = {}
     for line in env_path.read_text().splitlines():
@@ -160,7 +176,8 @@ def main() -> int:
                 continue
             scanned += 1
 
-            ocr_text = existing_ocr
+            # In --force mode we re-OCR (cheap; macOS Vision is local).
+            ocr_text = None if force_reprocess else existing_ocr
             if not ocr_text:
                 try:
                     ocr_text = ocr_image(full)
@@ -187,7 +204,15 @@ def main() -> int:
             meta = meta or {}
             existing_zh = meta.get("callout_translation_zh") if isinstance(meta, dict) else None
             existing_title_zh = meta.get("callout_title_zh") if isinstance(meta, dict) else None
-            need_translate = not existing_zh
+            existing_title_en = meta.get("callout_title_en") if isinstance(meta, dict) else None
+            existing_body_en = meta.get("callout_body_en") if isinstance(meta, dict) else None
+            # Re-translate when force_reprocess OR when no existing
+            # translation OR when the EN title/body changed (e.g. cleaner
+            # ran new heuristics on stored OCR).
+            content_changed = (
+                title != (existing_title_en or "") or body != (existing_body_en or "")
+            )
+            need_translate = force_reprocess or content_changed or not existing_zh
 
             zh_body = existing_zh
             zh_title = existing_title_zh
