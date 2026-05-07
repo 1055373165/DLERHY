@@ -385,6 +385,8 @@ class RenderStats:
     images_linked: int = 0  # F10
     images_missing_asset: int = 0  # F10 (placeholder retained)
     merged_targets_split: int = 0  # F11 (merged_sentence redistributed)
+    callouts_recovered: int = 0  # F12 (highlighted boxes recovered from OCR)
+    orphan_paragraphs_dropped: int = 0  # F12 follow-on (post-callout dupes)
     notes: list[str] = field(default_factory=list)
 
 
@@ -599,14 +601,26 @@ def expand_merged_targets(
 _ARTIFACTS_ROOT = ROOT / "artifacts"
 
 
-def fetch_image_for_block(conn, block_id: str) -> tuple[str, str | None] | None:
-    """Return (relative_md_path, alt_or_ocr_text) if an image asset exists
-    on disk for this block, else None.
+def fetch_image_for_block(conn, block_id: str) -> dict | None:
+    """Return resolution info for an image asset linked to this block.
+
+    Returns dict with keys:
+      - 'callout': dict | None — populated when the parser captured a
+        highlighted callout box as a snapshot. Carries title/body text in
+        EN+ZH so the renderer can emit a true bilingual callout instead
+        of an opaque image embed.
+      - 'image_md_alt': str | None — markdown alt text for image embed.
+      - 'image_rel_path': str | None — path to embed; absent when no PNG
+        is on disk.
+
+    Callout precedence: if `callout` is set, the renderer should emit
+    that and skip the image entirely (the snapshot is redundant with
+    the recovered text).
     """
     rows = conn.execute(
         text(
             """
-            SELECT storage_path, alt_text, ocr_text, image_type
+            SELECT storage_path, alt_text, ocr_text, image_type, metadata_json
             FROM document_images
             WHERE block_id = :bid
             ORDER BY created_at
@@ -614,20 +628,26 @@ def fetch_image_for_block(conn, block_id: str) -> tuple[str, str | None] | None:
         ),
         {"bid": block_id},
     ).fetchall()
-    for storage_path, alt_text, ocr_text, image_type in rows:
+    for storage_path, alt_text, ocr_text, image_type, meta in rows:
+        result: dict = {"callout": None, "image_md_alt": None, "image_rel_path": None}
+        if isinstance(meta, dict) and meta.get("callout_kind") == "highlighted_box":
+            result["callout"] = {
+                "title_en": meta.get("callout_title_en") or "",
+                "body_en": meta.get("callout_body_en") or "",
+                "title_zh": meta.get("callout_title_zh") or "",
+                "body_zh": meta.get("callout_translation_zh") or "",
+            }
+            return result
         if not storage_path:
             continue
         full_path = _ARTIFACTS_ROOT / storage_path
         if not full_path.exists():
             continue
-        # Use a path relative to the rendered Markdown's location.
-        # Renderer writes into artifacts/exports/<doc_id>/, and the image
-        # lives at artifacts/document-images/<doc_id>/<file>.png. Using a
-        # `../../document-images/...` relative reference keeps the artifact
-        # portable when the artifacts/ directory is moved as a unit.
         rel_path = "../../" + storage_path
         alt = (alt_text or ocr_text or image_type or "figure").strip()
-        return rel_path, alt
+        result["image_rel_path"] = rel_path
+        result["image_md_alt"] = alt
+        return result
     return None
 
 
@@ -645,6 +665,7 @@ def render_block(
     last_heading_norm: str | None,
     pending_note: dict | None = None,
     image_md: str | None = None,
+    callout_payload: dict | None = None,
 ) -> tuple[list[str], str | None, dict | None]:
     """Render one block to MD lines.
 
@@ -740,6 +761,27 @@ def render_block(
         return lines, new_last_heading, pending_note
 
     if effective_type in {"figure", "image"}:
+        # F12 takes precedence: parser captured a highlighted callout
+        # box as a PNG snapshot; emit the OCR-recovered bilingual text
+        # as a callout. The redundant image is suppressed.
+        if callout_payload:
+            title_en = (callout_payload.get("title_en") or "").strip()
+            body_en = (callout_payload.get("body_en") or "").strip()
+            title_zh = (callout_payload.get("title_zh") or "").strip()
+            body_zh = (callout_payload.get("body_zh") or "").strip()
+            stats.callouts_recovered += 1
+            if title_en:
+                lines.append(f"> **{title_en}** — {body_en}\n>\n")
+            else:
+                lines.append(f"> {body_en}\n>\n")
+            if body_zh:
+                if title_zh:
+                    lines.append(f"> **{title_zh}** — {body_zh}\n\n")
+                else:
+                    lines.append(f"> {body_zh}\n\n")
+            else:
+                lines.append("\n")
+            return lines, last_heading_norm, pending_note
         # F10: emit a real Markdown image reference if an asset is on disk;
         # otherwise keep the placeholder so readers know a figure was here.
         alt = canonical_source[:120] if canonical_source else effective_type
@@ -919,6 +961,11 @@ def render(cfg: RenderConfig) -> RenderStats:
         # don't emit it; instead we hold the title here and merge it into
         # the next paragraph as a callout banner.
         pending_note: dict | None = None
+        # F12 follow-on: when a callout-image was just emitted, the parser
+        # often emits an orphan paragraph immediately after that contains
+        # the SAME body text (minus a few leading words). Hold the callout
+        # body here so we can suppress the duplicate paragraph.
+        last_callout_body_en: str | None = None
 
         for row in blocks:
             blk_id, ordinal, btype, source_text, normalized_text, _anchor = row[:6]
@@ -990,14 +1037,43 @@ def render(cfg: RenderConfig) -> RenderStats:
                     targets = expanded
                     stats.merged_targets_split += 1
 
-            # F10: resolve image asset for figure/image-typed blocks.
+            # F12 follow-on: the parser frequently emits a duplicate orphan
+            # paragraph right after a callout image (containing the same
+            # body text minus the first 1-3 words that the parser ate as
+            # part of the highlighted background). Drop those duplicates
+            # so the reader sees the callout exactly once.
+            if last_callout_body_en and btype == "paragraph":
+                this_norm = re.sub(r"\s+", " ", (normalized_text or source_text or "")).strip().lower()
+                callout_norm = last_callout_body_en.lower()
+                # Substring match either direction handles the typical
+                # "missing first 2-3 words" truncation pattern.
+                if this_norm and (
+                    this_norm in callout_norm
+                    or callout_norm[20:200] in this_norm
+                    or this_norm[20:200] in callout_norm
+                ):
+                    last_callout_body_en = None
+                    stats.orphan_paragraphs_dropped += 1
+                    continue
+                last_callout_body_en = None
+
+            # F10/F12: resolve image asset for figure/image-typed blocks.
             image_md: str | None = None
+            callout_payload: dict | None = None
             if btype in {"figure", "image"}:
                 resolved = fetch_image_for_block(conn, blk_id)
                 if resolved is not None:
-                    rel_path, alt = resolved
-                    safe_alt = (alt or "figure").replace("\n", " ").strip()
-                    image_md = f"![{safe_alt}]({rel_path})"
+                    if resolved.get("callout"):
+                        # F12: parser captured a highlighted callout box
+                        # as a PNG snapshot; we OCR'd + translated it
+                        # offline (scripts/backfill_callout_ocr.py) and
+                        # now emit a real bilingual callout instead.
+                        callout_payload = resolved["callout"]
+                        last_callout_body_en = (callout_payload.get("body_en") or "").strip() or None
+                    elif resolved.get("image_rel_path"):
+                        rel = resolved["image_rel_path"]
+                        alt = (resolved["image_md_alt"] or "figure").replace("\n", " ").strip()
+                        image_md = f"![{alt}]({rel})"
 
             had_translation = bool(targets)
             lines, last_heading_norm, pending_note = render_block(
@@ -1010,6 +1086,7 @@ def render(cfg: RenderConfig) -> RenderStats:
                 last_heading_norm=last_heading_norm,
                 pending_note=pending_note,
                 image_md=image_md,
+                callout_payload=callout_payload,
             )
 
             if lines:
@@ -1038,6 +1115,8 @@ def render(cfg: RenderConfig) -> RenderStats:
         f"- images linked (F10): {stats.images_linked}\n"
         f"- images with missing asset: {stats.images_missing_asset}\n"
         f"- merged_sentence targets split (F11): {stats.merged_targets_split}\n"
+        f"- highlighted callouts recovered (F12): {stats.callouts_recovered}\n"
+        f"- orphan paragraphs dropped (post-callout): {stats.orphan_paragraphs_dropped}\n"
     )
     if stats.notes:
         sections.append("\n### Notes\n\n")
