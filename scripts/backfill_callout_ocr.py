@@ -54,29 +54,40 @@ _PAGE_HEADER_LINE = re.compile(
     r"^\s*(?:"
     r"\d+(?:\.\d+){0,3}\s+.+?\s+\d+"          # "1.2 Title 5"
     r"|\d+\s+(?:CHAPTER|Chapter)\s+\d+.*"     # "5 CHAPTER 1 Title"
+    r"|\d+(?:\.\d+){1,3}"                     # standalone section number "1.2", "2.3.1"
     r"|\d{1,3}"                               # bare page number
     r")\s*$"
 )
 # Macos Vision often splits visual line into two — title-only + page-only.
 # Match a section-style header WITHOUT trailing page number when it
-# occurs at the *top* of the OCR output.
+# occurs near the *edges* of the OCR output (header / footer regions).
 _SECTION_HEADER_ONLY = re.compile(
     r"^\s*\d+(?:\.\d+){1,3}\s+[A-Z].+$"
+)
+# Common book-page-header title fragments (parser/OCR sometimes sees
+# only the right half of a running header — e.g. "What you will learn").
+# We only strip these when they appear as the FIRST or LAST 1-2 lines.
+_HEADER_EDGE_FRAGMENT_HINT = re.compile(
+    r"^[A-Z][A-Za-z][^.!?]{0,60}$"  # short Title-Case line, no terminal punct
 )
 
 
 def clean_ocr_lines(lines: list[str]) -> list[str]:
     cleaned: list[str] = []
+    n = len(lines)
     for idx, ln in enumerate(lines):
         ln = ln.strip()
         if not ln:
             continue
         if _PAGE_HEADER_LINE.match(ln):
             continue
-        # First few OCR lines often contain the page running header in
-        # two pieces (title alone, page alone). Drop section-style header
-        # lines that appear in the top 3 lines OR in the bottom 3 lines.
-        if (idx < 3 or idx >= len(lines) - 3) and _SECTION_HEADER_ONLY.match(ln):
+        in_edge = idx < 3 or idx >= n - 3
+        if in_edge and _SECTION_HEADER_ONLY.match(ln):
+            continue
+        # Edge-only short Title-Case fragment with no terminal punctuation
+        # is almost always a running-header echo (e.g. "What you will learn"
+        # split off from "1.2 What you will learn 5").
+        if in_edge and len(ln) < 40 and _HEADER_EDGE_FRAGMENT_HINT.match(ln):
             continue
         cleaned.append(ln)
     return cleaned

@@ -1043,18 +1043,34 @@ def render(cfg: RenderConfig) -> RenderStats:
             # part of the highlighted background). Drop those duplicates
             # so the reader sees the callout exactly once.
             if last_callout_body_en and btype == "paragraph":
-                this_norm = re.sub(r"\s+", " ", (normalized_text or source_text or "")).strip().lower()
-                callout_norm = last_callout_body_en.lower()
-                # Substring match either direction handles the typical
-                # "missing first 2-3 words" truncation pattern.
-                if this_norm and (
-                    this_norm in callout_norm
-                    or callout_norm[20:200] in this_norm
-                    or this_norm[20:200] in callout_norm
-                ):
-                    last_callout_body_en = None
-                    stats.orphan_paragraphs_dropped += 1
-                    continue
+                # Aggressive normalise — strip punctuation, collapse spaces,
+                # lowercase — so OCR/curly-vs-straight quote differences
+                # don't defeat the substring match.
+                def _dedupe_norm(s: str) -> str:
+                    s = re.sub(r"\s+", " ", s).strip().lower()
+                    s = re.sub(r"[^\w\s]", "", s)
+                    return s
+
+                this_norm = _dedupe_norm(normalized_text or source_text or "")
+                callout_norm = _dedupe_norm(last_callout_body_en)
+                if this_norm and len(this_norm) >= 40:
+                    # Treat it as a duplicate when at least 60 chars of the
+                    # orphan appear contiguously in the callout body (or
+                    # vice versa) — covers the "first N words missing" and
+                    # "last N words extra" cases without chasing exact equality.
+                    sample_a = this_norm[:60]
+                    sample_b = this_norm[-60:]
+                    sample_c = callout_norm[20:80]
+                    if (
+                        this_norm in callout_norm
+                        or callout_norm in this_norm
+                        or sample_a in callout_norm
+                        or sample_b in callout_norm
+                        or (len(callout_norm) > 120 and sample_c in this_norm)
+                    ):
+                        last_callout_body_en = None
+                        stats.orphan_paragraphs_dropped += 1
+                        continue
                 last_callout_body_en = None
 
             # F10/F12: resolve image asset for figure/image-typed blocks.
