@@ -47,12 +47,18 @@ mkdir -p "$OUTPUT_DIR"
 
 if [ "$BILINGUAL" = "1" ]; then
   HTML_PATH="$OUTPUT_DIR/${CHAPTER}-bilingual.html"
-  EXPORT_PY="scripts/export_chapter_bilingual.py"
+  EXPORT_PY="scripts/export_chapter_zh_html.py"
   VERIFY_FLAGS="--bilingual"
+  export BILINGUAL=1
+  # Also produce the bilingual markdown — same render units, same fixes,
+  # source folded with <details><summary>英文原文</summary>.
+  export MD_OUTPUT_PATH="$OUTPUT_DIR/${CHAPTER}-bilingual.md"
 else
   HTML_PATH="$OUTPUT_DIR/${CHAPTER}-zh.html"
   EXPORT_PY="scripts/export_chapter_zh_html.py"
   VERIFY_FLAGS=""
+  export BILINGUAL=0
+  unset MD_OUTPUT_PATH
 fi
 
 QA_REPORT="${HTML_PATH%.html}.qa_report.json"

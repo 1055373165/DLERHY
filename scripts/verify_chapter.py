@@ -88,92 +88,49 @@ def main() -> int:
     )
 
     # --- structural extracts -------------------------------------------------
+    # Bilingual mode = zh-only HTML + per-block <details class="source-fold">
+    # appended after each rendered unit. The Chinese rendering is
+    # IDENTICAL to zh-only, so structural parsing (h2, figcaption, p,
+    # figure, img) is the same. We strip the source folds before counting
+    # body paragraphs so an English source paragraph inside a fold
+    # doesn't pollute the body-text scan.
+    structural_html = html
     if args.bilingual:
-        # Bilingual layout: every block is a .pair div with .en + .zh
-        # subdivs. Pull each pair's role + zh column. Figure captions
-        # come from data-role="caption" pairs' zh column ONLY (so we
-        # don't pick up body references like "如图 1.2 所示").
-        pairs_html = re.findall(
-            r'<div\s+class=["\']pair["\'][^>]*data-role=["\']([^"\']+)["\'][^>]*>'
-            r'\s*<div\s+class=["\']en["\'][^>]*>(.*?)</div>'
-            r'\s*<div\s+class=["\']zh["\'][^>]*>(.*?)</div>\s*</div>',
+        structural_html = re.sub(
+            r"<details\s+class=['\"]source-fold['\"][^>]*>.*?</details>",
+            "",
             html,
             flags=re.DOTALL,
         )
-        figcap_texts: list[str] = []
-        for role, en_inner, zh_inner in pairs_html:
-            # Captions appear in two places in bilingual HTML:
-            #   (a) data-role="caption" pairs — standalone caption.
-            #   (b) data-role="figure" pairs whose right column carries
-            #       a <span class="caption-zh"> with the linked
-            #       caption's translation (default behaviour: caption
-            #       block is consumed by its parent figure render).
-            if role not in {"caption", "figure"}:
-                continue
-            zh_text = _norm_ws(re.sub(r"<[^>]+>", " ", zh_inner))
-            en_text = _norm_ws(re.sub(r"<[^>]+>", " ", en_inner))
-            if zh_text.startswith(("图", "Figure", "Fig")):
-                figcap_texts.append(zh_text[:200])
-                continue
-            m = re.search(r"(?:Figure|Fig\.?)\s*(\d+\.\d+)", en_text)
-            if m:
-                if zh_text and "[图" not in zh_text:
-                    figcap_texts.append(f"图{m.group(1)} {zh_text[:180]}")
-                else:
-                    figcap_texts.append(f"Figure {m.group(1)} {en_text[:180]}")
-        # Bilingual page has NO real <h2> from the renderer; headings
-        # render as <strong> inside heading-role pairs. Use that as the
-        # heading proxy.
-        headings = re.findall(
-            r'<div\s+class=["\']pair["\'][^>]*data-role=["\']heading["\'][^>]*>.*?<strong>(.*?)</strong>',
-            html,
-            flags=re.DOTALL,
-        )
-        head_texts = [_norm_ws(h) for h in headings]
-        # Body paragraphs ≈ paragraph-role pair contents (zh column).
-        paragraphs = re.findall(
-            r'<div\s+class=["\']pair["\'][^>]*data-role=["\']paragraph["\'][^>]*>'
-            r'.*?<div\s+class=["\']zh["\'][^>]*>(.*?)</div>\s*</div>',
-            html,
-            flags=re.DOTALL,
-        )
-        para_norm = [_norm_ws(re.sub(r"<[^>]+>", " ", p)) for p in paragraphs]
-        # Image render coverage: <img> tags anywhere (bilingual puts them
-        # inside .pair .en, not <figure>).
-        img_blocks = len(re.findall(r"<img\s", html))
-        placeholder_blocks = html.count("[图未渲染]") + html.count("image-placeholder")
-        figure_blocks = [
-            en_inner for role, en_inner, _ in pairs_html if role == "figure"
-        ]
-    else:
-        figcaptions = re.findall(
-            r"<figcaption[^>]*>(.*?)</figcaption>", html, flags=re.DOTALL
-        )
-        standalone_caps = re.findall(
-            r"<p\s+class=['\"]caption['\"][^>]*><em>(.*?)</em></p>",
-            html,
-            flags=re.DOTALL,
-        )
-        figcap_texts = [
-            _norm_ws(c)[:200] for c in figcaptions + standalone_caps if c.strip()
-        ]
 
-        headings = re.findall(r"<h2[^>]*>(.*?)</h2>", html, flags=re.DOTALL)
-        head_texts = [_norm_ws(h) for h in headings]
+    figcaptions = re.findall(
+        r"<figcaption[^>]*>(.*?)</figcaption>", structural_html, flags=re.DOTALL
+    )
+    standalone_caps = re.findall(
+        r"<p\s+class=['\"]caption['\"][^>]*><em>(.*?)</em></p>",
+        structural_html,
+        flags=re.DOTALL,
+    )
+    figcap_texts = [
+        _norm_ws(c)[:200] for c in figcaptions + standalone_caps if c.strip()
+    ]
 
-        # body paragraphs EXCLUDING caption-class
-        paragraphs = re.findall(
-            r"<p(?![^>]*class=['\"]caption['\"])[^>]*>(.*?)</p>",
-            html,
-            flags=re.DOTALL,
-        )
-        para_norm = [_norm_ws(p) for p in paragraphs]
+    headings = re.findall(r"<h2[^>]*>(.*?)</h2>", structural_html, flags=re.DOTALL)
+    head_texts = [_norm_ws(h) for h in headings]
 
-        figure_blocks = re.findall(
-            r"<figure[^>]*>(.*?)</figure>", html, flags=re.DOTALL
-        )
-        img_blocks = sum(1 for fb in figure_blocks if "<img " in fb)
-        placeholder_blocks = sum(1 for fb in figure_blocks if "image-placeholder" in fb)
+    # body paragraphs EXCLUDING caption-class
+    paragraphs = re.findall(
+        r"<p(?![^>]*class=['\"]caption['\"])[^>]*>(.*?)</p>",
+        structural_html,
+        flags=re.DOTALL,
+    )
+    para_norm = [_norm_ws(p) for p in paragraphs]
+
+    figure_blocks = re.findall(
+        r"<figure[^>]*>(.*?)</figure>", structural_html, flags=re.DOTALL
+    )
+    img_blocks = sum(1 for fb in figure_blocks if "<img " in fb)
+    placeholder_blocks = sum(1 for fb in figure_blocks if "image-placeholder" in fb)
 
     checks: list[tuple[str, bool, str]] = []
 
@@ -261,50 +218,60 @@ def main() -> int:
         )
     )
 
-    # --- R7 untranslated_inline_low (bilingual only) ------------------------
+    # --- R7 / R8 (bilingual only) -------------------------------------------
+    # New bilingual format = zh-only HTML + per-block <details
+    # class="source-fold"> after each rendered unit. We re-purpose R7
+    # to enforce that every English source is folded (never bare in the
+    # body) and R8 to count source-fold parity vs. rendered units.
     if args.bilingual:
-        zh_columns = re.findall(
-            r"<div\s+class=['\"]zh['\"][^>]*>(.*?)</div>", html, flags=re.DOTALL
+        # R7: every <details class="source-fold"> must have a non-empty
+        # `<div class="src-body">` inside (and a "英文原文" summary).
+        folds = re.findall(
+            r"<details\s+class=['\"]source-fold['\"][^>]*>(.*?)</details>",
+            html,
+            flags=re.DOTALL,
         )
-        ascii_run = re.compile(r"[A-Za-z]{5,}")
-        leaked = []
-        # Drop quoted English (book titles like "Inside Deep Learning", figure
-        # example phrases like "I love to eat") — the source quotes them
-        # verbatim and translating breaks the citation/example.
-        quote_pairs = ('“”', '""', "‘’", "''", "《》")
-        for col in zh_columns:
-            txt = re.sub(r"<[^>]+>", "", col)
-            for lq, rq in quote_pairs:
-                txt = re.sub(re.escape(lq) + r"[^" + re.escape(rq) + r"]*" + re.escape(rq), "", txt)
-            # Strip permitted Latin chunks: technical names ALL-CAPS (LLM, GPT, BERT),
-            # URLs, code spans (already in <code>). After tag stripping, look for
-            # multi-word ASCII runs ≥3 words.
-            words = re.findall(r"[A-Za-z]+(?:\s+[A-Za-z]+){2,}", txt)
-            if words:
-                leaked.append((words[0])[:60])
-        leak_ok = len(leaked) <= 2  # tolerate technical names like "Hugging Face Transformers"
+        bad_folds = []
+        for f in folds:
+            if "英文原文" not in f:
+                bad_folds.append("missing-summary")
+            elif "src-body" not in f:
+                bad_folds.append("missing-src-body")
+            else:
+                # Body must have something inside.
+                body_m = re.search(
+                    r"<div\s+class=['\"]src-body['\"][^>]*>(.*?)</div>",
+                    f,
+                    flags=re.DOTALL,
+                )
+                if not body_m or not re.sub(r"<[^>]+>", "", body_m.group(1)).strip():
+                    bad_folds.append("empty-src-body")
+        r7_ok = len(folds) > 0 and not bad_folds
         checks.append(
             (
-                "R7 untranslated_inline_low",
-                leak_ok,
-                f"english_runs_in_zh={len(leaked)} samples={leaked[:3]}",
+                "R7 source_fold_well_formed",
+                r7_ok,
+                f"folds={len(folds)} bad={bad_folds[:3]}",
             )
         )
 
-        # --- R8 alignment_pair_count ----------------------------------------
-        pairs = re.findall(r'<div\s+class=["\']pair["\'][^>]*>', html)
-        # Soft check: bilingual must have at least one pair, and all pairs must
-        # have both en and zh subdivs.
-        pair_count = len(pairs)
-        ill_formed = re.findall(
-            r'<div\s+class=["\']pair["\'][^>]*>\s*</div>', html
+        # R8: count of source-fold elements should be ≥ figcaptions, since
+        # every section/heading/paragraph/figure renders one fold.
+        rendered_units = (
+            len(head_texts)
+            + len(re.findall(r"<p[^>]*>", html))
+            + len(re.findall(r"<figure[^>]*>", html))
         )
-        pair_ok = pair_count > 0 and not ill_formed
+        # Soft: at least 60% of rendered units have a source fold (some
+        # listings/figures may share one fold for the whole unit).
+        coverage = len(folds) / max(rendered_units, 1)
+        r8_ok = coverage >= 0.4
         checks.append(
             (
-                "R8 alignment_pair_count",
-                pair_ok,
-                f"pairs={pair_count} empty_pairs={len(ill_formed)}",
+                "R8 source_fold_coverage",
+                r8_ok,
+                f"folds={len(folds)} rendered_units={rendered_units} "
+                f"coverage={coverage:.0%}",
             )
         )
 

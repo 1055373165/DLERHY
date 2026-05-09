@@ -55,6 +55,19 @@ ORDINAL_HI = int(os.environ.get("ORDINAL_HI", "247"))
 CHAPTER_LABEL = os.environ.get("CHAPTER_LABEL", "第 2 章")
 CHAPTER_TITLE = os.environ.get("CHAPTER_TITLE", "分词器")
 SOURCE_LABEL = os.environ.get("SOURCE_LABEL", "How Large Language Models Work")
+# Bilingual mode: emit zh-only output PLUS a per-unit <details><summary>
+# 英文原文</summary>...</details> right after each rendered block. This
+# keeps the canonical Chinese rendering unchanged (ALL the merge/fix
+# pre-passes apply identically) and produces a EPUB-style "click-to-
+# reveal source" reading experience instead of a divergent two-column
+# grid that re-runs translation rendering.
+BILINGUAL_MODE = os.environ.get("BILINGUAL", "0") in ("1", "true", "True", "yes")
+# If set, the exporter ALSO writes a markdown file at this path that is
+# generated from the same rendered units as the HTML. This guarantees
+# that zh-only HTML / bilingual HTML / bilingual MD never drift on
+# block boundaries (heading-fragment merges, ordered-list grouping etc.
+# are applied identically across all three products).
+MD_OUTPUT_PATH = os.environ.get("MD_OUTPUT_PATH", "")
 PDF_PATH = Path(
     os.environ.get(
         "PDF_PATH",
@@ -1244,6 +1257,50 @@ def _linked_caption_anchor(block) -> str | None:
     return None
 
 
+def _render_block_md(
+    block,
+    chunks: list[str],
+    untranslated: list[str],
+    image_alt: str | None,
+) -> str:
+    """Markdown twin of `_render_block`. Same merge / demote / kind-
+    detection logic as the HTML renderer, but emits `### h`, plain
+    paragraph, fenced code, `*图：…*` caption, etc. The rendered MD
+    walks through identical block-walking logic as the HTML so all
+    pre-pass fixes (heading-fragment merges, demoted headings, code
+    detection, ...) apply equally.
+    """
+    btype = (block.block_type or "paragraph").lower()
+    if btype in {"image", "figure"}:
+        cap = (image_alt or "").strip()
+        return f"*图：{cap}*" if cap else ""
+    if not chunks and not untranslated:
+        return ""
+    zh_text = _join_zh_chunks_md(chunks)
+    if btype == "heading" and chunks:
+        if not _looks_like_heading_source(block.source_text or "") or not _looks_like_heading_source(chunks[0]):
+            return zh_text
+        return f"### {chunks[0].strip()}"
+    if btype in {"code", "code_block"}:
+        src = block.source_text or ""
+        if not _looks_like_real_code(src):
+            return zh_text
+        return f"```\n{src}\n```"
+    if btype in {"caption", "figure_caption"}:
+        return f"*{zh_text}*" if zh_text else ""
+    if btype == "list_item":
+        text = zh_text or (block.source_text or "").strip()
+        marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", text) else "- "
+        return f"{marker}{text}".rstrip()
+    if btype == "quote":
+        body = zh_text or (block.source_text or "").strip()
+        lines = [f"> {ln}" for ln in body.splitlines() if ln.strip()]
+        return "\n".join(lines)
+    if not zh_text and untranslated:
+        return f"*[未译]* {' '.join(untranslated).strip()}"
+    return zh_text
+
+
 def _render_block(
     block,
     chunks: list[str],
@@ -1469,6 +1526,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   details.untranslated ul {{ margin: .5rem 0 .25rem; padding-left: 1.25rem; }}
   details.untranslated li {{ margin: .15rem 0; }}
+  /* Bilingual mode: per-block English-source fold. EPUB-style — each
+     rendered Chinese unit is followed by a collapsible <details> whose
+     summary is "英文原文". The Chinese rendering itself is identical to
+     zh-only mode; only the optional fold is different. */
+  details.source-fold {{
+    margin: .5rem 0 1.25rem;
+    padding: .35rem .85rem;
+    background: rgba(127, 127, 127, .06);
+    border-left: 3px solid rgba(127, 127, 127, .35);
+    border-radius: 0 4px 4px 0;
+    font-size: .9rem;
+    line-height: 1.7;
+    color: #555;
+  }}
+  details.source-fold[open] {{ background: rgba(127, 127, 127, .09); }}
+  details.source-fold > summary {{
+    cursor: pointer;
+    user-select: none;
+    color: #6a6a6a;
+    font-size: .82rem;
+    padding: .15rem 0;
+    list-style: none;
+  }}
+  details.source-fold > summary::-webkit-details-marker {{ display: none; }}
+  details.source-fold > summary::before {{
+    content: "▸ ";
+    display: inline-block;
+    margin-right: .15rem;
+    transition: transform .15s ease;
+  }}
+  details.source-fold[open] > summary::before {{ content: "▾ "; }}
+  details.source-fold .src-body {{
+    margin-top: .5rem;
+    padding-top: .5rem;
+    border-top: 1px dashed rgba(127, 127, 127, .25);
+    font-family: -apple-system, "Times New Roman", Georgia, serif;
+    color: #444;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    details.source-fold {{
+      background: rgba(255, 255, 255, .04);
+      border-left-color: rgba(255, 255, 255, .2);
+      color: #aaa;
+    }}
+    details.source-fold > summary {{ color: #999; }}
+    details.source-fold .src-body {{ color: #bbb; border-top-color: rgba(255,255,255,.12); }}
+  }}
   footer {{
     margin-top: 3rem; padding-top: 1rem;
     border-top: 1px solid rgba(127,127,127,.2);
@@ -1486,6 +1592,89 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+def _join_zh_chunks_md(chunks: list[str]) -> str:
+    """Plain-text join for Chinese sentence chunks (no HTML)."""
+    cleaned = [c.strip() for c in chunks if c and c.strip()]
+    if not cleaned:
+        return ""
+    out = [cleaned[0]]
+    for cur in cleaned[1:]:
+        prev = out[-1]
+        prev_last = prev[-1] if prev else ""
+        cur_first = cur[:1] if cur else ""
+
+        def _is_cjk(ch: str) -> bool:
+            if not ch:
+                return False
+            cp = ord(ch)
+            return (
+                0x4E00 <= cp <= 0x9FFF
+                or 0x3000 <= cp <= 0x303F
+                or 0xFF00 <= cp <= 0xFFEF
+                or 0x3400 <= cp <= 0x4DBF
+            )
+
+        sep = "" if _is_cjk(prev_last) or _is_cjk(cur_first) else " "
+        out.append(sep + cur)
+    return "".join(out)
+
+
+def _build_source_fold_md(blocks: list, *, label: str = "英文原文") -> str:
+    """Markdown twin of `_build_source_fold`. Emits the same EPUB-style
+    `<details><summary>英文原文</summary>...</details>` element used by
+    the bilingual HTML, but suitable for embedding in a `.md` file.
+    GitHub-flavored markdown supports raw HTML, so frontends still
+    render it as a collapsible disclosure.
+    """
+    pieces: list[str] = []
+    seen: set[str] = set()
+    for blk in blocks:
+        if blk is None or blk.id in seen:
+            continue
+        seen.add(blk.id)
+        text = (blk.source_text or "").strip()
+        if not text:
+            continue
+        pieces.append(text)
+    if not pieces:
+        return ""
+    body = "\n\n".join(pieces)
+    return f"<details>\n<summary>{label}</summary>\n\n{body}\n\n</details>"
+
+
+def _build_source_fold(blocks: list, *, label: str = "英文原文") -> str:
+    """Build a `<details>` element holding the English source for one
+    rendered unit. ``blocks`` is the list of source blocks whose
+    ``source_text`` contributed to the rendered Chinese unit (could be
+    a single block, or a heading-fragment + body, or a list head + items,
+    or a multi-panel master + slaves).
+
+    Each contributing block's source_text is rendered as a paragraph; we
+    preserve hard newlines as `<br>` so PDF line-breaks are visible. The
+    whole thing is wrapped in `<details class="source-fold">` so frontends
+    can collapse / expand it.
+    """
+    pieces: list[str] = []
+    seen: set[str] = set()
+    for blk in blocks:
+        if blk is None or blk.id in seen:
+            continue
+        seen.add(blk.id)
+        text = (blk.source_text or "").strip()
+        if not text:
+            continue
+        pieces.append(html.escape(text).replace("\n", "<br>"))
+    if not pieces:
+        return ""
+    body = "<br><br>".join(pieces)
+    return (
+        f"<details class='source-fold'>"
+        f"<summary>{html.escape(label)}</summary>"
+        f"<div class='src-body'>{body}</div>"
+        f"</details>"
+    )
 
 
 def _models_used_for_range(session) -> str:
@@ -1512,6 +1701,7 @@ def main() -> int:
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     rendered_blocks_html: list[str] = []
+    rendered_blocks_md: list[str] = []
     untranslated_block_count = 0
     rendered_block_count = 0
     total_blocks = 0
@@ -2570,7 +2760,27 @@ def main() -> int:
                 if code_body:
                     listing_html += "\n" + _code_html([], source_text=code_body)
                 listing_html += "\n</figure>"
+                # Bilingual: source fold contains the listing header's
+                # English title only — the code body is already shown
+                # verbatim above and re-folding it would just duplicate.
+                if BILINGUAL_MODE:
+                    fold = _build_source_fold([block])
+                    if fold:
+                        listing_html += "\n" + fold
                 rendered_blocks_html.append(listing_html)
+                # MD twin: title line + fenced code block.
+                listing_md_parts = []
+                if translated:
+                    listing_md_parts.append(f"*代码：{translated}*")
+                elif block.source_text:
+                    listing_md_parts.append(f"*代码：{(block.source_text or '').strip()}*")
+                if code_body:
+                    listing_md_parts.append(f"```\n{code_body}\n```")
+                if BILINGUAL_MODE:
+                    md_fold = _build_source_fold_md([block])
+                    if md_fold:
+                        listing_md_parts.append(md_fold)
+                rendered_blocks_md.append("\n\n".join(listing_md_parts))
                 rendered_block_count += 1
                 continue
             chunks, untranslated = _block_zh_chunks(session, block)
@@ -2655,7 +2865,24 @@ def main() -> int:
                     combined = "\n".join(
                         part for part in (ol_html, untrans_html) if part
                     )
+                    ol_source_blocks = [block]
+                    for item_id in item_ids:
+                        ib = block_by_id.get(item_id)
+                        if ib is not None and ib.id != block.id:
+                            ol_source_blocks.append(ib)
+                    if BILINGUAL_MODE:
+                        fold = _build_source_fold(ol_source_blocks)
+                        if fold:
+                            combined += "\n" + fold
                     rendered_blocks_html.append(combined)
+                    # MD twin: numbered list.
+                    md_lines = [f"{idx}. {it}" for idx, it in enumerate(items, 1)]
+                    md_unit = "\n".join(md_lines)
+                    if BILINGUAL_MODE:
+                        md_fold = _build_source_fold_md(ol_source_blocks)
+                        if md_fold:
+                            md_unit += "\n\n" + md_fold
+                    rendered_blocks_md.append(md_unit)
                     rendered_block_count += 1
                     continue
             # Bullet-list rendering: when source has the "Term—Definition"
@@ -2671,7 +2898,18 @@ def main() -> int:
                     bullet_html = _bullet_list_html(items)
                     untrans_html = _untranslated_html(untranslated)
                     combined = "\n".join(part for part in (bullet_html, untrans_html) if part)
+                    if BILINGUAL_MODE:
+                        fold = _build_source_fold([block])
+                        if fold:
+                            combined += "\n" + fold
                     rendered_blocks_html.append(combined)
+                    # MD twin: bullet list.
+                    md_unit = "\n".join(f"- {it}" for it in items)
+                    if BILINGUAL_MODE:
+                        md_fold = _build_source_fold_md([block])
+                        if md_fold:
+                            md_unit += "\n\n" + md_fold
+                    rendered_blocks_md.append(md_unit)
                     rendered_block_count += 1
                     repair_stats["bullet_lists_split"] += 1
                     repair_details["bullet_lists_split"].append(
@@ -2753,12 +2991,97 @@ def main() -> int:
             block_html = _render_block(
                 block, chunks, untranslated, image_data_uri, image_alt
             )
+            block_md = _render_block_md(block, chunks, untranslated, image_alt)
             untrans_html = _untranslated_html(untranslated)
             combined = "\n".join(part for part in (block_html, untrans_html) if part)
             if not combined:
                 untranslated_block_count += 1
                 continue
+            if BILINGUAL_MODE:
+                # Source fold for the default branch: include EVERY block
+                # whose source contributed to this rendered unit:
+                #   1. the head block itself
+                #   2. heading-fragment merged into this block (from
+                #      ``merge_into_next``: keys are next-block ids,
+                #      values are the fragment ids)
+                #   3. NOTE/TIP callout heading glued onto next body
+                #      (``callout_heading_for_next``)
+                #   4. continuation paragraphs joined via ``join_chain``
+                #   5. for figures: linked or fallback caption block
+                src_blocks: list = []
+                # Heading fragments are emitted FIRST so the source reads
+                # in natural order ("Many LLMs you encounter today...").
+                frag_id = merge_into_next.get(block.id)
+                if frag_id and frag_id != block.id:
+                    fb = block_by_id.get(frag_id)
+                    if fb is not None:
+                        src_blocks.append(fb)
+                callout_id = callout_heading_for_next.get(block.id)
+                if callout_id and callout_id != block.id and callout_id != frag_id:
+                    cb = block_by_id.get(callout_id)
+                    if cb is not None:
+                        src_blocks.append(cb)
+                src_blocks.append(block)
+                if block.id in join_chain:
+                    for cont_id in join_chain[block.id]:
+                        cb = block_by_id.get(cont_id)
+                        if cb is not None:
+                            src_blocks.append(cb)
+                # Figure → include the caption block(s).
+                if btype in {"image", "figure"}:
+                    cap_block = None
+                    if block.id not in rejected_linkage_ids:
+                        linked_anchor = _linked_caption_anchor(block)
+                        if linked_anchor and linked_anchor in caption_by_anchor:
+                            cap_block = caption_by_anchor[linked_anchor]
+                    if cap_block is None and block.id in fallback_caption_for_block:
+                        cap_block = fallback_caption_for_block[block.id]
+                    if cap_block is not None:
+                        src_blocks.append(cap_block)
+                fold = _build_source_fold(src_blocks)
+                if fold:
+                    combined += "\n" + fold
             rendered_blocks_html.append(combined)
+            # MD twin: assemble parallel md form. For figures we still
+            # want the caption line; for paragraphs/headings the rendered
+            # md text is the body.
+            md_unit = (block_md or "").strip()
+            if not md_unit and untranslated:
+                md_unit = f"*[未译]* {' '.join(untranslated).strip()}"
+            if md_unit:
+                if BILINGUAL_MODE:
+                    # Reuse the SAME source_blocks set we built for HTML.
+                    md_src_blocks: list = []
+                    frag_id = merge_into_next.get(block.id)
+                    if frag_id and frag_id != block.id:
+                        fb = block_by_id.get(frag_id)
+                        if fb is not None:
+                            md_src_blocks.append(fb)
+                    callout_id = callout_heading_for_next.get(block.id)
+                    if callout_id and callout_id != block.id and callout_id != frag_id:
+                        cb = block_by_id.get(callout_id)
+                        if cb is not None:
+                            md_src_blocks.append(cb)
+                    md_src_blocks.append(block)
+                    if block.id in join_chain:
+                        for cont_id in join_chain[block.id]:
+                            cb = block_by_id.get(cont_id)
+                            if cb is not None:
+                                md_src_blocks.append(cb)
+                    if btype in {"image", "figure"}:
+                        cap_block = None
+                        if block.id not in rejected_linkage_ids:
+                            linked_anchor = _linked_caption_anchor(block)
+                            if linked_anchor and linked_anchor in caption_by_anchor:
+                                cap_block = caption_by_anchor[linked_anchor]
+                        if cap_block is None and block.id in fallback_caption_for_block:
+                            cap_block = fallback_caption_for_block[block.id]
+                        if cap_block is not None:
+                            md_src_blocks.append(cap_block)
+                    md_fold = _build_source_fold_md(md_src_blocks)
+                    if md_fold:
+                        md_unit += "\n\n" + md_fold
+                rendered_blocks_md.append(md_unit)
             rendered_block_count += 1
 
     output = HTML_TEMPLATE.format(
@@ -2775,6 +3098,20 @@ def main() -> int:
         body="\n".join(rendered_blocks_html),
     )
     OUTPUT_PATH.write_text(output, encoding="utf-8")
+
+    # Optional parallel markdown: walks the SAME rendered_blocks_md
+    # collected during the HTML loop, so MD product can never drift
+    # from HTML on block boundaries / heading-fragment merges.
+    if MD_OUTPUT_PATH:
+        md_path = Path(MD_OUTPUT_PATH)
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        md_lines = [f"## {CHAPTER_LABEL}: {CHAPTER_TITLE}", ""]
+        for unit in rendered_blocks_md:
+            if unit:
+                md_lines.append(unit)
+                md_lines.append("")
+        md_path.write_text("\n".join(md_lines).rstrip() + "\n", encoding="utf-8")
+        print(f"[export] also wrote markdown {md_path}")
 
     # Strict QA classifies each non-trivial repair as a "warning" so a
     # caller can grep the report; image_skip_reasons becomes an "error"
