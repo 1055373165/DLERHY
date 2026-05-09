@@ -801,14 +801,23 @@ def _looks_like_orphan_sentence_lead(text: str) -> bool:
     tokens``, etc. — usually a noun phrase, never an opening connector.
     Sliced body sentences like ``Many LLMs`` or ``However`` instead lead
     with a quantifier or contrast word and lack terminal punctuation.
+
+    Callout labels (NOTE / TIP / WARNING …) ALSO count: when the parser
+    typesets the callout's first words as a heading ("NOTE Vision and
+    language"), the rest of the prose continues in the next paragraph
+    block. Treat any such "callout + first-words" heading as an orphan-
+    merge candidate regardless of which content noun follows the label.
     """
     s = (text or "").strip()
-    if not s or len(s) > 30:
+    if not s or len(s) > 60:
         return False
     if _HEADING_NUMBERED_LEAD.match(s):
         return False
     if _HEADING_SENTENCE_TAIL.search(s):
         return False
+    # NEW: "NOTE Vision and language", "TIP Many algorithms", etc.
+    if _CALLOUT_LABEL_PATTERN.match(s):
+        return True
     return bool(_ORPHAN_LEAD_PATTERN.match(s))
 
 
@@ -1178,6 +1187,23 @@ _STUB_TRANSLATION_NEEDLES = (
 )
 
 
+_CHAPTER_COVER_CACHE_PATH = Path(".test-tmp/_chapter_cover_cache.json")
+
+
+def _load_chapter_cover_cache() -> dict[str, dict]:
+    """Load the precomputed per-item translations of chapter-cover blocks.
+
+    Cache key = block UUID. Value = {"chapter": "chN", "ordinal": int,
+    "items": [{"en": "...", "zh": "..."}, ...]}. Built once via
+    `scripts/translate_chapter_covers.py`. Missing → empty dict (graceful
+    fallback to legacy single-paragraph render).
+    """
+    try:
+        return json.loads(_CHAPTER_COVER_CACHE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
 def _is_stub_translation(zh_joined: str) -> bool:
     s = (zh_joined or "").strip()
     if not s or len(s) > 60:
@@ -1526,6 +1552,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   details.untranslated ul {{ margin: .5rem 0 .25rem; padding-left: 1.25rem; }}
   details.untranslated li {{ margin: .15rem 0; }}
+  /* "This chapter covers" callout — same warm parchment styling as
+     the source PDF callout box. Rendered for the single paragraph
+     block that the parser collapsed all chapter-cover bullets into;
+     `_render_chapter_cover_html` re-emits one <li> per item using the
+     precomputed cache. */
+  aside.chapter-cover {{
+    margin: 1.5rem 0 2rem;
+    padding: 1rem 1.25rem;
+    background: rgba(244, 236, 216, .85);
+    border-left: 3px solid #5a6a82;
+    border-radius: 4px;
+    color: #2c3a52;
+  }}
+  aside.chapter-cover h3 {{
+    margin: 0 0 .55rem;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: #5a6a82;
+    text-transform: none;
+  }}
+  aside.chapter-cover ul {{
+    margin: 0; padding-left: 1.2rem;
+  }}
+  aside.chapter-cover li {{
+    margin: .25rem 0;
+    line-height: 1.7;
+    color: #2c3a52;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    aside.chapter-cover {{
+      background: rgba(255, 255, 255, .04);
+      border-left-color: #8a9ab2;
+      color: #d2d8e0;
+    }}
+    aside.chapter-cover h3 {{ color: #aab4c8; }}
+    aside.chapter-cover li {{ color: #d2d8e0; }}
+  }}
   /* Bilingual mode: per-block English-source fold. EPUB-style — each
      rendered Chinese unit is followed by a collapsible <details> whose
      summary is "英文原文". The Chinese rendering itself is identical to
@@ -1592,6 +1656,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+def _render_chapter_cover_html(items: list[dict]) -> str:
+    """Render a chapter-cover bullet list with the EPUB-style heading.
+
+    Each ``item`` is ``{"en": "...", "zh": "..."}`` from the precomputed
+    cache. zh missing → fall back to en in italics so the structure
+    survives even with a partial cache.
+    """
+    if not items:
+        return ""
+    out = ["<aside class='chapter-cover'>", "<h3>本章涵盖</h3>", "<ul>"]
+    for it in items:
+        zh = (it.get("zh") or "").strip()
+        en = (it.get("en") or "").strip()
+        if zh:
+            out.append(f"  <li>{html.escape(zh)}</li>")
+        elif en:
+            out.append(f"  <li><em>{html.escape(en)}</em></li>")
+    out.append("</ul>")
+    out.append("</aside>")
+    return "\n".join(out)
+
+
+def _render_chapter_cover_md(items: list[dict]) -> str:
+    if not items:
+        return ""
+    lines = ["### 本章涵盖", ""]
+    for it in items:
+        zh = (it.get("zh") or "").strip()
+        en = (it.get("en") or "").strip()
+        if zh:
+            lines.append(f"- {zh}")
+        elif en:
+            lines.append(f"- *{en}*")
+    return "\n".join(lines)
 
 
 def _join_zh_chunks_md(chunks: list[str]) -> str:
@@ -1776,6 +1876,16 @@ def main() -> int:
             if (blk.block_type or "").lower() in {"caption", "figure_caption"} and blk.source_anchor:
                 caption_by_anchor[blk.source_anchor] = blk
         consumed_caption_ids: set[str] = set()
+
+        # Chapter-cover cache: pre-translated bullet items per cover
+        # paragraph block. Indexed by block UUID. The exporter renders
+        # ``<aside class='chapter-cover'>`` for matching blocks instead
+        # of the legacy single-paragraph summary.
+        _cover_cache_full = _load_chapter_cover_cache()
+        chapter_cover_blocks: dict[str, list[dict]] = {
+            blk_id: entry.get("items") or []
+            for blk_id, entry in _cover_cache_full.items()
+        }
         # Reject linkages where the linked caption's source text is actually
         # body prose (e.g. "Figure 3.1 describes the essential components...")
         # rather than a real caption (e.g. "Figure 3.1 The basic components...").
@@ -2733,6 +2843,29 @@ def main() -> int:
             ):
                 repair_stats["page_artifacts_suppressed"] += 1
                 continue
+            # Chapter-cover bullet list: a single paragraph block whose
+            # source joined 4-5 list items the parser couldn't keep
+            # apart. Render via the precomputed per-item translations
+            # so the structure matches the source PDF.
+            if str(block.id) in chapter_cover_blocks and btype == "paragraph":
+                items = chapter_cover_blocks[str(block.id)]
+                cover_html = _render_chapter_cover_html(items)
+                cover_md = _render_chapter_cover_md(items)
+                if cover_html:
+                    if BILINGUAL_MODE:
+                        fold = _build_source_fold([block])
+                        if fold:
+                            cover_html += "\n" + fold
+                        md_fold = _build_source_fold_md([block])
+                        if md_fold:
+                            cover_md += "\n\n" + md_fold
+                    rendered_blocks_html.append(cover_html)
+                    if cover_md:
+                        rendered_blocks_md.append(cover_md)
+                    rendered_block_count += 1
+                    repair_stats.setdefault("chapter_cover_bullets_split", 0)
+                    repair_stats["chapter_cover_bullets_split"] += 1
+                    continue
             # Footnote blocks in this book are page running-headers, not
             # real footnotes (parser misclassifies "4.5 Is bigger better?
             # \n63" as a footnote). Always drop — the section heading is
