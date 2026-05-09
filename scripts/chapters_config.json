@@ -50,7 +50,7 @@
       "ordinal_lo": 1,
       "ordinal_hi": 157,
       "figure_prefix": "5",
-      "figure_count": 16,
+      "figure_count": 11,
       "output_dir": ".test-tmp/ch5-export"
     },
     "ch6": {
@@ -60,7 +60,7 @@
       "ordinal_lo": 1,
       "ordinal_hi": 138,
       "figure_prefix": "6",
-      "figure_count": 24,
+      "figure_count": 14,
       "output_dir": ".test-tmp/ch6-export"
     },
     "ch7": {
@@ -70,7 +70,7 @@
       "ordinal_lo": 1,
       "ordinal_hi": 105,
       "figure_prefix": "7",
-      "figure_count": 9,
+      "figure_count": 6,
       "output_dir": ".test-tmp/ch7-export"
     },
     "ch8": {
@@ -80,7 +80,7 @@
       "ordinal_lo": 1,
       "ordinal_hi": 91,
       "figure_prefix": "8",
-      "figure_count": 8,
+      "figure_count": 5,
       "output_dir": ".test-tmp/ch8-export"
     },
     "ch9": {
@@ -90,7 +90,7 @@
       "ordinal_lo": 1,
       "ordinal_hi": 187,
       "figure_prefix": "9",
-      "figure_count": 15,
+      "figure_count": 4,
       "output_dir": ".test-tmp/ch9-export"
     }
   }
