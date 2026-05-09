@@ -58,7 +58,9 @@ else
   EXPORT_PY="scripts/export_chapter_zh_html.py"
   VERIFY_FLAGS=""
   export BILINGUAL=0
-  unset MD_OUTPUT_PATH
+  # zh-only also gets a parallel markdown — same renderer, no source
+  # fold (BILINGUAL_MODE=False), reads as a clean Chinese-only document.
+  export MD_OUTPUT_PATH="$OUTPUT_DIR/${CHAPTER}-zh.md"
 fi
 
 QA_REPORT="${HTML_PATH%.html}.qa_report.json"
