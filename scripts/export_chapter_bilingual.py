@@ -457,6 +457,28 @@ def main() -> int:
                 ):
                     total_blocks -= 1
                     continue
+            # Page-footer / page-number artifacts that DID get translated
+            # (e.g. "GE 121 9312", bare "4"): drop regardless of
+            # translatability — the surrounding text already carries the
+            # reading flow, the artifact is just typesetter noise.
+            if btype in {"paragraph", "heading", "footnote"} and zhmod._is_page_artifact(src_text):
+                total_blocks -= 1
+                continue
+            # Footnote blocks in this book are page running-headers, not
+            # real footnotes ("4.5 Is bigger better?\n63"). Always drop.
+            if btype == "footnote":
+                total_blocks -= 1
+                continue
+            # Stub-translation guard: short source ("5") + formulaic stub
+            # ("这是当前段落中唯一的句子。") → drop the pair.
+            if (
+                btype in {"paragraph", "heading"}
+                and len(src_text.strip()) <= 4
+            ):
+                stub_chunks, _ = zhmod._block_zh_chunks(session, block)
+                if stub_chunks and zhmod._is_stub_translation("".join(stub_chunks)):
+                    total_blocks -= 1
+                    continue
 
             # ---- left column: English source ----
             if btype in {"figure", "image"}:

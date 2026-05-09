@@ -182,9 +182,28 @@ def _render_block_md(block, session, consumed_caption_ids: set) -> str:
     if not _is_translatable_block(block, session):
         return ""
 
+    # Drop page-footer / page-number artifacts even when translatable
+    # ("GE 121 9312", bare "4"): the parser leaks these from chapter
+    # ends, the translator either copies them through or substitutes a
+    # stub. Either way they are noise, not content.
+    if btype in {"paragraph", "heading", "footnote"} and zhmod._is_page_artifact(src_text):
+        return ""
+    # Footnotes in this book are running-page headers, not real refs.
+    if btype == "footnote":
+        return ""
+
     # Translatable: zh body + folded en source.
     chunks, _untrans = zhmod._block_zh_chunks(session, block)
     zh_text = _join_chunks(chunks)
+
+    # Stub-translation guard: short meaningless source + formulaic stub
+    # ("这是当前段落中唯一的句子。") → drop entirely.
+    if (
+        btype in {"paragraph", "heading"}
+        and len(src_text) <= 4
+        and zhmod._is_stub_translation(zh_text)
+    ):
+        return ""
 
     if btype == "heading":
         # Headings render as h3 with zh text; en source folded.

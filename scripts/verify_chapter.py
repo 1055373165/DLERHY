@@ -268,8 +268,14 @@ def main() -> int:
         )
         ascii_run = re.compile(r"[A-Za-z]{5,}")
         leaked = []
+        # Drop quoted English (book titles like "Inside Deep Learning", figure
+        # example phrases like "I love to eat") — the source quotes them
+        # verbatim and translating breaks the citation/example.
+        quote_pairs = ('“”', '""', "‘’", "''", "《》")
         for col in zh_columns:
             txt = re.sub(r"<[^>]+>", "", col)
+            for lq, rq in quote_pairs:
+                txt = re.sub(re.escape(lq) + r"[^" + re.escape(rq) + r"]*" + re.escape(rq), "", txt)
             # Strip permitted Latin chunks: technical names ALL-CAPS (LLM, GPT, BERT),
             # URLs, code spans (already in <code>). After tag stripping, look for
             # multi-word ASCII runs ≥3 words.
