@@ -1188,6 +1188,20 @@ _STUB_TRANSLATION_NEEDLES = (
 
 
 _CHAPTER_COVER_CACHE_PATH = Path(".test-tmp/_chapter_cover_cache.json")
+_SIDEBAR_CALLOUT_CACHE_PATH = Path(".test-tmp/_sidebar_callout_cache.json")
+
+
+def _load_sidebar_callout_cache() -> dict[str, dict]:
+    """Load precomputed sidebar-callout translations.
+
+    Key = block UUID. Value = ``{title_en, title_zh, body_en, body_zh,
+    chapter_id, ordinal}``. Built by ``scripts/translate_sidebar_callouts.py``.
+    Missing → empty (graceful fallback to legacy paragraph render).
+    """
+    try:
+        return json.loads(_SIDEBAR_CALLOUT_CACHE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 
 def _load_chapter_cover_cache() -> dict[str, dict]:
@@ -1552,6 +1566,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   details.untranslated ul {{ margin: .5rem 0 .25rem; padding-left: 1.25rem; }}
   details.untranslated li {{ margin: .15rem 0; }}
+  /* Sidebar-callout box (e.g. "Training LLMs is expensive"). The
+     parser smashed the bold title and body into one paragraph block;
+     ``scripts/translate_sidebar_callouts.py`` re-translates them
+     separately and the exporter re-renders the structured version. */
+  aside.sidebar-callout {{
+    margin: 1.5rem 0 1.5rem;
+    padding: 0.95rem 1.15rem;
+    background: rgba(244, 236, 216, .85);
+    border-radius: 4px;
+    color: #2c3a52;
+  }}
+  aside.sidebar-callout .callout-title {{
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: #2a4d8f;
+    margin-bottom: .45rem;
+    letter-spacing: .01em;
+  }}
+  aside.sidebar-callout .callout-body {{
+    margin: 0;
+    line-height: 1.75;
+    color: #2c3a52;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    aside.sidebar-callout {{
+      background: rgba(255, 255, 255, .05);
+      color: #d2d8e0;
+    }}
+    aside.sidebar-callout .callout-title {{ color: #8aabd5; }}
+    aside.sidebar-callout .callout-body {{ color: #d2d8e0; }}
+  }}
   /* "This chapter covers" callout — same warm parchment styling as
      the source PDF callout box. Rendered for the single paragraph
      block that the parser collapsed all chapter-cover bullets into;
@@ -1656,6 +1701,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+def _render_sidebar_callout_html(entry: dict) -> str:
+    """Render a sidebar-callout block (bold title + body) as a tinted
+    aside, matching the source PDF's visual treatment of the box.
+    """
+    title = (entry.get("title_zh") or entry.get("title_en") or "").strip()
+    body = (entry.get("body_zh") or entry.get("body_en") or "").strip()
+    if not title and not body:
+        return ""
+    out = ["<aside class='sidebar-callout'>"]
+    if title:
+        out.append(f"<div class='callout-title'>{html.escape(title)}</div>")
+    if body:
+        out.append(f"<p class='callout-body'>{html.escape(body)}</p>")
+    out.append("</aside>")
+    return "\n".join(out)
+
+
+def _render_sidebar_callout_md(entry: dict) -> str:
+    title = (entry.get("title_zh") or entry.get("title_en") or "").strip()
+    body = (entry.get("body_zh") or entry.get("body_en") or "").strip()
+    if not title and not body:
+        return ""
+    parts = []
+    if title:
+        parts.append(f"**{title}**")
+    if body:
+        parts.append(body)
+    return "\n\n".join(parts)
 
 
 def _render_chapter_cover_html(items: list[dict]) -> str:
@@ -1973,6 +2048,12 @@ def main() -> int:
             blk_id: entry.get("items") or []
             for blk_id, entry in _cover_cache_full.items()
         }
+
+        # Sidebar-callout cache: hand-curated re-translations of boxed
+        # callouts (bold title + body) that the parser collapsed into a
+        # single paragraph. Indexed by block UUID. Built by
+        # ``scripts/translate_sidebar_callouts.py``.
+        sidebar_callout_cache: dict[str, dict] = _load_sidebar_callout_cache()
         # Reject linkages where the linked caption's source text is actually
         # body prose (e.g. "Figure 3.1 describes the essential components...")
         # rather than a real caption (e.g. "Figure 3.1 The basic components...").
@@ -2382,9 +2463,6 @@ def main() -> int:
                 continue
             if btype != "heading":
                 continue
-            # Only consider short fragments that don't look like real titles.
-            if not _looks_like_orphan_sentence_lead(src):
-                continue
             if i + 1 >= len(blocks):
                 continue
             next_blk = blocks[i + 1]
@@ -2399,17 +2477,41 @@ def main() -> int:
             if (next_blk.ordinal - blk.ordinal) > 1:
                 continue
             # Continuation marker: next block starts with a lowercase letter
-            # (English) — real subsection headings are followed by capitalised
-            # body text or another heading.
+            # (English) — real subsection headings are always followed by a
+            # CAPITALISED body sentence. A lowercase opening is the smoking
+            # gun that this "heading" is a sliced body fragment.
             first_char = next_src[:1]
             if not first_char.islower():
+                continue
+            # Decide whether to merge. Two acceptance paths:
+            #   (a) Recognised orphan-lead shape (Many/However/NOTE/...) —
+            #       used to be the only signal.
+            #   (b) Short noun-phrase fragment (≤60 chars, no terminator,
+            #       no numbered-section lead). Combined with the lowercase
+            #       continuation above this is enough — real titles like
+            #       "Embedding layers" pass length but are always followed
+            #       by a capital, so they're filtered earlier.
+            is_orphan_lead = _looks_like_orphan_sentence_lead(src)
+            is_short_noun_fragment = (
+                len(src) <= 60
+                and not _HEADING_NUMBERED_LEAD.match(src)
+                and not _HEADING_SENTENCE_TAIL.search(src)
+            )
+            if not (is_orphan_lead or is_short_noun_fragment):
                 continue
             merge_into_next[next_blk.id] = blk.id
             skip_render_block_ids.add(blk.id)
             repair_stats["heading_fragments_merged"] += 1
-            # Callout-prefix headings carry semantic content ("注意:")
-            # that must survive into the merged paragraph.
-            if _is_callout_lead_heading(src):
+            # The heading's translation has semantic content that must
+            # survive into the merged paragraph for these cases:
+            #   1. Callout-prefix headings ("NOTE", "TIP", ...) — the
+            #      "注意:" prefix must stay.
+            #   2. Short noun-phrase fragments that turned out to be the
+            #      SUBJECT of the body sentence (e.g. "Generative AI
+            #      (GAI or GenAI)" + "is poised to change..."). Without
+            #      gluing the heading back, the body translation reads
+            #      with a pronoun ("它") and the antecedent is lost.
+            if _is_callout_lead_heading(src) or is_short_noun_fragment:
                 callout_heading_for_next[next_blk.id] = blk.id
                 repair_stats.setdefault("callout_headings_glued", 0)
                 repair_stats["callout_headings_glued"] += 1
@@ -2934,6 +3036,50 @@ def main() -> int:
             # source joined 4-5 list items the parser couldn't keep
             # apart. Render via the precomputed per-item translations
             # so the structure matches the source PDF.
+            # Sidebar-callout box (bold title + body smashed into one
+            # paragraph by the parser). Hand-curated cache supplies the
+            # split + re-translation; render as a styled aside.
+            if str(block.id) in sidebar_callout_cache and btype == "paragraph":
+                entry = sidebar_callout_cache[str(block.id)]
+                cb_html = _render_sidebar_callout_html(entry)
+                cb_md = _render_sidebar_callout_md(entry)
+                if cb_html:
+                    if BILINGUAL_MODE:
+                        # Build the source fold from the corrected title + body
+                        # rather than the block's raw source_text (which has
+                        # the title's leading word dropped by the parser).
+                        en_title = (entry.get("title_en") or "").strip()
+                        en_body = (entry.get("body_en") or "").strip()
+                        if en_title or en_body:
+                            src_parts = []
+                            if en_title:
+                                src_parts.append(f"<strong>{html.escape(en_title)}</strong>")
+                            if en_body:
+                                src_parts.append(html.escape(en_body))
+                            cb_html += (
+                                "\n<details class='source-fold'>"
+                                f"<summary>{html.escape('英文原文')}</summary>"
+                                f"<div class='src-body'>{'<br><br>'.join(src_parts)}</div>"
+                                "</details>"
+                            )
+                            md_src = ""
+                            if en_title:
+                                md_src += f"**{en_title}**"
+                                if en_body:
+                                    md_src += "\n\n"
+                            if en_body:
+                                md_src += en_body
+                            cb_md += (
+                                "\n\n<details>\n<summary>英文原文</summary>\n\n"
+                                f"{md_src}\n\n</details>"
+                            )
+                    rendered_blocks_html.append(cb_html)
+                    if cb_md:
+                        rendered_blocks_md.append(cb_md)
+                    rendered_block_count += 1
+                    repair_stats.setdefault("sidebar_callouts_restructured", 0)
+                    repair_stats["sidebar_callouts_restructured"] += 1
+                    continue
             if str(block.id) in chapter_cover_blocks and btype == "paragraph":
                 items = chapter_cover_blocks[str(block.id)]
                 cover_html = _render_chapter_cover_html(items)

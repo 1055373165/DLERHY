@@ -187,28 +187,25 @@ In particular, the first part of this book focuses on what LLMs do: their inputs
 
 </details>
 
-训练LLM代价高昂：对大多数人而言，从头训练一个LLM并不现实——最低投入也要10万美元，而要想与OpenAI竞争则需要1亿美元级别的投资。与此同时，可用于训练LLM的资源也在不断演进。因此，我们不会带你过一遍今天训练LLM的具体流程，而是专注于更具长期价值的内容——那些我们认为若干年后仍然有效的知识，而不是几个月后就会过时的示例代码。
+**训练LLM成本高昂**
+
+训练大型语言模型（LLM）对大多数人而言并不现实——这至少需要10万美元的投资，若想与OpenAI竞争，则需投入1亿美元。与此同时，训练LLM所需的资源也在不断演变。因此，我们不会带你了解当前训练LLM的具体流程，而是聚焦于更具长期价值的内容——那些我们认为在未来数年仍具参考意义的实用知识，而非几个月内就可能过时的示例代码。
 
 <details>
 <summary>英文原文</summary>
 
-LLMs is expensive Training an LLM is not realistically possible for most people; it is a ≥$100, 000 investment at a minimum and would be a $100 million effort to try to compete with OpenAI. At the same time, the resources available for training LLMs are constantly evolving. As a result, instead of walking you through what training an LLM looks like today, we focus on content with a longer shelf life—helpful knowledge that we believe will be valid years from now instead of example code that could be out of date in just a few months.
+**Training LLMs is expensive**
+
+Training an LLM is not realistically possible for most people; it is a ≥$100, 000 investment at a minimum and would be a $100 million effort to try to compete with OpenAI. At the same time, the resources available for training LLMs are constantly evolving. As a result, instead of walking you through what training an LLM looks like today, we focus on content with a longer shelf life—helpful knowledge that we believe will be valid years from now instead of example code that could be out of date in just a few months.
 
 </details>
 
-### 生成式人工智能（GAI 或 GenAI）
+生成式人工智能（GAI 或 GenAI）它将改变我们生产和与信息互动的方式。2022年11月ChatGPT的推出突显了现代AI的能力，并吸引了全球大量人群。目前，你可以免费注册 https://chat.openai.com/ 进行尝试。如果你输入提示词“用两句话总结以下文本”，然后粘贴本章的所有介绍性文本，你将得到类似如下的输出。“最近人工智能，尤其是OpenAI的ChatGPT等大型语言模型（LLM）备受关注，突显了它们在自然语言处理方面的强大能力。本书旨在为读者提供对LLM的通俗易懂的理解，涵盖其运作细节、潜在应用、局限性以及围绕其使用的伦理考量，同时假定读者仅具备基本的编码概念和极少的数学背景。这令人印象深刻，对一般受众而言，这种能力似乎凭空出现。”当你访问OpenAI的网站并注册ChatGPT时，你可能会注意到一个类似图1.4所示的选项。正如GPT-4的名称所示，截至撰写本文时，OpenAI正在开发其第四代GPT模型。像GPT-4这样的LLM是机器学习研究中一个成熟的领域，旨在创建能够综合和响应信息并生成类人输出的算法。这种能力开启了人与机器之间先前只存在于科幻小说中的多个交互领域。ChatGPT中编码的语言表征的强大能力使其能够实现令人信服的对话、指令遵循、摘要生成、问答、内容创作以及更多应用。事实上，这项技术的许多可能应用可能还不存在，因为
 
 <details>
 <summary>英文原文</summary>
 
 Generative AI (GAI or GenAI)
-
-</details>
-
-它将改变我们生产和与信息互动的方式。2022年11月ChatGPT的推出突显了现代AI的能力，并吸引了全球大量人群。目前，你可以免费注册 https://chat.openai.com/ 进行尝试。如果你输入提示词“用两句话总结以下文本”，然后粘贴本章的所有介绍性文本，你将得到类似如下的输出。“最近人工智能，尤其是OpenAI的ChatGPT等大型语言模型（LLM）备受关注，突显了它们在自然语言处理方面的强大能力。本书旨在为读者提供对LLM的通俗易懂的理解，涵盖其运作细节、潜在应用、局限性以及围绕其使用的伦理考量，同时假定读者仅具备基本的编码概念和极少的数学背景。这令人印象深刻，对一般受众而言，这种能力似乎凭空出现。”当你访问OpenAI的网站并注册ChatGPT时，你可能会注意到一个类似图1.4所示的选项。正如GPT-4的名称所示，截至撰写本文时，OpenAI正在开发其第四代GPT模型。像GPT-4这样的LLM是机器学习研究中一个成熟的领域，旨在创建能够综合和响应信息并生成类人输出的算法。这种能力开启了人与机器之间先前只存在于科幻小说中的多个交互领域。ChatGPT中编码的语言表征的强大能力使其能够实现令人信服的对话、指令遵循、摘要生成、问答、内容创作以及更多应用。事实上，这项技术的许多可能应用可能还不存在，因为
-
-<details>
-<summary>英文原文</summary>
 
 is poised to change how we produce and interact with information. The introduction of ChatGPT in November 2022 highlighted the capabilities of modern AI and fascinated a significant portion of the world. Currently, you can sign up for free at https://chat.openai.com/ to try it out. If you enter the text prompt “Summarize the following text in two sentences,” followed by all of the introductory text from this chapter, you will get something similar to the following. “The recent surge in attention towards artificial intelligence, particularly large language models (LLMs) like ChatGPT from OpenAI, has highlighted their vast capabilities in natural language processing. This book aims to provide readers with a conversational understanding of LLMs, their operational intricacies, potential applications, limitations, and the ethical considerations surrounding their use while assuming only a basic familiarity with coding concepts and minimal mathematical background. That’s pretty impressive, and to a casual audience, it may seem like this capability has come out of nowhere.” When you visit OpenAI’s website and sign up for ChatGPT, you may notice an option similar to that shown in figure 1.4. As the name GPT-4 implies, Open AI is, as of this writing, working on its fourth generation of GPT models. LLMs like GPT-4 are a well-established area of ML research in creating algorithms that can synthesize and react to information and produce outputs that appear human generated. This ability unlocks several areas of interaction between people and machines that previously existed only in science fiction. The strength of the language representation encoded into ChatGPT enables convincing dialog, instruction following, summary generation, question answering, content creation, and many more applications. Indeed, it is likely that many possible applications of this technology do not yet exist because
 
@@ -778,19 +775,12 @@ This nuance of tokenizer implementation is fertile ground for software bugs. Dif
 
 </details>
 
-### 同形字造成混乱 同形字
+同形字造成混乱 同形字同形异义词是开发者在使用多种人类语言或考虑处理外部数据的安全隐患时可能遇到的问题。当输入来自任意用户时，有时可能带有恶意，试图诱使模型产生不良行为。针对大语言模型的一种攻击方式就是同形异义词攻击。同形异义词是指两个或多个字符具有不同的字节编码，但在屏幕上显示时看起来一模一样。例如，西欧语言中使用的拉丁字母“H”与东欧和中亚地区使用的西里尔字母“H”。BPE会将使用不同字节编码的同形异义词编码为不同的token。因此，同形异义词会膨胀文本中的token数量，改变大语言模型解析信息的方式，并增加计算成本。一个有趣的同形异义词例子是Unicode字符U+200B，也称为“零宽度空格”。该字符用于排版，会占用空间，但不会打印任何内容、显示任何内容，也不会改变文档的渲染方式。零宽度空格是Unicode规范中众多奇怪而有趣的东西之一，可能会给你带来麻烦。因此，许多服务采用标准化步骤，移除这些奇怪字符，并将同形异义词替换为规范表示（即任何看起来像“a”的字符都必须编码为a）。例如，OpenAI当前的tokenizer界面会移除同形异义词。如果你想要在自己的硬件或用户设备上部署大语言模型，就必须考虑同形异义词问题。
 
 <details>
 <summary>英文原文</summary>
 
 HOMOGLYPHS CREATE CONFUSION Homoglyphs
-
-</details>
-
-同形异义词是开发者在使用多种人类语言或考虑处理外部数据的安全隐患时可能遇到的问题。当输入来自任意用户时，有时可能带有恶意，试图诱使模型产生不良行为。针对大语言模型的一种攻击方式就是同形异义词攻击。同形异义词是指两个或多个字符具有不同的字节编码，但在屏幕上显示时看起来一模一样。例如，西欧语言中使用的拉丁字母“H”与东欧和中亚地区使用的西里尔字母“H”。BPE会将使用不同字节编码的同形异义词编码为不同的token。因此，同形异义词会膨胀文本中的token数量，改变大语言模型解析信息的方式，并增加计算成本。一个有趣的同形异义词例子是Unicode字符U+200B，也称为“零宽度空格”。该字符用于排版，会占用空间，但不会打印任何内容、显示任何内容，也不会改变文档的渲染方式。零宽度空格是Unicode规范中众多奇怪而有趣的东西之一，可能会给你带来麻烦。因此，许多服务采用标准化步骤，移除这些奇怪字符，并将同形异义词替换为规范表示（即任何看起来像“a”的字符都必须编码为a）。例如，OpenAI当前的tokenizer界面会移除同形异义词。如果你想要在自己的硬件或用户设备上部署大语言模型，就必须考虑同形异义词问题。
-
-<details>
-<summary>英文原文</summary>
 
 are a problem developers may encounter when working with multiple human languages or considering the security implications of processing externally provided data. When input comes from arbitrary users, sometimes it may be nefarious and want to trick your model into bad behavior. One way that could be done against an LLM is with a homoglyph attack. A homoglyph is when two or more characters have different byte encodings but appear identical when rendered on the screen. One example is the Latin letter “H” used in most Western European languages and the Cyrillic “H” used throughout Eastern Europe and Central Asia. BPE will encode homoglyphs that use different byte encodings into different tokens. As a result, homoglyphs can inflate the number of tokens in a text, change how an LLM parses the information, and run up your compute costs. An amusing example of a homoglyph is the Unicode character U+200B, also known as the “zero width space.” This character is used in typesetting and takes up space, but it does not print anything, show anything, or change anything about how a document is rendered. The zero width space is one of many strange and interesting things that exist within the Unicode specification and could be used to cause you pain. Many services thus employ normalization steps that remove such strange characters and replace homoglyphs with a canonical representation (i.e., anything that looks like an “a” must be encoded as an a). For example, OpenAI’s current tokenizer interface will remove homoglyphs. You must consider homoglyphs if you want to deploy an LLM on your hardware or a user’s device.
 
@@ -934,37 +924,23 @@ backstopped large language models Schoolhouse How you process sentences to under
 
 </details>
 
-4 Sincea
+4 Sincea令牌是 LLM 操作的基本单位，那么从技术上看，为什么分词器表示效率较低的语言成本更高呢？
 
 <details>
 <summary>英文原文</summary>
 
 4 Sincea
-
-</details>
-
-令牌是 LLM 操作的基本单位，那么从技术上看，为什么分词器表示效率较低的语言成本更高呢？
-
-<details>
-<summary>英文原文</summary>
 
 token is the basic unit an LLM operates on, why does it make sense (technologically) that languages less efficiently represented by a tokenizer would cost more?
 
 </details>
 
-5 这是一个伦理问题吗？
+5 这是一个伦理问题吗？大语言模型根据用户使用的语言不同，对同一服务收取不同的费用，这本身是否就是一个问题？你认为这是歧视吗？
 
 <details>
 <summary>英文原文</summary>
 
 5 Isit an ethical
-
-</details>
-
-大语言模型根据用户使用的语言不同，对同一服务收取不同的费用，这本身是否就是一个问题？你认为这是歧视吗？
-
-<details>
-<summary>英文原文</summary>
 
 problem that LLMs charge different amounts to people for the same service based on what language they speak? Would you consider this discrimination?
 
@@ -1070,7 +1046,7 @@ Yet this process is, indeed, how LLMs produce outputs. In this chapter, we will 
 
 </details>
 
-如今你遇到的所有大语言模型都使用一种称为Transformer的软件架构来解释token并生成输出。该架构由一系列算法和数据结构组成，这些算法和数据结构通过将信息表示为神经网络中的数字来存储信息。从本质上讲，Transformer是序列预测算法。虽然人们常用“推理”或“理解”来描述它们，但实际上它们所做的是预测token。Transformer有三种不同的token预测方法。尽管我们主要关注著名的GPT架构（更正式的名称是解码器-仅模型），但也有必要介绍编码器-仅模型和编码器-解码器模型：
+众多LLM如今你遇到的所有大语言模型都使用一种称为Transformer的软件架构来解释token并生成输出。该架构由一系列算法和数据结构组成，这些算法和数据结构通过将信息表示为神经网络中的数字来存储信息。从本质上讲，Transformer是序列预测算法。虽然人们常用“推理”或“理解”来描述它们，但实际上它们所做的是预测token。Transformer有三种不同的token预测方法。尽管我们主要关注著名的GPT架构（更正式的名称是解码器-仅模型），但也有必要介绍编码器-仅模型和编码器-解码器模型：
 
 <details>
 <summary>英文原文</summary>
@@ -1280,19 +1256,12 @@ Shockingly, we cannot guarantee that these semantic relationships will form duri
 
 </details>
 
-### 添加位置信息：一个关键问题
+添加位置信息：一个关键问题标准Transformer无法理解序列信息。如果向Transformer输入一个句子并打乱所有词元顺序，它将把所有可能的排列视为完全相同！图3.6展示了这一问题。
 
 <details>
 <summary>英文原文</summary>
 
 ADDING POSITIONAL INFORMATION One critical problem
-
-</details>
-
-标准Transformer无法理解序列信息。如果向Transformer输入一个句子并打乱所有词元顺序，它将把所有可能的排列视为完全相同！图3.6展示了这一问题。
-
-<details>
-<summary>英文原文</summary>
 
 is that a standard transformer does not understand sequential information. If you gave the transformer one sentence and rearranged all the tokens, it would view all possible permutations of the tokens as identical! That problem is illustrated in figure 3.6.
 
@@ -1484,19 +1453,12 @@ What is missing from this process is how we convert a vector, an array of floati
 
 </details>
 
-2 随机选择
+2 随机选择根据计算出的概率选择一个词元。
 
 <details>
 <summary>英文原文</summary>
 
 2 Randomly pick
-
-</details>
-
-根据计算出的概率选择一个词元。
-
-<details>
-<summary>英文原文</summary>
 
 a token according to the probabilities calculated.
 
@@ -1650,7 +1612,7 @@ Summary
 
 </details>
 
-Token作为语义的基本单元，在模型中并非以字符串形式存在，而是以数学方式表示为嵌入向量。这些嵌入向量能够捕捉相似性、差异性、反义关系等语言描述属性。位置和词序并非Transformer天然具备的特性，而是通过表示相对位置的另一个向量获得。模型可以通过将位置向量和词嵌入向量相加来表示词序。Transformer层类似于一种模糊字典，为近似匹配返回近似答案。这种模糊过程称为注意力机制，其中使用查询(query)、键(key)和值(value)这三个术语，类似于Python字典中的键和值。ChatGPT是仅解码器Transformer的一个示例，但同时也存在仅编码器Transformer和编码器-解码器Transformer。仅解码器Transformer最擅长生成文本，而其他类型的Transformer在其他任务上可能表现更优。LLM是自回归的，这意味着它们以递归方式工作。在每一步中，之前生成的所有Token都会被输入模型，以获取下一个Token。简而言之，自回归模型利用之前的内容预测下一个内容。
+LLM 的使用Token作为语义的基本单元，在模型中并非以字符串形式存在，而是以数学方式表示为嵌入向量。这些嵌入向量能够捕捉相似性、差异性、反义关系等语言描述属性。位置和词序并非Transformer天然具备的特性，而是通过表示相对位置的另一个向量获得。模型可以通过将位置向量和词嵌入向量相加来表示词序。Transformer层类似于一种模糊字典，为近似匹配返回近似答案。这种模糊过程称为注意力机制，其中使用查询(query)、键(key)和值(value)这三个术语，类似于Python字典中的键和值。ChatGPT是仅解码器Transformer的一个示例，但同时也存在仅编码器Transformer和编码器-解码器Transformer。仅解码器Transformer最擅长生成文本，而其他类型的Transformer在其他任务上可能表现更优。LLM是自回归的，这意味着它们以递归方式工作。在每一步中，之前生成的所有Token都会被输入模型，以获取下一个Token。简而言之，自回归模型利用之前的内容预测下一个内容。
 
 <details>
 <summary>英文原文</summary>
@@ -1774,19 +1736,12 @@ Specific and correlated with the desired behavior of the model Computable in a r
 
 </details>
 
-### 损失函数的具体性 首先，让我们开始
+损失函数的具体性 首先，让我们开始这是一个关于具体性不强的糟糕例子。如果你的老板对你说：“造一台智能计算机”，那会是一个宏伟的目标，但不是一个具体的目标。回想一下，在第一章中我们讨论了定义智能有多么困难。你的老板到底想让这台计算机在哪些方面表现出智能？一台懂人情世故却不会做微积分作业的计算机能行吗？相反，你可以尝试优化一个具体的IQ分数，但这与你老板想要的相关吗？十多年来，我们已能让计算机通过IQ测试，甚至在大语言模型出现之前就能做到。然而，除了通过IQ测试和执行有限的任务外，这些计算机别无他用。归根结底，IQ测试与我们希望计算机做的事情并不相关。因此，将IQ作为机器学习或构建老板要求的智能计算机的成功指标并不可取。另一个例子涉及理财的挑战。设想一个场景，你想尽量减少所背负的债务。你甚至希望债务变成负数，即别人欠你钱！我们在这里用债务的例子，是因为它本质上是一个你希望使其变小的数值。这个类比与实践中的术语完美契合：你想要最小化损失，就像你想要减少债务一样。债务量也是一个客观的衡量标准，这使得它成为确保我们的损失函数在变化条件下依然相关的良好途径。最后，如果我们的总体目标是保持资金盈余，那么最小化债务与这一目标高度相关。最小化债务具备一个好的损失函数的所有特征！
 
 <details>
 <summary>英文原文</summary>
 
 LOSS FUNCTION SPECIFICITY First, let’s start
-
-</details>
-
-这是一个关于具体性不强的糟糕例子。如果你的老板对你说：“造一台智能计算机”，那会是一个宏伟的目标，但不是一个具体的目标。回想一下，在第一章中我们讨论了定义智能有多么困难。你的老板到底想让这台计算机在哪些方面表现出智能？一台懂人情世故却不会做微积分作业的计算机能行吗？相反，你可以尝试优化一个具体的IQ分数，但这与你老板想要的相关吗？十多年来，我们已能让计算机通过IQ测试，甚至在大语言模型出现之前就能做到。然而，除了通过IQ测试和执行有限的任务外，这些计算机别无他用。归根结底，IQ测试与我们希望计算机做的事情并不相关。因此，将IQ作为机器学习或构建老板要求的智能计算机的成功指标并不可取。另一个例子涉及理财的挑战。设想一个场景，你想尽量减少所背负的债务。你甚至希望债务变成负数，即别人欠你钱！我们在这里用债务的例子，是因为它本质上是一个你希望使其变小的数值。这个类比与实践中的术语完美契合：你想要最小化损失，就像你想要减少债务一样。债务量也是一个客观的衡量标准，这使得它成为确保我们的损失函数在变化条件下依然相关的良好途径。最后，如果我们的总体目标是保持资金盈余，那么最小化债务与这一目标高度相关。最小化债务具备一个好的损失函数的所有特征！
-
-<details>
-<summary>英文原文</summary>
 
 with a bad example of specificity. If your boss came to you and said, “Build an intelligent computer,” that would be a magnificent goal, but it is not a specific goal. Remember, in chapter 1, we discussed how difficult it is to define intelligence. What exactly does your boss want this computer to be intelligent at? Would a street-smart computer that cannot do your calculus homework suffice? Instead, you could try to optimize for a specific IQ score, but does that correlate with what your boss wants? We have been able to get computers to pass IQ tests for over a decade [1], even before the introduction of LLMs. However, they could not do anything other than pass an IQ test and perform limited tasks. Ultimately, the IQ test does not correlate with what we want computers to do. As a result, it is not worth optimizing IQ as a metric for success in machine learning or for building the intelligent computer your boss asked you to create. Another example involves the challenge of managing money. Consider a scenario where you want to minimize the debt you carry. You might even want your debt to go negative, meaning others owe you money! We use the example of debt here because it is intrinsically a value you want to make smaller. This analogy aligns perfectly with the terminology used in practice: you want to minimize your loss just as you want to reduce your debt. The volume of debt is also an objective measure, making it a good way of ensuring our loss function is relevant under changing conditions. Finally, if our overall goal is to maintain a surplus of money, minimizing debt correlates well with that goal. Minimizing debt has all of the characteristics of a good loss function!
 
@@ -1819,30 +1774,14 @@ Regardless of the terminology, objective functions, reward functions, and loss f
 
 </details>
 
-### 损失函数的可计算性
+损失函数的可计算性也必须能够用计算机快速计算。债务示例不适合这一点，因为所需的输入和输出并不易于计算机获取。更努力工作会增加收入从而减少债务吗？也许吧，但我们如何将你的努力编码到计算机中呢？这里的问题是，最小化债务的最关键因素难以量化，比如工作机会、你是否适合这些工作、晋升可能性等。因此损失是具体的，但与该损失相关的输入是不可计算的。一个更好、更可计算的目标是预测投资的损失。这个目标更好的原因很微妙。这个目标仍然是客观的，因为我们的算法从历史数据中学习。例如，历史上对债券X和股票Y的投资有特定的回报。输入现在也是客观的：你可以量化投入每项投资的现金数量。要么投入资金，要么取出资金。没有像“努力”这样难以编码的问题需要处理。有了历史数据副本，计算机可以快速计算投资的损失/回报。
 
 <details>
 <summary>英文原文</summary>
 
 LOSS FUNCTION COMPUTABILITY The loss function
 
-</details>
-
-也必须能够用计算机快速计算。债务示例不适合这一点，因为所需的输入和输出并不易于计算机获取。更努力工作会增加收入从而减少债务吗？也许吧，但我们如何将你的努力编码到计算机中呢？这里的问题是，最小化债务的最关键因素难以量化，比如工作机会、你是否适合这些工作、晋升可能性等。因此损失是具体的，但与该损失相关的输入是不可计算的。一个更好、更可计算的目标是预测投资的损失。这个目标更好的原因很微妙。这个目标仍然是客观的，因为我们的算法从历史数据中学习。例如，历史上对债券X和股票Y的投资有特定的回报。输入现在也是客观的：你可以量化投入每项投资的现金数量。要么投入资金，要么取出资金。没有像“努力”这样难以编码的问题需要处理。有了历史数据副本，计算机可以快速计算投资的损失/回报。
-
-<details>
-<summary>英文原文</summary>
-
 must also be something we can compute quickly with a computer. The debt example is unsuitable for this aspect because all the inputs and outputs you need are not readily available to a computer. Will working harder at your job increase your income and thus lower your debt? Maybe, but how will we encode your hard work into the computer? Here, we have the problem that the most critical factors to minimizing debt are hard to quantify, like job availability, your fit for such jobs, likelihood of promotion, etc. So the loss is specific, but the inputs that connect to that loss are not computable. A better, more computable goal would be to predict the loss on an investment. The reasons this goal is better are subtle. The goal is still objective because our algorithms learn from historical data. For example, a historic investment in bonds X and stocks Y had certain returns. The inputs are also now objective: you can quantify the amount of cash you put into each investment. You either put money in, or you took it out. There are no hard-to-encode problems like “hard work” to deal with. With a copy of historical data, a computer can quickly calculate the loss/return on an investment.
-
-</details>
-
-*[未译]* LOSS FUNCTION SMOOTHNESS The third thing
-
-<details>
-<summary>英文原文</summary>
-
-LOSS FUNCTION SMOOTHNESS The third thing
 
 </details>
 
@@ -1850,6 +1789,8 @@ LOSS FUNCTION SMOOTHNESS The third thing
 
 <details>
 <summary>英文原文</summary>
+
+LOSS FUNCTION SMOOTHNESS The third thing
 
 we need is smoothness. Many people have good intuition for what smoothness means by thinking about a smooth versus bumpy texture. Instead of texture, we’re talking about the smoothness of a function, which can be depicted by drawing that function as a graph. For example, when trying to predict a loss on an investment, we run into the problem that investment returns are not usually smooth. They may follow a pattern of volatility where price graphs are jagged with sharp, sudden changes. This makes learning difficult. A graph showing the unstable values of real-world investment returns is shown in figure 4.1.
 
@@ -2609,19 +2550,12 @@ Delightfully, you now have a good understanding of SFT. Like the original traini
 
 </details>
 
-### 微调的陷阱：通过重用
+微调的陷阱：通过重用从第4章的梯度下降策略来看，所有微调方法都倾向于继承两个关于LLM返回其训练内容的能力的问题。由于SFT如此简单，现在正是我们回顾SFT之外更广泛的微调问题的好时机。无法保证SFT能正确保留你提供的信息。这个问题被称为灾难性遗忘[4]，当你在新数据上训练模型但不再继续训练旧数据时，模型开始
 
 <details>
 <summary>英文原文</summary>
 
 FINE-TUNING PITFALLS By reusing
-
-</details>
-
-从第4章的梯度下降策略来看，所有微调方法都倾向于继承两个关于LLM返回其训练内容的能力的问题。由于SFT如此简单，现在正是我们回顾SFT之外更广泛的微调问题的好时机。无法保证SFT能正确保留你提供的信息。这个问题被称为灾难性遗忘[4]，当你在新数据上训练模型但不再继续训练旧数据时，模型开始
-
-<details>
-<summary>英文原文</summary>
 
 the gradient descent strategy from chapter 4, all fine-tuning methods tend to inherit two problems around an LLM’s ability to return content on which it was trained. Since SFT is so simple, this is a good time for us to review the broader problems with fine-tuning beyond just SFT. There are no guarantees that SFT will retain the information you provide correctly. This problem, known as catastrophic forgetting [4], occurs when you train the model on new data but do not continue training on older data, and the model begins to
 
@@ -3065,19 +2999,12 @@ new, we are already starting to see programming libraries and other software too
 
 </details>
 
-### 集成特定 LLM
+集成特定 LLM使用具体的LLM，实现常见的提示模式，并根据你的数据、任务和LLM组合调整提示。
 
 <details>
 <summary>英文原文</summary>
 
 Integrating the specific LLM
-
-</details>
-
-使用具体的LLM，实现常见的提示模式，并根据你的数据、任务和LLM组合调整提示。
-
-<details>
-<summary>英文原文</summary>
 
 being used Implementing common patterns of prompting Tweaking the prompts for your desired combination of data, task, and LLM.
 
@@ -3101,19 +3028,12 @@ Listing 5.1 Simplest RAG in DSPy
 
 </details>
 
-### 使用OpenAI的GPT-3.5，
+使用OpenAI的GPT-3.5，它可以用其他在线或本地LLM替换。`import dspy` `llm = dspy.OpenAI(model='gpt-3.5-turbo')` 使用ColBERTv2算法对Wikipedia副本进行向量化 `similarity_and_database = dspy.ColBERTv2(`
 
 <details>
 <summary>英文原文</summary>
 
 Uses OpenAI’s GPT-3.5,
-
-</details>
-
-它可以用其他在线或本地LLM替换。`import dspy` `llm = dspy.OpenAI(model='gpt-3.5-turbo')` 使用ColBERTv2算法对Wikipedia副本进行向量化 `similarity_and_database = dspy.ColBERTv2(`
-
-<details>
-<summary>英文原文</summary>
 
 which can be swapped out with other online or local LLMs import dspy llm = dspy.OpenAI(model='gpt-3.5-turbo') Uses the ColBERTv2 algorithm to vectorize a copy of Wikipedia similarity_and_database = dspy.ColBERTv2(
 
@@ -3240,21 +3160,14 @@ Many data types, other than human language, can be represented as a sequence of 
 
 </details>
 
-### 第6章
+第6章
 超越自然语言处理
-89
+89描述了软件开发者希望计算机执行的操作。与人类语言类似，源代码中的标记根据所使用的语言及其出现的上下文而具有含义。甚至可以说，源代码比人类语言结构更严谨、含义更明确。若编程语言存在歧义和意义模糊，计算机将难以解析，他人更难以修改和维护。源代码（简称代码，下文将沿用此说法）只是大语言模型和Transformer处理非自然语言数据的一个例子。几乎所有可以重新表述为标记序列的数据，都可以利用Transformer以及我们对大语言模型工作原理的诸多认识。本章将回顾三个示例，它们与自然语言的相似程度依次递减：代码、数学和计算机视觉。这三种不同类型的数据（称为数据模态）各自需要从新的角度审视Transformer的输入或输出。不过，在所有情况下，Transformer本身保持不变。我们仍会堆叠多个Transformer层来构建模型，并继续使用梯度下降训练这些Transformer层。代码与自然语言最相似，因此不需要太多改动。不过，为了让代码大语言模型良好运行，我们将改变其输出生成后续标记的方式。接下来，我们将探讨数学——我们需要改变分词方式，使大语言模型能成功完成加法等基本运算。最后，对于计算机视觉（涉及图像处理以及目标检测与识别等任务），我们将同时修改输入和输出，展示如何通过完全替换标记的概念，将一种截然不同的数据类型转换为序列。图6.1展示了为处理每种数据模态而必须修改的大语言模型部分。
 
 <details>
 <summary>英文原文</summary>
 
 CHAPTER 6 Beyond natural language processing 89
-
-</details>
-
-描述了软件开发者希望计算机执行的操作。与人类语言类似，源代码中的标记根据所使用的语言及其出现的上下文而具有含义。甚至可以说，源代码比人类语言结构更严谨、含义更明确。若编程语言存在歧义和意义模糊，计算机将难以解析，他人更难以修改和维护。源代码（简称代码，下文将沿用此说法）只是大语言模型和Transformer处理非自然语言数据的一个例子。几乎所有可以重新表述为标记序列的数据，都可以利用Transformer以及我们对大语言模型工作原理的诸多认识。本章将回顾三个示例，它们与自然语言的相似程度依次递减：代码、数学和计算机视觉。这三种不同类型的数据（称为数据模态）各自需要从新的角度审视Transformer的输入或输出。不过，在所有情况下，Transformer本身保持不变。我们仍会堆叠多个Transformer层来构建模型，并继续使用梯度下降训练这些Transformer层。代码与自然语言最相似，因此不需要太多改动。不过，为了让代码大语言模型良好运行，我们将改变其输出生成后续标记的方式。接下来，我们将探讨数学——我们需要改变分词方式，使大语言模型能成功完成加法等基本运算。最后，对于计算机视觉（涉及图像处理以及目标检测与识别等任务），我们将同时修改输入和输出，展示如何通过完全替换标记的概念，将一种截然不同的数据类型转换为序列。图6.1展示了为处理每种数据模态而必须修改的大语言模型部分。
-
-<details>
-<summary>英文原文</summary>
 
 that describes the operations a software developer wants a computer to perform. Like human language, the tokens in the source code have meaning according to the language used and the context in which they appear. If anything, source code is more highly structured and specific than human language. A programming language with shades of ambiguity and meaning would be challenging for a computer to interpret and harder for others to modify and maintain.
 
@@ -3438,19 +3351,12 @@ Keeping all TeX-like representations mitigates the challenge of learning multi-p
 
 </details>
 
-### 选择 TeX
+选择 TeX在LLM中采用单一的首选表示法处理数学，并未解决这样一个事实：等效方程可以有多种写法。判断哪些方程是相同的极其困难，研究人员已经证明，没有任何单一算法能够确定两个数学表达式是否等价。（我们在此处措辞有些宽松，因为本节讨论的是形式化数学，因此我们将您引至文献[7]。）到目前为止，对LLM而言，最好的答案似乎是“让模型自己想办法解决”，而这一方法至今已取得了相当的成功。但我们不会感到惊讶，如果未来数学LLM的开发者们大力投资于改进预处理，通过创建更一致的数学方程规范化表示来减少等价表达式可能的不同写法。
 
 <details>
 <summary>英文原文</summary>
 
 Choosing TeX
-
-</details>
-
-在LLM中采用单一的首选表示法处理数学，并未解决这样一个事实：等效方程可以有多种写法。判断哪些方程是相同的极其困难，研究人员已经证明，没有任何单一算法能够确定两个数学表达式是否等价。（我们在此处措辞有些宽松，因为本节讨论的是形式化数学，因此我们将您引至文献[7]。）到目前为止，对LLM而言，最好的答案似乎是“让模型自己想办法解决”，而这一方法至今已取得了相当的成功。但我们不会感到惊讶，如果未来数学LLM的开发者们大力投资于改进预处理，通过创建更一致的数学方程规范化表示来减少等价表达式可能的不同写法。
-
-<details>
-<summary>英文原文</summary>
 
 as a single preferred representation for math in LLMs doesn’t solve the fact that there are multiple ways to write equivalent equations. Determining which equations are the same is so difficult that researchers have proven that no single algorithm can determine the equivalence of two mathematical expressions. (We are being a little loose with our words here, given that this section is on formal mathematics, so we will point you to the source [7].) So far, the best answer for LLMs appears to be “let the model try to figure that out,” which has been reasonably successful thus far. But we wouldn’t be surprised if the developers of future math LLMs invest heavily in improving preprocessing by creating more consistent canonical representations for mathematical equations that reduce the variety of possible expressions for equivalent expressions.
 
@@ -3483,19 +3389,12 @@ The first problem is that the standard byte-pair encoding (BPE) algorithm produ-
 
 </details>
 
-### 3252+3253与GPT-3和GPT-4的应对方式
+3252+3253与GPT-3和GPT-4的应对方式对这个字符串进行分词。GPT-4 会做得更好，因为它似乎每次从前三位数字开始对数字进行分词，结果是得到一个三位数后面跟着一位数。GPT-3 看起来不一致，因为它改变了分词数字的顺序，如图 6.9 所示。
 
 <details>
 <summary>英文原文</summary>
 
 3252+3253 and how GPT-3 and GPT-4
-
-</details>
-
-对这个字符串进行分词。GPT-4 会做得更好，因为它似乎每次从前三位数字开始对数字进行分词，结果是得到一个三位数后面跟着一位数。GPT-3 看起来不一致，因为它改变了分词数字的顺序，如图 6.9 所示。
-
-<details>
-<summary>英文原文</summary>
 
 tokenize this string. GPT-4 will do a better job because it seems to tokenize numbers by starting with the first three digits every time, resulting in a three-digit number followed by a single-digit number. GPT-3 appears inconsistent because it changes the order in which it tokenizes numbers, as shown in figure 6.9.
 
@@ -3600,19 +3499,12 @@ Conceptually, we will replace the tokenizer and embedding process with a new pro
 
 </details>
 
-### 解嵌入·块组合器·图像
+解嵌入·块组合器·图像图像不会自然地离散化为token，因此会提取一个序列的块。这些块实质上是按序列取出的图像小片段。最后再将块转换回图像。
 
 <details>
 <summary>英文原文</summary>
 
 Unembed Patch combiner Images
-
-</details>
-
-图像不会自然地离散化为token，因此会提取一个序列的块。这些块实质上是按序列取出的图像小片段。最后再将块转换回图像。
-
-<details>
-<summary>英文原文</summary>
 
 do not naturally discretize into tokens, so instead, a sequence of patches are extracted. The patches are literally small pieces of the image taken as a sequence. The patches are converted back to an image again at the end.
 
@@ -3821,19 +3713,12 @@ This chapter covers How LLMs and humans differ in learning Making LLMs better at
 
 </details>
 
-### 感谢ChatGPT，世界
+感谢ChatGPT，世界人们已经更广泛地认识到LLM及其能力。尽管有这种认识，关于LLM的许多误解和错误理解仍然存在。许多人认为LLM在持续学习和自我改进，比人类更聪明，并且很快就能解决地球上的所有问题。虽然这些说法有些夸张，但有些人真诚地担心LLM会严重扰乱世界。我们并不是说对LLM没有合理的担忧，我们将在本书的最后两章更深入地讨论这些问题。尽管如此，与LLM和技术的广泛发展相比，你可能遇到的许多关于LLM的想法和担忧都被夸大了。
 
 <details>
 <summary>英文原文</summary>
 
 Thanks to ChatGPT, the world
-
-</details>
-
-人们已经更广泛地认识到LLM及其能力。尽管有这种认识，关于LLM的许多误解和错误理解仍然存在。许多人认为LLM在持续学习和自我改进，比人类更聪明，并且很快就能解决地球上的所有问题。虽然这些说法有些夸张，但有些人真诚地担心LLM会严重扰乱世界。我们并不是说对LLM没有合理的担忧，我们将在本书的最后两章更深入地讨论这些问题。尽管如此，与LLM和技术的广泛发展相比，你可能遇到的许多关于LLM的想法和担忧都被夸大了。
-
-<details>
-<summary>英文原文</summary>
 
 has become more broadly aware of LLMs and their capabilities. Despite this awareness, many misconceptions and misunderstandings about LLMs still exist. Many people believe that LLMs are continually learning and self-improving, are more intelligent than people, and will soon be able to solve every problem on earth. While these statements are hyperbolic, some earnestly fear that LLMs will seriously disrupt the world. We are not here to say there are no legitimate concerns about LLMs, and we will discuss these in more depth in the book’s last two chapters. Still, many thoughts and worries about LLMs that you may encounter are blown out of proportion compared to how LLMs and technology broadly evolve.
 
@@ -3885,19 +3770,12 @@ Some of the benefits of LLMs are as follows:
 
 </details>
 
-### 训练有素的大语言模型具有
+训练有素的大语言模型具有LLM拥有广泛的背景信息，因此在处理许多与之前见过的任务相差不大的任务时表现良好，几乎无需额外工作即可生效。虽然这些信息不一定正确或详细，但LLM能够接收并生成合理回应的主题领域之广，远超大多数个人所能覆盖的范围。
 
 <details>
 <summary>英文原文</summary>
 
 Well-trained LLMs have
-
-</details>
-
-LLM拥有广泛的背景信息，因此在处理许多与之前见过的任务相差不大的任务时表现良好，几乎无需额外工作即可生效。虽然这些信息不一定正确或详细，但LLM能够接收并生成合理回应的主题领域之广，远超大多数个人所能覆盖的范围。
-
-<details>
-<summary>英文原文</summary>
 
 a broad collection of background information, so they perform well on many tasks that are not that different from what has been seen before, and little work is needed to make the model effective. While this is not necessarily correct or detailed information, the breadth of the topic areas that an LLM can receive and generate reasonable responses about is far beyond the areas that most individual people can cover.
 
@@ -4637,19 +4515,12 @@ This double-check could be as simple as telling the technician, “Hey, this loo
 
 </details>
 
-### 采用大语言模型
+采用大语言模型通过复核人工表现可以减少整个流程中的错误。这种方法看起来并没有加快速度，因为仍然由人工生成初始响应。不过，这种方法仍然创造了提高效率的机会：
 
 <details>
 <summary>英文原文</summary>
 
 Employing an LLM
-
-</details>
-
-通过复核人工表现可以减少整个流程中的错误。这种方法看起来并没有加快速度，因为仍然由人工生成初始响应。不过，这种方法仍然创造了提高效率的机会：
-
-<details>
-<summary>英文原文</summary>
 
 to double-check human performance can reduce errors in the process as a whole. It may not seem like this approach makes anything faster because humans are still generating the initial response. However, this approach still creates opportunities for increased efficiency:
 
@@ -4742,19 +4613,12 @@ Outlier detection—Finding texts that are dissimilar from essentially all other
 
 </details>
 
-### 信息可视化——创建二维
+信息可视化——创建二维绘制数据图以便进行可视化检查/探索，尤其是与交互式工具结合使用时（即数据探索）。常用算法包括UMAP和PCA。分类与回归——如果使用已知结果（例如净推荐值评分）对旧文本进行标注，则可以使用分类（即从A、B或C中选一个）或回归（即预测连续数值，如3.14或42）来预测新文本的得分（即数据分类与价值预测）。将嵌入作为简单算法（如逻辑回归和线性回归）的输入，分别适用于分类和回归任务。
 
 <details>
 <summary>英文原文</summary>
 
 Information visualization—Creating a 2D
-
-</details>
-
-绘制数据图以便进行可视化检查/探索，尤其是与交互式工具结合使用时（即数据探索）。常用算法包括UMAP和PCA。分类与回归——如果使用已知结果（例如净推荐值评分）对旧文本进行标注，则可以使用分类（即从A、B或C中选一个）或回归（即预测连续数值，如3.14或42）来预测新文本的得分（即数据分类与价值预测）。将嵌入作为简单算法（如逻辑回归和线性回归）的输入，分别适用于分类和回归任务。
-
-<details>
-<summary>英文原文</summary>
 
 plot of your data to allow visual inspec-tion/exploration, especially when combined with interactive tools (i.e., data exploration). Popular algorithms include UMAP and PCA. Classification and regression—If you label your old texts with known outcomes (e.g., net promoter score rating), you can use classification (i.e., pick one of A, B, or C) or regression (i.e., predict a continuous number like 3.14 or 42) to predict what the score would be on a new text (i.e., data categorization and value prediction). Using embeddings as input for simple algorithms like logistic regression and linear regression works well for classification or regression, respectively.
 
@@ -4811,19 +4675,12 @@ To be clear, we are not saying that all customer service tech support systems wi
 
 </details>
 
-### 使用LLM
+使用LLM作为正在发生的事情的第二双眼睛。如果LLM同意，一切正常。如果它不同意，你就进行二次检查，根据问题的性质，检查可能简单也可能复杂。使用嵌入将经典机器学习应用于该问题。聚类（将相似事物分组）和异常检测（发现独特或不寻常的事物）对于许多实际应用将特别有用。
 
 <details>
 <summary>英文原文</summary>
 
 Use LLMs
-
-</details>
-
-作为正在发生的事情的第二双眼睛。如果LLM同意，一切正常。如果它不同意，你就进行二次检查，根据问题的性质，检查可能简单也可能复杂。使用嵌入将经典机器学习应用于该问题。聚类（将相似事物分组）和异常检测（发现独特或不寻常的事物）对于许多实际应用将特别有用。
-
-<details>
-<summary>英文原文</summary>
 
 as a second set of eyes on what is happening. If the LLM agrees, all is good. If it disagrees, you perform a double-check that could be simple or complex, depending on the nature of the problem. Use embeddings to apply classic machine learning to the problem. Clustering (grouping similar things) and outlier detection (finding unique or unusual things) will be particularly useful for many real-world applications.
 
@@ -5115,19 +4972,12 @@ But the ATM example is not that simple. The number of teller jobs increased for 
 
 </details>
 
-### 关于训练数据的考量：生成式AI的
+关于训练数据的考量：生成式AI的对创意表达的影响尤为尖锐，原因在于这一情境呈现出一种反常的二元性。许多作家和艺术家在互联网上发布的作品，正在为那些似乎意在夺走他们饭碗的模型提供养料。LLM研究者提出的伦理论点是，他们应当能够自由使用这些创作者的内容作为训练数据。这一论点可能带来惨胜，并最终导致AI的覆灭。如果AI取代了创意工作者的劳动，LLM开发者将发现，由于缺乏人类生成的内容，以及训练LLM所需的数据呈指数级增长而用户生成内容仅线性增长，他们再也无法改进自己的模型。更重要的是，那些创作内容的人将无法再就业，也没有动力仅仅为了让LLM攫取而创作内容。这种负面循环将同时影响LLM和内容创作者，即便这仅仅是一种感知风险而非真实担忧。数据采集用于训练LLM，对于数千个依赖用户生成内容和消费者带来的广告收入的网站来说，是一个重大关切。这些网站为LLM提供了宝贵的训练数据，而LLM的构建者需要海量训练数据，却对广告收入毫无贡献。例如，Stack Exchange是一个由多个网站组成的集合，用户可以在上面提问、回答，并根据优质回答获得声誉评分。其旗下网站Stack Overflow对于寻求编程问题解决方案的程序员来说，简直是天赐之物。Stack Exchange还拥有许多其他多元化的用户社区，服务对象包括系统管理员、数学学生以及桌游爱好者。
 
 <details>
 <summary>英文原文</summary>
 
 CONSIDERATIONS ON TRAINING DATA Generative AI’s
-
-</details>
-
-对创意表达的影响尤为尖锐，原因在于这一情境呈现出一种反常的二元性。许多作家和艺术家在互联网上发布的作品，正在为那些似乎意在夺走他们饭碗的模型提供养料。LLM研究者提出的伦理论点是，他们应当能够自由使用这些创作者的内容作为训练数据。这一论点可能带来惨胜，并最终导致AI的覆灭。如果AI取代了创意工作者的劳动，LLM开发者将发现，由于缺乏人类生成的内容，以及训练LLM所需的数据呈指数级增长而用户生成内容仅线性增长，他们再也无法改进自己的模型。更重要的是，那些创作内容的人将无法再就业，也没有动力仅仅为了让LLM攫取而创作内容。这种负面循环将同时影响LLM和内容创作者，即便这仅仅是一种感知风险而非真实担忧。数据采集用于训练LLM，对于数千个依赖用户生成内容和消费者带来的广告收入的网站来说，是一个重大关切。这些网站为LLM提供了宝贵的训练数据，而LLM的构建者需要海量训练数据，却对广告收入毫无贡献。例如，Stack Exchange是一个由多个网站组成的集合，用户可以在上面提问、回答，并根据优质回答获得声誉评分。其旗下网站Stack Overflow对于寻求编程问题解决方案的程序员来说，简直是天赐之物。Stack Exchange还拥有许多其他多元化的用户社区，服务对象包括系统管理员、数学学生以及桌游爱好者。
-
-<details>
-<summary>英文原文</summary>
 
 effect on creative expression is poignant due to the situation’s per-verse duality. Much of the work of writers and artists who post their content on the internet is fueling models that are seemingly out to eliminate their jobs. The ethical argument made by LLM researchers is that they should be able to freely use content from these creators as training data. This argument may lead to a pyrrhic victory and, ultimately, an undoing for AI. If AI replaces the work of creatives, LLM developers will find that they can no longer improve their models due to a lack of human-generated content and the exponential size increases in the data needed to train LLMs exceeding the linear growth in user-generated content. More importantly, the folks who create that content can no longer be employed or motivated to create content merely to have it slurped up by an LLM. This negative cycle will affect both LLMs and content creators, even if it is only a perceived risk and not a genuine concern. Data harvesting to train LLMs is a significant concern for thousands of websites that rely on user-generated content and advertising revenue from those who consume that content. These sites provide precious training data for LLMs, whose builders require massive collections of training data but do nothing to contribute to advertising revenue. For example, Stack Exchange is a collection of websites where users can post questions, have other users answer them, and receive a reputation rating for good answers. One of Stack Exchange’s websites, Stack Overflow, is a godsend to program-mers looking for help solving coding problems. Stack Exchange also hosts many other diverse user communities catering to system administrators, math students, and tabletop gaming enthusiasts.
 
@@ -5286,19 +5136,12 @@ It is increasingly common for companies to use fine-tuning techniques like RLHF 
 
 </details>
 
-### 使用RLHF微调LLM
+使用RLHF微调LLM它需要大量手工构建的输入-输出对数据集。开发LLM的公司不分享其微调数据，因为这被视为专有信息，能提供竞争优势。因此，作为用户，我们无法检查所使用的模型的对齐意图。所以，目前尚不清楚任何单个LLM的目标与谁对齐。我们可以通过考虑训练数据集的来源和托管链来近似其中嵌入的目标性质。一个初步近似是，这些数据集隐含着其创建者的目标。通常，创建这些数据集的数据标注员受雇于社会规范不同的国家。进而，在一定程度上，这些目标反映了开发LLM的公司及其员工的价值观，他们最终能够过滤和选择标注员产生的数据。于是我们问：“作为用户，我们是否愿意使用可能偏向于我们所不认同的替代信仰系统的技术？”在某种程度上，我们必须接受这一点才能使用LLM。创建这些模型和数据集的成本太高，我们无法为每个基础都制作个性化模型。因此，LLM提供商必须存在，但这些提供商的目标不可能与每个潜在用户一致。同时，假设我们担心恶意行为者出于邪恶或恶意目的使用LLM。在那种情况下，我们可能也会意识到，我们无法解决对齐问题在某种意义上是一种幸事。如果能够完美地将这些算法中的任何一个对齐到任何个人的信仰系统，那么任何坏人都可以完美地将LLM对齐到他们的不良行为和信念。这个想法揭示了另一个问题：如果我们能够创建完美对齐的LLM，我们就必须创建LLM，以便只有好人才能对齐LLM，从而防止坏人做坏事。这种推理接近于一种神奇的想法，即可以创建一个全能的LLM，同时又被约束为服从全人类。
 
 <details>
 <summary>英文原文</summary>
 
 Fine-tuning an LLM using RLHF
-
-</details>
-
-它需要大量手工构建的输入-输出对数据集。开发LLM的公司不分享其微调数据，因为这被视为专有信息，能提供竞争优势。因此，作为用户，我们无法检查所使用的模型的对齐意图。所以，目前尚不清楚任何单个LLM的目标与谁对齐。我们可以通过考虑训练数据集的来源和托管链来近似其中嵌入的目标性质。一个初步近似是，这些数据集隐含着其创建者的目标。通常，创建这些数据集的数据标注员受雇于社会规范不同的国家。进而，在一定程度上，这些目标反映了开发LLM的公司及其员工的价值观，他们最终能够过滤和选择标注员产生的数据。于是我们问：“作为用户，我们是否愿意使用可能偏向于我们所不认同的替代信仰系统的技术？”在某种程度上，我们必须接受这一点才能使用LLM。创建这些模型和数据集的成本太高，我们无法为每个基础都制作个性化模型。因此，LLM提供商必须存在，但这些提供商的目标不可能与每个潜在用户一致。同时，假设我们担心恶意行为者出于邪恶或恶意目的使用LLM。在那种情况下，我们可能也会意识到，我们无法解决对齐问题在某种意义上是一种幸事。如果能够完美地将这些算法中的任何一个对齐到任何个人的信仰系统，那么任何坏人都可以完美地将LLM对齐到他们的不良行为和信念。这个想法揭示了另一个问题：如果我们能够创建完美对齐的LLM，我们就必须创建LLM，以便只有好人才能对齐LLM，从而防止坏人做坏事。这种推理接近于一种神奇的想法，即可以创建一个全能的LLM，同时又被约束为服从全人类。
-
-<details>
-<summary>英文原文</summary>
 
 requires a large data set of input-output pairs, often hand-built. Companies building LLMs do not share their fine-tuning data because it is considered proprietary and provides an advantage over competitors. Thus, as users, we cannot inspect the intended alignment of the models we use. It is, therefore, unclear today to whom the goals of any individual LLM are aligned. We can approximate the nature of the goals embedded in a training dataset by considering their origin and chain of custody. A first approximation is that these datasets implicitly contain the goals of the people who created them. Often, the data labelers creating these datasets are employed in countries and nations with different societal norms. Following that, to some degree, the goals are those of the company developing the LLM and its employees, who ultimately can filter and subselect the data produced by those labelers. In response, we ask, “Are we, as users, comfortable using technology that may be biased toward alternative systems of belief that we do not share?” To some degree, we must be comfortable with this to use LLMs. The cost of creating these models and data sets is too high for us to make individualized models on every basis. As a result, LLM providers must exist, but the goals of those providers can’t possibly align with every potential user. Simultaneously, suppose we are concerned about a nefarious actor using LLMs for evil or malicious purposes. In that case, we may also realize that our inability to solve the alignment problem is, in some ways, a blessing. If it were possible to perfectly align one of these algorithms to any individual’s belief system, then any bad actor could perfectly align an LLM to their bad behavior and beliefs. This thought highlights another problem: if we could create perfectly aligned LLMs, we would have to create LLMs so that only the good guys could align the LLMs to prevent the bad guys from doing bad things. This line of reasoning approaches the magical thinking that it is possible to create an all-powerful LLM that is simultaneously constrained to be obedient to all humans.
 
@@ -5949,19 +5792,12 @@ for controlling vocabulary size 18–20 for homoglyphs 24 of numbers 26, 99 in t
 
 </details>
 
-### 生成式AI
+生成式AI算法接收输入（数字、文本、图像）并产生新的输出（通常是文本或图像）。任何输入和输出的组合都是可能的，输出的性质取决于算法训练的目标。例如，可能包括添加细节、改写得更简短、推断缺失部分等。
 
 <details>
 <summary>英文原文</summary>
 
 Generative AI
-
-</details>
-
-算法接收输入（数字、文本、图像）并产生新的输出（通常是文本或图像）。任何输入和输出的组合都是可能的，输出的性质取决于算法训练的目标。例如，可能包括添加细节、改写得更简短、推断缺失部分等。
-
-<details>
-<summary>英文原文</summary>
 
 is about taking some input (numbers, text, images) and producing a new output (usually text or images). Any combination of input and output options is possible, and the nature of the output depends on what the algorithm was trained for. It could be to add detail, rewrite something to be shorter, extrapolate missing portions, and more.
 
@@ -6012,19 +5848,12 @@ Raff, Farris, Biderman for Booz Allen Hamilton L
 
 </details>
 
-### 大语言模型
+大语言模型将“我”放入“人工智能”。通过连接数十亿文档中的词语、概念和模式，大型语言模型能够生成类似人类的回复，这正是我们从ChatGPT、Claude和Deep-Seek等工具中所期待的表现。在这本兼具知识性与趣味性的书中，来自博思艾伦咨询公司的世界顶级机器学习研究人员探讨了大型语言模型的基础概念、其机遇与局限，以及将人工智能融入组织和应用的最佳实践。
 
 <details>
 <summary>英文原文</summary>
 
 arge Language Models
-
-</details>
-
-将“我”放入“人工智能”。通过连接数十亿文档中的词语、概念和模式，大型语言模型能够生成类似人类的回复，这正是我们从ChatGPT、Claude和Deep-Seek等工具中所期待的表现。在这本兼具知识性与趣味性的书中，来自博思艾伦咨询公司的世界顶级机器学习研究人员探讨了大型语言模型的基础概念、其机遇与局限，以及将人工智能融入组织和应用的最佳实践。
-
-<details>
-<summary>英文原文</summary>
 
 put the “I” in “AI.” By connecting words, concepts, and patterns from billions of documents, LLMs are able to generate the human-like responses we’ve come to expect from tools like ChatGPT, Claude, and Deep-Seek. In this informative and entertaining book, the world’s best machine learning researchers from Booz Allen Hamilton explore foundational concepts of LLMs, their opportunities and limitations, and the best practices for incorporating AI into your organizations and applications.
 
@@ -6050,19 +5879,12 @@ An excellent no-nonsense introduction to LLMs.”
 
 </details>
 
-### 大型语言模型的工作原理
+大型语言模型的工作原理带你深入大型语言模型内部，逐步展示一个自然语言提示如何转化为清晰可读的文本补全。本书采用通俗语言，你将了解大型语言模型是如何创建的、为何会出错，以及如何设计可靠的AI解决方案。在此过程中，你将学习大型语言模型如何“思考”，如何设计基于LLM的应用程序（如智能体和问答系统），以及如何处理伦理、法律和安全问题。
 
 <details>
 <summary>英文原文</summary>
 
 How Large Language Models Work takes
-
-</details>
-
-带你深入大型语言模型内部，逐步展示一个自然语言提示如何转化为清晰可读的文本补全。本书采用通俗语言，你将了解大型语言模型是如何创建的、为何会出错，以及如何设计可靠的AI解决方案。在此过程中，你将学习大型语言模型如何“思考”，如何设计基于LLM的应用程序（如智能体和问答系统），以及如何处理伦理、法律和安全问题。
-
-<details>
-<summary>英文原文</summary>
 
 you inside an LLM, showing step-by-step how a natural language prompt becomes a clear, readable text completion. Written in plain language, you’ll learn how LLMs are created, why they make errors, and how you can design reliable AI solutions. Along the way, you’ll learn how LLMs “think,” how to design LLM-powered appli-cations like agents and Q&A systems, and how to navigate the ethical, legal, and security issues.
 
