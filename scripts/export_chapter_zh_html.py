@@ -1721,38 +1721,84 @@ def _join_zh_chunks_md(chunks: list[str]) -> str:
     return "".join(out)
 
 
+_PARAGRAPH_END_RE = re.compile(
+    # End-of-sentence punctuation, optionally followed by a closing
+    # quote / paren. Covers "...end.", "...end.\"", "...end.")", and
+    # CJK variants "...句号。" / "...问号？" / "...叹号！"
+    r"[.?!。？！](?:[\"”’')）\]])?\s*$"
+)
+
+
 def _reflow_pdf_source(text: str) -> str:
-    """Undo PDF column-wrap line breaks.
+    """Undo PDF column-wrap line breaks while preserving real paragraph
+    separators.
 
-    The parser preserves every PDF visual line break as a literal `\\n`
-    in source_text. In the original print/PDF those breaks are purely
-    typographic — the prose flows as a single paragraph. When we embed
-    such text inside a `<details>` block, both GFM (treating each `\\n`
-    as a soft break) and our HTML side (which used `.replace("\\n",
-    "<br>")`) end up emitting one render-line per PDF print-line,
-    which butchers readability.
+    The PDF parser stores every visual line break as a literal ``\\n``
+    in source_text. Two distinct breaks share the same character:
 
-    Normalize:
-    - Repair hyphenated line wraps: ``commu-\\nnity`` → ``community``.
-    - Collapse single ``\\n`` between non-blank lines to one space.
-    - Preserve ``\\n\\n+`` runs as paragraph separators.
+    A. **Column wrap** — soft break inside one paragraph. Previous
+       line nearly fills the column (close to typical width). Collapse
+       these to a single space; leaving them in produces one render-
+       line per print-line, which butchers reading flow.
+    B. **Paragraph break** — hard break ending one paragraph. Previous
+       line is markedly shorter than typical (the paragraph happened to
+       end mid-column) AND ends with sentence-final punctuation. Keep
+       these as ``\\n\\n`` so markdown / HTML render the gap.
+
+    Also:
+    - Repair ``commu-\\nnity`` style soft hyphens.
+    - Preserve existing ``\\n\\n+`` runs as paragraph separators.
     """
     if not text:
         return text
     s = text.replace("\r\n", "\n").replace("\r", "\n")
-    # Repair lowercase-hyphen-newline-lowercase soft wraps. Common patterns:
-    #   "com-\nmunity"  (PDF hyphenation)
-    #   "represen-\ntation"
-    # Keep "U.S.-\nGermany" / "-" + uppercase intact (real compound names).
+    # Repair lowercase-hyphen-newline-lowercase wraps.
     s = re.sub(r"([a-z])-\n([a-z])", r"\1\2", s)
-    # Single newlines (not preceded or followed by another newline) =
-    # PDF column wrap. Replace with a single space.
-    s = re.sub(r"(?<!\n)\n(?!\n)", " ", s)
-    # Collapse 3+ consecutive newlines down to a paragraph break.
+    # Pre-normalise: 3+ consecutive newlines down to exactly two so the
+    # paragraph-break detector treats them uniformly.
     s = re.sub(r"\n{3,}", "\n\n", s)
-    # Tidy double spaces left by the join.
-    s = re.sub(r" {2,}", " ", s)
-    return s.strip()
+    lines = s.split("\n")
+    if len(lines) <= 1:
+        return re.sub(r" {2,}", " ", s).strip()
+
+    # Estimate typical column width: 95th percentile of non-trivial
+    # line lengths. Anything below ~65 % of that AND ending in sentence
+    # punctuation is treated as a paragraph break.
+    lengths = sorted(len(ln) for ln in lines if len(ln.strip()) > 25)
+    if lengths:
+        # Pick the 90th-percentile line length so a single very long
+        # line doesn't skew the threshold for stub blocks.
+        idx = max(0, int(len(lengths) * 0.9) - 1)
+        typical_width = lengths[idx]
+    else:
+        typical_width = 80
+    short_threshold = typical_width * 0.65
+
+    out: list[str] = [lines[0]]
+    for i in range(1, len(lines)):
+        prev = lines[i - 1].rstrip()
+        cur = lines[i]
+        cur_stripped = cur.lstrip()
+        # Already-blank line → paragraph separator.
+        if prev == "" or cur_stripped == "":
+            out.append("\n\n" if cur_stripped else "")
+            if cur_stripped:
+                out.append(cur_stripped)
+            continue
+        # Paragraph-break heuristic: short prev line + sentence-final.
+        if (
+            len(prev) < short_threshold
+            and _PARAGRAPH_END_RE.search(prev)
+        ):
+            out.append("\n\n")
+            out.append(cur_stripped)
+        else:
+            out.append(" ")
+            out.append(cur_stripped)
+    joined = "".join(out)
+    joined = re.sub(r" {2,}", " ", joined)
+    joined = re.sub(r"\n{3,}", "\n\n", joined)
+    return joined.strip()
 
 
 def _build_source_fold_md(blocks: list, *, label: str = "英文原文") -> str:
@@ -3171,20 +3217,18 @@ def main() -> int:
             if not combined:
                 untranslated_block_count += 1
                 continue
-            if BILINGUAL_MODE:
-                # Source fold for the default branch: include EVERY block
-                # whose source contributed to this rendered unit:
+            if BILINGUAL_MODE and btype not in {"image", "figure"}:
+                # Source fold for paragraph / heading / list / quote / code
+                # units. Figure & image blocks get NO fold — their
+                # translated figcaption already conveys the figure label
+                # + description, and the English "Figure N.M …" line
+                # would just be noise. include EVERY block whose source
+                # contributed to this rendered unit:
                 #   1. the head block itself
-                #   2. heading-fragment merged into this block (from
-                #      ``merge_into_next``: keys are next-block ids,
-                #      values are the fragment ids)
+                #   2. heading-fragment merged into this block
                 #   3. NOTE/TIP callout heading glued onto next body
-                #      (``callout_heading_for_next``)
                 #   4. continuation paragraphs joined via ``join_chain``
-                #   5. for figures: linked or fallback caption block
                 src_blocks: list = []
-                # Heading fragments are emitted FIRST so the source reads
-                # in natural order ("Many LLMs you encounter today...").
                 frag_id = merge_into_next.get(block.id)
                 if frag_id and frag_id != block.id:
                     fb = block_by_id.get(frag_id)
@@ -3201,30 +3245,16 @@ def main() -> int:
                         cb = block_by_id.get(cont_id)
                         if cb is not None:
                             src_blocks.append(cb)
-                # Figure → include the caption block(s).
-                if btype in {"image", "figure"}:
-                    cap_block = None
-                    if block.id not in rejected_linkage_ids:
-                        linked_anchor = _linked_caption_anchor(block)
-                        if linked_anchor and linked_anchor in caption_by_anchor:
-                            cap_block = caption_by_anchor[linked_anchor]
-                    if cap_block is None and block.id in fallback_caption_for_block:
-                        cap_block = fallback_caption_for_block[block.id]
-                    if cap_block is not None:
-                        src_blocks.append(cap_block)
                 fold = _build_source_fold(src_blocks)
                 if fold:
                     combined += "\n" + fold
             rendered_blocks_html.append(combined)
-            # MD twin: assemble parallel md form. For figures we still
-            # want the caption line; for paragraphs/headings the rendered
-            # md text is the body.
+            # MD twin: assemble parallel md form.
             md_unit = (block_md or "").strip()
             if not md_unit and untranslated:
                 md_unit = f"*[未译]* {' '.join(untranslated).strip()}"
             if md_unit:
-                if BILINGUAL_MODE:
-                    # Reuse the SAME source_blocks set we built for HTML.
+                if BILINGUAL_MODE and btype not in {"image", "figure"}:
                     md_src_blocks: list = []
                     frag_id = merge_into_next.get(block.id)
                     if frag_id and frag_id != block.id:
@@ -3242,16 +3272,6 @@ def main() -> int:
                             cb = block_by_id.get(cont_id)
                             if cb is not None:
                                 md_src_blocks.append(cb)
-                    if btype in {"image", "figure"}:
-                        cap_block = None
-                        if block.id not in rejected_linkage_ids:
-                            linked_anchor = _linked_caption_anchor(block)
-                            if linked_anchor and linked_anchor in caption_by_anchor:
-                                cap_block = caption_by_anchor[linked_anchor]
-                        if cap_block is None and block.id in fallback_caption_for_block:
-                            cap_block = fallback_caption_for_block[block.id]
-                        if cap_block is not None:
-                            md_src_blocks.append(cap_block)
                     md_fold = _build_source_fold_md(md_src_blocks)
                     if md_fold:
                         md_unit += "\n\n" + md_fold
