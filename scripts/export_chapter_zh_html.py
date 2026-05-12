@@ -1721,12 +1721,49 @@ def _join_zh_chunks_md(chunks: list[str]) -> str:
     return "".join(out)
 
 
+def _reflow_pdf_source(text: str) -> str:
+    """Undo PDF column-wrap line breaks.
+
+    The parser preserves every PDF visual line break as a literal `\\n`
+    in source_text. In the original print/PDF those breaks are purely
+    typographic — the prose flows as a single paragraph. When we embed
+    such text inside a `<details>` block, both GFM (treating each `\\n`
+    as a soft break) and our HTML side (which used `.replace("\\n",
+    "<br>")`) end up emitting one render-line per PDF print-line,
+    which butchers readability.
+
+    Normalize:
+    - Repair hyphenated line wraps: ``commu-\\nnity`` → ``community``.
+    - Collapse single ``\\n`` between non-blank lines to one space.
+    - Preserve ``\\n\\n+`` runs as paragraph separators.
+    """
+    if not text:
+        return text
+    s = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Repair lowercase-hyphen-newline-lowercase soft wraps. Common patterns:
+    #   "com-\nmunity"  (PDF hyphenation)
+    #   "represen-\ntation"
+    # Keep "U.S.-\nGermany" / "-" + uppercase intact (real compound names).
+    s = re.sub(r"([a-z])-\n([a-z])", r"\1\2", s)
+    # Single newlines (not preceded or followed by another newline) =
+    # PDF column wrap. Replace with a single space.
+    s = re.sub(r"(?<!\n)\n(?!\n)", " ", s)
+    # Collapse 3+ consecutive newlines down to a paragraph break.
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    # Tidy double spaces left by the join.
+    s = re.sub(r" {2,}", " ", s)
+    return s.strip()
+
+
 def _build_source_fold_md(blocks: list, *, label: str = "英文原文") -> str:
     """Markdown twin of `_build_source_fold`. Emits the same EPUB-style
     `<details><summary>英文原文</summary>...</details>` element used by
     the bilingual HTML, but suitable for embedding in a `.md` file.
     GitHub-flavored markdown supports raw HTML, so frontends still
     render it as a collapsible disclosure.
+
+    Source text is reflowed to undo PDF column-wrap newlines (otherwise
+    the GFM renderer treats each PDF line as a soft break).
     """
     pieces: list[str] = []
     seen: set[str] = set()
@@ -1734,7 +1771,7 @@ def _build_source_fold_md(blocks: list, *, label: str = "英文原文") -> str:
         if blk is None or blk.id in seen:
             continue
         seen.add(blk.id)
-        text = (blk.source_text or "").strip()
+        text = _reflow_pdf_source((blk.source_text or "").strip())
         if not text:
             continue
         pieces.append(text)
@@ -1751,10 +1788,12 @@ def _build_source_fold(blocks: list, *, label: str = "英文原文") -> str:
     a single block, or a heading-fragment + body, or a list head + items,
     or a multi-panel master + slaves).
 
-    Each contributing block's source_text is rendered as a paragraph; we
-    preserve hard newlines as `<br>` so PDF line-breaks are visible. The
-    whole thing is wrapped in `<details class="source-fold">` so frontends
-    can collapse / expand it.
+    Source text is reflowed (``_reflow_pdf_source``) to undo PDF column-
+    wrap newlines so the fold reads as a clean paragraph instead of
+    one-line-per-print-line. Remaining ``\\n\\n+`` paragraph breaks
+    become ``<br><br>``; multiple blocks (e.g. heading-fragment + body)
+    are joined with a paragraph gap. The whole thing is wrapped in
+    ``<details class="source-fold">`` so frontends can collapse it.
     """
     pieces: list[str] = []
     seen: set[str] = set()
@@ -1762,10 +1801,12 @@ def _build_source_fold(blocks: list, *, label: str = "英文原文") -> str:
         if blk is None or blk.id in seen:
             continue
         seen.add(blk.id)
-        text = (blk.source_text or "").strip()
+        text = _reflow_pdf_source((blk.source_text or "").strip())
         if not text:
             continue
-        pieces.append(html.escape(text).replace("\n", "<br>"))
+        # Escape first, then convert remaining (true paragraph) breaks
+        # to <br><br>.
+        pieces.append(html.escape(text).replace("\n\n", "<br><br>").replace("\n", " "))
     if not pieces:
         return ""
     body = "<br><br>".join(pieces)
