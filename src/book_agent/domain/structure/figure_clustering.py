@@ -367,6 +367,21 @@ def _owner_anchor_for_text(
     return min(candidates, key=lambda item: item[1])[0]
 
 
+_REAL_SECTION_HEADING_PATTERN = re.compile(
+    # Real section heading shape: "N.M [Title]" or "N.M.K [Title]" or
+    # "Chapter N ..."/"Appendix X ...". The leading number with a dot is
+    # the strong signal that distinguishes a chapter/section heading from
+    # a figure-internal numbered label ("1 Map text").
+    r"^\s*(?:"
+    r"\d+\.\d+(?:\.\d+)?\s+\S"
+    r"|chapter\s+\d+"
+    r"|appendix\s+[A-Z\d]"
+    r"|part\s+(?:[IVX]+|\d+)"
+    r")",
+    re.IGNORECASE,
+)
+
+
 def _classify_text_for_anchor(
     block: BlockLike,
     text_bbox: _Bbox,
@@ -383,6 +398,7 @@ def _classify_text_for_anchor(
       * ``"reject_long"`` — leave as prose (too long)
       * ``"reject_size"`` — leave as prose (font too different)
       * ``"reject_outside_anchor"`` — leave as prose (B requires inside)
+      * ``"reject_real_heading"`` — leave as prose (genuine section title)
       * ``"reject_other"``
     """
     text = (block.text or "").strip()
@@ -393,6 +409,15 @@ def _classify_text_for_anchor(
     # separate translatable blocks linked to the figure.
     if _looks_like_caption_text(text):
         return "caption", "caption-pattern"
+
+    # Protect genuine section/chapter headings from absorption. The
+    # parser's HEADING type is too coarse — it covers both real section
+    # titles ("1.3 Introducing how LLMs work") and figure-internal
+    # numbered labels ("1 Map text"). Without this guard, a section
+    # heading whose top happens to fall inside a tall figure's bbox got
+    # silently swept into the figure and dropped from the chapter flow.
+    if block.block_type == BlockType.HEADING and _REAL_SECTION_HEADING_PATTERN.match(text):
+        return "reject_real_heading", "looks like genuine section title (N.M ...)"
 
     if char_count > config.max_label_chars:
         return "reject_long", f"len={char_count} > {config.max_label_chars}"

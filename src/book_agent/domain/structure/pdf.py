@@ -528,10 +528,15 @@ _ACADEMIC_STANDALONE_HEADING_TITLES = {
     "introduction",
     "method",
     "methods",
-    "model",
     "related work",
     "results",
-    "training",
+    # NOTE: "training" and "model" used to be in this set but they
+    # collided destructively with book prose ("Training LLMs is
+    # expensive ..." was treated as standalone heading "Training" +
+    # body "LLMs is expensive Training an LLM ...", clobbering the
+    # callout title). They're rare as bare academic section titles
+    # anyway — real papers say "Training Procedure" / "Model
+    # Architecture". Drop them to avoid the collision.
 }
 _PAPER_TITLE_INSTITUTION_CUE_PATTERN = re.compile(
     r"\b(?:university|institute|department|school|college|laboratory|lab|centre|center)\b",
@@ -2892,6 +2897,35 @@ def _leading_all_caps_book_heading_and_remainder(text: str) -> tuple[str, str, i
     return None
 
 
+# Tokens that, when they are the FIRST word of the proposed remainder
+# body, indicate the "heading" was actually a mid-phrase cut — NOT a
+# real section title. A real book heading is followed by a fresh
+# sentence with its own subject ("Embedding layers" + "The first step
+# ..."), never by:
+#   - a bare verb / auxiliary that needs the heading as its subject
+#     ("is poised...", "are constantly...", "have proven...")
+#   - a coordinating conjunction ("or GenAI...", "and the next..." —
+#     mid-coordination, the heading was sliced inside parenthetical
+#     content)
+#   - a preposition ("of LLMs...", "to change...", "with information..."
+#     — the heading was sliced before the prepositional object)
+_BODY_CUT_AT_VERB_LEAD = frozenset(
+    {
+        # auxiliaries / linking verbs
+        "is", "are", "was", "were", "be", "been", "being", "am",
+        "do", "does", "did",
+        "has", "have", "had",
+        "can", "could", "should", "would", "will", "may", "might", "must", "shall",
+        "seems", "seem", "appears", "appear", "remains", "remain",
+        # coordinating conjunctions
+        "or", "nor",
+        # prepositions that always link to a preceding noun phrase
+        "of", "to", "for", "with", "without", "from", "by", "into",
+        "as", "than", "via",
+    }
+)
+
+
 def _leading_plain_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
     normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
     if not normalized:
@@ -2926,6 +2960,31 @@ def _leading_plain_book_heading_and_remainder(text: str) -> tuple[str, str, int]
         heading_last = alpha_tokens[-1].casefold()
         if heading_last in _PROSE_CONTINUATION_STOPWORDS or heading_last in _PROSE_CONTINUATION_START_WORDS:
             continue
+        # NEW: reject when the proposed split is mid-phrase rather than
+        # title→body. Real book headings produce a remainder that starts
+        # a fresh sentence: the first character is an UPPERCASE LETTER
+        # and the first word is neither a bare verb/auxiliary nor a
+        # coordinating conjunction / preposition that always links back
+        # to a preceding noun phrase.
+        #
+        # Example we used to incorrectly split:
+        #   "Generative AI (GAI or GenAI) is poised to change ..."
+        # The function tried multiple boundaries:
+        #   boundary=5 → remainder "is poised..."           (verb lead)
+        #   boundary=4 → heading ends with "or"             (already rejected)
+        #   boundary=3 → remainder "or GenAI) is poised..."  (conjunction lead)
+        #   boundary=2 → remainder "(GAI or GenAI) is..."    (paren/non-letter lead)
+        # all four boundaries are mid-phrase cuts; we want NONE of them.
+        if not remainder:
+            continue
+        first_char = remainder[0]
+        if not (first_char.isalpha() and first_char.isupper()):
+            continue
+        remainder_tokens = remainder.split()
+        if remainder_tokens:
+            rem_first = re.sub(r"[^A-Za-z'-]", "", remainder_tokens[0]).casefold()
+            if rem_first in _BODY_CUT_AT_VERB_LEAD:
+                continue
         if not _looks_like_book_prose_fragment(remainder):
             continue
         if not (_looks_like_book_prose_lead(remainder) or _looks_like_sentence_prose_line(remainder)):
@@ -4436,6 +4495,13 @@ class PdfStructureRecoveryService:
         # Figure clustering config — None means defaults. Wired from
         # Settings in build_default_recovery_service.
         self._figure_cluster_config = figure_cluster_config
+        # Recovery lane set per ``recover()`` call from the profile.
+        # Used to gate academic-style heading detection (which produces
+        # false positives like "Training" → standalone heading in book
+        # prose, splitting a callout title's body into a single-word
+        # heading + corrupted body). Reset per call so the service stays
+        # safe to reuse across documents.
+        self._current_recovery_lane: str | None = None
 
     def recover(
         self,
@@ -4443,6 +4509,9 @@ class PdfStructureRecoveryService:
         extraction: PdfExtraction,
         profile: PdfFileProfile,
     ) -> ParsedDocument:
+        # Remember the lane so downstream block-shaping passes can gate
+        # academic-only heuristics correctly.
+        self._current_recovery_lane = profile.recovery_lane
         ordered_pages = sorted(extraction.pages, key=lambda page: page.page_number)
         repeated_edge_text = self._find_repeated_edge_text(ordered_pages)
         page_contexts = self._page_contexts(ordered_pages)
@@ -6839,7 +6908,21 @@ class PdfStructureRecoveryService:
             and block.page_start == block.page_end
             and block.role in {"body", "code_like"}
         ):
-            academic_heading = _next_academic_inline_heading(_normalize_multiline_text(block.text))
+            # Academic-inline-heading detection ("Training" → standalone
+            # heading) is appropriate for academic-paper PDFs but
+            # produces destructive false positives in book prose. The
+            # callout title "Training LLMs is expensive Training an LLM
+            # is not realistically possible..." was being split as
+            # heading="Training" + body="LLMs is expensive Training an
+            # LLM..." (first word stolen, title destroyed). Gate by the
+            # current recovery lane so book-lane parses keep the block
+            # intact and let the book-style detectors run instead.
+            allow_academic = self._current_recovery_lane == "academic_paper"
+            academic_heading = (
+                _next_academic_inline_heading(_normalize_multiline_text(block.text))
+                if allow_academic
+                else None
+            )
             if academic_heading is not None and academic_heading[0] == 0:
                 _start_index, heading_text, remainder, heading_meta = academic_heading
                 recovered_heading_level = int(heading_meta.get("section_level") or 0) or None
