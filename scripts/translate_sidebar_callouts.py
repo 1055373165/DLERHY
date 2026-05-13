@@ -65,7 +65,9 @@ CALLOUTS = [
         "chapter_id": "b13f7481-d2af-5629-bb8f-52d9c2b9abc9",  # ch1
         "ordinal": 32,
         "title_en": "Training LLMs is expensive",
-        "title_fragment_in_db": "LLMs is expensive",
+        # Post-parser-fix: the title's leading word is no longer lost,
+        # so the in-DB block starts with the full title.
+        "title_fragment_in_db": "Training LLMs is expensive",
     },
 ]
 
