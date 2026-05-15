@@ -266,22 +266,21 @@ def main() -> int:
             )
         )
 
-        # R8: count of source-fold elements should be ≥ figcaptions, since
-        # every section/heading/paragraph/figure renders one fold.
-        rendered_units = (
-            len(head_texts)
-            + len(re.findall(r"<p[^>]*>", html))
-            + len(re.findall(r"<figure[^>]*>", html))
+        # R8: every translatable paragraph should have a paired source
+        # fold. Headings, figures, images and code blocks deliberately
+        # render WITHOUT a fold (heading + figcaption already carry the
+        # source content), so count only <p class="body"> equivalent
+        # paragraphs in the structural HTML.
+        body_paragraph_count = len(
+            re.findall(r"<p(?![^>]*class=['\"]caption['\"])[^>]*>", structural_html)
         )
-        # Soft: at least 60% of rendered units have a source fold (some
-        # listings/figures may share one fold for the whole unit).
-        coverage = len(folds) / max(rendered_units, 1)
-        r8_ok = coverage >= 0.4
+        coverage = len(folds) / max(body_paragraph_count, 1)
+        r8_ok = coverage >= 0.7
         checks.append(
             (
                 "R8 source_fold_coverage",
                 r8_ok,
-                f"folds={len(folds)} rendered_units={rendered_units} "
+                f"folds={len(folds)} body_p={body_paragraph_count} "
                 f"coverage={coverage:.0%}",
             )
         )

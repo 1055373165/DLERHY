@@ -1169,10 +1169,29 @@ _PAGE_ARTIFACT_PATTERN = re.compile(
     r")\s*$"
 )
 
+# Running-header heading artifacts: PDFs repeat the current section
+# title on top of each page ("1.1 Generative AI in context  3"). The
+# parser captures these as heading blocks distinct from the real
+# section heading. Detect by section-numbered start + trailing page
+# number on its own line (parser stores as "<title>\n<digits>").
+_RUNNING_HEADER_HEADING_PATTERN = re.compile(
+    r"^\s*\d+(?:\.\d+){0,2}\s+\S.*[\n ]\d{1,4}\s*$",
+    re.DOTALL,
+)
+
 
 def _is_page_artifact(src: str) -> bool:
     s = (src or "").strip()
-    return bool(s) and len(s) <= 30 and bool(_PAGE_ARTIFACT_PATTERN.match(s))
+    if not s:
+        return False
+    if len(s) <= 30 and _PAGE_ARTIFACT_PATTERN.match(s):
+        return True
+    # Running-header heading repeat: e.g. "1.1 Generative AI in context
+    # \n3" — strict shape so we don't kill real headings whose body
+    # happens to mention numbers.
+    if _RUNNING_HEADER_HEADING_PATTERN.match(s):
+        return True
+    return False
 
 
 # DeepSeek occasionally synthesises a stub when the source text is a
@@ -1181,9 +1200,14 @@ def _is_page_artifact(src: str) -> bool:
 # These are NOT real translations and should never reach the reader.
 _STUB_TRANSLATION_NEEDLES = (
     "这是当前段落中唯一的句子",
+    "这是当前段落中唯一的一句话",
     "当前段落仅此一句",
-    "本段仅有一句",
+    "当前段落只有这一句",
     "当前段落中的唯一句子",
+    "当前段落中唯一的一句话",
+    "本段仅有一句",
+    "本段落仅有一句",
+    "本段唯一的一句",
 )
 
 
@@ -1353,18 +1377,31 @@ def _render_block(
         return _image_html(image_data_uri, image_alt)
     if not chunks and not untranslated:
         return ""
-    if btype == "heading" and chunks:
+    if btype == "heading":
+        # When the chunk-level translator returns a stub
+        # ("这是当前段落中唯一的一句话") for a real heading, the
+        # ``_block_zh_chunks`` filter drops the bad chunk and moves the
+        # source into ``untranslated``. The heading source itself is
+        # still valid structural content — render it as the heading,
+        # falling back to the English source rather than emitting an
+        # empty body that the verifier would flag.
+        heading_translation = (chunks[0] if chunks else "").replace("\n", " ").strip()
+        heading_translation = re.sub(r"\s+", " ", heading_translation)
+        heading_source = (block.source_text or "").strip()
+        heading_source_normalized = re.sub(r"\s+", " ", heading_source.replace("\n", " ")).strip()
         # Older parser revisions promoted short/body-fragment text to HEADING
-        # (e.g. "Many LLMs", "Note: ...", figure-internal labels). Keep the
-        # render side robust to those rows by demoting any HEADING whose
-        # source isn't shaped like a section title — leading section number
-        # OR a Chapter/Part/Appendix lead OR ≥60 chars of meaningful prose.
-        # Check both the English source and the translated chunk so a
-        # parser that didn't include the source-side connector still demotes
-        # at render time.
-        if not _looks_like_heading_source(block.source_text or "") or not _looks_like_heading_source(chunks[0]):
-            return _paragraph_html(chunks)
-        return _heading_html(chunks[0])
+        # (e.g. "Many LLMs", "Note: ...", figure-internal labels). Demote
+        # any HEADING whose source isn't shaped like a section title.
+        if heading_source and not _looks_like_heading_source(heading_source):
+            return _paragraph_html(chunks) if chunks else ""
+        if chunks and not _looks_like_heading_source(chunks[0]):
+            # Translation lost the heading shape — fall back to source.
+            return _heading_html(heading_source_normalized or heading_translation)
+        if heading_translation:
+            return _heading_html(heading_translation)
+        if heading_source_normalized:
+            return _heading_html(heading_source_normalized)
+        return ""
     if btype in {"code", "code_block"}:
         # The parser flags any block that mixes monospace tokens with body
         # text as CODE — but most of those are body paragraphs that just
@@ -1495,7 +1532,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-left: 4px solid #888; background: #efefef;
     color: #555; font-size: .92rem; border-radius: 0 4px 4px 0;
   }}
-  p {{ margin: .85rem 0; }}
+  p {{ margin: 1.1rem 0; }}
+  /* Larger gap below source-fold and before the next paragraph so the
+     reading flow remains crisp — without this, the fold's bottom edge
+     visually merges with the following Chinese paragraph. */
+  details.source-fold + p,
+  details.source-fold + h2,
+  details.source-fold + h3,
+  details.source-fold + figure,
+  details.source-fold + aside {{ margin-top: 1.6rem; }}
   ul.bullet-list {{ margin: .85rem 0 .85rem 1.4rem; padding: 0; }}
   ul.bullet-list li {{ margin: .35rem 0; line-height: 1.7; }}
   ol.ordered-list {{ margin: .85rem 0 .85rem 1.4rem; padding: 0; }}
@@ -1672,9 +1717,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-top: 1px dashed rgba(127, 127, 127, .25);
     font-family: -apple-system, "Times New Roman", Georgia, serif;
     color: #444;
-    white-space: pre-wrap;
     word-wrap: break-word;
   }}
+  /* Render English source paragraphs with full paragraph spacing. The
+     fold body wraps multiple <p> tags (one per source paragraph), so
+     visual gaps reproduce the original PDF's paragraph rhythm rather
+     than running everything together. */
+  details.source-fold .src-body p {{
+    margin: 0 0 .85rem;
+    line-height: 1.7;
+  }}
+  details.source-fold .src-body p:last-child {{ margin-bottom: 0; }}
+  details.source-fold .src-body ul {{
+    margin: .25rem 0 .5rem 1.2rem;
+    padding: 0;
+  }}
+  details.source-fold .src-body li {{ margin: .2rem 0; line-height: 1.7; }}
   @media (prefers-color-scheme: dark) {{
     details.source-fold {{
       background: rgba(255, 255, 255, .04);
@@ -1905,18 +1963,14 @@ def _build_source_fold_md(blocks: list, *, label: str = "英文原文") -> str:
 def _build_source_fold(blocks: list, *, label: str = "英文原文") -> str:
     """Build a `<details>` element holding the English source for one
     rendered unit. ``blocks`` is the list of source blocks whose
-    ``source_text`` contributed to the rendered Chinese unit (could be
-    a single block, or a heading-fragment + body, or a list head + items,
-    or a multi-panel master + slaves).
+    ``source_text`` contributed to the rendered Chinese unit.
 
     Source text is reflowed (``_reflow_pdf_source``) to undo PDF column-
-    wrap newlines so the fold reads as a clean paragraph instead of
-    one-line-per-print-line. Remaining ``\\n\\n+`` paragraph breaks
-    become ``<br><br>``; multiple blocks (e.g. heading-fragment + body)
-    are joined with a paragraph gap. The whole thing is wrapped in
-    ``<details class="source-fold">`` so frontends can collapse it.
+    wrap newlines, then emitted as one ``<p>`` per paragraph (separated
+    by ``\\n\\n`` in the source). This produces real paragraph spacing
+    instead of mashing everything into a single visual block.
     """
-    pieces: list[str] = []
+    paragraphs: list[str] = []
     seen: set[str] = set()
     for blk in blocks:
         if blk is None or blk.id in seen:
@@ -1925,12 +1979,13 @@ def _build_source_fold(blocks: list, *, label: str = "英文原文") -> str:
         text = _reflow_pdf_source((blk.source_text or "").strip())
         if not text:
             continue
-        # Escape first, then convert remaining (true paragraph) breaks
-        # to <br><br>.
-        pieces.append(html.escape(text).replace("\n\n", "<br><br>").replace("\n", " "))
-    if not pieces:
+        for para in text.split("\n\n"):
+            cleaned = para.strip()
+            if cleaned:
+                paragraphs.append(html.escape(cleaned).replace("\n", " "))
+    if not paragraphs:
         return ""
-    body = "<br><br>".join(pieces)
+    body = "\n".join(f"<p>{p}</p>" for p in paragraphs)
     return (
         f"<details class='source-fold'>"
         f"<summary>{html.escape(label)}</summary>"
@@ -2054,6 +2109,32 @@ def main() -> int:
         # single paragraph. Indexed by block UUID. Built by
         # ``scripts/translate_sidebar_callouts.py``.
         sidebar_callout_cache: dict[str, dict] = _load_sidebar_callout_cache()
+
+        # Heading translation fallback table. PDFs repeat the section
+        # title at the top of each page; the translator sometimes
+        # returns a stub for the "real" heading occurrence (ord N) but
+        # translates the running-header copy (ord N + page_offset)
+        # cleanly. We index translated headings by their leading
+        # section number ("1.1") so the render layer can fall back to
+        # a sibling heading's translation when its own chunks are
+        # missing or stub-degenerate.
+        heading_translation_by_section: dict[str, str] = {}
+        section_lead_re = re.compile(r"^\s*(\d+(?:\.\d+){0,2})\b")
+        for blk in blocks:
+            if (blk.block_type or "").lower() != "heading":
+                continue
+            zh_chunks, _ = _block_zh_chunks(session, blk)
+            if not zh_chunks:
+                continue
+            zh = re.sub(r"\s+", " ", zh_chunks[0]).strip()
+            zh_no_tail = re.sub(r"\s+\d+\s*$", "", zh).strip()
+            src = (blk.source_text or "").strip()
+            m = section_lead_re.match(src)
+            if not m:
+                continue
+            section = m.group(1)
+            if section not in heading_translation_by_section and zh_no_tail:
+                heading_translation_by_section[section] = zh_no_tail
         # Reject linkages where the linked caption's source text is actually
         # body prose (e.g. "Figure 3.1 describes the essential components...")
         # rather than a real caption (e.g. "Figure 3.1 The basic components...").
@@ -3086,12 +3167,32 @@ def main() -> int:
                 cover_md = _render_chapter_cover_md(items)
                 if cover_html:
                     if BILINGUAL_MODE:
-                        fold = _build_source_fold([block])
-                        if fold:
-                            cover_html += "\n" + fold
-                        md_fold = _build_source_fold_md([block])
-                        if md_fold:
-                            cover_md += "\n\n" + md_fold
+                        # Source fold mirrors the Chinese bullet list:
+                        # one <li> per recovered English item. Without
+                        # this, the fold would render the parser's
+                        # joined run-on ("Transformers and large
+                        # language models are How LLMs work in plain
+                        # language ..."), defeating the visual structure
+                        # we re-emitted on the Chinese side.
+                        en_items = [
+                            (it.get("en") or "").strip()
+                            for it in items if (it.get("en") or "").strip()
+                        ]
+                        if en_items:
+                            li_html = "\n".join(
+                                f"  <li>{html.escape(s)}</li>" for s in en_items
+                            )
+                            cover_html += (
+                                "\n<details class='source-fold'>"
+                                f"<summary>{html.escape('英文原文')}</summary>"
+                                f"<div class='src-body'><ul>\n{li_html}\n</ul></div>"
+                                "</details>"
+                            )
+                            cover_md += (
+                                "\n\n<details>\n<summary>英文原文</summary>\n\n"
+                                + "\n".join(f"- {s}" for s in en_items)
+                                + "\n\n</details>"
+                            )
                     rendered_blocks_html.append(cover_html)
                     if cover_md:
                         rendered_blocks_md.append(cover_md)
@@ -3354,22 +3455,44 @@ def main() -> int:
                         src_text = (src_cap_block.source_text or "").strip()
                         if src_text and _is_real_caption_text(src_text):
                             image_alt = src_text
+            # Heading fallback: when this block IS a heading and its
+            # own translation is missing (stub filtered out by
+            # ``_block_zh_chunks``), borrow a sibling heading's clean
+            # translation matched by section number — the running-
+            # header copy on the next page often translates cleanly
+            # even when the main heading produces a stub.
+            if btype == "heading" and not chunks:
+                src_text = (block.source_text or "").strip()
+                _m = re.match(r"^\s*(\d+(?:\.\d+){0,2})\b", src_text)
+                if _m:
+                    fallback_zh = heading_translation_by_section.get(_m.group(1))
+                    if fallback_zh:
+                        chunks = [fallback_zh]
+                        untranslated = []
             block_html = _render_block(
                 block, chunks, untranslated, image_data_uri, image_alt
             )
             block_md = _render_block_md(block, chunks, untranslated, image_alt)
-            untrans_html = _untranslated_html(untranslated)
+            # Suppress the "未翻译片段" yellow warning for headings,
+            # figures, and image blocks — they render with their own
+            # structural fallback (heading-from-source / figcaption /
+            # image) so the warning is redundant noise.
+            if btype in {"heading", "image", "figure", "caption", "figure_caption"}:
+                untrans_html = ""
+            else:
+                untrans_html = _untranslated_html(untranslated)
             combined = "\n".join(part for part in (block_html, untrans_html) if part)
             if not combined:
                 untranslated_block_count += 1
                 continue
-            if BILINGUAL_MODE and btype not in {"image", "figure"}:
-                # Source fold for paragraph / heading / list / quote / code
-                # units. Figure & image blocks get NO fold — their
-                # translated figcaption already conveys the figure label
-                # + description, and the English "Figure N.M …" line
-                # would just be noise. include EVERY block whose source
-                # contributed to this rendered unit:
+            if BILINGUAL_MODE and btype not in {"image", "figure", "heading"}:
+                # Source fold for paragraph / list / quote / code units.
+                # Headings, figures and images get NO fold — the
+                # translated heading / figcaption already conveys all
+                # the source carries, and a duplicated English line
+                # below the heading is visual noise. Headings render at
+                # h2 / h3 size and would dominate the surrounding fold
+                # styling anyway.
                 #   1. the head block itself
                 #   2. heading-fragment merged into this block
                 #   3. NOTE/TIP callout heading glued onto next body
@@ -3400,7 +3523,7 @@ def main() -> int:
             if not md_unit and untranslated:
                 md_unit = f"*[未译]* {' '.join(untranslated).strip()}"
             if md_unit:
-                if BILINGUAL_MODE and btype not in {"image", "figure"}:
+                if BILINGUAL_MODE and btype not in {"image", "figure", "heading"}:
                     md_src_blocks: list = []
                     frag_id = merge_into_next.get(block.id)
                     if frag_id and frag_id != block.id:
