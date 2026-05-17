@@ -7576,10 +7576,28 @@ class PdfStructureRecoveryService:
             for idx, block in page_blocks:
                 if idx == caption_index or idx in already_claimed:
                     continue
-                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote", "heading"}:
+                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote"}:
                     continue
-                if block.block_type == BlockType.HEADING:
-                    continue
+                # Only protect HEADING blocks that came from a RIGOROUS
+                # recovery source (numbered section, all-caps subheading,
+                # academic / abstract / references / document-title). The
+                # "soft" heading detectors (inline_book_heading,
+                # embedded_book_plain_heading_recovered) regularly promote
+                # noun-phrase figure-internal labels — those must stay
+                # absorbable so the figure cluster swallows them.
+                if block.role == "heading" or block.block_type == BlockType.HEADING:
+                    heading_recovery_source = str(
+                        (block.metadata or {}).get("pdf_heading_recovery_source") or ""
+                    )
+                    if heading_recovery_source in {
+                        "embedded_book_heading_recovered",
+                        "embedded_book_subheading_recovered",
+                        "embedded_abstract_heading_recovered",
+                        "embedded_document_title_recovered",
+                        "embedded_references_heading_recovered",
+                        "academic_section_heading_recovered",
+                    }:
+                        continue
                 bbox = self._page_bbox(block, caption_block.page_start)
                 if bbox is None:
                     continue
