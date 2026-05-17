@@ -1997,6 +1997,53 @@ _BOOK_RUNNING_HEADER_PATTERN = re.compile(
 )
 
 
+# Manning-style numbered listings. Matches "Listing 4.1 ...", "Listing
+# 10.12 ...". Other publishers' "Example 1", "Code Snippet 2A", "示例 1"
+# do not match — keeps the scope-locked behaviour from polluting books
+# with different conventions.
+_LISTING_TITLE_RE = re.compile(r"^Listing\s+\d+(?:\.\d+)+\b", re.IGNORECASE)
+
+# Trailing function-call expression typical at the end of a listing
+# annotation that was concatenated with the final code line by the PDF
+# extractor. Matches print(calculate_pi(1000000)), foo.bar(1,2,3), etc.
+# Supports a single level of nested call.
+_LISTING_ANNOTATION_CODE_TAIL_RE = re.compile(
+    r"(?<![A-Za-z_])"
+    r"((?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*"
+    r"\((?:[^()]*"                              # plain args
+    r"|[A-Za-z_][A-Za-z0-9_]*\([^)]*\))*"       # or nested call(args)
+    r"\))"
+)
+
+# Code-line starters typical of programming-language source. If a
+# paragraph block within a Listing scope starts with one of these, it
+# is almost certainly a code line that was misclassified as paragraph
+# — keep it (don't suppress) but re-tag as code_like.
+_LISTING_CODE_LINE_STARTERS_RE = re.compile(
+    r"^(?:IMPORT|MODULE|PROCEDURE|VAR|BEGIN|END|FOR|IF|ELSE|RETURN|TYPE|CONST|FROM|"
+    r"import|from|def|class|if|else|elif|for|while|return|try|except|with|"
+    r"int|float|double|void|public|private|static|new)\b",
+)
+
+# Short prose-style annotation patterns (callout phrases the PDF puts
+# next to code with an arrow). Must look like English prose — starts
+# with capital and contains a verb or modal. The "** isn't an
+# operator." pattern (starting with code symbols) is also accepted.
+_LISTING_ANNOTATION_PROSE_RE = re.compile(
+    r"^(?:"
+    r"\*\*\s+\w"                                    # "** isn't an operator."
+    r"|[A-Z][A-Za-z_]*\s+(?:can|will|is|are|isn'?t|"
+    r"aren'?t|has|have|does|do|may|might|should|must|"
+    r"takes?|holds?|points?|matches?|sets?|returns?|sounds?)\s"
+    r"|[A-Z][a-z]+\s+(?:the|a|an|to|from|with|by|of|in|on|for|via|"
+    r"that|this|these|those)\s+\w"
+    r"|(?:Tests?|Note|See|Returns?|Computes?|Calculates?|Uses?|"
+    r"Forces?|Drops?|Adds?|Removes?|Sets?|Gets?|Missing|Optional|"
+    r"Required|Required:|Optional:)\s+\w"
+    r")",
+)
+
+
 def _is_book_running_header_text(text: str) -> bool:
     if not text:
         return False
@@ -4622,6 +4669,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
         recovered_blocks = self._promote_late_table_like_bodies(recovered_blocks)
         recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks, ordered_pages)
+        recovered_blocks = self._lock_listing_scope(recovered_blocks)
         recovered_blocks = self._apply_figure_clustering(recovered_blocks)
         recovered_blocks = self._recover_text_only_figures(recovered_blocks)
         self._link_artifact_captions(recovered_blocks)
@@ -6154,6 +6202,275 @@ class PdfStructureRecoveryService:
                 return True
 
         return False
+
+    def _lock_listing_scope(
+        self, recovered_blocks: list[_RecoveredBlock]
+    ) -> list[_RecoveredBlock]:
+        """Clean up Manning-style ``Listing N.M`` code-snippet regions.
+
+        This book uses styled ``Listing 4.1   ChatGPT calculating pi in
+        Python`` title bars over code samples. The PDF text extractor
+        often interleaves the listing's side-annotations (e.g. "Tests
+        the function; the more terms, the more accurate the
+        approximation") with code lines, sometimes concatenating an
+        annotation with the trailing code line into a single paragraph
+        block:
+
+            "Tests the function; the more terms,\\n
+             the more accurate the approximation print(calculate_pi(...))"
+
+        The end result: the actual print() call gets stripped from the
+        code block AND glued onto the annotation prose, breaking both
+        the listing render and the body translation.
+
+        Strategy: scope-locked by ``^Listing\\s+\\d+(?:\\.\\d+)+\\b``
+        pattern (Manning convention — does NOT match generic "Example",
+        "Code Snippet" or non-numbered listings used by other
+        publishers). Within the scope we
+
+        1. detect paragraph blocks whose *tail* matches a code-shaped
+           function-call suffix (``identifier(...)``) and split that
+           tail back into a synthetic code block;
+        2. flag the remaining annotation prefix with
+           ``pdf_listing_annotation_suppressed`` so the exporter can
+           skip rendering it (the annotation is decorative — it points
+           into the code with an arrow in the PDF, and its translation
+           would only confuse the reader).
+        """
+        if not recovered_blocks:
+            return recovered_blocks
+
+        # Pre-pass: when a paragraph block within a Listing scope vicinity
+        # contains BOTH a code-call expression AND a subsequent capital-
+        # letter sentence (annotation + code + body glued by upstream
+        # cross-page merge), split it into [annotation_or_code, body].
+        recovered_blocks = self._split_listing_artifact_continuations(recovered_blocks)
+
+        result: list[_RecoveredBlock] = []
+        i = 0
+        n = len(recovered_blocks)
+        while i < n:
+            block = recovered_blocks[i]
+            text = (block.text or "").strip()
+            if not _LISTING_TITLE_RE.match(text):
+                result.append(block)
+                i += 1
+                continue
+
+            # Walk forward up to 16 blocks to find scope end. Scope ends
+            # on: heading, image, figure, caption, table_like, next
+            # listing header, or first long prose paragraph (≥250 chars
+            # with ≥2 sentence breaks) that doesn't fit code-shape.
+            result.append(block)  # title block stays as-is
+            scope_blocks: list[_RecoveredBlock] = []
+            j = i + 1
+            scope_end = min(i + 16, n)
+            while j < scope_end:
+                nxt = recovered_blocks[j]
+                nxt_text = (nxt.text or "").strip()
+                if nxt.role in {"heading", "image", "figure", "caption", "table_like", "header", "footer"}:
+                    break
+                if _LISTING_TITLE_RE.match(nxt_text):
+                    break
+                # Long prose paragraph = scope end.
+                if (
+                    nxt.role == "body"
+                    and nxt.block_type == BlockType.PARAGRAPH
+                    and len(nxt_text) >= 250
+                    and len(re.findall(r"[.!?]\s+[A-Z]", nxt_text)) >= 2
+                ):
+                    break
+                scope_blocks.append(nxt)
+                j += 1
+
+            # Reclassify each scope block.
+            for sb in scope_blocks:
+                result.extend(self._reclassify_listing_scope_block(sb))
+            i = j
+        return result
+
+    def _split_listing_artifact_continuations(
+        self, blocks: list[_RecoveredBlock]
+    ) -> list[_RecoveredBlock]:
+        """Split paragraphs that glue annotation+code+body together.
+
+        Triggers when a paragraph follows a code block AND a Listing
+        title was seen earlier on the same page. The text typically
+        looks like:
+
+            "Tests the function; the more terms, the more accurate the
+             approximation print(calculate_pi(1000000)) Now let us
+             force ChatGPT to do some not terribly challenging
+             extrapolation. ..."
+
+        We use ``)\\s+[A-Z][a-z]+\\s+[a-z]`` (close paren + Capital +
+        lowercase prose start) as the boundary between the code call
+        and the body sentence.
+        """
+        out: list[_RecoveredBlock] = []
+        seen_listing_on_page: int | None = None
+        for block in blocks:
+            text = (block.text or "")
+            if _LISTING_TITLE_RE.match(text.strip()):
+                seen_listing_on_page = block.page_start
+            elif block.page_start != seen_listing_on_page:
+                seen_listing_on_page = None
+
+            should_split = (
+                seen_listing_on_page is not None
+                and block.role == "body"
+                and block.block_type == BlockType.PARAGRAPH
+                and len(text) >= 200
+            )
+            if not should_split:
+                out.append(block)
+                continue
+
+            # Search for "close paren + capital sentence start" boundary.
+            # Anchor: a function-call expression (.../identifier(...))
+            # immediately followed by " Now/We/This/These/That/The …"
+            boundary = re.search(
+                r"\)\s+(?=(?:Now|We|This|These|That|The|It|If|For|While|After|Before|"
+                r"Once|However|Additionally|Furthermore|Therefore|Thus|Hence|Similarly)\b)",
+                text,
+            )
+            if boundary is None:
+                out.append(block)
+                continue
+
+            split_pos = boundary.start() + 1  # include the ')' in first half
+            first_half = text[:split_pos].rstrip()
+            second_half = text[split_pos:].lstrip()
+            if not first_half or not second_half:
+                out.append(block)
+                continue
+
+            out.append(
+                replace(
+                    block,
+                    text=first_half,
+                    flags=list(dict.fromkeys([*block.flags, "listing_artifact_split"])),
+                )
+            )
+            body_meta = dict(block.metadata)
+            out.append(
+                replace(
+                    block,
+                    text=second_half,
+                    metadata=body_meta,
+                    anchor=f"{block.anchor}-bodysplit",
+                    flags=list(dict.fromkeys([*block.flags, "listing_body_continuation"])),
+                )
+            )
+        return out
+
+    def _reclassify_listing_scope_block(
+        self, block: _RecoveredBlock
+    ) -> list[_RecoveredBlock]:
+        """Within a Listing scope, fix paragraph misclassifications.
+
+        Four cases (conservative — leave block alone if none match):
+
+        1. Block text starts with a programming-language keyword
+           (``IMPORT``, ``MODULE``, ``def``, ``class``, …) → reclassify
+           as code_like (was misclassified as paragraph by PDF column-
+           extraction).
+        2. Block text starts with a short callout phrase (``Tests the
+           function``, ``Returns the …``) AND has a code-call tail
+           glued on the end → split into [annotation, code, body_rest].
+        3. Block text starts with a short callout phrase AND is < 160
+           chars total → flag as listing side annotation (suppressed).
+        4. Otherwise leave unchanged.
+        """
+        if block.role != "body" or block.block_type != BlockType.PARAGRAPH:
+            return [block]
+        stripped = (block.text or "").strip()
+        if not stripped:
+            return [block]
+
+        # Case 1: code line misclassified as paragraph.
+        if _LISTING_CODE_LINE_STARTERS_RE.match(stripped):
+            code_meta = dict(block.metadata)
+            code_meta["pdf_block_role"] = "code_like"
+            code_meta["translatable"] = False
+            code_meta["nontranslatable_reason"] = "code"
+            return [
+                replace(
+                    block,
+                    role="code_like",
+                    block_type=BlockType.CODE,
+                    metadata=code_meta,
+                    flags=list(dict.fromkeys([*block.flags, "listing_paragraph_to_code"])),
+                )
+            ]
+
+        # Case 2 / 3: annotation prose (must start with callout phrase).
+        is_annotation_lead = bool(_LISTING_ANNOTATION_PROSE_RE.match(stripped))
+        if not is_annotation_lead:
+            return [block]
+
+        code_match = _LISTING_ANNOTATION_CODE_TAIL_RE.search(stripped)
+        if code_match is not None:
+            # Case 2: split annotation + code (+ trailing body if any).
+            ann_text = stripped[: code_match.start()].rstrip(" ,;:")
+            code_text = code_match.group(0).strip()
+            body_text = stripped[code_match.end():].strip()
+            outputs: list[_RecoveredBlock] = []
+            if ann_text:
+                ann_meta = dict(block.metadata)
+                ann_meta["pdf_listing_annotation_suppressed"] = True
+                ann_meta["translatable"] = False
+                ann_meta["nontranslatable_reason"] = "listing_side_annotation"
+                outputs.append(
+                    replace(
+                        block,
+                        text=ann_text,
+                        metadata=ann_meta,
+                        flags=list(dict.fromkeys([*block.flags, "listing_annotation_suppressed"])),
+                    )
+                )
+            code_meta = dict(block.metadata)
+            code_meta["pdf_block_role"] = "code_like"
+            code_meta["translatable"] = False
+            code_meta["nontranslatable_reason"] = "code"
+            outputs.append(
+                replace(
+                    block,
+                    role="code_like",
+                    block_type=BlockType.CODE,
+                    text=code_text,
+                    metadata=code_meta,
+                    anchor=f"{block.anchor}-code",
+                    flags=list(dict.fromkeys([*block.flags, "listing_annotation_split"])),
+                )
+            )
+            if body_text:
+                body_meta = dict(block.metadata)
+                outputs.append(
+                    replace(
+                        block,
+                        text=body_text,
+                        metadata=body_meta,
+                        anchor=f"{block.anchor}-body",
+                    )
+                )
+            return outputs
+
+        # Case 3: short annotation without code tail.
+        if len(stripped) <= 160:
+            ann_meta = dict(block.metadata)
+            ann_meta["pdf_listing_annotation_suppressed"] = True
+            ann_meta["translatable"] = False
+            ann_meta["nontranslatable_reason"] = "listing_side_annotation"
+            return [
+                replace(
+                    block,
+                    metadata=ann_meta,
+                    flags=list(dict.fromkeys([*block.flags, "listing_annotation_suppressed"])),
+                )
+            ]
+
+        return [block]
 
     def _merge_cross_page_prose_continuations(
         self,
@@ -7695,7 +8012,7 @@ class PdfStructureRecoveryService:
         # synthesis so a second caption on the same page can pick up the
         # labels that sit above the first caption but below the second.
         already_claimed: set[int] = set()
-        synth: list[tuple[int, list[int], list[float]]] = []  # (caption_index, absorbed_indices, union_bbox)
+        synth: list[tuple[int, list[int], list[float], bool]] = []  # (caption_index, absorbed_indices, union_bbox, orphan_figure)
         for caption_index, caption_block in enumerate(recovered_blocks):
             if caption_block.role != "caption":
                 continue
@@ -7710,7 +8027,20 @@ class PdfStructureRecoveryService:
             if caption_bbox is None:
                 continue
             caption_top = caption_bbox[1]
-            zone_top = caption_top - 240.0  # search up to 240pt above the caption
+            # Orphan figure caption: the parser found "Figure N.M …" but no
+            # corresponding image / figure / vector_drawing anchor exists on
+            # the same page. This happens when the figure is rendered as
+            # pure vector graphics (arrows, text labels, code samples) with
+            # no embedded raster. In that case the figure body is just a
+            # constellation of short text labels — relax the candidate
+            # threshold and search window so the synthesizer can still
+            # cluster them.
+            page_has_artifact_anchor = any(
+                blk.role in {"image", "figure"}
+                for _idx, blk in page_blocks
+            )
+            orphan_figure = not page_has_artifact_anchor
+            zone_top = 0.0 if orphan_figure else caption_top - 240.0
 
             # Candidate filter: small text-like blocks above the caption.
             candidates: list[tuple[int, _RecoveredBlock, list[float]]] = []
@@ -7749,7 +8079,8 @@ class PdfStructureRecoveryService:
                     continue
                 candidates.append((idx, block, bbox))
 
-            if len(candidates) < 3:
+            candidate_threshold = 2 if orphan_figure else 3
+            if len(candidates) < candidate_threshold:
                 continue
 
             # Reject if any candidate is wide-format prose — i.e. spans
@@ -7768,7 +8099,10 @@ class PdfStructureRecoveryService:
             sorted_candidates = sorted(candidates, key=lambda c: c[2][1])
             top_y = sorted_candidates[0][2][1]
             bot_y = max(c[2][3] for c in sorted_candidates)
-            if bot_y - top_y > 240.0:
+            # Orphan figures (vector-graphics-only) often span more of the
+            # page since labels are scattered across the diagram.
+            vertical_span_limit = 480.0 if orphan_figure else 240.0
+            if bot_y - top_y > vertical_span_limit:
                 continue
             # Block immediately above the cluster must NOT be a long
             # paragraph that looks like body prose continuation.
@@ -7794,7 +8128,7 @@ class PdfStructureRecoveryService:
             uy1 = bot_y
             absorbed_idxs = [c[0] for c in sorted_candidates]
             already_claimed.update(absorbed_idxs)
-            synth.append((caption_index, absorbed_idxs, [ux0, uy0, ux1, uy1]))
+            synth.append((caption_index, absorbed_idxs, [ux0, uy0, ux1, uy1], orphan_figure))
 
         if not synth:
             return recovered_blocks
@@ -7802,7 +8136,7 @@ class PdfStructureRecoveryService:
         replaced_indices: set[int] = set()
         synth_block_at: dict[int, _RecoveredBlock] = {}
         caption_anchor_for_index: dict[int, str] = {}
-        for caption_index, absorbed, union_bbox in synth:
+        for caption_index, absorbed, union_bbox, was_orphan in synth:
             primary_index = absorbed[0]
             primary = recovered_blocks[primary_index]
             caption_block = recovered_blocks[caption_index]
@@ -7837,7 +8171,11 @@ class PdfStructureRecoveryService:
                 bbox_regions=[{"page_number": page_number, "bbox": list(union_bbox)}],
                 reading_order_index=primary.reading_order_index,
                 parse_confidence=primary.parse_confidence,
-                flags=list(dict.fromkeys([*primary.flags, "text_only_figure_synthesized"])),
+                flags=list(dict.fromkeys([
+                    *primary.flags,
+                    "text_only_figure_synthesized",
+                    *(["orphan_figure_synthesized"] if was_orphan else []),
+                ])),
                 font_size_avg=0.0,
                 source_path=primary.source_path,
                 anchor=anchor,

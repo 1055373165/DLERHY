@@ -8,7 +8,7 @@
       "chapter_label": "第 1 章",
       "chapter_title": "宏观图景：什么是大语言模型？",
       "ordinal_lo": 1,
-      "ordinal_hi": 67,
+      "ordinal_hi": 66,
       "figure_prefix": "1",
       "figure_count": 5,
       "output_dir": ".test-tmp/ch1-export"
@@ -28,7 +28,7 @@
       "chapter_label": "第 3 章",
       "chapter_title": "Transformer 架构：输入如何转换为输出",
       "ordinal_lo": 1,
-      "ordinal_hi": 131,
+      "ordinal_hi": 122,
       "figure_prefix": "3",
       "figure_count": 11,
       "output_dir": ".test-tmp/ch3-export-v2"
@@ -38,7 +38,7 @@
       "chapter_label": "第 4 章",
       "chapter_title": "LLM 如何学习",
       "ordinal_lo": 1,
-      "ordinal_hi": 140,
+      "ordinal_hi": 143,
       "figure_prefix": "4",
       "figure_count": 10,
       "output_dir": ".test-tmp/ch4-export"
@@ -48,7 +48,7 @@
       "chapter_label": "第 5 章",
       "chapter_title": "如何约束 LLM 的行为",
       "ordinal_lo": 1,
-      "ordinal_hi": 157,
+      "ordinal_hi": 155,
       "figure_prefix": "5",
       "figure_count": 11,
       "output_dir": ".test-tmp/ch5-export"
@@ -58,7 +58,7 @@
       "chapter_label": "第 6 章",
       "chapter_title": "超越自然语言处理",
       "ordinal_lo": 1,
-      "ordinal_hi": 138,
+      "ordinal_hi": 135,
       "figure_prefix": "6",
       "figure_count": 14,
       "output_dir": ".test-tmp/ch6-export"
@@ -68,7 +68,7 @@
       "chapter_label": "第 7 章",
       "chapter_title": "LLM 的误解、局限与新兴能力",
       "ordinal_lo": 1,
-      "ordinal_hi": 105,
+      "ordinal_hi": 98,
       "figure_prefix": "7",
       "figure_count": 6,
       "output_dir": ".test-tmp/ch7-export"
@@ -78,7 +78,7 @@
       "chapter_label": "第 8 章",
       "chapter_title": "用大语言模型设计解决方案",
       "ordinal_lo": 1,
-      "ordinal_hi": 91,
+      "ordinal_hi": 87,
       "figure_prefix": "8",
       "figure_count": 5,
       "output_dir": ".test-tmp/ch8-export"
@@ -88,7 +88,7 @@
       "chapter_label": "第 9 章",
       "chapter_title": "构建与使用 LLM 的伦理",
       "ordinal_lo": 1,
-      "ordinal_hi": 187,
+      "ordinal_hi": 185,
       "figure_prefix": "9",
       "figure_count": 4,
       "output_dir": ".test-tmp/ch9-export"

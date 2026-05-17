@@ -3254,6 +3254,14 @@ def main() -> int:
             ):
                 repair_stats["page_artifacts_suppressed"] += 1
                 continue
+            # Skip Listing side annotations the parser tagged as
+            # non-translatable callouts (Manning-style listings put
+            # short prose phrases next to code with arrows; rendering
+            # them mid-code only confuses the reader).
+            if (block.source_span_json or {}).get("pdf_listing_annotation_suppressed"):
+                repair_stats.setdefault("listing_annotations_suppressed", 0)
+                repair_stats["listing_annotations_suppressed"] += 1
+                continue
             # Chapter-cover bullet list: a single paragraph block whose
             # source joined 4-5 list items the parser couldn't keep
             # apart. Render via the precomputed per-item translations
