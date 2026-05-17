@@ -2854,6 +2854,43 @@ def _is_plausible_book_heading_candidate(text: str) -> bool:
 
 
 def _leading_numbered_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
+    # Fast-path: respect the PDF's own newline-separated structure when the
+    # raw block begins with "<section-number>\n<title-line>\n<body>". The
+    # newline-collapsing normalize below otherwise forces token-by-token
+    # boundary guessing, which mis-fires when the body opens with a word
+    # that doubles as a heading-continuation stopword (e.g. "As mentioned
+    # in chapter 1..."). The newline layout is far more reliable than the
+    # stopword heuristic.
+    if text:
+        # Preserve newlines: only strip leading page label without collapsing
+        # whitespace (the standard `_strip_leading_page_label` would flatten
+        # the structure we depend on here).
+        raw_lines_all = [line.strip() for line in (text or "").split("\n")]
+        # Drop a leading lone page label (e.g. "24") if present.
+        if raw_lines_all and re.fullmatch(r"\d{1,4}", raw_lines_all[0] or ""):
+            raw_lines_all = raw_lines_all[1:]
+        raw_lines = [line for line in raw_lines_all if line]
+        if len(raw_lines) >= 3:
+            first = raw_lines[0]
+            section_match = re.fullmatch(r"(?:\d+(?:\.\d+)*)[.):\-]?", first)
+            if section_match is not None:
+                title_line = raw_lines[1]
+                body_lines = raw_lines[2:]
+                candidate_heading = f"{first} {title_line}".strip()
+                normalized_heading_fp = _normalize_multiline_text(candidate_heading)
+                normalized_remainder_fp = _normalize_multiline_text(" ".join(body_lines))
+                if (
+                    normalized_heading_fp
+                    and normalized_remainder_fp
+                    and 2 <= len(normalized_heading_fp.split()) <= 14
+                    and _is_plausible_book_heading_candidate(normalized_heading_fp)
+                    and _looks_like_visual_heading(normalized_heading_fp, 1)
+                    and _looks_like_book_prose_lead(normalized_remainder_fp)
+                    and _looks_like_book_prose_fragment(normalized_remainder_fp)
+                ):
+                    level = _book_heading_level(normalized_heading_fp, fallback=2) or 2
+                    return normalized_heading_fp, normalized_remainder_fp, level
+
     normalized = _strip_leading_page_label(_normalize_pdf_signal_text(text))
     if not normalized or _LEADING_SECTION_NUMBER_PATTERN.match(normalized) is None:
         return None
@@ -6942,7 +6979,7 @@ class PdfStructureRecoveryService:
                 recovered_heading_level = 1
         elif (
             page_family == "body"
-            and block.page_start == block.page_end
+            and block.page_end - block.page_start <= 1
             and block.role in {"body", "code_like"}
         ):
             # Academic-inline-heading detection ("Training" → standalone
@@ -7539,7 +7576,9 @@ class PdfStructureRecoveryService:
             for idx, block in page_blocks:
                 if idx == caption_index or idx in already_claimed:
                     continue
-                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote"}:
+                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote", "heading"}:
+                    continue
+                if block.block_type == BlockType.HEADING:
                     continue
                 bbox = self._page_bbox(block, caption_block.page_start)
                 if bbox is None:
