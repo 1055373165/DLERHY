@@ -6285,9 +6285,49 @@ class PdfStructureRecoveryService:
 
             # Reclassify each scope block.
             for sb in scope_blocks:
-                result.extend(self._reclassify_listing_scope_block(sb))
+                result.extend(
+                    self._reclassify_listing_scope_block(
+                        self._strip_listing_code_trailing_annotation(sb)
+                    )
+                )
             i = j
         return result
+
+    def _strip_listing_code_trailing_annotation(
+        self, block: _RecoveredBlock
+    ) -> _RecoveredBlock:
+        """Remove trailing annotation-fragment lines from listing code.
+
+        The PDF extractor sometimes merges the first words of a side
+        annotation onto the bottom of a code block (e.g. ``return pi\\n
+        Tests the``). We detect a trailing line of the form
+        ``[Capital] [lowercase-verb]`` with no code punctuation, and
+        strip it.
+        """
+        if block.role != "code_like" or block.block_type != BlockType.CODE:
+            return block
+        text = block.text or ""
+        if "\n" not in text:
+            return block
+        lines = text.split("\n")
+        last = lines[-1].strip()
+        if not last:
+            return block
+        # Trailing fragment looks like prose: short (≤ 4 words), starts
+        # with capital + lowercase, no code punctuation, no operators.
+        if (
+            re.match(r"^[A-Z][a-z]+(?:\s+[a-z]+){0,3}$", last)
+            and not re.search(r"[(){}\[\];=:.<>+]", last)
+        ):
+            stripped = "\n".join(lines[:-1]).rstrip()
+            if not stripped:
+                return block
+            return replace(
+                block,
+                text=stripped,
+                flags=list(dict.fromkeys([*block.flags, "listing_code_trailing_annotation_stripped"])),
+            )
+        return block
 
     def _split_listing_artifact_continuations(
         self, blocks: list[_RecoveredBlock]

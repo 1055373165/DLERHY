@@ -3173,6 +3173,13 @@ def main() -> int:
             for j in range(i + 1, min(i + 13, len(blocks))):
                 nb = blocks[j]
                 nb_btype = (nb.block_type or "").lower()
+                # Parser-flagged listing side annotations: hide entirely
+                # (don't absorb into code; don't render as prose). They
+                # decorate the listing with arrows in the PDF and add no
+                # value once we've extracted the code.
+                if (nb.source_span_json or {}).get("pdf_listing_annotation_suppressed"):
+                    listing_body_ids.add(nb.id)
+                    continue
                 if nb_btype == "code" or nb_btype == "code_block":
                     # Genuine CODE block already in the listing region —
                     # absorb its source text too.
