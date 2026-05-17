@@ -1982,6 +1982,30 @@ def _is_page_number_text(text: str) -> bool:
     return bool(_PAGE_NUMBER_PATTERN.fullmatch(_normalize_text(text).casefold()))
 
 
+# Running-header text patterns the parser captures as paragraph blocks.
+# Two book-typography conventions seen in production:
+#   "22\nCHAPTER 2\nTokenizers: How large language models see the world"
+#   "2.2 Language models see only tokens\n23"
+#   "1.7 Why LLMs perform so well 11"
+_BOOK_RUNNING_HEADER_PATTERN = re.compile(
+    r"^(?:"
+    r"\s*\d+\s*\n\s*CHAPTER\s+\d+\b[^\n]{0,80}"
+    r"|\s*\d+(?:\.\d+){0,2}\s+[^\n]{1,80}\s*\n\s*\d{1,4}\s*$"
+    r"|\s*\d+(?:\.\d+){0,2}\s+[^\n]{1,80}\s+\d{1,4}\s*$"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _is_book_running_header_text(text: str) -> bool:
+    if not text:
+        return False
+    s = text.strip()
+    if len(s) > 200:
+        return False
+    return bool(_BOOK_RUNNING_HEADER_PATTERN.match(s))
+
+
 _MONOSPACE_FONT_PATTERNS = re.compile(
     r"(?i)(?:mono|courier|consol|menlo|fira\s*code|source\s*code|deja\s*vu\s*sans\s*mono"
     r"|liberation\s*mono|roboto\s*mono|inconsolata|ubuntu\s*mono|jetbrains\s*mono"
@@ -4592,6 +4616,7 @@ class PdfStructureRecoveryService:
         recovered_blocks = self._repair_prose_artifact_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._merge_same_anchor_code_continuations(recovered_blocks)
         recovered_blocks = self._merge_cross_page_code_continuations(recovered_blocks, ordered_pages)
+        recovered_blocks = self._merge_cross_page_prose_continuations(recovered_blocks, ordered_pages)
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
         recovered_blocks = self._promote_late_code_like_bodies(recovered_blocks)
         recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
@@ -6129,6 +6154,122 @@ class PdfStructureRecoveryService:
                 return True
 
         return False
+
+    def _merge_cross_page_prose_continuations(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage],
+    ) -> list[_RecoveredBlock]:
+        """Merge body paragraph blocks split across a page boundary.
+
+        Books frequently break a sentence at the page bottom and continue
+        it on the next page after a running header. The parser emits two
+        ``paragraph`` blocks (one per page) with header/footer/page-number
+        artifacts in between. Without merging, the translator sees the
+        halves independently → two Chinese paragraphs with a mid-sentence
+        seam. We detect the continuation pattern (previous ends without a
+        sentence terminator, current starts lowercase or with a hyphen
+        continuation) and glue them so a single packet covers the full
+        sentence.
+        """
+        merged: list[_RecoveredBlock] = []
+        for current in recovered_blocks:
+            target_index = self._cross_page_prose_merge_target_index(merged, current, pages)
+            if target_index is not None:
+                merged_block = self._merge_blocks(merged[target_index], current)
+                merged_block.flags = list(
+                    dict.fromkeys(
+                        [*merged_block.flags, "cross_page_prose_continuation_merged"]
+                    )
+                )
+                merged[target_index] = merged_block
+                continue
+            merged.append(current)
+        return merged
+
+    def _cross_page_prose_merge_target_index(
+        self,
+        recovered: list[_RecoveredBlock],
+        current: _RecoveredBlock,
+        pages: list[PdfPage],
+    ) -> int | None:
+        if not recovered:
+            return None
+        index = len(recovered) - 1
+        while index >= 0 and self._is_ignorable_prose_separator(recovered[index]):
+            index -= 1
+        if index < 0:
+            return None
+        if any(not self._is_ignorable_prose_separator(block) for block in recovered[index + 1 :]):
+            return None
+        if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages):
+            return index
+        return None
+
+    def _is_ignorable_prose_separator(self, block: _RecoveredBlock) -> bool:
+        if block.role in {"header", "footer", "footnote"}:
+            return True
+        text = block.text or ""
+        if block.block_type == BlockType.PARAGRAPH and _is_page_number_text(text):
+            return True
+        # Running-header text that the parser captured as a paragraph
+        # block. These look like "22\nCHAPTER 2\n<chapter title>" or
+        # "2.2 Language models see only tokens\n23" and must not break a
+        # cross-page sentence continuation chain.
+        if block.block_type == BlockType.PARAGRAPH and _is_book_running_header_text(text):
+            return True
+        return False
+
+    def _should_merge_cross_page_prose_continuation(
+        self,
+        previous: _RecoveredBlock,
+        current: _RecoveredBlock,
+        pages: list[PdfPage],
+    ) -> bool:
+        if previous.role != "body" or current.role != "body":
+            return False
+        if previous.block_type != BlockType.PARAGRAPH or current.block_type != BlockType.PARAGRAPH:
+            return False
+        if current.page_start <= previous.page_end:
+            return False
+        if current.page_start > previous.page_end + 2:
+            return False
+        if str(previous.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        if str(current.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        # Current must NOT itself be a separator (page number, running
+        # header) — otherwise we would graft the page header onto the
+        # previous body block.
+        if self._is_ignorable_prose_separator(current):
+            return False
+
+        prev_text = (previous.text or "").rstrip()
+        curr_text = (current.text or "").lstrip()
+        if not prev_text or not curr_text:
+            return False
+        # Strip trailing whitespace and quote-pairs so the terminator
+        # check looks at meaningful characters.
+        prev_tail = prev_text.rstrip("\"'“”‘’)] }\t\r\n ")
+        if not prev_tail:
+            return False
+        last_char = prev_tail[-1]
+        # Sentence-final punctuation rules out a continuation.
+        if last_char in {".", "!", "?", ":", ";"}:
+            return False
+        # Mid-word hyphen break or trailing connector (comma, dash, ampersand,
+        # open-paren leftover, alphabetic char) signals continuation.
+        if last_char not in {",", "-", "–", "—", "&"} and not last_char.isalpha():
+            return False
+
+        first_char = curr_text[0]
+        # Hyphenated break — accept any reasonable continuation lead.
+        if last_char == "-":
+            return first_char.isalnum()
+        # Standard continuation: current begins with lowercase letter.
+        # A digit or capital-letter lead almost always signals a new
+        # paragraph (section number, sentence, list item, etc.).
+        return first_char.islower()
 
     def _should_merge_same_anchor_code_continuation(
         self,
