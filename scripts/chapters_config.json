@@ -18,7 +18,7 @@
       "chapter_label": "第 2 章",
       "chapter_title": "分词器：大语言模型如何看待世界",
       "ordinal_lo": 1,
-      "ordinal_hi": 89,
+      "ordinal_hi": 86,
       "figure_prefix": "2",
       "figure_count": 8,
       "output_dir": ".test-tmp/ch2-export"

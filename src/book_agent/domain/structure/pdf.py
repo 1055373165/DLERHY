@@ -1995,6 +1995,27 @@ def _has_monospace_font(font_names: frozenset[str]) -> bool:
     return any(_MONOSPACE_FONT_PATTERNS.search(name) for name in font_names)
 
 
+# Body-prose font name fragments commonly seen in published books. When
+# one of these fonts is present alongside a monospace font, the block
+# is body prose with inline-code highlights, not a code listing.
+_PROSE_BODY_FONT_PATTERNS = re.compile(
+    r"Baskerville|Garamond|Georgia|TimesNewRoman|Times-?New-?Roman"
+    r"|FranklinGothic|Helvetica|Caslon|Sabon|Palatino|Minion|Bembo"
+    r"|Lato|Roboto|SourceSans|SourceSerif|Charter|Cambria|PT-?Serif",
+    re.IGNORECASE,
+)
+
+
+def _has_prose_body_font(font_names: frozenset[str]) -> bool:
+    """Return True if the block uses any common book-prose body font.
+
+    Used together with ``_has_monospace_font`` to distinguish real code
+    blocks (mono-only) from body paragraphs that just happen to embed
+    inline monospace identifiers.
+    """
+    return any(_PROSE_BODY_FONT_PATTERNS.search(name) for name in font_names)
+
+
 _LIST_BULLET_PATTERN = re.compile(
     r"^(?:"
     r"[-•●◦▪▸►‣⁃∙◆◇○]\s+"                      # bullet chars
@@ -5496,7 +5517,23 @@ class PdfStructureRecoveryService:
             return "list_item"
         if _looks_like_code(text, raw_block.line_count):
             return "code_like"
-        if raw_block.font_names and _has_monospace_font(raw_block.font_names) and raw_block.line_count >= 2:
+        # Font-based code detection: a block that uses ONLY monospace
+        # font(s) is almost certainly real code. But many book pages
+        # use a monospace font for inline identifiers ("…obtaining
+        # text input as a `string` data type…") while the surrounding
+        # prose stays in a regular body font. If a prose body font
+        # (Baskerville / Garamond / Times / Helvetica / Franklin) is
+        # present alongside the monospace one, this is body text with
+        # inline-code highlights — NOT a code block. Without this
+        # guard, list items like "1 Receiving the text to process—
+        # This means obtaining text input as a string data type…" got
+        # mis-tagged as code and dropped from the translation pipeline.
+        if (
+            raw_block.font_names
+            and _has_monospace_font(raw_block.font_names)
+            and raw_block.line_count >= 2
+            and not _has_prose_body_font(raw_block.font_names)
+        ):
             return "code_like"
         return "body"
 
