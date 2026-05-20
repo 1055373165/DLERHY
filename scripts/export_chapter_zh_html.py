@@ -1383,6 +1383,19 @@ _RUNNING_HEADER_HEADING_PATTERN = re.compile(
     re.DOTALL,
 )
 
+# Chapter running header repeated on every page — e.g.
+#   "CHAPTER 6\nBeyond natural language processing\n89"  (page no. last)
+#   "90\nCHAPTER 6\nBeyond natural language processing"   (page no. first)
+# The literal upper-case "CHAPTER" word only ever appears in these
+# running headers — real chapter titles in the body read "6 Beyond
+# natural language processing" — so matching it is unambiguous.
+_RUNNING_HEADER_CHAPTER_PATTERN = re.compile(
+    r"^\s*(?:"
+    r"\d{1,4}\s*\n[\s\S]*?CHAPTER\s+\d+\b[\s\S]*"
+    r"|CHAPTER\s+\d+\b[\s\S]*\n\s*\d{1,4}"
+    r")\s*$"
+)
+
 
 def _is_page_artifact(src: str) -> bool:
     s = (src or "").strip()
@@ -1394,6 +1407,11 @@ def _is_page_artifact(src: str) -> bool:
     # \n3" — strict shape so we don't kill real headings whose body
     # happens to mention numbers.
     if _RUNNING_HEADER_HEADING_PATTERN.match(s):
+        return True
+    # Chapter running header ("CHAPTER 6 … 89") leaked as a heading or
+    # paragraph block — suppress so it is neither translated into the
+    # body nor glued onto the next paragraph.
+    if _RUNNING_HEADER_CHAPTER_PATTERN.match(s):
         return True
     return False
 
@@ -2830,6 +2848,11 @@ def main() -> int:
             if not src:
                 continue
             if btype != "heading":
+                continue
+            # A running-header artifact ("CHAPTER 6 … 89") that leaked in
+            # as a heading must never be glued onto the next paragraph —
+            # it is suppressed at render time instead.
+            if _is_page_artifact(src):
                 continue
             if i + 1 >= len(blocks):
                 continue

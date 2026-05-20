@@ -3067,14 +3067,14 @@ Many data types, other than human language, can be represented as a sequence of 
 
 </details>
 
-第6章
-超越自然语言处理
-89描述了软件开发者希望计算机执行的操作。与人类语言类似，源代码中的标记根据所使用的语言及其出现的上下文具有含义。与其说有什么不同，不如说源代码比人类语言具有更高度的结构性和特异性。带有歧义和含义微妙差异的编程语言将使计算机难以解释，也让其他人更难修改和维护。源代码（或简称为“代码”，下文将如此称呼）只是LLM和Transformer处理非自然语言数据的一个例子。几乎任何可以重新表示为标记序列的数据都可以利用Transformer以及我们学到的关于LLM工作原理的诸多经验。本章将回顾三个逐渐远离自然语言的例子：代码、数学和计算机视觉。这三种不同类型的数据（称为数据模态）都将需要对Transformer的输入或输出进行新的审视。然而，在所有情况下，Transformer本身保持不变。我们仍然会将多个Transformer层堆叠起来构建模型，并继续使用梯度下降训练这些Transformer层。代码与自然语言最为相似，因此不需要太多改动。不过，为了使代码LLM运行良好，我们将改变LLM输出生成后续标记的方式。接下来，我们将探讨数学领域，其中需要改变分词方式，以使LLM能够成功完成加法等基本运算。最后，对于计算机视觉（涉及处理图像以及执行目标检测和识别等任务），我们将同时修改输入和输出，展示如何通过完全替换标记的概念，将一种截然不同的数据类型转换为序列。我们在图6.1中展示了针对每种数据模态必须修改的LLM部分。
+描述了软件开发者希望计算机执行的操作。与人类语言类似，源代码中的标记根据所使用的语言及其出现的上下文具有含义。与其说有什么不同，不如说源代码比人类语言具有更高度的结构性和特异性。带有歧义和含义微妙差异的编程语言将使计算机难以解释，也让其他人更难修改和维护。
+
+源代码（或简称为“代码”，下文将如此称呼）只是LLM和Transformer处理非自然语言数据的一个例子。几乎任何可以重新表示为标记序列的数据都可以利用Transformer以及我们学到的关于LLM工作原理的诸多经验。本章将回顾三个逐渐远离自然语言的例子：代码、数学和计算机视觉。
+
+这三种不同类型的数据（称为数据模态）都将需要对Transformer的输入或输出进行新的审视。然而，在所有情况下，Transformer本身保持不变。我们仍然会将多个Transformer层堆叠起来构建模型，并继续使用梯度下降训练这些Transformer层。代码与自然语言最为相似，因此不需要太多改动。不过，为了使代码LLM运行良好，我们将改变LLM输出生成后续标记的方式。接下来，我们将探讨数学领域，其中需要改变分词方式，以使LLM能够成功完成加法等基本运算。最后，对于计算机视觉（涉及处理图像以及执行目标检测和识别等任务），我们将同时修改输入和输出，展示如何通过完全替换标记的概念，将一种截然不同的数据类型转换为序列。我们在图6.1中展示了针对每种数据模态必须修改的LLM部分。
 
 <details>
 <summary>英文原文</summary>
-
-CHAPTER 6 Beyond natural language processing 89
 
 that describes the operations a software developer wants a computer to perform. Like human language, the tokens in the source code have meaning according to the language used and the context in which they appear. If anything, source code is more highly structured and specific than human language. A programming language with shades of ambiguity and meaning would be challenging for a computer to interpret and harder for others to modify and maintain.
 
