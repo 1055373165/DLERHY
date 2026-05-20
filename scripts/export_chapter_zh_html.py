@@ -899,6 +899,63 @@ def _detect_paragraph_break_positions(raw: str) -> list[int]:
     return breaks
 
 
+def _pdf_paragraph_break_offsets(block, raw: str) -> list[int]:
+    """Recover paragraph-start char offsets in ``raw`` from PDF layout.
+
+    The line-length heuristic in ``_detect_paragraph_break_positions``
+    misses a paragraph whose final line happens to be full-width (no
+    short trailing line to flag). The PDF itself marks every paragraph
+    start with first-line indentation, so we re-read the block's page
+    regions, find indented line starts, and map them back to ``raw``
+    character offsets. Best-effort: returns ``[]`` on any failure.
+    """
+    if not raw:
+        return []
+    meta = getattr(block, "source_span_json", None) or {}
+    regions = (meta.get("source_bbox_json") or {}).get("regions") or []
+    if not regions:
+        return []
+    pdf = _open_pdf()
+    if pdf is None:
+        return []
+    try:
+        import fitz
+    except ImportError:
+        return []
+    offsets: list[int] = []
+    for region in regions:
+        page_no = region.get("page_number")
+        bbox = region.get("bbox")
+        if not page_no or not bbox:
+            continue
+        idx = int(page_no) - 1
+        if idx < 0 or idx >= pdf.page_count:
+            continue
+        try:
+            page = pdf[idx]
+            data = page.get_text("dict", clip=fitz.Rect(*bbox))
+        except Exception:
+            continue
+        lines: list[tuple[float, str]] = []
+        for b in data.get("blocks", []):
+            for ln in b.get("lines", []):
+                txt = "".join(s.get("text", "") for s in ln.get("spans", []))
+                if txt.strip():
+                    lines.append((float(ln["bbox"][0]), txt.strip()))
+        if len(lines) < 2:
+            continue
+        left = min(x0 for x0, _ in lines)
+        for x0, txt in lines:
+            # First line of a paragraph is indented (~1em) relative to
+            # the body's left margin; continuation lines are flush.
+            if x0 > left + 4.0:
+                probe = " ".join(txt.split()[:5])
+                pos = _find_sentence_offset(probe, raw, 0)
+                if pos > 0:
+                    offsets.append(pos)
+    return sorted(set(offsets))
+
+
 def _paragraph_index_for_offset(offset: int, breaks: list[int]) -> int:
     """Given a char offset and paragraph-break positions, return the
     paragraph index (0-based) containing the offset."""
@@ -930,6 +987,12 @@ def _block_zh_chunks_grouped(
 
     raw = block.source_text or ""
     breaks = _detect_paragraph_break_positions(raw)
+    # Augment with PDF first-line-indentation breaks — catches a
+    # paragraph whose final line is full-width (invisible to the
+    # line-length heuristic above).
+    pdf_breaks = _pdf_paragraph_break_offsets(block, raw)
+    if pdf_breaks:
+        breaks = sorted(set(breaks) | set(pdf_breaks))
     num_paragraphs = len(breaks)
 
     seen_target_ids: set[str] = set()
@@ -1552,8 +1615,11 @@ def _render_block_md(
     """
     btype = (block.block_type or "paragraph").lower()
     if btype in {"image", "figure"}:
-        cap = (image_alt or "").strip()
-        return f"*图：{cap}*" if cap else ""
+        # Caption already carries its own "图 N.M" label (see
+        # _ensure_figure_prefix) — no extra "图：" prefix. Collapse the
+        # PDF line-wrap newlines so the caption is a single clean line.
+        cap = re.sub(r"\s+", " ", (image_alt or "")).strip()
+        return f"*{cap}*" if cap else ""
     if not chunks and not untranslated:
         return ""
     zh_text = _join_zh_chunks_md(chunks)
@@ -1567,7 +1633,8 @@ def _render_block_md(
             return zh_text
         return f"```\n{src}\n```"
     if btype in {"caption", "figure_caption"}:
-        return f"*{zh_text}*" if zh_text else ""
+        cap = re.sub(r"\s+", " ", zh_text).strip()
+        return f"*{cap}*" if cap else ""
     if btype == "list_item":
         text = zh_text or (block.source_text or "").strip()
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", text) else "- "
@@ -3720,6 +3787,7 @@ def main() -> int:
             # chunks that don't map back to the block's own paragraph
             # boundaries.
             block_html = None
+            block_md_grouped: str | None = None
             cross_block_modified = (
                 block.id in callout_heading_for_next
                 or block.id in join_chain
@@ -3735,11 +3803,19 @@ def main() -> int:
                 non_empty_groups = [g for g in grouped if g]
                 if len(non_empty_groups) >= 2:
                     block_html = _paragraph_html_multi(non_empty_groups)
+                    # MD twin: one paragraph per source paragraph,
+                    # separated by a blank line so the exported Markdown
+                    # preserves the original paragraph structure.
+                    block_md_grouped = "\n\n".join(
+                        _join_zh_chunks_md(g) for g in non_empty_groups if g
+                    )
             if block_html is None:
                 block_html = _render_block(
                     block, chunks, untranslated, image_data_uri, image_alt
                 )
             block_md = _render_block_md(block, chunks, untranslated, image_alt)
+            if block_md_grouped:
+                block_md = block_md_grouped
             # References / index reformatting — scoped strictly to their
             # own back-matter section (between the section heading and the
             # next heading). A heading either opens a section or closes

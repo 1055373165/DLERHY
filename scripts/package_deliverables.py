@@ -269,11 +269,11 @@ def _build_html_book(
     )
 
 
-_MD_FIG_MARKER_RE = re.compile(r"^\*图：图\s*(\d+(?:\.\d+)?)([\s\S]*?)\*\s*$", re.MULTILINE)
+_MD_FIG_MARKER_RE = re.compile(r"^\*图\s*(\d+(?:\.\d+)?)([\s\S]*?)\*\s*$", re.MULTILINE)
 
 
 def _inject_md_figures(md: str, figure_map: dict[str, str]) -> str:
-    """Inject ``![alt](assets/…)`` before each ``*图：图N.M …*`` caption."""
+    """Inject ``![alt](assets/…)`` before each ``*图 N.M …*`` caption."""
 
     def _replace(match: re.Match[str]) -> str:
         label = match.group(1)

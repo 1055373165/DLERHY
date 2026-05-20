@@ -277,22 +277,31 @@ def main() -> int:
         skinny_html = re.sub(r"<ol[^>]*>.*?</ol>", "", structural_html, flags=re.DOTALL)
         skinny_html = re.sub(r"<ul[^>]*>.*?</ul>", "", skinny_html, flags=re.DOTALL)
         skinny_html = re.sub(r"<aside[^>]*>.*?</aside>", "", skinny_html, flags=re.DOTALL)
-        skinny_html = re.sub(r"<details[^>]*>.*?</details>", "", skinny_html, flags=re.DOTALL)
-        body_paragraph_count = len(
-            re.findall(r"<p(?![^>]*class=['\"]caption['\"])[^>]*>", skinny_html)
+        # Replace each source fold with a NUL separator: it must break
+        # <p> runs (so two blocks aren't counted as one) while its inner
+        # <p> are removed (so the English source doesn't inflate count).
+        skinny_html = re.sub(
+            r"<details[^>]*>.*?</details>", "\x00", skinny_html, flags=re.DOTALL
         )
-        coverage = len(folds) / max(body_paragraph_count, 1)
-        # Threshold 0.5: multi-paragraph blocks emit N <p> but share
-        # ONE source fold (the fold's inner <p> are stripped by the
-        # <details> regex above). With heavy paragraph splitting, real
-        # books land around 60–70 % even when 100 % of source blocks
-        # are folded.
-        r8_ok = coverage >= 0.5
+        # A body "unit" = one source block = a maximal run of consecutive
+        # <p> tags. A multi-paragraph block emits N <p> joined by
+        # whitespace but shares ONE source fold, so we count runs, not
+        # individual <p> — otherwise paragraph splitting deflates the
+        # ratio even when every block is correctly folded.
+        body_unit_count = len(
+            re.findall(
+                r"(?:<p(?![^>]*class=['\"]caption['\"])[^>]*>.*?</p>\s*)+",
+                skinny_html,
+                flags=re.DOTALL,
+            )
+        )
+        coverage = len(folds) / max(body_unit_count, 1)
+        r8_ok = coverage >= 0.8
         checks.append(
             (
                 "R8 source_fold_coverage",
                 r8_ok,
-                f"folds={len(folds)} body_p={body_paragraph_count} "
+                f"folds={len(folds)} body_units={body_unit_count} "
                 f"coverage={coverage:.0%}",
             )
         )
