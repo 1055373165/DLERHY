@@ -23,9 +23,13 @@
 ### 本章涵盖
 
 - Transformer 与大型语言模型
+
 - LLM 的通俗工作原理
+
 - 人类与机器表征语言的不同方式
+
 - ChatGPT 等工具表现优异的原因
+
 - 理解使用LLM的局限与顾虑
 
 <details>
@@ -436,8 +440,11 @@ The generic process that tokenization follows is shown in figure 2.2 with four k
 </details>
 
 1. 接收待处理的文本——这意味着从用户、互联网或任何包含所需文本的源获取字符串数据类型的文本输入（由字母、数字或符号组成的集合）。
+
 2. 转换字符串——这通常涉及以某种有用的方式更改字符串，例如将大写字符转换为小写。这一步骤也可能出于安全原因（例如，文本来自用户，我们需要删除任何可能看起来像恶意输入的内容）或为了消除文本中的无关变化以帮助算法更好地学习。这个过程称为规范化。
+
 3. 将字符串分解为词元——一旦有了字符串，就需要将其分割成一系列离散的子字符串；这些就是大字符串中的词元。这称为分词。
+
 4. 将每个令牌映射到唯一标识符——唯一标识符通常是一个整数，生成LLM能够理解的输出。
 
 <details>
@@ -811,7 +818,9 @@ Many LLMs you encounter today interpret tokens and produce output using a softwa
 </details>
 
 - 仅编码器模型——这类模型旨在创建可用于执行任务的知识表示，即将输入编码为对算法更有用的数值表示。理解它们的最佳方式是将文本处理成机器学习算法更易使用的形式。它们广泛应用于科学研究。著名示例包括BERT和RoBERTa。
+
 - 仅解码器模型——这类模型旨在生成文本。理解它们的最佳方式是接受一个部分写好的文档，然后通过预测下一个标记来生成该文档的可能续写。著名示例包括OpenAI的GPT和Google的Gemini。
+
 - 编码器-解码器模型——这类模型也旨在生成文本。与仅解码器模型不同，它们接受整段文本并生成对应的段落，而不是续写已有内容。它们不如仅解码器模型流行，因为训练成本更高，而且使用起来有时更具挑战性。对于输入和输出序列明确的任务，编码器-解码器模型往往优于仅解码器模型。例如，它们在翻译和摘要任务上远优于仅解码器模型。著名示例包括T5和驱动谷歌翻译的算法。
 
 <details>
@@ -874,7 +883,9 @@ Let’s look at these layers in detail:
 </details>
 
 - 嵌入层——嵌入层将原始token作为输入，并将其映射为捕捉每个token含义的表示。例如，在第2章中，我们讨论了token如何表示概念，但各个token之间并不存在任何关系。考虑单词“dog”和“wolf”。根据我们对语言的理解，我们知道这些词是相关的，但我们需要某种方式在神经网络中捕捉这种关系。这正是嵌入层所做的工作。它捕捉每个token的信息，编码其含义，并允许我们表达它与其他token的概念关系。因此，我们可以捕捉到这样的概念：token dog和wolf的表示彼此之间比token red和France的表示更为相似。你可以将嵌入层视为模型的一部分，它处理页面上的单词，并将其映射到你脑海中的抽象概念表示。
+
 - Transformer层——Transformer层是语言模型中大部分计算发生的地方：它们捕捉由嵌入层产生的单词之间的关系，并承担获取输出的大部分实际工作。虽然LLM通常只有一个嵌入层和一个输出层，但它们拥有许多Transformer层。更强大的模型拥有更多的Transformer层。人们很容易将Transformer层描述为模型的“思考”部分。这种定义错误地暗示Transformer层（或由它们构建的更大模型）能够思考，但人类的思考是自我反思的，并且在持续时间和努力程度上是可变的。你可以思考某件事半秒钟或几个月，取决于任务所需的努力。Transformer总是以相同的努力重复相同的过程来处理每一项任务。没有内省，也无法改变Transformer层的心理状态。因此，更好的方式是将Transformer层想象为一组模糊规则——模糊是因为它们不要求精确匹配（因为嵌入可能返回类似“dog”到“wolf”的相似物），规则是因为Transformer没有灵活性。一旦学习完成，Transformer层每次都会做同样的事情。
+
 - 输出层——在模型完成计算后，输出层会执行额外的变换以获得有用的结果。最常见的是，输出层作为嵌入层的逆操作，将计算结果从捕捉概念的嵌入空间转换回捕捉实际子词的token空间，以构建文本输出。你可以将其视为模型的一部分，它接受你已经决定的答案，然后通过选择最有可能代表构成答案的概念的单词，来选择实际词语在页面上表达该答案。最后，我们以解嵌入过程结束，该过程将嵌入转换为token。由于每个token与子词具有一一对应关系，我们可以使用简单的字典或映射将token再次转换为人类可读的文本。该过程在图3.2中详细说明。
 
 <details>
@@ -904,11 +915,17 @@ To further understand what is happening inside an LLM, it can be helpful to refr
 *图：图3.2 使用大型语言模型将输入转换为输出的过程*
 
 1. 将文本映射到令牌（见第2章）。
+
 2. 将令牌映射到嵌入空间（新内容，见3.2.1节）。
+
 3. 为每个嵌入添加信息，以捕获每个令牌在输入文本中的位置（新内容，见3.2.1节）。
+
 4. 将数据通过一个Transformer层（重复L次）（新增，第3.2.2节）
+
 5. 应用解嵌入层以获取可能生成良好响应的token（新增，第3.2.3节）
+
 6. 从可能的token列表中采样以生成一个单一响应（新增，第3.2.3节）
+
 7. 将响应中的令牌解码为实际文本（第2章）。
 
 <details>
@@ -1045,7 +1062,9 @@ The transformer layer aims to transform the input into a more useful output. Mos
 </details>
 
 - 查询——查询是从嵌入层得到的向量，表示你要寻找的内容。
+
 - 键——键向量表示与查询进行配对的可能答案。
+
 - 值——每个键都有一个对应的值向量，即当查询与键匹配时返回的实际值。
 
 <details>
@@ -1389,6 +1408,7 @@ Gradient descent is the key to all modern deep-learning algorithms. When an indu
 </details>
 
 - 损失函数——你需要一个单一数值评分，计算算法运行得有多差。
+
 - 梯度下降——你需要一个机械过程，调整算法内部的数值，使损失函数得分尽可能小。
 
 <details>
@@ -1931,9 +1951,13 @@ LLMs are trained to mimic human text by predicting the next token. This task is 
 ### 本章涵盖
 
 - 约束LLM行为以提升其实用性
+
 - 约束 LLM 行为的四个领域
+
 - 微调如何让我们更新LLM
+
 - 强化学习如何改变LLM的输出
+
 - 使用检索增强生成修改 LLM 的输入
 
 <details>
@@ -2029,7 +2053,9 @@ Training an LLM following the process described in chapter 4 produces a model ty
 ### 并非所有模型输出都是理想的
 
 - 有时候，模型认为文档中接下来可能出现的内容并非我们所期望的。导致这种情况的原因有多种，其中包括记忆——有时，LLM会生成长度很长、与训练数据中序列完全一致的副本，这通常被称为记忆化，意指模型从训练集中通过记忆再现文本。记忆化可能是有益的，例如记住特定事实性问题的答案。例如，如果有人问“亚伯拉罕·林肯出生于何时？”，我们希望模型能准确复述出“1809年2月12日”。然而，如果它导致模型侵犯版权，那可能就非常有害了。如果有人要求获取“爱德华·拉夫所著《深入深度学习》的副本”，而模型生成了逐字复制的版本，那么爱德华可能会因版权侵权而对你感到不满！
+
 - 网络上的不良内容——互联网上并非所有内容都适合展示给用户。互联网上充斥着大量粗鄙和仇恨的内容，以及从常见误解到阴谋论等各种事实错误的信息。尽管模型开发者通常会在训练前尝试过滤掉这些数据，但这并非总是可行的。
+
 - 信息缺失与新知——不方便的是，在我们训练模型之后，世界不断演变，变得更加复杂。因此，一个基于截至2018年信息训练的模型将不知道之后发生的任何事情，例如新冠肺炎疫情或犹如噩梦般的“僵尸机器人”发明[1]。但你可能希望模型了解这些进展以保持其有用性，而无需花费高昂成本从头重新训练基础模型。
 
 <details>
@@ -2168,8 +2194,11 @@ At the time of writing, RLHF is the dominant paradigm for constraining models. A
 </details>
 
 - 智能体——拥有某个总体目标并可能通过多个动作来实现该目标的实体/AI/机器人。
+
 - 动作——智能体为推进其目标而可能执行或参与的所有可能行为的空间。
+
 - 环境——受动作影响的地方/对象/空间。环境可能会因为该动作、其他智能体的动作或环境的自然持续变化而改变或不改变。
+
 - 奖励——对改进（可能为负）的数值量化，该改进可能在任意次动作后发生或不发生。
 
 <details>
@@ -2644,8 +2673,11 @@ Coding frameworks like DSPy are beginning to emerge that separate the specific L
 ### 本章涵盖
 
 - Transformer 层在非文本数据上的工作原理
+
 - 帮助 LLM 编写可运行的软件
+
 - 调整LLM以理解数学符号
+
 - Transformer 如何替换输入和输出步骤以处理图像
 
 <details>
@@ -3155,8 +3187,11 @@ Similarly, as LLMs like ChatGPT have developed prompting as a strategy for devis
 ### 本章涵盖
 
 - LLM 与人类在学习上的差异
+
 - 提升 LLM 在延迟与规模敏感型应用中的表现
+
 - 生成中间输出以获得更好的最终结果
+
 - 计算复杂度如何限制LLM的能力
 
 <details>
@@ -3276,7 +3311,9 @@ Generally, humans are capable of self-improvement. They can focus on and study a
 </details>
 
 1. 在初始数据集上训练LLM。
+
 2. 使用LLM生成新数据，并将其添加到训练数据集中。
+
 3. 在新数据上训练或微调模型。（重复直到LLM按预期工作。）虽然这听起来直观且合理，但我们认为由于简单的原因它行不通。我们可以用一些基础信息论来解释原因，信息论将信息视为可量化的资源。这一论点的基础是，根据某种信息度量，原始数据集的信息量是固定的。用统计学的话来说，我们可以将原始信息描述为可用信息的分布，而LLM通过训练过程，试图通过存储和编码信息到其模型中来近似或再现这一信息分布。当你用LLM生成新数据时，这些数据样本是对LLM在训练过程中观察到的原始数据分布的一种有噪声且不完整的重现。从根本上说，LLM的输出不可能包含任何原始训练数据中不存在的新信息。因此，这类实验的现实是，连续多轮生成数据和训练会降低模型的质量和性能[3]。要让这样的方法奏效，你需要有能在每一轮提供外部或新信息的手段。这些概念也与一些人对AI的恐惧有关：他们担心AI会不断自我改进，直到变得极其智能，我们无法理解或控制它。有些论调认为，LLM可以使用其他工具，以某种方式获取外部信息或更多训练数据，从而实现自我改进。最终，这需要一种信念：虽然大多数技术的改进空间存在限制（例如收益递减规律），但LLM却能免疫这些限制。图7.2描述了LLM自我改进的固有限制。
 
 <details>
@@ -3672,8 +3709,11 @@ LLMs cannot self-improve and are inefficient at solving algorithmic problems req
 ### 本章涵盖
 
 - 使用检索增强生成减少错误
+
 - LLM 如何监督人类以减轻自动化偏差
+
 - 使用嵌入增强经典机器学习工具
+
 - 企业与用户双赢的LLM呈现方式
 
 <details>
@@ -3902,6 +3942,7 @@ Let’s look at a quick description of four types of machine learning algorithms
 </details>
 
 - 聚类算法——根据文本间的相似性进行分组，使组内文本与大量可用文本具有显著差异（例如，用于市场细分分析）。常用算法包括K-means和HDBSCAN。
+
 - 异常检测——找出与几乎所有其他可用文本都不相似的文本（即，发现逆向客户或新问题）。常用算法包括孤立森林和局部异常因子（LoF）。
 
 <details>
@@ -3914,6 +3955,7 @@ Outlier detection—Finding texts that are dissimilar from essentially all other
 </details>
 
 - 信息可视化——将数据绘制成二维图形以支持视觉检查/探索，特别是与交互式工具结合使用时（即数据探索）。常用算法包括UMAP和PCA。
+
 - 分类与回归——如果你用已知结果（如净推荐值评分）标记旧文本，可以使用分类（即从A、B、C中选择一个）或回归（即预测一个连续数值，如3.14或42）来预测新文本的分数（即数据分类与价值预测）。使用嵌入向量作为逻辑回归和线性回归等简单算法的输入，分别适用于分类和回归任务。
 
 <details>
@@ -4112,7 +4154,9 @@ Design your system’s incentives to align with your user’s incentives. This i
 ### 本章涵盖
 
 - LLM 执行多任务的能力也带来意外风险
+
 - LLM 与人类价值观的错位问题
+
 - LLM 数据使用对内容创作及未来模型构建的影响
 
 <details>
@@ -4626,10 +4670,14 @@ The financial and technical logistics in compensating all content authors for th
 ### 参考文献
 
 - [1] Young, B. (2023). AI 专家猜测 GPT-4 架构. Weights & Biases. https://api.wandb.ai/links/byyoung3/8zxbl12q
-[2] Micikevicius, P. (2017). 深度神经网络的混合精度训练. NVI-DIA Developer. https://mng.bz/6eaA
-[3] 使用 Google Cloud TPU 加速 AI 开发. https://cloud.google.com/tpu
-[4] Metz, C. (2023年7月23日). 研究人员发现 ChatGPT 及其他聊天机器人安全控制漏洞. New York Times.
-[5] Hu, K. (2023年2月2日). ChatGPT 创下用户增长最快纪录——分析师报告. Reuters. https://mng.bz/XxKv
+
+- [2] Micikevicius, P. (2017). 深度神经网络的混合精度训练. NVI-DIA Developer. https://mng.bz/6eaA
+
+- [3] 使用 Google Cloud TPU 加速 AI 开发. https://cloud.google.com/tpu
+
+- [4] Metz, C. (2023年7月23日). 研究人员发现 ChatGPT 及其他聊天机器人安全控制漏洞. New York Times.
+
+- [5] Hu, K. (2023年2月2日). ChatGPT 创下用户增长最快纪录——分析师报告. Reuters. https://mng.bz/XxKv
 
 <details>
 <summary>英文原文</summary>
@@ -4641,9 +4689,12 @@ The financial and technical logistics in compensating all content authors for th
 </details>
 
 - [1] Friederici, A. D. (2011). 语言处理的脑基础：从结构到功能. Physiology Review, 91, 1357-1392. https://doi.org/10.1152/physrev .00006.2011
-[2] Nation, P., and Waring, R. (1997). 词汇量、文本覆盖与词表. In: N. Schmitt and M. McCarthy, eds., 词汇：描述、习得与教学法 (pp. 6-19). Cambridge University Press.
-[3] Brown, T. B., Mann, B., Ryder, N., et al. (2020). 语言模型是少样本学习者. https://arxiv.org/abs/2005.14165
-[4] Google/SentencePiece. https://github.com/google/sentencepiece
+
+- [2] Nation, P., and Waring, R. (1997). 词汇量、文本覆盖与词表. In: N. Schmitt and M. McCarthy, eds., 词汇：描述、习得与教学法 (pp. 6-19). Cambridge University Press.
+
+- [3] Brown, T. B., Mann, B., Ryder, N., et al. (2020). 语言模型是少样本学习者. https://arxiv.org/abs/2005.14165
+
+- [4] Google/SentencePiece. https://github.com/google/sentencepiece
 
 <details>
 <summary>英文原文</summary>
@@ -4663,7 +4714,9 @@ The financial and technical logistics in compensating all content authors for th
 
 </details>
 
-[1] Denk, T. (2019). Transformer位置编码中的线性关系。 https://mng.bz/oKxd [2] Raff, E. (2022). Inside Deep Learning. Manning.
+- [1] Denk, T. (2019). Transformer位置编码中的线性关系。 https://mng.bz/oKxd
+
+- [2] Raff, E. (2022). Inside Deep Learning. Manning.
 
 <details>
 <summary>英文原文</summary>
@@ -4672,7 +4725,19 @@ The financial and technical logistics in compensating all content authors for th
 
 </details>
 
-- [7] Phung, D. V., Thakur, A., Castricato, L., Tow, J., and Havrilla, A. (2025). Implementing RLHF: Learning to summarize with trlX. Weights & Measures. https://mng.bz/rKzg [8] Kolter, Z., and Madry, M. (n.d.). Adversarial robustness: Theory and practice. https://adversarial-ml-tutorial.org/ [9] OpenAI. (2023, March 27). GPT-4 technical report. https://cdn.openai.com/papers/gpt-4.pdf [10] Chowdhery, A., Narang, S., Devlin, J., et al. (2022). PaLM: Scaling language modeling with pathways. https://arxiv.org/abs/2204.02311 [11] Liang, W., Izzo, Z., Zhang, Y., et al. (2024). Monitoring AI-modified content at scale: A case study on the impact of ChatGPT on AI conference peer reviews. https://arxiv.org/abs/2403.07183 [12] Li, C., and Flanigan, J. (2023). Task contamination: Language models may not be few-shot anymore. https://arxiv.org/abs/2312.16337 [13] Near, J. P., and Abuah, C. (2021). Programming Differential Privacy. https://programming-dp.com/
+- [7] Phung, D. V., Thakur, A., Castricato, L., Tow, J., and Havrilla, A. (2025). Implementing RLHF: Learning to summarize with trlX. Weights & Measures. https://mng.bz/rKzg
+
+- [8] Kolter, Z., and Madry, M. (n.d.). Adversarial robustness: Theory and practice. https://adversarial-ml-tutorial.org/
+
+- [9] OpenAI. (2023, March 27). GPT-4 technical report. https://cdn.openai.com/papers/gpt-4.pdf
+
+- [10] Chowdhery, A., Narang, S., Devlin, J., et al. (2022). PaLM: Scaling language modeling with pathways. https://arxiv.org/abs/2204.02311
+
+- [11] Liang, W., Izzo, Z., Zhang, Y., et al. (2024). Monitoring AI-modified content at scale: A case study on the impact of ChatGPT on AI conference peer reviews. https://arxiv.org/abs/2403.07183
+
+- [12] Li, C., and Flanigan, J. (2023). Task contamination: Language models may not be few-shot anymore. https://arxiv.org/abs/2312.16337
+
+- [13] Near, J. P., and Abuah, C. (2021). Programming Differential Privacy. https://programming-dp.com/
 
 <details>
 <summary>英文原文</summary>
@@ -4681,7 +4746,23 @@ The financial and technical logistics in compensating all content authors for th
 
 </details>
 
-- [1] Albergotti, R., and Matsakis, L. (2023年1月23日). OpenAI 雇佣了大量承包商，旨在使基础编码过时。Semafor. https://mng.bz/MDGQ [2] 介绍 Code Llama，一款用于编码的最先进大型语言模型。(2023年8月24日). Meta. https://mng.bz/av2j [3] von Werra, L., and Ben Allal, L. (2023年5月4日). StarCoder：用于代码的最先进大型语言模型。Hugging Face. https://huggingface.co/blog/starcoder [4] Biderman, S., and Raff, E. (2022).使用预训练语言模型欺骗 MOSS 检测。https://arxiv.org/abs/2201.07406. [5] Dyer, E., and Gur-Ari, G. (2020年6月30日). Minerva：使用语言模型解决定量推理问题。Google Research. https://mng.bz/gane. [6] Azerbayev, Z., Schoelkopf, H., Paster, K., 等. (2023年10月16日). Llemma：用于数学的开放语言模型。EleutherAI. https://blog.eleuther.ai/llemma/ [7] Richardson, D. (1968).关于实变初等函数的一些不可判定问题。《符号逻辑杂志》，33，514–520. [8] Nogueira, R., Jiang, Z., and Lin, J. (2021).使用简单算术任务研究变换器的局限性。https://arxiv.org/abs/2102.13019v3 [9] Golkar, S., Pettee, M., Eickenberg, M., 等. (2024).使用简单算术任务研究变换器的局限性。https://arxiv.org/abs/2310.02989
+- [1] Albergotti, R., and Matsakis, L. (2023年1月23日). OpenAI 雇佣了大量承包商，旨在使基础编码过时。Semafor. https://mng.bz/MDGQ
+
+- [2] 介绍 Code Llama，一款用于编码的最先进大型语言模型。(2023年8月24日). Meta. https://mng.bz/av2j
+
+- [3] von Werra, L., and Ben Allal, L. (2023年5月4日). StarCoder：用于代码的最先进大型语言模型。Hugging Face. https://huggingface.co/blog/starcoder
+
+- [4] Biderman, S., and Raff, E. (2022).使用预训练语言模型欺骗 MOSS 检测。https://arxiv.org/abs/2201.07406.
+
+- [5] Dyer, E., and Gur-Ari, G. (2020年6月30日). Minerva：使用语言模型解决定量推理问题。Google Research. https://mng.bz/gane.
+
+- [6] Azerbayev, Z., Schoelkopf, H., Paster, K., 等. (2023年10月16日). Llemma：用于数学的开放语言模型。EleutherAI. https://blog.eleuther.ai/llemma/
+
+- [7] Richardson, D. (1968).关于实变初等函数的一些不可判定问题。《符号逻辑杂志》，33，514–520.
+
+- [8] Nogueira, R., Jiang, Z., and Lin, J. (2021).使用简单算术任务研究变换器的局限性。https://arxiv.org/abs/2102.13019v3
+
+- [9] Golkar, S., Pettee, M., Eickenberg, M., 等. (2024).使用简单算术任务研究变换器的局限性。https://arxiv.org/abs/2310.02989
 
 <details>
 <summary>英文原文</summary>
@@ -4694,7 +4775,37 @@ The financial and technical logistics in compensating all content authors for th
 
 </details>
 
-[1] Romeo, R. R., Leonard, J. A., Robinson, S. T., 等 (2018). 《超越三千万词鸿沟：儿童对话接触与语言相关脑功能的关系》. Psychological Science, 29, 700–710. https://doi.org/10.1177/ 0956797617742725 [2] Gilkerson, J., Richards, J. A., Warren, S. F., 等 (2017). 《使用全天录音和自动分析绘制早期语言环境》. American Journal of Speech-Language Pathology, 26, 248-265. https://doi.org/10.1044/2016_ AJSLP-15-0169 [3] Shumailov, I., Shumaylov, Z., Zhao, Y., 等 (2024). 《递归的诅咒：在生成数据上训练导致模型遗忘》. https://arxiv.org/abs/2305.17493 [4] Stanovich K. E. (2009). 《智力测验遗漏了什么：理性思维的心理学》. Yale University Press. [5] Improving the realism of synthetic images. (2017, July 7). Apple Machine Learning Research. https://machinelearning.apple.com/research/gan [6] Dai, D., Sun, Y., Dong, L., 等 (2023). 《为什么GPT能够进行上下文学习？语言模型秘密地作为元优化器执行梯度下降》. 发表于 Findings of the Association for Computational Linguistics: ACL 2023 (pp. 4005–4019). Association for Computational Linguistics. [7] Hiller, J. (2023, December 12). 《微软瞄准核电以支撑AI运营》. Wall Street Journal. https://mng.bz/pKe5 [8] Disavino, S. (2023, September 8). 《得克萨斯州电力价格飙升，电网在热浪中通过可靠性考验》. Reuters. https://mng.bz/OB0K [9] Emoji recently added, v15.1. (n.d.) Unicode. https://www.unicode.org/emoji/charts-15.1/emoji-released.html [10] Wei, J., Wang, X., Schuurmans, D., 等。(2023).链式思维提示引发大型语言模型的推理能力. https://arxiv.org/abs/2201.11903 [11] Wang, L., Xu, W., Lan, Y., 等。(2023).规划与求解提示：通过大型语言模型改进零样本链式思维推理。在计算语言学协会第61届年会论文集（第1卷：长论文，页2609-2634）。计算语言学协会。 [12] Guan, L., Valmeekam, K., Sreedharan, S., 和 Kambhampati, S。(2023).利用预训练大型语言模型构建和利用世界模型进行基于模型的任务规划. https://arxiv.org/abs/2305.14909 [13] Bhargava, A。Y. (2015). Grokking算法：程序员和其他好奇人士的图解指南。Manning Publications. [14] Merrill, W., 和 Sabharwal, S。(2024).具有思维链的变换器的表达能力。在2024年国际学习表征会议上. https://openreview.net/forum?id=NjNGlPh8Wh [15] Carlini, N。(2023年9月22日).用大型语言模型下棋. https://nicholas.carlini.com/writing/2023/chess-llm.html [16] Edwards B。(2022年11月7日).一种新的围棋玩法击败了世界级围棋AI，但输给了人类业余爱好者。Ars Technica. https://mng.bz/dW6O
+- [1] Romeo, R. R., Leonard, J. A., Robinson, S. T., 等 (2018). 《超越三千万词鸿沟：儿童对话接触与语言相关脑功能的关系》. Psychological Science, 29, 700–710. https://doi.org/10.1177/ 0956797617742725
+
+- [2] Gilkerson, J., Richards, J. A., Warren, S. F., 等 (2017). 《使用全天录音和自动分析绘制早期语言环境》. American Journal of Speech-Language Pathology, 26, 248-265. https://doi.org/10.1044/2016_ AJSLP-15-0169
+
+- [3] Shumailov, I., Shumaylov, Z., Zhao, Y., 等 (2024). 《递归的诅咒：在生成数据上训练导致模型遗忘》. https://arxiv.org/abs/2305.17493
+
+- [4] Stanovich K. E. (2009). 《智力测验遗漏了什么：理性思维的心理学》. Yale University Press.
+
+- [5] Improving the realism of synthetic images. (2017, July 7). Apple Machine Learning Research. https://machinelearning.apple.com/research/gan
+
+- [6] Dai, D., Sun, Y., Dong, L., 等 (2023). 《为什么GPT能够进行上下文学习？语言模型秘密地作为元优化器执行梯度下降》. 发表于 Findings of the Association for Computational Linguistics: ACL 2023 (pp. 4005–4019). Association for Computational Linguistics.
+
+- [7] Hiller, J. (2023, December 12). 《微软瞄准核电以支撑AI运营》. Wall Street Journal. https://mng.bz/pKe5
+
+- [8] Disavino, S. (2023, September 8). 《得克萨斯州电力价格飙升，电网在热浪中通过可靠性考验》. Reuters. https://mng.bz/OB0K
+
+- [9] Emoji recently added, v15.1. (n.d.) Unicode. https://www.unicode.org/emoji/charts-15.1/emoji-released.html
+
+- [10] Wei, J., Wang, X., Schuurmans, D., 等。(2023).链式思维提示引发大型语言模型的推理能力. https://arxiv.org/abs/2201.11903
+
+- [11] Wang, L., Xu, W., Lan, Y., 等。(2023).规划与求解提示：通过大型语言模型改进零样本链式思维推理。在计算语言学协会第61届年会论文集（第1卷：长论文，页2609-2634）。计算语言学协会。
+
+- [12] Guan, L., Valmeekam, K., Sreedharan, S., 和 Kambhampati, S。(2023).利用预训练大型语言模型构建和利用世界模型进行基于模型的任务规划. https://arxiv.org/abs/2305.14909
+
+- [13] Bhargava, A。Y. (2015). Grokking算法：程序员和其他好奇人士的图解指南。Manning Publications.
+
+- [14] Merrill, W., 和 Sabharwal, S。(2024).具有思维链的变换器的表达能力。在2024年国际学习表征会议上. https://openreview.net/forum?id=NjNGlPh8Wh
+
+- [15] Carlini, N。(2023年9月22日).用大型语言模型下棋. https://nicholas.carlini.com/writing/2023/chess-llm.html
+
+- [16] Edwards B。(2022年11月7日).一种新的围棋玩法击败了世界级围棋AI，但输给了人类业余爱好者。Ars Technica. https://mng.bz/dW6O
 
 <details>
 <summary>英文原文</summary>
@@ -4715,9 +4826,11 @@ https://nicholas.carlini.com/writing/2023/chess-llm.html [16] Edwards B. (2022, 
 
 </details>
 
-[1] Yagoda, M. (2024年2月23日). 航空公司因聊天机器人给乘客提供错误建议承担责任——这对旅客意味着什么. BBC. https://mng.bz/xK7W
-[2] Notopoulos, K. (2023年12月18日). 汽车经销商在其网站上添加AI聊天机器人：然后一切都乱套了. https://mng.bz/AQPz
-[3] Suresh, H., Lao, N., and Liccardi, I. (2020). 错位的信任：衡量机器学习对人类决策的干扰. 收录于第12届ACM网络科学会议论文集（WebSci '20）（第315-324页）. 美国计算机协会. https://doi.org/10.1145/3394231.3397922
+- [1] Yagoda, M. (2024年2月23日). 航空公司因聊天机器人给乘客提供错误建议承担责任——这对旅客意味着什么. BBC. https://mng.bz/xK7W
+
+- [2] Notopoulos, K. (2023年12月18日). 汽车经销商在其网站上添加AI聊天机器人：然后一切都乱套了. https://mng.bz/AQPz
+
+- [3] Suresh, H., Lao, N., and Liccardi, I. (2020). 错位的信任：衡量机器学习对人类决策的干扰. 收录于第12届ACM网络科学会议论文集（WebSci '20）（第315-324页）. 美国计算机协会. https://doi.org/10.1145/3394231.3397922
 
 <details>
 <summary>英文原文</summary>
@@ -4726,7 +4839,47 @@ https://nicholas.carlini.com/writing/2023/chess-llm.html [16] Edwards B. (2022, 
 
 </details>
 
-[1] Hofmann, V., Kalluri, P. R., Jurafsky, D., and King, S. (2024). 方言偏见预测了AI对人们性格、就业能力和犯罪倾向的决策。https://arxiv.org/abs/2403.00742 [2] Omiye, J. NPR（美国国家公共电台）. https://mng.bz/7pBv [11] Marr, B. (2024年5月28日). 生成式AI如何改变艺术家和设计师的工作. 福布斯（Forbes）. https://mng.bz/mG7a [12] Autor, D., Chin, C., Salomons, A., and Seegmiller, B. (2024年). 新前沿：新工作的起源与内容（1940-2018）. 《经济学季刊》，第139卷，第1399-1465页. https://doi.org/10.1093/qje/qjae008 [2] Omiye, J. A., Lester, J. C., Spichak, S. et al. (2023). 大型语言模型传播基于种族的医学。npj Digital Medicine, 6, 195. https://doi.org/10.1038/s41746-023-00939-z [3] Farm labor. [3] (2025年1月8日). 经济研究服务局. https://www.ers.usda.gov/topics/farm-economy/farm-labor/ [4] Verma, P., and De Vync, G. [4] (2023年6月2日). ChatGPT取代了他们的工作：现在他们遛狗和修空调。华盛顿邮报. https://mng.bz/EwQd [5] Marr, B. [5] (2024年4月18日). 生成式AI在视频游戏开发中的作用。福布斯. https://mng.bz/Pdpn [6] Lev-Ram, M. [6] (2023年1月26日). 大型科技公司裁员的受害者发现其他公司争相雇用他们。福布斯. https://mng.bz/JYXV [7] Lohr, S. [7] (2024年2月1日). 报告称生成式AI的最大影响将在银行业和科技领域。纽约时报. https://mng.bz/wJ7P [8] Pethokoukis, J. [8] (2016年6月16日). ATM机和银行柜员的故事揭示了“机器人的崛起”与就业问题。美国企业研究所. https://mng.bz/qx7r [9] Hunter, L. [9] Hunter, L. W., Bernhardt, A., Hughes, K. L., and Skuratowicz, E. (2001). 不仅仅是ATM：零售银行业的技术、企业战略、工作和收入。ILR Review, 54(2A), 402-424. https://doi.org/10.1177/001979390105400222 [10] Rosalsky, G. [10] (2024年6月18日). 如果AI如此出色，为什么还有那么多翻译工作？
+- [1] Hofmann, V., Kalluri, P. R., Jurafsky, D., and King, S. (2024). 方言偏见预测了AI对人们性格、就业能力和犯罪倾向的决策。https://arxiv.org/abs/2403.00742
+
+- [2] Omiye, J. NPR（美国国家公共电台）. https://mng.bz/7pBv
+
+- [11] Marr, B. (2024年5月28日). 生成式AI如何改变艺术家和设计师的工作. 福布斯（Forbes）. https://mng.bz/mG7a
+
+- [12] Autor, D., Chin, C., Salomons, A., and Seegmiller, B. (2024年). 新前沿：新工作的起源与内容（1940-2018）. 《经济学季刊》，第139卷，第1399-1465页. https://doi.org/10.1093/qje/qjae008
+
+- [2] Omiye, J. A., Lester, J. C., Spichak, S. et al. (2023). 大型语言模型传播基于种族的医学。npj Digital Medicine, 6, 195. https://doi.org/10.1038/s41746-023-00939-z
+
+- [3] Farm labor.
+
+- [3] (2025年1月8日). 经济研究服务局. https://www.ers.usda.gov/topics/farm-economy/farm-labor/
+
+- [4] Verma, P., and De Vync, G.
+
+- [4] (2023年6月2日). ChatGPT取代了他们的工作：现在他们遛狗和修空调。华盛顿邮报. https://mng.bz/EwQd
+
+- [5] Marr, B.
+
+- [5] (2024年4月18日). 生成式AI在视频游戏开发中的作用。福布斯. https://mng.bz/Pdpn
+
+- [6] Lev-Ram, M.
+
+- [6] (2023年1月26日). 大型科技公司裁员的受害者发现其他公司争相雇用他们。福布斯. https://mng.bz/JYXV
+
+- [7] Lohr, S.
+
+- [7] (2024年2月1日). 报告称生成式AI的最大影响将在银行业和科技领域。纽约时报. https://mng.bz/wJ7P
+
+- [8] Pethokoukis, J.
+
+- [8] (2016年6月16日). ATM机和银行柜员的故事揭示了“机器人的崛起”与就业问题。美国企业研究所. https://mng.bz/qx7r
+
+- [9] Hunter, L.
+
+- [9] Hunter, L. W., Bernhardt, A., Hughes, K. L., and Skuratowicz, E. (2001). 不仅仅是ATM：零售银行业的技术、企业战略、工作和收入。ILR Review, 54(2A), 402-424. https://doi.org/10.1177/001979390105400222
+
+- [10] Rosalsky, G.
+
+- [10] (2024年6月18日). 如果AI如此出色，为什么还有那么多翻译工作？
 
 <details>
 <summary>英文原文</summary>
@@ -4735,7 +4888,29 @@ https://nicholas.carlini.com/writing/2023/chess-llm.html [16] Edwards B. (2022, 
 
 </details>
 
-[13] Dave, P. (2023年4月8日). StackOverflow将向AI巨头收取训练数据费用。《连线》杂志. https://mng.bz/5gDO [14] Grimm, D. (2024年5月8日). Stack Overflow因用户反对与OpenAI合作而大规模封禁用户——用户因删除答案以防止其被用于训练ChatGPT而遭封禁。Tom's Hardware. https://mng.bz/nR75 [15] Bishop, T. (2020年10月20日). Expedia集团CEO谈谷歌反垄断案：“很高兴看到政府终于采取行动。” Geek Wire. https://mng.bz/vK7p [16] Siddiqui, T. (2023年6月29日).人工智能的风险必须随着技术的发展而加以考虑：杰弗里·辛顿（Geoffrey Hinton）。多伦多大学. https://mng.bz/4aNR [17] Bengio, Y. (2023年6月24日).灾难性AI风险常见问题解答. https://mng.bz/QDO6 [18] 介绍Llama 3.1：迄今为止最强大的模型。(2024年7月23日). Meta. https://ai.meta.com/blog/meta-llama-3-1/ [19] Min, S., Gururangan, S., Wallace, E., 等. (2023年). SILO语言模型：在非参数数据存储中隔离法律风险. https://arxiv.org/abs/2308.04430 [20] Rivero, N. (2022年9月21日).低本底金属：纯净无杂质的宝藏。Quartz. https://mng.bz/eyXZ [21] Shumailov, I., Shumaylov, Z., Zhao, Y., 等. (2024年).当训练数据为递归生成时，AI模型会崩溃。《自然》杂志，第631卷，第755-759页. https://doi.org/10.1038/s41586-024-07566-y [22] Coffey, L. (2024年2月9日).教授们对检测AI生成写作的工具持谨慎态度。《高等教育内幕》. https://mng.bz/Xxj9 [23] Stack Exchange的流量自ChatGPT以来是否下降了？(2023年). Stack Exchange. https://mng.bz/yW7p [24] Dhamani, N., 和 Engler, M. (2024年).《生成式AI导论》。Manning出版社. https://www.manning.com/books/introduction-to-generative-ai
+- [13] Dave, P. (2023年4月8日). StackOverflow将向AI巨头收取训练数据费用。《连线》杂志. https://mng.bz/5gDO
+
+- [14] Grimm, D. (2024年5月8日). Stack Overflow因用户反对与OpenAI合作而大规模封禁用户——用户因删除答案以防止其被用于训练ChatGPT而遭封禁。Tom's Hardware. https://mng.bz/nR75
+
+- [15] Bishop, T. (2020年10月20日). Expedia集团CEO谈谷歌反垄断案：“很高兴看到政府终于采取行动。” Geek Wire. https://mng.bz/vK7p
+
+- [16] Siddiqui, T. (2023年6月29日).人工智能的风险必须随着技术的发展而加以考虑：杰弗里·辛顿（Geoffrey Hinton）。多伦多大学. https://mng.bz/4aNR
+
+- [17] Bengio, Y. (2023年6月24日).灾难性AI风险常见问题解答. https://mng.bz/QDO6
+
+- [18] 介绍Llama 3.1：迄今为止最强大的模型。(2024年7月23日). Meta. https://ai.meta.com/blog/meta-llama-3-1/
+
+- [19] Min, S., Gururangan, S., Wallace, E., 等. (2023年). SILO语言模型：在非参数数据存储中隔离法律风险. https://arxiv.org/abs/2308.04430
+
+- [20] Rivero, N. (2022年9月21日).低本底金属：纯净无杂质的宝藏。Quartz. https://mng.bz/eyXZ
+
+- [21] Shumailov, I., Shumaylov, Z., Zhao, Y., 等. (2024年).当训练数据为递归生成时，AI模型会崩溃。《自然》杂志，第631卷，第755-759页. https://doi.org/10.1038/s41586-024-07566-y
+
+- [22] Coffey, L. (2024年2月9日).教授们对检测AI生成写作的工具持谨慎态度。《高等教育内幕》. https://mng.bz/Xxj9
+
+- [23] Stack Exchange的流量自ChatGPT以来是否下降了？(2023年). Stack Exchange. https://mng.bz/yW7p
+
+- [24] Dhamani, N., 和 Engler, M. (2024年).《生成式AI导论》。Manning出版社. https://www.manning.com/books/introduction-to-generative-ai
 
 <details>
 <summary>英文原文</summary>
@@ -4746,23 +4921,183 @@ https://nicholas.carlini.com/writing/2023/chess-llm.html [16] Edwards B. (2022, 
 
 ### 索引
 
-A 梯度下降（滚球）52 局限 8–9, 14 神经网络层 31 大语言模型中的温度 43–44
-应用（大语言模型） 聊天机器人 2, 65, 67–69, 126–128, 130 代码生成 58–59, 88–95, 100, 142, 157 内容创作 6, 141–142, 144–145 客户服务/技术支持 125–139 图像字幕 104–105 图像生成 101, 104–106, 142, 152 信息检索 82, 128, 141–142 数学 26, 58–59, 95–100, 106, 114 搜索 58, 82–83, 125, 130, 141–142, 146 摘要 6, 30, 55, 123 翻译 3, 30, 125, 141–142, 144 另见 深度学习（DL），错误（大语言模型），输入（大语言模型），学习，机器学习（ML），神经网络，大语言模型输出，训练大语言模型
-人工智能（AI） 在大语言模型语境中 2–4 定义与理解 7–8 可解释人工智能 126, 136–137 炒作 1 与人类的学习比较 46, 108–111
-算法 注意力机制 38–39, 62, 109 字节对编码（BPE）20–23, 91, 98 经典机器学习 126 聚类 133 用于代码生成 89, 92–93 用于将图像转换为图像块 101–103 梯度下降 46–47, 49, 51–54, 60, 72, 101, 108, 115 用于图像生成 104, 142 用于图像识别 101 用于机器翻译 3, 125, 141–142 强化学习（RL）48, 73–75, 78, 93 用于搜索和信息检索 125, 141–142 SentencePiece 22 序列预测 30 用于语音到文本转录 125, 134 用于文本到语音 4, 125, 134 WordPiece 22 另见 聚类算法
-对齐问题（大语言模型）55, 146–148, 150–151
-类比 用于AI和ML 8, 14 用于注意力机制 38
-潜在风险与恐惧 107, 111–112, 120, 140, 146–152 问题解决与 120–123 社会影响 140–146 另见 聊天机器人，ChatGPT，生成式人工智能，大语言模型（LLMs），OpenAI
-注意力机制 类比 38 数学表示 40 在Transformer中 38–40, 62, 109
-自动化 偏见 126, 128–130 人类工作 141, 144 就业市场与 141, 144–145
-ChatGPT 代码生成 58–59, 90, 92–93, 120 与其他大语言模型的比较 2–3, 5, 10 错误与局限 12, 25, 57, 59–61, 143 微调 66, 68, 74, 143 作为生成式人工智能 1–2, 6 指令遵循 6, 59–61, 67, 74 逻辑谜题 60–61 数学 26, 57 模型版本（GPT-3.5, GPT-4）6–7, 15, 22, 70, 98, 143, 152, 156 公众曝光 1 安全控制 12 分词 15, 22–23, 25, 90, 98 另见 人工智能（AI），聊天机器人，生成式人工智能，大语言模型（LLMs），OpenAI
-聚类算法 用于客户支持 135 与嵌入向量配合使用 133–134 另见 算法
-编译器，用于代码验证 93–94, 100
-计算复杂度 大O表示法 120 大语言模型的 120–122 真实世界任务的 121–123
-计算机视觉 将图像转换为图像块 89, 101–103 图像字幕 104–105 图像生成 101, 104–106 图像块合并器 101, 103–104 图像块提取器 101–103 视觉Transformer（ViT）101, 103–104 另见 图像生成，机器学习（ML）
-内容创作 创作者报酬 145, 154–155 版权与 69, 145, 152–154 由大语言模型进行 6, 141–142, 144–145 另见 版权，伦理，合理使用，公有领域
-语境 在少样本学习中 114–115 在语言理解中 56, 60–61, 91, 118 大语言模型中的大小 83–84
-版权 DMCA 69, 152 合理使用与 69, 152–154 对大语言模型输出的影响 157–158
+- A 梯度下降（滚球）52
+
+- 局限 8–9, 14
+
+- 神经网络层 31
+
+- 大语言模型中的温度 43–44
+
+- 应用（大语言模型） 聊天机器人 2, 65, 67–69, 126–128, 130
+
+- 代码生成 58–59, 88–95, 100, 142, 157
+
+- 内容创作 6, 141–142, 144–145
+
+- 客户服务/技术支持 125–139
+
+- 图像字幕 104–105
+
+- 图像生成 101, 104–106, 142, 152
+
+- 信息检索 82, 128, 141–142
+
+- 数学 26, 58–59, 95–100, 106, 114
+
+- 搜索 58, 82–83, 125, 130, 141–142, 146
+
+- 摘要 6, 30, 55, 123
+
+- 翻译 3, 30, 125, 141–142, 144
+
+- 另见 深度学习（DL），错误（大语言模型），输入（大语言模型），学习，机器学习（ML），神经网络，大语言模型输出，训练大语言模型
+
+- 人工智能（AI） 在大语言模型语境中 2–4
+
+- 定义与理解 7–8
+
+- 可解释人工智能 126, 136–137
+
+- 炒作 1
+
+- 与人类的学习比较 46, 108–111
+
+- 算法 注意力机制 38–39, 62, 109
+
+- 字节对编码（BPE）20–23, 91, 98
+
+- 经典机器学习 126
+
+- 聚类 133
+
+- 用于代码生成 89, 92–93
+
+- 用于将图像转换为图像块 101–103
+
+- 梯度下降 46–47, 49, 51–54, 60, 72, 101, 108, 115
+
+- 用于图像生成 104, 142
+
+- 用于图像识别 101
+
+- 用于机器翻译 3, 125, 141–142
+
+- 强化学习（RL）48, 73–75, 78, 93
+
+- 用于搜索和信息检索 125, 141–142
+
+- SentencePiece 22
+
+- 序列预测 30
+
+- 用于语音到文本转录 125, 134
+
+- 用于文本到语音 4, 125, 134
+
+- WordPiece 22
+
+- 另见 聚类算法
+
+- 对齐问题（大语言模型）55, 146–148, 150–151
+
+- 类比 用于AI和ML 8, 14
+
+- 用于注意力机制 38
+
+- 潜在风险与恐惧 107, 111–112, 120, 140, 146–152
+
+- 问题解决与 120–123
+
+- 社会影响 140–146
+
+- 另见 聊天机器人，ChatGPT，生成式人工智能，大语言模型（LLMs），OpenAI
+
+- 注意力机制 类比 38
+
+- 数学表示 40
+
+- 在Transformer中 38–40, 62, 109
+
+- 自动化 偏见 126, 128–130
+
+- 人类工作 141, 144
+
+- 就业市场与 141, 144–145
+
+- ChatGPT 代码生成 58–59, 90, 92–93, 120
+
+- 与其他大语言模型的比较 2–3, 5, 10
+
+- 错误与局限 12, 25, 57, 59–61, 143
+
+- 微调 66, 68, 74, 143
+
+- 作为生成式人工智能 1–2, 6
+
+- 指令遵循 6, 59–61, 67, 74
+
+- 逻辑谜题 60–61
+
+- 数学 26, 57
+
+- 模型版本（GPT-3.5, GPT-4）6–7, 15, 22, 70, 98, 143, 152, 156
+
+- 公众曝光 1
+
+- 安全控制 12
+
+- 分词 15, 22–23, 25, 90, 98
+
+- 另见 人工智能（AI），聊天机器人，生成式人工智能，大语言模型（LLMs），OpenAI
+
+- 聚类算法 用于客户支持 135
+
+- 与嵌入向量配合使用 133–134
+
+- 另见 算法
+
+- 编译器，用于代码验证 93–94, 100
+
+- 计算复杂度 大O表示法 120
+
+- 大语言模型的 120–122
+
+- 真实世界任务的 121–123
+
+- 计算机视觉 将图像转换为图像块 89, 101–103
+
+- 图像字幕 104–105
+
+- 图像生成 101, 104–106
+
+- 图像块合并器 101, 103–104
+
+- 图像块提取器 101–103
+
+- 视觉Transformer（ViT）101, 103–104
+
+- 另见 图像生成，机器学习（ML）
+
+- 内容创作 创作者报酬 145, 154–155
+
+- 版权与 69, 145, 152–154
+
+- 由大语言模型进行 6, 141–142, 144–145
+
+- 另见 版权，伦理，合理使用，公有领域
+
+- 语境 在少样本学习中 114–115
+
+- 在语言理解中 56, 60–61, 91, 118
+
+- 大语言模型中的大小 83–84
+
+- 版权 DMCA 69, 152
+
+- 合理使用与 69, 152–154
+
+- 对大语言模型输出的影响 157–158
 
 <details>
 <summary>英文原文</summary>
@@ -4771,16 +5106,25 @@ A for gradient descent (rolling a ball) 52 limitations of 8–9, 14 for neural n
 
 </details>
 
-C 思维链（CoT）提示 119, 122
-另见 提示
-聊天机器人
-客户服务使用 67, 126–128, 130
-设计考虑 126–128
-交互风格 142
-作为LLM应用 2, 65, 67–69, 126–128, 130
-另见 人工智能（AI）, ChatGPT,
-生成式AI, 大语言模型
-（LLMs）, OpenAI
+- C 思维链（CoT）提示 119, 122
+
+- 另见 提示
+
+- 聊天机器人
+
+- 客户服务使用 67, 126–128, 130
+
+- 设计考虑 126–128
+
+- 交互风格 142
+
+- 作为LLM应用 2, 65, 67–69, 126–128, 130
+
+- 另见 人工智能（AI）, ChatGPT,
+
+- 生成式AI, 大语言模型
+
+- （LLMs）, OpenAI
 
 <details>
 <summary>英文原文</summary>
@@ -4789,21 +5133,77 @@ C chain-of-thought (CoT) prompting 119, 122 See also prompting chatbots customer
 
 </details>
 
-D 数据 算法性能与 10–11, 55, 62, 79, 107, 109, 111–112, 117 策划 79, 145, 159 漂移 117 用于微调 66, 68, 71–75, 77, 80, 115, 145, 150, 153 许可 140, 146, 152–154, 157–158 隐私 80, 146 公有领域 152, 155–156 质量 55, 69, 76, 78–80, 144–146, 159 用于RLHF 74, 77, 150 用于SFT 71–72 来源 140–141, 145–146, 152–156 另见 训练大语言模型
-深度学习（DL） 算法 11, 31, 47, 52 在大语言模型语境中 4, 9, 30 训练方法 46–54 另见 应用（大语言模型），错误（大语言模型），输入（大语言模型），学习，机器学习（ML），神经网络，大语言模型输出，训练大语言模型
-差分隐私（DP）80–81
-DSPy库 84–86, 117
-E 经济学 自动化与 141, 144–145 对齐问题 146–148, 150–151 自我改进论证 147, 149
-可解释人工智能 Google Gemini 1, 3–4, 10, 30, 143
-Google Cloud Platform (GCP) 5
-SentencePiece 22
-Tensor Processing Unit (TPU) 5
-Translate 31
-梯度下降 局限性 136–137 目的与效用 136–137
-F Adam优化器 类比（滚球）52 过程 51–53 在训练大语言模型中的作用 46–47, 51–54, 72, 101
-合理使用 在大语言模型语境中 153–154 判断标准 153 另见 内容创作，版权，伦理，公有领域 108, 115
-随机梯度下降（SGD）53–54
-图形处理单元（GPU）领域
+- D 数据 算法性能与 10–11, 55, 62, 79, 107, 109, 111–112, 117
+
+- 策划 79, 145, 159
+
+- 漂移 117
+
+- 用于微调 66, 68, 71–75, 77, 80, 115, 145, 150, 153
+
+- 许可 140, 146, 152–154, 157–158
+
+- 隐私 80, 146
+
+- 公有领域 152, 155–156
+
+- 质量 55, 69, 76, 78–80, 144–146, 159
+
+- 用于RLHF 74, 77, 150
+
+- 用于SFT 71–72
+
+- 来源 140–141, 145–146, 152–156
+
+- 另见 训练大语言模型
+
+- 深度学习（DL） 算法 11, 31, 47, 52
+
+- 在大语言模型语境中 4, 9, 30
+
+- 训练方法 46–54
+
+- 另见 应用（大语言模型），错误（大语言模型），输入（大语言模型），学习，机器学习（ML），神经网络，大语言模型输出，训练大语言模型
+
+- 差分隐私（DP）80–81
+
+- DSPy库 84–86, 117
+
+- E 经济学 自动化与 141, 144–145
+
+- 对齐问题 146–148, 150–151
+
+- 自我改进论证 147, 149
+
+- 可解释人工智能 Google Gemini 1, 3–4, 10, 30, 143
+
+- Google Cloud Platform (GCP) 5
+
+- SentencePiece 22
+
+- Tensor Processing Unit (TPU) 5
+
+- Translate 31
+
+- 梯度下降 局限性 136–137
+
+- 目的与效用 136–137
+
+- F Adam优化器 类比（滚球）52
+
+- 过程 51–53
+
+- 在训练大语言模型中的作用 46–47, 51–54, 72, 101
+
+- 合理使用 在大语言模型语境中 153–154
+
+- 判断标准 153
+
+- 另见 内容创作，版权，伦理，公有领域 108, 115
+
+- 随机梯度下降（SGD）53–54
+
+- 图形处理单元（GPU）领域
 
 <details>
 <summary>英文原文</summary>
@@ -4812,27 +5212,49 @@ D data algorithmic performance and 10–11, 55, 62, 79, 107, 109, 111–112, 117
 
 </details>
 
-少样本学习 114–115 LLM与人类对比 8–9, 46, 108–111
-强化学习（RL） 48, 73–75, 78, 93
-监督学习 46, 71–73
-训练算法 46–54
-另见 应用（LLM）、深度学习（DL） 115–116, 141, 154
-定义 3–4
-利用解决方案进行设计 125–139
-效率（功耗、延迟、优化） 115–117 错误（LLM）、输入（LLM）、机器学习（ML）、神经网络、LLM输出、训练LLM损失函数 卷积神经网络（CNN） 11, 77, 103
-深度学习 1, 9, 11, 14, 19, 30, 47, 52, 108, 可计算性 47, 49, 53
-交叉熵损失 50
-定义与目的 47–48
-激励不匹配 51, 55
-用于LLM（下一词预测） 54–57
-平滑性 47–48, 50
-特异性 47–48 123, 146, 149
-受人类大脑启发 9, 31, 46
-长短期记忆网络（LSTM） 11
-循环神经网络（RNN） 55, 63, 77
-训练 46–54, 77
-另见 应用（LLM）、深度学习（DL）、错误（LLM）、输入（LLM）、学习、机器学习（ML）、LLM输出、训练LLM
-归一化（文本） M 机器学习（ML）
+- 少样本学习 114–115 LLM与人类对比 8–9, 46, 108–111
+
+- 强化学习（RL） 48, 73–75, 78, 93
+
+- 监督学习 46, 71–73
+
+- 训练算法 46–54
+
+- 另见 应用（LLM）、深度学习（DL） 115–116, 141, 154
+
+- 定义 3–4
+
+- 利用解决方案进行设计 125–139
+
+- 效率（功耗、延迟、优化） 115–117
+
+- 错误（LLM）、输入（LLM）、机器学习（ML）、神经网络、LLM输出、训练LLM损失函数 卷积神经网络（CNN） 11, 77, 103
+
+- 深度学习 1, 9, 11, 14, 19, 30, 47, 52, 108, 可计算性 47, 49, 53
+
+- 交叉熵损失 50
+
+- 定义与目的 47–48
+
+- 激励不匹配 51, 55
+
+- 用于LLM（下一词预测） 54–57
+
+- 平滑性 47–48, 50
+
+- 特异性 47–48 123, 146, 149
+
+- 受人类大脑启发 9, 31, 46
+
+- 长短期记忆网络（LSTM） 11
+
+- 循环神经网络（RNN） 55, 63, 77
+
+- 训练 46–54, 77
+
+- 另见 应用（LLM）、深度学习（DL）、错误（LLM）、输入（LLM）、学习、机器学习（ML）、LLM输出、训练LLM
+
+- 归一化（文本） M 机器学习（ML）
 
 <details>
 <summary>英文原文</summary>
@@ -4841,84 +5263,175 @@ in AI/ML context 8, 46 few-shot learning 114–115 by LLMs vs. humans 8–9, 46,
 
 </details>
 
-控制词汇量大小 18–20
-同形字 24
-数字的 26, 99
-分词过程中 17, 19–20
-另见 同形字、语言、自然语言处理（NLP）、分词、词汇、单词
-数字错误（LLM）、输入（LLM）、学习、
-神经网络、LLM输出、
-训练LLM
-数学 LLM 理解 26, 97–99
-在LLM中的表示 26, 97–99
-分词 26, 97–99
-另见 数学 计算机代数系统 (CAS) 99–100
-形式化和符号化 95–96, 99–100
-Lean 编程语言用于证明 100, 114
-LLM 与 26, 58–59, 89, 95–100, 106, 114
-数字表示 26, 97–99
-分词 26, 89, 96–99, 106
-另见 数字
-Modula-3 编程语言 58–59, 70, 88
-O OpenAI ChatGPT 1–2, 6–7, 10, 12, 15, 22, 24–26, 30, 43, 57–61, 66–70, 74, 90–93, 107, 109, 120–130, 143, 157, 160
-DALL-E 7, 152
-GPT 模型 2–7, 10, 15, 18, 22–26, 60, 70, 83, 另见 Lean 编程语言、Python 编程语言、源代码
-多模态模型 98, 109, 123, 143, 152, 156
-tiktoken 22
-另见 人工智能（AI）、聊天机器人、定义 22, 104
-示例（图像和文本）22, 104–105 ChatGPT、生成式AI、大语言模型（LLM）
-LLM输出 N 变更/约束 65–86, 156–160
-自回归生成 40, 60, 62
-偏差 55, 140, 142–143, 156–157
-代码 89, 92–95, 100
-创造性 vs. 主题性 43–44
-解码/解嵌入 32–33, 40–42, 89, 101, 自然语言处理（NLP）历史 3
-与LLM的关系 3–4
-另见 同形字、语言、标准化（文本）、分词、词汇、单词
-神经网络 103
-结束序列（EoS）标记 41
-伦理关注 12, 140, 156–160 架构（层）9, 31–32, 37–38, 40, 44, 101–104 格式要求 70, 81, 86
-生成循环 40–41
-图像 101, 103–105
-许可影响 157–158
-采样标记 33, 41–43
-温度设置 43–44
-另见 应用（LLM）、深度学习（DL）、使用DSPy 84–86
-奖励函数质量奖励在RLHF 76–78
-强化学习中 48, 73–74, 76–79
-相似性奖励在RLHF 78 S 错误（LLM）、输入（LLM）、学习、
-机器学习（ML）、神经网络、
-训练LLM 自我改进（LLM）限制 111–112, 122, 147, 149
-理论可能性 111, 147
-语义空间 P 定义 35–36
-内部关系 36
-源代码补丁（图像）组合 101, 103–104
-提取 101–103
-替换视觉标记 89, 101–102
-LLM预训练 58–59, 88–95, 106, 120, 123, 142
-代码分词 89–92
-生成代码验证 92–95, 100
-另见 Lean 编程语言、Modula-3 基础模型 66, 68, 72
-定义 2, 10, 66
-提示 编程语言、Python 编程语言
-语音转文本 4, 125, 132, 134–135, 141 链式思维（CoT）119, 122
-工程 62, 67, 84, 114, 117, 122
-少样本学习 114–115
-图像生成 105
-指令遵循 6, 58, 60, 62, 67, 70–71, 另见 文本转语音
-随机梯度下降（SGD）53–54
-子词 74, 105, 114, 119
-公共领域创建 使用BPE 20–22
-定义 16
-分词角色 16, 18, 20–22
-监督微调（SFT）使用挑战 155–156
-定义 155
-另见 内容创作、版权、伦理、合理使用
-Python 编程语言 20, 58, 70, 81, 88, 数据要求 71–72
-机制 72
-陷阱（灾难性遗忘）72–73
-目的 71 90–91, 93
-另见 Lean 编程语言、Modula-3 编程语言、源代码 T R 技术 强化学习来自人类反馈 采纳与影响 1–2, 6, 107, 140–142,
+- 控制词汇量大小 18–20
+
+- 同形字 24
+
+- 数字的 26, 99
+
+- 分词过程中 17, 19–20
+
+- 另见 同形字、语言、自然语言处理（NLP）、分词、词汇、单词
+
+- 数字错误（LLM）、输入（LLM）、学习、
+
+- 神经网络、LLM输出、
+
+- 训练LLM
+
+- 数学 LLM 理解 26, 97–99
+
+- 在LLM中的表示 26, 97–99
+
+- 分词 26, 97–99
+
+- 另见 数学 计算机代数系统 (CAS) 99–100
+
+- 形式化和符号化 95–96, 99–100
+
+- Lean 编程语言用于证明 100, 114
+
+- LLM 与 26, 58–59, 89, 95–100, 106, 114
+
+- 数字表示 26, 97–99
+
+- 分词 26, 89, 96–99, 106
+
+- 另见 数字
+
+- Modula-3
+
+- 编程语言 58–59, 70, 88
+
+- O OpenAI ChatGPT 1–2, 6–7, 10, 12, 15, 22, 24–26, 30, 43, 57–61, 66–70, 74, 90–93, 107, 109, 120–130, 143, 157, 160
+
+- DALL-E 7, 152
+
+- GPT 模型 2–7, 10, 15, 18, 22–26, 60, 70, 83, 另见 Lean 编程语言、Python 编程语言、源代码
+
+- 多模态模型 98, 109, 123, 143, 152, 156
+
+- tiktoken 22
+
+- 另见 人工智能（AI）、聊天机器人、定义 22, 104
+
+- 示例（图像和文本）22, 104–105
+
+- ChatGPT、生成式AI、大语言模型（LLM）
+
+- LLM输出 N 变更/约束 65–86, 156–160
+
+- 自回归生成 40, 60, 62
+
+- 偏差 55, 140, 142–143, 156–157
+
+- 代码 89, 92–95, 100
+
+- 创造性 vs. 主题性 43–44
+
+- 解码/解嵌入 32–33, 40–42, 89, 101, 自然语言处理（NLP）历史 3
+
+- 与LLM的关系 3–4
+
+- 另见 同形字、语言、标准化（文本）、分词、词汇、单词
+
+- 神经网络 103
+
+- 结束序列（EoS）标记 41
+
+- 伦理关注 12, 140, 156–160
+
+- 架构（层）9, 31–32, 37–38, 40, 44, 101–104
+
+- 格式要求 70, 81, 86
+
+- 生成循环 40–41
+
+- 图像 101, 103–105
+
+- 许可影响 157–158
+
+- 采样标记 33, 41–43
+
+- 温度设置 43–44
+
+- 另见 应用（LLM）、深度学习（DL）、使用DSPy 84–86
+
+- 奖励函数质量奖励在RLHF 76–78
+
+- 强化学习中 48, 73–74, 76–79
+
+- 相似性奖励在RLHF 78 S 错误（LLM）、输入（LLM）、学习、
+
+- 机器学习（ML）、神经网络、
+
+- 训练LLM 自我改进（LLM）限制 111–112, 122, 147, 149
+
+- 理论可能性 111, 147
+
+- 语义空间 P 定义 35–36
+
+- 内部关系 36
+
+- 源代码补丁（图像）组合 101, 103–104
+
+- 提取 101–103
+
+- 替换视觉标记 89, 101–102
+
+- LLM预训练 58–59, 88–95, 106, 120, 123, 142
+
+- 代码分词 89–92
+
+- 生成代码验证 92–95, 100
+
+- 另见 Lean 编程语言、Modula-3
+
+- 基础模型 66, 68, 72
+
+- 定义 2, 10, 66
+
+- 提示 编程语言、Python 编程语言
+
+- 语音转文本 4, 125, 132, 134–135, 141
+
+- 链式思维（CoT）119, 122
+
+- 工程 62, 67, 84, 114, 117, 122
+
+- 少样本学习 114–115
+
+- 图像生成 105
+
+- 指令遵循 6, 58, 60, 62, 67, 70–71, 另见 文本转语音
+
+- 随机梯度下降（SGD）53–54
+
+- 子词 74, 105, 114, 119
+
+- 公共领域创建 使用BPE 20–22
+
+- 定义 16
+
+- 分词角色 16, 18, 20–22
+
+- 监督微调（SFT）使用挑战 155–156
+
+- 定义 155
+
+- 另见 内容创作、版权、伦理、合理使用
+
+- Python 编程语言 20, 58, 70, 81, 88, 数据要求 71–72
+
+- 机制 72
+
+- 陷阱（灾难性遗忘）72–73
+
+- 目的 71 90–91, 93
+
+- 另见 Lean 编程语言、Modula-3
+
+- 编程语言、源代码 T R 技术 强化学习来自人类反馈 采纳与影响 1–2, 6, 107, 140–142,
 
 <details>
 <summary>英文原文</summary>
@@ -4927,53 +5440,119 @@ for controlling vocabulary size 18–20 for homoglyphs 24 of numbers 26, 99 in t
 
 </details>
 
-144–146, 151, 160–161
-双重用途 151
-呈现与信任 126, 136–138
-文本到语音 4, 125, 132, 134–135, 141 另见 语音到文本
-词元与分词 字节对编码（BPE） 20–23, 90–91, 98 用于代码 89–92, 94–95 控制词汇表大小 18–20 优点 82 上下文大小考虑 83–84 过程 82–83 转换为向量（嵌入） 29, 31–38, 注意力机制 38–40, 62, 109 用于计算机视觉 89, 101–106
-仅解码器模型 30, 44
-编码器-解码器模型 30–31
-仅编码器模型 30
-层 31–33, 37–40, 44, 89, 101–102
-位置信息 33, 36–38, 44
-查询、键和值 38–40, 44, 61 44, 99, 101–102, 132
-解码/解嵌入 32–33, 40–42, 89, 101, 103
-序列结束（EoS）标记 41
-同形字 23–24
-用于图像（块） 89, 101–102, 106
-语言公平性 26–27
-用于数学 26, 89, 96–99, 106
-归一化 14, 17, 19–20, 24, 45, 99
-文本的数值表示 14–16, 30, 33–34
-词表外问题 18
-过程 14, 16–18, 20–23
-风险 22–24
-输出采样 33, 41–43, 101
-分割 17, 20
-特殊标记 21–22, 41, 95
-子词 16, 18, 20–22, 32, 45
-词汇表 15, 18–20, 22–23, 26, 41, 45, 80, 101, U 用户体验（UX） 聊天机器人及 68, 126, 132, 134
-可解释AI与信任 136–137
-透明度与对齐 137–138 V 向量 维度 35
-作为嵌入 33–38, 40, 42, 62, 70, 89, 99, 109
-另见 字节对编码（BPE）、同形字 101–104, 126, 132–134 用于图像块 102–103 表示词元 33–36
-词汇表 语言、自然语言处理（NLP）、归一化（文本）、词汇表、词
-训练LLM 控制大小 18–20, 22–23
-定义 18
-词表外问题 18
-在分词中 15, 18, 22
-另见 同形字、语言、自然语言 数据 3, 6, 10, 18, 21, 23, 26, 36, 46, 51, 54–57, 60–61, 66–69, 72, 78–80, 92–93, 96, 100, 105–114, 117, 120–125, 140–146, 150–160
-微调 65–79, 93, 108, 110, 114–115, 117, 123, 128, 130, 145–146, 150, 153–154
-梯度下降 46–54, 60, 72, 101, 108, 115
-损失/奖励函数 46–55, 58, 73–74, 76–79
-预训练 2, 10, 66, 68, 72
-自我改进的局限性 111–114, 122, 147, 处理（NLP）、归一化（文本）、词元与分词、词 W 词 149
-另见 应用（LLM）、深度学习（DL）、游戏与LLM 25, 45
-由词元和子词表示 15–16, 错误（LLM）、输入（LLM）、学习、机器学习（ML）、神经网络、LLM输出
-Transformer模型 18, 20–22
-语义关系 32, 34–36
-另见 同形字、语言、自然语言处理（NLP）、归一化（文本）、词元与分词、词汇表 架构 30–33, 89, 101–102
+- 144–146, 151, 160–161
+
+- 双重用途 151
+
+- 呈现与信任 126, 136–138
+
+- 文本到语音 4, 125, 132, 134–135, 141
+
+- 另见 语音到文本
+
+- 词元与分词 字节对编码（BPE） 20–23, 90–91, 98
+
+- 用于代码 89–92, 94–95
+
+- 控制词汇表大小 18–20
+
+- 优点 82
+
+- 上下文大小考虑 83–84
+
+- 过程 82–83
+
+- 转换为向量（嵌入） 29, 31–38, 注意力机制 38–40, 62, 109
+
+- 用于计算机视觉 89, 101–106
+
+- 仅解码器模型 30, 44
+
+- 编码器-解码器模型 30–31
+
+- 仅编码器模型 30
+
+- 层 31–33, 37–40, 44, 89, 101–102
+
+- 位置信息 33, 36–38, 44
+
+- 查询、键和值 38–40, 44, 61 44, 99, 101–102, 132
+
+- 解码/解嵌入 32–33, 40–42, 89, 101, 103
+
+- 序列结束（EoS）标记 41
+
+- 同形字 23–24
+
+- 用于图像（块） 89, 101–102, 106
+
+- 语言公平性 26–27
+
+- 用于数学 26, 89, 96–99, 106
+
+- 归一化 14, 17, 19–20, 24, 45, 99
+
+- 文本的数值表示 14–16, 30, 33–34
+
+- 词表外问题 18
+
+- 过程 14, 16–18, 20–23
+
+- 风险 22–24
+
+- 输出采样 33, 41–43, 101
+
+- 分割 17, 20
+
+- 特殊标记 21–22, 41, 95
+
+- 子词 16, 18, 20–22, 32, 45
+
+- 词汇表 15, 18–20, 22–23, 26, 41, 45, 80, 101, U 用户体验（UX） 聊天机器人及 68, 126, 132, 134
+
+- 可解释AI与信任 136–137
+
+- 透明度与对齐 137–138 V 向量 维度 35
+
+- 作为嵌入 33–38, 40, 42, 62, 70, 89, 99, 109
+
+- 另见 字节对编码（BPE）、同形字 101–104, 126, 132–134
+
+- 用于图像块 102–103
+
+- 表示词元 33–36
+
+- 词汇表 语言、自然语言处理（NLP）、归一化（文本）、词汇表、词
+
+- 训练LLM 控制大小 18–20, 22–23
+
+- 定义 18
+
+- 词表外问题 18
+
+- 在分词中 15, 18, 22
+
+- 另见 同形字、语言、自然语言 数据 3, 6, 10, 18, 21, 23, 26, 36, 46, 51, 54–57, 60–61, 66–69, 72, 78–80, 92–93, 96, 100, 105–114, 117, 120–125, 140–146, 150–160
+
+- 微调 65–79, 93, 108, 110, 114–115, 117, 123, 128, 130, 145–146, 150, 153–154
+
+- 梯度下降 46–54, 60, 72, 101, 108, 115
+
+- 损失/奖励函数 46–55, 58, 73–74, 76–79
+
+- 预训练 2, 10, 66, 68, 72
+
+- 自我改进的局限性 111–114, 122, 147, 处理（NLP）、归一化（文本）、词元与分词、词 W 词 149
+
+- 另见 应用（LLM）、深度学习（DL）、游戏与LLM 25, 45
+
+- 由词元和子词表示 15–16, 错误（LLM）、输入（LLM）、学习、机器学习（ML）、神经网络、LLM输出
+
+- Transformer模型 18, 20–22
+
+- 语义关系 32, 34–36
+
+- 另见 同形字、语言、自然语言处理（NLP）、归一化（文本）、词元与分词、词汇表 架构 30–33, 89, 101–102
 
 <details>
 <summary>英文原文</summary>
@@ -4982,7 +5561,7 @@ Transformer模型 18, 20–22
 
 </details>
 
-生成式AI是接收一些输入（数字、文本、图像）并产生新输出（通常是文本或图像）的技术。输入和输出的任何组合都是可能的，输出的性质取决于算法训练的目标。它可以用于添加细节、缩短改写、外推缺失部分等。
+- 生成式AI是接收一些输入（数字、文本、图像）并产生新输出（通常是文本或图像）的技术。输入和输出的任何组合都是可能的，输出的性质取决于算法训练的目标。它可以用于添加细节、缩短改写、外推缺失部分等。
 
 <details>
 <summary>英文原文</summary>
@@ -4991,7 +5570,7 @@ Generative AI is about taking some input (numbers, text, images) and producing a
 
 </details>
 
-生成式AI中各类术语及其关系的高层次图谱。生成式AI是对功能性的描述：即生成内容的功能，并利用AI技术来实现这一目标。
+- 生成式AI中各类术语及其关系的高层次图谱。生成式AI是对功能性的描述：即生成内容的功能，并利用AI技术来实现这一目标。
 
 <details>
 <summary>英文原文</summary>
@@ -5000,7 +5579,7 @@ A high-level map of various terms used in Generative AI and their relationships.
 
 </details>
 
-Python/数据
+- Python/数据
 
 <details>
 <summary>英文原文</summary>
@@ -5009,7 +5588,7 @@ PYTHON/DATA
 
 </details>
 
-“如果你想真正理解LLM的工作原理，这是必读之作。”——Janelle Shane，aiweirdness.com
+- “如果你想真正理解LLM的工作原理，这是必读之作。”——Janelle Shane，aiweirdness.com
 
 <details>
 <summary>英文原文</summary>

@@ -1462,6 +1462,81 @@ def _linked_caption_anchor(block) -> str | None:
     return None
 
 
+_REF_CITATION_MARKER_RE = re.compile(r"\[\s*\d+\s*\]")
+
+
+_REFERENCES_HEADING_RE = re.compile(
+    r"^\s*(?:references?|bibliography|works\s+cited|notes"
+    r"|参\s*考\s*文\s*献|参考资料|引用文献|参考书目)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _split_reference_citations(text: str, *, min_markers: int = 1) -> list[str] | None:
+    """Split a run-on bibliography paragraph into per-citation entries.
+
+    Reference sections reach the exporter as ONE block with every
+    citation jammed together: ``[1] Author... [2] Author... [3] ...``.
+    This drops any leading list marker, splits the text at each ``[N]``
+    marker, and re-attaches the marker to the entry that follows it.
+
+    Returns ``None`` unless the text carries ``>= min_markers`` ``[N]``
+    markers. Callers gate this to the references section (see
+    ``_REFERENCES_HEADING_RE``) so ordinary prose with inline citation
+    numbers is never reshaped.
+    """
+    if not text:
+        return None
+    body = re.sub(r"^\s*[-*+]\s+", "", text)
+    markers = list(_REF_CITATION_MARKER_RE.finditer(body))
+    if len(markers) < max(1, min_markers):
+        return None
+    # Entry 0 keeps any text before the first marker; later entries run
+    # from their own marker to the next.
+    entries: list[str] = []
+    for i, m in enumerate(markers):
+        seg_start = 0 if i == 0 else m.start()
+        seg_end = markers[i + 1].start() if i + 1 < len(markers) else len(body)
+        entry = body[seg_start:seg_end].strip()
+        if entry:
+            entries.append(entry)
+    return entries or None
+
+
+_INDEX_TERM_BREAK_RE = re.compile(
+    # A break point inside a run-on index line: after a page-number run
+    # (digits / en-dash ranges / commas) and a space, before the next
+    # term (a CJK char or a capitalised Latin word).
+    r"(?<=[0-9])\s+(?=[一-鿿]|[A-Z][a-z])"
+)
+
+
+_INDEX_HEADING_RE = re.compile(r"^\s*(?:index|索\s*引)\s*$", re.IGNORECASE)
+
+
+def _index_entries(text: str) -> list[str]:
+    """Best-effort de-run-on of a back-of-book index paragraph.
+
+    The index is multi-column PDF text that extracts as garbled run-on
+    lines; it cannot be fully recovered. This only makes it scannable:
+    split on existing newlines, then break each line before a new term
+    that follows a page-number run. Purely cosmetic — no translation,
+    no semantic repair. Returns one string per index entry.
+    """
+    entries: list[str] = []
+    if not text:
+        return entries
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        for piece in _INDEX_TERM_BREAK_RE.split(line):
+            piece = piece.strip()
+            if piece:
+                entries.append(piece)
+    return entries
+
+
 def _render_block_md(
     block,
     chunks: list[str],
@@ -1957,15 +2032,19 @@ def _render_chapter_cover_html(items: list[dict]) -> str:
 def _render_chapter_cover_md(items: list[dict]) -> str:
     if not items:
         return ""
-    lines = ["### 本章涵盖", ""]
+    bullets: list[str] = []
     for it in items:
         zh = (it.get("zh") or "").strip()
         en = (it.get("en") or "").strip()
         if zh:
-            lines.append(f"- {zh}")
+            bullets.append(f"- {zh}")
         elif en:
-            lines.append(f"- *{en}*")
-    return "\n".join(lines)
+            bullets.append(f"- *{en}*")
+    if not bullets:
+        return ""
+    # Loose list — a blank line between every item so the rendered
+    # Markdown reads less cramped (see _split_reference_citations).
+    return "### 本章涵盖\n\n" + "\n\n".join(bullets)
 
 
 def _join_zh_chunks_md(chunks: list[str]) -> str:
@@ -3217,6 +3296,13 @@ def main() -> int:
                 }
             )
 
+        # Tracks whether we are inside the references / back-of-book index
+        # section. Each is set when its heading renders and cleared at the
+        # next heading — scoping the citation-split / index reformat
+        # strictly to that section so body prose is never reshaped.
+        in_references_section = False
+        in_index_section = False
+
         for block in blocks:
             btype = (block.block_type or "").lower()
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
@@ -3498,9 +3584,9 @@ def main() -> int:
                         if fold:
                             combined += "\n" + fold
                     rendered_blocks_html.append(combined)
-                    # MD twin: numbered list.
+                    # MD twin: numbered list (loose — blank line per item).
                     md_lines = [f"{idx}. {it}" for idx, it in enumerate(items, 1)]
-                    md_unit = "\n".join(md_lines)
+                    md_unit = "\n\n".join(md_lines)
                     if BILINGUAL_MODE:
                         md_fold = _build_source_fold_md(ol_source_blocks)
                         if md_fold:
@@ -3526,8 +3612,8 @@ def main() -> int:
                         if fold:
                             combined += "\n" + fold
                     rendered_blocks_html.append(combined)
-                    # MD twin: bullet list.
-                    md_unit = "\n".join(f"- {it}" for it in items)
+                    # MD twin: bullet list (loose — blank line per item).
+                    md_unit = "\n\n".join(f"- {it}" for it in items)
                     if BILINGUAL_MODE:
                         md_fold = _build_source_fold_md([block])
                         if md_fold:
@@ -3654,6 +3740,33 @@ def main() -> int:
                     block, chunks, untranslated, image_data_uri, image_alt
                 )
             block_md = _render_block_md(block, chunks, untranslated, image_alt)
+            # References / index reformatting — scoped strictly to their
+            # own back-matter section (between the section heading and the
+            # next heading). A heading either opens a section or closes
+            # it; only the blocks in between are reshaped, so body prose
+            # with inline citation numbers is never touched.
+            _refish = btype in {"", "paragraph", "body", "text", "list_item"}
+            if btype == "heading":
+                head_probe = re.sub(r"^#+\s*", "", (block_md or "")).strip()
+                head_src = (block.source_text or "").strip()
+                in_references_section = bool(
+                    _REFERENCES_HEADING_RE.match(head_probe)
+                    or _REFERENCES_HEADING_RE.match(head_src)
+                )
+                in_index_section = bool(
+                    _INDEX_HEADING_RE.match(head_probe)
+                    or _INDEX_HEADING_RE.match(head_src)
+                )
+            elif in_references_section and _refish:
+                ref_entries = _split_reference_citations(block_md or "")
+                if ref_entries:
+                    block_md = "\n\n".join(f"- {e}" for e in ref_entries)
+                    block_html = _bullet_list_html(ref_entries)
+            elif in_index_section and _refish:
+                idx_entries = _index_entries(block_md or "")
+                if idx_entries:
+                    block_md = "\n\n".join(f"- {e}" for e in idx_entries)
+                    block_html = _bullet_list_html(idx_entries)
             # Suppress the "未翻译片段" yellow warning for headings,
             # figures, and image blocks — they render with their own
             # structural fallback (heading-from-source / figcaption /
