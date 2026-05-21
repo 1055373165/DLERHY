@@ -2924,6 +2924,30 @@ def _is_plausible_book_heading_candidate(text: str) -> bool:
     return True
 
 
+def _remainder_starts_fresh_sentence(remainder: str) -> bool:
+    """True when ``remainder`` opens a fresh sentence after a heading.
+
+    A real section heading is followed by a body sentence with its own
+    subject, which begins with an uppercase letter. Unlike
+    :func:`_looks_like_book_prose_lead` — which only accepts a body led
+    by a known stopword — this accepts ANY ordinary capitalised lead
+    ("Using", "Many", "Although", "For most people…"). Relying on the
+    stopword list alone made the heading/body splitter reject the correct
+    boundary and swallow the first body word into the title
+    (e.g. "6.1.3 Improving code via formatting Using").
+
+    A capitalised lead that happens to be a preposition/auxiliary
+    ("For", "By", "To") is still a genuine sentence start — the parser's
+    proper-noun-phrase guard (the "previous word is capitalised" check in
+    the caller) is what prevents cutting inside a Title-Cased phrase.
+    """
+    text = (remainder or "").strip()
+    if not text:
+        return False
+    first_char = text[0]
+    return first_char.isalpha() and first_char.isupper()
+
+
 def _leading_numbered_book_heading_and_remainder(text: str) -> tuple[str, str, int] | None:
     # Fast-path: respect the PDF's own newline-separated structure when the
     # raw block begins with "<section-number>\n<title-line>\n<body>". The
@@ -2975,22 +2999,70 @@ def _leading_numbered_book_heading_and_remainder(text: str) -> tuple[str, str, i
             continue
         remainder_first = re.sub(r"[^A-Za-z'-]", "", tokens[boundary]).casefold()
         heading_last = re.sub(r"[^A-Za-z'-]", "", tokens[boundary - 1]).casefold()
-        if remainder_first in (_HEADING_CONTINUATION_START_WORDS - {"the"}):
+        # Only a LOWERCASE continuation word signals a mid-phrase cut. A
+        # capitalised lead ("For most people…", "By contrast…") is a
+        # genuine sentence start even when the word also appears in the
+        # continuation list.
+        if remainder[:1].islower() and remainder_first in (
+            _HEADING_CONTINUATION_START_WORDS - {"the"}
+        ):
             continue
         if heading_last in _HEADING_CONTINUATION_START_WORDS or heading_last in {"a", "an", "the"}:
             continue
+        # Don't cut inside a Title-cased proper-noun phrase. A sentence-case
+        # section title ends with an ordinary lowercase word ("Sanitized
+        # input", "…via formatting") or sentence punctuation ("…fair use?").
+        # If the word right before the boundary is itself Title-cased
+        # (mixed case, capital initial), the title most likely continues
+        # (e.g. the boundary fell inside "Generative Pretrained
+        # Transformers"), so reject. An ALL-CAPS acronym ("RLHF", "GPT")
+        # is exempt — a real title can legitimately end with one.
+        prev_raw = tokens[boundary - 1]
+        prev_alpha = re.sub(r"[^A-Za-z]", "", prev_raw)
+        if (
+            prev_alpha
+            and prev_alpha[0].isupper()
+            and not prev_alpha.isupper()
+            and not re.search(r"[.?!][\"'\)\]]*$", prev_raw)
+        ):
+            continue
+        # An ALL-CAPS acronym at the START of the remainder, immediately
+        # followed by a Title-cased word, belongs to the section title —
+        # the body sentence really begins at that next word
+        # (e.g. "…a naive | RLHF First, let's…" → title keeps "RLHF").
+        rem_tokens = remainder.split()
+        if len(rem_tokens) >= 2:
+            rem_w0 = re.sub(r"[^A-Za-z]", "", rem_tokens[0])
+            rem_w1 = re.sub(r"[^A-Za-z]", "", rem_tokens[1])
+            if (
+                len(rem_w0) >= 2
+                and rem_w0.isupper()
+                and rem_w1
+                and rem_w1[0].isupper()
+                and not rem_w1.isupper()
+            ):
+                continue
         if not _is_plausible_book_heading_candidate(heading_text):
             continue
         if not _looks_like_visual_heading(heading_text, 1):
             continue
-        if not _looks_like_book_prose_lead(remainder):
+        # The body must open a fresh sentence (uppercase, non-linking
+        # lead). The loop runs boundaries low→high and returns the first
+        # match, so the EARLIEST valid title wins — the split no longer
+        # over-runs into the first body word.
+        if not _remainder_starts_fresh_sentence(remainder):
             continue
-        if not _looks_like_book_prose_fragment(remainder):
+        if not (
+            _looks_like_book_prose_fragment(remainder)
+            or _looks_like_sentence_prose_line(remainder)
+        ):
             continue
         level = _book_heading_level(heading_text, fallback=2) or 2
         normalized_heading = _normalize_multiline_text(heading_text)
         normalized_remainder = _normalize_multiline_text(remainder)
-        if len(normalized_heading.split()) < 4:
+        # Numbered headings include the section number as a token, so a
+        # genuine short title ("6.2.1 Sanitized input") is only 3 tokens.
+        if len(normalized_heading.split()) < 3:
             continue
         return normalized_heading, normalized_remainder, level
     return None
@@ -3014,9 +3086,12 @@ def _leading_all_caps_book_heading_and_remainder(text: str) -> tuple[str, str, i
             continue
         if not _is_plausible_book_heading_candidate(heading_text):
             continue
-        if not _looks_like_book_prose_lead(remainder):
+        if not _remainder_starts_fresh_sentence(remainder):
             continue
-        if not _looks_like_book_prose_fragment(remainder):
+        if not (
+            _looks_like_book_prose_fragment(remainder)
+            or _looks_like_sentence_prose_line(remainder)
+        ):
             continue
         normalized_heading = _normalize_multiline_text(heading_text)
         normalized_remainder = _normalize_multiline_text(remainder)

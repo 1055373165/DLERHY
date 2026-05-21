@@ -4281,6 +4281,70 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
             ),
         )
 
+    def test_numbered_heading_does_not_swallow_capitalised_body_lead(self) -> None:
+        # Regression: the body opens with an ordinary capitalised word
+        # ("Using", "Math", "Although", "Many", "One") — the splitter must
+        # NOT merge that first body word into the section title.
+        cases = [
+            (
+                "6.1.3 Improving code via formatting Using parsers for syntax "
+                "checking and compilers to produce working executables makes it "
+                "far easier to adapt LLMs to the new problem domain.",
+                "6.1.3 Improving code via formatting",
+            ),
+            (
+                "6.2.1 Sanitized input Math LLMs often suffer from input "
+                "preparation that may work well for natural language text but "
+                "degrade representations of mathematical concepts and symbols.",
+                "6.2.1 Sanitized input",
+            ),
+            (
+                "5.5.2 General-purpose LLM programming Although still early, we "
+                "are starting to see programming libraries and other software "
+                "tools for building LLMs as components of custom applications.",
+                "5.5.2 General-purpose LLM programming",
+            ),
+            (
+                "9.3.1 What is fair use? Many different countries and cultures "
+                "have different attitudes toward the use of copyrighted text in "
+                "new ways, especially when they advance the public good.",
+                "9.3.1 What is fair use?",
+            ),
+            (
+                "6.2.2 Helping LLMs understand numbers For most people, numbers "
+                "are the more accessible part of math and can be put into a "
+                "calculator to obtain a result without much effort.",
+                "6.2.2 Helping LLMs understand numbers",
+            ),
+            (
+                "5.3.1 Beginning with a naive RLHF First, let us look at the "
+                "incomplete and naive version of RLHF and explain why it does "
+                "not work before showing how it can be fixed.",
+                "5.3.1 Beginning with a naive RLHF",
+            ),
+        ]
+        for combined, expected_heading in cases:
+            with self.subTest(heading=expected_heading):
+                result = _leading_numbered_book_heading_and_remainder(combined)
+                self.assertIsNotNone(result)
+                assert result is not None
+                self.assertEqual(result[0], expected_heading)
+
+    def test_numbered_heading_keeps_capitalised_proper_noun_phrase_in_title(self) -> None:
+        # Regression: the title itself contains a capitalised proper-noun
+        # phrase ("Generative Pretrained Transformers"); the split must fall
+        # at the real title end, not inside that phrase.
+        result = _leading_numbered_book_heading_and_remainder(
+            "1.6 Generative Pretrained Transformers and friends The terminology "
+            "Generative Pretrained Transformer is worth unpacking because each "
+            "word carries a specific meaning in this context."
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(
+            result[0], "1.6 Generative Pretrained Transformers and friends"
+        )
+
     def test_helper_recognizes_figure_caption_without_space_after_fig_prefix(self) -> None:
         self.assertTrue(
             _looks_like_figure_caption(

@@ -3392,11 +3392,51 @@ def main() -> int:
         # strictly to that section so body prose is never reshaped.
         in_references_section = False
         in_index_section = False
+        # Book back-matter (back-cover blurb, praise quotes, author bios,
+        # ISBN) follows the index — it is marketing copy, not reference
+        # content, so it is dropped. The first heading AFTER the index
+        # heading marks where the back-cover begins.
+        seen_index_heading = False
+        book_back_matter = False
+        # The chapter's own title block duplicates the "## 第 N 章 …"
+        # header the exporter already emits — skip it once.
+        chapter_title_skipped = False
+        _chapter_title_norm = re.sub(
+            r"^\s*\d+(?:\.\d+)*\s*",
+            "",
+            re.sub(r"\s+", " ", (getattr(chapter, "title_src", "") or "")).strip(),
+        ).casefold()
 
         for block in blocks:
             btype = (block.block_type or "").lower()
             if btype in {"caption", "figure_caption"} and block.id in consumed_caption_ids:
                 continue
+            # --- Drop book back-matter (everything after the index) -----
+            if btype == "heading":
+                _hsrc = (block.source_text or "").strip()
+                if seen_index_heading and not _INDEX_HEADING_RE.match(_hsrc):
+                    book_back_matter = True
+                if _INDEX_HEADING_RE.match(_hsrc):
+                    seen_index_heading = True
+            if book_back_matter:
+                repair_stats["page_artifacts_suppressed"] += 1
+                continue
+            # --- Skip the chapter's own title block (dup of "## 第 N 章") -
+            if (
+                not chapter_title_skipped
+                and btype in {"heading", "paragraph"}
+                and _chapter_title_norm
+            ):
+                _bsrc = re.sub(
+                    r"^\s*\d+(?:\.\d+)*\s*",
+                    "",
+                    re.sub(r"\s+", " ", (block.source_text or "")).strip(),
+                ).casefold()
+                if _bsrc and (_bsrc == _chapter_title_norm
+                              or _bsrc in _chapter_title_norm
+                              or _chapter_title_norm in _bsrc):
+                    chapter_title_skipped = True
+                    continue
             # Multi-panel cluster: skip slave panels and intervening text
             # blocks — the master panel renders the union bbox + caption.
             if block.id in cluster_skip_block_ids:
