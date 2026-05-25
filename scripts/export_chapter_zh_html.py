@@ -911,6 +911,12 @@ def _pdf_paragraph_break_offsets(block, raw: str) -> list[int]:
     """
     if not raw:
         return []
+    # Only body paragraphs wrap into multiple paragraphs. A heading,
+    # caption or code block must never be split — e.g. a section heading
+    # whose number sits in the page gutter ("3.2" at x0≈68, title at
+    # x0≈104) would otherwise look like an indented paragraph start.
+    if (getattr(block, "block_type", "") or "").lower() not in {"", "paragraph", "body", "text"}:
+        return []
     meta = getattr(block, "source_span_json", None) or {}
     regions = (meta.get("source_bbox_json") or {}).get("regions") or []
     if not regions:
@@ -1373,6 +1379,21 @@ _PAGE_ARTIFACT_PATTERN = re.compile(
     r")\s*$"
 )
 
+# Figure-internal placeholder labels the parser leaked as standalone
+# body blocks — e.g. the diagram callouts ``"Input text ..."`` /
+# ``"Output text ..."`` in the Transformer schematic. They are a quoted
+# stub ending in an ellipsis and carry no reading value.
+_FIGURE_LABEL_FRAGMENT_RE = re.compile(
+    r'^\s*["“]\s*[A-Za-z][\w ./()-]{0,34}?\s*(?:\.\.\.|…)\s*["”]?\s*$'
+)
+
+# A "Listing N.M …" block is a code-listing title, not a section
+# heading — render it as a code caption (matching the "*代码：…*" form).
+_LISTING_HEADING_RE = re.compile(
+    r"^\s*(?:Listing|代码清单|清单)\s*\d+(?:\.\d+)+\b", re.IGNORECASE
+)
+
+
 # Running-header heading artifacts: PDFs repeat the current section
 # title on top of each page ("1.1 Generative AI in context  3"). The
 # parser captures these as heading blocks distinct from the real
@@ -1642,9 +1663,17 @@ def _render_block_md(
         return ""
     zh_text = _join_zh_chunks_md(chunks)
     if btype == "heading" and chunks:
-        if not _looks_like_heading_source(block.source_text or "") or not _looks_like_heading_source(chunks[0]):
-            return zh_text
-        return f"### {chunks[0].strip()}"
+        # The translator sometimes keeps the PDF line break between the
+        # section number and the title ("3.2\n详细探索…"); collapse it so
+        # the heading renders on one line.
+        heading_zh = re.sub(r"\s+", " ", chunks[0]).strip()
+        # A "Listing N.M …" block is a code-listing title — render it as
+        # a code caption, not a section heading.
+        if _LISTING_HEADING_RE.match((block.source_text or "").strip()):
+            return f"*代码：{heading_zh}*" if heading_zh else ""
+        if not _looks_like_heading_source(block.source_text or "") or not _looks_like_heading_source(heading_zh):
+            return re.sub(r"\s+", " ", zh_text).strip() if zh_text else zh_text
+        return f"### {heading_zh}"
     if btype in {"code", "code_block"}:
         src = block.source_text or ""
         if not _looks_like_real_code(src):
@@ -1690,6 +1719,11 @@ def _render_block(
         heading_translation = re.sub(r"\s+", " ", heading_translation)
         heading_source = (block.source_text or "").strip()
         heading_source_normalized = re.sub(r"\s+", " ", heading_source.replace("\n", " ")).strip()
+        # A "Listing N.M …" block is a code-listing title — render it as
+        # a caption rather than a section heading.
+        if _LISTING_HEADING_RE.match(heading_source):
+            cap = heading_translation or heading_source_normalized
+            return _caption_html([cap]) if cap else ""
         # Older parser revisions promoted short/body-fragment text to HEADING
         # (e.g. "Many LLMs", "Note: ...", figure-internal labels). Demote
         # any HEADING whose source isn't shaped like a section title.
@@ -2842,6 +2876,33 @@ def main() -> int:
         callout_heading_for_next: dict[str, str] = {}
         skip_render_block_ids: set[str] = set()
         block_index_by_ord = {b.ordinal: i for i, b in enumerate(blocks)}
+
+        # Recover a section heading that survived only as a running-header
+        # artifact ("5.4 Other factors … 79"). When the document has the
+        # §N.M subsections but no dedicated §N.M heading block, promote
+        # the FIRST such artifact to a heading so the outline is complete.
+        _heading_secnums: set[str] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() != "heading":
+                continue
+            _hm = re.match(r"\s*(\d+(?:\.\d+){0,3})\b", blk.source_text or "")
+            if _hm:
+                _heading_secnums.add(_hm.group(1))
+        promote_artifact_to_heading: set[str] = set()
+        _promoted_secnums: set[str] = set()
+        for blk in blocks:
+            if (blk.block_type or "").lower() not in {"paragraph", "heading", "footnote"}:
+                continue
+            _src = (blk.source_text or "").strip()
+            _rm = re.match(r"\s*(\d+\.\d+)\s+\S.*[\n ]\d{1,4}\s*$", _src, re.DOTALL)
+            if _rm is None:
+                continue
+            _secnum = _rm.group(1)
+            if _secnum in _heading_secnums or _secnum in _promoted_secnums:
+                continue
+            if any(h.startswith(_secnum + ".") for h in _heading_secnums):
+                promote_artifact_to_heading.add(blk.id)
+                _promoted_secnums.add(_secnum)
         for i, blk in enumerate(blocks):
             btype = (blk.block_type or "").lower()
             src = (blk.source_text or "").strip()
@@ -3401,6 +3462,9 @@ def main() -> int:
         # The chapter's own title block duplicates the "## 第 N 章 …"
         # header the exporter already emits — skip it once.
         chapter_title_skipped = False
+        # A short, non-numbered heading immediately after a "Listing N.M"
+        # caption is a code side-annotation ("Uses OpenAI's") — drop it.
+        prev_was_listing_caption = False
         _chapter_title_norm = re.sub(
             r"^\s*\d+(?:\.\d+)*\s*",
             "",
@@ -3472,11 +3536,47 @@ def main() -> int:
             # into body blocks ("GE 121 9312", "4", "Chapter 3"). These
             # add no reading value and the translator's stub for them
             # ("这是当前段落中唯一的句子") is misleading.
+            # Recover a section heading kept only as a running-header
+            # artifact: render it (translated, trailing page number
+            # stripped) as a heading instead of suppressing it.
+            if block.id in promote_artifact_to_heading:
+                _pc, _pu = _block_zh_chunks(session, block)
+                _ht = re.sub(r"\s+", " ", " ".join(c.strip() for c in _pc)).strip()
+                _ht = re.sub(r"[\s\d]+$", "", _ht).strip()
+                if _ht:
+                    rendered_blocks_html.append(_heading_html(_ht))
+                    rendered_blocks_md.append(f"### {_ht}")
+                    rendered_block_count += 1
+                else:
+                    repair_stats["page_artifacts_suppressed"] += 1
+                continue
             if btype in {"paragraph", "heading", "footnote"} and _is_page_artifact(
                 block.source_text or ""
             ):
                 repair_stats["page_artifacts_suppressed"] += 1
                 continue
+            # Figure-internal placeholder labels ("Input text ...",
+            # "Output text ...") the parser leaked as standalone body
+            # blocks — they belong inside the diagram, not the prose.
+            if btype == "paragraph" and _FIGURE_LABEL_FRAGMENT_RE.match(
+                (block.source_text or "").strip()
+            ):
+                repair_stats["page_artifacts_suppressed"] += 1
+                continue
+            # A short non-numbered heading right after a "Listing N.M"
+            # caption is a code side-annotation, not a section heading.
+            _src_strip = (block.source_text or "").strip()
+            if (
+                prev_was_listing_caption
+                and btype == "heading"
+                and not re.match(r"^\d+(?:\.\d+)*\s", _src_strip)
+                and len(_src_strip.split()) <= 6
+            ):
+                repair_stats["page_artifacts_suppressed"] += 1
+                continue
+            prev_was_listing_caption = btype == "heading" and bool(
+                _LISTING_HEADING_RE.match(_src_strip)
+            )
             # Skip Listing side annotations the parser tagged as
             # non-translatable callouts (Manning-style listings put
             # short prose phrases next to code with arrows; rendering
