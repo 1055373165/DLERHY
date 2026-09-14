@@ -25,12 +25,12 @@ from book_agent.schemas.workflow import (
     TranslateDocumentResponse,
 )
 from book_agent.services.export import ExportGateError
-from book_agent.services.workflows import (
+from book_agent.application.read_models import (
     DocumentExportResult,
     DocumentReviewResult,
     DocumentTranslationResult,
-    DocumentWorkflowService,
 )
+from book_agent.services.workflows import DocumentWorkflowService
 
 _ACTION_PATH = re.compile(r"^/v1/documents/(?P<document_id>[^/?]+)/(?P<action>translate|review|export)$")
 

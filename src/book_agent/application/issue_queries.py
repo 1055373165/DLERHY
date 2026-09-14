@@ -16,16 +16,12 @@ from book_agent.application.read_models import (
     IssueChapterPressureEntry,
     IssueHotspotEntry,
 )
-from book_agent.domain.enums import (
-    IssueStatus,
-)
+from book_agent.domain.enums import IssueStatus
 from book_agent.domain.models import (
     Chapter,
     ChapterWorklistAssignment,
 )
-from book_agent.domain.models.review import (
-    ReviewIssue,
-)
+from book_agent.domain.models.review import ReviewIssue
 
 
 def _utcnow() -> datetime:

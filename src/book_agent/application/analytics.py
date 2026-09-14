@@ -36,13 +36,9 @@ from book_agent.domain.enums import (
     IssueStatus,
     MemoryProposalStatus,
 )
-from book_agent.domain.models import (
-    ChapterWorklistAssignment,
-)
+from book_agent.domain.models import ChapterWorklistAssignment
 from book_agent.domain.models.review import ChapterQualitySummary as PersistedChapterQualitySummary
-from book_agent.domain.models.review import (
-    ReviewIssue,
-)
+from book_agent.domain.models.review import ReviewIssue
 from book_agent.services.review import NaturalnessSummary as ReviewNaturalnessSummary
 
 

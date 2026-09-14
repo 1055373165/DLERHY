@@ -22,9 +22,7 @@ from book_agent.domain.enums import (
     ActorType,
     PacketStatus,
 )
-from book_agent.domain.models import (
-    ChapterWorklistAssignment,
-)
+from book_agent.domain.models import ChapterWorklistAssignment
 from book_agent.domain.models.ops import AuditEvent
 from book_agent.domain.models.review import (
     IssueAction,

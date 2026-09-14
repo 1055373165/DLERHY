@@ -53,7 +53,8 @@ from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
 from book_agent.services.review import ChapterQualitySummary as ReviewChapterQualitySummary, ReviewArtifacts, ReviewService
 from book_agent.services.translation import TranslationService as _TranslationService
-from book_agent.services.workflows import ActionWorkflowResult, DocumentWorkflowService
+from book_agent.application.read_models import ActionWorkflowResult
+from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationUsage, TranslationWorkerOutput
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
@@ -10381,11 +10382,11 @@ class PersistenceAndReviewTests(unittest.TestCase):
             executions: list = []
 
             with patch.object(
-                workflow,
+                workflow.review_repair,
                 "_review_auto_followup_candidate_actions",
                 side_effect=[[action], []],
             ) as candidate_mock, patch.object(
-                workflow,
+                workflow.issue_actions,
                 "execute_action",
                 return_value=ActionWorkflowResult(
                     action_execution=ActionExecutionArtifacts(
@@ -10402,7 +10403,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     ),
                 ),
             ) as execute_mock:
-                result = workflow._apply_review_auto_followups(
+                result = workflow.review_repair._apply_review_auto_followups(
                     chapter_id="chapter-1",
                     artifacts=initial_artifacts,
                     attempted_action_ids=set(),
@@ -10493,11 +10494,11 @@ class PersistenceAndReviewTests(unittest.TestCase):
             session.commit()
 
             with patch.object(
-                workflow,
+                workflow.review_repair,
                 "_review_auto_followup_candidate_actions",
                 return_value=[action],
-            ) as candidate_mock, patch.object(workflow, "execute_action") as execute_mock:
-                result = workflow._apply_review_auto_followups(
+            ) as candidate_mock, patch.object(workflow.issue_actions, "execute_action") as execute_mock:
+                result = workflow.review_repair._apply_review_auto_followups(
                     chapter_id=chapter_id,
                     artifacts=artifacts,
                     attempted_action_ids=set(),
@@ -10578,14 +10579,14 @@ class PersistenceAndReviewTests(unittest.TestCase):
             session.commit()
 
             with patch.object(
-                workflow,
+                workflow.review_repair,
                 "_list_document_active_blocking_issues",
                 side_effect=[[issue], [issue], [issue]],
             ), patch.object(
-                workflow,
+                workflow.review_repair,
                 "_document_blocker_candidate_actions",
                 return_value=[action],
-            ), patch.object(workflow, "execute_action") as execute_mock:
+            ), patch.object(workflow.issue_actions, "execute_action") as execute_mock:
                 result = workflow.repair_document_blockers_until_exportable(
                     document_id,
                     max_rounds=2,
@@ -10720,7 +10721,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     issue_ids=[issue.id],
                     followup_actions=[followup_action],
                 ),
-            ), patch.object(workflow, "execute_action") as execute_mock:
+            ), patch.object(workflow.issue_actions, "execute_action") as execute_mock:
                 with self.assertRaises(ExportGateError) as exc_info:
                     workflow.export_document(
                         document_id,
@@ -11109,7 +11110,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 resolved_issue_ids=[],
             )
 
-            candidates = workflow._review_auto_followup_candidate_actions(
+            candidates = workflow.review_repair._review_auto_followup_candidate_actions(
                 artifacts,
                 issue_by_id={issue.id: issue for issue in artifacts.issues},
                 attempted_action_ids={"action-term-b"},
@@ -11194,7 +11195,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 translation_worker=ConsistentContextEngineeringWorker(),
             )
             workflow.translate_document(document_id)
-            with patch("book_agent.services.workflows.build_default_concept_resolver", return_value=resolver):
+            with patch("book_agent.application.review_repair.build_default_concept_resolver", return_value=resolver):
                 review = workflow.review_document(
                     document_id,
                     auto_execute_packet_followups=True,
@@ -11291,7 +11292,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             unaffected_packet_ids = set(packet_ids) - affected_packet_ids
             self.assertEqual(len(affected_packet_ids), 2)
 
-            with patch("book_agent.services.workflows.build_default_concept_resolver", return_value=_NullResolver()):
+            with patch("book_agent.application.review_repair.build_default_concept_resolver", return_value=_NullResolver()):
                 review = workflow.review_document(
                     document_id,
                     auto_execute_packet_followups=True,
