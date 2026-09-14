@@ -2084,7 +2084,11 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         with self.session_factory() as session:
             service = PacketExperimentService(
                 TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+                settings=Settings(
+                    translation_backend="echo",
+                    translation_model="echo-worker",
+                    database_url="sqlite+pysqlite:///./artifacts/book-agent.db",
+                ),
             )
             artifacts = service.run(
                 packet_id,
@@ -2637,7 +2641,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             session.add_all(
                 [
                     ReviewIssue(
-                        id="issue-style-a",
+                        id="cccccccc-cccc-4ccc-8ccc-ccccccccccc1",
                         document_id=document_id,
                         chapter_id=chapter_id,
                         block_id=None,
@@ -2655,7 +2659,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                         updated_at=now,
                     ),
                     ReviewIssue(
-                        id="issue-term-b",
+                        id="dddddddd-dddd-4ddd-8ddd-ddddddddddd2",
                         document_id=document_id,
                         chapter_id=chapter_id,
                         block_id=None,
@@ -2673,7 +2677,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                         updated_at=now,
                     ),
                     ReviewIssue(
-                        id="issue-style-b",
+                        id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3",
                         document_id=document_id,
                         chapter_id=chapter_id,
                         block_id=None,

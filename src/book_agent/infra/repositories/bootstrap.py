@@ -200,13 +200,16 @@ class BootstrapRepository:
         for mapping in packet_maps:
             packet_maps_by_packet.setdefault(mapping.packet_id, []).append(mapping)
 
+        # Sentences follow reading order: block ordinal, then position in block.
+        # (Sorting by block_id ordered them by random UUID.)
+        block_ordinal_by_id = {block.id: block.ordinal for block in blocks}
         chapter_bundles = [
             PersistedChapterBundle(
                 chapter=chapter,
                 blocks=sorted(blocks_by_chapter.get(chapter.id, []), key=lambda item: item.ordinal),
                 sentences=sorted(
                     sentences_by_chapter.get(chapter.id, []),
-                    key=lambda item: (item.block_id, item.ordinal_in_block),
+                    key=lambda item: (block_ordinal_by_id.get(item.block_id, 0), item.ordinal_in_block),
                 ),
                 chapter_brief=briefs_by_chapter.get(chapter.id),
                 translation_packets=packets_by_chapter.get(chapter.id, []),

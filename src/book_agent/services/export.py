@@ -4347,11 +4347,22 @@ class ExportService:
         if self._should_promote_book_block_to_code(block):
             block = self._replace_render_block_as_code(block, flag="export_book_code_promoted")
         elif self._should_demote_book_code_block_to_paragraph(block):
-            block = self._replace_render_block_as_paragraph(
+            demoted = self._replace_render_block_as_paragraph(
                 block,
                 flag="export_book_code_demoted",
                 drop_target_text=self._should_drop_demoted_book_code_target_text(block),
             )
+            # A reference listing rendered as code joined its entries with bare
+            # newlines; restore the entry breaks once it becomes a paragraph.
+            page_family = str(block.source_metadata.get("pdf_page_family") or "").strip().casefold()
+            if page_family == "references" and demoted.target_text:
+                joined = self._join_reference_target_segments(
+                    demoted.target_text.split("\n"),
+                    source_text=block.source_text,
+                )
+                if joined:
+                    demoted = replace(demoted, target_text=joined)
+            block = demoted
         elif self._should_demote_book_heading_with_prose_target(bundle, block):
             block = self._replace_render_block_as_paragraph(
                 block,
@@ -4480,6 +4491,7 @@ class ExportService:
         fragments.append(
             replace(
                 block,
+                block_type=BlockType.CODE.value,
                 source_text="\n".join(code_lines),
                 target_text=None,
                 source_metadata=_derived_metadata("code_like", "embedded_code_span"),
