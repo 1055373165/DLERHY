@@ -62,6 +62,22 @@ def _write_split_title_pdf(path: Path) -> None:
     document.save(path)
 
 
+def _write_numbered_section_pdf(path: Path) -> None:
+    """Numbered bold section headings, one sharing a block with its body and one on its own line."""
+    document = fitz.open()
+    document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+    page = document.new_page()
+    page.insert_text((72, 100), "1. Tops and Bottoms (top at 70 and bottom at 30)", fontname="hebo", fontsize=11.5)
+    page.insert_text((72, 116), "According to Wilder, tops and bottoms are indicated when the reading crosses a zone.")
+    page.insert_text((72, 128), "Such tops usually form before the actual market top.")
+    page.insert_text((72, 170), "2. Failure Swings", fontname="hebo", fontsize=11.5)
+    page.insert_text((72, 200), "When the indicator does not exceed its previous high, it is called a failure swing.")
+    page.draw_circle((78.5, 236.5), 1.5, color=None, fill=(0, 0, 0))
+    page.insert_text((90, 240), "Bullish Engulfing and Bearish Engulfing", fontname="hebo")
+    page.insert_text((90, 252), "If you find them at the extremes of a divergence, the signal is more reliable.")
+    document.save(path)
+
+
 class LeadingEmphasisLineCountTest(unittest.TestCase):
     def test_counts_bold_prefix_followed_by_plain_lines(self) -> None:
         self.assertEqual(leading_emphasis_line_count(((11.5, True), (10.0, False), (10.0, False))), 1)
@@ -119,6 +135,25 @@ class StyledHeadingRecoveryTest(unittest.TestCase):
         self.assertIn(("CHAPTER 2: BIRTH AND GROWTH OF RSI", 1), headings)
         self.assertIn(("CHAPTER 3: BREAKING THE MYTH: RSI CAN REMAIN OVERSOLD FOR SEVERAL MONTHS?", 1), headings)
         self.assertIn("'Momentum is perhaps the most important factor in trading.'", [block.text for block in blocks])
+
+    def test_numbered_bold_headings_split_from_list_items_but_bullets_do_not(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "numbered.pdf"
+            _write_numbered_section_pdf(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        blocks = [(block.block_type, " ".join(block.text.split())) for chapter in parsed.chapters for block in chapter.blocks]
+        self.assertIn((BlockType.HEADING.value, "1. Tops and Bottoms (top at 70 and bottom at 30)"), blocks)
+        self.assertIn((BlockType.HEADING.value, "2. Failure Swings"), blocks)
+        self.assertTrue(
+            any(block_type == BlockType.PARAGRAPH.value and text.startswith("According to Wilder") for block_type, text in blocks)
+        )
+        self.assertTrue(
+            any(
+                block_type == BlockType.LIST_ITEM.value and text.startswith("\u2022 Bullish Engulfing and Bearish Engulfing If you")
+                for block_type, text in blocks
+            )
+        )
 
 
 if __name__ == "__main__":

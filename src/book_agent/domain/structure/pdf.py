@@ -595,6 +595,10 @@ class PdfStructureRecoveryService:
                     emphasis_line_count = leading_emphasis_line_count(raw_block.line_styles)
                     if emphasis_line_count:
                         metadata["pdf_leading_emphasis_text"] = "\n".join(raw_block.line_texts[:emphasis_line_count])
+                    elif len(raw_block.line_styles) == 1 and all_lines_bold:
+                        # A one-line bold block may merge with the body block below it;
+                        # remember the line so the heading can be split back out.
+                        metadata["pdf_leading_emphasis_text"] = raw_block.line_texts[0]
                     if raw_block.font_names and _has_monospace_font(raw_block.font_names):
                         metadata["has_monospace_font"] = True
                         if role == "code_like":
@@ -2982,6 +2986,22 @@ class PdfStructureRecoveryService:
         academic_lane: bool = False,
         font_emphasis_available: bool = False,
     ) -> list[_RecoveredBlock]:
+        if block.role == "list_item" and block.block_type == BlockType.LIST_ITEM:
+            # Numbered section headings ("1. Tops and Bottoms") start like list
+            # items; only font emphasis can tell them apart.
+            styled_heading = (
+                styled_heading_and_remainder(block.text, str(block.metadata["pdf_leading_emphasis_text"]))
+                if font_emphasis_available
+                and re.match(r"^\d{1,3}[.)]\s", block.text)
+                and block.metadata.get("pdf_leading_emphasis_text")
+                and str(block.metadata.get("pdf_page_family") or "body") == "body"
+                else None
+            )
+            if styled_heading is None:
+                return [replace(block)]
+            return self._heading_and_body_segments(
+                block, styled_heading[0], styled_heading[1], "embedded_book_styled_heading_recovered", 2
+            )
         if (
             block.role not in {"body", "code_like"}
             or block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE}
@@ -3175,7 +3195,17 @@ class PdfStructureRecoveryService:
 
         if heading_text is None or recovery_flag is None:
             return [replace(block)]
+        return self._heading_and_body_segments(block, heading_text, remainder, recovery_flag, recovered_heading_level)
 
+    def _heading_and_body_segments(
+        self,
+        block: _RecoveredBlock,
+        heading_text: str,
+        remainder: str | None,
+        recovery_flag: str,
+        recovered_heading_level: int | None,
+    ) -> list[_RecoveredBlock]:
+        metadata = dict(block.metadata)
         shared_flags = list(dict.fromkeys([*block.flags, recovery_flag]))
         heading_metadata = dict(metadata)
         heading_metadata["pdf_heading_recovery_source"] = recovery_flag
