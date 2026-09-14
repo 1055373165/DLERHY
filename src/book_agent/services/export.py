@@ -8,6 +8,7 @@ import mimetypes
 import re
 import shutil
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -207,225 +208,49 @@ class ExportService:
     def export_bilingual_markdown(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.BILINGUAL_MARKDOWN)
 
-    @_within_render_model_scope
     def export_document_merged_html(self, document_id: str) -> ExportArtifacts:
-        bundle = self.repository.load_document_bundle(document_id)
-        for chapter_bundle in bundle.chapters:
-            self._enforce_gate(chapter_bundle, ExportType.MERGED_HTML)
-        self._sync_document_title_tgt(bundle)
-        output_dir = self.output_root / bundle.document.id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        file_path = output_dir / "merged-document.html"
-        manifest_path = output_dir / "merged-document.manifest.json"
-        asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
-        merged_html = self._build_merged_document_html(bundle, asset_path_by_block_id)
-        file_path.write_text(merged_html, encoding="utf-8")
-        self._write_document_export_alias(output_dir, bundle.document, ExportType.MERGED_HTML, merged_html)
-        manifest_path.write_text(
-            json.dumps(
-                self._build_merged_document_manifest(
-                    bundle,
-                    file_path,
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-        export = self._record_document_export(
-            bundle,
-            ExportType.MERGED_HTML,
-            file_path,
-            manifest_path,
-        )
-        self.repository.save_export(export)
-        self._apply_document_export_status_updates(bundle, ExportType.MERGED_HTML)
-        self.repository.session.flush()
-        return ExportArtifacts(
-            export_record=export,
-            file_path=file_path,
-            manifest_path=manifest_path,
-        )
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML])
 
-    @_within_render_model_scope
     def export_document_merged_markdown(self, document_id: str) -> ExportArtifacts:
-        bundle = self.repository.load_document_bundle(document_id)
-        for chapter_bundle in bundle.chapters:
-            self._enforce_gate(chapter_bundle, ExportType.MERGED_MARKDOWN)
-        self._sync_document_title_tgt(bundle)
-        output_dir = self.output_root / bundle.document.id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        file_path = output_dir / "merged-document.md"
-        manifest_path = output_dir / "merged-document.markdown.manifest.json"
-        asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
-        merged_markdown = self._build_merged_document_markdown(bundle, asset_path_by_block_id)
-        file_path.write_text(merged_markdown, encoding="utf-8")
-        self._write_document_export_alias(output_dir, bundle.document, ExportType.MERGED_MARKDOWN, merged_markdown)
-        manifest_path.write_text(
-            json.dumps(
-                self._build_merged_document_manifest(
-                    bundle,
-                    file_path,
-                    export_type=ExportType.MERGED_MARKDOWN,
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-        export = self._record_document_export(
-            bundle,
-            ExportType.MERGED_MARKDOWN,
-            file_path,
-            manifest_path,
-        )
-        self.repository.save_export(export)
-        self._apply_document_export_status_updates(bundle, ExportType.MERGED_MARKDOWN)
-        self.repository.session.flush()
-        return ExportArtifacts(
-            export_record=export,
-            file_path=file_path,
-            manifest_path=manifest_path,
-        )
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_MARKDOWN])
 
-    @_within_render_model_scope
     def export_document_rebuilt_epub(self, document_id: str) -> ExportArtifacts:
-        initial_bundle = self.repository.load_document_bundle(document_id)
-        if initial_bundle.document.source_type != SourceType.EPUB:
-            raise ExportGateError(
-                "Rebuilt EPUB is only available for EPUB source documents.",
-            )
-        for chapter_bundle in initial_bundle.chapters:
-            self._enforce_gate(chapter_bundle, ExportType.REBUILT_EPUB)
-        upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
-        bundle = self.repository.load_document_bundle(document_id)
-        self._sync_document_title_tgt(bundle)
-        output_dir = self.output_root / bundle.document.id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        asset_path_by_block_id = self._export_epub_assets_for_document_bundle(bundle, output_dir)
-        file_path = output_dir / "rebuilt-document.epub"
-        manifest_path = output_dir / "rebuilt-document.epub.manifest.json"
-        self._write_rebuilt_epub(bundle, file_path, asset_path_by_block_id)
-        manifest_path.write_text(
-            json.dumps(
-                self._build_rebuilt_document_manifest(
-                    bundle,
-                    file_path,
-                    export_type=ExportType.REBUILT_EPUB,
-                    renderer_kind="epub_spine_rebuilder",
-                    derived_from_exports=upstream_exports,
-                    expected_limitations=[
-                        "assets_reused_from_source_when_available",
-                        "no_in_image_text_rewrite",
-                        "single_document_level_output_only",
-                    ],
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-        export = self._record_document_export(
-            bundle,
-            ExportType.REBUILT_EPUB,
-            file_path,
-            manifest_path,
-        )
-        self.repository.save_export(export)
-        self.repository.session.flush()
-        return ExportArtifacts(
-            export_record=export,
-            file_path=file_path,
-            manifest_path=manifest_path,
-        )
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_EPUB])
 
-    @_within_render_model_scope
     def export_document_zh_epub(self, document_id: str) -> ExportArtifacts:
-        bundle = self.repository.load_document_bundle(document_id)
-        if bundle.document.source_type != SourceType.EPUB:
-            raise ExportGateError("Source-preserving EPUB export is only available for EPUB source documents.")
-        for chapter_bundle in bundle.chapters:
-            self._enforce_gate(chapter_bundle, ExportType.ZH_EPUB)
-        output_dir = self.output_root / bundle.document.id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        file_path = output_dir / "zh-document.epub"
-        manifest_path = output_dir / "zh-document.epub.manifest.json"
-        self._write_source_preserving_epub(bundle, file_path)
-        manifest_path.write_text(
-            json.dumps(
-                self._build_rebuilt_document_manifest(
-                    bundle,
-                    file_path,
-                    export_type=ExportType.ZH_EPUB,
-                    renderer_kind="source_preserving_epub_patcher",
-                    derived_from_exports={},
-                    expected_limitations=[
-                        "source_archive_structure_preserved",
-                        "nav_and_anchors_preserved",
-                        "only_leaf_xhtml_nodes_patched",
-                    ],
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-        export = self._record_document_export(
-            bundle,
-            ExportType.ZH_EPUB,
-            file_path,
-            manifest_path,
-        )
-        self.repository.save_export(export)
-        self._apply_source_preserving_epub_status_updates(bundle)
-        self.repository.session.flush()
-        return ExportArtifacts(
-            export_record=export,
-            file_path=file_path,
-            manifest_path=manifest_path,
-        )
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB])
+
+    def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF])
 
     @_within_render_model_scope
-    def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
+    def _export_document(self, document_id: str, renderer: DocumentRenderer) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
+        if renderer.epub_source_only_error is not None and bundle.document.source_type != SourceType.EPUB:
+            raise ExportGateError(renderer.epub_source_only_error)
         for chapter_bundle in bundle.chapters:
-            self._enforce_gate(chapter_bundle, ExportType.REBUILT_PDF)
-        upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
-        bundle = self.repository.load_document_bundle(document_id)
-        self._sync_document_title_tgt(bundle)
-        merged_html_artifacts = upstream_exports[ExportType.MERGED_HTML]
+            self._enforce_gate(chapter_bundle, renderer.export_type)
+        upstream_exports: dict[ExportType, ExportArtifacts] = {}
+        if renderer.uses_upstream_exports:
+            upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
+            bundle = self.repository.load_document_bundle(document_id)
+        if renderer.syncs_document_title:
+            self._sync_document_title_tgt(bundle)
         output_dir = self.output_root / bundle.document.id
         output_dir.mkdir(parents=True, exist_ok=True)
-        file_path = output_dir / "rebuilt-document.pdf"
-        manifest_path = output_dir / "rebuilt-document.pdf.manifest.json"
-        self._render_rebuilt_pdf_from_html(merged_html_artifacts.file_path, file_path)
+        file_path = output_dir / renderer.file_name
+        manifest_path = output_dir / renderer.manifest_name
+        rendered_text = renderer.render(self, bundle, output_dir, file_path, upstream_exports)
+        if rendered_text is not None:
+            self._write_document_export_alias(output_dir, bundle.document, renderer.export_type, rendered_text)
         manifest_path.write_text(
-            json.dumps(
-                self._build_rebuilt_document_manifest(
-                    bundle,
-                    file_path,
-                    export_type=ExportType.REBUILT_PDF,
-                    renderer_kind="html_print_renderer",
-                    derived_from_exports=upstream_exports,
-                    expected_limitations=[
-                        "not_page_faithful_to_source_pdf",
-                        "assets_reused_from_source_when_available",
-                        "no_in_image_text_rewrite",
-                        "single_document_level_output_only",
-                    ],
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
+            json.dumps(renderer.manifest(self, bundle, file_path, upstream_exports), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        export = self._record_document_export(
-            bundle,
-            ExportType.REBUILT_PDF,
-            file_path,
-            manifest_path,
-        )
+        export = self._record_document_export(bundle, renderer.export_type, file_path, manifest_path)
         self.repository.save_export(export)
+        if renderer.apply_status_updates is not None:
+            renderer.apply_status_updates(self, bundle)
         self.repository.session.flush()
         return ExportArtifacts(
             export_record=export,
@@ -3218,3 +3043,157 @@ class ExportService:
         else:
             metadata.pop("materialized_render_scale", None)
         setattr(document_image, "metadata_json", metadata)
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentRenderer:
+    """How one whole-document export type is rendered, described, and recorded.
+
+    ``render`` writes ``file_path`` and returns the rendered text when the
+    export also gets a human-titled alias copy; ``manifest`` builds the
+    manifest payload.
+    """
+
+    export_type: ExportType
+    file_name: str
+    manifest_name: str
+    render: Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str | None]
+    manifest: Callable[[ExportService, DocumentExportBundle, Path, dict], dict]
+    epub_source_only_error: str | None = None
+    uses_upstream_exports: bool = False
+    syncs_document_title: bool = True
+    apply_status_updates: Callable[[ExportService, DocumentExportBundle], None] | None = None
+
+
+def _render_merged(builder_name: str) -> Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str]:
+    def render(service: ExportService, bundle: DocumentExportBundle, output_dir: Path, file_path: Path, _upstream: dict) -> str:
+        asset_path_by_block_id = service._export_epub_assets_for_document_bundle(bundle, output_dir)
+        text = getattr(service, builder_name)(bundle, asset_path_by_block_id)
+        file_path.write_text(text, encoding="utf-8")
+        return text
+
+    return render
+
+
+def _render_rebuilt_epub(
+    service: ExportService, bundle: DocumentExportBundle, output_dir: Path, file_path: Path, _upstream: dict
+) -> None:
+    asset_path_by_block_id = service._export_epub_assets_for_document_bundle(bundle, output_dir)
+    service._write_rebuilt_epub(bundle, file_path, asset_path_by_block_id)
+    return None
+
+
+def _render_zh_epub(
+    service: ExportService, bundle: DocumentExportBundle, _output_dir: Path, file_path: Path, _upstream: dict
+) -> None:
+    service._write_source_preserving_epub(bundle, file_path)
+    return None
+
+
+def _render_rebuilt_pdf(
+    service: ExportService, _bundle: DocumentExportBundle, _output_dir: Path, file_path: Path, upstream: dict
+) -> None:
+    service._render_rebuilt_pdf_from_html(upstream[ExportType.MERGED_HTML].file_path, file_path)
+    return None
+
+
+def _merged_manifest(export_type: ExportType | None):
+    def manifest(service: ExportService, bundle: DocumentExportBundle, file_path: Path, _upstream: dict) -> dict:
+        if export_type is None:
+            return service._build_merged_document_manifest(bundle, file_path)
+        return service._build_merged_document_manifest(bundle, file_path, export_type=export_type)
+
+    return manifest
+
+
+def _rebuilt_manifest(export_type: ExportType, renderer_kind: str, expected_limitations: list[str], *, upstream: bool):
+    def manifest(service: ExportService, bundle: DocumentExportBundle, file_path: Path, upstream_exports: dict) -> dict:
+        return service._build_rebuilt_document_manifest(
+            bundle,
+            file_path,
+            export_type=export_type,
+            renderer_kind=renderer_kind,
+            derived_from_exports=upstream_exports if upstream else {},
+            expected_limitations=expected_limitations,
+        )
+
+    return manifest
+
+
+_DOCUMENT_RENDERERS: dict[ExportType, DocumentRenderer] = {
+    ExportType.MERGED_HTML: DocumentRenderer(
+        export_type=ExportType.MERGED_HTML,
+        file_name="merged-document.html",
+        manifest_name="merged-document.manifest.json",
+        render=_render_merged("_build_merged_document_html"),
+        manifest=_merged_manifest(None),
+        apply_status_updates=lambda service, bundle: service._apply_document_export_status_updates(
+            bundle, ExportType.MERGED_HTML
+        ),
+    ),
+    ExportType.MERGED_MARKDOWN: DocumentRenderer(
+        export_type=ExportType.MERGED_MARKDOWN,
+        file_name="merged-document.md",
+        manifest_name="merged-document.markdown.manifest.json",
+        render=_render_merged("_build_merged_document_markdown"),
+        manifest=_merged_manifest(ExportType.MERGED_MARKDOWN),
+        apply_status_updates=lambda service, bundle: service._apply_document_export_status_updates(
+            bundle, ExportType.MERGED_MARKDOWN
+        ),
+    ),
+    ExportType.REBUILT_EPUB: DocumentRenderer(
+        export_type=ExportType.REBUILT_EPUB,
+        file_name="rebuilt-document.epub",
+        manifest_name="rebuilt-document.epub.manifest.json",
+        render=_render_rebuilt_epub,
+        manifest=_rebuilt_manifest(
+            ExportType.REBUILT_EPUB,
+            "epub_spine_rebuilder",
+            [
+                "assets_reused_from_source_when_available",
+                "no_in_image_text_rewrite",
+                "single_document_level_output_only",
+            ],
+            upstream=True,
+        ),
+        epub_source_only_error="Rebuilt EPUB is only available for EPUB source documents.",
+        uses_upstream_exports=True,
+    ),
+    ExportType.ZH_EPUB: DocumentRenderer(
+        export_type=ExportType.ZH_EPUB,
+        file_name="zh-document.epub",
+        manifest_name="zh-document.epub.manifest.json",
+        render=_render_zh_epub,
+        manifest=_rebuilt_manifest(
+            ExportType.ZH_EPUB,
+            "source_preserving_epub_patcher",
+            [
+                "source_archive_structure_preserved",
+                "nav_and_anchors_preserved",
+                "only_leaf_xhtml_nodes_patched",
+            ],
+            upstream=False,
+        ),
+        epub_source_only_error="Source-preserving EPUB export is only available for EPUB source documents.",
+        syncs_document_title=False,
+        apply_status_updates=lambda service, bundle: service._apply_source_preserving_epub_status_updates(bundle),
+    ),
+    ExportType.REBUILT_PDF: DocumentRenderer(
+        export_type=ExportType.REBUILT_PDF,
+        file_name="rebuilt-document.pdf",
+        manifest_name="rebuilt-document.pdf.manifest.json",
+        render=_render_rebuilt_pdf,
+        manifest=_rebuilt_manifest(
+            ExportType.REBUILT_PDF,
+            "html_print_renderer",
+            [
+                "not_page_faithful_to_source_pdf",
+                "assets_reused_from_source_when_available",
+                "no_in_image_text_rewrite",
+                "single_document_level_output_only",
+            ],
+            upstream=True,
+        ),
+        uses_upstream_exports=True,
+    ),
+}
