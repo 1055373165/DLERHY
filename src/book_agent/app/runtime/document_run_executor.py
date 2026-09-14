@@ -840,8 +840,11 @@ class DocumentRunExecutor:
         run_id: str | None = None,
         lease_token: str | None = None,
     ) -> dict[str, Any]:
+        # Three transactions so no database connection is held open across the
+        # LLM call: prepare (commits the call-started event), call the worker
+        # outside any session, then persist the result.
         with session_scope(self.session_factory) as session:
-            workflow = self._workflow_service(session)
+            translation_service = self._workflow_service(session).translation_service
             packet = session.get(TranslationPacket, packet_id)
             if packet is None:
                 raise RuntimeError(f"Packet {packet_id} was not found.")
@@ -854,10 +857,20 @@ class DocumentRunExecutor:
                     "cost_usd": 0.0,
                     "latency_ms": 0,
                 }
-            artifacts = workflow.translation_service.execute_packet(
-                packet_id,
+            prepared = translation_service.prepare_packet(packet_id, run_id=run_id)
+
+        try:
+            worker_result = translation_service.call_worker(prepared)
+        except Exception as exc:
+            with session_scope(self.session_factory) as session:
+                self._workflow_service(session).translation_service.record_worker_failure(prepared, exc)
+            raise
+
+        with session_scope(self.session_factory) as session:
+            artifacts = self._workflow_service(session).translation_service.persist_packet_result(
+                prepared,
+                worker_result,
                 auto_commit_memory=False,
-                run_id=run_id,
             )
             if lease_token is not None:
                 # The LLM call may outlive the lease; only commit results while

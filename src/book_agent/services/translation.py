@@ -31,7 +31,12 @@ from book_agent.workers.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
-from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
+from book_agent.workers.translator import (
+    EchoTranslationWorker,
+    TranslationTask,
+    TranslationWorker,
+    TranslationWorkerMetadata,
+)
 
 
 def _utcnow() -> datetime:
@@ -263,6 +268,24 @@ class TranslationExecutionArtifacts:
     updated_sentences: list[Sentence]
 
 
+@dataclass(slots=True)
+class PreparedPacketTranslation:
+    """Everything needed to run the worker and later persist its result."""
+
+    packet_id: str
+    chapter_id: str
+    run_id: str | None
+    task: TranslationTask
+    worker_metadata: TranslationWorkerMetadata
+    chapter_memory_snapshot_id: str | None
+    call_id: str
+    started_at: datetime
+
+    @property
+    def correlation_id(self) -> str:
+        return f"packet:{self.packet_id}"
+
+
 class TranslationService:
     def __init__(
         self,
@@ -294,9 +317,37 @@ class TranslationService:
         auto_commit_memory: bool | None = None,
         run_id: str | None = None,
     ) -> TranslationExecutionArtifacts:
-        effective_auto_commit_memory = (
-            self.default_auto_commit_memory if auto_commit_memory is None else auto_commit_memory
+        """Prepare, translate and persist a packet within the current session.
+
+        Callers that must not hold a database transaction across the LLM call
+        (the run executor) use prepare_packet / call_worker /
+        persist_packet_result with separate sessions instead.
+        """
+        prepared = self.prepare_packet(
+            packet_id,
+            compile_options=compile_options,
+            rerun_hints=rerun_hints,
+            run_id=run_id,
         )
+        try:
+            worker_result = self.call_worker(prepared)
+        except Exception as exc:
+            self.record_worker_failure(prepared, exc)
+            raise
+        return self.persist_packet_result(
+            prepared,
+            worker_result,
+            auto_commit_memory=auto_commit_memory,
+        )
+
+    def prepare_packet(
+        self,
+        packet_id: str,
+        *,
+        compile_options: ChapterContextCompileOptions | None = None,
+        rerun_hints: tuple[str, ...] = (),
+        run_id: str | None = None,
+    ) -> PreparedPacketTranslation:
         bundle = self.repository.load_packet_bundle(packet_id)
         compiled_context_result = self.memory_service.load_compiled_context(
             packet=bundle.context_packet,
@@ -317,54 +368,83 @@ class TranslationService:
         except Exception:  # pragma: no cover - defensive
             pass
         worker_metadata = self.worker.metadata()
-        call_id = stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp()))
-        correlation_id = f"packet:{bundle.packet.id}"
+        prepared = PreparedPacketTranslation(
+            packet_id=bundle.packet.id,
+            chapter_id=bundle.packet.chapter_id,
+            run_id=run_id,
+            task=TranslationTask(
+                context_packet=compiled_context_packet,
+                current_sentences=bundle.current_sentences,
+            ),
+            worker_metadata=worker_metadata,
+            chapter_memory_snapshot_id=(
+                chapter_memory_snapshot.id if chapter_memory_snapshot is not None else None
+            ),
+            call_id=stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp())),
+            started_at=_utcnow(),
+        )
         emit_event(
             self.repository.session,
             kind=LLM_CALL_STARTED,
             run_id=run_id,
-            chapter_id=bundle.packet.chapter_id,
-            packet_id=bundle.packet.id,
+            chapter_id=prepared.chapter_id,
+            packet_id=prepared.packet_id,
             actor_kind="agent",
             actor_id=f"worker.{worker_metadata.worker_name}",
-            correlation_id=correlation_id,
+            correlation_id=prepared.correlation_id,
             payload={
-                "call_id": call_id,
+                "call_id": prepared.call_id,
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "sentence_count": len(bundle.current_sentences),
             },
         )
-        _call_started_at = _utcnow()
-        try:
-            worker_result = self._coerce_worker_result(
-                self.worker.translate(
-                    TranslationTask(
-                        context_packet=compiled_context_packet,
-                        current_sentences=bundle.current_sentences,
-                    )
-                )
-            )
-        except Exception as exc:
-            emit_event(
-                self.repository.session,
-                kind=LLM_CALL_FAILED,
-                run_id=run_id,
-                chapter_id=bundle.packet.chapter_id,
-                packet_id=bundle.packet.id,
-                actor_kind="agent",
-                actor_id=f"worker.{worker_metadata.worker_name}",
-                correlation_id=correlation_id,
-                payload={
-                    "call_id": call_id,
-                    "backend": worker_metadata.worker_name,
-                    "model": worker_metadata.model_name,
-                    "error_class": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                    "elapsed_ms": int((_utcnow() - _call_started_at).total_seconds() * 1000),
-                },
-            )
-            raise
+        return prepared
+
+    def call_worker(self, prepared: PreparedPacketTranslation) -> TranslationWorkerResult:
+        """Run the translation worker. Touches no database state."""
+        return self._coerce_worker_result(self.worker.translate(prepared.task))
+
+    def record_worker_failure(self, prepared: PreparedPacketTranslation, exc: Exception) -> None:
+        metadata = prepared.worker_metadata
+        emit_event(
+            self.repository.session,
+            kind=LLM_CALL_FAILED,
+            run_id=prepared.run_id,
+            chapter_id=prepared.chapter_id,
+            packet_id=prepared.packet_id,
+            actor_kind="agent",
+            actor_id=f"worker.{metadata.worker_name}",
+            correlation_id=prepared.correlation_id,
+            payload={
+                "call_id": prepared.call_id,
+                "backend": metadata.worker_name,
+                "model": metadata.model_name,
+                "error_class": type(exc).__name__,
+                "error_message": str(exc)[:500],
+                "elapsed_ms": int((_utcnow() - prepared.started_at).total_seconds() * 1000),
+            },
+        )
+
+    def persist_packet_result(
+        self,
+        prepared: PreparedPacketTranslation,
+        worker_result: TranslationWorkerResult,
+        *,
+        auto_commit_memory: bool | None = None,
+    ) -> TranslationExecutionArtifacts:
+        effective_auto_commit_memory = (
+            self.default_auto_commit_memory if auto_commit_memory is None else auto_commit_memory
+        )
+        run_id = prepared.run_id
+        worker_metadata = prepared.worker_metadata
+        compiled_context_packet = prepared.task.context_packet
+        bundle = self.repository.load_packet_bundle(prepared.packet_id)
+        chapter_memory_snapshot = (
+            self.repository.session.get(MemorySnapshot, prepared.chapter_memory_snapshot_id)
+            if prepared.chapter_memory_snapshot_id is not None
+            else None
+        )
         _usage = worker_result.usage
         emit_event(
             self.repository.session,
@@ -374,9 +454,9 @@ class TranslationService:
             packet_id=bundle.packet.id,
             actor_kind="agent",
             actor_id=f"worker.{worker_metadata.worker_name}",
-            correlation_id=correlation_id,
+            correlation_id=prepared.correlation_id,
             payload={
-                "call_id": call_id,
+                "call_id": prepared.call_id,
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "token_in": int(_usage.token_in or 0),
@@ -387,7 +467,7 @@ class TranslationService:
                 "provider_request_id": _usage.provider_request_id,
             },
         )
-        artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet)
+        artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         self.repository.save_translation_artifacts(
             translation_run=artifacts.translation_run,
             target_segments=artifacts.target_segments,
@@ -559,10 +639,10 @@ class TranslationService:
         bundle: TranslationPacketBundle,
         worker_result: TranslationWorkerResult,
         compiled_context_packet: CompiledTranslationContext,
+        metadata: TranslationWorkerMetadata,
     ) -> TranslationExecutionArtifacts:
         now = _utcnow()
         attempt = self.repository.next_attempt(bundle.packet.id)
-        metadata = self.worker.metadata()
         output = worker_result.output
         usage = worker_result.usage
         translation_run = TranslationRun(
