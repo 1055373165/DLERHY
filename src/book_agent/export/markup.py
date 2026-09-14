@@ -30,6 +30,9 @@ from book_agent.export.models import (
 )
 from book_agent.infra.repositories.export import ChapterExportBundle
 
+# Text the PDF parser gives image and clustered-figure blocks; never a caption.
+ARTIFACT_PLACEHOLDER_TEXTS = frozenset({"", "[Image]", "[Figure]"})
+
 
 def render_block_markdown(
     block: MergedRenderBlock,
@@ -51,7 +54,7 @@ def render_block_markdown(
             if (
                 include_source_caption
                 and source_text
-                and source_text not in {"[Image]", ""}
+                and source_text not in ARTIFACT_PLACEHOLDER_TEXTS
             ):
                 normalized_source_caption = re.sub(r"\s+", " ", source_text).strip()
                 parts.append(f"*{normalized_source_caption}*")
@@ -468,7 +471,7 @@ def render_block_html(
             image_alt_text = str(block.source_metadata.get("image_alt") or "PDF image")
             source_caption = (
                 ""
-                if not include_source_caption or block.source_text in {"", "[Image]"}
+                if not include_source_caption or block.source_text in ARTIFACT_PLACEHOLDER_TEXTS
                 else source_html
             )
             body = (
@@ -826,7 +829,7 @@ def render_block_rebuilt_epub_xhtml(
         note_html = f"<div class='artifact-note'>{notice}</div>" if notice else ""
         if asset_src and block.artifact_kind in {"image", "figure"}:
             caption_html = ""
-            if block.source_text and block.source_text not in {"", "[Image]"}:
+            if block.source_text and block.source_text not in ARTIFACT_PLACEHOLDER_TEXTS:
                 caption_html = f"<figcaption class='caption'>{source_html}</figcaption>"
             return (
                 "<section class='artifact'>"
