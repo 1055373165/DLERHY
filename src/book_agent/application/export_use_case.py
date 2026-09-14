@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,11 +25,25 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.export import ExportRepository
 from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.storage.blobs import blob_root_for_export_root, stamp_export_records
-from book_agent.services.export import ExportArtifacts, ExportGateError, ExportService
+from book_agent.services.export import ExportGateError, ExportService
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Whole-document exports; every other type is written per chapter.
+_DOCUMENT_LEVEL_EXPORTERS: dict[ExportType, str] = {
+    ExportType.MERGED_HTML: "export_document_merged_html",
+    ExportType.MERGED_MARKDOWN: "export_document_merged_markdown",
+    ExportType.REBUILT_EPUB: "export_document_rebuilt_epub",
+    ExportType.ZH_EPUB: "export_document_zh_epub",
+    ExportType.REBUILT_PDF: "export_document_rebuilt_pdf",
+}
+
+
+def _optional_path(path: Any) -> str | None:
+    return str(path) if path is not None else None
 
 
 class DocumentExportUseCase:
@@ -90,58 +105,103 @@ class DocumentExportUseCase:
         auto_execute_followup_on_gate: bool,
         max_auto_followup_attempts: int,
     ) -> DocumentExportResult:
-        auto_followup_executions: list[ExportAutoFollowupExecution] = []
+        bundle, executions = self._pass_export_gate(
+            document_id,
+            export_type,
+            auto_execute_followup_on_gate=auto_execute_followup_on_gate,
+            max_auto_followup_attempts=max_auto_followup_attempts,
+        )
+
+        chapter_results: list[ChapterExportResult] = []
+        file_path: str | None = None
+        manifest_path: str | None = None
+        document_exporter = _DOCUMENT_LEVEL_EXPORTERS.get(export_type)
+        if document_exporter is not None:
+            artifacts = getattr(self.export_service, document_exporter)(document_id)
+            file_path = str(artifacts.file_path)
+            manifest_path = _optional_path(artifacts.manifest_path)
+        else:
+            for chapter_bundle in bundle.chapters:
+                artifacts = self.export_service.export_chapter(chapter_bundle.chapter.id, export_type)
+                chapter_results.append(
+                    ChapterExportResult(
+                        chapter_id=chapter_bundle.chapter.id,
+                        export_id=artifacts.export_record.id,
+                        export_type=artifacts.export_record.export_type.value,
+                        status=artifacts.export_record.status.value,
+                        file_path=str(artifacts.file_path),
+                        manifest_path=_optional_path(artifacts.manifest_path),
+                    )
+                )
+
+        document = self.session.get(type(bundle.document), document_id) or bundle.document
+        return DocumentExportResult(
+            document_id=document_id,
+            export_type=export_type.value,
+            document_status=document.status.value,
+            file_path=file_path,
+            manifest_path=manifest_path,
+            chapter_results=chapter_results,
+            auto_followup_requested=auto_execute_followup_on_gate,
+            auto_followup_applied=bool(executions),
+            auto_followup_attempt_count=len(executions),
+            auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
+            auto_followup_executions=executions,
+        )
+
+    def _pass_export_gate(
+        self,
+        document_id: str,
+        export_type: ExportType,
+        *,
+        auto_execute_followup_on_gate: bool,
+        max_auto_followup_attempts: int,
+    ) -> tuple[Any, list[ExportAutoFollowupExecution]]:
+        """Check every chapter against the export gate, auto-executing followups if asked.
+
+        Returns the document bundle that passed and the followups executed on
+        the way; raises ExportGateError (with auto followup telemetry) when the
+        gate still blocks.
+        """
+        executions: list[ExportAutoFollowupExecution] = []
         attempted_action_ids: set[str] = set()
+
+        def stop(exc: ExportGateError, stop_reason: str, followup_action_ids: list[str]) -> ExportGateError:
+            self._record_export_auto_followup_stop(
+                chapter_id=exc.chapter_id,
+                document_id=document_id,
+                export_type=export_type,
+                executions=executions,
+                attempt_limit=max_auto_followup_attempts,
+                stop_reason=stop_reason,
+                issue_ids=exc.issue_ids,
+                followup_action_ids=followup_action_ids,
+            )
+            return self._with_auto_followup_telemetry(
+                exc,
+                executions,
+                requested=True,
+                attempt_limit=max_auto_followup_attempts,
+                stop_reason=stop_reason,
+            )
 
         while True:
             bundle = self.bootstrap_repository.load_document_bundle(document_id)
             try:
                 for chapter_bundle in bundle.chapters:
                     self.export_service.assert_chapter_exportable(chapter_bundle.chapter.id, export_type)
-                break
+                return bundle, executions
             except ExportGateError as exc:
                 if not auto_execute_followup_on_gate:
                     raise
                 if not exc.followup_actions:
-                    self._record_export_auto_followup_stop(
-                        chapter_id=exc.chapter_id,
-                        document_id=document_id,
-                        export_type=export_type,
-                        executions=auto_followup_executions,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="no_followup_actions",
-                        issue_ids=exc.issue_ids,
-                        followup_action_ids=[],
-                    )
-                    raise self._with_auto_followup_telemetry(
-                        exc,
-                        auto_followup_executions,
-                        requested=True,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="no_followup_actions",
-                    ) from exc
+                    raise stop(exc, "no_followup_actions", []) from exc
                 candidate_actions = [
-                    action
-                    for action in exc.followup_actions
-                    if action.action_id not in attempted_action_ids
+                    action for action in exc.followup_actions if action.action_id not in attempted_action_ids
                 ]
                 if not candidate_actions:
-                    self._record_export_auto_followup_stop(
-                        chapter_id=exc.chapter_id,
-                        document_id=document_id,
-                        export_type=export_type,
-                        executions=auto_followup_executions,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="no_new_actions",
-                        issue_ids=exc.issue_ids,
-                        followup_action_ids=[action.action_id for action in exc.followup_actions],
-                    )
-                    raise self._with_auto_followup_telemetry(
-                        exc,
-                        auto_followup_executions,
-                        requested=True,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="no_new_actions",
+                    raise stop(
+                        exc, "no_new_actions", [action.action_id for action in exc.followup_actions]
                     ) from exc
                 issue_by_id = {
                     issue.id: issue
@@ -154,44 +214,15 @@ class DocumentExportUseCase:
                     actions=candidate_actions,
                 )
                 if not candidate_actions:
-                    self._record_export_auto_followup_stop(
-                        chapter_id=exc.chapter_id,
-                        document_id=document_id,
-                        export_type=export_type,
-                        executions=auto_followup_executions,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="manual_hold_required",
-                        issue_ids=exc.issue_ids,
-                        followup_action_ids=[action.action_id for action in blocked_actions],
-                    )
-                    raise self._with_auto_followup_telemetry(
-                        exc,
-                        auto_followup_executions,
-                        requested=True,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="manual_hold_required",
+                    raise stop(
+                        exc, "manual_hold_required", [action.action_id for action in blocked_actions]
                     ) from exc
-                remaining_attempt_budget = max(max_auto_followup_attempts - len(auto_followup_executions), 0)
+                remaining_attempt_budget = max(max_auto_followup_attempts - len(executions), 0)
                 if remaining_attempt_budget <= 0:
-                    self._record_export_auto_followup_stop(
-                        chapter_id=exc.chapter_id,
-                        document_id=document_id,
-                        export_type=export_type,
-                        executions=auto_followup_executions,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="max_attempts_reached",
-                        issue_ids=exc.issue_ids,
-                        followup_action_ids=[action.action_id for action in candidate_actions],
-                    )
-                    raise self._with_auto_followup_telemetry(
-                        exc,
-                        auto_followup_executions,
-                        requested=True,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="max_attempts_reached",
+                    raise stop(
+                        exc, "max_attempts_reached", [action.action_id for action in candidate_actions]
                     ) from exc
-                executed_actions = candidate_actions[:remaining_attempt_budget]
-                for followup_action in executed_actions:
+                for followup_action in candidate_actions[:remaining_attempt_budget]:
                     attempted_action_ids.add(followup_action.action_id)
                     try:
                         result = self.issue_actions.execute_action(
@@ -202,164 +233,34 @@ class DocumentExportUseCase:
                         # Skip actions that are not applicable to this document type
                         # (e.g. PDF structure refresh on EPUB documents)
                         continue
-                    auto_followup_executions.append(
+                    rerun = result.rerun_execution
+                    executions.append(
                         ExportAutoFollowupExecution(
                             action_id=followup_action.action_id,
                             issue_id=followup_action.issue_id,
                             action_type=followup_action.action_type,
                             rerun_scope_type=result.action_execution.rerun_plan.scope_type.value,
                             rerun_scope_ids=result.action_execution.rerun_plan.scope_ids,
-                            followup_executed=result.rerun_execution is not None,
-                            rerun_packet_ids=(
-                                result.rerun_execution.translated_packet_ids if result.rerun_execution else []
-                            ),
-                            rerun_translation_run_ids=(
-                                result.rerun_execution.translation_run_ids if result.rerun_execution else []
-                            ),
-                            issue_resolved=(
-                                result.rerun_execution.issue_resolved if result.rerun_execution else None
-                            ),
+                            followup_executed=rerun is not None,
+                            rerun_packet_ids=(rerun.translated_packet_ids if rerun else []),
+                            rerun_translation_run_ids=(rerun.translation_run_ids if rerun else []),
+                            issue_resolved=(rerun.issue_resolved if rerun else None),
                         )
                     )
                     self._record_export_auto_followup_execution(
                         chapter_id=exc.chapter_id,
                         document_id=document_id,
                         export_type=export_type,
-                        execution=auto_followup_executions[-1],
-                        attempt_index=len(auto_followup_executions),
+                        execution=executions[-1],
+                        attempt_index=len(executions),
                         attempt_limit=max_auto_followup_attempts,
                     )
                 if len(candidate_actions) > remaining_attempt_budget:
-                    self._record_export_auto_followup_stop(
-                        chapter_id=exc.chapter_id,
-                        document_id=document_id,
-                        export_type=export_type,
-                        executions=auto_followup_executions,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="max_attempts_reached",
-                        issue_ids=exc.issue_ids,
-                        followup_action_ids=[action.action_id for action in candidate_actions[remaining_attempt_budget:]],
-                    )
-                    raise self._with_auto_followup_telemetry(
+                    raise stop(
                         exc,
-                        auto_followup_executions,
-                        requested=True,
-                        attempt_limit=max_auto_followup_attempts,
-                        stop_reason="max_attempts_reached",
+                        "max_attempts_reached",
+                        [action.action_id for action in candidate_actions[remaining_attempt_budget:]],
                     ) from exc
-
-        results: list[ChapterExportResult] = []
-        document_file_path: str | None = None
-        document_manifest_path: str | None = None
-
-        if export_type == ExportType.MERGED_HTML:
-            artifacts = self.export_service.export_document_merged_html(document_id)
-            document = self.session.get(type(bundle.document), document_id) or bundle.document
-            return DocumentExportResult(
-                document_id=document_id,
-                export_type=export_type.value,
-                document_status=document.status.value,
-                file_path=str(artifacts.file_path),
-                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                chapter_results=results,
-                auto_followup_requested=auto_execute_followup_on_gate,
-                auto_followup_applied=bool(auto_followup_executions),
-                auto_followup_attempt_count=len(auto_followup_executions),
-                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-                auto_followup_executions=auto_followup_executions,
-            )
-        if export_type == ExportType.MERGED_MARKDOWN:
-            artifacts = self.export_service.export_document_merged_markdown(document_id)
-            document = self.session.get(type(bundle.document), document_id) or bundle.document
-            return DocumentExportResult(
-                document_id=document_id,
-                export_type=export_type.value,
-                document_status=document.status.value,
-                file_path=str(artifacts.file_path),
-                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                chapter_results=results,
-                auto_followup_requested=auto_execute_followup_on_gate,
-                auto_followup_applied=bool(auto_followup_executions),
-                auto_followup_attempt_count=len(auto_followup_executions),
-                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-                auto_followup_executions=auto_followup_executions,
-            )
-        if export_type == ExportType.REBUILT_EPUB:
-            artifacts = self.export_service.export_document_rebuilt_epub(document_id)
-            document = self.session.get(type(bundle.document), document_id) or bundle.document
-            return DocumentExportResult(
-                document_id=document_id,
-                export_type=export_type.value,
-                document_status=document.status.value,
-                file_path=str(artifacts.file_path),
-                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                chapter_results=results,
-                auto_followup_requested=auto_execute_followup_on_gate,
-                auto_followup_applied=bool(auto_followup_executions),
-                auto_followup_attempt_count=len(auto_followup_executions),
-                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-                auto_followup_executions=auto_followup_executions,
-            )
-        if export_type == ExportType.ZH_EPUB:
-            artifacts = self.export_service.export_document_zh_epub(document_id)
-            document = self.session.get(type(bundle.document), document_id) or bundle.document
-            return DocumentExportResult(
-                document_id=document_id,
-                export_type=export_type.value,
-                document_status=document.status.value,
-                file_path=str(artifacts.file_path),
-                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                chapter_results=results,
-                auto_followup_requested=auto_execute_followup_on_gate,
-                auto_followup_applied=bool(auto_followup_executions),
-                auto_followup_attempt_count=len(auto_followup_executions),
-                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-                auto_followup_executions=auto_followup_executions,
-            )
-        if export_type == ExportType.REBUILT_PDF:
-            artifacts = self.export_service.export_document_rebuilt_pdf(document_id)
-            document = self.session.get(type(bundle.document), document_id) or bundle.document
-            return DocumentExportResult(
-                document_id=document_id,
-                export_type=export_type.value,
-                document_status=document.status.value,
-                file_path=str(artifacts.file_path),
-                manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                chapter_results=results,
-                auto_followup_requested=auto_execute_followup_on_gate,
-                auto_followup_applied=bool(auto_followup_executions),
-                auto_followup_attempt_count=len(auto_followup_executions),
-                auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-                auto_followup_executions=auto_followup_executions,
-            )
-
-        for chapter_bundle in bundle.chapters:
-            artifacts: ExportArtifacts = self.export_service.export_chapter(chapter_bundle.chapter.id, export_type)
-            results.append(
-                ChapterExportResult(
-                    chapter_id=chapter_bundle.chapter.id,
-                    export_id=artifacts.export_record.id,
-                    export_type=artifacts.export_record.export_type.value,
-                    status=artifacts.export_record.status.value,
-                    file_path=str(artifacts.file_path),
-                    manifest_path=(str(artifacts.manifest_path) if artifacts.manifest_path is not None else None),
-                )
-            )
-
-        document = self.session.get(type(bundle.document), document_id) or bundle.document
-        return DocumentExportResult(
-            document_id=document_id,
-            export_type=export_type.value,
-            document_status=document.status.value,
-            file_path=document_file_path,
-            manifest_path=document_manifest_path,
-            chapter_results=results,
-            auto_followup_requested=auto_execute_followup_on_gate,
-            auto_followup_applied=bool(auto_followup_executions),
-            auto_followup_attempt_count=len(auto_followup_executions),
-            auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
-            auto_followup_executions=auto_followup_executions,
-        )
 
     def _with_auto_followup_telemetry(
         self,
