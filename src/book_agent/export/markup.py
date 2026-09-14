@@ -14,7 +14,7 @@ from pathlib import PurePosixPath
 from book_agent.domain.enums import (
     BlockType,
 )
-from book_agent.export import code_text, render_repair
+from book_agent.export import code_text, render_repair, stylesheets
 from book_agent.export.common import (
     _LIST_MARKER_PATTERN,
     _ORDERED_LIST_LINE_PATTERN,
@@ -801,20 +801,7 @@ def epub_relative_asset_path(asset_path: str) -> str:
 
 
 def build_rebuilt_epub_stylesheet() -> str:
-    return (
-        "body{font-family:Georgia,'Times New Roman',serif;line-height:1.7;margin:0 auto;max-width:48rem;"
-        "padding:1.2rem;color:#1f2933;background:#fffdfa;}"
-        "h1,h2,h3{font-family:'Helvetica Neue','Arial',sans-serif;line-height:1.2;color:#17313a;}"
-        "h1{font-size:1.9rem;margin:0 0 0.8rem;}h2{font-size:1.45rem;margin:1.6rem 0 0.6rem;}"
-        "p{margin:0.8rem 0;}blockquote{margin:1rem 0;padding-left:1rem;border-left:0.25rem solid #9dc8cf;}"
-        "pre{white-space:pre-wrap;background:#f5f8fc;border:1px solid #dbe4ef;border-radius:0.5rem;padding:0.9rem;overflow-x:auto;}"
-        "code{font-family:'SFMono-Regular',Menlo,monospace;}figure{margin:1rem 0;}img{max-width:100%;height:auto;}"
-        ".chapter-meta,.source-note,.artifact-note,.caption{color:#5c6776;font-size:0.95rem;}"
-        ".artifact{margin:1rem 0;padding:0.9rem;border:1px solid #dbe4ef;border-radius:0.75rem;background:#fbfcfe;}"
-        ".source-note{margin-top:0.5rem;font-style:italic;}.toc ol{padding-left:1.2rem;}"
-        "table{border-collapse:collapse;width:100%;margin:1rem 0;}th,td{border:1px solid #dbe4ef;padding:0.45rem 0.6rem;text-align:left;}"
-        "thead th{background:#eef4fb;}"
-    )
+    return stylesheets.load("rebuilt_epub.css")
 
 
 def render_block_rebuilt_epub_xhtml(
@@ -961,16 +948,4 @@ def build_merged_toc(
 
 
 def usage_summary_css() -> str:
-    return (
-        ".usage-summary{margin:0 0 22px;padding:18px 22px;border:1px solid rgba(184,197,218,.75);"
-        "border-radius:18px;background:linear-gradient(180deg,#fbfdff 0%,#f3f7fc 100%);"
-        "box-shadow:0 6px 18px rgba(60,74,97,.05);}"
-        ".usage-summary .usage-kicker{font-family:var(--font-ui);font-size:11px;letter-spacing:.14em;"
-        "text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:10px;}"
-        ".usage-summary .usage-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;}"
-        ".usage-summary .usage-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--font-ui);"
-        "font-size:14px;color:#314152;}"
-        ".usage-summary .usage-label{color:var(--muted);}"
-        ".usage-summary .usage-value{font-variant-numeric:tabular-nums;color:#17313a;font-weight:600;}"
-        "@media (max-width:600px){.usage-summary .usage-row{flex-direction:column;gap:2px;}}"
-    )
+    return stylesheets.load("usage_summary.css")
