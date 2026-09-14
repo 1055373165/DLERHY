@@ -898,6 +898,8 @@ def _looks_like_visual_heading(text: str, line_count: int) -> bool:
         elif word[:1].islower():
             lowercase_words += 1
 
+    if len(alpha_words) == 1 and compact.casefold() in {"preface", "foreword", "index"}:
+        return True
     if compact.endswith("?"):
         return titleish_words >= 2 and lowercase_words <= max(4, len(alpha_words) // 2)
 
@@ -1237,6 +1239,12 @@ def _embedded_academic_abstract_segments(text: str) -> tuple[str, str, str] | No
     return prefix, "Abstract", remainder
 
 
+def _is_broken_word_fragment(text: str) -> bool:
+    # A hyphen-split word tail with at most two letters ("Ar", "e") is a broken
+    # extraction fragment, not the end of a heading title.
+    return len(re.sub(r"[^A-Za-z]", "", text.rsplit("-", 1)[-1])) <= 2
+
+
 def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | None:
     tokens = candidate_text.split()
     if not tokens:
@@ -1278,6 +1286,7 @@ def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | No
         if (
             title_tokens
             and stripped.islower()
+            and not _is_broken_word_fragment(title_tokens[-1].strip("()[]{}.,;:?!"))
             and lowered not in _ACADEMIC_BODY_STARTER_WORDS
             and next_token is not None
             and (
@@ -1299,6 +1308,8 @@ def _consume_academic_heading_title(candidate_text: str) -> tuple[str, str] | No
                 and _looks_like_academic_prose_lead(prospective_remainder)
                 and lowered not in _ACADEMIC_HEADING_TAIL_NOUNS
                 and not token.rstrip().endswith(("?", "!", ":"))
+                and not _looks_like_academic_heading_token(next_stripped)
+                and not _is_broken_word_fragment(stripped)
             ):
                 break
             title_tokens.append(token)
@@ -5673,7 +5684,7 @@ class PdfStructureRecoveryService:
             if _FOOTNOTE_PATTERN.match(text):
                 return "footnote"
         if page_context.is_toc_page and _looks_like_toc_heading(text):
-            return "heading"
+            return "toc_entry"
         if page_context.is_toc_page and text.casefold() in page_context.toc_entries_by_text:
             return "toc_entry"
         if zone == "bottom" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
@@ -7467,6 +7478,37 @@ class PdfStructureRecoveryService:
                 segments: list[_RecoveredBlock] = []
                 segment_index = 0
                 normalized_prefix = _normalize_multiline_text(prefix)
+                prefix_title = (
+                    _infer_first_page_paper_title_and_remainder(normalized_prefix)
+                    if normalized_prefix and is_first_substantive_page_block and not page_has_heading
+                    else None
+                )
+                if prefix_title is not None:
+                    # The embedded-abstract split runs before first-page title
+                    # recovery, so recover the paper title from the prefix here.
+                    title_text, normalized_prefix = prefix_title
+                    title_metadata = dict(block.metadata)
+                    title_metadata["pdf_heading_recovery_source"] = "embedded_document_title_recovered"
+                    title_metadata["heading_level"] = 1
+                    segment_index += 1
+                    segments.append(
+                        _RecoveredBlock(
+                            role="heading",
+                            block_type=BlockType.HEADING,
+                            text=_normalize_multiline_text(title_text),
+                            page_start=block.page_start,
+                            page_end=block.page_end,
+                            bbox_regions=list(block.bbox_regions),
+                            reading_order_index=block.reading_order_index,
+                            parse_confidence=block.parse_confidence,
+                            flags=list(dict.fromkeys([*shared_flags, "embedded_document_title_recovered"])),
+                            metadata=title_metadata,
+                            font_size_avg=block.font_size_avg,
+                            source_path=block.source_path,
+                            anchor=f"{block.anchor}-s{segment_index}",
+                        )
+                    )
+                    normalized_prefix = _normalize_multiline_text(normalized_prefix)
                 if normalized_prefix:
                     segment_index += 1
                     segments.append(
