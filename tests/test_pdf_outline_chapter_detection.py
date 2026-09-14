@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from book_agent.ingestion.pdf.classify import (
     _extract_book_main_chapter_number,
     _looks_like_book_primary_outline_title,
+    _should_keep_book_top_level_outline_title,
     _should_start_outlined_book_top_level_chapter,
 )
 
@@ -108,6 +109,14 @@ def test_frontmatter_titles_unchanged():
     assert _should_start_outlined_book_top_level_chapter("preface")
     assert _should_start_outlined_book_top_level_chapter("acknowledgments")
     assert _should_start_outlined_book_top_level_chapter("foreword")
+
+
+def test_subtitled_frontmatter_titles_start_chapter():
+    """Outline titles like "Introduction: Why RSI is So Magical?" were folded into Front Matter."""
+    assert _should_keep_book_top_level_outline_title("Introduction: Why RSI is So Magical?")
+    assert _should_start_outlined_book_top_level_chapter("Introduction: Why RSI is So Magical?")
+    assert _should_start_outlined_book_top_level_chapter("Preface \u2013 About This Book")
+    assert not _should_start_outlined_book_top_level_chapter("Introduction to Machine Learning")
 
 
 def test_appendix_unchanged():

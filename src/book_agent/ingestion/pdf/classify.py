@@ -349,7 +349,12 @@ def _should_keep_book_top_level_outline_title(text: str) -> bool:
     lowered = normalized.casefold()
     if _looks_like_book_primary_outline_title(normalized):
         return True
-    return lowered in _BOOK_SPECIAL_OUTLINE_TITLES
+    return lowered in _BOOK_SPECIAL_OUTLINE_TITLES or _outline_title_label(lowered) in _BOOK_SPECIAL_OUTLINE_TITLES
+
+
+def _outline_title_label(title: str) -> str:
+    """The label of a subtitled outline title: "introduction: why rsi is so magical?" -> "introduction"."""
+    return re.split(r"\s*(?::|\s[-\u2013\u2014]\s)", title, maxsplit=1)[0]
 
 
 def _extract_book_main_chapter_number(text: str) -> int | None:
@@ -385,8 +390,8 @@ def _extract_book_main_chapter_number(text: str) -> int | None:
 
 
 def _looks_like_outlined_book_frontmatter_title(text: str | None) -> bool:
-    normalized = _normalize_outline_heading_text(text or "")
-    return normalized.casefold() in _OUTLINED_BOOK_FRONTMATTER_TITLES
+    normalized = _normalize_outline_heading_text(text or "").casefold()
+    return normalized in _OUTLINED_BOOK_FRONTMATTER_TITLES or _outline_title_label(normalized) in _OUTLINED_BOOK_FRONTMATTER_TITLES
 
 
 def _looks_like_outlined_book_appendix_title(text: str | None) -> bool:
