@@ -177,24 +177,3 @@ class TranslationWorkerResult(BaseSchema):
     @property
     def notes(self) -> list[TranslationNote]:
         return self.output.notes
-
-
-class QualitySummary(BaseSchema):
-    coverage_ok: bool
-    term_consistency_score: float | None = None
-    style_drift_score: float | None = None
-
-
-class ReviewIssueSuggestion(BaseSchema):
-    issue_type: str
-    severity: str
-    sentence_id: str | None = None
-    evidence: dict[str, str] = Field(default_factory=dict)
-    suggested_action: str | None = None
-
-
-class ReviewerOutput(BaseSchema):
-    chapter_id: str
-    quality_summary: QualitySummary
-    issues: list[ReviewIssueSuggestion] = Field(default_factory=list)
-    rerun_recommendations: list[dict[str, str]] = Field(default_factory=list)

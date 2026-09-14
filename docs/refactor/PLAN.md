@@ -64,9 +64,9 @@
 - [x] Alembic `20260914_0030`：删除 7 张表、REPAIR 阶段与 `runtime_bundle_revision_id` 列（在临时 Postgres 16 上验证：种子数据迁移、CHECK 拒绝 repair、ORM 与库表一致）。
 
 ### P1.2 删除非产品代码
-- [ ] 仅被脚本/测试使用的模块：`pdf_inplace`、`packet_experiment*`、`translation_chapter_smoke`、`translation_prompt_ab`、`translate_rollout_supervisor`、`translate_benchmark_draft_generator`、`extraction_router`、`chapter_memory_backfill`（评估）、`tools/pdf_smoke`（评估）。
-- [ ] 过时脚本：章节一次性脚本（B 组）、4 月 autopilot 时代脚本（C 组）、packet 实验脚本（F 组）；ops 类脚本移到 `scripts/ops/`。
-- [ ] `orchestrator/state_machine.py` 中无调用方的转移表；`workers/contracts.py` 未用的 Reviewer DTO 等。
+- [x] 仅被脚本/测试使用的模块：`pdf_inplace`、`packet_experiment*`、`translation_chapter_smoke`、`translation_prompt_ab`、`translate_rollout_supervisor`、`translate_benchmark_draft_generator`、`extraction_router`。保留 `chapter_memory_backfill`（运维回填）与 `tools/pdf_smoke`（解析诊断），二者有测试。
+- [x] 过时脚本 32 个：章节一次性脚本、autopilot 时代脚本、packet 实验脚本。交付导出脚本链路留待 P4；运维脚本暂不搬目录。
+- [x] `orchestrator/state_machine.py` 无调用方的转移表；`workers/contracts.py` 未用的 Reviewer DTO。
 
 ### P1.3 仓库卫生
 - [ ] `git rm --cached`：`deliverable/`、`LLM-Book*/`、`books/`、`.scratch/`、`book-agent.db`、`frontend/.omc/`、`.claude/settings.local.json`、`.claude/*.lock`；提交 `artifacts/` 的删除。
