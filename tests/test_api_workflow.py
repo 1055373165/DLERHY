@@ -596,8 +596,7 @@ class ApiWorkflowTests(unittest.TestCase):
         sqlite_path = Path(self.tempdir.name) / "book-agent.db"
         self.engine = build_engine(
             f"sqlite+pysqlite:///{sqlite_path}",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
+            connect_args={"check_same_thread": False, "timeout": 30},
         )
         self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)

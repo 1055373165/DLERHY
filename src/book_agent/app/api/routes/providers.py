@@ -164,6 +164,5 @@ def get_active_provider(
 def _invalidate_app_worker(request: Request) -> None:
     """Clear the cached worker so the next packet rebuilds from DB."""
     state = request.app.state
-    if hasattr(state, "translation_worker_revision"):
-        state.translation_worker_revision = -1
-    state.translation_worker = None
+    state.translation_worker_revision = -1
+    state.resolved_translation_worker = None

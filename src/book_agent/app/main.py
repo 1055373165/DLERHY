@@ -86,28 +86,31 @@ def create_app() -> FastAPI:
     app.state.export_root = str(settings.export_root)
     app.state.runtime_bundle_root = str(settings.runtime_bundle_root)
     app.state.upload_root = str(settings.upload_root)
-    # Lazily build the translation worker so user-driven provider swaps
-    # (POST /v1/providers/.../activate) take effect on the next request
-    # without restarting the server.
+    # `translation_worker` is an explicit override (embedders/tests). When it is
+    # unset, the worker is built lazily from the active provider credential and
+    # cached per credential revision, so provider swaps
+    # (POST /v1/providers/.../activate) apply without a restart.
     app.state.translation_worker = None
+    app.state.resolved_translation_worker = None
     app.state.translation_worker_revision = -1
     app.state.document_run_executor = None
 
     def _resolve_translation_worker_state():
         from book_agent.services.provider_credentials import current_revision
 
+        override = getattr(app.state, "translation_worker", None)
+        if override is not None:
+            return override
         revision = current_revision()
-        if (
-            app.state.translation_worker is not None
-            and getattr(app.state, "translation_worker_revision", -1) == revision
-        ):
-            return app.state.translation_worker
+        cached = getattr(app.state, "resolved_translation_worker", None)
+        if cached is not None and getattr(app.state, "translation_worker_revision", -1) == revision:
+            return cached
         if app.state.session_factory is None:
             _ensure_database_state(app, settings=settings)
         with app.state.session_factory() as session:
             worker = resolve_translation_worker(session, settings)
             session.commit()
-        app.state.translation_worker = worker
+        app.state.resolved_translation_worker = worker
         app.state.translation_worker_revision = revision
         return worker
 

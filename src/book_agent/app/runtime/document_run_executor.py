@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -142,10 +143,12 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     ensure_database_state = getattr(app.state, "ensure_database_state", None)
     if callable(ensure_database_state):
         ensure_database_state()
+    resolver = getattr(app.state, "resolve_translation_worker", None)
     executor = DocumentRunExecutor(
         session_factory=app.state.session_factory,
         export_root=app.state.export_root,
-        translation_worker=app.state.translation_worker,
+        translation_worker=getattr(app.state, "translation_worker", None),
+        translation_worker_resolver=resolver if callable(resolver) else None,
     )
     executor.start()
     app.state.document_run_executor = executor
@@ -159,6 +162,7 @@ class DocumentRunExecutor:
         session_factory: sessionmaker,
         export_root: str | Path,
         translation_worker: TranslationWorker | None,
+        translation_worker_resolver: Callable[[], TranslationWorker] | None = None,
         poll_interval_seconds: float = 1.0,
         controller_reconcile_interval_seconds: float = 10.0,
         state_reconciler_interval_seconds: float = 30.0,
@@ -173,6 +177,10 @@ class DocumentRunExecutor:
         self.session_factory = session_factory
         self.export_root = str(Path(export_root).resolve())
         self.translation_worker = translation_worker
+        # Resolved per workflow service so provider swaps and late app-state
+        # initialization are picked up; a fixed worker is used only when no
+        # resolver is supplied.
+        self.translation_worker_resolver = translation_worker_resolver
         self.poll_interval_seconds = poll_interval_seconds
         self.controller_reconcile_interval_seconds = max(0.0, float(controller_reconcile_interval_seconds))
         self._controller_runner = ControllerRunner(session_factory) if enable_controller_runner else None
@@ -194,7 +202,6 @@ class DocumentRunExecutor:
         self._supervisor_thread: threading.Thread | None = None
         self._active_run_threads: dict[str, threading.Thread] = {}
         self._active_work_threads: dict[str, dict[str, threading.Thread]] = {}
-        self._controller_runner = ControllerRunner(session_factory)
         self._lock = threading.Lock()
 
     def _maybe_reconcile_controllers(self, run_id: str) -> None:
@@ -293,11 +300,16 @@ class DocumentRunExecutor:
             with self._lock:
                 self._active_run_threads.pop(run_id, None)
 
+    def _current_translation_worker(self) -> TranslationWorker | None:
+        if self.translation_worker_resolver is not None:
+            return self.translation_worker_resolver()
+        return self.translation_worker
+
     def _workflow_service(self, session) -> DocumentWorkflowService:
         return DocumentWorkflowService(
             session,
             export_root=self.export_root,
-            translation_worker=self.translation_worker,
+            translation_worker=self._current_translation_worker(),
         )
 
     def _run_control_service(self, session) -> RunControlService:
@@ -406,6 +418,8 @@ class DocumentRunExecutor:
                 self._maybe_reconcile_controllers(run_id)
                 self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
+                if self._enforce_budget_guardrails(run_id):
+                    return
                 if self._process_repair_stage(run_id):
                     continue
                 if self._process_translate_stage(run_id):
@@ -435,12 +449,17 @@ class DocumentRunExecutor:
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
 
-    def _reconcile_runtime_resources(self, run_id: str) -> None:
-        try:
-            self._controller_runner.reconcile_run(run_id=run_id)
-        except Exception:
-            # Phase A is mirror-only; control-plane scaffolding must not interrupt the V1 run loop.
-            return
+    def _enforce_budget_guardrails(self, run_id: str) -> bool:
+        """Pause or fail the run when a configured budget is exhausted.
+
+        Returns True when the run was stopped and the loop should exit.
+        """
+        with session_scope(self.session_factory) as session:
+            result = self._run_execution_service(session).enforce_budget_guardrails(run_id=run_id)
+        if not result.budget_exceeded:
+            return False
+        self._sync_pipeline_status(run_id, result.run_summary.status)
+        return True
 
     def _reclaim_expired_leases(self, run_id: str) -> bool:
         with session_scope(self.session_factory) as session:
