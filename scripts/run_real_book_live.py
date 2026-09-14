@@ -35,6 +35,7 @@ from book_agent.services.run_control import DocumentRunSummary, RunBudgetSummary
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.factory import build_translation_worker
+from book_agent.workers.failures import classify_failure
 from scripts.real_book_live_reporting_common import (
     CURRENT_TELEMETRY_GENERATION,
     build_telemetry_compatibility,
@@ -345,48 +346,6 @@ def _build_run_budget(args: argparse.Namespace) -> RunBudgetSummary:
     )
 
 
-def _is_retryable_exception(exc: Exception) -> bool:
-    message = str(exc).lower()
-    non_retryable_markers = [
-        "http 400",
-        "http 401",
-        "http 402",
-        "http 403",
-        "http 404",
-        "insufficient balance",
-        "invalid api key",
-        "authentication failed",
-    ]
-    if any(marker in message for marker in non_retryable_markers):
-        return False
-    retryable_markers = [
-        "http 408",
-        "http 409",
-        "http 429",
-        "http 500",
-        "http 502",
-        "http 503",
-        "http 504",
-        "request failed",
-        "timed out",
-        "timeout",
-        "temporarily unavailable",
-        "connection reset",
-        "connection aborted",
-        "connection refused",
-        "structured json output payload",
-        "translationworkeroutput schema",
-    ]
-    return any(marker in message for marker in retryable_markers)
-
-
-def _pause_reason_for_exception(exc: Exception) -> str | None:
-    taxonomy = classify_failure_taxonomy(stage="translate", error_message=str(exc))
-    if isinstance(taxonomy, dict) and taxonomy.get("reason_code") == "provider.insufficient_balance":
-        return "provider.insufficient_balance"
-    return None
-
-
 def _summarize_samples(session, document_id: str, *, limit: int) -> list[dict[str, Any]]:
     stmt = (
         select(
@@ -657,8 +616,9 @@ def _execute_controlled_translate_work_item(
     except Exception as exc:
         stop_event.set()
         heartbeat_thread.join(timeout=max(1, heartbeat_interval_seconds))
-        retryable = _is_retryable_exception(exc)
-        pause_reason = _pause_reason_for_exception(exc)
+        failure = classify_failure(exc)
+        retryable = failure.retryable
+        pause_reason = failure.pause_reason
         failure_taxonomy = classify_failure_taxonomy(
             stage="translate",
             error_message=str(exc),
