@@ -13,10 +13,10 @@ from pathlib import Path
 from sqlalchemy import select
 
 from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
-from book_agent.domain.enums import PacketStatus
-from book_agent.domain.event_kinds import LLM_CALL_FAILED
+from book_agent.domain.enums import PacketStatus, RunStatus
+from book_agent.domain.event_kinds import LLM_CALL_FAILED, PACKET_TRANSLATED
 from book_agent.domain.models.ops import Event
-from book_agent.domain.models.translation import TranslationPacket
+from book_agent.domain.models.translation import TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory, session_scope
 from book_agent.services.workflows import DocumentWorkflowService
@@ -61,6 +61,13 @@ class _PoolProbeWorker(EchoTranslationWorker):
         if self._fail:
             raise RuntimeError("provider exploded")
         return super().translate(task)
+
+
+class _DropLastAlignmentWorker(EchoTranslationWorker):
+    def translate(self, task):
+        result = super().translate(task)
+        result.output.alignment_suggestions = result.output.alignment_suggestions[:-1]
+        return result
 
 
 class ExecutorTranslationTransactionTests(unittest.TestCase):
@@ -115,7 +122,32 @@ class ExecutorTranslationTransactionTests(unittest.TestCase):
             packet = session.get(TranslationPacket, self.packet_id)
         self.assertEqual(len(failed_events), 1)
         self.assertEqual(failed_events[0].payload["error_message"], "provider exploded")
+        self.assertEqual(failed_events[0].payload["error_code"], "unclassified")
         self.assertEqual(packet.status, PacketStatus.BUILT)
+
+    def test_failed_attempt_is_recorded_as_a_failed_run_and_next_attempt_follows(self) -> None:
+        with self.assertRaises(RuntimeError):
+            self._executor(_PoolProbeWorker(self.engine, fail=True))._translate_single_packet(self.packet_id)
+        self._executor(_PoolProbeWorker(self.engine))._translate_single_packet(self.packet_id)
+
+        with self.session_factory() as session:
+            runs = session.scalars(
+                select(TranslationRun).where(TranslationRun.packet_id == self.packet_id).order_by(TranslationRun.attempt)
+            ).all()
+        self.assertEqual([(run.attempt, run.status, run.error_code) for run in runs], [
+            (1, RunStatus.FAILED, "unclassified"),
+            (2, RunStatus.SUCCEEDED, None),
+        ])
+
+    def test_incomplete_sentence_coverage_is_recorded_on_the_run(self) -> None:
+        self._executor(_DropLastAlignmentWorker())._translate_single_packet(self.packet_id)
+
+        with self.session_factory() as session:
+            run = session.scalars(select(TranslationRun).where(TranslationRun.packet_id == self.packet_id)).one()
+            translated_event = session.scalars(select(Event).where(Event.kind == PACKET_TRANSLATED)).one()
+        self.assertEqual(run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(run.error_code, "output_sentence_coverage_incomplete")
+        self.assertEqual(len(translated_event.payload["output_validation"]["uncovered_sentence_ids"]), 1)
 
 
 if __name__ == "__main__":
