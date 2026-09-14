@@ -30,19 +30,19 @@
 
 ### P0.2 执行器生命周期与可观测性
 - [x] 修复 `_controller_runner` 重复赋值（`document_run_executor.py:178/197`）。
-- [ ] 被吞掉的 controller / reconciler 异常至少记日志。
+- [x] 被吞掉的 reconciler / supervisor / heartbeat 异常记日志（controller 已随 P1.1 删除）。
 - [x] 解决 `test_api_workflow.py` 段错误（根因：测试用 StaticPool 让多个执行器线程共享同一个 sqlite3 连接；改为文件 SQLite 默认连接池）。
 - [ ] 执行器 `stop()` 协作式取消 work 线程后再 dispose engine（并入 P2 队列/租约取消）。
-- [ ] 预热/播种工作项时 `IntegrityError` 不再把整个 run 判失败。
+- [x] run loop 遇到 `IntegrityError` / `OperationalError` 记日志并在下个 tick 重试，不再把整个 run 判失败。
 
 ### P0.3 预算护栏
 - [x] `_run_loop` 每 tick 调用 `RunExecutionService.enforce_budget_guardrails`。
 
 ### P0.4 API 正确性
-- [ ] GET 路径不再做被回滚的写入（导出下载按需生成、providers bootstrap）。
-- [ ] SSE `_client_gone` 断连检测（`run_stream.py:194`）。
-- [ ] 后台导出也做 CAS/sha256 stamp（与路由共用一个函数）。
-- [ ] `ExportDocumentRequest.export_type` 与服务支持的类型一致。
+- [x] GET 路径的必要写入显式提交（导出下载按需生成/重建、providers 首次 bootstrap）；是否应由 GET 触发生成留待 P2 事务策略。
+- [x] SSE 改为 async generator，按 `request.is_disconnected()` 检测断连并释放 LISTEN 连接（Postgres 测试覆盖）。
+- [x] CAS/sha256 stamp 移到 `DocumentWorkflowService.export_document` 出口（API / 执行器 / CLI 共用）；修复原裸 SQL UPDATE 在 SQLite 上匹配不到 UUID 的问题。
+- [x] `ExportDocumentRequest.export_type` 增加 `zh_epub`（`bilingual_markdown` 等未实现类型留待 P4 决定）。
 
 ### P0.5 可信测试基线
 - [ ] 引入 `tests/conftest.py`（共享 SQLite session / app 夹具），测试临时目录按运行隔离并清理。
@@ -61,7 +61,6 @@
 - [x] 路由 `patches.py`；执行器中的 controller 调和、REPAIR 阶段、导出误路由恢复、`_finalize_*` 死副本；`run_control` 摘要里的 `runtime_v2` 投影；导出/文档 API 的 `runtime_v2_context` 与 `route_evidence_json`。
 - [x] 对应测试（34 个文件及 `test_run_execution` / `test_api_workflow` / `test_run_control_api` 中的相关用例）。
 - [x] Alembic `20260914_0030`：删除 7 张表、REPAIR 阶段与 `runtime_bundle_revision_id` 列（在临时 Postgres 16 上验证：种子数据迁移、CHECK 拒绝 repair、ORM 与库表一致）。
-- [ ] 执行器中 controller/reconciler 以外仍被吞掉的异常记日志（并入 P0.2 剩余项）。
 
 ### P1.2 删除非产品代码
 - [ ] 仅被脚本/测试使用的模块：`pdf_inplace`、`packet_experiment*`、`translation_chapter_smoke`、`translation_prompt_ab`、`translate_rollout_supervisor`、`translate_benchmark_draft_generator`、`extraction_router`、`chapter_memory_backfill`（评估）、`tools/pdf_smoke`（评估）。

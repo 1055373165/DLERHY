@@ -21,7 +21,7 @@ from book_agent.core.config import get_settings
 from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
 from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
 from book_agent.infra.concurrency.rebuild_lock import try_acquire_rebuild_lock
-from book_agent.infra.storage.blobs import stamp_and_materialize
+from book_agent.infra.storage.blobs import UNRECOVERABLE_SCHEME
 
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
@@ -166,9 +166,6 @@ def _by_basename_under_document(
     return None
 
 
-_UNRECOVERABLE_SCHEME = "unrecoverable://"
-
-
 def _assert_record_serviceable(record: Any) -> None:
     # Short-circuit deterministic 410 Gone when the row is known-stale.
     # This is set either by the M1 legacy backfill migration (for old
@@ -178,7 +175,7 @@ def _assert_record_serviceable(record: Any) -> None:
     # poisoned.
     stale = getattr(record, "stale_reason", None)
     file_path = getattr(record, "file_path", "") or ""
-    if stale or file_path.startswith(_UNRECOVERABLE_SCHEME):
+    if stale or file_path.startswith(UNRECOVERABLE_SCHEME):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail=(
@@ -203,51 +200,6 @@ def _blob_path(content_sha256: str, roots: tuple[Path, ...]) -> Path | None:
         if _is_within_any_root(candidate, roots) and candidate.exists():
             return candidate
     return None
-
-
-def _blob_root(roots: tuple[Path, ...]) -> Path:
-    # Writer-side counterpart to ``_blob_path``: the CAS tree is rooted
-    # at the *outer* artifact dir (parent of export_root), which
-    # ``_artifact_roots`` always puts last. In single-root deployments
-    # the export_root IS the artifact_root, so the same index applies.
-    return roots[-1] / "blobs"
-
-
-def _emit_export_blobs(
-    session: Session,
-    records,
-    *,
-    artifact_roots: tuple[Path, ...],
-) -> None:
-    # M2.2c: after a writer has produced an export at its canonical
-    # ``file_path``, hash the bytes, stamp the row, and hardlink into
-    # the CAS tree. Idempotent + best-effort: a failure here never
-    # fails the enclosing export/download — verifier (M2.1) will stamp
-    # anything we miss.
-    blob_root = _blob_root(artifact_roots)
-    for record in records:
-        candidate = getattr(record, "file_path", None) or ""
-        if not candidate or candidate.startswith(_UNRECOVERABLE_SCHEME):
-            continue
-        resolved = Path(candidate)
-        if not resolved.is_absolute() or not resolved.exists():
-            # Defensive: rebuilds sometimes hand us a tempdir-rooted
-            # path. Fall back to the canonical-layout probe so the
-            # blob emission still fires for legacy file_paths.
-            try:
-                resolved = _resolve_artifact_path(
-                    candidate,
-                    roots=artifact_roots,
-                    document_id=getattr(record, "document_id", None),
-                )
-            except HTTPException:
-                continue
-        stamp_and_materialize(
-            session,
-            export_id=str(record.id),
-            file_path=resolved,
-            blob_root=blob_root,
-        )
 
 
 def _canonical_artifact_path(
@@ -317,7 +269,7 @@ def _resolve_artifact_path(
     # _assert_record_serviceable, an `unrecoverable://…` path must never
     # be interpreted as a filesystem path.
     candidate_str = str(candidate)
-    if candidate_str.startswith(_UNRECOVERABLE_SCHEME):
+    if candidate_str.startswith(UNRECOVERABLE_SCHEME):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Export artifact is permanently unavailable (unrecoverable sentinel).",
@@ -1837,7 +1789,8 @@ def download_document_export(
         # No pre-built export — generate on demand
         try:
             workflow.export_document(document_id, lookup_type)
-            session.flush()
+            # GET sessions roll back on exit; keep the generated export rows.
+            session.commit()
             primary_records = workflow.export_repository.list_document_exports_filtered(
                 document_id,
                 export_type=lookup_type,
@@ -1853,12 +1806,6 @@ def download_document_export(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No successful {export_type.value} exports are available for download.",
             )
-        try:
-            _emit_export_blobs(
-                session, primary_records, artifact_roots=_artifact_roots(request)
-            )
-        except Exception:
-            pass
 
     book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
     label_map = {
@@ -1907,7 +1854,8 @@ def download_document_export(
                 ) from exc
             try:
                 workflow.export_document(document_id, lookup_type)
-                session.flush()
+                # GET sessions roll back on exit; keep the rebuilt export rows.
+                session.commit()
             except HTTPException:
                 raise
             except Exception as rebuild_exc:
@@ -1925,12 +1873,6 @@ def download_document_export(
                 export_type=lookup_type,
                 status=ExportStatus.SUCCEEDED,
             )
-            try:
-                _emit_export_blobs(
-                    session, primary_records, artifact_roots=artifact_roots
-                )
-            except Exception:
-                pass
         for record in primary_records:
             _assert_record_serviceable(record)
         files = [
@@ -2137,17 +2079,4 @@ def export_document(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.to_http_detail()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    # M2.2c: stamp + materialize the freshly-written export(s) into the
-    # CAS tree. session auto-commits on POST exit via get_db_session.
-    try:
-        session.flush()
-        fresh_records = workflow.export_repository.list_document_exports_filtered(
-            document_id,
-            export_type=export_type_enum,
-            status=ExportStatus.SUCCEEDED,
-        )
-        _emit_export_blobs(session, fresh_records, artifact_roots=_artifact_roots(request))
-    except Exception:
-        # Advisory path. Never fail the caller because CAS emission hiccuped.
-        pass
     return _to_export_response(result)

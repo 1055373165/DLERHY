@@ -208,6 +208,7 @@ class ExportDocumentRequest(BaseSchema):
         "merged_markdown",
         "rebuilt_epub",
         "rebuilt_pdf",
+        "zh_epub",
     ]
     auto_execute_followup_on_gate: bool = False
     max_auto_followup_attempts: int = Field(default=3, ge=1)

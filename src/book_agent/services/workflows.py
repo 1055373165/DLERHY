@@ -42,6 +42,7 @@ from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
+from book_agent.infra.storage.blobs import blob_root_for_export_root, stamp_export_records
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
 from book_agent.orchestrator.rerun import build_rerun_plan, packet_scope_ids_for_issue
@@ -2133,6 +2134,38 @@ class DocumentWorkflowService:
         *,
         auto_execute_followup_on_gate: bool = False,
         max_auto_followup_attempts: int = 3,
+    ) -> DocumentExportResult:
+        result = self._write_document_export(
+            document_id,
+            export_type,
+            auto_execute_followup_on_gate=auto_execute_followup_on_gate,
+            max_auto_followup_attempts=max_auto_followup_attempts,
+        )
+        self._stamp_export_blobs(document_id, export_type)
+        return result
+
+    def _stamp_export_blobs(self, document_id: str, export_type: ExportType) -> None:
+        # Every export writer path (API, run executor, CLI) goes through
+        # export_document, so content-address the fresh files here.
+        self.session.flush()
+        records = self.export_repository.list_document_exports_filtered(
+            document_id,
+            export_type=export_type,
+            status=ExportStatus.SUCCEEDED,
+        )
+        stamp_export_records(
+            self.session,
+            records,
+            blob_root=blob_root_for_export_root(self.export_service.output_root),
+        )
+
+    def _write_document_export(
+        self,
+        document_id: str,
+        export_type: ExportType,
+        *,
+        auto_execute_followup_on_gate: bool,
+        max_auto_followup_attempts: int,
     ) -> DocumentExportResult:
         auto_followup_executions: list[ExportAutoFollowupExecution] = []
         attempted_action_ids: set[str] = set()

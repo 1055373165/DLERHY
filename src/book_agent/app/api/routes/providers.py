@@ -44,8 +44,10 @@ def list_providers(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> list[ProviderCredentialRead]:
-    # First-touch bootstrap from .env if the table is empty.
+    # First-touch bootstrap from .env if the table is empty. GET sessions roll
+    # back on exit, so persist the seeded row explicitly.
     svc.resolve_active_credential(session, get_settings())
+    session.commit()
     rows = svc.list_credentials(session)
     return [_to_read(row) for row in rows]
 
@@ -156,6 +158,7 @@ def get_active_provider(
 ) -> ProviderCredentialRead | None:
     settings = get_settings()
     record = svc.resolve_active_credential(session, settings)
+    session.commit()
     if record is None:
         return None
     return _to_read(record)

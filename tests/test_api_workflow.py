@@ -35,6 +35,7 @@ from book_agent.domain.enums import (
     ActionType,
     Detector,
     DocumentRunStatus,
+    ExportType,
     IssueStatus,
     JobScopeType,
     LockLevel,
@@ -2565,6 +2566,50 @@ class ApiWorkflowTests(unittest.TestCase):
 
         self.assertNotIn("welcome.html", merged_html)
         self.assertIsNone(manifest["author"])
+
+    def _translated_reviewed_document(self) -> str:
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(self._write_epub())})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+        self.assertEqual(self.client.post(f"/v1/documents/{document_id}/translate", json={}).status_code, 200)
+        self.assertEqual(self.client.post(f"/v1/documents/{document_id}/review").status_code, 200)
+        return document_id
+
+    def _merged_html_exports(self, document_id: str) -> list[Export]:
+        with self.session_factory() as session:
+            return list(
+                session.scalars(
+                    select(Export).where(
+                        Export.document_id == document_id,
+                        Export.export_type == ExportType.MERGED_HTML,
+                    )
+                ).all()
+            )
+
+    def test_export_stamps_content_addressed_blob(self) -> None:
+        document_id = self._translated_reviewed_document()
+
+        export = self.client.post(f"/v1/documents/{document_id}/export", json={"export_type": "merged_html"})
+        self.assertEqual(export.status_code, 200)
+
+        [record] = self._merged_html_exports(document_id)
+        self.assertIsNotNone(record.content_sha256)
+        self.assertEqual(record.byte_count, Path(record.file_path).stat().st_size)
+        blob = Path(self.tempdir.name) / "blobs" / record.content_sha256[:2] / record.content_sha256[2:4] / record.content_sha256
+        self.assertTrue(blob.exists())
+
+    def test_download_persists_export_generated_on_demand(self) -> None:
+        document_id = self._translated_reviewed_document()
+        self.assertEqual(self._merged_html_exports(document_id), [])
+
+        download = self.client.get(
+            f"/v1/documents/{document_id}/exports/download",
+            params={"export_type": "merged_html"},
+        )
+        self.assertEqual(download.status_code, 200)
+
+        [record] = self._merged_html_exports(document_id)
+        self.assertIsNotNone(record.content_sha256)
 
     def test_rebuilt_epub_export_produces_document_level_epub_artifact(self) -> None:
         epub_path = self._write_epub_with_chapters(
