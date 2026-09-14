@@ -26,10 +26,9 @@ class AppScope(str, Enum):
       land in a shared DB.
     * ``E2E`` — same restriction as SMOKE by default; e2e fixtures are
       tempdir-rooted too.
-    * ``DEV`` — permissive; dev compose uses Postgres on :55432.
-    * ``PROD`` — permissive in the positive direction (any URL allowed),
-      but WARN-logged if sqlite is detected since prod on sqlite is
-      almost certainly a misconfiguration.
+    * ``DEV`` / ``PROD`` — REQUIRE a PostgreSQL URL. The app relies on
+      PostgreSQL row locks, JSONB and LISTEN/NOTIFY; SQLite is only for
+      unit tests, which inject their own session factory.
     """
 
     PROD = "prod"
@@ -170,4 +169,10 @@ def validate_app_scope(settings: Settings) -> None:
             f"app_scope={settings.app_scope.value} requires a sqlite database_url "
             f"(got {url!r}). Non-sqlite URLs are refused to prevent "
             "tempdir-rooted ExportRecords from polluting shared databases."
+        )
+    if settings.app_scope in {AppScope.DEV, AppScope.PROD} and not url.startswith("postgresql"):
+        raise AppScopeViolation(
+            f"app_scope={settings.app_scope.value} requires a PostgreSQL database_url "
+            f"(got {url.split(':', 1)[0]!r}). SQLite is only supported by unit tests and "
+            "the smoke/e2e scopes."
         )

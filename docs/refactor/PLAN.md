@@ -86,7 +86,7 @@
 - [x] **P2.4 Run 状态**：所有修改 run 行的路径（状态转换、用量计数、流水线缓存、租约回收、播种）经 `get_run_for_update` 加行锁，读改写串行化，统一「先锁 run 再动 work item」的顺序；状态转换因此等价于 CAS。Postgres 并发测试：12 个并发完成，改前只保留 3 个计数，改后 12 个。
 - [x] **P2.5 事务与线程**：翻译拆为 prepare / call_worker / persist 三个事务阶段，LLM 调用期间不占连接，失败事件真正落库；审校与导出改在工作线程执行，阶段缓存与工作项结果同事务写入；`stop()` 按层 join 并阻止停止后再起线程；心跳未启动时不再 join 抛错；`get_run_for_update` 先做空 UPDATE 取写锁（SQLite 也能串行化）。
 - [x] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建并启动对应 run（`translate_targeted` / `review_full` / `export_full`），返回 202 与 run 摘要。新增 `orchestrator/run_plan.py`：run 类型 + `status_detail_json.run_request` 决定 run 拥有的阶段、包范围、审校是否修复阻断、导出门禁是否自动跟进；执行器、阶段门、终态对账都按计划判定必需阶段。导出门禁失败会保留门禁记录并把门禁详情写进阶段缓存。GET 下载只提供已有导出（按需生成与自愈重建连同 `rebuild_lock` 一并删除）。同步语义的 API 测试改用 `tests/document_actions.py` 的进程内适配器。
-- [ ] **P2.7 数据层**：应用只支持 Postgres（SQLite 仅纯单测）；`JSONB` variant；枚举 CHECK 由枚举生成；去掉 `has_table` 探测；审计写入仅插入；`service.sh` SQLite 模式与 Docker 迁移步骤。
+- [x] **P2.7 数据层**：dev/prod 作用域的应用拒绝非 PostgreSQL URL（SQLite 仅用于单测与 smoke/e2e）；`service.sh` 去掉 SQLite 模式，总是用 PostgreSQL 并先跑迁移；compose 新增一次性 `migrate` 服务，app 等它成功后启动。ORM 的 JSON 列用 `JsonDocument`（PostgreSQL 上为 JSONB）；每个枚举列按 Python 枚举生成 `<表>_<列>_check`，迁移 0031 补上 provider_credentials 缺的 CHECK，漂移测试对比 CHECK 名称、枚举取值与 JSONB 类型。仓储不再在查询时 `has_table` 探测。审计改为插入：去掉确定性 id（重复执行同一动作会覆盖旧审计），ORM 拒绝更新审计/事件行。
 
 ---
 

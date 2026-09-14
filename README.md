@@ -41,7 +41,7 @@ cp .env.example .env              # edit: OPENAI_API_KEY=sk-...
 docker compose up -d              # → http://localhost:58000
 ```
 
-Docker Compose brings up PostgreSQL 16 and the app container in one shot.
+Docker Compose brings up PostgreSQL 16, runs the Alembic migrations in a one-shot `migrate` container, then starts the app.
 Uploads persist in the `app_exports` volume; database state in `postgres_data`.
 
 ### Option 2 · Local dev (macOS / Linux)

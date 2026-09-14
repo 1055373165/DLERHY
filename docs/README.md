@@ -111,7 +111,7 @@ This single command will:
 1. Install Python dependencies (via [uv](https://docs.astral.sh/uv/) if available, or pip)
 2. Start the backend with hot-reload on `http://127.0.0.1:8999`
 3. Start the frontend with HMR on `http://127.0.0.1:4173`
-4. Use a zero-config SQLite database (no setup needed)
+4. Start PostgreSQL in Docker and run Alembic migrations
 
 Open your browser at **http://127.0.0.1:4173** to access the web dashboard, or visit **http://127.0.0.1:8999/v1/docs** for the interactive API documentation.
 
@@ -195,7 +195,8 @@ BOOK_AGENT_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/b
 ### Docker Compose (Production)
 
 ```bash
-# Build and start all services
+# Build and start all services (the one-shot `migrate` service runs
+# `alembic upgrade head` before the app starts)
 docker compose up -d
 
 # The app is available at http://localhost:58000
@@ -215,7 +216,7 @@ All settings use the `BOOK_AGENT_` prefix and can be set via environment variabl
 | `BOOK_AGENT_TRANSLATION_TIMEOUT_SECONDS` | `60` | Request timeout per LLM call |
 | `BOOK_AGENT_TRANSLATION_MAX_RETRIES` | `1` | Max retry attempts on transient failures |
 | `BOOK_AGENT_TRANSLATION_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
-| `BOOK_AGENT_DATABASE_URL` | `sqlite:///./artifacts/book-agent.db` | Database connection string |
+| `BOOK_AGENT_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:55432/book_agent` | PostgreSQL connection string (the only supported database) |
 | `BOOK_AGENT_LOG_LEVEL` | `INFO` | Logging level |
 | `BOOK_AGENT_CORS_ALLOW_ORIGINS` | `[]` | Allowed CORS origins (comma-separated or JSON array) |
 
@@ -369,7 +370,7 @@ npm run test     # Run tests
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic
 - **Frontend:** React 19, TypeScript, Vite 7, React Query, React Router
-- **Database:** PostgreSQL 16 (production) / SQLite (development)
+- **Database:** PostgreSQL 16 (SQLite is used only by unit tests)
 - **LLM Integration:** OpenAI-compatible API (DeepSeek, OpenAI, etc.)
 - **PDF Parsing:** PyMuPDF
 - **Containerization:** Docker, Docker Compose

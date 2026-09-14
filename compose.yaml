@@ -16,9 +16,24 @@ services:
       timeout: 5s
       retries: 12
 
+  migrate:
+    build:
+      context: .
+    image: book-agent:local
+    container_name: book-agent-migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/book_agent
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   app:
     build:
       context: .
+    image: book-agent:local
     container_name: book-agent-app
     restart: unless-stopped
     env_file: .env
@@ -30,8 +45,8 @@ services:
     volumes:
       - app_exports:/app/artifacts/exports
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

@@ -18,10 +18,8 @@ if str(SRC) not in sys.path:
 
 from book_agent.app.api.routes.documents import ArchiveInput, _build_export_archive, _resolve_artifact_path
 from book_agent.app.main import create_app
-from book_agent.core.config import get_settings
+from book_agent.core.config import AppScopeViolation, get_settings
 from book_agent.domain.enums import ExportType
-from book_agent.infra.db.base import Base
-from book_agent.infra.db.session import build_engine
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -107,29 +105,18 @@ class AppRuntimeTests(unittest.TestCase):
             archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
         return epub_path
 
-    def test_create_app_bootstrap_upload_works_with_sqlite_default(self) -> None:
-        db_path = Path(self.tempdir.name) / "runtime.sqlite"
-        self._set_env("BOOK_AGENT_DATABASE_URL", f"sqlite+pysqlite:///{db_path}")
-        # The app no longer creates the schema itself; migrations/create_all own that.
-        engine = build_engine(database_url=f"sqlite+pysqlite:///{db_path}")
-        Base.metadata.create_all(engine)
-        engine.dispose()
+    def test_create_app_refuses_sqlite_database_url(self) -> None:
+        self._set_env("BOOK_AGENT_DATABASE_URL", f"sqlite+pysqlite:///{Path(self.tempdir.name) / 'runtime.sqlite'}")
 
-        app = create_app()
-        client = TestClient(app)
-        self.addCleanup(client.close)
+        with self.assertRaises(AppScopeViolation):
+            create_app()
 
-        epub_path = self._write_epub()
-        with epub_path.open("rb") as handle:
-            response = client.post(
-                "/v1/documents/bootstrap-upload",
-                files={"source_file": (epub_path.name, handle, "application/epub+zip")},
-            )
+    def test_smoke_scope_still_requires_sqlite(self) -> None:
+        self._set_env("BOOK_AGENT_APP_SCOPE", "smoke")
+        self._set_env("BOOK_AGENT_DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:9/book_agent")
 
-        self.assertEqual(response.status_code, 201)
-        payload = response.json()
-        self.assertEqual(payload["title"], "Runtime Smoke Book")
-        self.assertTrue(db_path.exists())
+        with self.assertRaises(AppScopeViolation):
+            create_app()
 
     def test_create_app_returns_503_when_database_is_unavailable(self) -> None:
         self._set_env(
