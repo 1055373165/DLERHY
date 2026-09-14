@@ -95,9 +95,9 @@
 顺序：`workflows.py` → `export.py` → `pdf.py` → 翻译核心。每项先补 golden 测试。
 
 ### P3.1 `services/workflows.py`（4.9k）
-- [ ] 绞杀者模式拆为 application 模块：`analytics`（纯函数）→ `worklist` / `memory_proposals` → `document_queries` → `export_use_case` / `review_repair` / `actions`；门面委托保留到调用方迁完。
-- [ ] `routes/documents.py` 约 1000 行手写序列化改为 `from_attributes` 响应模型；下载/制品解析逻辑移出路由。
-- [ ] `export_document` 五段重复分支参数化。
+- [x] 绞杀者模式拆为 `book_agent/application/`：`read_models`（结果 dataclass）、`analytics`（纯函数）、`memory_proposals`、`issue_queries`、`worklist`、`document_queries`、`issue_actions`、`review_repair`、`export_use_case`；`services/workflows.py` 4.7k → ~480 行门面，公共方法保留委托。先补 golden（`tests/test_workflow_golden.py`）。
+- [x] `routes/documents.py` 手写序列化（~880 行）改为 `model_validate(..., from_attributes=True)`；下载/制品解析移到 `app/api/export_downloads.py`（路由 1955 → ~590 行）。
+- [x] `export_document` 五段重复分支参数化（整书导出查表，gate 停止原因共用一个 helper）。
 
 ### P3.2 `services/export.py`（8.7k）
 - [ ] golden：merged HTML / Markdown / EPUB（EPUB 与 PDF 夹具各一）。

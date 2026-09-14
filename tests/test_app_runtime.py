@@ -16,7 +16,7 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.app.api.routes.documents import ArchiveInput, _build_export_archive, _resolve_artifact_path
+from book_agent.app.api.export_downloads import ArchiveInput, build_export_archive, resolve_artifact_path
 from book_agent.app.main import create_app
 from book_agent.core.config import AppScopeViolation, get_settings
 from book_agent.domain.enums import ExportType
@@ -160,7 +160,7 @@ class AppRuntimeTests(unittest.TestCase):
         actual_path = legacy_dir / "merged-document-first-epub.html"
         actual_path.write_text("<html>legacy</html>", encoding="utf-8")
 
-        resolved = _resolve_artifact_path(
+        resolved = resolve_artifact_path(
             legacy_dir / "merged-document.html",
             roots=((artifact_root / "exports").resolve(), artifact_root.resolve()),
         )
@@ -173,7 +173,7 @@ class AppRuntimeTests(unittest.TestCase):
         actual_path = export_dir / "merged-document-first-epub.html"
         actual_path.write_text("<html>legacy merged</html>", encoding="utf-8")
 
-        archive_path = _build_export_archive(
+        archive_path = build_export_archive(
             "doc-1",
             ExportType.MERGED_HTML,
             [
