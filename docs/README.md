@@ -10,7 +10,7 @@ An LLM-powered translation agent that translates English books (PDF / EPUB) into
 - **Automated QA & Review** — Post-translation quality checks with issue detection, severity scoring, and automated repair actions
 - **Run Control Plane** — Budget-aware execution with pause / resume / cancel / retry, parallel workers, and audit trails
 - **Translation Memory** — Per-chapter memory snapshots (termbases, entity registries, style deltas) that evolve as translation progresses
-- **Multi-Format Export** — Bilingual HTML/Markdown, merged documents, rebuilt EPUB/PDF, Chinese-only outputs, review packages, and JSONL
+- **Multi-Format Export** — Bilingual chapter HTML, whole-book Chinese reading edition (HTML/Markdown), rebuilt and Chinese EPUB, rebuilt PDF, and review packages
 - **Web Dashboard** — React frontend for document management, run monitoring, and deliverable downloads
 - **CLI & REST API** — Full workflow accessible via CLI commands or a documented FastAPI REST API
 
@@ -251,15 +251,15 @@ BOOK_AGENT_TRANSLATION_MODEL=gpt-4o
 
 | Format | Description |
 |---|---|
-| `bilingual_markdown` | Side-by-side English/Chinese Markdown |
-| `bilingual_html` | Side-by-side English/Chinese HTML |
-| `merged_markdown` | Interleaved bilingual Markdown |
-| `merged_html` | Interleaved bilingual HTML |
-| `zh_epub` | Chinese-only EPUB |
-| `zh_pdf` | Chinese-only PDF |
-| `rebuilt_epub` | Rebuilt bilingual EPUB |
+| `bilingual_html` | Per-chapter side-by-side English/Chinese HTML |
+| `merged_html` | Whole-book Chinese reading edition (HTML) |
+| `merged_markdown` | Whole-book Chinese reading edition (Markdown) |
+| `rebuilt_epub` | EPUB rebuilt from the translated document (EPUB sources) |
+| `zh_epub` | Source EPUB with text replaced by the translation (EPUB sources) |
+| `rebuilt_pdf` | PDF printed from the merged HTML (requires Playwright) |
 | `review_package` | Per-chapter review JSON with quality metrics |
-| `jsonl` | Machine-readable sentence-aligned JSONL |
+
+`bilingual_markdown`, `zh_pdf` and `jsonl` are declared but not implemented.
 
 ## Project Structure
 

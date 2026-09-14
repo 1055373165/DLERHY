@@ -69,9 +69,9 @@
 - [x] `orchestrator/state_machine.py` 无调用方的转移表；`workers/contracts.py` 未用的 Reviewer DTO。
 
 ### P1.3 仓库卫生
-- [ ] `git rm --cached`：`deliverable/`、`LLM-Book*/`、`books/`、`.scratch/`、`book-agent.db`、`frontend/.omc/`、`.claude/settings.local.json`、`.claude/*.lock`；提交 `artifacts/` 的删除。
-- [ ] 补全 `.gitignore`。
-- [ ] 合并/清理 `snapshot.md`、`progress.txt`、`docs/mainline-progress.md`；README 与实际能力对齐。
+- [x] `git rm --cached`：`deliverable/`、`LLM-Book*/`、`books/`、`.scratch/`、`book-agent.db`、`frontend/.omc/`、`.claude/settings.local.json`、`.claude/*.lock`；提交 `artifacts/` 的删除。
+- [x] 补全 `.gitignore`。
+- [x] 删除过期交接文档 `snapshot.md`、`progress.txt`、`docs/mainline-progress.md`、`tasks/todo.md`；README 与实际能力对齐（运行时、自愈、导出格式）。
 - [ ] 删除或重写过期的 `frontend/src/features/workspace/WorkspacePage.test.tsx`。
 
 ---
