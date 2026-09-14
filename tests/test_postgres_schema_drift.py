@@ -9,18 +9,20 @@ Opt-in like the other PostgreSQL tests: ``BOOK_AGENT_RUN_PG_TESTS=1``.
 """
 
 import os
+import re
 import subprocess
 import sys
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import JSON, CheckConstraint, create_engine, inspect, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.engine import make_url
 
 import book_agent.domain.models  # noqa: F401  (register all tables on Base.metadata)
 from book_agent.core.config import get_settings
-from book_agent.infra.db.base import Base
+from book_agent.infra.db.base import Base, enum_check_constraint_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -83,11 +85,39 @@ class PostgresSchemaDriftTests(unittest.TestCase):
                         f"{table_name}.{column.name}: nullable db={database_column['nullable']} "
                         f"orm={column.nullable}"
                     )
+                elif isinstance(column.type, JSON) and str(database_column["type"]) != "JSONB":
+                    problems.append(f"{table_name}.{column.name}: JSON column is {database_column['type']} in database")
             database_indexes = {index["name"] for index in inspector.get_indexes(table_name)}
             for index in table.indexes:
                 if index.name not in database_indexes:
                     problems.append(f"{table_name}: index {index.name} missing from migrations")
+            problems.extend(self._check_constraint_problems(inspector, table))
         self.assertEqual(problems, [])
+
+    def _check_constraint_problems(self, inspector, table) -> list[str]:
+        problems: list[str] = []
+        database_checks = {check["name"]: check["sqltext"] for check in inspector.get_check_constraints(table.name)}
+        orm_check_names = {
+            constraint.name for constraint in table.constraints if isinstance(constraint, CheckConstraint)
+        }
+        for name in sorted(set(database_checks) - orm_check_names):
+            problems.append(f"{table.name}: check {name} only in database")
+        for name in sorted(orm_check_names - set(database_checks)):
+            problems.append(f"{table.name}: check {name} missing from migrations")
+        for column in table.columns:
+            if not isinstance(column.type, SAEnum):
+                continue
+            sqltext = database_checks.get(enum_check_constraint_name(table.name, column.name))
+            if sqltext is None:
+                continue
+            database_values = set(re.findall(r"'([^']*)'", sqltext))
+            enum_values = set(column.type.enums)
+            if database_values != enum_values:
+                problems.append(
+                    f"{table.name}.{column.name}: check allows {sorted(database_values)}, "
+                    f"enum has {sorted(enum_values)}"
+                )
+        return problems
 
 
 if __name__ == "__main__":

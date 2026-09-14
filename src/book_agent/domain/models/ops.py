@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, event, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, event, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -18,7 +18,7 @@ from book_agent.domain.enums import (
     WorkItemStatus,
     WorkerLeaseStatus,
 )
-from book_agent.infra.db.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
+from book_agent.infra.db.base import Base, CreatedAtMixin, JsonDocument, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
 
 
 class JobRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -39,7 +39,7 @@ class JobRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
     retry_count: Mapped[int] = mapped_column(nullable=False, default=0)
     rerun_reason: Mapped[str | None] = mapped_column(Text)
-    error_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -57,7 +57,7 @@ class ArtifactInvalidation(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     invalidated_by_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
-    reason_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    reason_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class AuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -71,7 +71,7 @@ class AuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     actor_id: Mapped[str | None] = mapped_column(Text)
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class ChapterWorklistAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -145,7 +145,7 @@ class DocumentRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("document_runs.id", ondelete="SET NULL"),
     )
     stop_reason: Mapped[str | None] = mapped_column(Text)
-    status_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status_detail_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -201,10 +201,10 @@ class WorkItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    output_artifact_refs_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    output_artifact_refs_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     error_class: Mapped[str | None] = mapped_column(Text)
-    error_detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error_detail_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class WorkerLease(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -308,7 +308,7 @@ class RunAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     actor_id: Mapped[str | None] = mapped_column(Text)
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class Event(Base):
@@ -320,6 +320,9 @@ class Event(Base):
     """
 
     __tablename__ = "events"
+    __table_args__ = (
+        CheckConstraint("actor_kind IN ('user', 'agent', 'system')", name="events_actor_kind_check"),
+    )
 
     id: Mapped[int] = mapped_column(
         # sqlite autoincrement only works on INTEGER PRIMARY KEY (ROWID
@@ -347,7 +350,7 @@ class Event(Base):
     actor_id: Mapped[str] = mapped_column(Text, nullable=False, default="system")
     org_id: Mapped[str] = mapped_column(Text, nullable=False, default="default")
     correlation_id: Mapped[str | None] = mapped_column(Text)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    payload: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 APPEND_ONLY_MODELS: tuple[type[Base], ...] = (AuditEvent, StageTransition, RunAuditEvent, Event)

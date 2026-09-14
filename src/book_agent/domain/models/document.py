@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -20,6 +20,7 @@ from book_agent.domain.enums import (
 from book_agent.infra.db.base import (
     Base,
     CreatedAtMixin,
+    JsonDocument,
     TimestampMixin,
     UUIDPrimaryKeyMixin,
     enum_value_type,
@@ -48,7 +49,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     parser_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     segmentation_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active_book_profile_version: Mapped[int | None] = mapped_column(Integer)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class Chapter(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -73,7 +74,7 @@ class Chapter(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     risk_level: Mapped[Severity | None] = mapped_column(
         enum_value_type(Severity, name="chapter_risk_level"),
     )
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -98,7 +99,7 @@ class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_text: Mapped[str | None] = mapped_column(Text)
     source_anchor: Mapped[str | None] = mapped_column(Text)
-    source_span_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_span_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     parse_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     protected_policy: Mapped[ProtectedPolicy] = mapped_column(
         enum_value_type(ProtectedPolicy, name="protected_policy"),
@@ -142,7 +143,7 @@ class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     translatable: Mapped[bool] = mapped_column(nullable=False, default=True)
     nontranslatable_reason: Mapped[str | None] = mapped_column(Text)
     source_anchor: Mapped[str | None] = mapped_column(Text)
-    source_span_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_span_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     upstream_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     sentence_status: Mapped[SentenceStatus] = mapped_column(
         enum_value_type(SentenceStatus, name="sentence_status"),
@@ -166,10 +167,10 @@ class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         enum_value_type(BookType, name="book_type"),
         nullable=False,
     )
-    style_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    quote_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    style_policy_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    quote_policy_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     special_content_policy_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON,
+        JsonDocument,
         nullable=False,
         default=dict,
     )
@@ -204,7 +205,7 @@ class MemorySnapshot(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    content_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     status: Mapped[MemoryStatus] = mapped_column(
         enum_value_type(MemoryStatus, name="memory_status"),
         nullable=False,
@@ -227,10 +228,10 @@ class DocumentImage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     image_type: Mapped[str] = mapped_column(Text, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    bbox_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    bbox_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     ocr_text: Mapped[str | None] = mapped_column(Text)
     latex: Mapped[str | None] = mapped_column(Text)
     alt_text: Mapped[str | None] = mapped_column(Text)
     width_px: Mapped[int | None] = mapped_column(Integer)
     height_px: Mapped[int | None] = mapped_column(Integer)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)

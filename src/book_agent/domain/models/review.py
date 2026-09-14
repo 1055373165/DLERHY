@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, Text, Uuid
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -16,7 +16,7 @@ from book_agent.domain.enums import (
     RootCauseLayer,
     Severity,
 )
-from book_agent.infra.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
+from book_agent.infra.db.base import Base, JsonDocument, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
 
 
 class ReviewIssue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -52,7 +52,7 @@ class ReviewIssue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
-    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     status: Mapped[IssueStatus] = mapped_column(
         enum_value_type(IssueStatus, name="issue_status"),
         nullable=False,
@@ -110,7 +110,7 @@ class IssueAction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=ActionStatus.PLANNED,
     )
-    reason_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    reason_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     created_by: Mapped[ActionActorType] = mapped_column(
         enum_value_type(ActionActorType, name="action_actor_type"),
         nullable=False,
@@ -147,7 +147,7 @@ class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_value_type(ExportType, name="export_type"),
         nullable=False,
     )
-    input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ExportStatus] = mapped_column(
         enum_value_type(ExportStatus, name="export_status"),
