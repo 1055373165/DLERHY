@@ -58,6 +58,7 @@
       "pdf_font_names": [
        "Helvetica"
       ],
+      "pdf_leading_emphasis_text": "Abstract",
       "pdf_page_family": "body",
       "pdf_page_family_source": "body",
       "reading_order_index": 2,

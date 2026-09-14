@@ -56,6 +56,8 @@ from book_agent.ingestion.pdf.classify import (
     _is_book_running_header_text,
     _is_page_number_text,
     _leading_all_caps_book_heading_and_remainder,
+    leading_emphasis_line_count,
+    styled_heading_and_remainder,
     _leading_numbered_book_heading_and_remainder,
     _leading_plain_book_heading_and_remainder,
     _leading_reference_heading_and_remainder,
@@ -581,6 +583,9 @@ class PdfStructureRecoveryService:
                     metadata, flags = self._metadata_for_block(role, raw_block.text, page_context)
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
+                    emphasis_line_count = leading_emphasis_line_count(raw_block.line_styles)
+                    if emphasis_line_count:
+                        metadata["pdf_leading_emphasis_text"] = "\n".join(raw_block.line_texts[:emphasis_line_count])
                     if raw_block.font_names and _has_monospace_font(raw_block.font_names):
                         metadata["has_monospace_font"] = True
                         if role == "code_like":
@@ -2629,6 +2634,7 @@ class PdfStructureRecoveryService:
         recovered_blocks: list[_RecoveredBlock],
         *,
         academic_lane: bool = False,
+        font_emphasis_available: bool = False,
     ) -> list[_RecoveredBlock]:
         first_substantive_anchor_by_page: dict[int, str] = {}
         has_heading_by_page: dict[int, bool] = defaultdict(bool)
@@ -2651,6 +2657,7 @@ class PdfStructureRecoveryService:
                 ),
                 page_has_heading=has_heading_by_page.get(block.page_start, False),
                 academic_lane=academic_lane,
+                font_emphasis_available=font_emphasis_available,
             )
             for segment in segments:
                 reading_order_index += 1
@@ -2918,6 +2925,7 @@ class PdfStructureRecoveryService:
         is_first_substantive_page_block: bool,
         page_has_heading: bool,
         academic_lane: bool = False,
+        font_emphasis_available: bool = False,
     ) -> list[_RecoveredBlock]:
         if (
             block.role not in {"body", "code_like"}
@@ -3078,10 +3086,19 @@ class PdfStructureRecoveryService:
                 if academic_lane
                 else None
             )
+            styled_heading = (
+                styled_heading_and_remainder(block.text, str(metadata["pdf_leading_emphasis_text"]))
+                if font_emphasis_available and metadata.get("pdf_leading_emphasis_text")
+                else None
+            )
             if academic_heading is not None and academic_heading[0] == 0:
                 _start_index, heading_text, remainder, heading_meta = academic_heading
                 recovered_heading_level = int(heading_meta.get("section_level") or 0) or None
                 recovery_flag = "academic_section_heading_recovered"
+            elif styled_heading is not None:
+                heading_text, remainder = styled_heading
+                recovered_heading_level = 2
+                recovery_flag = "embedded_book_styled_heading_recovered"
             else:
                 numbered_book_heading = _leading_numbered_book_heading_and_remainder(block.text)
                 if numbered_book_heading is not None:
@@ -3092,7 +3109,10 @@ class PdfStructureRecoveryService:
                     if inline_caps_heading is not None:
                         heading_text, remainder, recovered_heading_level = inline_caps_heading
                         recovery_flag = "embedded_book_subheading_recovered"
-                    else:
+                    elif not font_emphasis_available:
+                        # Word-pattern guessing is only a fallback for text layers
+                        # without font styles; with styles it splits prose such as
+                        # "As John | Murphy notes ..." into a fake heading.
                         plain_heading = _leading_plain_book_heading_and_remainder(block.text)
                         if plain_heading is not None:
                             heading_text, remainder, recovered_heading_level = plain_heading
@@ -4241,6 +4261,19 @@ class RecoveryContext:
     def academic_lane(self) -> bool:
         return self.profile.recovery_lane == "academic_paper"
 
+    @property
+    def font_emphasis_available(self) -> bool:
+        """Whether the text layer distinguishes bold lines from plain ones anywhere."""
+        seen_bold = seen_plain = False
+        for page in self.extraction.pages:
+            for block in page.blocks:
+                for _size, bold in block.line_styles:
+                    seen_bold = seen_bold or bold
+                    seen_plain = seen_plain or not bold
+                    if seen_bold and seen_plain:
+                        return True
+        return False
+
 
 BlockPassFn = Callable[["PdfStructureRecoveryService", list[_RecoveredBlock], RecoveryContext], list[_RecoveredBlock]]
 
@@ -4288,7 +4321,11 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("promote_contextual_image_legends", _returning("_promote_contextual_image_legend_blocks", "ordered_pages")),
     BlockRecoveryPass(
         "recover_embedded_page_headings",
-        _returning("_recover_embedded_page_heading_blocks", academic_lane="academic_lane"),
+        _returning(
+            "_recover_embedded_page_heading_blocks",
+            academic_lane="academic_lane",
+            font_emphasis_available="font_emphasis_available",
+        ),
     ),
     BlockRecoveryPass("recover_document_title_headings", _document_title_pass),
     BlockRecoveryPass("recover_academic_sections", _returning("_recover_academic_section_blocks", "profile")),

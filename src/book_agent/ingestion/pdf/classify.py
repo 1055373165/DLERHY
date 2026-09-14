@@ -2258,3 +2258,50 @@ def _assess_page_layout(
     else:
         risk = "low"
     return _PageLayoutAssessment(risk=risk, reasons=tuple(reasons))
+
+
+_EMPHASIS_SIZE_DELTA = 1.0
+_STYLED_HEADING_MAX_WORDS = 16
+
+
+def leading_emphasis_line_count(line_styles: tuple[tuple[float, bool], ...]) -> int:
+    """Count leading lines set in bold or a larger size than the rest of the block.
+
+    Returns 0 unless the emphasis is a clean prefix: at least one plain line
+    follows and no later line is emphasized (run-in bold labels and bold
+    table headers mixed into body lines are not heading prefixes).
+    """
+    if len(line_styles) < 2:
+        return 0
+    base_size, last_bold = line_styles[-1]
+    if last_bold or base_size <= 0:
+        return 0
+
+    def emphasized(style: tuple[float, bool]) -> bool:
+        size, bold = style
+        return bold or size >= base_size + _EMPHASIS_SIZE_DELTA
+
+    count = 0
+    while count < len(line_styles) and emphasized(line_styles[count]):
+        count += 1
+    if count == 0 or count == len(line_styles):
+        return 0
+    if any(emphasized(style) for style in line_styles[count:]):
+        return 0
+    return count
+
+
+def styled_heading_and_remainder(text: str, emphasis_text: str) -> tuple[str, str] | None:
+    """Split ``text`` at its font-emphasized leading lines when they read as a heading."""
+    heading = _normalize_text(emphasis_text)
+    normalized = _normalize_text(text)
+    if not heading or not normalized.startswith(heading):
+        return None
+    remainder = normalized[len(heading):].strip()
+    if not remainder:
+        return None
+    if len(heading.split()) > _STYLED_HEADING_MAX_WORDS or heading.endswith((",", ";")):
+        return None
+    if _looks_like_caption_text(heading) or _looks_like_code(heading, 1):
+        return None
+    return heading, remainder

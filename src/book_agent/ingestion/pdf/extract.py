@@ -36,6 +36,14 @@ from book_agent.ingestion.text import (
 )
 
 
+_BOLD_FONT_NAME = re.compile(r"bold|black|heavy|semibold|demi", re.IGNORECASE)
+
+
+def _span_is_bold(span: dict[str, Any]) -> bool:
+    # PyMuPDF sets flag bit 16 for bold; subset fonts often only say so in the name.
+    return bool(int(span.get("flags", 0) or 0) & 16) or bool(_BOLD_FONT_NAME.search(str(span.get("font", ""))))
+
+
 class PdfTextExtractor(Protocol):
     def extract(self, file_path: str | Path) -> PdfExtraction:
         ...
@@ -112,8 +120,11 @@ class PyMuPDFTextExtractor:
                     font_names_set: set[str] = set()
                     mono_span_count = 0
                     total_span_count = 0
+                    line_styles: list[tuple[float, bool]] = []
                     for line in block.get("lines", []):
                         parts: list[str] = []
+                        size_weights: dict[float, int] = {}
+                        line_bold = True
                         for span in line.get("spans", []):
                             text = span.get("text", "")
                             if not text:
@@ -121,15 +132,22 @@ class PyMuPDFTextExtractor:
                             parts.append(text)
                             span_count += 1
                             total_span_count += 1
-                            font_sizes.append(float(span.get("size", 0.0) or 0.0))
+                            size = float(span.get("size", 0.0) or 0.0)
+                            font_sizes.append(size)
                             fn = span.get("font", "")
                             if fn:
                                 font_names_set.add(fn)
                                 if _MONOSPACE_FONT_PATTERNS.search(fn):
                                     mono_span_count += 1
+                            visible = len(text.strip())
+                            if visible:
+                                size_weights[round(size, 1)] = size_weights.get(round(size, 1), 0) + visible
+                                line_bold = line_bold and _span_is_bold(span)
                         normalized_line = _normalize_text("".join(parts))
                         if normalized_line:
                             lines.append(normalized_line)
+                            dominant_size = max(size_weights, key=size_weights.__getitem__) if size_weights else 0.0
+                            line_styles.append((dominant_size, line_bold and bool(size_weights)))
 
                     text = _normalize_multiline_text("\n".join(lines))
                     if not text:
@@ -168,6 +186,7 @@ class PyMuPDFTextExtractor:
                             font_size_avg=_safe_mean(font_sizes),
                             font_names=font_names_frozen,
                             raw_text=raw_text,
+                            line_styles=tuple(line_styles),
                         )
                     )
 

@@ -115,6 +115,9 @@ class PdfTextBlock:
     font_size_avg: float
     font_names: frozenset[str] = frozenset()
     raw_text: str | None = None
+    # Per entry of ``line_texts``: (dominant font size, every span bold).
+    # Empty when the extractor has no span-level font information.
+    line_styles: tuple[tuple[float, bool], ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
