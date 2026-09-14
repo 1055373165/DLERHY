@@ -312,6 +312,12 @@ class ParseService:
         document.status = DocumentStatus.PARSED
         document.updated_at = now
 
+        # PDF v2 M3 wire-up: optionally enhance modalities (references /
+        # equations / tables / images) before the canonical IR is built and
+        # blocks are constructed, so the persisted IR and blocks both reflect
+        # the modality contracts.
+        parsed = self._apply_modality_pipeline(parsed, document)
+
         parse_ir_result = self.parse_ir_service.build(document, parsed)
         parsed = parse_ir_result.parsed_document
         document.metadata_json = {
@@ -327,11 +333,6 @@ class ParseService:
                 },
             },
         }
-
-        # PDF v2 M3 wire-up: optionally enhance modalities (references /
-        # equations / tables / images) before downstream block construction
-        # so the persisted DocIR signals reflect the modality contracts.
-        parsed = self._apply_modality_pipeline(parsed, document)
 
         chapters: list[Chapter] = []
         blocks: list[Block] = []
