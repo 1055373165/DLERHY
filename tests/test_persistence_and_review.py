@@ -2776,30 +2776,6 @@ class PersistenceAndReviewTests(unittest.TestCase):
 
         self.assertIn("renderer unavailable", str(exc_info.exception))
 
-    def test_workflow_exports_merged_markdown_from_legacy_db_without_document_images_table(self) -> None:
-        document_id = self._bootstrap_custom_epub_to_db(
-            [("Chapter One", "chapter1.xhtml", STRUCTURED_ARTIFACT_XHTML)],
-            extra_files={"OEBPS/images/agent-loop.png": b"fake-png-binary"},
-        )
-        Base.metadata.tables["document_images"].drop(self.engine)
-
-        with tempfile.TemporaryDirectory() as outdir:
-            with self.session_factory() as session:
-                workflow = DocumentWorkflowService(session, export_root=outdir)
-                workflow.translate_document(document_id)
-                with patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None):
-                    export = workflow.export_document(document_id, ExportType.MERGED_MARKDOWN)
-
-            markdown_path = Path(export.file_path)
-            self.assertTrue(markdown_path.exists())
-            markdown_text = markdown_path.read_text(encoding="utf-8")
-
-        # Post-UX-cleanup: no "Chapter N:" ordinal prefix, no English
-        # "_Source title:_" addendum.
-        self.assertNotIn("## Chapter 1:", markdown_text)
-        self.assertNotIn("_Source title:", markdown_text)
-        self.assertIn("![Agent loop architecture](assets/agent-loop.png)", markdown_text)
-
     def test_visible_merged_chapters_group_pdf_auxiliary_sections_under_real_top_level_titles(self) -> None:
         now = datetime.now(timezone.utc)
         document = Document(
@@ -10902,43 +10878,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertLess(len(remaining_term_issues), len(initial_term_issues))
             self.assertTrue(remaining_style_issues)
 
-    def test_bootstrap_repository_document_image_probe_preserves_uncommitted_concept_lock_state(self) -> None:
-        document_id = self._bootstrap_custom_epub_to_db(
-            [("Chapter One", "chapter1.xhtml", MIXED_AUTO_FOLLOWUP_XHTML)]
-        )
-
-        with self.session_factory() as session:
-            workflow = DocumentWorkflowService(
-                session,
-                translation_worker=GuidanceAwareMixedWorker(),
-            )
-            workflow.translate_document(document_id)
-            session.commit()
-            chapter_id = workflow.bootstrap_repository.load_document_bundle(document_id).chapters[0].chapter.id
-
-            lock_result = ChapterConceptLockService(session).lock_concept(
-                chapter_id=chapter_id,
-                source_term="agentic AI",
-                canonical_zh="智能体式AI",
-            )
-
-            self.assertTrue(workflow.bootstrap_repository._document_images_table_available())
-
-            review_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
-            self.assertIsNotNone(review_bundle.chapter_translation_memory)
-            assert review_bundle.chapter_translation_memory is not None
-            self.assertEqual(review_bundle.chapter_translation_memory.version, lock_result.snapshot_version)
-            self.assertEqual(review_bundle.chapter_translation_memory.status.value, "active")
-            self.assertIn(
-                ("agentic AI", "智能体AI"),
-                [
-                    (entry.source_term, entry.target_term)
-                    for entry in review_bundle.term_entries
-                    if entry.scope_id == chapter_id and entry.status == TermStatus.ACTIVE
-                ],
-            )
-
-    def test_export_repository_document_image_probe_preserves_uncommitted_concept_lock_state(self) -> None:
+    def test_export_repository_chapter_load_preserves_uncommitted_concept_lock_state(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
             [("Chapter One", "chapter1.xhtml", MIXED_AUTO_FOLLOWUP_XHTML)]
         )
@@ -10960,9 +10900,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     canonical_zh="智能体式AI",
                 )
 
-                export_repository = ExportRepository(session)
-                self.assertTrue(export_repository._document_images_table_available())
-                export_repository.load_chapter_bundle(chapter_id)
+                ExportRepository(session).load_chapter_bundle(chapter_id)
 
                 review_bundle = ReviewRepository(session).load_chapter_bundle(chapter_id)
                 self.assertIsNotNone(review_bundle.chapter_translation_memory)

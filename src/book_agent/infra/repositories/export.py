@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Select, func, inspect, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import (
@@ -57,10 +57,6 @@ class DocumentExportBundle:
 class ExportRepository:
     def __init__(self, session: Session):
         self.session = session
-
-    def _document_images_table_available(self) -> bool:
-        connection = self.session.connection()
-        return bool(inspect(connection).has_table(DocumentImage.__tablename__))
 
     def get_document(self, document_id: str) -> Document:
         document = self.session.get(Document, document_id)
@@ -179,7 +175,7 @@ class ExportRepository:
                 .where(DocumentImage.block_id.in_(block_ids))
                 .order_by(DocumentImage.page_number, DocumentImage.id)
             ).all()
-            if block_ids and self._document_images_table_available()
+            if block_ids
             else []
         )
 

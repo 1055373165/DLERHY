@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ArtifactStatus
@@ -48,28 +48,16 @@ class BootstrapRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def _document_images_table_available(self) -> bool:
-        connection = self.session.connection()
-        return bool(inspect(connection).has_table(DocumentImage.__tablename__))
-
-    def _parse_revision_tables_available(self) -> bool:
-        connection = self.session.connection()
-        inspector = inspect(connection)
-        return inspector.has_table(DocumentParseRevision.__tablename__) and inspector.has_table(
-            DocumentParseRevisionArtifact.__tablename__
-        )
-
     def save(self, artifacts: BootstrapArtifacts) -> None:
         self.session.merge(artifacts.document)
         self.session.flush()
 
-        if self._parse_revision_tables_available():
-            if artifacts.parse_revision is not None:
-                self.session.merge(artifacts.parse_revision)
-                self.session.flush()
-            if artifacts.parse_revision_artifact is not None:
-                self.session.merge(artifacts.parse_revision_artifact)
-                self.session.flush()
+        if artifacts.parse_revision is not None:
+            self.session.merge(artifacts.parse_revision)
+            self.session.flush()
+        if artifacts.parse_revision_artifact is not None:
+            self.session.merge(artifacts.parse_revision_artifact)
+            self.session.flush()
 
         self._merge_collection(artifacts.chapters)
         self.session.flush()
@@ -139,31 +127,23 @@ class BootstrapRepository:
         memory_snapshots = self.session.scalars(
             select(MemorySnapshot).where(MemorySnapshot.document_id == document_id)
         ).all()
-        document_images = (
-            self.session.scalars(
-                select(DocumentImage)
-                .where(DocumentImage.document_id == document_id)
-                .order_by(DocumentImage.page_number, DocumentImage.id)
-            ).all()
-            if self._document_images_table_available()
-            else []
-        )
-        parse_revision = (
-            self.session.scalars(
-                select(DocumentParseRevision)
-                .where(DocumentParseRevision.document_id == document_id)
-                .order_by(DocumentParseRevision.version.desc(), DocumentParseRevision.created_at.desc())
-            ).first()
-            if self._parse_revision_tables_available()
-            else None
-        )
+        document_images = self.session.scalars(
+            select(DocumentImage)
+            .where(DocumentImage.document_id == document_id)
+            .order_by(DocumentImage.page_number, DocumentImage.id)
+        ).all()
+        parse_revision = self.session.scalars(
+            select(DocumentParseRevision)
+            .where(DocumentParseRevision.document_id == document_id)
+            .order_by(DocumentParseRevision.version.desc(), DocumentParseRevision.created_at.desc())
+        ).first()
         parse_revision_artifact = (
             self.session.scalars(
                 select(DocumentParseRevisionArtifact)
                 .where(DocumentParseRevisionArtifact.document_parse_revision_id == parse_revision.id)
                 .order_by(DocumentParseRevisionArtifact.created_at.asc(), DocumentParseRevisionArtifact.id.asc())
             ).first()
-            if parse_revision is not None and self._parse_revision_tables_available()
+            if parse_revision is not None
             else None
         )
         packets = self.session.scalars(
