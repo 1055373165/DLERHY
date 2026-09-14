@@ -1,10 +1,12 @@
 # 测试基线
 
-## 当前基线（P0 完成后，2026-09-14）
+## 当前基线（P1 完成后，2026-09-14）
 
 逐文件独立进程运行（`ls tests/test_*.py | xargs -P 6 -n 1 …`，见 [PLAN.md](PLAN.md) 的工作原则）：
 
-**994 passed · 0 failed · 4 xfailed · 30 skipped**
+**959 passed · 0 failed · 4 xfailed · 30 skipped**（P0 结束时 994 passed；P1.2 随实验/benchmark 模块删除了 35 个测试）
+
+前端：`cd frontend && npx vitest run` → 4 files / 4 tests passed。
 
 任何新的失败都是回归；xfail 意外通过（XPASS）也需要处理：修复已落地时移除标记。
 
