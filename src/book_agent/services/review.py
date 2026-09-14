@@ -27,7 +27,7 @@ from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
-from book_agent.services.style_drift import STYLE_DRIFT_RULES
+from book_agent.translation.heuristics import heuristics_pack_for_document
 from book_agent.services.term_normalization import normalize_term_rendering
 
 
@@ -538,6 +538,7 @@ class ReviewService:
         chapter_memory_snapshot_version = (
             bundle.chapter_translation_memory.version if bundle.chapter_translation_memory is not None else None
         )
+        style_drift_rules = heuristics_pack_for_document(bundle.document).style_drift_rules
         for sentence in bundle.sentences:
             if not sentence.translatable or sentence.sentence_status == SentenceStatus.BLOCKED:
                 continue
@@ -548,7 +549,7 @@ class ReviewService:
             )
             if not aligned_text.strip():
                 continue
-            for rule in STYLE_DRIFT_RULES:
+            for rule in style_drift_rules:
                 if not rule.source_pattern.search(sentence.source_text or ""):
                     continue
                 target_match = rule.target_pattern.search(aligned_text)

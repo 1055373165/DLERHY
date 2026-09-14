@@ -118,12 +118,12 @@
 - [ ] refresh 不重建句子：目前只检测并上报（`stale_sentence_block_ids` + `refresh_sentences_stale`）。真正重建需要先定句子退役模型（句子被 packet、译文、对齐边引用，没有失效状态），再串联 packet 重建与重译。
 
 ### P3.4 翻译核心
-- [ ] DTO 从 `workers/contracts.py` 移至 `translation/contracts`（修复 domain→workers、infra→workers 依赖）。
-- [ ] 类型化 `ChapterMemory`：单一 schema / 合并 / 提交策略（现有 5 份 schema、3–4 种合并）。
-- [ ] `TranslationService` 拆为 `PacketExecutor` + 后置 hooks（术语校验、记忆提案、事件）；新增 `OutputValidator`（覆盖率），失败 run 记录 `error_code`。
-- [ ] 术语统一：编译期从 `TermEntry` 解析，注入同样走相关性过滤（prompt 变化，需 golden 基线有意更新）。
-- [ ] Prompt profile 注册表（先 golden 快照各 profile 的 prompt）。
-- [ ] 书籍特定启发式（style_drift、term_normalization、关键词集）数据化 / 按文档配置。
+- [x] DTO 从 `workers/contracts.py` 移至 `translation/contracts`（修复 domain→workers、infra→workers 依赖）。先补 golden：`tests/test_translation_prompt_golden.py`（EPUB + 学术 PDF 每个真实任务的上下文包 + 13 个 profile × 2 种布局的 prompt）。
+- [x] 类型化 `translation/chapter_memory.ChapterMemory`：五处手写 payload（bootstrap、backfill、概念锁定、翻译、提案批准）共用一个模型与提交策略。
+- [x] 后置 hooks（`GlossaryViolationHook`、`ChapterMemoryProposalHook`）；`OutputValidator` 检查句子覆盖率，不完整时 run 记 `error_code`；worker 失败写 FAILED run（`error_code` 为失败分类原因）。执行主干仍在 `TranslationService`（prepare / call_worker / persist）。
+- [x] 术语统一：文档术语表在 `load_compiled_context` 中解析，与 termbase / 章节概念一起过相关性过滤（夹具无术语表，golden 未变）。
+- [x] Prompt profile 注册表 `translation/prompt_profiles.py`，13 个 profile 的 prompt 快照逐字节不变。
+- [x] 书籍特定启发式数据化为 `translation/heuristics/*.json` 包（默认 `tech-book-default`）；review 的 style drift 按 `document.metadata_json.translation_heuristics_pack` 选包。上下文编译与术语规范化仍用默认包。
 
 ---
 

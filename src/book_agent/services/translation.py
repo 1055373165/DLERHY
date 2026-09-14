@@ -40,6 +40,7 @@ from book_agent.translation.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.translation.heuristics import DEFAULT_HEURISTICS
 from book_agent.translation.output_validation import OutputValidator
 from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import (
@@ -61,61 +62,9 @@ def _coerce_nonnegative_int(value: object) -> int:
         return 0
 
 
-CONCEPT_HINT_KEYWORDS = {
-    "agent",
-    "agentic",
-    "ai",
-    "context",
-    "engineering",
-    "generative",
-    "language",
-    "llm",
-    "memory",
-    "model",
-    "models",
-    "architecture",
-    "distributed",
-    "infrastructure",
-    "planning",
-    "retrieval",
-    "sql",
-    "substrate",
-}
-CONCEPT_HEADWORDS = {
-    "ai",
-    "agent",
-    "agents",
-    "architecture",
-    "engineering",
-    "infrastructure",
-    "llm",
-    "mechanisms",
-    "memory",
-    "model",
-    "models",
-    "modules",
-    "sql",
-    "stores",
-    "substrate",
-}
-CONCEPT_MODIFIERS = {
-    "adaptive",
-    "agentic",
-    "context",
-    "data",
-    "distributed",
-    "durable",
-    "external",
-    "generative",
-    "language",
-    "large",
-    "memory",
-    "planning",
-    "prompt",
-    "reactive",
-    "retrieval",
-    "structured",
-}
+CONCEPT_HINT_KEYWORDS = DEFAULT_HEURISTICS.concept_hint_keywords
+CONCEPT_HEADWORDS = DEFAULT_HEURISTICS.concept_headwords
+CONCEPT_MODIFIERS = DEFAULT_HEURISTICS.concept_modifiers
 STOPWORDS = {
     "about",
     "a",
