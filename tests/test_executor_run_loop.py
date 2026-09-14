@@ -1,13 +1,18 @@
-"""The server-side run loop must enforce run budgets.
+"""Behavior of the server-side run loop.
 
-Previously ``RunExecutionService.enforce_budget_guardrails`` was only called by
-tests and a live-run script, so a run with an exhausted budget kept executing
-under the API executor.
+- Run budgets are enforced on every tick. Previously
+  ``RunExecutionService.enforce_budget_guardrails`` was only called by tests and a
+  live-run script, so a run with an exhausted budget kept executing.
+- A transient database error (e.g. losing a unique-index race while seeding work
+  items) must not fail the whole run; any other unhandled error still does.
 """
 
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from uuid import uuid4
+
+from sqlalchemy.exc import IntegrityError
 
 from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
 from book_agent.domain.enums import DocumentRunType, DocumentStatus, SourceType
@@ -19,7 +24,7 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.run_control import RunBudgetSummary, RunControlService
 
 
-class ExecutorBudgetGuardrailTests(unittest.TestCase):
+class ExecutorRunLoopTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = build_engine("sqlite+pysqlite:///:memory:")
         self.addCleanup(self.engine.dispose)
@@ -30,6 +35,7 @@ class ExecutorBudgetGuardrailTests(unittest.TestCase):
             export_root="artifacts/exports",
             translation_worker=None,
             state_reconciler_interval_seconds=0,
+            poll_interval_seconds=0,
         )
 
     def _create_running_run(self, budget: RunBudgetSummary | None) -> str:
@@ -98,6 +104,38 @@ class ExecutorBudgetGuardrailTests(unittest.TestCase):
         with self.session_factory() as session:
             summary = RunControlService(RunControlRepository(session)).get_run_summary(run_id)
         self.assertEqual(summary.status, "running")
+
+    def _run_status(self, run_id: str) -> tuple[str, str | None]:
+        with self.session_factory() as session:
+            summary = RunControlService(RunControlRepository(session)).get_run_summary(run_id)
+        return summary.status, summary.stop_reason
+
+    def test_transient_integrity_error_does_not_fail_run(self) -> None:
+        run_id = self._create_running_run(None)
+        calls: list[int] = []
+
+        def _flaky_translate_stage(_run_id: str) -> bool:
+            calls.append(1)
+            if len(calls) == 1:
+                raise IntegrityError("INSERT INTO work_items", {}, Exception("unique violation"))
+            self.executor._stop_event.set()
+            return True
+
+        with patch.object(self.executor, "_process_translate_stage", side_effect=_flaky_translate_stage):
+            with self.assertLogs("book_agent.app.runtime.document_run_executor", level="WARNING"):
+                self.executor._run_loop(run_id)
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self._run_status(run_id), ("running", None))
+
+    def test_unexpected_error_fails_run(self) -> None:
+        run_id = self._create_running_run(None)
+
+        with patch.object(self.executor, "_process_translate_stage", side_effect=RuntimeError("boom")):
+            with self.assertLogs("book_agent.app.runtime.document_run_executor", level="ERROR"):
+                self.executor._run_loop(run_id)
+
+        self.assertEqual(self._run_status(run_id), ("failed", "runner.unhandled_exception"))
 
 
 if __name__ == "__main__":

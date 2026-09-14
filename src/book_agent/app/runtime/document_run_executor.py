@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import traceback
@@ -10,7 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.ids import stable_id
@@ -54,6 +55,9 @@ from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.translator import TranslationWorker
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -184,10 +188,8 @@ class DocumentRunExecutor:
         try:
             with session_scope(self.session_factory) as session:
                 Reconciler(session).check_and_audit(run_id)
-        except OperationalError:
-            return
         except Exception:
-            return
+            logger.warning("State reconciler scan failed for run %s", run_id, exc_info=True)
 
     def start(self) -> None:
         with self._lock:
@@ -263,6 +265,7 @@ class DocumentRunExecutor:
             except Exception:
                 if self._stop_event.is_set():
                     return
+                logger.exception("Run supervisor tick failed")
                 time.sleep(min(self.poll_interval_seconds, 1.0))
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
@@ -373,7 +376,12 @@ class DocumentRunExecutor:
                     "cancelled",
                 }:
                     return
-            except Exception as exc:  # pragma: no cover - defensive safety net
+            except (IntegrityError, OperationalError):
+                # Concurrent seeding lost a unique-index race or the database hiccuped;
+                # the next tick re-reads state instead of failing the whole run.
+                logger.warning("Run loop tick for %s hit a transient database error", run_id, exc_info=True)
+            except Exception as exc:
+                logger.exception("Run loop for %s failed with an unhandled exception", run_id)
                 self._fail_run(run_id, stop_reason="runner.unhandled_exception", exc=exc)
                 return
 
@@ -1449,7 +1457,7 @@ class DocumentRunExecutor:
                 if not alive:
                     return
             except Exception:
-                continue
+                logger.warning("Heartbeat failed for lease %s", lease_token, exc_info=True)
 
     def _list_all_packet_ids(self, session, document_id: str) -> list[str]:
         return list(
