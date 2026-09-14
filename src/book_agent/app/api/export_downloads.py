@@ -424,14 +424,13 @@ def document_export_response(
     artifact_roots: tuple[Path, ...],
 ) -> FileResponse:
     """Serve a document's latest successful export, zipped with its sidecar assets if any."""
-    document = export_repository.get_document(document_id)
-
-    # Bilingual document downloads reuse merged exports (which already contain both languages)
-    _BILINGUAL_TO_MERGED = {
-        ExportType.BILINGUAL_HTML: ExportType.MERGED_HTML,
-        ExportType.BILINGUAL_MARKDOWN: ExportType.MERGED_MARKDOWN,
-    }
-    lookup_type = _BILINGUAL_TO_MERGED.get(export_type, export_type)
+    try:
+        document = export_repository.get_document(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if export_type == ExportType.BILINGUAL_HTML:
+        return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots)
+    lookup_type = export_type
 
     try:
         primary_records = export_repository.list_document_exports_filtered(
@@ -454,7 +453,6 @@ def document_export_response(
         ExportType.MERGED_HTML: "中文阅读稿",
         ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
         ExportType.BILINGUAL_HTML: "中英文对照",
-        ExportType.BILINGUAL_MARKDOWN: "中英文对照-Markdown",
         ExportType.REBUILT_EPUB: "重建EPUB",
         ExportType.REBUILT_PDF: "重建PDF",
         ExportType.REVIEW_PACKAGE: "审校包",
@@ -476,9 +474,9 @@ def document_export_response(
         for record in primary_records
     ]
 
-    # Use the latest (last) primary record only — deliver a single merged file
-    file_path = files[-1]
-    primary_record = primary_records[-1]
+    # Records are newest first; deliver the latest one.
+    file_path = files[0]
+    primary_record = primary_records[0]
     canonical_basename = _canonical_basename(primary_record.file_path)
     ext = Path(canonical_basename).suffix or ""
     main_filename = f"{book_title}-{label}{ext}"
@@ -527,5 +525,78 @@ def document_export_response(
         path=archive_path,
         media_type="application/zip",
         headers={"content-disposition": content_disposition(zip_name)},
+        background=BackgroundTask(cleanup_path, archive_path),
+    )
+
+
+def _bilingual_document_response(
+    export_repository: ExportRepository,
+    document: Any,
+    *,
+    artifact_roots: tuple[Path, ...],
+) -> FileResponse:
+    """Zip the latest successful bilingual export of every chapter, in chapter order."""
+    records = export_repository.list_document_exports_filtered(
+        document.id,
+        export_type=ExportType.BILINGUAL_HTML,
+        status=ExportStatus.SUCCEEDED,
+    )
+    latest_by_chapter: dict[str, Any] = {}
+    for record in records:  # newest first
+        chapter_id = str((record.input_version_bundle_json or {}).get("chapter_id") or "")
+        if chapter_id and chapter_id not in latest_by_chapter:
+            latest_by_chapter[chapter_id] = record
+    chapters = [
+        chapter for chapter in export_repository.list_document_chapters(document.id) if chapter.id in latest_by_chapter
+    ]
+    if not chapters:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No successful bilingual_html chapter exports are available for download.",
+        )
+
+    archive_inputs: list[ArchiveInput] = []
+    seen_paths: set[str] = set()
+    for chapter in chapters:
+        record = latest_by_chapter[chapter.id]
+        assert_record_serviceable(record)
+        file_path = resolve_artifact_path(
+            record.file_path,
+            roots=artifact_roots,
+            document_id=document.id,
+            content_sha256=record.content_sha256,
+        )
+        canonical_path = _canonical_artifact_path(record.file_path, roots=artifact_roots, document_id=document.id) or file_path
+        _append_archive_input(
+            archive_inputs,
+            seen_paths,
+            file_path,
+            preferred_archive_name=_chapter_export_download_filename(
+                document,
+                chapter,
+                ExportType.BILINGUAL_HTML,
+                file_suffix=Path(_canonical_basename(record.file_path)).suffix or ".html",
+            ),
+        )
+        for sidecar_path in _export_sidecar_paths(canonical_path):
+            _append_archive_input(
+                archive_inputs,
+                seen_paths,
+                sidecar_path,
+                preferred_archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
+            )
+
+    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
+    archive_folder = f"{book_title}-中英文对照"
+    archive_path = build_export_archive(
+        document.id,
+        ExportType.BILINGUAL_HTML,
+        archive_inputs,
+        folder_name=archive_folder,
+    )
+    return FileResponse(
+        path=archive_path,
+        media_type="application/zip",
+        headers={"content-disposition": content_disposition(f"{archive_folder}.zip")},
         background=BackgroundTask(cleanup_path, archive_path),
     )

@@ -1793,7 +1793,6 @@ class ApiWorkflowTests(unittest.TestCase):
         terminal = self._wait_for_run_terminal(retry_payload["run_id"])
         self.assertEqual(terminal["status"], "succeeded")
 
-    @unittest.expectedFailure  # bilingual downloads are served from the Chinese-only merged edition
     def test_export_download_bundles_multi_chapter_exports_as_zip(self) -> None:
         epub_path = self._write_epub_with_chapters(
             [
@@ -1805,6 +1804,7 @@ class ApiWorkflowTests(unittest.TestCase):
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
         self.assertEqual(bootstrap.status_code, 201)
         document_id = bootstrap.json()["document_id"]
+        document_title = bootstrap.json()["title"]
 
         translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
         self.assertEqual(translate.status_code, 200)
@@ -1829,8 +1829,16 @@ class ApiWorkflowTests(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             names = archive.namelist()
 
-        self.assertEqual(len([name for name in names if name.endswith(".html")]), 2)
-        self.assertTrue(all(name.startswith(f"{document_id}-bilingual_html/") for name in names))
+        html_names = [name for name in names if name.endswith(".html")]
+        self.assertEqual(len(html_names), 2)
+        self.assertEqual({name.split("/", 1)[0] for name in names}, {f"{safe_title_for_filename(document_title, wrap_book_quotes=True)}-中英文对照"})
+        self.assertIn("第1章", html_names[0])
+        self.assertIn("第2章", html_names[1])
+        with zipfile.ZipFile(BytesIO(download.content)) as archive:
+            chapter_html = archive.read(html_names[0]).decode("utf-8")
+        # A real bilingual edition: the Chinese rendering and the English source side by side.
+        self.assertIn("ZH::", chapter_html)
+        self.assertIn("Pricing power matters.", chapter_html)
 
     def test_refresh_epub_structure_repairs_legacy_page_number_titles_and_combined_book_title(self) -> None:
         epub_path = self._write_epub_with_frontmatter_titlepage()

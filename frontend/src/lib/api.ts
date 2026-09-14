@@ -857,24 +857,62 @@ async function saveBinaryResponse(response: Response, fallbackName: string): Pro
   return filename;
 }
 
+export type DocumentDownloadType = "merged_html" | "bilingual_html" | "merged_markdown" | "review_package";
+
+const TERMINAL_RUN_STATUSES = new Set(["succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"]);
+
+async function waitForRunToFinish(
+  runId: string,
+  { pollIntervalMs, timeoutMs }: { pollIntervalMs: number; timeoutMs: number }
+): Promise<DocumentRunSummary> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const run = await getRun(runId);
+    if (TERMINAL_RUN_STATUSES.has(run.status)) {
+      return run;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error("导出仍在进行，请稍后在交付页下载。");
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+/**
+ * Download the latest export of a document. Downloads only serve existing
+ * exports, so when none exists yet an export run is enqueued and awaited first.
+ */
 export async function downloadDocumentExport(
   documentId: string,
-  exportType: "merged_html" | "bilingual_html" | "merged_markdown" | "bilingual_markdown" | "review_package"
+  exportType: DocumentDownloadType,
+  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000 }: { pollIntervalMs?: number; timeoutMs?: number } = {}
 ): Promise<string> {
-  const response = await requestBinary(
-    `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
-      exportType
-    )}`
-  );
-  const extMap: Record<string, string> = {
+  const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
+    exportType
+  )}`;
+  let response = await fetch(withApiBase(downloadPath));
+  if (response.status === 404) {
+    const run = await requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ export_type: exportType }),
+    });
+    const finished = await waitForRunToFinish(run.run_id, { pollIntervalMs, timeoutMs });
+    if (finished.status !== "succeeded" && finished.status !== "succeeded_with_warnings") {
+      throw new Error(`导出未完成（${finished.stop_reason ?? finished.status}）。`);
+    }
+    response = await fetch(withApiBase(downloadPath));
+  }
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  const fallbackExtension: Record<DocumentDownloadType, string> = {
     merged_markdown: ".md",
-    bilingual_markdown: ".md",
     merged_html: ".html",
-    bilingual_html: ".html",
+    bilingual_html: ".zip",
     review_package: ".zip",
   };
-  const ext = extMap[exportType] ?? ".zip";
-  return saveBinaryResponse(response, `book-agent-${exportType}${ext}`);
+  return saveBinaryResponse(response, `book-agent-${exportType}${fallbackExtension[exportType]}`);
 }
 
 export async function downloadChapterExport(

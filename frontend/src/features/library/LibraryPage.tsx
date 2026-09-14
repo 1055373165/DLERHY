@@ -22,7 +22,6 @@ const DOWNLOAD_OPTIONS = [
   { label: "中文版 · HTML", exportType: "merged_html", enabled: true },
   { label: "中文版 · Markdown", exportType: "merged_markdown", enabled: true },
   { label: "中英文对照版 · HTML", exportType: "bilingual_html", enabled: true },
-  { label: "中英文对照版 · Markdown", exportType: "bilingual_markdown", enabled: true },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [12, 24, 50, 100] as const;
