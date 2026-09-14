@@ -55,8 +55,9 @@ def _write_split_title_pdf(path: Path) -> None:
     page.insert_text((126, 300), "The chapter covers what the indicator is and why it was invented.", fontname="helv")
     page = document.new_page()
     page.insert_text((180, 130), "CHAPTER 3: BREAKING THE MYTH:", fontname="hebo", fontsize=16.5)
-    page.insert_text((200, 150), "RSI CAN REMAIN OVERSOLD FOR", fontname="hebo", fontsize=16.5)
-    page.insert_text((230, 170), "SEVERAL MONTHS?", fontname="hebo", fontsize=16.5)
+    page.insert_text((200, 150), "RSI CAN REMAIN", fontname="hebo", fontsize=16.5)
+    page.insert_text((200, 166), "OVERSOLD FOR", fontname="hebo", fontsize=16.5)
+    page.insert_text((230, 190), "SEVERAL MONTHS?", fontname="hebo", fontsize=16.5)
     page.insert_text((126, 210), "Experts say that the indicator can stay in a zone for months at a time.", fontname="helv")
     page.insert_text((126, 240), "Well, that does not happen on daily charts of the index.", fontname="helv")
     document.save(path)
@@ -128,7 +129,7 @@ class StyledHeadingRecoveryTest(unittest.TestCase):
 
         blocks = [block for chapter in parsed.chapters for block in chapter.blocks]
         headings = [
-            (" ".join(block.text.split()), block.metadata.get("heading_level"))
+            (block.text, block.metadata.get("heading_level"))
             for block in blocks
             if block.block_type == BlockType.HEADING.value
         ]

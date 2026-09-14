@@ -1626,9 +1626,12 @@ class PdfStructureRecoveryService:
         merged_text = previous_text + separator + current_text
         merged_flags = list(dict.fromkeys([*previous.flags, *current.flags, "multiline_heading_merged"]))
         merged_metadata = {**previous.metadata, **current.metadata}
-        if "styled_heading_line_merged" in current.flags and "heading_level" in previous.metadata:
-            # The title's first line decides its level ("CHAPTER 5:" is the chapter heading).
-            merged_metadata["heading_level"] = previous.metadata["heading_level"]
+        if "styled_heading_line_merged" in current.flags:
+            # One title set over several lines: a single-line heading at the first line's level
+            # ("CHAPTER 5:" is the chapter heading).
+            merged_text = " ".join(merged_text.split())
+            if "heading_level" in previous.metadata:
+                merged_metadata["heading_level"] = previous.metadata["heading_level"]
         return _RecoveredBlock(
             role="heading",
             block_type=BlockType.HEADING,
