@@ -113,6 +113,13 @@ from book_agent.application.read_models import (
 
 from book_agent.application import analytics
 
+from book_agent.application.memory_proposals import ChapterMemoryProposalService
+
+from book_agent.application.issue_queries import IssueQueries
+
+
+from book_agent.application.worklist import ChapterWorklistService
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -219,6 +226,16 @@ class DocumentWorkflowService:
             RealignService(self.ops_repository),
             self.pdf_structure_refresh_service,
         )
+        self.memory_proposals = ChapterMemoryProposalService(session, self.memory_service)
+        self.issue_queries = IssueQueries(session)
+        self.worklist = ChapterWorklistService(
+            session,
+            self.bootstrap_repository,
+            self.review_repository,
+            self.ops_repository,
+            self.issue_queries,
+            self.memory_proposals,
+        )
 
     def bootstrap_document(self, source_path: str | Path) -> DocumentSummary:
         artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path)
@@ -246,7 +263,7 @@ class DocumentWorkflowService:
 
     def get_document_summary(self, document_id: str) -> DocumentSummary:
         bundle = self.bootstrap_repository.load_document_bundle(document_id)
-        open_issue_counts = self._open_issue_counts(document_id)
+        open_issue_counts = self.issue_queries.open_issue_counts(document_id)
         quality_summary_map = self.review_repository.load_quality_summaries_for_document(document_id)
         chapter_export_map, merged_export_ready, latest_merged_export_at = self._chapter_export_status_map(document_id)
         latest_run = self._latest_document_run(document_id)
@@ -276,7 +293,7 @@ class DocumentWorkflowService:
                     bilingual_export_ready=(chapter_bundle.chapter.id in chapter_export_map),
                     latest_bilingual_export_at=chapter_export_map.get(chapter_bundle.chapter.id),
                     pdf_image_summary=chapter_pdf_image_summary_map.get(chapter_bundle.chapter.id),
-                    quality_summary=self._to_stored_quality_summary(
+                    quality_summary=analytics.stored_quality_summary(
                         quality_summary_map.get(chapter_bundle.chapter.id)
                     ),
                 )
@@ -726,7 +743,7 @@ class DocumentWorkflowService:
                     low_confidence_count=artifacts.summary.low_confidence_count,
                     format_pollution_count=artifacts.summary.format_pollution_count,
                     resolved_issue_count=len(artifacts.resolved_issue_ids),
-                    naturalness_summary=self._to_naturalness_summary(artifacts.summary.naturalness_summary),
+                    naturalness_summary=analytics.naturalness_summary(artifacts.summary.naturalness_summary),
                 )
             )
 
@@ -768,22 +785,7 @@ class DocumentWorkflowService:
         *,
         status: str | None = None,
     ) -> list[ChapterMemoryProposalSummary]:
-        normalized_status = None
-        if status is not None:
-            normalized_status = MemoryProposalStatus(str(status).strip().lower())
-        proposals = self.memory_service.list_chapter_proposals(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            status=normalized_status,
-        )
-        audit_map = self._load_latest_memory_proposal_decision_map(proposal.id for proposal in proposals)
-        return [
-            self._to_chapter_memory_proposal_summary(
-                proposal,
-                last_decision=audit_map.get(proposal.id),
-            )
-            for proposal in proposals
-        ]
+        return self.memory_proposals.list_chapter_memory_proposals(document_id, chapter_id, status=status)
 
     def approve_chapter_memory_proposal(
         self,
@@ -794,29 +796,12 @@ class DocumentWorkflowService:
         actor_name: str | None = None,
         note: str | None = None,
     ) -> ChapterMemoryProposalDecisionResult:
-        committed_snapshot = self.memory_service.approve_proposal(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            proposal_id=proposal_id,
-        )
-        decision_audit = self._record_chapter_memory_proposal_decision_audit(
-            proposal_id=proposal_id,
-            document_id=document_id,
-            chapter_id=chapter_id,
-            decision="approved",
+        return self.memory_proposals.approve_chapter_memory_proposal(
+            document_id,
+            chapter_id,
+            proposal_id,
             actor_name=actor_name,
             note=note,
-        )
-        proposal = self.memory_service.chapter_memory_repository.load_proposal(proposal_id=proposal_id)
-        if proposal is None:
-            raise ValueError(f"Chapter memory proposal not found after approval: {proposal_id}")
-        return ChapterMemoryProposalDecisionResult(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            decision="approved",
-            proposal=self._to_chapter_memory_proposal_summary(proposal, last_decision=decision_audit),
-            committed_snapshot_id=committed_snapshot.id,
-            committed_snapshot_version=committed_snapshot.version,
         )
 
     def reject_chapter_memory_proposal(
@@ -828,24 +813,12 @@ class DocumentWorkflowService:
         actor_name: str | None = None,
         note: str | None = None,
     ) -> ChapterMemoryProposalDecisionResult:
-        proposal = self.memory_service.reject_proposal(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            proposal_id=proposal_id,
-        )
-        decision_audit = self._record_chapter_memory_proposal_decision_audit(
-            proposal_id=proposal_id,
-            document_id=document_id,
-            chapter_id=chapter_id,
-            decision="rejected",
+        return self.memory_proposals.reject_chapter_memory_proposal(
+            document_id,
+            chapter_id,
+            proposal_id,
             actor_name=actor_name,
             note=note,
-        )
-        return ChapterMemoryProposalDecisionResult(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            decision="rejected",
-            proposal=self._to_chapter_memory_proposal_summary(proposal, last_decision=decision_audit),
         )
 
     def repair_document_blockers_until_exportable(
@@ -1743,160 +1716,6 @@ class DocumentWorkflowService:
             rerun_execution=rerun_execution,
         )
 
-    def _to_chapter_memory_proposal_summary(
-        self,
-        proposal: ChapterMemoryProposal,
-        *,
-        last_decision: ChapterMemoryProposalDecisionAuditSummary | None = None,
-    ) -> ChapterMemoryProposalSummary:
-        return ChapterMemoryProposalSummary(
-            proposal_id=proposal.id,
-            packet_id=proposal.packet_id,
-            translation_run_id=proposal.translation_run_id,
-            status=proposal.status.value,
-            base_snapshot_version=proposal.base_snapshot_version,
-            committed_snapshot_id=proposal.committed_snapshot_id,
-            created_at=proposal.created_at.isoformat(),
-            updated_at=proposal.updated_at.isoformat(),
-            last_decision=last_decision,
-        )
-
-    def _to_chapter_memory_proposal_surface(
-        self,
-        *,
-        document_id: str,
-        chapter_id: str,
-    ) -> ChapterMemoryProposalSurface:
-        proposals = self.memory_service.list_chapter_proposals(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            status=None,
-        )
-        counts_by_status = {
-            MemoryProposalStatus.PROPOSED.value: 0,
-            MemoryProposalStatus.COMMITTED.value: 0,
-            MemoryProposalStatus.REJECTED.value: 0,
-        }
-        audit_map = self._load_latest_memory_proposal_decision_map(proposal.id for proposal in proposals)
-        pending_proposals: list[ChapterMemoryProposalSummary] = []
-        latest_proposal_updated_at: str | None = None
-        for proposal in proposals:
-            counts_by_status[proposal.status.value] = counts_by_status.get(proposal.status.value, 0) + 1
-            updated_at = proposal.updated_at.isoformat()
-            if latest_proposal_updated_at is None or updated_at > latest_proposal_updated_at:
-                latest_proposal_updated_at = updated_at
-            if proposal.status == MemoryProposalStatus.PROPOSED:
-                pending_proposals.append(
-                    self._to_chapter_memory_proposal_summary(
-                        proposal,
-                        last_decision=audit_map.get(proposal.id),
-                    )
-                )
-
-        latest_snapshot = self.memory_service.load_latest_chapter_memory(
-            document_id=document_id,
-            chapter_id=chapter_id,
-        )
-        return ChapterMemoryProposalSurface(
-            proposal_count=len(proposals),
-            pending_proposal_count=len(pending_proposals),
-            counts_by_status=counts_by_status,
-            latest_proposal_updated_at=latest_proposal_updated_at,
-            active_snapshot_version=(latest_snapshot.version if latest_snapshot is not None else None),
-            pending_proposals=pending_proposals,
-            recent_decisions=self._list_recent_chapter_memory_proposal_decisions(chapter_id=chapter_id),
-        )
-
-    def _load_latest_memory_proposal_decision_map(
-        self,
-        proposal_ids,
-    ) -> dict[str, ChapterMemoryProposalDecisionAuditSummary]:
-        normalized_proposal_ids = tuple(dict.fromkeys(str(proposal_id) for proposal_id in proposal_ids if proposal_id))
-        if not normalized_proposal_ids:
-            return {}
-        rows = self.session.scalars(
-            select(AuditEvent)
-            .where(
-                AuditEvent.object_type == "chapter_memory_proposal",
-                AuditEvent.object_id.in_(normalized_proposal_ids),
-                AuditEvent.action.in_(("chapter.memory_proposal.approved", "chapter.memory_proposal.rejected")),
-            )
-            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
-        ).all()
-        latest_by_proposal: dict[str, ChapterMemoryProposalDecisionAuditSummary] = {}
-        for audit in rows:
-            proposal_id = str(audit.object_id)
-            if proposal_id in latest_by_proposal:
-                continue
-            latest_by_proposal[proposal_id] = self._to_chapter_memory_proposal_decision_audit_summary(audit)
-        return latest_by_proposal
-
-    def _list_recent_chapter_memory_proposal_decisions(
-        self,
-        *,
-        chapter_id: str,
-        limit: int = 5,
-    ) -> list[ChapterMemoryProposalDecisionAuditSummary]:
-        audits = self.session.scalars(
-            select(AuditEvent)
-            .join(ChapterMemoryProposal, ChapterMemoryProposal.id == AuditEvent.object_id)
-            .where(
-                AuditEvent.object_type == "chapter_memory_proposal",
-                ChapterMemoryProposal.chapter_id == chapter_id,
-                AuditEvent.action.in_(("chapter.memory_proposal.approved", "chapter.memory_proposal.rejected")),
-            )
-            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
-            .limit(limit)
-        ).all()
-        return [self._to_chapter_memory_proposal_decision_audit_summary(audit) for audit in audits]
-
-    def _to_chapter_memory_proposal_decision_audit_summary(
-        self,
-        audit: AuditEvent,
-    ) -> ChapterMemoryProposalDecisionAuditSummary:
-        payload = dict(audit.payload_json or {})
-        action = str(audit.action)
-        decision = "approved" if action.endswith(".approved") else "rejected"
-        return ChapterMemoryProposalDecisionAuditSummary(
-            proposal_id=str(audit.object_id),
-            decision=decision,
-            actor_type=audit.actor_type.value,
-            actor_id=audit.actor_id,
-            note=(str(payload.get("note")) if payload.get("note") is not None else None),
-            created_at=audit.created_at.isoformat(),
-        )
-
-    def _record_chapter_memory_proposal_decision_audit(
-        self,
-        *,
-        proposal_id: str,
-        document_id: str,
-        chapter_id: str,
-        decision: str,
-        actor_name: str | None,
-        note: str | None,
-    ) -> ChapterMemoryProposalDecisionAuditSummary:
-        normalized_actor_name = (actor_name or "").strip() or None
-        normalized_note = (note or "").strip() or None
-        audit = AuditEvent(
-            object_type="chapter_memory_proposal",
-            object_id=proposal_id,
-            action=f"chapter.memory_proposal.{decision}",
-            actor_type=(ActorType.HUMAN if normalized_actor_name else ActorType.SYSTEM),
-            actor_id=(normalized_actor_name or "memory-proposal-api"),
-            created_at=_utcnow(),
-            payload_json={
-                "document_id": document_id,
-                "chapter_id": chapter_id,
-                "proposal_id": proposal_id,
-                "decision": decision,
-                "note": normalized_note,
-            },
-        )
-        self.session.add(audit)
-        self.session.flush()
-        return self._to_chapter_memory_proposal_decision_audit_summary(audit)
-
     def get_document_export_dashboard(
         self,
         document_id: str,
@@ -1937,14 +1756,14 @@ class DocumentWorkflowService:
         latest_export_at = exports[0].created_at.isoformat() if exports else None
         record_count = len(records)
         has_more = (offset + record_count) < filtered_export_count
-        issue_chapter_pressure = self._to_issue_chapter_pressure(document_id)
-        issue_chapter_breakdown = self._to_issue_chapter_breakdown(document_id)
+        issue_chapter_pressure = self.issue_queries.chapter_pressure(document_id)
+        issue_chapter_breakdown = self.issue_queries.chapter_breakdown(document_id)
         issue_chapter_heatmap = analytics.issue_chapter_heatmap(issue_chapter_breakdown)
-        issue_chapter_activity = self._to_issue_chapter_activity_map(document_id)
-        issue_chapter_worklist_meta = self._to_issue_chapter_worklist_meta(document_id)
-        chapter_assignment_map = self._to_chapter_assignment_map(document_id)
-        chapter_memory_proposal_map = self._to_chapter_memory_proposal_queue_map(document_id)
-        issue_activity_breakdown = self._to_issue_activity_breakdown(document_id)
+        issue_chapter_activity = self.issue_queries.chapter_activity_map(document_id)
+        issue_chapter_worklist_meta = self.issue_queries.chapter_worklist_meta(document_id)
+        chapter_assignment_map = self.issue_queries.chapter_assignment_map(document_id)
+        chapter_memory_proposal_map = self.memory_proposals.proposal_queue_map(document_id)
+        issue_activity_breakdown = self.issue_queries.activity_breakdown(document_id)
         return DocumentExportDashboard(
             document_id=document_id,
             export_count=len(exports),
@@ -1964,7 +1783,7 @@ class DocumentWorkflowService:
             translation_usage_breakdown=analytics.translation_usage_breakdown_from_runs(document_translation_runs),
             translation_usage_timeline=analytics.translation_usage_timeline_from_runs(document_translation_runs),
             translation_usage_highlights=analytics.translation_usage_highlights_from_runs(document_translation_runs),
-            issue_hotspots=self._to_issue_hotspots(document_id),
+            issue_hotspots=self.issue_queries.issue_hotspots(document_id),
             issue_chapter_pressure=issue_chapter_pressure,
             issue_chapter_highlights=analytics.issue_chapter_highlights(issue_chapter_pressure),
             issue_chapter_breakdown=issue_chapter_breakdown,
@@ -1976,7 +1795,7 @@ class DocumentWorkflowService:
                 chapter_assignment_map,
                 chapter_memory_proposal_map,
             ),
-            issue_activity_timeline=self._to_issue_activity_timeline(document_id),
+            issue_activity_timeline=self.issue_queries.activity_timeline(document_id),
             issue_activity_breakdown=issue_activity_breakdown,
             issue_activity_highlights=analytics.issue_activity_highlights(issue_activity_breakdown),
             records=records,
@@ -2028,73 +1847,16 @@ class DocumentWorkflowService:
         limit: int | None = None,
         offset: int = 0,
     ) -> DocumentChapterWorklist:
-        self.bootstrap_repository.load_document_bundle(document_id)
-
-        issue_chapter_breakdown = self._to_issue_chapter_breakdown(document_id)
-        issue_chapter_heatmap = analytics.issue_chapter_heatmap(issue_chapter_breakdown)
-        issue_chapter_activity = self._to_issue_chapter_activity_map(document_id)
-        issue_chapter_worklist_meta = self._to_issue_chapter_worklist_meta(document_id)
-        chapter_assignment_map = self._to_chapter_assignment_map(document_id)
-        chapter_memory_proposal_map = self._to_chapter_memory_proposal_queue_map(document_id)
-        entries = analytics.issue_chapter_queue(
-            issue_chapter_heatmap,
-            issue_chapter_activity,
-            issue_chapter_worklist_meta,
-            chapter_assignment_map,
-            chapter_memory_proposal_map,
-        )
-
-        filtered_entries = [
-            entry
-            for entry in entries
-            if (queue_priority is None or entry.queue_priority == queue_priority)
-            and (sla_status is None or entry.sla_status == sla_status)
-            and (owner_ready is None or entry.owner_ready == owner_ready)
-            and (
-                needs_immediate_attention is None
-                or entry.needs_immediate_attention == needs_immediate_attention
-            )
-            and (assigned is None or entry.is_assigned == assigned)
-            and (
-                assigned_owner_name is None
-                or entry.assigned_owner_name == assigned_owner_name
-            )
-        ]
-        paged_entries = filtered_entries[offset : (offset + limit) if limit is not None else None]
-
-        queue_priority_counts: dict[str, int] = {}
-        sla_status_counts: dict[str, int] = {}
-        for entry in entries:
-            queue_priority_counts[entry.queue_priority] = (
-                queue_priority_counts.get(entry.queue_priority, 0) + 1
-            )
-            sla_status_counts[entry.sla_status] = sla_status_counts.get(entry.sla_status, 0) + 1
-
-        owner_workload_summary = analytics.owner_workload_summary(entries)
-
-        return DocumentChapterWorklist(
-            document_id=document_id,
-            worklist_count=len(entries),
-            filtered_worklist_count=len(filtered_entries),
-            entry_count=len(paged_entries),
-            offset=offset,
+        return self.worklist.get_document_chapter_worklist(
+            document_id,
+            queue_priority=queue_priority,
+            sla_status=sla_status,
+            owner_ready=owner_ready,
+            needs_immediate_attention=needs_immediate_attention,
+            assigned=assigned,
+            assigned_owner_name=assigned_owner_name,
             limit=limit,
-            has_more=(offset + len(paged_entries)) < len(filtered_entries),
-            applied_queue_priority_filter=queue_priority,
-            applied_sla_status_filter=sla_status,
-            applied_owner_ready_filter=owner_ready,
-            applied_needs_immediate_attention_filter=needs_immediate_attention,
-            applied_assigned_filter=assigned,
-            applied_assigned_owner_filter=assigned_owner_name,
-            queue_priority_counts=queue_priority_counts,
-            sla_status_counts=sla_status_counts,
-            immediate_attention_count=sum(1 for entry in entries if entry.needs_immediate_attention),
-            owner_ready_count=sum(1 for entry in entries if entry.owner_ready),
-            assigned_count=sum(1 for entry in entries if entry.is_assigned),
-            owner_workload_summary=owner_workload_summary,
-            owner_workload_highlights=analytics.owner_workload_highlights(owner_workload_summary),
-            highlights=analytics.issue_chapter_worklist_highlights(entries),
-            entries=paged_entries,
+            offset=offset,
         )
 
     def get_document_chapter_worklist_detail(
@@ -2102,71 +1864,7 @@ class DocumentWorkflowService:
         document_id: str,
         chapter_id: str,
     ) -> DocumentChapterWorklistDetail:
-        bundle = self.bootstrap_repository.load_document_bundle(document_id)
-        chapter_bundle = next(
-            (chapter_bundle for chapter_bundle in bundle.chapters if chapter_bundle.chapter.id == chapter_id),
-            None,
-        )
-        if chapter_bundle is None:
-            raise ValueError(f"Chapter not found in document: {chapter_id}")
-
-        issue_family_breakdown = [
-            entry
-            for entry in self._to_issue_chapter_breakdown(document_id)
-            if entry.chapter_id == chapter_id
-        ]
-        chapter_activity = self._to_issue_chapter_activity_map(document_id)
-        chapter_worklist_meta = self._to_issue_chapter_worklist_meta(document_id)
-        chapter_assignment_map = self._to_chapter_assignment_map(document_id)
-        chapter_memory_proposal_map = self._to_chapter_memory_proposal_queue_map(document_id)
-        queue_entries = analytics.issue_chapter_queue(
-            analytics.issue_chapter_heatmap(issue_family_breakdown),
-            chapter_activity,
-            chapter_worklist_meta,
-            chapter_assignment_map,
-            chapter_memory_proposal_map,
-        )
-        queue_entry = queue_entries[0] if queue_entries else None
-        quality_summary = self.review_repository.load_quality_summaries_for_document(document_id).get(chapter_id)
-        memory_proposals = self._to_chapter_memory_proposal_surface(
-            document_id=document_id,
-            chapter_id=chapter_id,
-        )
-        recent_actions = self._to_chapter_recent_actions(chapter_id)
-        assignment_history = self._to_chapter_assignment_history(chapter_id)
-
-        return DocumentChapterWorklistDetail(
-            document_id=document_id,
-            chapter_id=chapter_id,
-            ordinal=chapter_bundle.chapter.ordinal,
-            title_src=chapter_bundle.chapter.title_src,
-            chapter_status=chapter_bundle.chapter.status.value,
-            packet_count=len(chapter_bundle.translation_packets),
-            translated_packet_count=sum(
-                1
-                for packet in chapter_bundle.translation_packets
-                if packet.status == PacketStatus.TRANSLATED
-            ),
-            current_issue_count=sum(entry.issue_count for entry in issue_family_breakdown),
-            current_open_issue_count=sum(entry.open_issue_count for entry in issue_family_breakdown),
-            current_triaged_issue_count=sum(entry.triaged_issue_count for entry in issue_family_breakdown),
-            current_active_blocking_issue_count=sum(
-                entry.active_blocking_issue_count for entry in issue_family_breakdown
-            ),
-            assignment=chapter_assignment_map.get(chapter_id),
-            queue_entry=queue_entry,
-            quality_summary=self._to_stored_quality_summary(quality_summary),
-            issue_family_breakdown=issue_family_breakdown,
-            recent_issues=self._to_chapter_recent_issues(chapter_id),
-            recent_actions=recent_actions,
-            assignment_history=assignment_history,
-            memory_proposals=memory_proposals,
-            timeline=analytics.chapter_worklist_timeline(
-                recent_actions=recent_actions,
-                assignment_history=assignment_history,
-                memory_decisions=memory_proposals.recent_decisions,
-            ),
-        )
+        return self.worklist.get_document_chapter_worklist_detail(document_id, chapter_id)
 
     def assign_document_chapter_worklist_owner(
         self,
@@ -2177,45 +1875,13 @@ class DocumentWorkflowService:
         assigned_by: str,
         note: str | None = None,
     ) -> ChapterWorklistAssignmentSummary:
-        bundle = self.bootstrap_repository.load_document_bundle(document_id)
-        if not any(chapter_bundle.chapter.id == chapter_id for chapter_bundle in bundle.chapters):
-            raise ValueError(f"Chapter not found in document: {chapter_id}")
-
-        assignment = self.session.scalar(
-            select(ChapterWorklistAssignment).where(ChapterWorklistAssignment.chapter_id == chapter_id)
+        return self.worklist.assign_document_chapter_worklist_owner(
+            document_id,
+            chapter_id,
+            owner_name=owner_name,
+            assigned_by=assigned_by,
+            note=note,
         )
-        if assignment is None:
-            assignment = ChapterWorklistAssignment(
-                document_id=document_id,
-                chapter_id=chapter_id,
-            )
-            self.session.add(assignment)
-        assignment.document_id = document_id
-        assignment.chapter_id = chapter_id
-        assignment.owner_name = owner_name
-        assignment.assigned_by = assigned_by
-        assignment.note = note
-        assignment.assigned_at = _utcnow()
-        self.session.flush()
-        self.session.refresh(assignment)
-
-        audit = AuditEvent(
-            object_type="chapter",
-            object_id=chapter_id,
-            action="chapter.worklist.assignment.set",
-            actor_type=ActorType.HUMAN,
-            actor_id=assigned_by,
-            created_at=_utcnow(),
-            payload_json={
-                "document_id": document_id,
-                "chapter_id": chapter_id,
-                "owner_name": owner_name,
-                "note": note,
-            },
-        )
-        self.ops_repository.save_audits([audit])
-        self.session.flush()
-        return analytics.assignment_summary(assignment)
 
     def clear_document_chapter_worklist_owner(
         self,
@@ -2225,524 +1891,12 @@ class DocumentWorkflowService:
         cleared_by: str,
         note: str | None = None,
     ) -> ChapterWorklistAssignmentSummary:
-        self.bootstrap_repository.load_document_bundle(document_id)
-        assignment = self.session.scalar(
-            select(ChapterWorklistAssignment).where(
-                ChapterWorklistAssignment.document_id == document_id,
-                ChapterWorklistAssignment.chapter_id == chapter_id,
-            )
+        return self.worklist.clear_document_chapter_worklist_owner(
+            document_id,
+            chapter_id,
+            cleared_by=cleared_by,
+            note=note,
         )
-        if assignment is None:
-            raise ValueError(f"Chapter worklist assignment not found: {chapter_id}")
-
-        summary = analytics.assignment_summary(assignment)
-        self.session.delete(assignment)
-        self.session.flush()
-        audit = AuditEvent(
-            object_type="chapter",
-            object_id=chapter_id,
-            action="chapter.worklist.assignment.cleared",
-            actor_type=ActorType.HUMAN,
-            actor_id=cleared_by,
-            created_at=_utcnow(),
-            payload_json={
-                "document_id": document_id,
-                "chapter_id": chapter_id,
-                "owner_name": summary.owner_name,
-                "note": note,
-            },
-        )
-        self.ops_repository.save_audits([audit])
-        self.session.flush()
-        return summary
-
-    def _to_chapter_recent_issues(
-        self,
-        chapter_id: str,
-        *,
-        limit: int = 10,
-    ) -> list[ChapterWorklistIssue]:
-        issues = self.session.scalars(
-            select(ReviewIssue)
-            .where(ReviewIssue.chapter_id == chapter_id)
-            .order_by(ReviewIssue.updated_at.desc(), ReviewIssue.created_at.desc())
-            .limit(limit)
-        ).all()
-        return [
-            ChapterWorklistIssue(
-                issue_id=issue.id,
-                issue_type=issue.issue_type,
-                root_cause_layer=issue.root_cause_layer.value,
-                severity=issue.severity.value,
-                status=issue.status.value,
-                blocking=issue.blocking,
-                detector=issue.detector.value,
-                suggested_action=issue.suggested_action,
-                created_at=issue.created_at.isoformat(),
-                updated_at=issue.updated_at.isoformat(),
-            )
-            for issue in issues
-        ]
-
-    def _to_chapter_recent_actions(
-        self,
-        chapter_id: str,
-        *,
-        limit: int = 10,
-    ) -> list[ChapterWorklistAction]:
-        rows = self.session.execute(
-            select(IssueAction, ReviewIssue.issue_type)
-            .join(ReviewIssue, IssueAction.issue_id == ReviewIssue.id)
-            .where(ReviewIssue.chapter_id == chapter_id)
-            .order_by(IssueAction.updated_at.desc(), IssueAction.created_at.desc())
-            .limit(limit)
-        ).all()
-        return [
-            ChapterWorklistAction(
-                action_id=action.id,
-                issue_id=action.issue_id,
-                issue_type=issue_type,
-                action_type=action.action_type.value,
-                scope_type=action.scope_type.value,
-                scope_id=action.scope_id,
-                status=action.status.value,
-                created_by=action.created_by.value,
-                created_at=action.created_at.isoformat(),
-                updated_at=action.updated_at.isoformat(),
-            )
-            for action, issue_type in rows
-        ]
-
-    def _to_chapter_assignment_history(
-        self,
-        chapter_id: str,
-        *,
-        limit: int = 20,
-    ) -> list[ChapterWorklistAssignmentHistoryEntry]:
-        assignment_actions = {
-            "chapter.worklist.assignment.set": "set",
-            "chapter.worklist.assignment.cleared": "cleared",
-        }
-        events = self.session.scalars(
-            select(AuditEvent)
-            .where(
-                AuditEvent.object_type == "chapter",
-                AuditEvent.object_id == chapter_id,
-                AuditEvent.action.in_(tuple(assignment_actions.keys())),
-            )
-            .order_by(AuditEvent.created_at.desc())
-            .limit(limit)
-        ).all()
-        return [
-            ChapterWorklistAssignmentHistoryEntry(
-                event_id=event.id,
-                event_type=assignment_actions[event.action],
-                owner_name=(event.payload_json.get("owner_name") if event.payload_json else None),
-                performed_by=event.actor_id,
-                note=(event.payload_json.get("note") if event.payload_json else None),
-                created_at=event.created_at.isoformat(),
-            )
-            for event in events
-        ]
-
-    def _to_issue_hotspots(self, document_id: str) -> list[IssueHotspotEntry]:
-        rows = self.session.execute(
-            select(
-                ReviewIssue.issue_type,
-                ReviewIssue.root_cause_layer,
-                func.count(ReviewIssue.id).label("issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.OPEN, 1), else_=0)).label("open_issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.TRIAGED, 1), else_=0)).label(
-                    "triaged_issue_count"
-                ),
-                func.sum(case((ReviewIssue.status == IssueStatus.RESOLVED, 1), else_=0)).label(
-                    "resolved_issue_count"
-                ),
-                func.sum(case((ReviewIssue.status == IssueStatus.WONTFIX, 1), else_=0)).label(
-                    "wontfix_issue_count"
-                ),
-                func.sum(case((ReviewIssue.blocking.is_(True), 1), else_=0)).label("blocking_issue_count"),
-                func.count(distinct(ReviewIssue.chapter_id)).label("chapter_count"),
-                func.max(ReviewIssue.created_at).label("latest_seen_at"),
-            )
-            .where(ReviewIssue.document_id == document_id)
-            .group_by(ReviewIssue.issue_type, ReviewIssue.root_cause_layer)
-        ).all()
-        hotspots = [
-            IssueHotspotEntry(
-                issue_type=issue_type,
-                root_cause_layer=root_cause_layer.value,
-                issue_count=issue_count or 0,
-                open_issue_count=open_issue_count or 0,
-                triaged_issue_count=triaged_issue_count or 0,
-                resolved_issue_count=resolved_issue_count or 0,
-                wontfix_issue_count=wontfix_issue_count or 0,
-                blocking_issue_count=blocking_issue_count or 0,
-                chapter_count=chapter_count or 0,
-                latest_seen_at=latest_seen_at.isoformat() if latest_seen_at is not None else None,
-            )
-            for (
-                issue_type,
-                root_cause_layer,
-                issue_count,
-                open_issue_count,
-                triaged_issue_count,
-                resolved_issue_count,
-                wontfix_issue_count,
-                blocking_issue_count,
-                chapter_count,
-                latest_seen_at,
-            ) in rows
-        ]
-        hotspots.sort(
-            key=lambda entry: (
-                -entry.open_issue_count,
-                -entry.blocking_issue_count,
-                -entry.issue_count,
-                entry.issue_type,
-                entry.root_cause_layer,
-            )
-        )
-        return hotspots
-
-    def _to_issue_chapter_pressure(self, document_id: str) -> list[IssueChapterPressureEntry]:
-        rows = self.session.execute(
-            select(
-                Chapter.id,
-                Chapter.ordinal,
-                Chapter.title_src,
-                Chapter.status,
-                func.count(ReviewIssue.id).label("issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.OPEN, 1), else_=0)).label("open_issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.TRIAGED, 1), else_=0)).label(
-                    "triaged_issue_count"
-                ),
-                func.sum(case((ReviewIssue.status == IssueStatus.RESOLVED, 1), else_=0)).label(
-                    "resolved_issue_count"
-                ),
-                func.sum(case((ReviewIssue.blocking.is_(True), 1), else_=0)).label("blocking_issue_count"),
-                func.max(ReviewIssue.created_at).label("latest_issue_at"),
-            )
-            .join(ReviewIssue, ReviewIssue.chapter_id == Chapter.id)
-            .where(Chapter.document_id == document_id)
-            .group_by(Chapter.id, Chapter.ordinal, Chapter.title_src, Chapter.status)
-        ).all()
-        chapters = [
-            IssueChapterPressureEntry(
-                chapter_id=chapter_id,
-                ordinal=ordinal,
-                title_src=title_src,
-                chapter_status=chapter_status.value,
-                issue_count=issue_count or 0,
-                open_issue_count=open_issue_count or 0,
-                triaged_issue_count=triaged_issue_count or 0,
-                resolved_issue_count=resolved_issue_count or 0,
-                blocking_issue_count=blocking_issue_count or 0,
-                latest_issue_at=latest_issue_at.isoformat() if latest_issue_at is not None else None,
-            )
-            for (
-                chapter_id,
-                ordinal,
-                title_src,
-                chapter_status,
-                issue_count,
-                open_issue_count,
-                triaged_issue_count,
-                resolved_issue_count,
-                blocking_issue_count,
-                latest_issue_at,
-            ) in rows
-        ]
-        chapters.sort(
-            key=lambda entry: (
-                -entry.open_issue_count,
-                -entry.blocking_issue_count,
-                -entry.issue_count,
-                entry.ordinal,
-                entry.chapter_id,
-            )
-        )
-        return chapters
-
-    def _to_issue_activity_timeline(self, document_id: str) -> list[IssueActivityTimelineEntry]:
-        issues = self.session.scalars(
-            select(ReviewIssue).where(ReviewIssue.document_id == document_id)
-        ).all()
-        return analytics.build_issue_activity_timeline(issues)
-
-    def _to_issue_chapter_breakdown(self, document_id: str) -> list[IssueChapterBreakdownEntry]:
-        rows = self.session.execute(
-            select(
-                Chapter.id,
-                Chapter.ordinal,
-                Chapter.title_src,
-                Chapter.status,
-                ReviewIssue.issue_type,
-                ReviewIssue.root_cause_layer,
-                func.count(ReviewIssue.id).label("issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.OPEN, 1), else_=0)).label("open_issue_count"),
-                func.sum(case((ReviewIssue.status == IssueStatus.TRIAGED, 1), else_=0)).label(
-                    "triaged_issue_count"
-                ),
-                func.sum(case((ReviewIssue.status == IssueStatus.RESOLVED, 1), else_=0)).label(
-                    "resolved_issue_count"
-                ),
-                func.sum(case((ReviewIssue.blocking.is_(True), 1), else_=0)).label("blocking_issue_count"),
-                func.sum(
-                    case(
-                        (
-                            ReviewIssue.blocking.is_(True)
-                            & ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ).label("active_blocking_issue_count"),
-                func.max(ReviewIssue.created_at).label("latest_seen_at"),
-            )
-            .join(ReviewIssue, ReviewIssue.chapter_id == Chapter.id)
-            .where(Chapter.document_id == document_id)
-            .group_by(
-                Chapter.id,
-                Chapter.ordinal,
-                Chapter.title_src,
-                Chapter.status,
-                ReviewIssue.issue_type,
-                ReviewIssue.root_cause_layer,
-            )
-        ).all()
-        entries = [
-            IssueChapterBreakdownEntry(
-                chapter_id=chapter_id,
-                ordinal=ordinal,
-                title_src=title_src,
-                chapter_status=chapter_status.value,
-                issue_type=issue_type,
-                root_cause_layer=root_cause_layer.value,
-                issue_count=issue_count or 0,
-                open_issue_count=open_issue_count or 0,
-                triaged_issue_count=triaged_issue_count or 0,
-                resolved_issue_count=resolved_issue_count or 0,
-                blocking_issue_count=blocking_issue_count or 0,
-                active_blocking_issue_count=active_blocking_issue_count or 0,
-                latest_seen_at=latest_seen_at.isoformat() if latest_seen_at is not None else None,
-            )
-            for (
-                chapter_id,
-                ordinal,
-                title_src,
-                chapter_status,
-                issue_type,
-                root_cause_layer,
-                issue_count,
-                open_issue_count,
-                triaged_issue_count,
-                resolved_issue_count,
-                blocking_issue_count,
-                active_blocking_issue_count,
-                latest_seen_at,
-            ) in rows
-        ]
-        entries.sort(
-            key=lambda entry: (
-                entry.ordinal,
-                -entry.open_issue_count,
-                -entry.active_blocking_issue_count,
-                -entry.issue_count,
-                entry.issue_type,
-                entry.root_cause_layer,
-            )
-        )
-        return entries
-
-    def _to_chapter_memory_proposal_queue_map(
-        self,
-        document_id: str,
-    ) -> dict[str, ChapterMemoryProposalQueueSummary]:
-        proposal_rows = self.session.execute(
-            select(
-                ChapterMemoryProposal.chapter_id,
-                ChapterMemoryProposal.status,
-                func.count(ChapterMemoryProposal.id),
-                func.max(ChapterMemoryProposal.updated_at),
-            )
-            .where(ChapterMemoryProposal.document_id == document_id)
-            .group_by(ChapterMemoryProposal.chapter_id, ChapterMemoryProposal.status)
-        ).all()
-        snapshot_rows = self.session.execute(
-            select(MemorySnapshot.scope_id, MemorySnapshot.version)
-            .where(
-                MemorySnapshot.document_id == document_id,
-                MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
-                MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_TRANSLATION_MEMORY,
-                MemorySnapshot.status == MemoryStatus.ACTIVE,
-            )
-        ).all()
-
-        by_chapter: dict[str, ChapterMemoryProposalQueueSummary] = {}
-        for chapter_id, proposal_status, proposal_count, latest_updated_at in proposal_rows:
-            normalized_chapter_id = str(chapter_id)
-            summary = by_chapter.get(normalized_chapter_id)
-            if summary is None:
-                summary = ChapterMemoryProposalQueueSummary(
-                    proposal_count=0,
-                    pending_proposal_count=0,
-                    counts_by_status={
-                        MemoryProposalStatus.PROPOSED.value: 0,
-                        MemoryProposalStatus.COMMITTED.value: 0,
-                        MemoryProposalStatus.REJECTED.value: 0,
-                    },
-                    latest_proposal_updated_at=None,
-                    active_snapshot_version=None,
-                )
-                by_chapter[normalized_chapter_id] = summary
-
-            status_value = proposal_status.value
-            count_value = int(proposal_count or 0)
-            summary.proposal_count += count_value
-            summary.counts_by_status[status_value] = summary.counts_by_status.get(status_value, 0) + count_value
-            if status_value == MemoryProposalStatus.PROPOSED.value:
-                summary.pending_proposal_count += count_value
-            updated_at_value = latest_updated_at.isoformat() if latest_updated_at is not None else None
-            if (
-                updated_at_value is not None
-                and (
-                    summary.latest_proposal_updated_at is None
-                    or updated_at_value > summary.latest_proposal_updated_at
-                )
-            ):
-                summary.latest_proposal_updated_at = updated_at_value
-
-        for scope_id, version in snapshot_rows:
-            normalized_chapter_id = str(scope_id)
-            summary = by_chapter.get(normalized_chapter_id)
-            if summary is None:
-                summary = ChapterMemoryProposalQueueSummary(
-                    proposal_count=0,
-                    pending_proposal_count=0,
-                    counts_by_status={
-                        MemoryProposalStatus.PROPOSED.value: 0,
-                        MemoryProposalStatus.COMMITTED.value: 0,
-                        MemoryProposalStatus.REJECTED.value: 0,
-                    },
-                    latest_proposal_updated_at=None,
-                    active_snapshot_version=None,
-                )
-                by_chapter[normalized_chapter_id] = summary
-            summary.active_snapshot_version = int(version)
-
-        return by_chapter
-
-    def _to_issue_chapter_activity_map(
-        self,
-        document_id: str,
-    ) -> dict[str, list[IssueActivityTimelineEntry]]:
-        issues = self.session.scalars(
-            select(ReviewIssue).where(
-                ReviewIssue.document_id == document_id,
-                ReviewIssue.chapter_id.is_not(None),
-            )
-        ).all()
-        grouped: dict[str, list[ReviewIssue]] = {}
-        for issue in issues:
-            if issue.chapter_id is None:
-                continue
-            grouped.setdefault(issue.chapter_id, []).append(issue)
-        return {
-            chapter_id: analytics.build_issue_activity_timeline(chapter_issues)
-            for chapter_id, chapter_issues in grouped.items()
-        }
-
-    def _to_issue_chapter_worklist_meta(
-        self,
-        document_id: str,
-    ) -> dict[str, dict[str, object]]:
-        rows = self.session.execute(
-            select(
-                ReviewIssue.chapter_id,
-                func.min(ReviewIssue.created_at).label("oldest_active_issue_at"),
-            )
-            .where(
-                ReviewIssue.document_id == document_id,
-                ReviewIssue.chapter_id.is_not(None),
-                ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
-            )
-            .group_by(ReviewIssue.chapter_id)
-        ).all()
-        now = _utcnow()
-        meta: dict[str, dict[str, object]] = {}
-        for chapter_id, oldest_active_issue_at in rows:
-            if chapter_id is None or oldest_active_issue_at is None:
-                continue
-            if oldest_active_issue_at.tzinfo is None:
-                oldest_active_issue_at = oldest_active_issue_at.replace(tzinfo=timezone.utc)
-            age_hours = max(0, int((now - oldest_active_issue_at).total_seconds() // 3600))
-            meta[chapter_id] = {
-                "oldest_active_issue_at": oldest_active_issue_at.isoformat(),
-                "age_hours": age_hours,
-            }
-        return meta
-
-    def _to_chapter_assignment_map(
-        self,
-        document_id: str,
-    ) -> dict[str, ChapterWorklistAssignmentSummary]:
-        assignments = self.session.scalars(
-            select(ChapterWorklistAssignment).where(
-                ChapterWorklistAssignment.document_id == document_id
-            )
-        ).all()
-        return {
-            assignment.chapter_id: analytics.assignment_summary(assignment)
-            for assignment in assignments
-        }
-
-    def _to_issue_activity_breakdown(self, document_id: str) -> list[IssueActivityBreakdownEntry]:
-        issues = self.session.scalars(
-            select(ReviewIssue).where(ReviewIssue.document_id == document_id)
-        ).all()
-        if not issues:
-            return []
-
-        grouped: dict[tuple[str, str], list[ReviewIssue]] = {}
-        for issue in issues:
-            key = (issue.issue_type, issue.root_cause_layer.value)
-            grouped.setdefault(key, []).append(issue)
-
-        breakdown = [
-            IssueActivityBreakdownEntry(
-                issue_type=issue_type,
-                root_cause_layer=root_cause_layer,
-                issue_count=len(group_issues),
-                open_issue_count=sum(1 for issue in group_issues if issue.status == IssueStatus.OPEN),
-                blocking_issue_count=sum(1 for issue in group_issues if issue.blocking),
-                latest_seen_at=max(issue.created_at for issue in group_issues).isoformat(),
-                timeline=analytics.build_issue_activity_timeline(group_issues),
-            )
-            for (issue_type, root_cause_layer), group_issues in grouped.items()
-        ]
-        breakdown.sort(
-            key=lambda entry: (
-                -entry.open_issue_count,
-                -entry.blocking_issue_count,
-                -entry.issue_count,
-                entry.issue_type,
-                entry.root_cause_layer,
-            )
-        )
-        return breakdown
-
-    def _open_issue_counts(self, document_id: str) -> dict[str, int]:
-        rows = self.session.execute(
-            select(ReviewIssue.chapter_id, func.count(ReviewIssue.id))
-            .where(
-                ReviewIssue.document_id == document_id,
-                ReviewIssue.status == IssueStatus.OPEN,
-                ReviewIssue.chapter_id.is_not(None),
-            )
-            .group_by(ReviewIssue.chapter_id)
-        ).all()
-        return {chapter_id: count for chapter_id, count in rows if chapter_id is not None}
 
     def _with_auto_followup_telemetry(
         self,
@@ -2890,39 +2044,6 @@ class DocumentWorkflowService:
         )
         self.ops_repository.save_audits([audit])
         self.session.flush()
-
-    def _to_stored_quality_summary(
-        self,
-        summary: PersistedChapterQualitySummary | None,
-    ) -> StoredChapterQualitySummary | None:
-        if summary is None:
-            return None
-        return StoredChapterQualitySummary(
-            issue_count=summary.issue_count,
-            action_count=summary.action_count,
-            resolved_issue_count=summary.resolved_issue_count,
-            coverage_ok=summary.coverage_ok,
-            alignment_ok=summary.alignment_ok,
-            term_ok=summary.term_ok,
-            format_ok=summary.format_ok,
-            blocking_issue_count=summary.blocking_issue_count,
-            low_confidence_count=summary.low_confidence_count,
-            format_pollution_count=summary.format_pollution_count,
-        )
-
-    def _to_naturalness_summary(
-        self,
-        summary: ReviewNaturalnessSummary | None,
-    ) -> NaturalnessSummarySnapshot | None:
-        if summary is None:
-            return None
-        return NaturalnessSummarySnapshot(
-            advisory_only=summary.advisory_only,
-            style_drift_issue_count=summary.style_drift_issue_count,
-            affected_packet_count=summary.affected_packet_count,
-            dominant_style_rules=list(summary.dominant_style_rules),
-            preferred_hints=list(summary.preferred_hints),
-        )
 
     def _record_export_auto_followup_execution(
         self,

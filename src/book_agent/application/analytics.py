@@ -25,6 +25,8 @@ from book_agent.application.read_models import (
     IssueChapterHighlights,
     IssueChapterPressureEntry,
     IssueChapterQueueEntry,
+    NaturalnessSummarySnapshot,
+    StoredChapterQualitySummary,
     TranslationUsageBreakdownEntry,
     TranslationUsageHighlights,
     TranslationUsageSummary,
@@ -37,9 +39,11 @@ from book_agent.domain.enums import (
 from book_agent.domain.models import (
     ChapterWorklistAssignment,
 )
+from book_agent.domain.models.review import ChapterQualitySummary as PersistedChapterQualitySummary
 from book_agent.domain.models.review import (
     ReviewIssue,
 )
+from book_agent.services.review import NaturalnessSummary as ReviewNaturalnessSummary
 
 
 def issue_chapter_worklist_highlights(
@@ -1042,3 +1046,36 @@ def build_issue_activity_timeline(issues: list[ReviewIssue]) -> list[IssueActivi
         )
     timeline.sort(key=lambda entry: entry.bucket_start, reverse=True)
     return timeline
+
+
+def stored_quality_summary(
+    summary: PersistedChapterQualitySummary | None,
+) -> StoredChapterQualitySummary | None:
+    if summary is None:
+        return None
+    return StoredChapterQualitySummary(
+        issue_count=summary.issue_count,
+        action_count=summary.action_count,
+        resolved_issue_count=summary.resolved_issue_count,
+        coverage_ok=summary.coverage_ok,
+        alignment_ok=summary.alignment_ok,
+        term_ok=summary.term_ok,
+        format_ok=summary.format_ok,
+        blocking_issue_count=summary.blocking_issue_count,
+        low_confidence_count=summary.low_confidence_count,
+        format_pollution_count=summary.format_pollution_count,
+    )
+
+
+def naturalness_summary(
+    summary: ReviewNaturalnessSummary | None,
+) -> NaturalnessSummarySnapshot | None:
+    if summary is None:
+        return None
+    return NaturalnessSummarySnapshot(
+        advisory_only=summary.advisory_only,
+        style_drift_issue_count=summary.style_drift_issue_count,
+        affected_packet_count=summary.affected_packet_count,
+        dominant_style_rules=list(summary.dominant_style_rules),
+        preferred_hints=list(summary.preferred_hints),
+    )
