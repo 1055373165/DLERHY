@@ -5,18 +5,6 @@ from __future__ import annotations
 
 import re
 
-from book_agent.ingestion.text import (
-    _expanded_code_candidate_lines,
-    _looks_like_code_docstring_line,
-    _looks_like_embedded_code_line,
-    _looks_like_labeled_prose_line,
-    _looks_like_prose_line_group,
-    _looks_like_sentence_prose_line,
-    _looks_like_shell_command_continuation_line,
-    _looks_like_shell_command_line,
-    _looks_like_splitworthy_single_line_code_fragment,
-    _looks_like_structured_data_line,
-)
 from book_agent.export.common import (
     _ACADEMIC_CITATION_PATTERN,
     _ACADEMIC_FRONTMATTER_MARKER_PATTERN,
@@ -35,17 +23,31 @@ from book_agent.export.common import (
     _OCR_TOLERANT_CODE_ASSIGNMENT_PATTERN,
     _ORDERED_LIST_MARKER_PATTERN,
     _PROSE_ARTIFACT_STOPWORDS,
-    _PROSE_CONTINUATION_START_WORDS,
     _REFERENCE_ENTRY_MARKER_PATTERN,
     _REFERENCE_LOCATOR_CONTINUATION_PATTERN,
     _REFERENCE_LOCATOR_PATTERN,
     _SINGLE_LINE_CODEISH_PATTERN,
-    _TERMINAL_PUNCTUATION,
     _URL_ONLY_PATTERN,
     _normalize_render_text,
 )
 from book_agent.export.models import (
     MergedRenderBlock,
+)
+from book_agent.ingestion.pdf.classify import (
+    _PROSE_CONTINUATION_START_WORDS,
+)
+from book_agent.ingestion.text import (
+    _TERMINAL_PUNCTUATION,
+    _expanded_code_candidate_lines,
+    _looks_like_code_docstring_line,
+    _looks_like_embedded_code_line,
+    _looks_like_labeled_prose_line,
+    _looks_like_prose_line_group,
+    _looks_like_sentence_prose_line,
+    _looks_like_shell_command_continuation_line,
+    _looks_like_shell_command_line,
+    _looks_like_splitworthy_single_line_code_fragment,
+    _looks_like_structured_data_line,
 )
 
 

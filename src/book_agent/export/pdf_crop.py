@@ -12,6 +12,7 @@ from pathlib import Path
 from book_agent.domain.enums import (
     BlockType,
 )
+from book_agent.domain.structure.geometry import horizontal_overlap_ratio
 from book_agent.export.common import (
     _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
     _PDF_IMAGE_MAX_RENDER_SCALE,
@@ -183,7 +184,7 @@ def best_caption_aligned_image_bbox(
         gap = max(0.0, caption_y0 - block.bbox[3])
         if gap > 120.0:
             continue
-        overlap = bbox_horizontal_overlap_ratio(block.bbox, corridor)
+        overlap = horizontal_overlap_ratio(block.bbox, corridor)
         center_distance = abs(((block.bbox[0] + block.bbox[2]) / 2.0) - ((caption_x0 + caption_x1) / 2.0))
         if overlap < 0.18 and center_distance > 220.0:
             continue
@@ -221,7 +222,7 @@ def trim_caption_crop_bbox_with_text_blocks(
         for block in layout_blocks
         if looks_like_page_text_block(block)
         and block.bbox[3] <= caption_y0 + 2.0
-        and bbox_horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
+        and horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
         and block.bbox[1] < bottom
     ]
     if interfering_text_blocks:
@@ -246,7 +247,7 @@ def best_seed_aligned_image_bbox(
         if not looks_like_page_image_block(block):
             continue
         overlap = bbox_overlap_area(block.bbox, seed_bbox)
-        horizontal = bbox_horizontal_overlap_ratio(block.bbox, seed_bbox)
+        horizontal = horizontal_overlap_ratio(block.bbox, seed_bbox)
         center_distance = abs(((block.bbox[0] + block.bbox[2]) / 2.0) - seed_center_x) + abs(
             ((block.bbox[1] + block.bbox[3]) / 2.0) - seed_center_y
         )
@@ -259,7 +260,7 @@ def best_seed_aligned_image_bbox(
         candidates,
         key=lambda block: (
             bbox_overlap_area(block.bbox, seed_bbox),
-            bbox_horizontal_overlap_ratio(block.bbox, seed_bbox),
+            horizontal_overlap_ratio(block.bbox, seed_bbox),
             -abs(((block.bbox[0] + block.bbox[2]) / 2.0) - seed_center_x),
         ),
     )
@@ -267,7 +268,7 @@ def best_seed_aligned_image_bbox(
     for block in candidates:
         if block is primary:
             continue
-        if bbox_overlap_area(block.bbox, merged_bbox) > 0.0 or bbox_horizontal_overlap_ratio(
+        if bbox_overlap_area(block.bbox, merged_bbox) > 0.0 or horizontal_overlap_ratio(
             block.bbox,
             merged_bbox,
         ) >= 0.45:
@@ -299,14 +300,14 @@ def trim_direct_crop_bbox_with_text_blocks(
         block
         for block in layout_blocks
         if looks_like_page_text_block(block)
-        and bbox_horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
+        and horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
         and block.bbox[1] <= top + (bottom - top) * 0.3
     ]
     bottom_text_blocks = [
         block
         for block in layout_blocks
         if looks_like_page_text_block(block)
-        and bbox_horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
+        and horizontal_overlap_ratio(block.bbox, [left, top, right, bottom]) >= 0.35
         and block.bbox[3] >= bottom - (bottom - top) * 0.3
     ]
     if top_text_blocks:
@@ -330,15 +331,6 @@ def looks_like_page_text_block(block: _PdfPageLayoutBlock) -> bool:
     if block.block_type == 1:
         return False
     return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", block.text))
-
-
-def bbox_horizontal_overlap_ratio(left: list[float], right: list[float]) -> float:
-    overlap = min(left[2], right[2]) - max(left[0], right[0])
-    if overlap <= 0:
-        return 0.0
-    left_width = max(left[2] - left[0], 1.0)
-    right_width = max(right[2] - right[0], 1.0)
-    return overlap / min(left_width, right_width)
 
 
 def bbox_overlap_area(left_bbox: list[float], right_bbox: list[float]) -> float:

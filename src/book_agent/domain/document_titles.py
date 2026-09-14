@@ -270,3 +270,16 @@ def resolve_document_titles(
         title_tgt=title_tgt,
         resolution_source=resolution_source,
     )
+
+
+def display_author_value(author: str | None) -> str | None:
+    """The author as shown to readers, or None when metadata holds a file name or path."""
+    normalized = re.sub(r"\s+", " ", (author or "")).strip()
+    if not normalized:
+        return None
+    lowered = normalized.casefold()
+    if "/" in lowered or "\\" in lowered:
+        return None
+    if lowered.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx")):
+        return None
+    return normalized

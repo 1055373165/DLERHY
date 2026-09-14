@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +19,11 @@ from book_agent.application.read_models import (
     DocumentSummary,
     ExportDetail,
 )
-from book_agent.domain.document_titles import document_display_title, document_source_title
+from book_agent.domain.document_titles import (
+    display_author_value,
+    document_display_title,
+    document_source_title,
+)
 from book_agent.domain.enums import (
     DocumentRunStatus,
     DocumentStatus,
@@ -40,18 +43,6 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.export import ExportRepository
 from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
-
-
-def _display_author_value(author: str | None) -> str | None:
-    normalized = re.sub(r"\s+", " ", (author or "")).strip()
-    if not normalized:
-        return None
-    lowered = normalized.casefold()
-    if "/" in lowered or "\\" in lowered:
-        return None
-    if lowered.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx")):
-        return None
-    return normalized
 
 
 def _history_run_progress(run: DocumentRun | None) -> tuple[str | None, int | None, int | None]:
@@ -146,7 +137,7 @@ class DocumentQueryService:
             title=document_display_title(bundle.document),
             title_src=document_source_title(bundle.document),
             title_tgt=(bundle.document.title_tgt or None),
-            author=_display_author_value(bundle.document.author),
+            author=display_author_value(bundle.document.author),
             pdf_profile=bundle.document.metadata_json.get("pdf_profile"),
             pdf_page_evidence=bundle.document.metadata_json.get("pdf_page_evidence"),
             pdf_image_summary=self._document_pdf_image_summary(bundle),
@@ -215,7 +206,7 @@ class DocumentQueryService:
                     title=document_display_title(document),
                     title_src=document_source_title(document),
                     title_tgt=(document.title_tgt or None),
-                    author=_display_author_value(document.author),
+                    author=display_author_value(document.author),
                     source_path=document.source_path,
                     created_at=document.created_at.isoformat(),
                     updated_at=document.updated_at.isoformat(),

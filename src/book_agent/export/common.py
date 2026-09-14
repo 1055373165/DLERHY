@@ -16,9 +16,12 @@ from book_agent.domain.structure.epub import (
     _join_path,
     _local_name,
 )
+from book_agent.ingestion.pdf.classify import (
+    _HEADING_CONTINUATION_START_WORDS,
+    _LEADING_SECTION_NUMBER_PATTERN,
+)
 
 _SPECIAL_PDF_PAGE_FAMILIES = {"frontmatter", "appendix", "references", "index", "backmatter", "toc"}
-_TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _DOCUMENT_IMAGE_MATERIALIZATION_VERSION = 3
 _PDF_IMAGE_MIN_RENDER_SCALE = 4.0
 _PDF_IMAGE_MAX_RENDER_SCALE = 8.0
@@ -135,13 +138,6 @@ def _looks_like_metadata_filename(value: str) -> bool:
     return candidate.endswith((".html", ".xhtml", ".htm", ".xml", ".opf", ".ncx"))
 
 
-def _display_author_value(author: str | None) -> str | None:
-    normalized = re.sub(r"\s+", " ", (author or "")).strip()
-    if not normalized or _looks_like_metadata_filename(normalized):
-        return None
-    return normalized
-
-
 def _document_export_label(export_type: ExportType) -> str:
     if export_type == ExportType.MERGED_HTML:
         return "中文阅读稿"
@@ -228,10 +224,6 @@ _ACADEMIC_FRONTMATTER_MARKER_PATTERN = re.compile(
     r"\b(?:university|institute|department|school|laboratory|center|centre|society|sciences?)\b",
     re.IGNORECASE,
 )
-_LEADING_SECTION_NUMBER_PATTERN = re.compile(
-    r"^(?:(?:\d+(?:\.\d+)*)|[ivxlcdm]+)[.):\-]?\s+",
-    re.IGNORECASE,
-)
 _LIST_MARKER_PATTERN = re.compile(r"^[\s\u200b\ufeff]*(?:[-*+•●▪◦○◯])[\s\u200b\ufeff]+")
 _ORDERED_LIST_MARKER_PATTERN = re.compile(r"^[\s\u200b\ufeff]*(?:\[\d+\]|\d+[.)])[\s\u200b\ufeff]+")
 _UNORDERED_LIST_LINE_PATTERN = re.compile(
@@ -246,37 +238,6 @@ _REFERENCE_LOCATOR_PATTERN = re.compile(r"(?:https?://|doi\.org/|arxiv:)\S+", re
 _URL_ONLY_PATTERN = re.compile(r"^[\s\u200b\ufeff]*https?://\S+[\s\u200b\ufeff]*$", re.IGNORECASE)
 _REFERENCE_TARGET_ENTRY_PATTERN = re.compile(r"\d+[.)]\s+.*?(?=(?:\s+\d+[.)]\s+)|$)")
 _REFERENCE_LOCATOR_CONTINUATION_PATTERN = re.compile(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
-_HEADING_CONTINUATION_START_WORDS = {
-    "and",
-    "as",
-    "at",
-    "by",
-    "for",
-    "from",
-    "in",
-    "into",
-    "of",
-    "on",
-    "or",
-    "the",
-    "to",
-    "via",
-    "with",
-    "without",
-}
-_PROSE_CONTINUATION_START_WORDS = _HEADING_CONTINUATION_START_WORDS.union(
-    {
-        "because",
-        "but",
-        "that",
-        "which",
-        "who",
-        "whose",
-        "where",
-        "when",
-        "while",
-    }
-)
 _INLINE_CODE_LIKE_PATTERN = re.compile(
     r"(?:"
     r"\bdef\s+[A-Za-z_][A-Za-z0-9_]*\s*\("

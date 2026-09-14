@@ -134,6 +134,7 @@ from book_agent.ingestion.text import (
     _safe_mean,
     _sorted_counter,
 )
+from book_agent.domain.structure.geometry import horizontal_overlap_ratio, union_bbox
 
 _OUTLINED_BOOK_TOP_LEVEL_SPECIAL_TITLES = _OUTLINED_BOOK_FRONTMATTER_TITLES.union({"glossary"})
 _APPENDIX_SUBHEADING_PATTERN = re.compile(r"^(?P<label>[A-Z]\.\d+)\s+(?P<title>.+)$")
@@ -1393,7 +1394,7 @@ class PdfStructureRecoveryService:
 
         for image in page.image_blocks:
             image_bbox = [float(value) for value in image.bbox]
-            if self._horizontal_overlap_ratio(block_bbox, image_bbox) < 0.25:
+            if horizontal_overlap_ratio(block_bbox, image_bbox) < 0.25:
                 continue
             below_gap = block_bbox[1] - image_bbox[3]
             above_gap = image_bbox[1] - block_bbox[3]
@@ -1701,7 +1702,7 @@ class PdfStructureRecoveryService:
         if curr_top > current_page.height * 0.34:
             return False
         if (
-            self._horizontal_overlap_ratio(previous_bbox, current_bbox) < 0.25
+            horizontal_overlap_ratio(previous_bbox, current_bbox) < 0.25
             and abs(float(previous_bbox[0]) - float(current_bbox[0])) > 96.0
         ):
             return False
@@ -2443,7 +2444,7 @@ class PdfStructureRecoveryService:
             if gap > 54.0:
                 return False
 
-            overlap_ratio = self._horizontal_overlap_ratio(previous_bbox, current_bbox)
+            overlap_ratio = horizontal_overlap_ratio(previous_bbox, current_bbox)
             previous_center = (float(previous_bbox[0]) + float(previous_bbox[2])) / 2.0
             current_center = (float(current_bbox[0]) + float(current_bbox[2])) / 2.0
             max_width = max(float(previous_bbox[2]) - float(previous_bbox[0]), float(current_bbox[2]) - float(current_bbox[0]), 1.0)
@@ -2475,7 +2476,7 @@ class PdfStructureRecoveryService:
         if curr_top > curr_page.height * 0.30:
             return False
 
-        overlap_ratio = self._horizontal_overlap_ratio(previous_bbox, current_bbox)
+        overlap_ratio = horizontal_overlap_ratio(previous_bbox, current_bbox)
         left_edge_dist = abs(float(previous_bbox[0]) - float(current_bbox[0]))
         if overlap_ratio < 0.12 and left_edge_dist > 96.0:
             return False
@@ -3758,7 +3759,7 @@ class PdfStructureRecoveryService:
         replaced_indices: set[int] = set()
         synth_block_at: dict[int, _RecoveredBlock] = {}
         caption_anchor_for_index: dict[int, str] = {}
-        for caption_index, absorbed, union_bbox, was_orphan in synth:
+        for caption_index, absorbed, synthesized_bbox, was_orphan in synth:
             primary_index = absorbed[0]
             primary = recovered_blocks[primary_index]
             caption_block = recovered_blocks[caption_index]
@@ -3780,7 +3781,7 @@ class PdfStructureRecoveryService:
             # via the union bbox so the export can render the figure
             # region from the source PDF.
             metadata["source_bbox_json"] = {
-                "regions": [{"page_number": page_number, "bbox": list(union_bbox)}]
+                "regions": [{"page_number": page_number, "bbox": list(synthesized_bbox)}]
             }
             metadata["source_page_start"] = page_number
 
@@ -3790,7 +3791,7 @@ class PdfStructureRecoveryService:
                 text="[Figure]",
                 page_start=page_number,
                 page_end=page_number,
-                bbox_regions=[{"page_number": page_number, "bbox": list(union_bbox)}],
+                bbox_regions=[{"page_number": page_number, "bbox": list(synthesized_bbox)}],
                 reading_order_index=primary.reading_order_index,
                 parse_confidence=primary.parse_confidence,
                 flags=list(dict.fromkeys([
@@ -3986,7 +3987,7 @@ class PdfStructureRecoveryService:
                 continue
             if candidate_bbox is None:
                 continue
-            overlap_ratio = self._horizontal_overlap_ratio(artifact_bbox, candidate_bbox)
+            overlap_ratio = horizontal_overlap_ratio(artifact_bbox, candidate_bbox)
             if overlap_ratio < 0.2:
                 continue
             center_distance = abs(
@@ -4053,7 +4054,7 @@ class PdfStructureRecoveryService:
         caption_bbox = self._page_bbox(caption_block, page_number)
         if artifact_bbox is None and caption_bbox is None:
             return None
-        cluster_bbox = self._union_bbox(artifact_bbox, caption_bbox)
+        cluster_bbox = union_bbox(artifact_bbox, caption_bbox)
         if cluster_bbox is None:
             return None
 
@@ -4092,7 +4093,7 @@ class PdfStructureRecoveryService:
                 continue
             if gap > 96.0:
                 break
-            overlap_ratio = self._horizontal_overlap_ratio(cluster_bbox, candidate_bbox)
+            overlap_ratio = horizontal_overlap_ratio(cluster_bbox, candidate_bbox)
             center_distance = abs(
                 ((candidate_bbox[0] + candidate_bbox[2]) / 2.0) - cluster_center
             )
@@ -4118,26 +4119,6 @@ class PdfStructureRecoveryService:
                 except (TypeError, ValueError):
                     return None
         return None
-
-    def _union_bbox(self, left: list[float] | None, right: list[float] | None) -> list[float] | None:
-        if left is None:
-            return right
-        if right is None:
-            return left
-        return [
-            min(left[0], right[0]),
-            min(left[1], right[1]),
-            max(left[2], right[2]),
-            max(left[3], right[3]),
-        ]
-
-    def _horizontal_overlap_ratio(self, left: list[float], right: list[float]) -> float:
-        overlap = min(left[2], right[2]) - max(left[0], right[0])
-        if overlap <= 0:
-            return 0.0
-        left_width = max(left[2] - left[0], 1.0)
-        right_width = max(right[2] - right[0], 1.0)
-        return overlap / min(left_width, right_width)
 
     def _source_anchor(self, block: _RecoveredBlock) -> str:
         return f"{block.source_path}#{block.anchor}" if block.anchor else block.source_path

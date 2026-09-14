@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from book_agent.domain.enums import BlockType
+from book_agent.domain.structure.geometry import horizontal_overlap_ratio, union_bbox
 
 _HEADING_LEAD_PATTERN = re.compile(
     r"^(?:chapter|part|appendix|abstract|introduction|references|conclusion|\d+(?:\.\d+)*\s+[A-Z])\b",
@@ -232,15 +233,6 @@ def persisted_block_page_bbox(block: object, page_number: int) -> list[float] | 
     return None
 
 
-def horizontal_overlap_ratio(left: list[float], right: list[float]) -> float:
-    overlap = min(left[2], right[2]) - max(left[0], right[0])
-    if overlap <= 0:
-        return 0.0
-    left_width = max(left[2] - left[0], 1.0)
-    right_width = max(right[2] - right[0], 1.0)
-    return overlap / min(left_width, right_width)
-
-
 def looks_like_codeish_text(text: str) -> bool:
     lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
     if len(lines) < 2:
@@ -320,7 +312,7 @@ def _infer_adjacent_group_context_ids(
     caption_bbox = persisted_block_page_bbox(caption_block, page_number)
     if artifact_bbox is None and caption_bbox is None:
         return []
-    cluster_bbox = _union_bbox(artifact_bbox, caption_bbox)
+    cluster_bbox = union_bbox(artifact_bbox, caption_bbox)
     if cluster_bbox is None:
         return []
 
@@ -392,14 +384,3 @@ def _infer_adjacent_group_context_ids(
     return []
 
 
-def _union_bbox(left: list[float] | None, right: list[float] | None) -> list[float] | None:
-    if left is None:
-        return right
-    if right is None:
-        return left
-    return [
-        min(left[0], right[0]),
-        min(left[1], right[1]),
-        max(left[2], right[2]),
-        max(left[3], right[3]),
-    ]

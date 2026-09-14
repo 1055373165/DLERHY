@@ -14,19 +14,8 @@ from book_agent.domain.enums import (
     BlockType,
     SentenceStatus,
 )
-from book_agent.ingestion.text import (
-    _expanded_code_candidate_lines,
-    _looks_like_code,
-    _looks_like_code_continuation_line,
-    _looks_like_code_docstring_line,
-    _looks_like_embedded_code_line,
-    _looks_like_labeled_prose_line,
-    _looks_like_prose_line_group,
-    _looks_like_sentence_prose_line,
-    _looks_like_shell_command_line,
-    _looks_like_splitworthy_single_line_code_fragment,
-)
-from book_agent.export import code_text, pdf_crop
+from book_agent.domain.structure.geometry import horizontal_overlap_ratio
+from book_agent.export import code_text
 from book_agent.export.common import (
     _APPENDIX_TITLE_PATTERN,
     _BOOK_ALLOWED_REFERENCE_HEADINGS,
@@ -38,7 +27,6 @@ from book_agent.export.common import (
     _PURE_CHAPTER_LABEL_PATTERN,
     _REFERENCE_ENTRY_MARKER_PATTERN,
     _REFERENCE_LOCATOR_PATTERN,
-    _TERMINAL_PUNCTUATION,
     _UNORDERED_LIST_LINE_PATTERN,
     _URL_ONLY_PATTERN,
     _is_academic_paper_document,
@@ -52,6 +40,19 @@ from book_agent.export.models import (
     MergedRenderBlock,
 )
 from book_agent.infra.repositories.export import ChapterExportBundle
+from book_agent.ingestion.text import (
+    _TERMINAL_PUNCTUATION,
+    _expanded_code_candidate_lines,
+    _looks_like_code,
+    _looks_like_code_continuation_line,
+    _looks_like_code_docstring_line,
+    _looks_like_embedded_code_line,
+    _looks_like_labeled_prose_line,
+    _looks_like_prose_line_group,
+    _looks_like_sentence_prose_line,
+    _looks_like_shell_command_line,
+    _looks_like_splitworthy_single_line_code_fragment,
+)
 
 
 def normalize_pdf_body_render_texts(
@@ -1217,8 +1218,8 @@ def should_bridge_code_blocks_across_inline_artifact(
     if middle_width > code_width * 0.58 and middle_height > 96.0:
         return False
     if (
-        pdf_crop.bbox_horizontal_overlap_ratio(middle_first_bbox, previous_last_bbox) < 0.22
-        and pdf_crop.bbox_horizontal_overlap_ratio(middle_first_bbox, following_first_bbox) < 0.22
+        horizontal_overlap_ratio(middle_first_bbox, previous_last_bbox) < 0.22
+        and horizontal_overlap_ratio(middle_first_bbox, following_first_bbox) < 0.22
     ):
         return False
     return True

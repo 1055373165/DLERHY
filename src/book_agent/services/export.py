@@ -17,6 +17,7 @@ from xml.etree import ElementTree as ET
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import (
     compose_document_title,
+    display_author_value,
     document_display_title,
     document_source_title,
     safe_title_for_filename,
@@ -52,7 +53,6 @@ from book_agent.export import (
 from book_agent.export.common import (
     _SEVERITY_RANK,
     _SPECIAL_PDF_PAGE_FAMILIES,
-    _display_author_value,
     _document_export_label,
     _excerpt_text,
     _is_academic_paper_document,
@@ -1326,7 +1326,7 @@ class ExportService:
             for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
         )
         title = html.escape(document_display_title(bundle.document) or bundle.document.id)
-        author_value = _display_author_value(bundle.document.author)
+        author_value = display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
         author_html = f"<div class='meta'>{author}</div>" if author else ""
         usage_html = self._build_usage_summary_html(
@@ -1367,7 +1367,7 @@ class ExportService:
     ) -> str:
         visible_chapters = self._visible_merged_chapters(bundle)
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
-        author = _display_author_value(bundle.document.author)
+        author = display_author_value(bundle.document.author)
 
         # Chinese reading edition — only the book's own front matter
         # (title + author). No "Merged Reading Edition" kicker, no
@@ -1545,7 +1545,7 @@ class ExportService:
             "title": document_display_title(bundle.document),
             "title_src": document_source_title(bundle.document),
             "title_tgt": bundle.document.title_tgt,
-            "author": _display_author_value(bundle.document.author),
+            "author": display_author_value(bundle.document.author),
             "export_type": export_type.value,
             "output_path": str(output_path),
             "chapter_count": len(visible_chapters),
@@ -2472,7 +2472,7 @@ class ExportService:
         )
 
         metadata_title = html.escape(document_display_title(bundle.document) or bundle.document.id)
-        metadata_author = html.escape(_display_author_value(bundle.document.author) or "Unknown")
+        metadata_author = html.escape(display_author_value(bundle.document.author) or "Unknown")
         modified_at = _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
         asset_root = file_path.parent / "assets"

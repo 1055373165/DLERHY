@@ -112,8 +112,8 @@
 - [x] 按依赖分层拆出 `ingestion/text` → `ingestion/pdf/models` → `ingestion/pdf/classify` → `ingestion/pdf/extract`；导入方改为直接依赖新模块。
 - [x] `_BLOCK_RECOVERY_PASSES` 有序表 + 冻结的 `RecoveryContext`；学术 lane 显式传参，去掉 `_current_recovery_lane`。
 - [x] 章节构建 / TOC 偏移移到 `ingestion/pdf/chapters.py`（19 个函数）。`pdf.py` 9.6k → ~4.3k 行。
-- [ ] 去重：可翻译性判定、caption 正则、group-context 几何、prose-continuation 启发式。
-- [ ] OCR / 文件 IO 移出 domain；配置注入替代 env 读取。
+- [x] 去重（行为不变的部分）：bbox 几何合并到 `domain/structure/geometry.py`（原三份）；export 与 ingestion 相同的续行词表 / 章节号正则 / 句末标点共用一份；`display_author_value` 合并到 `domain/document_titles.py`。未合并：caption 正则、可翻译性判定、metadata 文件名判定——几份实现规则确有差异，合并会改变输出。
+- [x] OCR / 文件 IO 移出 domain（`ingestion/pdf/ocr*.py`、`surya_reextraction.py`）；OCR 与 sanity 重抽取配置进 `Settings`，构造器不再读 env。
 - [x] 修复：TATR 显式拿到 `source_path`；modality 先于 IR 构建；OCR parser 走默认恢复服务工厂。
 - [ ] refresh 不重建句子：目前只检测并上报（`stale_sentence_block_ids` + `refresh_sentences_stale`）。真正重建需要先定句子退役模型（句子被 packet、译文、对齐边引用，没有失效状态），再串联 packet 重建与重译。
 
