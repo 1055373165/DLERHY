@@ -44,6 +44,24 @@ def _write_styled_book_pdf(path: Path) -> None:
     document.save(path)
 
 
+def _write_split_title_pdf(path: Path) -> None:
+    """Chapter openers whose large bold title lines are separate text blocks (sparse pages)."""
+    document = fitz.open()
+    document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+    page = document.new_page()
+    page.insert_text((214, 143), "CHAPTER 2: BIRTH AND", fontname="hebo", fontsize=20)
+    page.insert_text((250, 167), "GROWTH OF RSI", fontname="hebo", fontsize=20)
+    page.insert_text((126, 210), "'Momentum is perhaps the most important factor in trading.'", fontname="helv", fontsize=14)
+    page.insert_text((126, 300), "The chapter covers what the indicator is and why it was invented.", fontname="helv")
+    page = document.new_page()
+    page.insert_text((180, 130), "CHAPTER 3: BREAKING THE MYTH:", fontname="hebo", fontsize=16.5)
+    page.insert_text((200, 150), "RSI CAN REMAIN OVERSOLD FOR", fontname="hebo", fontsize=16.5)
+    page.insert_text((230, 170), "SEVERAL MONTHS?", fontname="hebo", fontsize=16.5)
+    page.insert_text((126, 210), "Experts say that the indicator can stay in a zone for months at a time.", fontname="helv")
+    page.insert_text((126, 240), "Well, that does not happen on daily charts of the index.", fontname="helv")
+    document.save(path)
+
+
 class LeadingEmphasisLineCountTest(unittest.TestCase):
     def test_counts_bold_prefix_followed_by_plain_lines(self) -> None:
         self.assertEqual(leading_emphasis_line_count(((11.5, True), (10.0, False), (10.0, False))), 1)
@@ -85,6 +103,22 @@ class StyledHeadingRecoveryTest(unittest.TestCase):
         self.assertTrue(any(text.startswith("However, Andrew Cardwell") for text in paragraphs))
         self.assertNotIn("As John", headings)
         self.assertNotIn("Relative Strength", headings)
+
+    def test_bold_title_lines_in_separate_blocks_form_one_chapter_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "titles.pdf"
+            _write_split_title_pdf(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        blocks = [block for chapter in parsed.chapters for block in chapter.blocks]
+        headings = [
+            (" ".join(block.text.split()), block.metadata.get("heading_level"))
+            for block in blocks
+            if block.block_type == BlockType.HEADING.value
+        ]
+        self.assertIn(("CHAPTER 2: BIRTH AND GROWTH OF RSI", 1), headings)
+        self.assertIn(("CHAPTER 3: BREAKING THE MYTH: RSI CAN REMAIN OVERSOLD FOR SEVERAL MONTHS?", 1), headings)
+        self.assertIn("'Momentum is perhaps the most important factor in trading.'", [block.text for block in blocks])
 
 
 if __name__ == "__main__":

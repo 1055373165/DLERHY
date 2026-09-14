@@ -580,7 +580,16 @@ class PdfStructureRecoveryService:
                         outline_titles=outline_by_page.get(page.page_number, []),
                         page_context=page_context,
                     )
+                    all_lines_bold = bool(raw_block.line_styles) and all(bold for _size, bold in raw_block.line_styles)
+                    if (
+                        role != "heading"
+                        and all_lines_bold
+                        and self._continues_styled_heading(recovered, page.page_number, raw_block)
+                    ):
+                        role = "heading"
                     metadata, flags = self._metadata_for_block(role, raw_block.text, page_context)
+                    if all_lines_bold:
+                        metadata["pdf_all_lines_bold"] = True
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
                     emphasis_line_count = leading_emphasis_line_count(raw_block.line_styles)
@@ -1407,6 +1416,28 @@ class PdfStructureRecoveryService:
                 return True
         return False
 
+    def _continues_styled_heading(
+        self,
+        recovered: list[_RecoveredBlock],
+        page_number: int,
+        raw_block: PdfTextBlock,
+    ) -> bool:
+        """A bold block set at a heading's size right under that heading is its next line.
+
+        Page-median size thresholds miss the second line of a large title on
+        sparse chapter-opener pages, where the title lines themselves pull
+        the median up.
+        """
+        previous = next((block for block in reversed(recovered) if block.role not in {"header", "footer"}), None)
+        if previous is None or previous.role != "heading" or not previous.metadata.get("pdf_all_lines_bold"):
+            return False
+        if len(_normalize_text(raw_block.text)) > 120:
+            return False
+        previous_bbox = self._page_bbox(previous, page_number)
+        return previous_bbox is not None and _is_styled_heading_line_continuation(
+            previous_bbox, previous.font_size_avg, raw_block.bbox, raw_block.font_size_avg
+        )
+
     def _merge_target_index(
         self,
         recovered: list[_RecoveredBlock],
@@ -1505,6 +1536,23 @@ class PdfStructureRecoveryService:
         current_family = str(current.metadata.get("pdf_page_family") or "body")
         if previous_family != current_family or previous_family != "body":
             return False
+        if (
+            previous.metadata.get("pdf_all_lines_bold")
+            and current.metadata.get("pdf_all_lines_bold")
+            and previous.page_end == current.page_start
+            and int(previous.bbox_regions[-1]["page_number"]) == current.page_start
+            and _is_styled_heading_line_continuation(
+                previous.bbox_regions[-1]["bbox"],
+                previous.font_size_avg,
+                current.bbox_regions[0]["bbox"],
+                current.font_size_avg,
+            )
+        ):
+            # Adjacent in the block list: a previous styled merge keeps the
+            # first line's reading order index, so the index check below
+            # would stop a three-line title after two lines.
+            current.flags = list(dict.fromkeys([*current.flags, "styled_heading_line_merged"]))
+            return True
         if current.reading_order_index - previous.reading_order_index != 1:
             return False
 
@@ -1570,6 +1618,9 @@ class PdfStructureRecoveryService:
         merged_text = previous_text + separator + current_text
         merged_flags = list(dict.fromkeys([*previous.flags, *current.flags, "multiline_heading_merged"]))
         merged_metadata = {**previous.metadata, **current.metadata}
+        if "styled_heading_line_merged" in current.flags and "heading_level" in previous.metadata:
+            # The title's first line decides its level ("CHAPTER 5:" is the chapter heading).
+            merged_metadata["heading_level"] = previous.metadata["heading_level"]
         return _RecoveredBlock(
             role="heading",
             block_type=BlockType.HEADING,
@@ -4296,6 +4347,23 @@ def _in_place(method_name: str, *context_args: str, **context_kwargs: str) -> Bl
         return blocks
 
     return run
+
+
+def _is_styled_heading_line_continuation(
+    previous_bbox: Any,
+    previous_size: float,
+    current_bbox: Any,
+    current_size: float,
+) -> bool:
+    """Same size, directly below (within about one line height) and horizontally overlapping."""
+    if previous_size <= 0 or abs(current_size - previous_size) > previous_size * 0.05:
+        return False
+    gap = float(current_bbox[1]) - float(previous_bbox[3])
+    # Line boxes of tightly set titles overlap slightly (ascender/descender padding).
+    if gap < -previous_size * 0.5 or gap > previous_size:
+        return False
+    overlap = min(float(previous_bbox[2]), float(current_bbox[2])) - max(float(previous_bbox[0]), float(current_bbox[0]))
+    return overlap > 0
 
 
 def _returning(method_name: str, *context_args: str, **context_kwargs: str) -> BlockPassFn:
