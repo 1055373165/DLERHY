@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -32,6 +32,7 @@ from book_agent.services.glossary_enforcement import detect_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
+from book_agent.translation.chapter_memory import ChapterMemory
 from book_agent.translation.contracts import (
     CompiledTranslationContext,
     RelevantTerm,
@@ -768,23 +769,12 @@ class TranslationService:
         current_snapshot: MemorySnapshot | None,
         compiled_context_packet,
     ) -> dict[str, Any]:
-        existing_content = dict(current_snapshot.content_json) if current_snapshot is not None else {}
-        recent_accepted = existing_content.get("recent_accepted_translations", [])
-        if not isinstance(recent_accepted, list):
-            recent_accepted = []
-        active_concepts = existing_content.get("active_concepts", [])
-        if not isinstance(active_concepts, list):
-            active_concepts = []
-        existing_brief_version = _coerce_nonnegative_int(existing_content.get("chapter_brief_version"))
-        packet_brief_version = _coerce_nonnegative_int(bundle.packet.chapter_brief_version)
-        chapter_brief = existing_content.get("chapter_brief")
-        heading_path = existing_content.get("heading_path") or compiled_context_packet.heading_path
-        if compiled_context_packet.chapter_brief and (
-            chapter_brief is None or packet_brief_version >= existing_brief_version
-        ):
-            chapter_brief = compiled_context_packet.chapter_brief
-            existing_brief_version = packet_brief_version
-            heading_path = compiled_context_packet.heading_path
+        memory = ChapterMemory.from_content(current_snapshot.content_json if current_snapshot is not None else None)
+        memory = memory.with_brief(
+            compiled_context_packet.chapter_brief,
+            version=bundle.packet.chapter_brief_version,
+            heading_path=compiled_context_packet.heading_path,
+        )
 
         target_excerpt = " ".join(segment.text_zh.strip() for segment in artifacts.target_segments if segment.text_zh).strip()
         source_excerpt = " ".join(
@@ -792,40 +782,28 @@ class TranslationService:
             for sentence in bundle.current_sentences
         ).strip()
         if source_excerpt and target_excerpt:
-            entry: dict[str, Any] = {
-                "packet_id": bundle.packet.id,
-                "block_id": bundle.packet.block_start_id,
-                "source_excerpt": source_excerpt,
-                "target_excerpt": target_excerpt,
-                "source_sentence_ids": [sentence.id for sentence in bundle.current_sentences],
-            }
-            recent_accepted = [
-                item
-                for item in recent_accepted
-                if not (isinstance(item, dict) and item.get("packet_id") == bundle.packet.id)
-            ]
-            recent_accepted.append(entry)
-            recent_accepted = recent_accepted[-4:]
+            memory = memory.with_recent_translation(
+                {
+                    "packet_id": bundle.packet.id,
+                    "block_id": bundle.packet.block_start_id,
+                    "source_excerpt": source_excerpt,
+                    "target_excerpt": target_excerpt,
+                    "source_sentence_ids": [sentence.id for sentence in bundle.current_sentences],
+                }
+            )
 
-        active_concepts = self._merge_active_concepts(
-            existing_concepts=active_concepts,
-            source_sentences=[sentence.source_text for sentence in bundle.current_sentences],
-            packet_id=bundle.packet.id,
+        memory = replace(
+            memory,
+            chapter_id=bundle.packet.chapter_id,
+            active_concepts=self._merge_active_concepts(
+                existing_concepts=memory.active_concepts,
+                source_sentences=[sentence.source_text for sentence in bundle.current_sentences],
+                packet_id=bundle.packet.id,
+            ),
+            last_packet_id=bundle.packet.id,
+            last_translation_run_id=artifacts.translation_run.id,
         )
-
-        content_json = {
-            "schema_version": 1,
-            "chapter_id": bundle.packet.chapter_id,
-            "chapter_title": existing_content.get("chapter_title"),
-            "heading_path": heading_path,
-            "chapter_brief": chapter_brief,
-            "chapter_brief_version": existing_brief_version or None,
-            "active_concepts": active_concepts,
-            "recent_accepted_translations": recent_accepted,
-            "last_packet_id": bundle.packet.id,
-            "last_translation_run_id": artifacts.translation_run.id,
-        }
-        return content_json
+        return memory.to_content()
 
     def _merge_active_concepts(
         self,

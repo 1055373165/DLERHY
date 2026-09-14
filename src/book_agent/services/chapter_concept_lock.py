@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sqlalchemy import select
@@ -9,38 +9,23 @@ from sqlalchemy.orm import Session
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, TermType
 from book_agent.domain.models import Chapter, MemorySnapshot
-from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.domain.models.translation import TermEntry
+from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.term_normalization import normalize_term_rendering
+from book_agent.translation.chapter_memory import ChapterMemory
 
 
 def _copy_content(snapshot: MemorySnapshot | None, chapter: Chapter) -> dict[str, Any]:
-    if snapshot is not None:
-        content = dict(snapshot.content_json or {})
+    if snapshot is None:
+        memory = ChapterMemory.seed(chapter_id=chapter.id, chapter_title=chapter.title_src)
     else:
-        content = {
-            "schema_version": 1,
-            "chapter_id": chapter.id,
-            "chapter_title": chapter.title_src,
-            "heading_path": [chapter.title_src] if chapter.title_src else [],
-            "chapter_brief": None,
-            "chapter_brief_version": None,
-            "active_concepts": [],
-            "recent_accepted_translations": [],
-            "last_packet_id": None,
-            "last_translation_run_id": None,
-        }
-    content.setdefault("schema_version", 1)
-    content.setdefault("chapter_id", chapter.id)
-    content.setdefault("chapter_title", chapter.title_src)
-    content.setdefault("heading_path", [chapter.title_src] if chapter.title_src else [])
-    content.setdefault("chapter_brief", None)
-    content.setdefault("chapter_brief_version", None)
-    content.setdefault("active_concepts", [])
-    content.setdefault("recent_accepted_translations", [])
-    content.setdefault("last_packet_id", None)
-    content.setdefault("last_translation_run_id", None)
-    return content
+        content = dict(snapshot.content_json or {})
+        memory = ChapterMemory.from_content(content, chapter_id=chapter.id)
+        if "chapter_title" not in content:
+            memory = replace(memory, chapter_title=chapter.title_src)
+        if "heading_path" not in content:
+            memory = replace(memory, heading_path=[chapter.title_src] if chapter.title_src else [])
+    return memory.to_content()
 
 
 @dataclass(frozen=True, slots=True)
