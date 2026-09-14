@@ -48,7 +48,7 @@
 - [ ] 引入 `tests/conftest.py`（共享 SQLite session / app 夹具），测试临时目录按运行隔离并清理。
 - [ ] 修复或删除无法收集的测试（`test_app_runtime.py` 引用已删模块；`test_translate_agent_benchmark_execution.py` 依赖 `artifacts/`）。
 - [ ] 分拣 `baseline-tests.md` 中的旧失败：修复 / 标注 xfail（附原因）/ 随 P1 删除。
-- [ ] Postgres：`alembic upgrade head` + 与 `Base.metadata` 的漂移检查测试（opt-in，CI 可跑）。
+- [x] Postgres：`tests/test_postgres_schema_drift.py` 在临时库上 `alembic upgrade head` 并与 `Base.metadata` 比对表/列/可空性/索引（`BOOK_AGENT_RUN_PG_TESTS=1` 开启）。
 
 ---
 
