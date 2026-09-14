@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +15,9 @@ from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
 from book_agent.workers.providers import ProviderHTTPError, ProviderNetworkError, ProviderTransportError
 from book_agent.workers.factory import TranslationWorkerProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 def _database_error_detail(*, exc: OperationalError) -> str:
@@ -56,13 +60,18 @@ def create_app() -> FastAPI:
             yield
         finally:
             executor = getattr(app.state, "document_run_executor", None)
+            executor_stopped = True
             if executor is not None:
-                executor.stop()
+                executor_stopped = executor.stop()
                 app.state.document_run_executor = None
             engine = getattr(app.state, "engine", None)
-            if engine is not None:
+            if engine is not None and executor_stopped:
                 engine.dispose()
                 app.state.engine = None
+            elif engine is not None:
+                # Work threads still hold leases and will record their results;
+                # leave the pool to be released at process exit.
+                logger.warning("Leaving the database engine open: run executor work threads are still running")
 
     app = FastAPI(
         title=settings.app_name,

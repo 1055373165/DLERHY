@@ -32,7 +32,7 @@
 - [x] 修复 `_controller_runner` 重复赋值（`document_run_executor.py:178/197`）。
 - [x] 被吞掉的 reconciler / supervisor / heartbeat 异常记日志（controller 已随 P1.1 删除）。
 - [x] 解决 `test_api_workflow.py` 段错误（根因：测试用 StaticPool 让多个执行器线程共享同一个 sqlite3 连接；改为文件 SQLite 默认连接池）。
-- [ ] 执行器 `stop()` 协作式取消 work 线程后再 dispose engine（并入 P2 队列/租约取消）。
+- [x] 执行器 `stop()` 返回是否所有线程都已退出；仍有 work 线程（LLM 调用无法中断）时 lifespan 不 dispose engine，线程在租约保护下落库结果。
 - [x] run loop 遇到 `IntegrityError` / `OperationalError` 记日志并在下个 tick 重试，不再把整个 run 判失败。
 
 ### P0.3 预算护栏

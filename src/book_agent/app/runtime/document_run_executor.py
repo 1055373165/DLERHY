@@ -163,7 +163,13 @@ class DocumentRunExecutor:
             )
             self._supervisor_thread.start()
 
-    def stop(self, *, work_timeout_seconds: float = 30.0) -> None:
+    def stop(self, *, work_timeout_seconds: float = 30.0) -> bool:
+        """Stop scheduling and wait for threads; True when every thread has exited.
+
+        Work threads may be inside an LLM call that cannot be interrupted; they
+        finish (and record their result under their lease) after the timeout,
+        so callers must not dispose the database engine unless this returns True.
+        """
         self._stop_event.set()
         self._wake_event.set()
         # Join tier by tier and re-read the registry after each tier: the
@@ -187,10 +193,14 @@ class DocumentRunExecutor:
             thread.join(timeout=work_timeout_seconds)
             if thread.is_alive():
                 logger.warning("Work thread %s still running after stop", thread.name)
+        all_stopped = not any(
+            thread is not None and thread.is_alive() for thread in [supervisor, *run_threads, *work_threads]
+        )
         with self._lock:
             self._active_run_threads = {}
             self._active_work_threads = {}
             self._supervisor_thread = None
+        return all_stopped
 
     def wake(self, run_id: str | None = None) -> None:
         self._wake_event.set()

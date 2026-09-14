@@ -7,6 +7,7 @@
   items) must not fail the whole run; any other unhandled error still does.
 """
 
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -136,6 +137,28 @@ class ExecutorRunLoopTests(unittest.TestCase):
                 self.executor._run_loop(run_id)
 
         self.assertEqual(self._run_status(run_id), ("failed", "runner.unhandled_exception"))
+
+    def test_stop_reports_work_threads_that_outlive_the_timeout(self) -> None:
+        release = threading.Event()
+        started = threading.Event()
+
+        def _slow_work() -> None:
+            started.set()
+            release.wait(timeout=10)
+
+        self.executor._ensure_work_thread(
+            run_id="run-slow",
+            work_item_id="work-slow",
+            thread_name="book-agent-test-slow",
+            target=_slow_work,
+        )
+        started.wait(timeout=5)
+
+        self.assertFalse(self.executor.stop(work_timeout_seconds=0.05))
+        release.set()
+
+    def test_stop_returns_true_when_everything_exited(self) -> None:
+        self.assertTrue(self.executor.stop(work_timeout_seconds=0.05))
 
 
 if __name__ == "__main__":
