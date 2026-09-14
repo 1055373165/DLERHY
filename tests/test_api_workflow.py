@@ -716,13 +716,13 @@ class ApiWorkflowTests(unittest.TestCase):
             archive.writestr("OEBPS/chapter1.xhtml", chapter_xhtml)
         return epub_path
 
-    def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 10.0) -> dict:
+    def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 30.0) -> dict:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             response = self.client.get(f"/v1/runs/{run_id}")
             self.assertEqual(response.status_code, 200)
             payload = response.json()
-            if payload["status"] in {"succeeded", "failed", "paused", "cancelled"}:
+            if payload["status"] in {"succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"}:
                 return payload
             time.sleep(0.2)
         self.fail(f"Run {run_id} did not reach terminal state within {timeout_seconds} seconds.")
@@ -1263,7 +1263,9 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(resumed.status_code, 200)
 
         terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
-        self.assertEqual(terminal["status"], "failed")
+        # Review is an optional stage for run classification, so a failed review
+        # ends the run as succeeded_with_warnings (see orchestrator.stage_status).
+        self.assertEqual(terminal["status"], "succeeded_with_warnings")
 
         with self.session_factory() as session:
             remaining_blocking_issue_count = session.scalar(

@@ -215,7 +215,8 @@ class StageStatusCalculator:
         elif (
             total_packets > 0
             and translated == total_packets
-            and wi_counts.total > 0
+            # Zero active work items is fine: a document that is already fully
+            # translated needs no translate work in this run.
             and wi_counts.succeeded == wi_counts.total
         ):
             status = StageStatus.SUCCEEDED

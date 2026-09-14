@@ -9,12 +9,14 @@ from uuid import uuid4
 from book_agent.domain.enums import (
     ActorType,
     DocumentRunStatus,
+    DocumentRunType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models.ops import RunAuditEvent
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
+from book_agent.orchestrator.stage_gate import STAGE_DEPENDENCIES
 from book_agent.orchestrator.stage_status import (
     OPTIONAL_PIPELINE_STAGES,
     PIPELINE_STAGES,
@@ -29,6 +31,22 @@ from book_agent.services.run_control import DocumentRunSummary, RunControlServic
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _promote_startable_optional_stages(
+    stage_status_by_name: dict[str, StageStatus],
+) -> dict[str, StageStatus]:
+    # The run executor seeds review and exports for TRANSLATE_FULL runs as soon
+    # as their upstream stages succeed. An optional stage that has not started
+    # but whose gate is open is therefore pending, not "not requested";
+    # classifying it as NOT_STARTED would end the run before review/export ran.
+    promoted = dict(stage_status_by_name)
+    for stage in PIPELINE_STAGES:
+        if stage not in OPTIONAL_PIPELINE_STAGES or promoted.get(stage) != StageStatus.NOT_STARTED:
+            continue
+        if all(promoted.get(upstream) == StageStatus.SUCCEEDED for upstream in STAGE_DEPENDENCIES[stage]):
+            promoted[stage] = StageStatus.RUNNING
+    return promoted
 
 
 def _ensure_utc(value: datetime | None) -> datetime | None:
@@ -619,7 +637,12 @@ class RunExecutionService:
         }
         stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
 
-        outcome = classify_run_outcome(stage_status_by_name)
+        outcome_statuses = (
+            _promote_startable_optional_stages(stage_status_by_name)
+            if run.run_type == DocumentRunType.TRANSLATE_FULL
+            else stage_status_by_name
+        )
+        outcome = classify_run_outcome(outcome_statuses)
 
         if outcome == RunOutcome.FAILED:
             failed_required_stages = [

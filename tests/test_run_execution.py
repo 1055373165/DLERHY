@@ -64,13 +64,14 @@ class RunExecutionServiceTests(unittest.TestCase):
         document_id: str,
         *,
         budget: RunBudgetSummary | None = None,
+        run_type: DocumentRunType = DocumentRunType.TRANSLATE_FULL,
     ) -> str:
         with self.session_factory() as session:
             repository = RunControlRepository(session)
             control = RunControlService(repository)
             run = control.create_run(
                 document_id=document_id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
+                run_type=run_type,
                 requested_by="test-runner",
                 budget=budget,
             )
@@ -150,9 +151,14 @@ class RunExecutionServiceTests(unittest.TestCase):
 
     def test_run_execution_success_lifecycle_updates_usage_and_terminal_state(self) -> None:
         # Terminal success is derived from real packet state, so seed an actual packet.
+        # A targeted translate run requests no review/export stages, so a green
+        # translate ledger is terminal.
         document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
         packet_id = packet_ids_by_chapter[0][0]
-        run_id = self._create_running_run_for_document(document_id)
+        run_id = self._create_running_run_for_document(
+            document_id,
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
+        )
 
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))
