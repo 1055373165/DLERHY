@@ -16,7 +16,6 @@ from urllib.parse import unquote
 from unittest.mock import patch
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,6 +62,7 @@ from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
 from book_agent.workers.providers.openai_compatible import ProviderNetworkError
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
+from tests.document_actions import SyncDocumentActionClient
 
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -605,7 +605,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.app.state.session_factory = self.session_factory
         self.app.state.export_root = str(Path(self.tempdir.name) / "exports")
         self.app.state.upload_root = str(Path(self.tempdir.name) / "uploads")
-        self.client = TestClient(self.app)
+        self.client = SyncDocumentActionClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self._stop_executor)
 
@@ -2579,7 +2579,7 @@ class ApiWorkflowTests(unittest.TestCase):
         blob = Path(self.tempdir.name) / "blobs" / record.content_sha256[:2] / record.content_sha256[2:4] / record.content_sha256
         self.assertTrue(blob.exists())
 
-    def test_download_persists_export_generated_on_demand(self) -> None:
+    def test_download_does_not_generate_missing_exports(self) -> None:
         document_id = self._translated_reviewed_document()
         self.assertEqual(self._merged_html_exports(document_id), [])
 
@@ -2587,10 +2587,8 @@ class ApiWorkflowTests(unittest.TestCase):
             f"/v1/documents/{document_id}/exports/download",
             params={"export_type": "merged_html"},
         )
-        self.assertEqual(download.status_code, 200)
-
-        [record] = self._merged_html_exports(document_id)
-        self.assertIsNotNone(record.content_sha256)
+        self.assertEqual(download.status_code, 404)
+        self.assertEqual(self._merged_html_exports(document_id), [])
 
     def test_rebuilt_epub_export_produces_document_level_epub_artifact(self) -> None:
         epub_path = self._write_epub_with_chapters(

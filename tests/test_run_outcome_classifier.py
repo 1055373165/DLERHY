@@ -20,6 +20,7 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.orchestrator.run_plan import plan_for_run
 from book_agent.orchestrator.stage_status import (
     OPTIONAL_PIPELINE_STAGES,
     PIPELINE_STAGES,
@@ -27,7 +28,6 @@ from book_agent.orchestrator.stage_status import (
     RunOutcome,
     StageStatus,
     classify_run_outcome,
-    required_stages_for_run_type,
 )
 
 
@@ -169,8 +169,8 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
 
 
     def test_translate_full_requires_every_pipeline_stage(self) -> None:
-        self.assertEqual(required_stages_for_run_type("translate_full"), frozenset(PIPELINE_STAGES))
-        self.assertEqual(required_stages_for_run_type("translate_targeted"), REQUIRED_PIPELINE_STAGES)
+        self.assertEqual(plan_for_run("translate_full", {}).required_stages, frozenset(PIPELINE_STAGES))
+        self.assertEqual(plan_for_run("translate_targeted", {}).required_stages, REQUIRED_PIPELINE_STAGES)
 
     def test_failed_review_fails_run_when_review_is_required(self) -> None:
         statuses = {
@@ -180,7 +180,7 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
             "merged_html": StageStatus.NOT_STARTED,
         }
         self.assertEqual(
-            classify_run_outcome(statuses, required_stages_for_run_type("translate_full")),
+            classify_run_outcome(statuses, plan_for_run("translate_full", {}).required_stages),
             RunOutcome.FAILED,
         )
         self.assertEqual(classify_run_outcome(statuses), RunOutcome.SUCCEEDED_WITH_WARNINGS)

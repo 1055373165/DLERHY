@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
     DocumentRunStatus,
-    DocumentRunType,
     ExportType,
     PacketStatus,
     WorkItemScopeType,
@@ -35,6 +34,7 @@ from book_agent.orchestrator.pipeline_stage_cache import (
     write_cached_stages,
 )
 from book_agent.orchestrator.reconciler import Reconciler
+from book_agent.orchestrator.run_plan import EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
     StageStatus,
@@ -51,6 +51,7 @@ from book_agent.orchestrator.state_machine import (
     build_packet_runtime_state,
     packet_runtime_state,
 )
+from book_agent.services.export import ExportGateError
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
@@ -303,7 +304,7 @@ class DocumentRunExecutor:
                 session.scalars(
                     select(DocumentRun.id)
                     .where(
-                        DocumentRun.run_type == DocumentRunType.TRANSLATE_FULL,
+                        DocumentRun.run_type.in_(sorted(EXECUTABLE_RUN_TYPES)),
                         DocumentRun.status.in_(
                             [DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING]
                         ),
@@ -325,13 +326,15 @@ class DocumentRunExecutor:
                 self._reclaim_expired_leases(run_id)
                 if self._enforce_budget_guardrails(run_id):
                     return
-                if self._process_translate_stage(run_id):
+                plan = plan_for_run(run_summary.run_type, run_summary.status_detail_json)
+                if plan.includes("translate") and self._process_translate_stage(run_id, plan):
                     continue
-                if self._process_review_stage(run_id):
+                if plan.includes("review") and self._process_review_stage(run_id, plan):
                     continue
-                if self._process_export_stage(run_id, export_type=ExportType.BILINGUAL_HTML):
-                    continue
-                if self._process_export_stage(run_id, export_type=ExportType.MERGED_HTML):
+                if any(
+                    self._process_export_stage(run_id, export_type=ExportType(stage), plan=plan)
+                    for stage in plan.export_stages
+                ):
                     continue
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
@@ -356,6 +359,17 @@ class DocumentRunExecutor:
 
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
+
+    def _plan_for(self, run: DocumentRun) -> RunPlan:
+        return plan_for_run(run.run_type, run.status_detail_json)
+
+    @staticmethod
+    def _next_stage_label(plan: RunPlan, stage: str) -> str:
+        if stage in plan.stages:
+            index = plan.stages.index(stage)
+            if index + 1 < len(plan.stages):
+                return plan.stages[index + 1]
+        return "completed"
 
     def _enforce_budget_guardrails(self, run_id: str) -> bool:
         """Pause or fail the run when a configured budget is exhausted.
@@ -390,11 +404,14 @@ class DocumentRunExecutor:
                     )
         return reclaimed.expired_lease_count > 0
 
-    def _process_translate_stage(self, run_id: str) -> bool:
+    def _process_translate_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
+            packet_scope = plan.packet_ids
+            next_stage = self._next_stage_label(plan, "translate")
             document_id = run.document_id
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             if self._reconcile_translate_work_items(
@@ -413,6 +430,7 @@ class DocumentRunExecutor:
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=active_translate_items,
+                packet_scope=packet_scope,
             )
             if seeded_packet_ids:
                 translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
@@ -424,15 +442,17 @@ class DocumentRunExecutor:
                     "translate",
                     status="pending",
                     extra={
-                        "total_packet_count": len(self._list_all_packet_ids(session, document_id)),
-                        "pending_packet_count": len(self._list_pending_packet_ids(session, document_id)),
+                        "total_packet_count": len(self._list_all_packet_ids(session, document_id, packet_scope)),
+                        "pending_packet_count": len(
+                            self._list_pending_packet_ids(session, document_id, packet_scope)
+                        ),
                     },
                     current_stage="translate",
                     session=session,
                 )
             if not active_translate_items:
-                packet_ids = self._list_pending_packet_ids(session, document_id)
-                current_stage = "translate" if packet_ids else "review"
+                packet_ids = self._list_pending_packet_ids(session, document_id, packet_scope)
+                current_stage = "translate" if packet_ids else next_stage
                 execution.seed_translate_work_items(
                     run_id=run_id,
                     packet_ids=packet_ids,
@@ -443,7 +463,7 @@ class DocumentRunExecutor:
                     "translate",
                     status=("pending" if packet_ids else "succeeded"),
                     extra={
-                        "total_packet_count": len(self._list_all_packet_ids(session, document_id)),
+                        "total_packet_count": len(self._list_all_packet_ids(session, document_id, packet_scope)),
                         "pending_packet_count": len(packet_ids),
                     },
                     current_stage=current_stage,
@@ -478,7 +498,7 @@ class DocumentRunExecutor:
             return True
 
         if active_translate_items and all(item.status == WorkItemStatus.SUCCEEDED for item in active_translate_items):
-            self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage="review")
+            self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage=next_stage)
         return False
 
     def _seed_translate_frontier_work_items(
@@ -489,6 +509,7 @@ class DocumentRunExecutor:
         run_id: str,
         document_id: str,
         translate_items: list[WorkItem],
+        packet_scope: frozenset[str] | None = None,
     ) -> list[str]:
         # DECIDE (read-only planner) → EXECUTE (single-writer seed).
         # Keep the two halves textually adjacent so any future tweak
@@ -499,6 +520,7 @@ class DocumentRunExecutor:
             run_id=run_id,
             document_id=document_id,
             translate_items=translate_items,
+            packet_scope=packet_scope,
         )
         if plan.is_empty:
             return []
@@ -509,13 +531,14 @@ class DocumentRunExecutor:
         )
         return plan.packet_ids
 
-    def _process_review_stage(self, run_id: str) -> bool:
+    def _process_review_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, "review"
+                run_id, run.document_id, "review", plan_stages=plan.stages
             ):
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
@@ -552,22 +575,34 @@ class DocumentRunExecutor:
                 run_id=run_id,
                 work_item_id=claimed.work_item_id,
                 thread_name=f"book-agent-review-{claimed.work_item_id}",
-                target=lambda claimed=claimed: self._execute_review_work_item(run_id, claimed),
+                target=lambda claimed=claimed: self._execute_review_work_item(run_id, claimed, plan),
             )
             return True
 
         if review_items and all(item.status == WorkItemStatus.SUCCEEDED for item in review_items):
-            self._update_pipeline_stage(run_id, "review", status="succeeded", current_stage="bilingual_html")
+            self._update_pipeline_stage(
+                run_id,
+                "review",
+                status="succeeded",
+                current_stage=self._next_stage_label(plan, "review"),
+            )
         return False
 
-    def _process_export_stage(self, run_id: str, *, export_type: ExportType) -> bool:
+    def _process_export_stage(
+        self,
+        run_id: str,
+        *,
+        export_type: ExportType,
+        plan: RunPlan | None = None,
+    ) -> bool:
         pipeline_key = export_type.value
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, pipeline_key
+                run_id, run.document_id, pipeline_key, plan_stages=plan.stages
             ):
                 return False
 
@@ -611,13 +646,18 @@ class DocumentRunExecutor:
                     run_id,
                     claimed,
                     export_type=export_type,
+                    plan=plan,
                 ),
             )
             return True
 
         if export_items and all(item.status == WorkItemStatus.SUCCEEDED for item in export_items):
-            next_stage = "merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"
-            self._update_pipeline_stage(run_id, pipeline_key, status="succeeded", current_stage=next_stage)
+            self._update_pipeline_stage(
+                run_id,
+                pipeline_key,
+                status="succeeded",
+                current_stage=self._next_stage_label(plan, pipeline_key),
+            )
         return False
 
     def _execute_translate_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
@@ -633,8 +673,15 @@ class DocumentRunExecutor:
             lease_seconds=self.lease_seconds,
         )
 
-    def _execute_review_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
+    def _execute_review_work_item(
+        self,
+        run_id: str,
+        claimed: ClaimedRunWorkItem,
+        plan: RunPlan | None = None,
+    ) -> None:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+        repairs_blockers = plan.review_repairs_blockers if plan is not None else True
+        next_stage = self._next_stage_label(plan, "review") if plan is not None else "bilingual_html"
 
         def _run_review() -> dict[str, Any]:
             payload: dict[str, Any]
@@ -643,6 +690,20 @@ class DocumentRunExecutor:
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
                 document_id = str(input_bundle.get("document_id") or claimed.scope_id)
+                if not repairs_blockers:
+                    # Standalone review run: record issues, like the synchronous review.
+                    result = workflow.review_document(document_id)
+                    payload = {
+                        "document_id": document_id,
+                        "total_issue_count": result.total_issue_count,
+                        "total_action_count": result.total_action_count,
+                        "chapter_count": len(result.chapter_results),
+                        "examined_chapter_count": result.examined_chapter_count,
+                        "skipped_chapter_count": result.skipped_chapter_count,
+                        "total_chapter_count": result.total_chapter_count,
+                    }
+                    self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                    return payload
                 initial_result = workflow.review_document(
                     document_id,
                     auto_execute_packet_followups=True,
@@ -727,7 +788,7 @@ class DocumentRunExecutor:
                     "review",
                     status=stage_status,
                     extra=payload,
-                    current_stage="bilingual_html",
+                    current_stage=next_stage,
                     session=session,
                 )
 
@@ -746,20 +807,39 @@ class DocumentRunExecutor:
         claimed: ClaimedRunWorkItem,
         *,
         export_type: ExportType,
+        plan: RunPlan | None = None,
     ) -> None:
         pipeline_key = export_type.value
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
         document_id = str(input_bundle.get("document_id") or "")
+        auto_followup = plan.auto_followup_on_export_gate if plan is not None else True
+        next_stage = (
+            self._next_stage_label(plan, pipeline_key)
+            if plan is not None
+            else ("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed")
+        )
 
         def _run_export() -> dict[str, Any]:
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                result = workflow.export_document(
-                    document_id,
-                    export_type,
-                    auto_execute_followup_on_gate=True,
-                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                max_attempts = (
+                    plan.max_auto_followup_attempts
+                    if plan is not None and plan.max_auto_followup_attempts is not None
+                    else self._max_auto_followup_attempts(session, run_id)
                 )
+                try:
+                    result = workflow.export_document(
+                        document_id,
+                        export_type,
+                        auto_execute_followup_on_gate=auto_followup,
+                        max_auto_followup_attempts=max_attempts,
+                    )
+                except ExportGateError:
+                    # Keep the review issues and followup attempts the gate
+                    # recorded; the work item still fails with the gate detail.
+                    self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                    session.commit()
+                    raise
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
             return {
                 "document_id": document_id,
@@ -783,7 +863,7 @@ class DocumentRunExecutor:
                     pipeline_key,
                     status="succeeded",
                     extra=payload,
-                    current_stage=("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"),
+                    current_stage=next_stage,
                     session=session,
                 )
 
@@ -963,6 +1043,8 @@ class DocumentRunExecutor:
             "failure_reason": failure.reason,
             "traceback": traceback.format_exc(limit=8),
         }
+        if isinstance(exc, ExportGateError):
+            error_detail["export_gate"] = exc.to_http_detail()
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_work_item_failure(
@@ -997,6 +1079,7 @@ class DocumentRunExecutor:
                     "error_class": error_class,
                     "error_message": str(exc),
                     **({"stop_reason": pause_reason} if pause_reason is not None else {}),
+                    **({"export_gate": error_detail["export_gate"]} if "export_gate" in error_detail else {}),
                 },
                 current_stage=stage_key,
                 session=session,
@@ -1347,6 +1430,7 @@ class DocumentRunExecutor:
         run_id: str,
         document_id: str,
         translate_items: list[WorkItem] | None = None,
+        packet_scope: frozenset[str] | None = None,
     ) -> TranslateFrontierPlan:
         """DECIDE-phase planner: pick next TRANSLATE work_item targets.
 
@@ -1385,7 +1469,7 @@ class DocumentRunExecutor:
             self._translate_item_chapter_id_map(session, chapter_blocking_items).values()
         )
         represented_packet_ids = frozenset(str(item.scope_id) for item in stage_items)
-        candidate_packet_ids = self._list_pending_packet_ids(session, document_id)
+        candidate_packet_ids = self._list_pending_packet_ids(session, document_id, packet_scope)
         if not candidate_packet_ids:
             return TranslateFrontierPlan(
                 packet_ids=[],
@@ -1504,7 +1588,14 @@ class DocumentRunExecutor:
             except Exception:
                 logger.warning("Heartbeat failed for lease %s", lease_token, exc_info=True)
 
-    def _list_all_packet_ids(self, session, document_id: str) -> list[str]:
+    def _list_all_packet_ids(
+        self,
+        session,
+        document_id: str,
+        packet_scope: frozenset[str] | None = None,
+    ) -> list[str]:
+        if packet_scope is not None:
+            return [packet_id for packet_id in self._list_all_packet_ids(session, document_id) if packet_id in packet_scope]
         return list(
             session.scalars(
                 select(TranslationPacket.id)
@@ -1514,7 +1605,16 @@ class DocumentRunExecutor:
             ).all()
         )
 
-    def _list_pending_packet_ids(self, session, document_id: str) -> list[str]:
+    def _list_pending_packet_ids(
+        self,
+        session,
+        document_id: str,
+        packet_scope: frozenset[str] | None = None,
+    ) -> list[str]:
+        if packet_scope is not None:
+            return [
+                packet_id for packet_id in self._list_pending_packet_ids(session, document_id) if packet_id in packet_scope
+            ]
         return list(
             session.scalars(
                 select(TranslationPacket.id)

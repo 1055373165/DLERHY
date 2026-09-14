@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from book_agent.domain.enums import ExportType
 from book_agent.orchestrator.stage_status import (
     PIPELINE_STAGES,
     StageEvidence,
@@ -37,6 +38,16 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "bilingual_html": ("translate", "review"),
     "merged_html": ("translate", "review", "bilingual_html"),
 }
+# Other export types (standalone export runs) follow translation and review.
+_DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")
+
+
+def _dependencies_for(stage: str) -> tuple[str, ...]:
+    if stage in STAGE_DEPENDENCIES:
+        return STAGE_DEPENDENCIES[stage]
+    if stage in {export_type.value for export_type in ExportType}:
+        return _DEFAULT_EXPORT_DEPENDENCIES
+    raise ValueError(f"unknown pipeline stage: {stage!r}")
 
 
 @dataclass(frozen=True)
@@ -79,19 +90,32 @@ class StageGateKeeper:
         self._session = session
         self._calculator = StageStatusCalculator(session)
 
-    def can_start(self, run_id: str, document_id: str, stage: str) -> bool:
-        return self.evaluate(run_id, document_id, stage).can_start
+    def can_start(
+        self,
+        run_id: str,
+        document_id: str,
+        stage: str,
+        *,
+        plan_stages: tuple[str, ...] | None = None,
+    ) -> bool:
+        return self.evaluate(run_id, document_id, stage, plan_stages=plan_stages).can_start
 
     def evaluate(
         self,
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        plan_stages: tuple[str, ...] | None = None,
     ) -> GateDecision:
-        if stage not in STAGE_DEPENDENCIES:
-            raise ValueError(f"unknown pipeline stage: {stage!r}")
+        """``plan_stages`` limits gating to upstream stages the run itself owns.
 
-        upstream_stages = STAGE_DEPENDENCIES[stage]
+        A standalone review or export run does not wait for stages another
+        run performed; the review and export services apply their own checks.
+        """
+        upstream_stages = _dependencies_for(stage)
+        if plan_stages is not None:
+            upstream_stages = tuple(upstream for upstream in upstream_stages if upstream in plan_stages)
         upstream_statuses: dict[str, StageStatus] = {
             upstream: self._calculator.stage_status(run_id, document_id, upstream)
             for upstream in upstream_stages

@@ -114,7 +114,7 @@ class ExecutorRunLoopTests(unittest.TestCase):
         run_id = self._create_running_run(None)
         calls: list[int] = []
 
-        def _flaky_translate_stage(_run_id: str) -> bool:
+        def _flaky_translate_stage(_run_id: str, _plan=None) -> bool:
             calls.append(1)
             if len(calls) == 1:
                 raise IntegrityError("INSERT INTO work_items", {}, Exception("unique violation"))

@@ -55,13 +55,11 @@ PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
 # ``FAILED`` downgrades the run to ``SUCCEEDED_WITH_WARNINGS`` instead of
 # failing the whole pipeline.
 #
-# Required stages depend on the run type (``required_stages_for_run_type``).
-# ``translate`` is always required — without a translated ledger there is no
-# artifact to hand off. TRANSLATE_FULL runs always seed review and both
-# exports, so for them every stage is required and a failed review fails the
-# run. For other run types review/exports are optional: never started means
-# "not requested", and an optional failure downgrades to
-# SUCCEEDED_WITH_WARNINGS.
+# Required stages come from the run's plan (``orchestrator.run_plan``): every
+# planned stage is required, so a TRANSLATE_FULL run fails when its review or
+# exports fail. Pipeline stages outside the plan are optional: never started
+# means "not requested", and a failure there downgrades to
+# SUCCEEDED_WITH_WARNINGS. The constants below describe a translate-only plan.
 REQUIRED_PIPELINE_STAGES: frozenset[str] = frozenset({"translate"})
 OPTIONAL_PIPELINE_STAGES: frozenset[str] = frozenset(
     {"review", "bilingual_html", "merged_html"}
@@ -160,49 +158,50 @@ class StageStatusCalculator:
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
     ) -> StageStatus:
-        return self.stage_evidence(run_id, document_id, stage).status
+        return self.stage_evidence(run_id, document_id, stage, packet_ids=packet_ids).status
 
     def stage_evidence(
         self,
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
     ) -> StageEvidence:
+        """``packet_ids`` scopes the translate stage to a targeted run's packets."""
         if stage == "translate":
-            return self._translate_evidence(run_id, document_id)
+            return self._translate_evidence(run_id, document_id, packet_ids=packet_ids)
         if stage == "review":
             return self._work_item_stage_evidence(run_id, WorkItemStage.REVIEW, "review")
-        if stage == "bilingual_html":
-            return self._export_stage_evidence(run_id, ExportType.BILINGUAL_HTML, "bilingual_html")
-        if stage == "merged_html":
-            return self._export_stage_evidence(run_id, ExportType.MERGED_HTML, "merged_html")
+        if stage in {export_type.value for export_type in ExportType}:
+            return self._export_stage_evidence(run_id, ExportType(stage), stage)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
 
     # --- internals -----------------------------------------------------
 
-    def _translate_evidence(self, run_id: str, document_id: str) -> StageEvidence:
-        total_packets = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(Chapter.document_id == document_id)
-        ) or 0
-        translated = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(
-                Chapter.document_id == document_id,
-                TranslationPacket.status == PacketStatus.TRANSLATED,
+    def _translate_evidence(
+        self,
+        run_id: str,
+        document_id: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
+    ) -> StageEvidence:
+        def _packet_count(*conditions) -> int:
+            stmt = (
+                select(func.count(TranslationPacket.id))
+                .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
+                .where(Chapter.document_id == document_id, *conditions)
             )
-        ) or 0
-        failed_packets = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(
-                Chapter.document_id == document_id,
-                TranslationPacket.status == PacketStatus.FAILED,
-            )
-        ) or 0
+            if packet_ids is not None:
+                stmt = stmt.where(TranslationPacket.id.in_(packet_ids))
+            return self._session.scalar(stmt) or 0
+
+        total_packets = _packet_count()
+        translated = _packet_count(TranslationPacket.status == PacketStatus.TRANSLATED)
+        failed_packets = _packet_count(TranslationPacket.status == PacketStatus.FAILED)
 
         wi_counts = self._work_item_counts(run_id, WorkItemStage.TRANSLATE)
 
@@ -413,18 +412,6 @@ class RunOutcome(str, Enum):
     FAILED = "failed"
 
 
-def required_stages_for_run_type(run_type: str) -> frozenset[str]:
-    """Stages a run of ``run_type`` must complete to succeed.
-
-    A TRANSLATE_FULL run always seeds review and both exports, so its
-    deliverable is the export: all pipeline stages are required. Other run
-    types only require translate.
-    """
-    if run_type == "translate_full":
-        return frozenset(PIPELINE_STAGES)
-    return REQUIRED_PIPELINE_STAGES
-
-
 def classify_run_outcome(
     stage_status_by_name: Mapping[str, StageStatus],
     required_stages: frozenset[str] = REQUIRED_PIPELINE_STAGES,
@@ -447,7 +434,7 @@ def classify_run_outcome(
     Phase 3 introduces it before the classifier gets taught about it.
     """
 
-    optional_stages = frozenset(PIPELINE_STAGES) - required_stages
+    optional_stages = frozenset(stage_status_by_name) - required_stages
 
     def status_of(stage: str) -> StageStatus | None:
         return stage_status_by_name.get(stage)

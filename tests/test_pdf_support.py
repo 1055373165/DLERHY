@@ -10,7 +10,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.pool import StaticPool
 
@@ -96,6 +95,7 @@ from book_agent.services.rerun import RerunService
 from book_agent.services.review import ReviewService
 from book_agent.services.translation import TranslationService
 from book_agent.services.workflows import DocumentWorkflowService
+from tests.document_actions import SyncDocumentActionClient
 
 
 PAGE_WIDTH = 595
@@ -6886,7 +6886,7 @@ class PdfApiWorkflowTests(unittest.TestCase):
         self.app = create_app()
         self.app.state.session_factory = self.session_factory
         self.app.state.export_root = str(Path(self.tempdir.name) / "exports")
-        self.client = TestClient(self.app)
+        self.client = SyncDocumentActionClient(self.app)
         self.addCleanup(self.client.close)
 
     def test_contract_advertises_text_pdf_support(self) -> None:

@@ -190,9 +190,14 @@ POST /v1/runs/{id}/pause           # graceful pause at next safe point
 POST /v1/runs/{id}/resume          # resume from checkpoint
 POST /v1/runs/{id}/retry           # reset retryable_failed items
 POST /v1/runs/{id}/cancel          # hard stop
-POST /v1/documents/{id}/review     # run QA review
-POST /v1/documents/{id}/export     # emit a deliverable
+POST /v1/documents/{id}/translate  # enqueue a translate_targeted run (202)
+POST /v1/documents/{id}/review     # enqueue a review_full run (202)
+POST /v1/documents/{id}/export     # enqueue an export_full run (202)
+GET  /v1/documents/{id}/exports/download?export_type=…  # serve an existing export
 ```
+
+The document actions return the created run immediately; poll `/v1/runs/{id}` for the result.
+Downloads never generate exports — enqueue an export run first.
 
 The frontend polls `/v1/runs/{id}` every 2.5 s — the UI is a live view of PostgreSQL, not a cached snapshot.
 

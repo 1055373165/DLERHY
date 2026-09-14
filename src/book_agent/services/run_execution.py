@@ -15,13 +15,13 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models.ops import RunAuditEvent
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
+from book_agent.orchestrator.run_plan import plan_for_run
 from book_agent.orchestrator.stage_status import (
     PIPELINE_STAGES,
     RunOutcome,
     StageStatus,
     StageStatusCalculator,
     classify_run_outcome,
-    required_stages_for_run_type,
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
 
@@ -615,15 +615,27 @@ class RunExecutionService:
                 detail_json={"remaining_claimable_work_items": claimable_count},
             )
 
+        plan = plan_for_run(run.run_type, run.status_detail_json)
+        # Planned stages are required. Other pipeline stages are optional and
+        # only matter if this run produced work for them; document-wide
+        # translation progress is not a standalone review/export run's concern.
+        evaluated_stages = list(plan.stages) + [
+            stage for stage in PIPELINE_STAGES if stage not in plan.stages and stage != "translate"
+        ]
         calculator = StageStatusCalculator(self.repository.session)
         stage_status_by_name: dict[str, StageStatus] = {
-            stage: calculator.stage_status(run_id, run.document_id, stage)
-            for stage in PIPELINE_STAGES
+            stage: calculator.stage_status(
+                run_id,
+                run.document_id,
+                stage,
+                packet_ids=plan.packet_ids if stage == "translate" else None,
+            )
+            for stage in evaluated_stages
         }
         stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
 
-        required_stages = required_stages_for_run_type(run.run_type.value)
-        optional_stages = frozenset(PIPELINE_STAGES) - required_stages
+        required_stages = plan.required_stages
+        optional_stages = frozenset(stage_status_by_name) - required_stages
         outcome = classify_run_outcome(stage_status_by_name, required_stages)
 
         if outcome == RunOutcome.FAILED:

@@ -19,8 +19,10 @@ from starlette.background import BackgroundTask
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
-from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
-from book_agent.infra.concurrency.rebuild_lock import try_acquire_rebuild_lock
+from book_agent.domain.enums import DocumentRunStatus, DocumentRunType, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
+from book_agent.app.api.routes.runs import _to_run_summary_response
+from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.storage.blobs import UNRECOVERABLE_SCHEME
 
 from book_agent.schemas.document import DocumentContractResponse
@@ -45,12 +47,11 @@ from book_agent.schemas.workflow import (
     ExportDetailResponse,
     DocumentSummaryResponse,
     ExportDocumentRequest,
-    ExportDocumentResponse,
-    ReviewDocumentResponse,
     TranslateDocumentRequest,
-    TranslateDocumentResponse,
 )
-from book_agent.services.export import ExportGateError
+from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
+from book_agent.schemas.run_control import DocumentRunSummaryResponse
+from book_agent.services.run_control import RunControlService
 from book_agent.services.workflows import (
     DocumentChapterWorklist,
     DocumentChapterWorklistDetail,
@@ -62,10 +63,7 @@ from book_agent.services.workflows import (
     ChapterMemoryProposalSummary,
     ChapterWorklistTimelineEntry,
     DocumentBusyError,
-    DocumentExportResult,
-    DocumentReviewResult,
     DocumentSummary,
-    DocumentTranslationResult,
     DocumentWorkflowService,
 )
 
@@ -814,18 +812,6 @@ def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHis
     )
 
 
-def _to_translate_response(result: DocumentTranslationResult) -> TranslateDocumentResponse:
-    return TranslateDocumentResponse(
-        document_id=result.document_id,
-        translated_packet_count=result.translated_packet_count,
-        skipped_packet_ids=result.skipped_packet_ids,
-        translation_run_ids=result.translation_run_ids,
-        review_required_sentence_ids=result.review_required_sentence_ids,
-        memory_commit_mode=result.memory_commit_mode,
-        recorded_memory_proposal_count=result.recorded_memory_proposal_count,
-    )
-
-
 def _to_chapter_memory_proposal_response(
     proposal: ChapterMemoryProposalSummary,
 ) -> ChapterMemoryProposalResponse:
@@ -917,81 +903,6 @@ def _proposal_http_exception(exc: ValueError) -> HTTPException:
     if "not found" in lowered or "does not belong" in lowered:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
-
-
-def _to_review_response(result: DocumentReviewResult) -> ReviewDocumentResponse:
-    return ReviewDocumentResponse(
-        document_id=result.document_id,
-        total_issue_count=result.total_issue_count,
-        total_action_count=result.total_action_count,
-        chapter_results=[
-            {
-                "chapter_id": chapter.chapter_id,
-                "status": chapter.status,
-                "issue_count": chapter.issue_count,
-                "action_count": chapter.action_count,
-                "blocking_issue_count": chapter.blocking_issue_count,
-                "coverage_ok": chapter.coverage_ok,
-                "alignment_ok": chapter.alignment_ok,
-                "term_ok": chapter.term_ok,
-                "format_ok": chapter.format_ok,
-                "low_confidence_count": chapter.low_confidence_count,
-                "format_pollution_count": chapter.format_pollution_count,
-                "resolved_issue_count": chapter.resolved_issue_count,
-                "naturalness_summary": (
-                    {
-                        "advisory_only": chapter.naturalness_summary.advisory_only,
-                        "style_drift_issue_count": chapter.naturalness_summary.style_drift_issue_count,
-                        "affected_packet_count": chapter.naturalness_summary.affected_packet_count,
-                        "dominant_style_rules": list(chapter.naturalness_summary.dominant_style_rules),
-                        "preferred_hints": list(chapter.naturalness_summary.preferred_hints),
-                    }
-                    if chapter.naturalness_summary is not None
-                    else None
-                ),
-            }
-            for chapter in result.chapter_results
-        ],
-    )
-
-
-def _to_export_response(result: DocumentExportResult) -> ExportDocumentResponse:
-    return ExportDocumentResponse(
-        document_id=result.document_id,
-        export_type=result.export_type,
-        document_status=result.document_status,
-        file_path=result.file_path,
-        manifest_path=result.manifest_path,
-        chapter_results=[
-            {
-                "chapter_id": chapter.chapter_id,
-                "export_id": chapter.export_id,
-                "export_type": chapter.export_type,
-                "status": chapter.status,
-                "file_path": chapter.file_path,
-                "manifest_path": chapter.manifest_path,
-            }
-            for chapter in result.chapter_results
-        ],
-        auto_followup_requested=result.auto_followup_requested,
-        auto_followup_applied=result.auto_followup_applied,
-        auto_followup_attempt_count=result.auto_followup_attempt_count,
-        auto_followup_attempt_limit=result.auto_followup_attempt_limit,
-        auto_followup_executions=[
-            {
-                "action_id": execution.action_id,
-                "issue_id": execution.issue_id,
-                "action_type": execution.action_type,
-                "rerun_scope_type": execution.rerun_scope_type,
-                "rerun_scope_ids": execution.rerun_scope_ids,
-                "followup_executed": execution.followup_executed,
-                "rerun_packet_ids": execution.rerun_packet_ids,
-                "rerun_translation_run_ids": execution.rerun_translation_run_ids,
-                "issue_resolved": execution.issue_resolved,
-            }
-            for execution in (result.auto_followup_executions or [])
-        ],
-    )
 
 
 def _to_export_dashboard_response(result: DocumentExportDashboard) -> DocumentExportDashboardResponse:
@@ -1776,26 +1687,11 @@ def download_document_export(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if not primary_records:
-        # No pre-built export — generate on demand
-        try:
-            workflow.export_document(document_id, lookup_type)
-            # GET sessions roll back on exit; keep the generated export rows.
-            session.commit()
-            primary_records = workflow.export_repository.list_document_exports_filtered(
-                document_id,
-                export_type=lookup_type,
-                status=ExportStatus.SUCCEEDED,
-            )
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Export generation failed: {exc}",
-            ) from exc
-        if not primary_records:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No successful {export_type.value} exports are available for download.",
-            )
+        # Downloads only serve existing exports; POST /export enqueues one.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No successful {lookup_type.value} exports are available for download.",
+        )
 
     book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
     label_map = {
@@ -1815,65 +1711,15 @@ def download_document_export(
     for record in primary_records:
         _assert_record_serviceable(record)
     artifact_roots = _artifact_roots(request)
-    try:
-        files = [
-            _resolve_artifact_path(
-                record.file_path,
-                roots=artifact_roots,
-                document_id=document_id,
-                content_sha256=record.content_sha256,
-            )
-            for record in primary_records
-        ]
-    except HTTPException as exc:
-        # Records exist but file is missing on disk. This is the M1.3
-        # self-heal path: attempt one idempotent rebuild under a
-        # two-layer try-lock (process + pg advisory). The lock makes
-        # concurrent downloads of the same (doc, type) NOT thundering-
-        # herd ``export_document`` and race to overwrite the output.
-        if exc.status_code != status.HTTP_404_NOT_FOUND:
-            raise
-        with try_acquire_rebuild_lock(
-            session, document_id, lookup_type.value
-        ) as acquired:
-            if not acquired:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Export rebuild in progress for this document; retry shortly.",
-                    headers={"Retry-After": "5"},
-                ) from exc
-            try:
-                workflow.export_document(document_id, lookup_type)
-                # GET sessions roll back on exit; keep the rebuilt export rows.
-                session.commit()
-            except HTTPException:
-                raise
-            except Exception as rebuild_exc:
-                # Export gates (chapter not reviewed, review package stale,
-                # etc.) surface here. The artifact is genuinely gone and
-                # cannot be regenerated under current state — a 422 points
-                # the operator at the gate they need to clear, rather than
-                # the useless 404 they'd get without this branch.
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Export rebuild failed: {rebuild_exc}",
-                ) from rebuild_exc
-            primary_records = workflow.export_repository.list_document_exports_filtered(
-                document_id,
-                export_type=lookup_type,
-                status=ExportStatus.SUCCEEDED,
-            )
-        for record in primary_records:
-            _assert_record_serviceable(record)
-        files = [
-            _resolve_artifact_path(
-                record.file_path,
-                roots=artifact_roots,
-                document_id=document_id,
-                content_sha256=record.content_sha256,
-            )
-            for record in primary_records
-        ]
+    files = [
+        _resolve_artifact_path(
+            record.file_path,
+            roots=artifact_roots,
+            document_id=document_id,
+            content_sha256=record.content_sha256,
+        )
+        for record in primary_records
+    ]
 
     # Use the latest (last) primary record only — deliver a single merged file
     file_path = files[-1]
@@ -2021,52 +1867,89 @@ def reject_chapter_memory_proposal(
     return _to_chapter_memory_proposal_decision_response(result)
 
 
-@router.post("/{document_id}/translate", response_model=TranslateDocumentResponse)
+def _enqueue_document_run(
+    request: Request,
+    session: Session,
+    *,
+    document_id: str,
+    run_type: DocumentRunType,
+    run_request: dict[str, Any],
+) -> DocumentRunSummaryResponse:
+    control = RunControlService(RunControlRepository(session))
+    try:
+        created = control.create_run(
+            document_id=document_id,
+            run_type=run_type,
+            requested_by="api.documents",
+            status_detail_json={"source": "api.documents", RUN_REQUEST_KEY: run_request},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    summary = control.resume_run(created.run_id, actor_id="api.documents", note="enqueued")
+    # The executor reads the run from its own session; commit before waking it.
+    session.commit()
+    ensure_document_run_executor(request.app).wake(summary.run_id)
+    return _to_run_summary_response(summary)
+
+
+@router.post(
+    "/{document_id}/translate",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def translate_document(
     document_id: str,
     payload: TranslateDocumentRequest,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> TranslateDocumentResponse:
-    try:
-        result = _workflow_service(request, session).translate_document(document_id, payload.packet_ids)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_translate_response(result)
+) -> DocumentRunSummaryResponse:
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.TRANSLATE_TARGETED,
+        run_request={"packet_ids": list(payload.packet_ids)},
+    )
 
 
-@router.post("/{document_id}/review", response_model=ReviewDocumentResponse)
+@router.post(
+    "/{document_id}/review",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def review_document(
     document_id: str,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> ReviewDocumentResponse:
-    try:
-        result = _workflow_service(request, session).review_document(document_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_review_response(result)
+) -> DocumentRunSummaryResponse:
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.REVIEW_FULL,
+        run_request={},
+    )
 
 
-@router.post("/{document_id}/export", response_model=ExportDocumentResponse)
+@router.post(
+    "/{document_id}/export",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def export_document(
     document_id: str,
     payload: ExportDocumentRequest,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> ExportDocumentResponse:
-    try:
-        workflow = _workflow_service(request, session)
-        export_type_enum = ExportType(payload.export_type)
-        result = workflow.export_document(
-            document_id,
-            export_type_enum,
-            auto_execute_followup_on_gate=payload.auto_execute_followup_on_gate,
-            max_auto_followup_attempts=payload.max_auto_followup_attempts,
-        )
-    except ExportGateError as exc:
-        session.commit()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.to_http_detail()) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_export_response(result)
+) -> DocumentRunSummaryResponse:
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.EXPORT_FULL,
+        run_request={
+            "export_type": payload.export_type,
+            "auto_execute_followup_on_gate": payload.auto_execute_followup_on_gate,
+            "max_auto_followup_attempts": payload.max_auto_followup_attempts,
+        },
+    )

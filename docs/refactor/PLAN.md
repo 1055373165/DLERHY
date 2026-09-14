@@ -85,7 +85,7 @@
 - [x] **P2.3 租约丢失**：worker 在提交结果的事务内锁定并校验租约（`assert_lease_held`），租约已被回收则回滚并丢弃结果，不再写失败记录或崩溃。领取本身已是按状态的 CAS UPDATE（并发下只有一个赢家），`SKIP LOCKED` 只是性能优化，暂不做。
 - [x] **P2.4 Run 状态**：所有修改 run 行的路径（状态转换、用量计数、流水线缓存、租约回收、播种）经 `get_run_for_update` 加行锁，读改写串行化，统一「先锁 run 再动 work item」的顺序；状态转换因此等价于 CAS。Postgres 并发测试：12 个并发完成，改前只保留 3 个计数，改后 12 个。
 - [x] **P2.5 事务与线程**：翻译拆为 prepare / call_worker / persist 三个事务阶段，LLM 调用期间不占连接，失败事件真正落库；审校与导出改在工作线程执行，阶段缓存与工作项结果同事务写入；`stop()` 按层 join 并阻止停止后再起线程；心跳未启动时不再 join 抛错；`get_run_for_update` 先做空 UPDATE 取写锁（SQLite 也能串行化）。
-- [ ] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建对应 run（执行器支持 `translate_targeted` / `review_full` / `export_full`）并立即返回；GET 下载不再触发生成。
+- [x] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建并启动对应 run（`translate_targeted` / `review_full` / `export_full`），返回 202 与 run 摘要。新增 `orchestrator/run_plan.py`：run 类型 + `status_detail_json.run_request` 决定 run 拥有的阶段、包范围、审校是否修复阻断、导出门禁是否自动跟进；执行器、阶段门、终态对账都按计划判定必需阶段。导出门禁失败会保留门禁记录并把门禁详情写进阶段缓存。GET 下载只提供已有导出（按需生成与自愈重建连同 `rebuild_lock` 一并删除）。同步语义的 API 测试改用 `tests/document_actions.py` 的进程内适配器。
 - [ ] **P2.7 数据层**：应用只支持 Postgres（SQLite 仅纯单测）；`JSONB` variant；枚举 CHECK 由枚举生成；去掉 `has_table` 探测；审计写入仅插入；`service.sh` SQLite 模式与 Docker 迁移步骤。
 
 ---

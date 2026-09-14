@@ -313,9 +313,10 @@ When the server is running, interactive API docs are available at:
 |---|---|---|
 | `POST` | `/v1/documents/bootstrap` | Upload and bootstrap a document |
 | `GET` | `/v1/documents/{id}/summary` | Get document translation summary |
-| `POST` | `/v1/documents/{id}/translate` | Translate document packets |
-| `POST` | `/v1/documents/{id}/review` | Run QA review |
-| `POST` | `/v1/documents/{id}/export` | Export translated document |
+| `POST` | `/v1/documents/{id}/translate` | Enqueue a `translate_targeted` run (returns 202 + run) |
+| `POST` | `/v1/documents/{id}/review` | Enqueue a `review_full` run (returns 202 + run) |
+| `POST` | `/v1/documents/{id}/export` | Enqueue an `export_full` run (returns 202 + run) |
+| `GET` | `/v1/documents/{id}/exports/download` | Download an existing export (never generates one) |
 | `POST` | `/v1/runs` | Create a new translation run |
 | `GET` | `/v1/runs/{id}` | Get run status and progress |
 | `POST` | `/v1/runs/{id}/pause` | Pause a running translation |
