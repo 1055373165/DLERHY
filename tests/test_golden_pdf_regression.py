@@ -32,11 +32,9 @@ from book_agent.domain.structure.models import (
     TRANSLATE_ALL,
     TRANSLATE_NONE,
 )
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PyMuPDFTextExtractor,
-    PdfStructureRecoveryService,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.extract import PyMuPDFTextExtractor
+from book_agent.ingestion.pdf.models import PdfFileProfile
 from book_agent.domain.structure.text_layer_sanity import assess_text
 
 from tests.golden_pdfs.fixtures import (
@@ -114,7 +112,7 @@ class GoldenTwoColumnPaperTests(unittest.TestCase):
     """
 
     def test_multi_column_signature_detected(self) -> None:
-        from book_agent.domain.structure.pdf import _page_has_multi_column_signature
+        from book_agent.ingestion.pdf.classify import _page_has_multi_column_signature
         _parsed, extraction, _ = _parse(make_two_column_paper())
         self.assertTrue(
             _page_has_multi_column_signature(extraction.pages[0]),
@@ -186,7 +184,7 @@ class GoldenThreeColumnTests(unittest.TestCase):
     """Multi-column reordering must generalize past 2 columns."""
 
     def test_three_column_signature_detected(self) -> None:
-        from book_agent.domain.structure.pdf import _page_has_multi_column_signature
+        from book_agent.ingestion.pdf.classify import _page_has_multi_column_signature
         _parsed, extraction, _ = _parse(make_three_column_newsletter())
         self.assertTrue(_page_has_multi_column_signature(extraction.pages[0]))
 

@@ -13,7 +13,7 @@ from book_agent.core.ids import stable_id
 from book_agent.domain.enums import ActorType, ArtifactStatus, BlockType, SourceType
 from book_agent.domain.models import Block, Chapter, Document, DocumentImage
 from book_agent.domain.models.ops import AuditEvent
-from book_agent.domain.structure.pdf import _looks_like_table
+from book_agent.ingestion.text import _looks_like_table
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.services.bootstrap import ParseService
 

@@ -13,16 +13,15 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Protocol
 
-from book_agent.domain.structure.pdf import (
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
     PdfImageBlock,
     PdfPage,
-    PdfStructureRecoveryService,
     PdfTextBlock,
-    _normalize_multiline_text,
-    _normalize_text,
 )
+from book_agent.ingestion.text import _normalize_multiline_text, _normalize_text
 from book_agent.domain.structure.models import ParsedDocument
 
 _OCR_INLINE_TAG_PATTERN = re.compile(r"</?(?:b|strong|i|em|u)>", re.IGNORECASE)

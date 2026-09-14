@@ -14,7 +14,7 @@ from book_agent.domain.enums import (
     BlockType,
     SentenceStatus,
 )
-from book_agent.domain.structure.pdf import (
+from book_agent.ingestion.text import (
     _expanded_code_candidate_lines,
     _looks_like_code,
     _looks_like_code_continuation_line,

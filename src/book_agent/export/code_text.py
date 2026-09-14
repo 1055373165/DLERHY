@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from book_agent.domain.structure.pdf import (
+from book_agent.ingestion.text import (
     _expanded_code_candidate_lines,
     _looks_like_code_docstring_line,
     _looks_like_embedded_code_line,

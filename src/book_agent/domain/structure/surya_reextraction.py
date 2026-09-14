@@ -44,7 +44,7 @@ from book_agent.domain.structure.ocr_reextraction import (
 
 if TYPE_CHECKING:
     from book_agent.domain.structure.ocr import OcrPdfTextExtractor
-    from book_agent.domain.structure.pdf import PdfExtraction, PdfTextBlock
+    from book_agent.ingestion.pdf.models import PdfExtraction, PdfTextBlock
 
 
 # Bbox overlap threshold for matching a request bbox to a Surya block bbox.

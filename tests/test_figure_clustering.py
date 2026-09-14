@@ -393,10 +393,8 @@ class ParserIntegrationTests(unittest.TestCase):
     real ``_RecoveredBlock`` round-trip including metadata preservation."""
 
     def setUp(self) -> None:
-        from book_agent.domain.structure.pdf import (
-            PdfStructureRecoveryService,
-            _RecoveredBlock,
-        )
+        from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+        from book_agent.ingestion.pdf.models import _RecoveredBlock
 
         self.RecoveredBlock = _RecoveredBlock
         self.service = PdfStructureRecoveryService()

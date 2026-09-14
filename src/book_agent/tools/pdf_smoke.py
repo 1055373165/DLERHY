@@ -6,7 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler
+from book_agent.domain.structure.pdf import PDFParser
+from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 
 _SKIPPED_DIRECTORY_NAMES = {

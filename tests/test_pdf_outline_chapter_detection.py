@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from book_agent.domain.structure.pdf import (  # noqa: E402
+from book_agent.ingestion.pdf.classify import (
     _extract_book_main_chapter_number,
     _looks_like_book_primary_outline_title,
     _should_start_outlined_book_top_level_chapter,

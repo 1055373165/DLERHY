@@ -38,19 +38,8 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models import Block, Chapter, Document, JobRun
 from book_agent.domain.models.review import IssueAction, ReviewIssue
-from book_agent.domain.structure.pdf import (
-    BasicPdfTextExtractor,
-    PDFParser,
-    PdfExtraction,
-    PdfFileProfiler,
-    PdfFileProfile,
-    PdfImageBlock,
-    PdfOutlineEntry,
-    PdfPage,
-    PdfStructureRecoveryService,
-    PdfTextBlock,
-    PyMuPDFTextExtractor,
-    _RecoveredBlock,
+from book_agent.domain.structure.pdf import PDFParser, PdfStructureRecoveryService
+from book_agent.ingestion.pdf.classify import (
     _detect_backmatter_cue,
     _embedded_academic_abstract_segments,
     _book_heading_level,
@@ -63,15 +52,31 @@ from book_agent.domain.structure.pdf import (
     _infer_appendix_subheading_title,
     _infer_intro_page_title,
     _next_academic_inline_heading,
+    _looks_like_dense_toc_block,
+    _looks_like_visual_heading,
+    _looks_like_reference_entry,
+)
+from book_agent.ingestion.pdf.extract import (
+    BasicPdfTextExtractor,
+    PdfFileProfiler,
+    PyMuPDFTextExtractor,
+)
+from book_agent.ingestion.pdf.models import (
+    PdfExtraction,
+    PdfFileProfile,
+    PdfImageBlock,
+    PdfOutlineEntry,
+    PdfPage,
+    PdfTextBlock,
+    _RecoveredBlock,
+)
+from book_agent.ingestion.text import (
     _looks_like_code,
     _looks_like_equation,
     _looks_like_figure_caption,
     _looks_like_code_continuation_line,
-    _looks_like_dense_toc_block,
     _looks_like_list_item,
     _looks_like_numeric_table_fragment,
-    _looks_like_visual_heading,
-    _looks_like_reference_entry,
     _looks_like_table,
     _normalize_multiline_text,
 )

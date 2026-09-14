@@ -35,12 +35,8 @@ from book_agent.domain.structure.ocr_reextraction import (
     OcrReextractionAdapter,
     OcrReextractionRequest,
 )
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PdfPage,
-    PdfStructureRecoveryService,
-    _RecoveredBlock,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import PdfFileProfile, PdfPage, _RecoveredBlock
 
 
 def _mk_recovered_block(ordinal: int, page_number: int, text: str) -> _RecoveredBlock:

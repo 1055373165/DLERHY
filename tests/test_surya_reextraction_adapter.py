@@ -21,11 +21,7 @@ if str(SRC) not in sys.path:
 from book_agent.domain.structure.ocr_reextraction import (
     OcrReextractionRequest,
 )
-from book_agent.domain.structure.pdf import (
-    PdfExtraction,
-    PdfPage,
-    PdfTextBlock,
-)
+from book_agent.ingestion.pdf.models import PdfExtraction, PdfPage, PdfTextBlock
 from book_agent.domain.structure.surya_reextraction import (
     SuryaOcrReextractionAdapter,
     _normalize_bbox,

@@ -14,7 +14,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.domain.structure.ocr import OcrPdfTextExtractor, UvSuryaOcrRunner
-from book_agent.domain.structure.pdf import PdfExtraction, PdfFileProfiler
+from book_agent.ingestion.pdf.extract import PdfFileProfiler
+from book_agent.ingestion.pdf.models import PdfExtraction
 
 
 class OcrRuntimeTests(unittest.TestCase):

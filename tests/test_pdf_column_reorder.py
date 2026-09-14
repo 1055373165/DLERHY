@@ -22,12 +22,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PdfPage,
-    PdfStructureRecoveryService,
-    PdfTextBlock,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import PdfFileProfile, PdfPage, PdfTextBlock
 
 
 def _mk_block(
