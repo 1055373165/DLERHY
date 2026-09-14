@@ -72,7 +72,7 @@
 - [x] `git rm --cached`：`deliverable/`、`LLM-Book*/`、`books/`、`.scratch/`、`book-agent.db`、`frontend/.omc/`、`.claude/settings.local.json`、`.claude/*.lock`；提交 `artifacts/` 的删除。
 - [x] 补全 `.gitignore`。
 - [x] 删除过期交接文档 `snapshot.md`、`progress.txt`、`docs/mainline-progress.md`、`tasks/todo.md`；README 与实际能力对齐（运行时、自愈、导出格式）。
-- [ ] 删除或重写过期的 `frontend/src/features/workspace/WorkspacePage.test.tsx`。
+- [x] 删除 `WorkspacePage.test.tsx` 中针对已移除界面的 15 个测试，修正 LibraryPage 测试；前端 vitest 4/4 通过（遗留夹具在 P4 前端整理时清理）。
 
 ---
 
