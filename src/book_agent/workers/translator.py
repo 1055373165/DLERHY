@@ -5,7 +5,7 @@ from typing import Any, Literal, Protocol
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.models import Sentence
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     AlignmentSuggestion,
     ContextPacket,
     PacketBlock,

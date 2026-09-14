@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
+from book_agent.domain.enums import (
+    ActorType,
+    PacketStatus,
+    RelationType,
+    RunStatus,
+    SegmentType,
+    SentenceStatus,
+    TargetSegmentStatus,
+)
 from book_agent.domain.event_kinds import (
     GLOSSARY_VIOLATION,
     LLM_CALL_COMPLETED,
@@ -14,7 +23,6 @@ from book_agent.domain.event_kinds import (
     PACKET_TRANSLATED,
 )
 from book_agent.domain.models import MemorySnapshot, Sentence
-from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunStatus, SegmentType, SentenceStatus, TargetSegmentStatus
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.events import emit_event
@@ -24,7 +32,7 @@ from book_agent.services.glossary_enforcement import detect_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     CompiledTranslationContext,
     RelevantTerm,
     TranslationUsage,

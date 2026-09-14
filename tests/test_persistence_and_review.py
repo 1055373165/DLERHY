@@ -3,13 +3,13 @@
 import html
 import json
 import shutil
+import sys
 import tempfile
-from types import SimpleNamespace
 import unittest
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-import sys
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import delete, select
@@ -19,45 +19,102 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.core.ids import stable_id
+from book_agent.application.read_models import ActionWorkflowResult
 from book_agent.core.config import Settings
-from book_agent.domain.enums import ActionActorType, ActionStatus, ActionType, ActorType, ArtifactStatus, BlockType, BookType, ChapterStatus, Detector, DocumentStatus, ExportType, IssueStatus, JobScopeType, LockLevel, MemoryScopeType, MemoryStatus, ProtectedPolicy, RelationType, RootCauseLayer, RunStatus, SegmentType, Severity, SnapshotType, SentenceStatus, SourceType, TargetSegmentStatus, TermStatus, TermType
-from book_agent.domain.enums import PacketStatus, PacketType
-from book_agent.domain.models import ArtifactInvalidation, AuditEvent, Block, BookProfile, Chapter, ChapterQualitySummary, Document, Export, MemorySnapshot, Sentence, TermEntry
+from book_agent.core.ids import stable_id
+from book_agent.domain.enums import (
+    ActionActorType,
+    ActionStatus,
+    ActionType,
+    ActorType,
+    ArtifactStatus,
+    BlockType,
+    BookType,
+    ChapterStatus,
+    Detector,
+    DocumentStatus,
+    ExportType,
+    IssueStatus,
+    JobScopeType,
+    LockLevel,
+    MemoryScopeType,
+    MemoryStatus,
+    PacketStatus,
+    PacketType,
+    ProtectedPolicy,
+    RelationType,
+    RootCauseLayer,
+    RunStatus,
+    SegmentType,
+    SentenceStatus,
+    Severity,
+    SnapshotType,
+    SourceType,
+    TargetSegmentStatus,
+    TermStatus,
+    TermType,
+)
+from book_agent.domain.models import (
+    ArtifactInvalidation,
+    AuditEvent,
+    Block,
+    BookProfile,
+    Chapter,
+    ChapterQualitySummary,
+    Document,
+    Export,
+    MemorySnapshot,
+    Sentence,
+    TermEntry,
+)
+from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
+from book_agent.export.models import ExportFollowupAction, MergedRenderBlock
+from book_agent.export.pdf_crop import apply_document_image_materializations
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
-from book_agent.infra.repositories.export import ChapterExportBundle, DocumentExportBundle, ExportRepository
+from book_agent.infra.repositories.export import (
+    ChapterExportBundle,
+    DocumentExportBundle,
+    ExportRepository,
+)
 from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.orchestrator.rerun import RerunPlan
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
-from book_agent.domain.models.review import IssueAction, ReviewIssue
 from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExecutor
 from book_agent.services.chapter_concept_autolock import (
     ChapterConceptAutoLockService,
-    ConceptTranslationExample,
     ConceptResolutionPayload,
+    ConceptTranslationExample,
     FallbackConceptResolver,
     HeuristicConceptResolver,
     OpenAICompatibleConceptResolver,
     build_default_concept_resolver,
 )
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.export.pdf_crop import apply_document_image_materializations
-from book_agent.export.models import ExportFollowupAction, MergedRenderBlock
 from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.pdf_prose_artifact_repair import PdfProseArtifactRepairService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
-from book_agent.services.review import ChapterQualitySummary as ReviewChapterQualitySummary, ReviewArtifacts, ReviewService
+from book_agent.services.review import ChapterQualitySummary as ReviewChapterQualitySummary
+from book_agent.services.review import ReviewArtifacts, ReviewService
 from book_agent.services.translation import TranslationService as _TranslationService
-from book_agent.application.read_models import ActionWorkflowResult
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationUsage, TranslationWorkerOutput
+from book_agent.translation.contracts import (
+    AlignmentSuggestion,
+    TranslationTargetSegment,
+    TranslationUsage,
+    TranslationWorkerOutput,
+)
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 
 

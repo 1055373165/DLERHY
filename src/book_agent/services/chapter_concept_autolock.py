@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
 import re
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from sqlalchemy.orm import Session
@@ -11,8 +11,11 @@ from book_agent.core.config import Settings, get_settings
 from book_agent.domain.enums import LockLevel, TargetSegmentStatus, TermStatus
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.schemas.common import BaseSchema
-from book_agent.services.chapter_concept_lock import ChapterConceptLockResult, ChapterConceptLockService
-from book_agent.workers.contracts import TranslationUsage
+from book_agent.services.chapter_concept_lock import (
+    ChapterConceptLockResult,
+    ChapterConceptLockService,
+)
+from book_agent.translation.contracts import TranslationUsage
 from book_agent.workers.providers import OpenAICompatibleTranslationClient
 
 logger = logging.getLogger(__name__)

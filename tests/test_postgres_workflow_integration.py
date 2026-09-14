@@ -1,12 +1,12 @@
-import os
 import json
+import os
+import sys
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
-import sys
 
 from sqlalchemy import delete, func, select
 
@@ -19,7 +19,6 @@ if str(SRC) not in sys.path:
 
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import (
-    PacketStatus,
     ActionActorType,
     ActionStatus,
     ActionType,
@@ -32,29 +31,38 @@ from book_agent.domain.enums import (
     JobScopeType,
     LockLevel,
     MemoryScopeType,
+    PacketStatus,
     RootCauseLayer,
     Severity,
     SnapshotType,
     TermStatus,
     TermType,
+    WorkerLeaseStatus,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
-    WorkerLeaseStatus,
 )
 from book_agent.domain.models import Chapter, MemorySnapshot, Sentence, TermEntry
-from book_agent.domain.models.ops import RunAuditEvent, WorkItem, WorkerLease
+from book_agent.domain.models.ops import RunAuditEvent, WorkerLease, WorkItem
 from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
-from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.export import ExportGateError
 from book_agent.services.run_control import RunBudgetSummary, RunControlService
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.translation.contracts import (
+    AlignmentSuggestion,
+    TranslationTargetSegment,
+    TranslationWorkerOutput,
+)
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
-
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">

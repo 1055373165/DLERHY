@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from typing import Iterable
 
 from book_agent.core.ids import stable_id
@@ -31,7 +31,7 @@ from book_agent.domain.models import (
     Sentence,
     TranslationPacket,
 )
-from book_agent.workers.contracts import ContextPacket, PacketBlock
+from book_agent.translation.contracts import ContextPacket, PacketBlock
 
 
 def _utcnow() -> datetime:

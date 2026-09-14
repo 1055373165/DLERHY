@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-from typing import Iterable
+from typing import Any, Iterable
 
 from book_agent.domain.enums import MemoryProposalStatus
 from book_agent.domain.models import ChapterMemoryProposal, MemorySnapshot
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.workers.contracts import CompiledTranslationContext, ContextPacket
+from book_agent.translation.contracts import CompiledTranslationContext, ContextPacket
 
 
 @dataclass(slots=True)

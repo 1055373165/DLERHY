@@ -2,18 +2,18 @@
 
 import json
 import os
+import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-import sys
-import time
-from urllib.parse import unquote
 from unittest.mock import patch
+from urllib.parse import unquote
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select
@@ -49,21 +49,36 @@ from book_agent.domain.enums import (
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models import Chapter, Document, IssueAction, MemorySnapshot, Sentence, TermEntry
+from book_agent.domain.models import (
+    Chapter,
+    Document,
+    IssueAction,
+    MemorySnapshot,
+    Sentence,
+    TermEntry,
+)
 from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.review import Export, ReviewIssue
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.run_control import RunControlRepository
-from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.export import ExportGateError, ExportService
+from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.translation.contracts import (
+    AlignmentSuggestion,
+    TranslationTargetSegment,
+    TranslationWorkerOutput,
+)
 from book_agent.workers.providers.openai_compatible import ProviderNetworkError
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
 from tests.document_actions import SyncDocumentActionClient
-
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">

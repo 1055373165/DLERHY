@@ -9,7 +9,11 @@ from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from book_agent.workers.contracts import TranslationUsage, TranslationWorkerOutput, TranslationWorkerResult
+from book_agent.translation.contracts import (
+    TranslationUsage,
+    TranslationWorkerOutput,
+    TranslationWorkerResult,
+)
 from book_agent.workers.translator import TranslationModelClient, TranslationPromptRequest
 
 

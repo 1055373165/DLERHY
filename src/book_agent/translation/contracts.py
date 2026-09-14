@@ -1,3 +1,5 @@
+"""Translation contracts: context packets sent to workers and structured worker output."""
+
 from typing import Any, Literal
 
 from pydantic import Field

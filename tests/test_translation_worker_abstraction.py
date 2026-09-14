@@ -1,13 +1,13 @@
 # ruff: noqa: E402
 
-from http.client import IncompleteRead
+import sys
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timezone
-from unittest.mock import patch
+from http.client import IncompleteRead
 from pathlib import Path
-import sys
+from unittest.mock import patch
 
 from sqlalchemy import select
 
@@ -16,19 +16,20 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.core.config import Settings
 from book_agent.domain.enums import (
     ArtifactStatus,
     BlockType,
     ChapterStatus,
     DocumentStatus,
-    MemoryStatus,
     MemoryScopeType,
+    MemoryStatus,
     PacketSentenceRole,
     PacketStatus,
     PacketType,
     ProtectedPolicy,
-    SnapshotType,
     SentenceStatus,
+    SnapshotType,
     SourceType,
 )
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
@@ -39,17 +40,15 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
-from book_agent.core.config import Settings
-from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
+from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.context_compile import (
     ChapterContextCompileOptions,
     ChapterContextCompiler,
     _compress_chapter_brief,
 )
 from book_agent.services.translation import TranslationService as _TranslationService
-from book_agent.workers.factory import build_translation_worker
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     AlignmentSuggestion,
     ConceptCandidate,
     ContextPacket,
@@ -61,6 +60,7 @@ from book_agent.workers.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderNetworkError,

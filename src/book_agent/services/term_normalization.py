@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from book_agent.workers.contracts import ConceptCandidate, RelevantTerm
+from book_agent.translation.contracts import ConceptCandidate, RelevantTerm
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _AGENTIC_AI_BAD_TARGET_RE = re.compile(r"^智能体式(?:AI|人工智能)$", re.IGNORECASE)

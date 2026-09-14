@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 
 from book_agent.domain.models import MemorySnapshot
-from book_agent.services.style_drift import STYLE_DRIFT_RULES, source_aware_literalism_guardrail_lines
+from book_agent.services.style_drift import (
+    STYLE_DRIFT_RULES,
+    source_aware_literalism_guardrail_lines,
+)
 from book_agent.services.term_normalization import (
     normalize_concept_candidate,
     normalize_relevant_term,
 )
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     CompiledTranslationContext,
     ConceptCandidate,
     ContextPacket,

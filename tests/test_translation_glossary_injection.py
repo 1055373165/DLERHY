@@ -33,7 +33,7 @@ from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.translation import TranslationService
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     CompiledTranslationContext,
     PacketBlock,
     RelevantTerm,

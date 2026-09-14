@@ -1,9 +1,9 @@
+import sys
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-import sys
 
 from sqlalchemy import delete, select
 
@@ -31,7 +31,12 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models import Chapter, ChapterMemoryProposal, MemorySnapshot
 from book_agent.domain.models.review import IssueAction, ReviewIssue
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -41,8 +46,8 @@ from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.orchestrator.rerun import RerunPlan
-from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.actions import IssueActionExecutor
+from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
@@ -50,14 +55,13 @@ from book_agent.services.rerun import RerunService
 from book_agent.services.review import ReviewService
 from book_agent.services.translation import TranslationService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     AlignmentSuggestion,
     CompiledTranslationContext,
     TranslationTargetSegment,
     TranslationWorkerOutput,
 )
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
-
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from book_agent.domain.enums import ActionType, JobScopeType
 from book_agent.domain.models.review import IssueAction, ReviewIssue
 from book_agent.services.term_normalization import normalize_term_rendering
-from book_agent.workers.contracts import ConceptCandidate
+from book_agent.translation.contracts import ConceptCandidate
 
 
 @dataclass(slots=True)

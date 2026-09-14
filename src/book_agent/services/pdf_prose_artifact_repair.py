@@ -11,13 +11,13 @@ from book_agent.domain.block_rules import block_is_context_translatable
 from book_agent.domain.context.builders import ContextPacketBuilder
 from book_agent.domain.enums import BlockType, SentenceStatus
 from book_agent.domain.models import Block, BookProfile, Chapter, Document, MemorySnapshot, Sentence
+from book_agent.export.common import _normalize_signature_text
+from book_agent.export.models import MergedRenderBlock
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.export import ExportRepository
 from book_agent.services.bootstrap import SegmentationService
-from book_agent.export.common import _normalize_signature_text
-from book_agent.export.models import MergedRenderBlock
 from book_agent.services.export import ExportService
-from book_agent.workers.contracts import ContextPacket
+from book_agent.translation.contracts import ContextPacket
 from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
 
 
