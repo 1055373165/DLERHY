@@ -29,7 +29,7 @@ from book_agent.domain.structure.pdf import (
     _sanity_ocr_reextraction_enabled,
     build_default_recovery_service,
 )
-from book_agent.domain.structure.ocr_reextraction import (
+from book_agent.ingestion.pdf.ocr_reextraction import (
     NoOpOcrReextractionAdapter,
 )
 

@@ -13,7 +13,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.structure.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
+from book_agent.ingestion.pdf.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfExtraction
 
@@ -75,11 +75,11 @@ class OcrRuntimeTests(unittest.TestCase):
                     clear=False,
                 ),
                 patch(
-                    "book_agent.domain.structure.ocr.shutil.which",
+                    "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
                 ),
-                patch("book_agent.domain.structure.ocr.subprocess.Popen", side_effect=_fake_popen),
-                patch("book_agent.domain.structure.ocr.time.sleep", return_value=None),
+                patch("book_agent.ingestion.pdf.ocr.subprocess.Popen", side_effect=_fake_popen),
+                patch("book_agent.ingestion.pdf.ocr.time.sleep", return_value=None),
             ):
                 results_path = UvSuryaOcrRunner().run(
                     file_path="scan-sample.pdf",
@@ -154,11 +154,11 @@ class OcrRuntimeTests(unittest.TestCase):
                     clear=False,
                 ),
                 patch(
-                    "book_agent.domain.structure.ocr.shutil.which",
+                    "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
                 ),
-                patch("book_agent.domain.structure.ocr.subprocess.Popen", side_effect=_fake_popen),
-                patch("book_agent.domain.structure.ocr._utcnow", side_effect=_fake_utcnow),
+                patch("book_agent.ingestion.pdf.ocr.subprocess.Popen", side_effect=_fake_popen),
+                patch("book_agent.ingestion.pdf.ocr._utcnow", side_effect=_fake_utcnow),
             ):
                 with self.assertRaisesRegex(RuntimeError, "exceeded max runtime 1.0s"):
                     UvSuryaOcrRunner().run(

@@ -38,13 +38,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-from book_agent.domain.structure.ocr_reextraction import (
+from book_agent.ingestion.pdf.ocr_reextraction import (
     OcrReextractionRequest,
 )
 
 if TYPE_CHECKING:
-    from book_agent.domain.structure.ocr import OcrPdfTextExtractor
-    from book_agent.ingestion.pdf.models import PdfExtraction, PdfTextBlock
+    from book_agent.ingestion.pdf.ocr import OcrPdfTextExtractor
+    from book_agent.ingestion.pdf.models import PdfExtraction, PdfPage, PdfTextBlock
 
 
 # Bbox overlap threshold for matching a request bbox to a Surya block bbox.
@@ -85,7 +85,7 @@ class SuryaOcrReextractionAdapter:
         # Lazy-import so modules that never use Surya don't pay the cost
         # of loading its deps (subprocess / transformers / ...).
         if extractor is None:
-            from book_agent.domain.structure.ocr import OcrPdfTextExtractor as _Ext
+            from book_agent.ingestion.pdf.ocr import OcrPdfTextExtractor as _Ext
 
             extractor = _Ext()
         self._extractor = extractor

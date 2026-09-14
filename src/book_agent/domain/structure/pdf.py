@@ -10,7 +10,7 @@ from statistics import median
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from book_agent.domain.structure.ocr_reextraction import (
+    from book_agent.ingestion.pdf.ocr_reextraction import (
         OcrReextractionAdapter,
     )
 
@@ -308,7 +308,7 @@ class PdfStructureRecoveryService:
         """
         from dataclasses import replace as _replace
 
-        from book_agent.domain.structure.ocr_reextraction import (
+        from book_agent.ingestion.pdf.ocr_reextraction import (
             OcrReextractionRequest,
         )
 
@@ -4199,7 +4199,7 @@ def build_default_recovery_service(*, allow_ocr_reextraction: bool = True) -> Pd
         return PdfStructureRecoveryService(figure_cluster_config=figure_config)
     # Lazy import to avoid pulling Surya-runtime deps into every code path
     # that merely constructs a parser.
-    from book_agent.domain.structure.surya_reextraction import (
+    from book_agent.ingestion.pdf.surya_reextraction import (
         SuryaOcrReextractionAdapter,
     )
 

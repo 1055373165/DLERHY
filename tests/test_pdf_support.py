@@ -81,7 +81,7 @@ from book_agent.ingestion.text import (
     _normalize_multiline_text,
 )
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
-from book_agent.domain.structure.ocr import OcrPdfTextExtractor, UvSuryaOcrRunner
+from book_agent.ingestion.pdf.ocr import OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -6109,7 +6109,7 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
         self.assertEqual(extraction.pages[0].blocks[1].line_count, 2)
 
     def test_uv_surya_ocr_runner_pins_transformers_for_runtime_compatibility(self) -> None:
-        with patch("book_agent.domain.structure.ocr.shutil.which", side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"]):
+        with patch("book_agent.ingestion.pdf.ocr.shutil.which", side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"]):
             command = UvSuryaOcrRunner(page_range="0-31")._build_command(
                 file_path="scan-sample.pdf",
                 output_dir="/tmp/book-agent-ocr-smoke",
@@ -6160,11 +6160,11 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
                     clear=False,
                 ),
                 patch(
-                    "book_agent.domain.structure.ocr.shutil.which",
+                    "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
                 ),
-                patch("book_agent.domain.structure.ocr.subprocess.Popen", side_effect=_fake_popen),
-                patch("book_agent.domain.structure.ocr.time.sleep", return_value=None),
+                patch("book_agent.ingestion.pdf.ocr.subprocess.Popen", side_effect=_fake_popen),
+                patch("book_agent.ingestion.pdf.ocr.time.sleep", return_value=None),
             ):
                 results_path = UvSuryaOcrRunner().run(
                     file_path="scan-sample.pdf",

@@ -30,7 +30,7 @@ from book_agent.domain.structure.models import (
     ParsedBlock,
     ParsedChapter,
 )
-from book_agent.domain.structure.ocr_reextraction import (
+from book_agent.ingestion.pdf.ocr_reextraction import (
     NoOpOcrReextractionAdapter,
     OcrReextractionAdapter,
     OcrReextractionRequest,

@@ -44,11 +44,11 @@ from book_agent.domain.models import (
 from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
 from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
 from book_agent.domain.structure.epub import EPUBParser
-from book_agent.domain.structure.ocr import OcrPdfParser
+from book_agent.ingestion.pdf.ocr import OcrPdfParser
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfFileProfile
-from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
+from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
 from book_agent.services.modality_pipeline import (
     ModalityPipelineOptions,
     enhance_parsed_document,
