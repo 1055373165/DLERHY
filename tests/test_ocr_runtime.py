@@ -13,7 +13,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.structure.ocr import OcrPdfTextExtractor, UvSuryaOcrRunner
+from book_agent.domain.structure.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfExtraction
 
@@ -250,6 +250,20 @@ class OcrRuntimeTests(unittest.TestCase):
         self.assertEqual(extraction.pages[0].image_blocks[0].image_type, "scanned_page_image")
         self.assertEqual(extraction.pages[0].image_blocks[0].width_px, 768)
         self.assertEqual(extraction.pages[0].image_blocks[0].height_px, 1089)
+
+
+
+class OcrPdfParserRecoveryServiceTests(unittest.TestCase):
+    def test_default_recovery_service_uses_settings_figure_config_without_ocr_reextraction(self) -> None:
+        figure_config = object()
+        with (
+            patch("book_agent.domain.structure.pdf._resolve_default_figure_cluster_config", return_value=figure_config),
+            patch.dict(os.environ, {"BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION": "1"}),
+        ):
+            parser = OcrPdfParser()
+
+        self.assertIs(parser.recovery_service._figure_cluster_config, figure_config)
+        self.assertIsNone(parser.recovery_service._ocr_reextraction_adapter)
 
 
 if __name__ == "__main__":

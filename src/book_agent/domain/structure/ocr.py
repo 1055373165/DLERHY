@@ -13,7 +13,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Protocol
 
-from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService, build_default_recovery_service
 from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
@@ -654,7 +654,7 @@ class OcrPdfParser:
         recovery_service: PdfStructureRecoveryService | None = None,
     ):
         self.extractor = extractor or OcrPdfTextExtractor()
-        self.recovery_service = recovery_service or PdfStructureRecoveryService()
+        self.recovery_service = recovery_service or build_default_recovery_service(allow_ocr_reextraction=False)
 
     def parse(
         self,

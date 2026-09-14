@@ -4182,11 +4182,12 @@ def _sanity_ocr_reextraction_enabled() -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def build_default_recovery_service() -> PdfStructureRecoveryService:
+def build_default_recovery_service(*, allow_ocr_reextraction: bool = True) -> PdfStructureRecoveryService:
     """Construct a PdfStructureRecoveryService with env-driven defaults.
 
-    When sanity-driven OCR re-extraction is enabled, we attach a
-    `SuryaOcrReextractionAdapter`; otherwise we return a plain service.
+    When sanity-driven OCR re-extraction is enabled (and allowed), we attach a
+    `SuryaOcrReextractionAdapter`; otherwise we return a plain service. The
+    OCR parser disallows it: its pages already come from OCR.
     Callers that want explicit control can instantiate
     `PdfStructureRecoveryService(ocr_reextraction_adapter=...)` directly.
 
@@ -4194,7 +4195,7 @@ def build_default_recovery_service() -> PdfStructureRecoveryService:
     harnesses that patch settings still reach the parser.
     """
     figure_config = _resolve_default_figure_cluster_config()
-    if not _sanity_ocr_reextraction_enabled():
+    if not allow_ocr_reextraction or not _sanity_ocr_reextraction_enabled():
         return PdfStructureRecoveryService(figure_cluster_config=figure_config)
     # Lazy import to avoid pulling Surya-runtime deps into every code path
     # that merely constructs a parser.
