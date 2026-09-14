@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, func, text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, event, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -348,3 +348,18 @@ class Event(Base):
     org_id: Mapped[str] = mapped_column(Text, nullable=False, default="default")
     correlation_id: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+APPEND_ONLY_MODELS: tuple[type[Base], ...] = (AuditEvent, StageTransition, RunAuditEvent, Event)
+
+
+class AppendOnlyViolation(RuntimeError):
+    """Raised when a flush would rewrite an audit or event row."""
+
+
+def _reject_update(_mapper, _connection, target) -> None:
+    raise AppendOnlyViolation(f"{type(target).__name__} rows are append-only and cannot be updated.")
+
+
+for _model in APPEND_ONLY_MODELS:
+    event.listen(_model, "before_update", _reject_update)

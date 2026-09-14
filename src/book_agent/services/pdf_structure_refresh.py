@@ -465,7 +465,6 @@ class PdfStructureRefreshService:
         now: datetime,
     ) -> None:
         document_audit = AuditEvent(
-            id=stable_id("audit", "document", document.id, "document.pdf_structure_refreshed", now.isoformat()),
             object_type="document",
             object_id=document.id,
             action="document.pdf_structure_refreshed",
@@ -477,11 +476,10 @@ class PdfStructureRefreshService:
             },
             created_at=now,
         )
-        self.session.merge(document_audit)
+        self.session.add(document_audit)
         for chapter_id in refreshed_chapter_ids:
-            self.session.merge(
+            self.session.add(
                 AuditEvent(
-                    id=stable_id("audit", "chapter", chapter_id, "chapter.pdf_structure_refreshed", now.isoformat()),
                     object_type="chapter",
                     object_id=chapter_id,
                     action="chapter.pdf_structure_refreshed",

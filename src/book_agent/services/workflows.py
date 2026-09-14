@@ -9,7 +9,6 @@ from typing import Any
 from sqlalchemy import and_, case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
-from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import document_display_title, document_source_title
 from book_agent.domain.enums import (
     ActionType,
@@ -4473,14 +4472,6 @@ class DocumentWorkflowService:
         attempt_limit: int,
     ) -> None:
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "chapter",
-                chapter_id,
-                "review.auto_followup.executed",
-                execution.action_id,
-                str(attempt_index),
-            ),
             object_type="chapter",
             object_id=chapter_id,
             action="review.auto_followup.executed",
@@ -4516,14 +4507,6 @@ class DocumentWorkflowService:
         followup_action_ids: list[str],
     ) -> None:
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "chapter",
-                chapter_id,
-                "review.auto_followup.stopped",
-                stop_reason,
-                str(len(executions)),
-            ),
             object_type="chapter",
             object_id=chapter_id,
             action="review.auto_followup.stopped",
@@ -4552,14 +4535,6 @@ class DocumentWorkflowService:
         round_limit: int,
     ) -> None:
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "document",
-                document_id,
-                "document.blocker_repair.executed",
-                execution.action_id,
-                str(attempt_index),
-            ),
             object_type="document",
             object_id=document_id,
             action="document.blocker_repair.executed",
@@ -4597,14 +4572,6 @@ class DocumentWorkflowService:
         followup_action_ids: list[str],
     ) -> None:
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "document",
-                document_id,
-                "document.blocker_repair.stopped",
-                stop_reason,
-                str(len(executions)),
-            ),
             object_type="document",
             object_id=document_id,
             action="document.blocker_repair.stopped",
@@ -4668,15 +4635,6 @@ class DocumentWorkflowService:
         if chapter_id is None:
             return
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "chapter",
-                chapter_id,
-                "export.auto_followup.executed",
-                export_type.value,
-                execution.action_id,
-                str(attempt_index),
-            ),
             object_type="chapter",
             object_id=chapter_id,
             action="export.auto_followup.executed",
@@ -4717,15 +4675,6 @@ class DocumentWorkflowService:
         if chapter_id is None:
             return
         audit = AuditEvent(
-            id=stable_id(
-                "audit",
-                "chapter",
-                chapter_id,
-                "export.auto_followup.stopped",
-                export_type.value,
-                stop_reason,
-                str(len(executions)),
-            ),
             object_type="chapter",
             object_id=chapter_id,
             action="export.auto_followup.stopped",

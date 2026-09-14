@@ -151,7 +151,6 @@ class IssueActionExecutor:
 
     def _audit(self, object_type: str, object_id: str, action: str, issue_id: str, now: datetime) -> AuditEvent:
         return AuditEvent(
-            id=stable_id("audit", object_type, object_id, action, issue_id),
             object_type=object_type,
             object_id=object_id,
             action=action,

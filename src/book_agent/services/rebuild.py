@@ -198,7 +198,7 @@ class TargetedRebuildService:
             ],
             now=now,
         ):
-            self.session.merge(audit)
+            self.session.add(audit)
 
         self.session.flush()
         return TargetedRebuildArtifacts(
@@ -482,7 +482,6 @@ class TargetedRebuildService:
         for snapshot in rebuilt_snapshots:
             audits.append(
                 AuditEvent(
-                    id=stable_id("audit", "memory_snapshot", snapshot.id, "snapshot.rebuilt", issue_id),
                     object_type="memory_snapshot",
                     object_id=snapshot.id,
                     action="snapshot.rebuilt",
@@ -501,7 +500,6 @@ class TargetedRebuildService:
         for packet in rebuilt_packets:
             audits.append(
                 AuditEvent(
-                    id=stable_id("audit", "packet", packet.id, "packet.rebuilt", issue_id),
                     object_type="packet",
                     object_id=packet.id,
                     action="packet.rebuilt",

@@ -71,9 +71,8 @@ class RealignService:
                 [segment.id for segment in target_segments],
                 alignment_edges,
             )
-            self.ops_repository.session.merge(
+            self.ops_repository.session.add(
                 AuditEvent(
-                    id=stable_id("audit", "packet", packet_id, "packet.realigned", latest_run.id),
                     object_type="packet",
                     object_id=packet_id,
                     action="packet.realigned",

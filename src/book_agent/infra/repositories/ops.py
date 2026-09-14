@@ -124,12 +124,11 @@ class OpsRepository:
         self.session.merge(action)
         for invalidation in invalidations:
             self.session.merge(invalidation)
-        for audit in audits:
-            self.session.merge(audit)
+        # Audit rows are insert-only.
+        self.session.add_all(audits)
 
     def save_audits(self, audits: list[AuditEvent]) -> None:
-        for audit in audits:
-            self.session.merge(audit)
+        self.session.add_all(audits)
 
     def replace_alignment_edges(
         self,
