@@ -1,9 +1,6 @@
-export type DocumentStatus =
-  | "active"
-  | "failed"
-  | "partially_exported"
-  | "exported"
-  | string;
+import type * as Generated from "./api-types.gen";
+
+export type DocumentStatus = Generated.DocumentStatus;
 
 export type RunStatus =
   | "pending"
@@ -17,9 +14,7 @@ export type RunStatus =
   | "cancelled"
   | string;
 
-export interface HealthResponse {
-  status: string;
-}
+export type HealthResponse = Generated.HealthResponse;
 
 export interface ChapterSummary {
   chapter_id: string;
@@ -129,10 +124,7 @@ export interface RunLeaseSummary {
   latest_heartbeat_at?: string | null;
 }
 
-export interface RunEventSummary {
-  event_count: number;
-  latest_event_at?: string | null;
-}
+export type RunEventSummary = Generated.RunEventSummaryResponse;
 
 export interface DocumentRunSummary {
   run_id: string;
@@ -180,21 +172,9 @@ export interface RunAuditEventPage {
   entries: RunAuditEvent[];
 }
 
-export interface TranslationUsageSummary {
-  run_count: number;
-  succeeded_run_count: number;
-  total_token_in: number;
-  total_token_out: number;
-  total_cost_usd: number;
-}
+export type TranslationUsageSummary = Generated.TranslationUsageSummaryResponse;
 
-export interface IssueHotspotEntry {
-  issue_type: string;
-  root_cause_layer?: string | null;
-  issue_count: number;
-  open_issue_count: number;
-  blocking_issue_count: number;
-}
+export type IssueHotspotEntry = Generated.IssueHotspotEntryResponse;
 
 export interface IssueChapterHighlightEntry {
   chapter_id: string;
@@ -205,22 +185,9 @@ export interface IssueChapterHighlightEntry {
   blocking_issue_count: number;
 }
 
-export interface IssueChapterHighlights {
-  top_open_chapter?: IssueChapterHighlightEntry | null;
-  top_blocking_chapter?: IssueChapterHighlightEntry | null;
-  top_resolved_chapter?: IssueChapterHighlightEntry | null;
-}
+export type IssueChapterHighlights = Generated.IssueChapterHighlightsResponse;
 
-export interface ExportRecordSummary {
-  export_id: string;
-  export_type: string;
-  status: string;
-  file_path: string;
-  manifest_path?: string | null;
-  chapter_id?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type ExportRecordSummary = Generated.ExportRecordSummaryResponse;
 
 export interface DocumentExportDashboard {
   document_id: string;
@@ -240,26 +207,9 @@ export interface DocumentExportDashboard {
   records: ExportRecordSummary[];
 }
 
-export interface ChapterMemoryProposalDecisionAudit {
-  proposal_id: string;
-  decision: "approved" | "rejected";
-  actor_type: string;
-  actor_id?: string | null;
-  note?: string | null;
-  created_at: string;
-}
+export type ChapterMemoryProposalDecisionAudit = Generated.ChapterMemoryProposalDecisionAuditResponse;
 
-export interface ChapterMemoryProposal {
-  proposal_id: string;
-  packet_id: string;
-  translation_run_id: string;
-  status: string;
-  base_snapshot_version?: number | null;
-  committed_snapshot_id?: string | null;
-  created_at: string;
-  updated_at: string;
-  last_decision?: ChapterMemoryProposalDecisionAudit | null;
-}
+export type ChapterMemoryProposal = Generated.ChapterMemoryProposalResponse;
 
 export interface ChapterMemoryProposalSurface {
   proposal_count: number;
@@ -271,24 +221,7 @@ export interface ChapterMemoryProposalSurface {
   recent_decisions: ChapterMemoryProposalDecisionAudit[];
 }
 
-export interface ChapterWorklistTimelineEntry {
-  event_id: string;
-  source_kind: "action" | "assignment" | "memory_proposal" | string;
-  event_kind: string;
-  created_at: string;
-  actor_name?: string | null;
-  note?: string | null;
-  issue_id?: string | null;
-  issue_type?: string | null;
-  action_id?: string | null;
-  action_type?: string | null;
-  scope_type?: string | null;
-  scope_id?: string | null;
-  status?: string | null;
-  proposal_id?: string | null;
-  decision?: "approved" | "rejected" | null;
-  owner_name?: string | null;
-}
+export type ChapterWorklistTimelineEntry = Generated.ChapterWorklistTimelineEntryResponse;
 
 export interface ChapterMemoryProposalQueueSummary {
   proposal_count: number;
@@ -388,17 +321,7 @@ export interface DocumentChapterWorklistFilters {
   assignedOwnerName?: string;
 }
 
-export interface ChapterWorklistAssignment {
-  assignment_id: string;
-  document_id: string;
-  chapter_id: string;
-  owner_name: string;
-  assigned_by: string;
-  note?: string | null;
-  assigned_at: string;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistAssignment = Generated.ChapterWorklistAssignmentResponse;
 
 export interface ChapterWorklistAssignmentRequest {
   owner_name: string;
@@ -411,40 +334,11 @@ export interface ChapterWorklistAssignmentClearRequest {
   note?: string;
 }
 
-export interface ChapterWorklistAssignmentClearResponse {
-  document_id: string;
-  chapter_id: string;
-  cleared: boolean;
-  cleared_by: string;
-  note?: string | null;
-  cleared_assignment_id: string;
-}
+export type ChapterWorklistAssignmentClearResponse = Generated.ChapterWorklistAssignmentClearResponse;
 
-export interface ChapterWorklistIssue {
-  issue_id: string;
-  issue_type: string;
-  root_cause_layer: string;
-  severity: string;
-  status: string;
-  blocking: boolean;
-  detector: string;
-  suggested_action?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistIssue = Generated.ChapterWorklistIssueResponse;
 
-export interface ChapterWorklistAction {
-  action_id: string;
-  issue_id: string;
-  issue_type: string;
-  action_type: string;
-  scope_type: string;
-  scope_id?: string | null;
-  status: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistAction = Generated.ChapterWorklistActionResponse;
 
 export interface ExecuteActionResponse {
   action_id: string;
@@ -465,14 +359,7 @@ export interface ExecuteActionResponse {
   recheck_issue_count?: number | null;
 }
 
-export interface ChapterWorklistAssignmentHistoryEntry {
-  event_id: string;
-  event_type: string;
-  owner_name?: string | null;
-  performed_by?: string | null;
-  note?: string | null;
-  created_at: string;
-}
+export type ChapterWorklistAssignmentHistoryEntry = Generated.ChapterWorklistAssignmentHistoryEntryResponse;
 
 export interface DocumentChapterWorklistDetail {
   document_id: string;
@@ -500,14 +387,7 @@ export interface ChapterMemoryProposalDecisionPayload {
   note?: string;
 }
 
-export interface ChapterMemoryProposalDecisionResponse {
-  document_id: string;
-  chapter_id: string;
-  decision: "approved" | "rejected";
-  proposal: ChapterMemoryProposal;
-  committed_snapshot_id?: string | null;
-  committed_snapshot_version?: number | null;
-}
+export type ChapterMemoryProposalDecisionResponse = Generated.ChapterMemoryProposalDecisionResponse;
 
 export interface HistoryFilters {
   query?: string;

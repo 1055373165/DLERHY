@@ -129,9 +129,10 @@
 
 ## P4 统一导出
 
-- [ ] 将 `export_chapter_zh_html.py` 独有的改进（caption 链接、图 bbox 扩展、stub 过滤、列表拆分等）移植到 `export/assembly/normalize`。
+- [ ] 将 `export_chapter_zh_html.py` 独有的改进（caption 链接、图 bbox 扩展、stub 过滤、列表拆分等）移植到 `export/assembly/normalize`。**阻塞**：脚本依赖的源 PDF（`artifacts/uploads/.../llm-book.pdf`）已不在磁盘或 git 中，无法以 `verify_chapter.py` 对照验证，脚本暂不删除。
 - [ ] 明确“译文选择”规则（脚本：首个 edge；服务：最新 run），有意统一。
 - [ ] 以 `verify_chapter.py` 作为 oracle，对 ch1–ch9 新旧产出对照。
 - [ ] 删除脚本导出链路及依赖 `.test-tmp/` 的构建脚本（先确认所需输入已迁出）。
-- [ ] 双语整书下载返回真正的双语产物；实现或移除 `BILINGUAL_MARKDOWN` / `ZH_PDF` / `JSONL`。
-- [ ] 前端：`api.ts` 由 OpenAPI 生成；拆分 `WorkspaceContext`。
+- [x] 双语整书下载改为打包各章最新双语导出；移除未实现的 `BILINGUAL_MARKDOWN` / `ZH_PDF` / `JSONL`（迁移 0032）。前端下载在 404 时先入队导出 run、等待完成再下载。
+- [x] 前端：`scripts/generate_frontend_api_types.py` 由 OpenAPI 生成 `api-types.gen.ts`（测试保证与后端同步），`api.ts` 中与生成类型兼容的 16 个类型改为别名。
+- [ ] 其余 19 个手写类型（状态字面量更窄、可选性不同）尚未改为生成类型；`WorkspaceContext` 拆分未做。
