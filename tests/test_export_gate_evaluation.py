@@ -85,17 +85,6 @@ class ExportGateEvaluationTests(unittest.TestCase):
                 service._raise_for_gate(bundle, evaluation)
             self.assertEqual(raised.exception.issue_ids, [issue.id])
 
-    def test_unsupported_export_type_is_reported_by_the_gate(self) -> None:
-        with session_scope(self.session_factory) as session:
-            service = DocumentWorkflowService(session, export_root=self.export_root).export_service
-            bundle = service.repository.load_chapter_bundle(self.chapter_id)
-
-            evaluation = service.evaluate_chapter_gate(bundle, ExportType.JSONL)
-
-            self.assertTrue(evaluation.unsupported)
-            with self.assertRaisesRegex(ExportGateError, "Unsupported export type"):
-                service._raise_for_gate(bundle, evaluation)
-
 
 if __name__ == "__main__":
     unittest.main()

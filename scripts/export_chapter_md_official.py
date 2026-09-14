@@ -1,11 +1,9 @@
-"""Drive the official ExportService for bilingual markdown.
+"""Drive the official ExportService for a chapter's bilingual HTML or the merged Markdown.
 
-Replaces the throwaway scripts/export_chapter_md.py I wrote: this one
-calls ``workflow.export_service.export_chapter(chapter_id,
-ExportType.BILINGUAL_MARKDOWN)`` so the output goes through the same
-``_render_block_markdown`` + ``_markdown_details_source`` path that
-the project has been carefully tuning (figure cropping, <details>
-folding, etc.).
+Calls ``workflow.export_service.export_chapter(chapter_id, ExportType.BILINGUAL_HTML)``
+or ``export_document_merged_markdown(document_id)`` so the output goes through
+the same rendering path as the product exporter (figure cropping, <details>
+folding, etc.). Bilingual Markdown has no exporter.
 
 Usage:
     bash scripts/export_chapter_md_official.sh ch1
@@ -49,8 +47,8 @@ def main() -> int:
     )
     p.add_argument(
         "--type",
-        choices=["bilingual_markdown", "bilingual_html", "merged_markdown"],
-        default="bilingual_markdown",
+        choices=["bilingual_html", "merged_markdown"],
+        default="merged_markdown",
     )
     args = p.parse_args()
 
@@ -69,7 +67,6 @@ def main() -> int:
     args.export_root.mkdir(parents=True, exist_ok=True)
 
     type_map = {
-        "bilingual_markdown": ExportType.BILINGUAL_MARKDOWN,
         "bilingual_html": ExportType.BILINGUAL_HTML,
         "merged_markdown": None,  # special: use export_document_merged_markdown
     }

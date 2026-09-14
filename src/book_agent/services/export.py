@@ -139,14 +139,6 @@ _REVIEW_PACKAGE_CHAPTER_STATUSES = {
     ChapterStatus.EXPORTED,
 }
 _FINAL_EXPORT_CHAPTER_STATUSES = {ChapterStatus.QA_CHECKED, ChapterStatus.APPROVED, ChapterStatus.EXPORTED}
-_GATED_EXPORT_TYPES = {
-    ExportType.BILINGUAL_HTML,
-    ExportType.MERGED_HTML,
-    ExportType.MERGED_MARKDOWN,
-    ExportType.ZH_EPUB,
-    ExportType.REBUILT_EPUB,
-    ExportType.REBUILT_PDF,
-}
 
 
 @dataclass(slots=True)
@@ -161,7 +153,6 @@ class ExportIssuePlan:
 @dataclass(slots=True)
 class ChapterGateEvaluation:
     export_type: ExportType
-    unsupported: bool = False
     status_blocked: bool = False
     alignment: ExportIssuePlan | None = None
     layout: ExportIssuePlan | None = None
@@ -208,9 +199,6 @@ class ExportService:
 
     def export_bilingual_html(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.BILINGUAL_HTML)
-
-    def export_bilingual_markdown(self, chapter_id: str) -> ExportArtifacts:
-        return self.export_chapter(chapter_id, ExportType.BILINGUAL_MARKDOWN)
 
     def export_document_merged_html(self, document_id: str) -> ExportArtifacts:
         return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML])
@@ -430,7 +418,7 @@ class ExportService:
                 encoding="utf-8",
             )
             return file_path, manifest_path
-        raise ExportGateError(f"Unsupported export type in P0: {export_type.value}")
+        raise ExportGateError(f"{export_type.value} is a whole-document export, not a per-chapter export.")
 
     def _record(
         self,
@@ -670,8 +658,6 @@ class ExportService:
         export, and layout issues only when alignment is clean, mirroring the
         order in which the gate reports problems.
         """
-        if export_type not in _GATED_EXPORT_TYPES and export_type != ExportType.REVIEW_PACKAGE:
-            return ChapterGateEvaluation(export_type=export_type, unsupported=True)
         allowed_statuses = (
             _REVIEW_PACKAGE_CHAPTER_STATUSES if export_type == ExportType.REVIEW_PACKAGE else _FINAL_EXPORT_CHAPTER_STATUSES
         )
@@ -708,8 +694,6 @@ class ExportService:
     def _raise_for_gate(self, bundle: ChapterExportBundle, evaluation: ChapterGateEvaluation) -> None:
         chapter_id = bundle.chapter.id
         chapter_status = bundle.chapter.status
-        if evaluation.unsupported:
-            raise ExportGateError(f"Unsupported export type in P0: {evaluation.export_type.value}")
         if evaluation.export_type == ExportType.REVIEW_PACKAGE:
             if evaluation.status_blocked:
                 raise ExportGateError(

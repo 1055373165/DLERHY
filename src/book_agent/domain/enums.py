@@ -235,15 +235,12 @@ class ActionStatus(StrEnum):
 
 class ExportType(StrEnum):
     BILINGUAL_HTML = "bilingual_html"
-    BILINGUAL_MARKDOWN = "bilingual_markdown"
     MERGED_HTML = "merged_html"
     MERGED_MARKDOWN = "merged_markdown"
     REBUILT_EPUB = "rebuilt_epub"
     REBUILT_PDF = "rebuilt_pdf"
     ZH_EPUB = "zh_epub"
-    ZH_PDF = "zh_pdf"
     REVIEW_PACKAGE = "review_package"
-    JSONL = "jsonl"
 
 
 class ExportStatus(StrEnum):
