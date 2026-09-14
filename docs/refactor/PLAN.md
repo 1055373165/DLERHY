@@ -100,12 +100,12 @@
 - [x] `export_document` 五段重复分支参数化（整书导出查表，gate 停止原因共用一个 helper）。
 
 ### P3.2 `services/export.py`（8.7k）
-- [ ] golden：merged HTML / Markdown / EPUB（EPUB 与 PDF 夹具各一）。
-- [ ] 纯启发式（代码/正文、PDF 修复、代码 reflow、bbox 数学）抽为自由函数，保留委托方法。
-- [ ] 统一 `build_action` / `scope_for_action`（review 与 export 当前映射不一致）。
-- [ ] 每次导出只组装一次 `DocumentRenderModel`；gate 变为只读评估，issue 同步显式化。
-- [ ] 渲染器协议：`html` / `markdown` / `epub_rebuilt` / `epub_patch` / `pdf_print` / `review_package`；CSS 外置模板。
-- [ ] 资产处理无副作用（返回 DocumentImage 更新由服务持久化）。
+- [x] golden：`tests/test_export_golden.py`，EPUB 与 PDF 夹具各一，覆盖双语章节、审校包、merged HTML/Markdown、rebuilt / 中文 EPUB（逐条目展开）。
+- [x] 223 个无状态方法抽到 `book_agent/export/`（`code_text`、`render_repair`、`markup`、`pdf_crop`、`evidence`、`alignment`、`titles`、`epub_assets`、`common`、`models`），测试与其它服务仍在用的私有方法保留委托；`services/export.py` 8.6k → ~3.2k 行。
+- [x] 统一为 `rule_engine.build_issue_action`（两套规则取并集，REEXPORT_ONLY 按章节作用域）。
+- [x] 单次导出调用内每章 render blocks 只构建一次（按 bundle 缓存）；gate 拆为 `evaluate_chapter_gate`（只读）/ `sync_gate_issues` / `_raise_for_gate`。未做：用例层 gate 与服务内 gate 仍各跑一遍。
+- [x] 整书导出统一为 `_export_document` + 每种类型一个 `DocumentRenderer`；CSS 外置到 `export/templates/*.css`。章节级（双语、审校包）仍走 `export_chapter`。
+- [x] 资产写入函数返回 `DocumentImageMaterialization`，由调用方 `apply_document_image_materializations` 显式落到行上。
 
 ### P3.3 `domain/structure/pdf.py`（9.5k）
 - [ ] characterization：所有夹具 PDF 的 `ParsedDocument` 快照（锚点、类型、角色、章节）。

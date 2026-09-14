@@ -46,6 +46,7 @@ from book_agent.services.chapter_concept_autolock import (
     build_default_concept_resolver,
 )
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
+from book_agent.export.pdf_crop import apply_document_image_materializations
 from book_agent.export.models import ExportFollowupAction, MergedRenderBlock
 from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.pdf_prose_artifact_repair import PdfProseArtifactRepairService
@@ -8819,6 +8820,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 archive.writestr("OEBPS/html/chapter1.xhtml", chapter_xhtml)
                 archive.writestr("OEBPS/images/ch1/fig1.jpg", b"fake-jpg-bytes")
 
+            materializations = []
             with self.session_factory() as session:
                 service = ExportService(ExportRepository(session), output_root=output_dir)
                 asset_map = service._export_epub_archive_assets(
@@ -8826,6 +8828,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
                     [block],
                     output_dir,
                     document_images=[document_image],
+                    materializations=materializations,
                 )
 
             self.assertEqual(
@@ -8833,6 +8836,10 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 {"legacy-epub-figure-materialized": "assets/fig1.jpg"},
             )
             self.assertEqual((output_dir / "assets/fig1.jpg").read_bytes(), b"fake-jpg-bytes")
+            # The writer reports the materialization; the image row is untouched until applied.
+            self.assertEqual(document_image.metadata_json["storage_status"], "logical_only")
+            self.assertEqual([item.document_image for item in materializations], [document_image])
+            apply_document_image_materializations(materializations)
             self.assertTrue(Path(document_image.storage_path).exists())
             self.assertEqual(Path(document_image.storage_path).read_bytes(), b"fake-jpg-bytes")
             self.assertEqual(document_image.metadata_json["materialized_via"], "epub_archive_asset")

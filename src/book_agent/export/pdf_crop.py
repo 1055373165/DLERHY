@@ -17,8 +17,10 @@ from book_agent.export.common import (
     _PDF_IMAGE_MAX_RENDER_SCALE,
     _PDF_IMAGE_MIN_RENDER_SCALE,
     _PDF_IMAGE_TARGET_LONG_EDGE_PX,
+    _utcnow,
 )
 from book_agent.export.models import (
+    DocumentImageMaterialization,
     MergedRenderBlock,
     _PdfPageLayoutBlock,
 )
@@ -606,3 +608,41 @@ def rect_overlap_area(left_rect: list[float], right_rect: list[float]) -> float:
     if right <= left or bottom <= top:
         return 0.0
     return (right - left) * (bottom - top)
+
+
+def plan_document_image_materialization(
+    document_image: object,
+    materialized_path: Path,
+    *,
+    materialized_via: str,
+    render_scale: float | None = None,
+    original_asset_availability: str | None = None,
+) -> DocumentImageMaterialization:
+    metadata = dict(getattr(document_image, "metadata_json", {}) or {})
+    metadata.update(
+        {
+            "storage_status": "materialized",
+            "materialized_via": materialized_via,
+            "materialized_at": _utcnow().isoformat(),
+            "materialized_version": _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
+        }
+    )
+    if original_asset_availability:
+        metadata["original_asset_availability"] = original_asset_availability
+    if render_scale is not None:
+        metadata["materialized_render_scale"] = round(render_scale, 3)
+    else:
+        metadata.pop("materialized_render_scale", None)
+    return DocumentImageMaterialization(
+        document_image=document_image,
+        storage_path=str(materialized_path),
+        metadata_json=metadata,
+    )
+
+
+def apply_document_image_materializations(materializations: list[DocumentImageMaterialization]) -> None:
+    for materialization in materializations:
+        image = materialization.document_image
+        if getattr(image, "storage_path", None) != materialization.storage_path:
+            setattr(image, "storage_path", materialization.storage_path)
+        setattr(image, "metadata_json", materialization.metadata_json)

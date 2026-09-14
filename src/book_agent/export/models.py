@@ -72,3 +72,12 @@ class MergedRenderBlock:
     target_segment_ids: list[str]
     is_expected_source_only: bool
     notice: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentImageMaterialization:
+    """A DocumentImage whose file an export (re)wrote, with its new storage fields."""
+
+    document_image: object
+    storage_path: str
+    metadata_json: dict[str, object]

@@ -50,7 +50,6 @@ from book_agent.export import (
     titles,
 )
 from book_agent.export.common import (
-    _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
     _SEVERITY_RANK,
     _SPECIAL_PDF_PAGE_FAMILIES,
     _display_author_value,
@@ -63,11 +62,16 @@ from book_agent.export.common import (
     _utcnow,
 )
 from book_agent.export.models import (
+    DocumentImageMaterialization,
     ExportArtifacts,
     ExportFollowupAction,
     ExportIssueSyncArtifacts,
     ExportMisalignmentEvidence,
     MergedRenderBlock,
+)
+from book_agent.export.pdf_crop import (
+    apply_document_image_materializations,
+    plan_document_image_materialization,
 )
 from book_agent.infra.repositories.export import (
     ChapterExportBundle,
@@ -2413,13 +2417,16 @@ class ExportService:
             for chapter_bundle in bundle.chapters
             for block in self._render_blocks_for_chapter(chapter_bundle)
         ]
+        materializations: list[DocumentImageMaterialization] = []
         exported_assets = self._export_epub_assets(
             bundle.document.source_type,
             bundle.document.source_path,
             render_blocks,
             output_dir,
             document_images=document_images,
+            materializations=materializations,
         )
+        apply_document_image_materializations(materializations)
         merged_assets = dict(persisted_assets)
         merged_assets.update(exported_assets)
         return merged_assets
@@ -2653,13 +2660,16 @@ class ExportService:
     ) -> dict[str, str]:
         persisted_assets = self._export_persisted_document_image_assets(bundle.document_images, output_dir)
         render_blocks = self._render_blocks_for_chapter(bundle)
+        materializations: list[DocumentImageMaterialization] = []
         exported_assets = self._export_epub_assets(
             bundle.document.source_type,
             bundle.document.source_path,
             render_blocks,
             output_dir,
             document_images=bundle.document_images,
+            materializations=materializations,
         )
+        apply_document_image_materializations(materializations)
         merged_assets = dict(persisted_assets)
         merged_assets.update(exported_assets)
         return merged_assets
@@ -2747,6 +2757,7 @@ class ExportService:
         output_dir: Path,
         *,
         document_images: list[object] | None = None,
+        materializations: list[DocumentImageMaterialization] | None = None,
     ) -> dict[str, str]:
         if not source_path:
             return {}
@@ -2757,6 +2768,7 @@ class ExportService:
                 render_blocks,
                 output_dir,
                 document_images=document_images,
+                materializations=materializations,
             )
         if source_type in {SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN}:
             return self._export_pdf_assets(
@@ -2764,6 +2776,7 @@ class ExportService:
                 render_blocks,
                 output_dir,
                 document_images=document_images,
+                materializations=materializations,
             )
         return {}
 
@@ -2774,7 +2787,13 @@ class ExportService:
         output_dir: Path,
         *,
         document_images: list[object] | None = None,
+        materializations: list[DocumentImageMaterialization] | None = None,
     ) -> dict[str, str]:
+        """Copy figure images out of the source EPUB.
+
+        Newly materialized DocumentImage files are reported in
+        ``materializations`` for the caller to persist; rows are not modified.
+        """
         epub_path = Path(source_path)
         if not epub_path.exists():
             return {}
@@ -2843,11 +2862,14 @@ class ExportService:
                     materialized_path.parent.mkdir(parents=True, exist_ok=True)
                     with archive.open(archive_info) as source_handle, materialized_path.open("wb") as target_handle:
                         shutil.copyfileobj(source_handle, target_handle)
-                    self._mark_document_image_materialized(
-                        persisted_image,
-                        materialized_path,
-                        materialized_via="epub_archive_asset",
-                    )
+                    if materializations is not None:
+                        materializations.append(
+                            plan_document_image_materialization(
+                                persisted_image,
+                                materialized_path,
+                                materialized_via="epub_archive_asset",
+                            )
+                        )
 
         return {
             block_id: relative_path_by_archive_path[archive_path]
@@ -2862,7 +2884,13 @@ class ExportService:
         output_dir: Path,
         *,
         document_images: list[object] | None = None,
+        materializations: list[DocumentImageMaterialization] | None = None,
     ) -> dict[str, str]:
+        """Crop or extract figure images from the source PDF.
+
+        Newly materialized DocumentImage files are reported in
+        ``materializations`` for the caller to persist; rows are not modified.
+        """
         pdf_path = Path(source_path)
         if not pdf_path.exists():
             return {}
@@ -2961,13 +2989,16 @@ class ExportService:
                             desired_width_px=desired_width_px,
                             desired_height_px=desired_height_px,
                         )
-                        self._mark_document_image_materialized(
-                            persisted_image,
-                            materialized_path,
-                            materialized_via=materialized_via,
-                            render_scale=render_scale,
-                            original_asset_availability=original_asset_availability,
-                        )
+                        if materializations is not None:
+                            materializations.append(
+                                plan_document_image_materialization(
+                                    persisted_image,
+                                    materialized_path,
+                                    materialized_via=materialized_via,
+                                    render_scale=render_scale,
+                                    original_asset_availability=original_asset_availability,
+                                )
+                            )
                     if not target_path.exists():
                         shutil.copy2(materialized_path, target_path)
                 elif not target_path.exists():
@@ -3015,34 +3046,6 @@ class ExportService:
         )
         return (self.output_root.parent / "document-images" / document_id / f"{block_id}{asset_suffix}").resolve()
 
-    def _mark_document_image_materialized(
-        self,
-        document_image: object,
-        materialized_path: Path,
-        *,
-        materialized_via: str,
-        render_scale: float | None = None,
-        original_asset_availability: str | None = None,
-    ) -> None:
-        storage_path = str(materialized_path)
-        if getattr(document_image, "storage_path", None) != storage_path:
-            setattr(document_image, "storage_path", storage_path)
-        metadata = dict(getattr(document_image, "metadata_json", {}) or {})
-        metadata.update(
-            {
-                "storage_status": "materialized",
-                "materialized_via": materialized_via,
-                "materialized_at": _utcnow().isoformat(),
-                "materialized_version": _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
-            }
-        )
-        if original_asset_availability:
-            metadata["original_asset_availability"] = original_asset_availability
-        if render_scale is not None:
-            metadata["materialized_render_scale"] = round(render_scale, 3)
-        else:
-            metadata.pop("materialized_render_scale", None)
-        setattr(document_image, "metadata_json", metadata)
 
 
 @dataclass(frozen=True, slots=True)
