@@ -17,8 +17,20 @@ frontend/.vite/
 htmlcov/
 .coverage
 book_agent.db
+book-agent.db
 .server.pid
 artifacts/
 .gstack/
 .omc/
 .test-tmp/
+
+# Local run output and deliverables (kept on disk, never versioned)
+deliverable/
+LLM-Book*/
+books/
+.scratch/
+frontend/.omc/
+
+# Personal Claude Code state
+.claude/settings.local.json
+.claude/*.lock
