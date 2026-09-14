@@ -69,6 +69,15 @@ class RunControlRepository:
         """
         # Flush first so refreshing the locked row cannot discard pending changes.
         self.session.flush()
+        # A no-op UPDATE takes the write lock up front: a row lock on PostgreSQL,
+        # and on SQLite (which ignores FOR UPDATE) the database write lock, so
+        # the read below cannot be overtaken by another writer's commit.
+        self.session.execute(
+            update(DocumentRun)
+            .where(DocumentRun.id == run_id)
+            .values(updated_at=DocumentRun.updated_at)
+            .execution_options(synchronize_session=False)
+        )
         run = self.session.scalar(
             select(DocumentRun)
             .where(DocumentRun.id == run_id)

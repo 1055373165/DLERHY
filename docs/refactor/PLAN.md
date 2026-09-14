@@ -84,7 +84,7 @@
 - [x] **P2.2 类型化 provider 异常**：`workers.failures.classify_failure` 按异常类型给出 retry / pause / fail（402 → 暂停「余额不足」，401/403 → 暂停「认证失败」）；新增 `ProviderResponseFormatError`；删除消息子串匹配。
 - [x] **P2.3 租约丢失**：worker 在提交结果的事务内锁定并校验租约（`assert_lease_held`），租约已被回收则回滚并丢弃结果，不再写失败记录或崩溃。领取本身已是按状态的 CAS UPDATE（并发下只有一个赢家），`SKIP LOCKED` 只是性能优化，暂不做。
 - [x] **P2.4 Run 状态**：所有修改 run 行的路径（状态转换、用量计数、流水线缓存、租约回收、播种）经 `get_run_for_update` 加行锁，读改写串行化，统一「先锁 run 再动 work item」的顺序；状态转换因此等价于 CAS。Postgres 并发测试：12 个并发完成，改前只保留 3 个计数，改后 12 个。
-- [ ] **P2.5 事务与线程**：LLM 调用不在 DB 事务内；审核/导出不在 run 线程上内联阻塞。
+- [x] **P2.5 事务与线程**：翻译拆为 prepare / call_worker / persist 三个事务阶段，LLM 调用期间不占连接，失败事件真正落库；审校与导出改在工作线程执行，阶段缓存与工作项结果同事务写入；`stop()` 按层 join 并阻止停止后再起线程；心跳未启动时不再 join 抛错；`get_run_for_update` 先做空 UPDATE 取写锁（SQLite 也能串行化）。
 - [ ] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建对应 run（执行器支持 `translate_targeted` / `review_full` / `export_full`）并立即返回；GET 下载不再触发生成。
 - [ ] **P2.7 数据层**：应用只支持 Postgres（SQLite 仅纯单测）；`JSONB` variant；枚举 CHECK 由枚举生成；去掉 `has_table` 探测；审计写入仅插入；`service.sh` SQLite 模式与 Docker 迁移步骤。
 

@@ -162,23 +162,30 @@ class DocumentRunExecutor:
             )
             self._supervisor_thread.start()
 
-    def stop(self) -> None:
+    def stop(self, *, work_timeout_seconds: float = 30.0) -> None:
         self._stop_event.set()
         self._wake_event.set()
+        # Join tier by tier and re-read the registry after each tier: the
+        # supervisor may still start run threads, and run threads work threads,
+        # until they observe the stop event.
         with self._lock:
             supervisor = self._supervisor_thread
+        if supervisor is not None:
+            supervisor.join(timeout=5)
+        with self._lock:
             run_threads = list(self._active_run_threads.values())
+        for thread in run_threads:
+            thread.join(timeout=5)
+        with self._lock:
             work_threads = [
                 thread
                 for thread_map in self._active_work_threads.values()
                 for thread in thread_map.values()
             ]
-        if supervisor is not None:
-            supervisor.join(timeout=5)
-        for thread in run_threads:
-            thread.join(timeout=5)
         for thread in work_threads:
-            thread.join(timeout=5)
+            thread.join(timeout=work_timeout_seconds)
+            if thread.is_alive():
+                logger.warning("Work thread %s still running after stop", thread.name)
         with self._lock:
             self._active_run_threads = {}
             self._active_work_threads = {}
@@ -253,6 +260,8 @@ class DocumentRunExecutor:
 
     def _ensure_run_thread(self, run_id: str) -> None:
         with self._lock:
+            if self._stop_event.is_set():
+                return
             existing = self._active_run_threads.get(run_id)
             if existing is not None and existing.is_alive():
                 return
@@ -274,6 +283,8 @@ class DocumentRunExecutor:
         target,
     ) -> None:
         with self._lock:
+            if self._stop_event.is_set():
+                return
             thread_map = self._active_work_threads.setdefault(run_id, {})
             existing = thread_map.get(work_item_id)
             if existing is not None and existing.is_alive():
@@ -535,7 +546,14 @@ class DocumentRunExecutor:
                 claimed = None
 
         if claimed is not None:
-            self._execute_review_work_item(run_id, claimed)
+            # Review can take many minutes; run it off the run thread so lease
+            # reclaim, budgets and cancellation keep ticking.
+            self._ensure_work_thread(
+                run_id=run_id,
+                work_item_id=claimed.work_item_id,
+                thread_name=f"book-agent-review-{claimed.work_item_id}",
+                target=lambda claimed=claimed: self._execute_review_work_item(run_id, claimed),
+            )
             return True
 
         if review_items and all(item.status == WorkItemStatus.SUCCEEDED for item in review_items):
@@ -585,7 +603,16 @@ class DocumentRunExecutor:
                 claimed = None
 
         if claimed is not None:
-            self._execute_export_work_item(run_id, claimed, export_type=export_type)
+            self._ensure_work_thread(
+                run_id=run_id,
+                work_item_id=claimed.work_item_id,
+                thread_name=f"book-agent-export-{export_type.value}-{claimed.work_item_id}",
+                target=lambda claimed=claimed: self._execute_export_work_item(
+                    run_id,
+                    claimed,
+                    export_type=export_type,
+                ),
+            )
             return True
 
         if export_items and all(item.status == WorkItemStatus.SUCCEEDED for item in export_items):
@@ -687,21 +714,22 @@ class DocumentRunExecutor:
                     },
                     payload_json=payload,
                 )
-            # Skip visibility (Phase 3): if any chapters were excluded from
-            # review because their translate packets weren't TRANSLATED, mark
-            # the stage as ``partial`` so the UI does not claim "done" for
-            # content that was never examined.
-            stage_status = (
-                "partial" if int(payload.get("skipped_chapter_count") or 0) > 0
-                else "succeeded"
-            )
-            self._update_pipeline_stage(
-                run_id,
-                "review",
-                status=stage_status,
-                extra=payload,
-                current_stage="bilingual_html",
-            )
+                # Skip visibility (Phase 3): if any chapters were excluded from
+                # review because their translate packets weren't TRANSLATED, mark
+                # the stage as ``partial`` so the UI does not claim "done" for
+                # content that was never examined.
+                stage_status = (
+                    "partial" if int(payload.get("skipped_chapter_count") or 0) > 0
+                    else "succeeded"
+                )
+                self._update_pipeline_stage(
+                    run_id,
+                    "review",
+                    status=stage_status,
+                    extra=payload,
+                    current_stage="bilingual_html",
+                    session=session,
+                )
 
         self._execute_claimed_work_item(
             run_id=run_id,
@@ -750,13 +778,14 @@ class DocumentRunExecutor:
                     output_artifact_refs_json=payload,
                     payload_json=payload,
                 )
-            self._update_pipeline_stage(
-                run_id,
-                pipeline_key,
-                status="succeeded",
-                extra=payload,
-                current_stage=("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"),
-            )
+                self._update_pipeline_stage(
+                    run_id,
+                    pipeline_key,
+                    status="succeeded",
+                    extra=payload,
+                    current_stage=("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"),
+                    session=session,
+                )
 
         self._execute_claimed_work_item(
             run_id=run_id,
@@ -809,13 +838,11 @@ class DocumentRunExecutor:
                     )
             heartbeat_thread.start()
             payload = worker_fn()
-            stop_event.set()
-            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
+            self._stop_heartbeat(heartbeat_thread, stop_event)
             on_success(payload, claimed.lease_token)
             self.wake(run_id)
         except LeaseLostError:
-            stop_event.set()
-            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
+            self._stop_heartbeat(heartbeat_thread, stop_event)
             # The lease expired and the work item was reclaimed; its new owner
             # records the outcome, so discard this attempt without touching it.
             logger.warning(
@@ -824,14 +851,29 @@ class DocumentRunExecutor:
             )
             self.wake(run_id)
         except Exception as exc:
-            stop_event.set()
+            self._stop_heartbeat(heartbeat_thread, stop_event)
+            try:
+                self._complete_failure(
+                    run_id=run_id,
+                    claimed=claimed,
+                    exc=exc,
+                    stage_key=stage_key or claimed.stage,
+                )
+            except LeaseLostError:
+                logger.warning("Work item %s lost its lease before its failure was recorded", claimed.work_item_id)
+            except Exception:
+                # The lease will expire and the run loop reclaims the item.
+                logger.exception(
+                    "Recording failure of work item %s failed (original error: %s)",
+                    claimed.work_item_id,
+                    exc,
+                )
+
+    def _stop_heartbeat(self, heartbeat_thread: threading.Thread, stop_event: threading.Event) -> None:
+        stop_event.set()
+        # The thread is not started yet if starting the work item itself failed.
+        if heartbeat_thread.is_alive():
             heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
-            self._complete_failure(
-                run_id=run_id,
-                claimed=claimed,
-                exc=exc,
-                stage_key=stage_key or claimed.stage,
-            )
 
     def _translate_single_packet(
         self,
@@ -945,6 +987,20 @@ class DocumentRunExecutor:
                     work_item_id=claimed.work_item_id,
                     attempt=claimed.attempt,
                 )
+            # Same transaction as the work-item failure and the terminal
+            # decision, so nobody observes a finished run with a stale stage.
+            self._update_pipeline_stage(
+                run_id,
+                stage_key,
+                status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
+                extra={
+                    "error_class": error_class,
+                    "error_message": str(exc),
+                    **({"stop_reason": pause_reason} if pause_reason is not None else {}),
+                },
+                current_stage=stage_key,
+                session=session,
+            )
             if pause_reason is not None:
                 control = self._run_control_service(session)
                 summary = control.pause_run_system(
@@ -960,17 +1016,6 @@ class DocumentRunExecutor:
                 )
             else:
                 summary = execution.reconcile_run_terminal_state(run_id=run_id)
-        self._update_pipeline_stage(
-            run_id,
-            stage_key,
-            status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
-            extra={
-                "error_class": error_class,
-                "error_message": str(exc),
-                **({"stop_reason": pause_reason} if pause_reason is not None else {}),
-            },
-            current_stage=stage_key,
-        )
         if summary.status in {"failed", "paused", "cancelled"}:
             self._sync_pipeline_status(run_id, summary.status)
         self.wake(run_id)
