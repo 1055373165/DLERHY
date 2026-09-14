@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import html
 import json
@@ -7,7 +8,7 @@ import mimetypes
 import re
 import shutil
 import zipfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
@@ -124,6 +125,66 @@ class ExportGateError(ValueError):
         }
 
 
+_REVIEW_PACKAGE_CHAPTER_STATUSES = {
+    ChapterStatus.TRANSLATED,
+    ChapterStatus.QA_CHECKED,
+    ChapterStatus.REVIEW_REQUIRED,
+    ChapterStatus.APPROVED,
+    ChapterStatus.EXPORTED,
+}
+_FINAL_EXPORT_CHAPTER_STATUSES = {ChapterStatus.QA_CHECKED, ChapterStatus.APPROVED, ChapterStatus.EXPORTED}
+_GATED_EXPORT_TYPES = {
+    ExportType.BILINGUAL_HTML,
+    ExportType.MERGED_HTML,
+    ExportType.MERGED_MARKDOWN,
+    ExportType.ZH_EPUB,
+    ExportType.REBUILT_EPUB,
+    ExportType.REBUILT_PDF,
+}
+
+
+@dataclass(slots=True)
+class ExportIssuePlan:
+    """Export-time issues a check found, and the earlier issues of that kind it compared against."""
+
+    issues: list[ReviewIssue]
+    existing: list[ReviewIssue]
+    now: datetime
+
+
+@dataclass(slots=True)
+class ChapterGateEvaluation:
+    export_type: ExportType
+    unsupported: bool = False
+    status_blocked: bool = False
+    alignment: ExportIssuePlan | None = None
+    layout: ExportIssuePlan | None = None
+    # Filled in by ExportService.sync_gate_issues.
+    alignment_artifacts: ExportIssueSyncArtifacts | None = None
+    layout_artifacts: ExportIssueSyncArtifacts | None = None
+
+
+def _within_render_model_scope(method):
+    """Build each chapter's render blocks at most once per export call.
+
+    The gate (layout validation), manifests and every renderer ask for the same
+    chapter's render blocks; inside one export they read the same bundle, so
+    the blocks are cached by bundle object for the duration of the call.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self._render_block_cache is not None:
+            return method(self, *args, **kwargs)
+        self._render_block_cache = {}
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._render_block_cache = None
+
+    return wrapper
+
+
 class ExportService:
     def __init__(
         self,
@@ -134,6 +195,7 @@ class ExportService:
         self.repository = repository
         self.output_root = Path(output_root)
         self.layout_validation_service = layout_validation_service or LayoutValidationService()
+        self._render_block_cache: dict[int, tuple[ChapterExportBundle, list[MergedRenderBlock]]] | None = None
 
     def export_review_package(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.REVIEW_PACKAGE)
@@ -144,6 +206,7 @@ class ExportService:
     def export_bilingual_markdown(self, chapter_id: str) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.BILINGUAL_MARKDOWN)
 
+    @_within_render_model_scope
     def export_document_merged_html(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
@@ -183,6 +246,7 @@ class ExportService:
             manifest_path=manifest_path,
         )
 
+    @_within_render_model_scope
     def export_document_merged_markdown(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
@@ -223,6 +287,7 @@ class ExportService:
             manifest_path=manifest_path,
         )
 
+    @_within_render_model_scope
     def export_document_rebuilt_epub(self, document_id: str) -> ExportArtifacts:
         initial_bundle = self.repository.load_document_bundle(document_id)
         if initial_bundle.document.source_type != SourceType.EPUB:
@@ -273,6 +338,7 @@ class ExportService:
             manifest_path=manifest_path,
         )
 
+    @_within_render_model_scope
     def export_document_zh_epub(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         if bundle.document.source_type != SourceType.EPUB:
@@ -318,6 +384,7 @@ class ExportService:
             manifest_path=manifest_path,
         )
 
+    @_within_render_model_scope
     def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         for chapter_bundle in bundle.chapters:
@@ -489,10 +556,12 @@ class ExportService:
             ExportType.MERGED_MARKDOWN: self._ensure_upstream_document_export(document_id, ExportType.MERGED_MARKDOWN),
         }
 
+    @_within_render_model_scope
     def assert_chapter_exportable(self, chapter_id: str, export_type: ExportType) -> None:
         bundle = self.repository.load_chapter_bundle(chapter_id)
         self._enforce_gate(bundle, export_type)
 
+    @_within_render_model_scope
     def export_chapter(self, chapter_id: str, export_type: ExportType) -> ExportArtifacts:
         bundle = self.repository.load_chapter_bundle(chapter_id)
         self._enforce_gate(bundle, export_type)
@@ -760,48 +829,81 @@ class ExportService:
         ]
 
     def _enforce_gate(self, bundle: ChapterExportBundle, export_type: ExportType) -> None:
+        evaluation = self.evaluate_chapter_gate(bundle, export_type)
+        self.sync_gate_issues(bundle, evaluation)
+        self._raise_for_gate(bundle, evaluation)
+
+    def evaluate_chapter_gate(self, bundle: ChapterExportBundle, export_type: ExportType) -> ChapterGateEvaluation:
+        """Decide whether a chapter may be exported, without writing anything.
+
+        Alignment issues are only planned when the chapter status allows the
+        export, and layout issues only when alignment is clean, mirroring the
+        order in which the gate reports problems.
+        """
+        if export_type not in _GATED_EXPORT_TYPES and export_type != ExportType.REVIEW_PACKAGE:
+            return ChapterGateEvaluation(export_type=export_type, unsupported=True)
+        allowed_statuses = (
+            _REVIEW_PACKAGE_CHAPTER_STATUSES if export_type == ExportType.REVIEW_PACKAGE else _FINAL_EXPORT_CHAPTER_STATUSES
+        )
+        if bundle.chapter.status not in allowed_statuses:
+            return ChapterGateEvaluation(export_type=export_type, status_blocked=True)
+        now = _utcnow()
+        alignment_plan = self._plan_export_alignment_issues(bundle, now)
+        if export_type == ExportType.REVIEW_PACKAGE or alignment_plan.issues:
+            return ChapterGateEvaluation(export_type=export_type, alignment=alignment_plan)
+        layout_plan = None
+        if _is_pdf_document(bundle.document):
+            layout_plan = self._plan_export_layout_issues(bundle, now, self._render_blocks_for_chapter(bundle))
+        return ChapterGateEvaluation(export_type=export_type, alignment=alignment_plan, layout=layout_plan)
+
+    def sync_gate_issues(
+        self,
+        bundle: ChapterExportBundle,
+        evaluation: ChapterGateEvaluation,
+    ) -> None:
+        """Persist the export-time issues an evaluation found and resolve the ones it no longer sees."""
+        if evaluation.alignment is not None:
+            evaluation.alignment_artifacts = self._apply_export_issue_plan(
+                bundle,
+                evaluation.alignment,
+                resolution_note="Resolved by latest export-time alignment check.",
+            )
+        if evaluation.layout is not None:
+            evaluation.layout_artifacts = self._apply_export_issue_plan(
+                bundle,
+                evaluation.layout,
+                resolution_note="Resolved by latest export-time layout validation check.",
+            )
+
+    def _raise_for_gate(self, bundle: ChapterExportBundle, evaluation: ChapterGateEvaluation) -> None:
+        chapter_id = bundle.chapter.id
         chapter_status = bundle.chapter.status
-        if export_type == ExportType.REVIEW_PACKAGE:
-            if chapter_status not in {
-                ChapterStatus.TRANSLATED,
-                ChapterStatus.QA_CHECKED,
-                ChapterStatus.REVIEW_REQUIRED,
-                ChapterStatus.APPROVED,
-                ChapterStatus.EXPORTED,
-            }:
+        if evaluation.unsupported:
+            raise ExportGateError(f"Unsupported export type in P0: {evaluation.export_type.value}")
+        if evaluation.export_type == ExportType.REVIEW_PACKAGE:
+            if evaluation.status_blocked:
                 raise ExportGateError(
-                    f"Chapter {bundle.chapter.id} is not ready for review export from status {chapter_status.value}."
+                    f"Chapter {chapter_id} is not ready for review export from status {chapter_status.value}."
                 )
-            self._sync_export_alignment_issues(bundle)
             return
-
-        if export_type in {
-            ExportType.BILINGUAL_HTML,
-            ExportType.MERGED_HTML,
-            ExportType.MERGED_MARKDOWN,
-            ExportType.ZH_EPUB,
-            ExportType.REBUILT_EPUB,
-            ExportType.REBUILT_PDF,
-        }:
-            is_pdf_source = bundle.document.source_type in {
-                SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN,
-            }
-            if chapter_status not in {ChapterStatus.QA_CHECKED, ChapterStatus.APPROVED, ChapterStatus.EXPORTED}:
-                blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
+        if evaluation.status_blocked:
+            blocking_issues, followup_actions = self._open_blocking_followup_actions(chapter_id)
+            raise ExportGateError(
+                f"Chapter {chapter_id} must pass review before final export; current status is {chapter_status.value}.",
+                chapter_id=chapter_id,
+                issue_ids=[issue.id for issue in blocking_issues],
+                followup_actions=followup_actions,
+            )
+        for artifacts, problem in (
+            (evaluation.alignment_artifacts, "export-time misalignment anomalies"),
+            (evaluation.layout_artifacts, "export-time layout validation issues"),
+        ):
+            if artifacts is not None and artifacts.issues:
                 raise ExportGateError(
-                    f"Chapter {bundle.chapter.id} must pass review before final export; current status is {chapter_status.value}.",
-                    chapter_id=bundle.chapter.id,
-                    issue_ids=[issue.id for issue in blocking_issues],
-                    followup_actions=followup_actions,
-                )
-            export_alignment_artifacts = self._sync_export_alignment_issues(bundle)
-            if export_alignment_artifacts.issues:
-                raise ExportGateError(
-                    "Chapter "
-                    f"{bundle.chapter.id} has export-time misalignment anomalies and cannot be exported. "
-                    f"Review issues created: {', '.join(issue.id for issue in export_alignment_artifacts.issues)}.",
-                    chapter_id=bundle.chapter.id,
-                    issue_ids=[issue.id for issue in export_alignment_artifacts.issues],
+                    f"Chapter {chapter_id} has {problem} and cannot be exported. "
+                    f"Review issues created: {', '.join(issue.id for issue in artifacts.issues)}.",
+                    chapter_id=chapter_id,
+                    issue_ids=[issue.id for issue in artifacts.issues],
                     followup_actions=[
                         ExportFollowupAction(
                             action_id=action.id,
@@ -810,43 +912,17 @@ class ExportService:
                             scope_type=action.scope_type.value,
                             scope_id=action.scope_id,
                         )
-                        for action in export_alignment_artifacts.actions
+                        for action in artifacts.actions
                     ],
                 )
-            render_blocks = self._render_blocks_for_chapter(bundle)
-            if is_pdf_source:
-                export_layout_artifacts = self._sync_export_layout_issues(bundle, render_blocks)
-            else:
-                export_layout_artifacts = ExportIssueSyncArtifacts(issues=[], actions=[])
-            if export_layout_artifacts.issues:
-                raise ExportGateError(
-                    "Chapter "
-                    f"{bundle.chapter.id} has export-time layout validation issues and cannot be exported. "
-                    f"Review issues created: {', '.join(issue.id for issue in export_layout_artifacts.issues)}.",
-                    chapter_id=bundle.chapter.id,
-                    issue_ids=[issue.id for issue in export_layout_artifacts.issues],
-                    followup_actions=[
-                        ExportFollowupAction(
-                            action_id=action.id,
-                            issue_id=action.issue_id,
-                            action_type=action.action_type.value,
-                            scope_type=action.scope_type.value,
-                            scope_id=action.scope_id,
-                        )
-                        for action in export_layout_artifacts.actions
-                    ],
-                )
-            if self.repository.has_open_blocking_issues(bundle.chapter.id):
-                blocking_issues, followup_actions = self._open_blocking_followup_actions(bundle.chapter.id)
-                raise ExportGateError(
-                    f"Chapter {bundle.chapter.id} still has open blocking review issues and cannot be exported.",
-                    chapter_id=bundle.chapter.id,
-                    issue_ids=[issue.id for issue in blocking_issues],
-                    followup_actions=followup_actions,
-                )
-            return
-
-        raise ExportGateError(f"Unsupported export type in P0: {export_type.value}")
+        if self.repository.has_open_blocking_issues(chapter_id):
+            blocking_issues, followup_actions = self._open_blocking_followup_actions(chapter_id)
+            raise ExportGateError(
+                f"Chapter {chapter_id} still has open blocking review issues and cannot be exported.",
+                chapter_id=chapter_id,
+                issue_ids=[issue.id for issue in blocking_issues],
+                followup_actions=followup_actions,
+            )
 
     def _apply_status_updates(self, bundle: ChapterExportBundle, export_type: ExportType) -> None:
         now = _utcnow()
@@ -978,84 +1054,84 @@ class ExportService:
         return alignment.build_export_misalignment_evidence(bundle)
 
     def _sync_export_alignment_issues(self, bundle: ChapterExportBundle) -> ExportIssueSyncArtifacts:
-        now = _utcnow()
-        issues = alignment.build_export_alignment_issues(bundle, now)
-        active_issue_ids = {issue.id for issue in issues}
-
-        existing_export_issues = [
-            issue
-            for issue in bundle.review_issues
-            if issue.issue_type == "ALIGNMENT_FAILURE"
-            and issue.root_cause_layer == RootCauseLayer.EXPORT
-        ]
-        for issue in existing_export_issues:
-            if issue.id in active_issue_ids:
-                continue
-            if issue.status in {IssueStatus.OPEN, IssueStatus.TRIAGED}:
-                issue.status = IssueStatus.RESOLVED
-                issue.resolution_note = "Resolved by latest export-time alignment check."
-                issue.updated_at = now
-                self.repository.session.merge(issue)
-
-        for issue in issues:
-            self.repository.session.merge(issue)
-        self.repository.session.flush()
-
-        actions = [build_issue_action(issue) for issue in issues]
-        for action in actions:
-            self.repository.session.merge(action)
-        self.repository.session.flush()
-
-        retained_issue_ids = {issue.id for issue in existing_export_issues if issue.status != IssueStatus.RESOLVED}
-        bundle.review_issues = [
-            issue
-            for issue in bundle.review_issues
-            if issue.id not in retained_issue_ids
-        ] + issues
-        return ExportIssueSyncArtifacts(issues=issues, actions=actions)
+        return self._apply_export_issue_plan(
+            bundle,
+            self._plan_export_alignment_issues(bundle, _utcnow()),
+            resolution_note="Resolved by latest export-time alignment check.",
+        )
 
     def _sync_export_layout_issues(
         self,
         bundle: ChapterExportBundle,
         render_blocks: list[MergedRenderBlock] | None = None,
     ) -> ExportIssueSyncArtifacts:
-        now = _utcnow()
+        return self._apply_export_issue_plan(
+            bundle,
+            self._plan_export_layout_issues(bundle, _utcnow(), render_blocks),
+            resolution_note="Resolved by latest export-time layout validation check.",
+        )
+
+    def _plan_export_alignment_issues(self, bundle: ChapterExportBundle, now: datetime) -> ExportIssuePlan:
+        return ExportIssuePlan(
+            issues=alignment.build_export_alignment_issues(bundle, now),
+            existing=[
+                issue
+                for issue in bundle.review_issues
+                if issue.issue_type == "ALIGNMENT_FAILURE" and issue.root_cause_layer == RootCauseLayer.EXPORT
+            ],
+            now=now,
+        )
+
+    def _plan_export_layout_issues(
+        self,
+        bundle: ChapterExportBundle,
+        now: datetime,
+        render_blocks: list[MergedRenderBlock] | None,
+    ) -> ExportIssuePlan:
         issue = self._build_export_layout_issue(bundle, now, render_blocks=render_blocks)
-        issues = [issue] if issue is not None else []
-        active_issue_ids = {current.id for current in issues}
+        return ExportIssuePlan(
+            issues=[issue] if issue is not None else [],
+            existing=[
+                current
+                for current in bundle.review_issues
+                if current.issue_type == "LAYOUT_VALIDATION_FAILURE"
+                and current.root_cause_layer == RootCauseLayer.STRUCTURE
+                and (current.evidence_json or {}).get("reason") == "export_layout_validation"
+            ],
+            now=now,
+        )
 
-        existing_layout_issues = [
-            current
-            for current in bundle.review_issues
-            if current.issue_type == "LAYOUT_VALIDATION_FAILURE"
-            and current.root_cause_layer == RootCauseLayer.STRUCTURE
-            and (current.evidence_json or {}).get("reason") == "export_layout_validation"
-        ]
-        for current in existing_layout_issues:
-            if current.id in active_issue_ids:
+    def _apply_export_issue_plan(
+        self,
+        bundle: ChapterExportBundle,
+        plan: ExportIssuePlan,
+        *,
+        resolution_note: str,
+    ) -> ExportIssueSyncArtifacts:
+        active_issue_ids = {issue.id for issue in plan.issues}
+        for issue in plan.existing:
+            if issue.id in active_issue_ids:
                 continue
-            if current.status in {IssueStatus.OPEN, IssueStatus.TRIAGED}:
-                current.status = IssueStatus.RESOLVED
-                current.resolution_note = "Resolved by latest export-time layout validation check."
-                current.updated_at = now
-                self.repository.session.merge(current)
+            if issue.status in {IssueStatus.OPEN, IssueStatus.TRIAGED}:
+                issue.status = IssueStatus.RESOLVED
+                issue.resolution_note = resolution_note
+                issue.updated_at = plan.now
+                self.repository.session.merge(issue)
 
-        for current in issues:
-            self.repository.session.merge(current)
+        for issue in plan.issues:
+            self.repository.session.merge(issue)
         self.repository.session.flush()
 
-        actions = [build_issue_action(current) for current in issues]
+        actions = [build_issue_action(issue) for issue in plan.issues]
         for action in actions:
             self.repository.session.merge(action)
         self.repository.session.flush()
 
-        retained_issue_ids = {current.id for current in existing_layout_issues if current.status != IssueStatus.RESOLVED}
+        retained_issue_ids = {issue.id for issue in plan.existing if issue.status != IssueStatus.RESOLVED}
         bundle.review_issues = [
-            current
-            for current in bundle.review_issues
-            if current.id not in retained_issue_ids
-        ] + issues
-        return ExportIssueSyncArtifacts(issues=issues, actions=actions)
+            issue for issue in bundle.review_issues if issue.id not in retained_issue_ids
+        ] + plan.issues
+        return ExportIssueSyncArtifacts(issues=plan.issues, actions=actions)
 
     def _build_export_alignment_issues(
         self,
@@ -1907,6 +1983,16 @@ class ExportService:
         ]
 
     def _render_blocks_for_chapter(self, bundle: ChapterExportBundle) -> list[MergedRenderBlock]:
+        cache = self._render_block_cache
+        if cache is None:
+            return self._build_render_blocks_for_chapter(bundle)
+        cached = cache.get(id(bundle))
+        if cached is None or cached[0] is not bundle:
+            cached = (bundle, self._build_render_blocks_for_chapter(bundle))
+            cache[id(bundle)] = cached
+        return list(cached[1])
+
+    def _build_render_blocks_for_chapter(self, bundle: ChapterExportBundle) -> list[MergedRenderBlock]:
         target_map = alignment.build_target_map(bundle)
         sentence_targets = alignment.sentence_target_map(bundle)
         blocks_by_id = {block.id: block for block in bundle.blocks}
