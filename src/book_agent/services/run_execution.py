@@ -9,44 +9,25 @@ from uuid import uuid4
 from book_agent.domain.enums import (
     ActorType,
     DocumentRunStatus,
-    DocumentRunType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models.ops import RunAuditEvent
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
-from book_agent.orchestrator.stage_gate import STAGE_DEPENDENCIES
 from book_agent.orchestrator.stage_status import (
-    OPTIONAL_PIPELINE_STAGES,
     PIPELINE_STAGES,
-    REQUIRED_PIPELINE_STAGES,
     RunOutcome,
     StageStatus,
     StageStatusCalculator,
     classify_run_outcome,
+    required_stages_for_run_type,
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _promote_startable_optional_stages(
-    stage_status_by_name: dict[str, StageStatus],
-) -> dict[str, StageStatus]:
-    # The run executor seeds review and exports for TRANSLATE_FULL runs as soon
-    # as their upstream stages succeed. An optional stage that has not started
-    # but whose gate is open is therefore pending, not "not requested";
-    # classifying it as NOT_STARTED would end the run before review/export ran.
-    promoted = dict(stage_status_by_name)
-    for stage in PIPELINE_STAGES:
-        if stage not in OPTIONAL_PIPELINE_STAGES or promoted.get(stage) != StageStatus.NOT_STARTED:
-            continue
-        if all(promoted.get(upstream) == StageStatus.SUCCEEDED for upstream in STAGE_DEPENDENCIES[stage]):
-            promoted[stage] = StageStatus.RUNNING
-    return promoted
 
 
 def _ensure_utc(value: datetime | None) -> datetime | None:
@@ -637,23 +618,20 @@ class RunExecutionService:
         }
         stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
 
-        outcome_statuses = (
-            _promote_startable_optional_stages(stage_status_by_name)
-            if run.run_type == DocumentRunType.TRANSLATE_FULL
-            else stage_status_by_name
-        )
-        outcome = classify_run_outcome(outcome_statuses)
+        required_stages = required_stages_for_run_type(run.run_type.value)
+        optional_stages = frozenset(PIPELINE_STAGES) - required_stages
+        outcome = classify_run_outcome(stage_status_by_name, required_stages)
 
         if outcome == RunOutcome.FAILED:
             failed_required_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in REQUIRED_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in required_stages
             ]
             failed_optional_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in optional_stages
             ]
             return self.control_service.fail_run_system(
                 run_id,
@@ -683,7 +661,7 @@ class RunExecutionService:
             failed_optional_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in optional_stages
             ]
             return self.control_service.succeed_run_with_warnings_system(
                 run_id,

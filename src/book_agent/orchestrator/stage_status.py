@@ -55,12 +55,13 @@ PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
 # ``FAILED`` downgrades the run to ``SUCCEEDED_WITH_WARNINGS`` instead of
 # failing the whole pipeline.
 #
-# Today ``translate`` is the only strictly required stage — without a
-# translated ledger there is no artifact to hand off. Review and the two
-# export stages are treated as optional because the operator may not have
-# requested them (single-lang output, HTML-only, etc.). P0.2b/P0.2c will
-# widen this to per-run configuration once the UI can surface the choice;
-# until then, "missing work_items ⇒ not requested" is the single rule.
+# Required stages depend on the run type (``required_stages_for_run_type``).
+# ``translate`` is always required — without a translated ledger there is no
+# artifact to hand off. TRANSLATE_FULL runs always seed review and both
+# exports, so for them every stage is required and a failed review fails the
+# run. For other run types review/exports are optional: never started means
+# "not requested", and an optional failure downgrades to
+# SUCCEEDED_WITH_WARNINGS.
 REQUIRED_PIPELINE_STAGES: frozenset[str] = frozenset({"translate"})
 OPTIONAL_PIPELINE_STAGES: frozenset[str] = frozenset(
     {"review", "bilingual_html", "merged_html"}
@@ -412,8 +413,21 @@ class RunOutcome(str, Enum):
     FAILED = "failed"
 
 
+def required_stages_for_run_type(run_type: str) -> frozenset[str]:
+    """Stages a run of ``run_type`` must complete to succeed.
+
+    A TRANSLATE_FULL run always seeds review and both exports, so its
+    deliverable is the export: all pipeline stages are required. Other run
+    types only require translate.
+    """
+    if run_type == "translate_full":
+        return frozenset(PIPELINE_STAGES)
+    return REQUIRED_PIPELINE_STAGES
+
+
 def classify_run_outcome(
     stage_status_by_name: Mapping[str, StageStatus],
+    required_stages: frozenset[str] = REQUIRED_PIPELINE_STAGES,
 ) -> RunOutcome:
     """Pure-function reduction of per-stage status → run terminal intent.
 
@@ -433,12 +447,14 @@ def classify_run_outcome(
     Phase 3 introduces it before the classifier gets taught about it.
     """
 
+    optional_stages = frozenset(PIPELINE_STAGES) - required_stages
+
     def status_of(stage: str) -> StageStatus | None:
         return stage_status_by_name.get(stage)
 
     required_failed = [
         stage
-        for stage in REQUIRED_PIPELINE_STAGES
+        for stage in required_stages
         if status_of(stage) == StageStatus.FAILED
     ]
     if required_failed:
@@ -446,7 +462,7 @@ def classify_run_outcome(
 
     required_not_succeeded = [
         stage
-        for stage in REQUIRED_PIPELINE_STAGES
+        for stage in required_stages
         if status_of(stage) != StageStatus.SUCCEEDED
     ]
     if required_not_succeeded:
@@ -454,7 +470,7 @@ def classify_run_outcome(
 
     optional_running = [
         stage
-        for stage in OPTIONAL_PIPELINE_STAGES
+        for stage in optional_stages
         if status_of(stage) == StageStatus.RUNNING
     ]
     if optional_running:
@@ -462,7 +478,7 @@ def classify_run_outcome(
 
     optional_failed = [
         stage
-        for stage in OPTIONAL_PIPELINE_STAGES
+        for stage in optional_stages
         if status_of(stage) == StageStatus.FAILED
     ]
     if optional_failed:

@@ -22,10 +22,12 @@ if str(SRC) not in sys.path:
 
 from book_agent.orchestrator.stage_status import (
     OPTIONAL_PIPELINE_STAGES,
+    PIPELINE_STAGES,
     REQUIRED_PIPELINE_STAGES,
     RunOutcome,
     StageStatus,
     classify_run_outcome,
+    required_stages_for_run_type,
 )
 
 
@@ -164,6 +166,24 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
             ),
             RunOutcome.RUNNING,
         )
+
+
+    def test_translate_full_requires_every_pipeline_stage(self) -> None:
+        self.assertEqual(required_stages_for_run_type("translate_full"), frozenset(PIPELINE_STAGES))
+        self.assertEqual(required_stages_for_run_type("translate_targeted"), REQUIRED_PIPELINE_STAGES)
+
+    def test_failed_review_fails_run_when_review_is_required(self) -> None:
+        statuses = {
+            "translate": StageStatus.SUCCEEDED,
+            "review": StageStatus.FAILED,
+            "bilingual_html": StageStatus.NOT_STARTED,
+            "merged_html": StageStatus.NOT_STARTED,
+        }
+        self.assertEqual(
+            classify_run_outcome(statuses, required_stages_for_run_type("translate_full")),
+            RunOutcome.FAILED,
+        )
+        self.assertEqual(classify_run_outcome(statuses), RunOutcome.SUCCEEDED_WITH_WARNINGS)
 
 
 if __name__ == "__main__":

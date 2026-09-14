@@ -264,10 +264,12 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         # SUCCEEDED + has_warnings=true flag (the P0.2a interim). The
         # failed optional stage is still recorded in the last-control
         # payload so the UI can surface a degraded-completion badge.
+        # Review is optional only for run types other than TRANSLATE_FULL.
         _, run_id = self._seed(
             translated_packet_count=1,
             built_packet_count=0,
             translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
         )
         with self.session_factory() as session:
             session.add(
@@ -291,6 +293,35 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         detail = last_control.get("detail_json") or {}
         self.assertEqual(detail.get("run_outcome"), "succeeded_with_warnings")
         self.assertEqual(detail.get("failed_optional_stages"), ["review"])
+
+    def test_translate_full_run_fails_when_review_failed(self) -> None:
+        # A TRANSLATE_FULL run's deliverable is the export; a failed review
+        # means nothing was delivered, so the run fails instead of
+        # soft-succeeding.
+        _, run_id = self._seed(
+            translated_packet_count=1,
+            built_packet_count=0,
+            translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+        )
+        with self.session_factory() as session:
+            session.add(
+                WorkItem(
+                    run_id=run_id,
+                    stage=WorkItemStage.REVIEW,
+                    scope_type=WorkItemScopeType.DOCUMENT,
+                    scope_id=str(uuid4()),
+                    status=WorkItemStatus.TERMINAL_FAILED,
+                    attempt=1,
+                    priority=100,
+                )
+            )
+            session.commit()
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "failed")
+        detail = (summary.status_detail_json.get("last_control") or {}).get("detail_json") or {}
+        self.assertEqual(detail.get("failed_required_stages"), ["review"])
 
     def test_run_fails_when_translate_work_item_terminal_failed(self) -> None:
         # Evidence-driven failure: TERMINAL_FAILED work_item makes

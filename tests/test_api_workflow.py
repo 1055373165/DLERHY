@@ -1263,9 +1263,8 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(resumed.status_code, 200)
 
         terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
-        # Review is an optional stage for run classification, so a failed review
-        # ends the run as succeeded_with_warnings (see orchestrator.stage_status).
-        self.assertEqual(terminal["status"], "succeeded_with_warnings")
+        # Review is required for TRANSLATE_FULL runs: unresolved blockers fail the run.
+        self.assertEqual(terminal["status"], "failed")
 
         with self.session_factory() as session:
             remaining_blocking_issue_count = session.scalar(
