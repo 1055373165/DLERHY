@@ -38,6 +38,10 @@ class ClaimedWorkItemBundle:
     worker_lease: WorkerLease
 
 
+class LeaseLostError(ValueError):
+    """The worker no longer holds the lease for its work item (expired or reclaimed)."""
+
+
 class RunControlRepository:
     def __init__(self, session: Session):
         self.session = session
@@ -367,7 +371,26 @@ class RunControlRepository:
             )
         )
         if lease is None:
-            raise ValueError(f"Active worker lease not found: {lease_token}")
+            raise LeaseLostError(f"Active worker lease not found: {lease_token}")
+        return lease
+
+    def lock_active_lease(self, lease_token: str) -> WorkerLease:
+        """Lock the active lease row until the current transaction ends.
+
+        Committing a worker's results while holding this lock means a
+        concurrent lease reclaim waits for the commit instead of handing the
+        work item to another worker mid-write.
+        """
+        lease = self.session.scalar(
+            select(WorkerLease)
+            .where(
+                WorkerLease.lease_token == lease_token,
+                WorkerLease.status == WorkerLeaseStatus.ACTIVE,
+            )
+            .with_for_update()
+        )
+        if lease is None:
+            raise LeaseLostError(f"Active worker lease not found: {lease_token}")
         return lease
 
     def mark_work_item_running(

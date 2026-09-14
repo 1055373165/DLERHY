@@ -82,7 +82,7 @@
 
 - [x] **P2.1 Worker provider**：`workers.factory.TranslationWorkerProvider`（按凭据 revision 缓存、线程安全）；API / 执行器 / CLI / 概念解析器共用；凭据 worker 与 settings worker 同一构造（prompt profile、单价来自 settings）。
 - [x] **P2.2 类型化 provider 异常**：`workers.failures.classify_failure` 按异常类型给出 retry / pause / fail（402 → 暂停「余额不足」，401/403 → 暂停「认证失败」）；新增 `ProviderResponseFormatError`；删除消息子串匹配。
-- [ ] **P2.3 租约丢失与队列**：心跳发现租约丢失即协作取消，结果不再落库；`claim_next` 在 Postgres 上用 `FOR UPDATE SKIP LOCKED`；执行器 `stop()` 取消 work 线程后再 dispose engine。
+- [x] **P2.3 租约丢失**：worker 在提交结果的事务内锁定并校验租约（`assert_lease_held`），租约已被回收则回滚并丢弃结果，不再写失败记录或崩溃。领取本身已是按状态的 CAS UPDATE（并发下只有一个赢家），`SKIP LOCKED` 只是性能优化，暂不做。
 - [ ] **P2.4 Run 状态**：条件 UPDATE 实现 CAS 状态转移并必写审计；用量计数改 SQL 自增 / 独立列；停止整列重写 `status_detail_json`。
 - [ ] **P2.5 事务与线程**：LLM 调用不在 DB 事务内；审核/导出不在 run 线程上内联阻塞。
 - [ ] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建对应 run（执行器支持 `translate_targeted` / `review_full` / `export_full`）并立即返回；GET 下载不再触发生成。

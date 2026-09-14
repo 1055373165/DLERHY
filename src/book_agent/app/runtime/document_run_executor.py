@@ -28,7 +28,7 @@ from book_agent.domain.models import Block, Chapter
 from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
-from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.infra.repositories.run_control import LeaseLostError, RunControlRepository
 from book_agent.orchestrator.frontier_plan import TranslateFrontierPlan
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
@@ -597,7 +597,11 @@ class DocumentRunExecutor:
         self._execute_claimed_work_item(
             run_id=run_id,
             claimed=claimed,
-            worker_fn=lambda: self._translate_single_packet(claimed.scope_id, run_id=run_id),
+            worker_fn=lambda: self._translate_single_packet(
+                claimed.scope_id,
+                run_id=run_id,
+                lease_token=claimed.lease_token,
+            ),
             on_success=self._complete_translate_success,
             lease_seconds=self.lease_seconds,
         )
@@ -656,6 +660,7 @@ class DocumentRunExecutor:
                     "blocker_repair_execution_count": len(repair_result.executions),
                     "remaining_blocking_issue_count": remaining_blocking_issue_count,
                 }
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
             if remaining_blocking_issue_count > 0:
                 self._update_pipeline_stage(
                     run_id,
@@ -727,6 +732,7 @@ class DocumentRunExecutor:
                     auto_execute_followup_on_gate=True,
                     max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
                 )
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
             return {
                 "document_id": document_id,
                 "export_type": export_type.value,
@@ -807,6 +813,16 @@ class DocumentRunExecutor:
             heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
             on_success(payload, claimed.lease_token)
             self.wake(run_id)
+        except LeaseLostError:
+            stop_event.set()
+            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
+            # The lease expired and the work item was reclaimed; its new owner
+            # records the outcome, so discard this attempt without touching it.
+            logger.warning(
+                "Work item %s lost its lease; discarded this attempt's result",
+                claimed.work_item_id,
+            )
+            self.wake(run_id)
         except Exception as exc:
             stop_event.set()
             heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
@@ -817,7 +833,13 @@ class DocumentRunExecutor:
                 stage_key=stage_key or claimed.stage,
             )
 
-    def _translate_single_packet(self, packet_id: str, *, run_id: str | None = None) -> dict[str, Any]:
+    def _translate_single_packet(
+        self,
+        packet_id: str,
+        *,
+        run_id: str | None = None,
+        lease_token: str | None = None,
+    ) -> dict[str, Any]:
         with session_scope(self.session_factory) as session:
             workflow = self._workflow_service(session)
             packet = session.get(TranslationPacket, packet_id)
@@ -837,6 +859,10 @@ class DocumentRunExecutor:
                 auto_commit_memory=False,
                 run_id=run_id,
             )
+            if lease_token is not None:
+                # The LLM call may outlive the lease; only commit results while
+                # this worker still owns the work item.
+                self._run_execution_service(session).assert_lease_held(lease_token=lease_token)
             translation_run = artifacts.translation_run
             return {
                 "packet_id": packet_id,
@@ -1415,6 +1441,7 @@ class DocumentRunExecutor:
                         lease_seconds=lease_seconds,
                     )
                 if not alive:
+                    logger.warning("Lease %s is no longer active; stopping heartbeat", lease_token)
                     return
             except Exception:
                 logger.warning("Heartbeat failed for lease %s", lease_token, exc_info=True)

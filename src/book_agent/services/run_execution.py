@@ -258,6 +258,10 @@ class RunExecutionService:
         )
         return self._to_claimed_run_work_item(ClaimedWorkItemBundle(work_item=work_item, worker_lease=lease))
 
+    def assert_lease_held(self, *, lease_token: str) -> None:
+        """Raise LeaseLostError unless the lease is still active; locks it for this transaction."""
+        self.repository.lock_active_lease(lease_token)
+
     def heartbeat_work_item(
         self,
         *,
