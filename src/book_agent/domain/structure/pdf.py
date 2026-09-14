@@ -1153,6 +1153,8 @@ class PdfStructureRecoveryService:
         text = _normalize_text(raw_block.text)
         zone = self._page_zone(raw_block.bbox, page.height)
         signature = _header_footer_signature(text)
+        if raw_block.ruled_table:
+            return "table_like"
         if zone == "top" and ((zone, signature) in repeated_edge_text):
             return "header"
         if zone == "bottom" and (_is_page_number_text(text) or (zone, signature) in repeated_edge_text):
@@ -1461,6 +1463,8 @@ class PdfStructureRecoveryService:
     def _merge_blocks(self, previous: _RecoveredBlock, current: _RecoveredBlock) -> _RecoveredBlock:
         flags = [*previous.flags]
         code_merge = previous.block_type == BlockType.CODE and current.block_type == BlockType.CODE
+        # Table rows are lines; joining them with a space flattens the grid.
+        line_merge = code_merge or (previous.block_type == BlockType.TABLE and current.block_type == BlockType.TABLE)
         if code_merge:
             previous_text = previous.text.rstrip("\n")
             current_text = current.text.lstrip("\n")
@@ -1472,7 +1476,7 @@ class PdfStructureRecoveryService:
             merged_text = previous_text[:-1] + current_text
             flags.append("dehyphenated")
         else:
-            separator = "\n" if code_merge else ("" if previous_text.endswith(" ") else " ")
+            separator = "\n" if line_merge else ("" if previous_text.endswith(" ") else " ")
             merged_text = previous_text + separator + current_text
 
         if current.page_start > previous.page_end:
@@ -2482,11 +2486,11 @@ class PdfStructureRecoveryService:
             return False
         if previous.block_type != BlockType.TABLE or current.block_type != BlockType.TABLE:
             return False
-        if previous.source_path != current.source_path:
-            return False
 
         # --- Same-page merge (original logic) ---
         if previous.page_end == current.page_start:
+            if previous.source_path != current.source_path:
+                return False
             if previous.page_start != current.page_start or previous.page_end != current.page_end:
                 return False
             if previous.page_start != previous.page_end:

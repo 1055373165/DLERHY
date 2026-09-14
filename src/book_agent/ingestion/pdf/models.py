@@ -118,6 +118,8 @@ class PdfTextBlock:
     # Per entry of ``line_texts``: (dominant font size, every span bold).
     # Empty when the extractor has no span-level font information.
     line_styles: tuple[tuple[float, bool], ...] = ()
+    # Text is "| cell | cell |" rows recovered from a ruled (vector-lined) table grid.
+    ruled_table: bool = False
 
 
 @dataclass(slots=True, frozen=True)

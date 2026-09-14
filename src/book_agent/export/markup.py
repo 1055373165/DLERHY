@@ -256,7 +256,13 @@ def parse_structured_table_rows(text: str) -> tuple[list[str], list[list[str]]] 
 
 
 def split_table_candidate_line(line: str) -> list[str] | None:
-    stripped = line.strip().strip("|").strip()
+    bare = line.strip()
+    if len(bare) > 2 and bare.startswith("|") and bare.endswith("|"):
+        # A fully delimited row keeps its empty cells so later cells stay in their columns.
+        cells = [cell.strip() for cell in bare[1:-1].split("|")]
+        if len(cells) >= 2 and any(cells):
+            return cells
+    stripped = bare.strip("|").strip()
     if not stripped:
         return None
     if "|" in stripped:

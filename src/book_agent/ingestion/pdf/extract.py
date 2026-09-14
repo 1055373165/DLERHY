@@ -44,6 +44,47 @@ def _span_is_bold(span: dict[str, Any]) -> bool:
     return bool(int(span.get("flags", 0) or 0) & 16) or bool(_BOLD_FONT_NAME.search(str(span.get("font", ""))))
 
 
+_MIN_RULED_TABLE_CELLS = 4
+_MAX_RULED_TABLE_AVG_CELL_CHARS = 80
+
+
+def _has_ruling_grid(drawings: list[dict[str, Any]]) -> bool:
+    """At least three horizontal and two vertical rules (lines or hairline rectangles)."""
+    horizontal = vertical = 0
+    for drawing in drawings:
+        for item in drawing.get("items") or ():
+            kind = item[0]
+            if kind == "l":
+                start, end = item[1], item[2]
+                width, height = abs(end.x - start.x), abs(end.y - start.y)
+            elif kind == "re":
+                rect = item[1]
+                width, height = abs(rect.width), abs(rect.height)
+            else:
+                continue
+            if width >= 8.0 and height <= 2.0:
+                horizontal += 1
+            elif height >= 8.0 and width <= 2.0:
+                vertical += 1
+            if horizontal >= 3 and vertical >= 2:
+                return True
+    return False
+
+
+def _table_cell_text(cell: Any) -> str:
+    # Merged cells come back as None; "|" would split the recovered row.
+    return " ".join(str(cell or "").split()).replace("|", "/")
+
+
+def _looks_like_data_table(rows: list[list[str]]) -> bool:
+    if len(rows) < 2 or max((len(row) for row in rows), default=0) < 2:
+        return False
+    cells = [cell for row in rows for cell in row if cell]
+    if len(cells) < _MIN_RULED_TABLE_CELLS:
+        return False
+    return sum(len(cell) for cell in cells) / len(cells) <= _MAX_RULED_TABLE_AVG_CELL_CHARS
+
+
 class PdfTextExtractor(Protocol):
     def extract(self, file_path: str | Path) -> PdfExtraction:
         ...
@@ -190,11 +231,17 @@ class PyMuPDFTextExtractor:
                         )
                     )
 
+                try:
+                    drawings = page.get_drawings()
+                except Exception:
+                    drawings = []
+                blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 image_blocks.extend(
                     self._extract_vector_drawing_blocks(
                         page,
                         page_number=page_index + 1,
                         start_block_number=len(text_dict.get("blocks", [])) + 1,
+                        drawings=drawings,
                     )
                 )
 
@@ -237,11 +284,13 @@ class PyMuPDFTextExtractor:
         *,
         page_number: int,
         start_block_number: int,
+        drawings: list[dict[str, Any]] | None = None,
     ) -> list[PdfImageBlock]:
-        try:
-            drawings = page.get_drawings()
-        except Exception:
-            return []
+        if drawings is None:
+            try:
+                drawings = page.get_drawings()
+            except Exception:
+                return []
 
         page_width = float(page.rect.width)
         page_height = float(page.rect.height)
@@ -268,6 +317,65 @@ class PyMuPDFTextExtractor:
                 )
             )
         return image_blocks
+
+    def _merge_ruled_table_blocks(
+        self,
+        page: Any,
+        blocks: list[PdfTextBlock],
+        drawings: list[dict[str, Any]],
+    ) -> list[PdfTextBlock]:
+        """Replace the per-cell text blocks of a ruled table with one block of pipe rows.
+
+        PyMuPDF emits every cell of a vector-lined table as its own text line,
+        so the table otherwise reaches recovery as a column of numbers.
+        ``find_tables`` is slow, so it only runs on pages whose drawings form
+        a grid of horizontal and vertical rules.
+        """
+        if not blocks or not _has_ruling_grid(drawings):
+            return blocks
+        try:
+            tables = page.find_tables().tables
+        except Exception:
+            return blocks
+        for table in tables:
+            try:
+                rows = [[_table_cell_text(cell) for cell in row] for row in table.extract()]
+            except Exception:
+                continue
+            rows = [row for row in rows if any(row)]
+            if not _looks_like_data_table(rows):
+                continue
+            x0, y0, x1, y1 = (float(value) for value in table.bbox)
+            members = [
+                block
+                for block in blocks
+                if x0 - 2 <= (block.bbox[0] + block.bbox[2]) / 2 <= x1 + 2
+                and y0 - 2 <= (block.bbox[1] + block.bbox[3]) / 2 <= y1 + 2
+            ]
+            if not members:
+                continue
+            row_lines = ["| " + " | ".join(row) + " |" for row in rows]
+            font_sizes = [block.font_size_avg for block in members if block.font_size_avg > 0]
+            table_block = PdfTextBlock(
+                page_number=members[0].page_number,
+                block_number=min(block.block_number for block in members),
+                text="\n".join(row_lines),
+                bbox=(x0, y0, x1, y1),
+                line_texts=row_lines,
+                span_count=sum(block.span_count for block in members),
+                line_count=len(row_lines),
+                font_size_min=min((block.font_size_min for block in members), default=0.0),
+                font_size_max=max((block.font_size_max for block in members), default=0.0),
+                font_size_avg=_safe_mean(font_sizes),
+                font_names=frozenset().union(*(block.font_names for block in members)),
+                ruled_table=True,
+            )
+            first_index = blocks.index(members[0])
+            member_ids = {id(block) for block in members}
+            remaining = [block for block in blocks if id(block) not in member_ids]
+            remaining.insert(min(first_index, len(remaining)), table_block)
+            blocks = remaining
+        return blocks
 
     def _looks_like_vector_drawing_figure_bbox(
         self,
