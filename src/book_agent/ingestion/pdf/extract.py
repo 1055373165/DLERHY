@@ -7,6 +7,7 @@ import ctypes
 import re
 import sys
 import zlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -71,6 +72,87 @@ def _has_ruling_grid(drawings: list[dict[str, Any]]) -> bool:
     return False
 
 
+_BULLET_MARK_MIN_SIZE = 1.5
+_BULLET_MARK_MAX_SIZE = 7.0
+_BULLET_MAX_GAP = 36.0
+
+
+def _vector_bullet_marks(drawings: list[dict[str, Any]]) -> list[tuple[float, float, float, float]]:
+    """Small filled, roughly square shapes: list bullets drawn as vector dots or squares."""
+    marks: list[tuple[float, float, float, float]] = []
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        if rect is None or drawing.get("fill") is None:
+            continue
+        width, height = float(rect[2]) - float(rect[0]), float(rect[3]) - float(rect[1])
+        if not (_BULLET_MARK_MIN_SIZE <= width <= _BULLET_MARK_MAX_SIZE):
+            continue
+        if not (_BULLET_MARK_MIN_SIZE <= height <= _BULLET_MARK_MAX_SIZE) or abs(width - height) > 1.5:
+            continue
+        marks.append((float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])))
+    return marks
+
+
+def _split_vector_bullet_blocks(
+    blocks: list[PdfTextBlock],
+    line_bboxes_by_block: dict[int, list[tuple[float, float, float, float]]],
+    drawings: list[dict[str, Any]],
+) -> list[PdfTextBlock]:
+    """Split a text block into list items at lines preceded by a vector bullet mark.
+
+    Such bullets are not in the text layer, so a whole bulleted list otherwise
+    arrives as one paragraph. Each item gets a "• " marker, the same text a
+    glyph bullet would have produced.
+    """
+    marks = _vector_bullet_marks(drawings)
+    if not marks:
+        return blocks
+    result: list[PdfTextBlock] = []
+    for block in blocks:
+        line_bboxes = line_bboxes_by_block.get(id(block))
+        if not line_bboxes or len(line_bboxes) != len(block.line_texts):
+            result.append(block)
+            continue
+        starts = [
+            any(
+                mark[2] <= bbox[0]
+                and bbox[0] - mark[2] <= _BULLET_MAX_GAP
+                and bbox[1] - 1.0 <= (mark[1] + mark[3]) / 2 <= bbox[3] + 1.0
+                for mark in marks
+            )
+            for bbox in line_bboxes
+        ]
+        if not any(starts):
+            result.append(block)
+            continue
+        segment_starts = [index for index, is_start in enumerate(starts) if is_start]
+        if segment_starts[0] != 0:
+            segment_starts.insert(0, 0)
+        for position, start in enumerate(segment_starts):
+            end = segment_starts[position + 1] if position + 1 < len(segment_starts) else len(line_bboxes)
+            segment_lines = list(block.line_texts[start:end])
+            if starts[start]:
+                segment_lines[0] = f"\u2022 {segment_lines[0]}"
+            segment_bboxes = line_bboxes[start:end]
+            result.append(
+                replace(
+                    block,
+                    text=_normalize_multiline_text("\n".join(segment_lines)),
+                    bbox=(
+                        min(bbox[0] for bbox in segment_bboxes),
+                        min(bbox[1] for bbox in segment_bboxes),
+                        max(bbox[2] for bbox in segment_bboxes),
+                        max(bbox[3] for bbox in segment_bboxes),
+                    ),
+                    line_texts=segment_lines,
+                    line_count=len(segment_lines),
+                    line_styles=block.line_styles[start:end],
+                    raw_text=None,
+                )
+            )
+    return result
+
+
 def _table_cell_text(cell: Any) -> str:
     # Merged cells come back as None; "|" would split the recovered row.
     return " ".join(str(cell or "").split()).replace("|", "/")
@@ -120,6 +202,7 @@ class PyMuPDFTextExtractor:
                 page = document.load_page(page_index)
                 text_dict = page.get_text("dict", sort=False)
                 blocks: list[PdfTextBlock] = []
+                line_bboxes_by_block: dict[int, list[tuple[float, float, float, float]]] = {}
                 image_blocks: list[PdfImageBlock] = []
                 for block_number, block in enumerate(text_dict.get("blocks", []), start=1):
                     if block.get("type") == 1:
@@ -162,6 +245,7 @@ class PyMuPDFTextExtractor:
                     mono_span_count = 0
                     total_span_count = 0
                     line_styles: list[tuple[float, bool]] = []
+                    line_bboxes: list[tuple[float, float, float, float]] = []
                     for line in block.get("lines", []):
                         parts: list[str] = []
                         size_weights: dict[float, int] = {}
@@ -189,6 +273,7 @@ class PyMuPDFTextExtractor:
                             lines.append(normalized_line)
                             dominant_size = max(size_weights, key=size_weights.__getitem__) if size_weights else 0.0
                             line_styles.append((dominant_size, line_bold and bool(size_weights)))
+                            line_bboxes.append(tuple(float(value) for value in line.get("bbox", (0, 0, 0, 0))))
 
                     text = _normalize_multiline_text("\n".join(lines))
                     if not text:
@@ -230,11 +315,13 @@ class PyMuPDFTextExtractor:
                             line_styles=tuple(line_styles),
                         )
                     )
+                    line_bboxes_by_block[id(blocks[-1])] = line_bboxes
 
                 try:
                     drawings = page.get_drawings()
                 except Exception:
                     drawings = []
+                blocks = _split_vector_bullet_blocks(blocks, line_bboxes_by_block, drawings)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 image_blocks.extend(
                     self._extract_vector_drawing_blocks(
