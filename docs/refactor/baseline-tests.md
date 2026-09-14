@@ -1,133 +1,35 @@
-# Test baseline (pre-refactor, commit 2890024)
+# 测试基线
 
-Collected 2026-09-14 by running each test file in its own process (full single-process run segfaults in test_api_workflow).
-Totals over files that completed: **1043 passed / 44 failed / 5 errors**; 2 files fail at collection; test_api_workflow segfaults.
+## 当前基线（P0 完成后，2026-09-14）
 
-Any failure NOT listed here is a regression.
+逐文件独立进程运行（`ls tests/test_*.py | xargs -P 6 -n 1 …`，见 [PLAN.md](PLAN.md) 的工作原则）：
 
-## tests/test_api_deps.py
+**994 passed · 0 failed · 4 xfailed · 30 skipped**
 
-- summary: `2 failed, 2 passed in 12.22s`
-- FAILED ApiDepsTests::test_non_sqlite_database_error_message_keeps_pg_guidance
-- FAILED ApiDepsTests::test_sqlite_database_locked_error_message_is_specific
+任何新的失败都是回归；xfail 意外通过（XPASS）也需要处理：修复已落地时移除标记。
 
-## tests/test_api_workflow.py
+### 跳过（需显式开启）
 
-- summary (original): segfault after 43 tests (StaticPool shared one sqlite3 connection across executor threads)
-- after P0.1/P0.2 (file SQLite without StaticPool, executor uses resolved worker): `11 failed, 43 passed`
-- pre-existing failures (all verified failing on the original code as well):
-- FAILED test_export_download_bundles_multi_chapter_exports_as_zip
-- FAILED test_export_download_includes_epub_asset_sidecars
-- FAILED test_failed_review_persists_partial_repair_progress
-- FAILED test_image_only_cover_chapter_does_not_block_review_or_export
-- FAILED test_merged_html_export_backfills_translated_document_title_and_uses_human_download_name
-- FAILED test_merged_html_export_renders_prose_and_code_with_different_modes
-- FAILED test_merged_html_export_renders_structured_artifacts_with_special_modes
-- FAILED test_retry_run_recovers_stale_failed_stage_run_still_marked_running
-- FAILED test_translate_executor_defaults_to_single_worker_on_sqlite_without_budget_override
-- FAILED test_translate_full_run_executes_review_and_exports_in_background (run now succeeds; merged export not ready)
-- FAILED test_translate_full_run_repairs_document_blockers_before_export (now times out in blocker repair loop)
+`BOOK_AGENT_RUN_PG_TESTS=1` 且 `BOOK_AGENT_DATABASE_URL` 指向 PostgreSQL 时运行：
 
-## tests/test_app_runtime.py
+- `tests/test_postgres_workflow_integration.py`（22）
+- `tests/test_events_bus.py`（5）
+- `tests/test_run_stream_sse.py`（2，另需 events 表）
+- `tests/test_postgres_schema_drift.py`（1，在临时库上迁移并比对 ORM）
 
-- summary: `1 error in 12.40s`
-ERROR tests/test_app_runtime.py
+### 预期失败（已知缺陷，附原因）
 
-## tests/test_forge_migrate.py
+| 测试 | 原因 | 后续 |
+|---|---|---|
+| `test_api_workflow.py::test_export_download_bundles_multi_chapter_exports_as_zip` | 双语整书下载被映射到纯中文的 merged 版本 | P4 双语整书下载 |
+| `test_persistence_and_review.py::test_workflow_review_auto_executes_packet_scoped_stale_brief_followups_when_concept_autolock_fails` | 源文本不变时重建章节摘要无法消除 STALE_CHAPTER_BRIEF；过去仅因句子乱序偶然通过 | P3.4 记忆 / 摘要策略 |
+| `test_pdf_support.py::test_bootstrap_pipeline_recovers_chapters_when_intro_cue_is_embedded_in_body_block` | PyMuPDF 提取下漏识别第 3 页引言提示（Basic 提取器下通过） | P3.3 |
+| `test_pdf_support.py::test_bootstrap_pipeline_labels_frontmatter_before_first_intro_chapter` | 跨页正文合并（cd3092e）抹掉前言页族；章节标题吸入正文（fda01fd 起） | P3.3 |
 
-- summary: `1 failed, 1 passed in 3.46s`
-- FAILED ForgeMigrateTests::test_migration_imports_state_and_syncs_framework_docs
+## P0 期间的变化摘要
 
-## tests/test_minimal_pipeline_smoke.py
+起点（`main@2890024`）：1043 passed / 44 failed / 5 errors，2 个文件无法收集，`test_api_workflow` 段错误。
 
-- summary: `2 errors in 17.19s`
-- ERROR MinimalPipelineSmokeTests::test_minimal_epub_full_pipeline_smoke
-- ERROR MinimalPipelineSmokeTests::test_minimal_pdf_full_pipeline_smoke
-
-## tests/test_minimal_pipeline_smoke_script.py
-
-- summary: `1 failed in 17.10s`
-- FAILED MinimalPipelineSmokeScriptTests::test_script_runs_all_cases_and_writes_report
-
-## tests/test_patch_review.py
-
-- summary: `5 failed, 5 errors in 21.97s`
-- ERROR PatchReviewServiceTests::test_approve_emits_event_and_stamps_fields
-- ERROR PatchReviewServiceTests::test_empty_reviewer_rejected
-- ERROR PatchReviewServiceTests::test_list_and_get_roundtrip
-- ERROR PatchReviewServiceTests::test_reject_terminal
-- ERROR PublishGateTests::test_validated_patch_awaiting_review_is_blocked
-- FAILED PatchReviewServiceTests::test_approve_emits_event_and_stamps_fields
-- FAILED PatchReviewServiceTests::test_empty_reviewer_rejected
-- FAILED PatchReviewServiceTests::test_list_and_get_roundtrip
-- FAILED PatchReviewServiceTests::test_reject_terminal
-- FAILED PublishGateTests::test_validated_patch_awaiting_review_is_blocked
-
-## tests/test_pdf_scan_corpus_acceptance.py
-
-- summary: `2 failed in 0.58s`
-- FAILED PdfScanCorpusAcceptanceTests::test_locked_larger_corpus_acceptance_passes_phase3_thresholds
-- FAILED PdfScanCorpusAcceptanceTests::test_locked_larger_corpus_acceptance_snapshot_records_frozen_baseline_values
-
-## tests/test_pdf_support.py
-
-- summary: `14 failed, 177 passed, 20 warnings, 6 subtests passed in 1614.59s (0:26:54)`
-- FAILED BasicPdfOutlineRecoveryTests::test_recovery_prefers_academic_heading_split_for_embedded_numbered_section
-- FAILED BasicPdfOutlineRecoveryTests::test_uv_surya_ocr_runner_writes_status_snapshots_during_execution
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_classifies_page_families_and_splits_special_sections
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_cleans_noisy_inline_academic_section_headings
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_labels_frontmatter_before_first_intro_chapter
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_recovers_chapters_when_intro_cue_is_embedded_in_body_block
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_recovers_inline_academic_section_headings
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_repairs_broken_academic_heading_tail_before_body
-- FAILED PdfBootstrapPipelineTests::test_bootstrap_pipeline_uses_toc_entries_to_recover_chapters
-- FAILED PdfBootstrapPipelineTests::test_parser_recovers_title_and_references_for_single_column_research_paper
-- FAILED PdfBootstrapPipelineTests::test_recovery_merges_cross_page_code_continuations_across_footer_separators
-- FAILED PdfBootstrapPipelineTests::test_toc_recovery_reconciles_printed_page_numbers_with_pdf_offset
-- FAILED PdfProfilerTests::test_bootstrap_pipeline_resolves_document_book_title_from_source_filename_for_outlined_book
-- FAILED PdfReviewTests::test_medium_risk_pdf_creates_structure_review_issue
-
-## tests/test_persistence_and_review.py
-
-- summary: `11 failed, 128 passed in 105.29s (0:01:45)`
-- FAILED PersistenceAndReviewTests::test_export_service_rebuilt_epub_rejects_non_epub_source_document
-- FAILED PersistenceAndReviewTests::test_export_service_reflow_splits_inline_call_keyword_arguments_after_open_paren
-- FAILED PersistenceAndReviewTests::test_render_blocks_demote_reference_listing_code_block_and_preserve_entry_breaks
-- FAILED PersistenceAndReviewTests::test_render_blocks_promote_wrapped_shell_command_to_code_and_split_trailing_prose
-- FAILED PersistenceAndReviewTests::test_review_skips_image_only_cover_packet_missing_title_context_failure
-- FAILED PersistenceAndReviewTests::test_workflow_exports_merged_markdown_with_assets
-- FAILED PersistenceAndReviewTests::test_workflow_review_auto_executes_multi_packet_unlocked_concept_followups_without_chapter_rerun
-- FAILED PersistenceAndReviewTests::test_workflow_review_auto_executes_packet_scoped_stale_brief_followups_when_concept_autolock_fails
-- FAILED PersistenceAndReviewTests::test_workflow_review_auto_executes_single_packet_unlocked_concept_followups
-- FAILED PersistenceAndReviewTests::test_workflow_review_does_not_run_stale_brief_followup_when_concept_autolock_succeeds
-- FAILED PersistenceAndReviewTests::test_workflow_review_unlocked_concept_followup_uses_default_concept_resolver
-
-## tests/test_phase3_integration_gate.py
-
-- summary: `2 failed, 1 passed in 9.38s`
-- FAILED Phase3IntegrationGateTests::test_phase3_integration_gate_keeps_locked_larger_corpus_acceptance_green
-- FAILED Phase3IntegrationGateTests::test_phase3_integration_snapshot_records_lane_acceptance_matrix_and_contract_coverage
-
-## tests/test_req_ex_02_export_misrouting_self_heal.py
-
-- summary: `1 failed in 12.39s`
-- FAILED ReqEx02ExportMisroutingSelfHealTests::test_req_ex_02_export_misrouting_self_heal_closes_loop
-
-## tests/test_run_execution.py
-
-- summary: `3 failed, 20 passed in 5.03s`
-- FAILED RunExecutionServiceTests::test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_review
-- FAILED RunExecutionServiceTests::test_recover_export_misrouting_rebinds_run_to_effective_bundle_revision
-- FAILED RunExecutionServiceTests::test_run_execution_success_lifecycle_updates_usage_and_terminal_state
-
-## tests/test_translate_agent_benchmark_execution.py
-
-- summary: `5 warnings, 1 error in 0.24s`
-ERROR tests/test_translate_agent_benchmark_execution.py
-
-## tests/test_translation_worker_abstraction.py
-
-- summary: `2 failed, 67 passed in 22.76s`
-- FAILED TranslationWorkerAbstractionTests::test_packet_experiment_scan_ranks_memory_rich_packets_first
-- FAILED TranslationWorkerAbstractionTests::test_packet_experiment_service_dry_run_exports_prompt_without_worker_output
-
+- **删除**：自愈层相关 34 个测试文件；依赖从未入库数据的测试（benchmark 执行、PDF 扫描语料验收、phase3 gate 两例、Postgres 版最小流水线 smoke）。
+- **修复的产品缺陷**（均有回归测试）：后台 run 使用 Echo worker；预算护栏未生效；执行器瞬时 DB 错误导致 run 失败；已翻译文档的 run 永久挂起；run 在审校/导出前被判成功；GET 写入被回滚；后台导出缺 CAS 印章（且 SQLite 上 UUID 匹配失败）；SSE 断连不释放连接；概念解析器 provider 错误中断审校；句子按随机 UUID 排序；代码/正文拆分片段类型错误；参考文献条目换行丢失；PDF 学术标题截断、单词前言标题、目录页成章、论文标题回退为文件名。
+- **测试卫生**：测试强制 echo 后端（不再读取 `.env` 发起真实计费调用）；每个测试进程使用独立临时目录并在退出时清理；`test_api_workflow` 不再用 StaticPool 共享 sqlite 连接。

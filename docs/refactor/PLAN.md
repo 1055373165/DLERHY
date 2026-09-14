@@ -45,9 +45,10 @@
 - [x] `ExportDocumentRequest.export_type` 增加 `zh_epub`（`bilingual_markdown` 等未实现类型留待 P4 决定）。
 
 ### P0.5 可信测试基线
-- [ ] 引入 `tests/conftest.py`（共享 SQLite session / app 夹具），测试临时目录按运行隔离并清理。
-- [ ] 修复或删除无法收集的测试（`test_app_runtime.py` 引用已删模块；`test_translate_agent_benchmark_execution.py` 依赖 `artifacts/`）。
-- [ ] 分拣 `baseline-tests.md` 中的旧失败：修复 / 标注 xfail（附原因）/ 随 P1 删除。
+- [x] 测试临时目录按进程隔离并在退出时清理；测试强制 echo 后端，不再读取 `.env` 发起真实 provider 调用。
+- [ ] 共享 SQLite session / app 夹具（`conftest.py`）并入 P3 的测试拆分。
+- [x] 修复或删除无法收集 / 依赖未入库数据的测试。
+- [x] 分拣旧失败：修复 13 个产品缺陷、更新过时测试、4 个 xfail 附原因；基线 994 passed / 0 failed（见 `baseline-tests.md`）。
 - [x] Postgres：`tests/test_postgres_schema_drift.py` 在临时库上 `alembic upgrade head` 并与 `Base.metadata` 比对表/列/可空性/索引（`BOOK_AGENT_RUN_PG_TESTS=1` 开启）。
 
 ---
