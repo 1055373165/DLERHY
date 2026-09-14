@@ -14,7 +14,9 @@ from book_agent.domain.models import Block, BookProfile, Chapter, Document, Memo
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.export import ExportRepository
 from book_agent.services.bootstrap import SegmentationService
-from book_agent.services.export import ExportService, MergedRenderBlock, _normalize_signature_text
+from book_agent.export.common import _normalize_signature_text
+from book_agent.export.models import MergedRenderBlock
+from book_agent.services.export import ExportService
 from book_agent.workers.contracts import ContextPacket
 from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
 

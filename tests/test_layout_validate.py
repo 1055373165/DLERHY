@@ -10,7 +10,7 @@ if str(SRC) not in sys.path:
 
 from book_agent.domain.enums import BlockType, SourceType
 from book_agent.infra.repositories.export import ChapterExportBundle
-from book_agent.services.export import MergedRenderBlock
+from book_agent.export.models import MergedRenderBlock
 from book_agent.services.layout_validate import LayoutValidationService
 
 

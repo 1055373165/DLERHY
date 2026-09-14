@@ -31,7 +31,8 @@ from book_agent.domain.models.review import IssueAction, ReviewIssue
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.export import ExportRepository
-from book_agent.services.export import ExportGateError, ExportService, MergedRenderBlock
+from book_agent.export.models import MergedRenderBlock
+from book_agent.services.export import ExportGateError, ExportService
 
 
 class ExportLayoutGateTests(unittest.TestCase):

@@ -87,7 +87,8 @@ from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.services.actions import IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts, BootstrapPipeline, IngestService, ParseService
-from book_agent.services.export import ExportGateError, ExportService, MergedRenderBlock
+from book_agent.export.models import MergedRenderBlock
+from book_agent.services.export import ExportGateError, ExportService
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
