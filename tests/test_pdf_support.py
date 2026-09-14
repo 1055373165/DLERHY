@@ -4426,8 +4426,6 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
 
     def test_recovery_prefers_academic_heading_split_for_embedded_numbered_section(self) -> None:
         service = PdfStructureRecoveryService()
-        # Academic heading splitting only runs in the academic_paper recovery lane.
-        service._current_recovery_lane = "academic_paper"
         block = _RecoveredBlock(
             role="body",
             block_type=BlockType.PARAGRAPH,
@@ -4447,10 +4445,12 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
             anchor="p3-b33",
         )
 
+        # Academic heading splitting only runs in the academic_paper recovery lane.
         repaired = service._split_embedded_page_heading_segments(
             block,
             is_first_substantive_page_block=False,
             page_has_heading=True,
+            academic_lane=True,
         )
 
         self.assertEqual(len(repaired), 2)

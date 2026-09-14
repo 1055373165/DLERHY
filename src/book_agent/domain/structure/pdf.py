@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter, defaultdict
-from dataclasses import replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any, Final
@@ -215,13 +216,6 @@ class PdfStructureRecoveryService:
         # Figure clustering config — None means defaults. Wired from
         # Settings in build_default_recovery_service.
         self._figure_cluster_config = figure_cluster_config
-        # Recovery lane set per ``recover()`` call from the profile.
-        # Used to gate academic-style heading detection (which produces
-        # false positives like "Training" → standalone heading in book
-        # prose, splitting a callout title's body into a single-word
-        # heading + corrupted body). Reset per call so the service stays
-        # safe to reuse across documents.
-        self._current_recovery_lane: str | None = None
 
     def recover(
         self,
@@ -229,45 +223,26 @@ class PdfStructureRecoveryService:
         extraction: PdfExtraction,
         profile: PdfFileProfile,
     ) -> ParsedDocument:
-        # Remember the lane so downstream block-shaping passes can gate
-        # academic-only heuristics correctly.
-        self._current_recovery_lane = profile.recovery_lane
         ordered_pages = sorted(extraction.pages, key=lambda page: page.page_number)
-        repeated_edge_text = self._find_repeated_edge_text(ordered_pages)
-        page_contexts = self._page_contexts(ordered_pages)
-        page_layout_assessments = self._page_layout_assessments(ordered_pages, profile, extraction.title)
+        context = RecoveryContext(
+            file_path=file_path,
+            extraction=extraction,
+            profile=profile,
+            ordered_pages=ordered_pages,
+            page_contexts=self._page_contexts(ordered_pages),
+            page_layout_assessments=self._page_layout_assessments(ordered_pages, profile, extraction.title),
+        )
+        page_contexts = context.page_contexts
+        page_layout_assessments = context.page_layout_assessments
         recovered_blocks = self._recover_blocks(
             ordered_pages,
-            repeated_edge_text,
+            self._find_repeated_edge_text(ordered_pages),
             page_contexts,
             extraction.outline_entries,
             profile,
         )
-        self._link_footnotes(recovered_blocks)
-        recovered_blocks = self._promote_inline_book_heading_blocks(recovered_blocks)
-        recovered_blocks = self._promote_contextual_image_legend_blocks(recovered_blocks, ordered_pages)
-        recovered_blocks = self._recover_embedded_page_heading_blocks(recovered_blocks)
-        recovered_blocks = self._recover_document_title_heading_blocks(recovered_blocks, extraction.title)
-        recovered_blocks = self._recover_academic_section_blocks(recovered_blocks, profile)
-        recovered_blocks = self._populate_missing_heading_levels(recovered_blocks)
-        recovered_blocks = self._merge_adjacent_heading_continuations(recovered_blocks, ordered_pages)
-        recovered_blocks = self._repair_prose_artifact_continuations(recovered_blocks, ordered_pages)
-        recovered_blocks = self._merge_same_anchor_code_continuations(recovered_blocks)
-        recovered_blocks = self._merge_cross_page_code_continuations(recovered_blocks, ordered_pages)
-        recovered_blocks = self._merge_cross_page_prose_continuations(recovered_blocks, ordered_pages)
-        recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
-        recovered_blocks = self._promote_late_code_like_bodies(recovered_blocks)
-        recovered_blocks = self._split_mixed_code_prose_blocks(recovered_blocks)
-        recovered_blocks = self._promote_late_table_like_bodies(recovered_blocks)
-        recovered_blocks = self._merge_adjacent_table_fragments(recovered_blocks, ordered_pages)
-        recovered_blocks = self._lock_listing_scope(recovered_blocks)
-        recovered_blocks = self._apply_figure_clustering(recovered_blocks)
-        recovered_blocks = self._recover_text_only_figures(recovered_blocks)
-        self._link_artifact_captions(recovered_blocks)
-        self._link_artifact_group_contexts(
-            recovered_blocks,
-            academic_paper=profile.recovery_lane == "academic_paper",
-        )
+        for block_pass in _BLOCK_RECOVERY_PASSES:
+            recovered_blocks = block_pass.run(self, recovered_blocks, context)
         chapters = self._build_chapters(
             recovered_blocks,
             extraction.outline_entries,
@@ -2669,6 +2644,8 @@ class PdfStructureRecoveryService:
     def _recover_embedded_page_heading_blocks(
         self,
         recovered_blocks: list[_RecoveredBlock],
+        *,
+        academic_lane: bool = False,
     ) -> list[_RecoveredBlock]:
         first_substantive_anchor_by_page: dict[int, str] = {}
         has_heading_by_page: dict[int, bool] = defaultdict(bool)
@@ -2690,6 +2667,7 @@ class PdfStructureRecoveryService:
                     first_substantive_anchor_by_page.get(block.page_start) == block.anchor
                 ),
                 page_has_heading=has_heading_by_page.get(block.page_start, False),
+                academic_lane=academic_lane,
             )
             for segment in segments:
                 reading_order_index += 1
@@ -2956,6 +2934,7 @@ class PdfStructureRecoveryService:
         *,
         is_first_substantive_page_block: bool,
         page_has_heading: bool,
+        academic_lane: bool = False,
     ) -> list[_RecoveredBlock]:
         if (
             block.role not in {"body", "code_like"}
@@ -3111,10 +3090,9 @@ class PdfStructureRecoveryService:
             # LLM..." (first word stolen, title destroyed). Gate by the
             # current recovery lane so book-lane parses keep the block
             # intact and let the book-style detectors run instead.
-            allow_academic = self._current_recovery_lane == "academic_paper"
             academic_heading = (
                 _next_academic_inline_heading(_normalize_multiline_text(block.text))
-                if allow_academic
+                if academic_lane
                 else None
             )
             if academic_heading is not None and academic_heading[0] == 0:
@@ -5098,3 +5076,88 @@ class PDFParser:
         else:
             effective_profile = self.profiler.profile_from_extraction(extraction)
         return self.recovery_service.recover(file_path, extraction, effective_profile)
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryContext:
+    """Per-document inputs shared by the block recovery passes (read-only)."""
+
+    file_path: str | Path
+    extraction: PdfExtraction
+    profile: PdfFileProfile
+    ordered_pages: list[PdfPage]
+    page_contexts: dict[int, _PageRecoveryContext]
+    page_layout_assessments: dict[int, _PageLayoutAssessment]
+
+    @property
+    def academic_lane(self) -> bool:
+        return self.profile.recovery_lane == "academic_paper"
+
+
+BlockPassFn = Callable[["PdfStructureRecoveryService", list[_RecoveredBlock], RecoveryContext], list[_RecoveredBlock]]
+
+
+@dataclass(frozen=True, slots=True)
+class BlockRecoveryPass:
+    name: str
+    run: BlockPassFn
+
+
+def _in_place(method_name: str, *context_args: str, **context_kwargs: str) -> BlockPassFn:
+    """Adapt a service method that links blocks in place (returns None)."""
+
+    def run(service, blocks, context):
+        getattr(service, method_name)(
+            blocks,
+            *(getattr(context, arg) for arg in context_args),
+            **{key: getattr(context, attr) for key, attr in context_kwargs.items()},
+        )
+        return blocks
+
+    return run
+
+
+def _returning(method_name: str, *context_args: str, **context_kwargs: str) -> BlockPassFn:
+    def run(service, blocks, context):
+        return getattr(service, method_name)(
+            blocks,
+            *(getattr(context, arg) for arg in context_args),
+            **{key: getattr(context, attr) for key, attr in context_kwargs.items()},
+        )
+
+    return run
+
+
+def _document_title_pass(service, blocks, context):
+    return service._recover_document_title_heading_blocks(blocks, context.extraction.title)
+
+
+# Ordered block-shaping passes run by PdfStructureRecoveryService.recover after
+# the per-page block recovery and before chapters are built.
+_BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
+    BlockRecoveryPass("link_footnotes", _in_place("_link_footnotes")),
+    BlockRecoveryPass("promote_inline_book_headings", _returning("_promote_inline_book_heading_blocks")),
+    BlockRecoveryPass("promote_contextual_image_legends", _returning("_promote_contextual_image_legend_blocks", "ordered_pages")),
+    BlockRecoveryPass(
+        "recover_embedded_page_headings",
+        _returning("_recover_embedded_page_heading_blocks", academic_lane="academic_lane"),
+    ),
+    BlockRecoveryPass("recover_document_title_headings", _document_title_pass),
+    BlockRecoveryPass("recover_academic_sections", _returning("_recover_academic_section_blocks", "profile")),
+    BlockRecoveryPass("populate_missing_heading_levels", _returning("_populate_missing_heading_levels")),
+    BlockRecoveryPass("merge_heading_continuations", _returning("_merge_adjacent_heading_continuations", "ordered_pages")),
+    BlockRecoveryPass("repair_prose_artifact_continuations", _returning("_repair_prose_artifact_continuations", "ordered_pages")),
+    BlockRecoveryPass("merge_same_anchor_code", _returning("_merge_same_anchor_code_continuations")),
+    BlockRecoveryPass("merge_cross_page_code", _returning("_merge_cross_page_code_continuations", "ordered_pages")),
+    BlockRecoveryPass("merge_cross_page_prose", _returning("_merge_cross_page_prose_continuations", "ordered_pages")),
+    BlockRecoveryPass("split_mixed_code_prose", _returning("_split_mixed_code_prose_blocks")),
+    BlockRecoveryPass("promote_late_code_bodies", _returning("_promote_late_code_like_bodies")),
+    BlockRecoveryPass("split_mixed_code_prose_again", _returning("_split_mixed_code_prose_blocks")),
+    BlockRecoveryPass("promote_late_table_bodies", _returning("_promote_late_table_like_bodies")),
+    BlockRecoveryPass("merge_table_fragments", _returning("_merge_adjacent_table_fragments", "ordered_pages")),
+    BlockRecoveryPass("lock_listing_scope", _returning("_lock_listing_scope")),
+    BlockRecoveryPass("figure_clustering", _returning("_apply_figure_clustering")),
+    BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
+    BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
+    BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
+)
