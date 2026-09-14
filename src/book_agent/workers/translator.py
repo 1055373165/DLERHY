@@ -14,6 +14,12 @@ from book_agent.translation.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.translation.prompt_profiles import (
+    COMPACT_SYSTEM_PROMPT,
+    DEFAULT_SYSTEM_PROMPT,
+    PROMPT_PROFILES,
+    ROLE_STYLE_LINES,
+)
 
 
 def _format_section(title: str, lines: list[str]) -> list[str]:
@@ -190,7 +196,7 @@ def _chapter_brief_visible(packet: ContextPacket) -> bool:
 
 
 def _compact_prompt_candidate(packet: ContextPacket, *, current_sentence_count: int, prompt_profile: PromptProfile) -> bool:
-    if prompt_profile not in COMPACT_PROMPT_PROFILES:
+    if not PROMPT_PROFILES[prompt_profile].compact_eligible:
         return False
     if not packet.current_blocks:
         return False
@@ -298,8 +304,6 @@ TranslationMaterial = Literal[
     "business_document",
 ]
 
-MATERIAL_AWARE_PROMPT_PROFILES = frozenset({"material-aware-v1", "material-aware-minimal-v1"})
-COMPACT_PROMPT_PROFILES = frozenset({"role-style-v2", "material-aware-minimal-v1"})
 
 
 def _resolve_translation_material(packet: ContextPacket) -> TranslationMaterial:
@@ -583,15 +587,6 @@ def _build_split_system_prompt(
     )
 
 
-TECH_COLUMN_META_V1_SYSTEM_PROMPT = """【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：
-自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；
-彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；
-译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；
-技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；
-严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；
-完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。"""
-
-
 class TranslationModelClient(Protocol):
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult | TranslationWorkerOutput:
         ...
@@ -607,9 +602,10 @@ def build_translation_prompt_request(
     allow_compact_prompt: bool = True,
 ) -> TranslationPromptRequest:
     packet = task.context_packet
+    profile = PROMPT_PROFILES[prompt_profile]
     translation_material = _resolve_translation_material(packet)
-    material_aware_prompt = prompt_profile in MATERIAL_AWARE_PROMPT_PROFILES
-    minimal_material_prompt = prompt_profile == "material-aware-minimal-v1"
+    material_aware_prompt = profile.material_aware
+    minimal_material_prompt = profile.minimal_material
     heading_path = " > ".join(packet.heading_path) if packet.heading_path else "(root)"
     term_lines = _sorted_term_lines(packet)
     entity_lines = _sorted_entity_lines(packet)
@@ -706,36 +702,10 @@ def build_translation_prompt_request(
             material=translation_material,
             minimal=minimal_material_prompt,
         )
-    elif not compact_prompt and prompt_profile in {
-        "role-style-v2",
-        "role-style-faithful-v4",
-        "role-style-faithful-v5",
-        "role-style-faithful-v6",
-        "role-style-memory-v2",
-        "role-style-brief-v3",
-    }:
-        style_lines = [
-            "- Write like a polished Chinese technical translator, not a sentence-by-sentence converter.",
-            "- Prefer established Chinese technical phrasing and avoid literal calques of English abstract noun chains.",
-            "- Keep terminology stable across the packet and maintain a professional, readable register.",
-            "- Preserve rhetorical emphasis, but do not over-fragment paragraphs unless the source clearly intends it.",
-        ]
-    if not compact_prompt and prompt_profile == "role-style-memory-v2":
-        memory_handling_lines = [
-            "- Treat Locked and Relevant Terms as authoritative whenever they match the source.",
-            "- Treat locked Chapter Concept Memory as the default rendering for recurring concepts unless the current packet explicitly redefines them.",
-            "- Use Previous Accepted Translations to continue local discourse and terminology continuity across paragraphs.",
-            "- If wording remains ambiguous or risky, keep the translated body clean and report the uncertainty only via structured low_confidence_flags or notes.",
-        ]
-    elif not compact_prompt and prompt_profile == "role-style-brief-v3":
-        memory_handling_lines = [
-            "- Read Chapter Brief as the purpose summary of this section: use it to infer why the current paragraph exists, not just what words appear nearby.",
-            "- Treat Locked and Relevant Terms as authoritative whenever they match the source.",
-            "- Treat locked Chapter Concept Memory as the default rendering for recurring concepts unless the current packet explicitly redefines them.",
-            "- If a high-signal concept is still unlocked, choose the most publication-ready Chinese rendering that fits the current chapter brief and keep it stable across the packet.",
-            "- Use Previous Accepted Translations to preserve discourse continuity, reference chains, and recently established wording across neighboring paragraphs.",
-            "- Keep the translated body clean and publication-ready; never insert inline translator notes. Put uncertainty only into structured low_confidence_flags or notes.",
-        ]
+    elif not compact_prompt and profile.role_style:
+        style_lines = list(ROLE_STYLE_LINES)
+    if not compact_prompt and profile.memory_handling_lines:
+        memory_handling_lines = list(profile.memory_handling_lines)
 
     sections = [
         *_format_section("Core Translation Contract:", contract_lines),
@@ -745,46 +715,15 @@ def build_translation_prompt_request(
         if material_aware_prompt:
             style_title = "Material-Specific Style Target:"
         _extend_section(sections, style_title, style_lines)
-    if (
-        (
-            not compact_prompt
-            and prompt_profile
-            in {
-                "role-style-v2",
-                "role-style-faithful-v4",
-                "role-style-faithful-v5",
-                "role-style-faithful-v6",
-                "role-style-memory-v2",
-                "role-style-brief-v3",
-            }
-        )
-        or prompt_profile in {"material-aware-v1", "material-aware-minimal-v1"}
-    ):
+    if (not compact_prompt and profile.role_style) or profile.material_aware:
         _extend_section(sections, "Section-Level Scaffolding:", section_scaffolding_lines)
         _extend_section(sections, "Paragraph Intent Signal:", paragraph_intent_lines)
         _extend_section(sections, "Source-Aware Literalism Guardrails:", literalism_guardrail_lines)
     if memory_handling_lines:
         _extend_section(sections, "Memory and Ambiguity Handling:", memory_handling_lines)
-    if not compact_prompt and prompt_profile == "role-style-brief-v3":
-        _extend_section(
-            sections,
-            "Paragraph Intent Priorities:",
-            [
-                "- Understand the paragraph's role in the chapter before translating: definition, analogy, transition, argument, caution, or summary.",
-                "- Prefer a connected Chinese paragraph that reads as if written by a professional translator, not as sentence fragments stitched together.",
-                "- Keep core concepts concise and reusable so the same rendering can survive later packets and reviews.",
-            ],
-        )
-        _extend_section(
-            sections,
-            "Literalism Guardrails:",
-            [
-                "- Do not calque English evidential phrases into awkward weight metaphors; prefer natural Chinese forms such as '大量证据表明' or '现有证据表明'.",
-                "- For contextual fit, prefer natural Chinese expressions such as '更符合上下文' or '更贴合语境', not literal forms like '上下文更准确'.",
-                "- For phrases like 'contextually accurate outputs', rewrite them as '更符合上下文的输出' or an equally natural Chinese expression, not '上下文更准确的输出'.",
-                "- When an English noun phrase names a field, discipline, or methodology, prefer an established Chinese concept name over a word-for-word rendering.",
-            ],
-        )
+    if not compact_prompt:
+        for title, lines in profile.extra_sections:
+            _extend_section(sections, title, list(lines))
     if packet.open_questions:
         _extend_section(
             sections,
@@ -814,105 +753,22 @@ def build_translation_prompt_request(
         _extend_section(sections, "Sentence Ledger:", sentence_lines)
     user_prompt = "\n".join(sections)
     system_prompt_parts: TranslationSystemPromptParts | None = None
-    if prompt_profile == "cn-native-faithful-v1":
+    if profile.split_system_static_lines:
         system_prompt_parts = _build_split_system_prompt(
-            static_lines=[
-                "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction.",
-                "Your non-negotiable goal is to preserve meaning exactly while making the Chinese read as if a strong native Chinese author wrote it directly.",
-                "Do not produce translationese, rigid English sentence mirroring, slogan-like wrap-ups, or abstract noun-heavy paraphrases.",
-                "Keep concrete imagery concrete, keep technical logic precise, and keep alignment coverage complete.",
-            ],
+            static_lines=list(profile.split_system_static_lines),
             packet=packet,
         )
-    elif prompt_profile == "cn-native-faithful-v2":
-        system_prompt_parts = _build_split_system_prompt(
-            static_lines=[
-                "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction.",
-                "Faithfulness comes first, but the Chinese must feel native, concise, and smooth to mainland-Chinese readers.",
-                "Prefer plain, direct Chinese over inflated or literary substitutes; avoid copying English abstract noun chains into Chinese.",
-                "When the source would sound stiff if mirrored literally, reshape it into natural Chinese without changing claims, constraints, or emphasis.",
-                "Keep alignment coverage complete.",
-            ],
-            packet=packet,
-        )
-    elif prompt_profile == "cn-native-faithful-v3":
-        system_prompt_parts = _build_split_system_prompt(
-            static_lines=[
-                "You are a publication-grade English-to-Chinese translator and stylistic localizer for technical books and professional nonfiction.",
-                "Translate with two simultaneous goals: exact fidelity to source meaning and native Chinese readability that feels written, not translated.",
-                "Preserve claims, logic, qualifiers, contrasts, and rhetorical force exactly; never add explanation, soften stance, or upgrade tone.",
-                "Favor connected Chinese discourse, stable terminology, and natural sentence rhythm over sentence-by-sentence English mirroring.",
-                "Keep the translated body free of translator commentary and keep alignment coverage complete.",
-            ],
-            packet=packet,
-        )
-    elif prompt_profile == "tech-column-meta-v1":
-        system_prompt = TECH_COLUMN_META_V1_SYSTEM_PROMPT
+    elif profile.fixed_system_prompt is not None:
+        system_prompt = profile.fixed_system_prompt
     elif material_aware_prompt:
         system_prompt = _material_system_prompt(
             translation_material,
             minimal=minimal_material_prompt,
         )
     elif compact_prompt:
-        system_prompt = (
-            "You are a professional English-to-Chinese technical translator. "
-            "Produce accurate, natural Chinese for the current paragraph and keep alignment coverage complete."
-        )
-    elif prompt_profile == "current":
-        system_prompt = (
-            "You are a high-fidelity book translation worker. "
-            "Translate English book content into natural Chinese with paragraph-level coherence, "
-            "preserve meaning, respect locked terms, and do not translate protected spans. "
-            "You may reorganize sentence structure, but alignment coverage must remain complete."
-        )
-    elif prompt_profile == "role-style-v2":
-        system_prompt = (
-            "You are a senior technical translator and localizer for English-to-Chinese books, papers, and business documents. "
-            "Produce accurate, professional, publication-grade Chinese that preserves structure and terminology consistency. "
-            "Prefer natural Chinese technical prose over literal sentence mirroring, while keeping alignment coverage complete."
-        )
-    elif prompt_profile == "role-style-faithful-v4":
-        system_prompt = (
-            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
-            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
-            "Write in native, publication-ready Chinese that matches how a strong Chinese technical book would actually read: natural and precise, never translationese, but also never promotional, chatty, or over-interpreted. "
-            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
-            "Alignment coverage must remain complete."
-        )
-    elif prompt_profile == "role-style-faithful-v5":
-        system_prompt = (
-            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
-            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
-            "Keep concrete imagery concrete: when the source uses everyday metaphors or domestic imagery, render them in equally vivid, plain Chinese instead of recasting them into abstract service, product, or management language. "
-            "Write in native, publication-ready Chinese that reads like a strong Chinese technical book: natural, precise, and plain when the source is plain. "
-            "Avoid translationese, but also avoid promotional, chatty, interpretive, or over-packaged prose. Prefer concrete verbs and adjectives over abstract noun-heavy phrasing. "
-            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
-            "Alignment coverage must remain complete."
-        )
-    elif prompt_profile == "role-style-faithful-v6":
-        system_prompt = (
-            "You are a publication-grade English-to-Chinese translator for technical books and professional nonfiction. "
-            "High fidelity comes first: preserve every claim, contrast, analogy, and constraint in the source without adding explanation, softening the stance, or upgrading the tone. "
-            "Keep concrete imagery concrete: when the source uses everyday metaphors or domestic imagery, render them in equally vivid, plain Chinese instead of recasting them into service, marketing, or management language. "
-            "Write in native, publication-ready Chinese that reads like a strong Chinese technical book: natural, precise, and plain when the source is plain. "
-            "Prefer everyday concrete wording over elevated substitutes, and keep food, objects, actions, preferences, and care on the same concrete level as the source rather than upgrading them into menu, service, or abstract-value language. "
-            "Avoid translationese and avoid abstract noun-heavy wrap-ups; do not turn a simple ending into a slogan about consistency, care, or service unless the source itself clearly does so. "
-            "When literal mirroring sounds stiff, reshape the sentence into idiomatic Chinese while keeping the original imagery, logic, and rhetorical force intact. "
-            "Alignment coverage must remain complete."
-        )
-    elif prompt_profile == "role-style-brief-v3":
-        system_prompt = (
-            "You are a publication-grade English-to-Chinese translator and localizer for technical books, papers, and business writing. "
-            "Translate each packet as connected Chinese prose that reflects chapter intent, concept continuity, and professional publishing style. "
-            "Prefer natural Chinese technical expression over literal mirroring, use chapter brief and concept memory actively, and keep alignment coverage complete."
-        )
+        system_prompt = COMPACT_SYSTEM_PROMPT
     else:
-        system_prompt = (
-            "You are a senior English-to-Chinese technical translator working inside a structured translation system. "
-            "Translate with paragraph-first coherence, authoritative use of locked terms and chapter concept memory, and clean professional Chinese. "
-            "Keep the translated body free of inline translator notes; report uncertainty only through structured notes or low-confidence flags. "
-            "Alignment coverage must remain complete."
-        )
+        system_prompt = profile.system_prompt or DEFAULT_SYSTEM_PROMPT
     if system_prompt_parts is not None:
         system_prompt_static = system_prompt_parts.static_prompt
         system_prompt_dynamic = system_prompt_parts.dynamic_prompt

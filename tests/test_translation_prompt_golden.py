@@ -9,10 +9,13 @@ import json
 import os
 import tempfile
 import unittest
+from typing import get_args
 from pathlib import Path
 
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
+from book_agent.translation.prompt_profiles import PROMPT_PROFILES
+from book_agent.workers.translator import PromptProfile
 from tests.translation_prompt_scenario import intern_long_strings, normalize, record_prompts
 
 GOLDEN_DIR = Path(__file__).parent / "golden" / "translation_prompts"
@@ -52,6 +55,9 @@ class TranslationPromptGoldenTests(unittest.TestCase):
 
     def test_pdf_translation_prompts_match_golden(self) -> None:
         self._assert_matches_golden("pdf")
+
+    def test_prompt_profile_literal_matches_registry(self) -> None:
+        self.assertEqual(sorted(get_args(PromptProfile)), sorted(PROMPT_PROFILES))
 
 
 def _expand(snapshot: dict) -> object:
