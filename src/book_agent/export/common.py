@@ -366,7 +366,7 @@ _SINGLE_LINE_CODEISH_PATTERN = re.compile(
     r"^\s*#"
     r"|^\s*@"
     r"|^\s*(?:async\s+def|def|class|from|import|return|yield|raise)\b"
-    r"|^\s*(?:if|elif|for|while|with|except)\b.+:"
+    r"|^\s*(?:if|elif|for|while|with|except)\b.+:\s*$"
     r"|^\s*else\s*:"
     r"|^\s*try\s*:"
     r"|(?:^|\s)(?:print|invoke|Agent|LlmAgent|Runner|Runnable|ChatPromptTemplate|StrOutputParser)\s*\("
@@ -375,7 +375,8 @@ _SINGLE_LINE_CODEISH_PATTERN = re.compile(
     r"|->"
     r"|=>"
     r")",
-    re.IGNORECASE,
+    # Case-sensitive: keywords are lowercase in code, while prose opens
+    # sentences with "If ...:", "From ...", "Return ...".
 )
 _GLOSSARY_DEFINITION_LINE_PATTERN = re.compile(
     r"^(?P<label>[A-Za-z][A-Za-z0-9/&'(). -]{0,80}?):\s+(?P<body>.+)$"

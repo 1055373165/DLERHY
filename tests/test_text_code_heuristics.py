@@ -3,13 +3,15 @@
 A trading book had ordinary sentences promoted to code blocks (and so left
 untranslated): a line starting "use RSI smoothed indicator, ..." matched the
 Rust/PHP ``use`` import pattern, and "Note: However, common sense ..." matched
-the ``key: value`` data-line rule.
+the ``key: value`` data-line rule. At export time "If you want to ... simple):"
+matched the Python ``if ...:`` statement pattern case-insensitively.
 """
 
 from __future__ import annotations
 
 import unittest
 
+from book_agent.export.code_text import looks_like_single_line_codeish_text
 from book_agent.ingestion.text import (
     _CODE_IMPORT_LINE_PATTERN,
     _looks_like_code,
@@ -70,6 +72,23 @@ class LabeledProseLineTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertFalse(_looks_like_labeled_prose_line(line))
                 self.assertTrue(_looks_like_embedded_code_line(line))
+
+
+class ExportSingleLineCodeishTest(unittest.TestCase):
+    def test_capitalized_prose_is_not_a_python_statement(self) -> None:
+        for line in (
+            "If you want to understand the inside secrets of RSI, let us go and check how it is calculated "
+            "(Calculation sheet is straight from the Wilder's book; I have used prices in round figures):",
+            "From here on we look at the weekly chart.",
+            "Return on capital matters more than the win rate.",
+        ):
+            with self.subTest(line=line):
+                self.assertFalse(looks_like_single_line_codeish_text(line))
+
+    def test_statements_still_look_like_code(self) -> None:
+        for line in ("if x > 3:", "for item in items:", "from pathlib import Path", "print(result)"):
+            with self.subTest(line=line):
+                self.assertTrue(looks_like_single_line_codeish_text(line))
 
 
 if __name__ == "__main__":
