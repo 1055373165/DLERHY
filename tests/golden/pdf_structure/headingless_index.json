@@ -1,0 +1,372 @@
+{
+ "author": "Test Author",
+ "chapters": [
+  {
+   "blocks": [
+    {
+     "anchor": "p1-b1",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 1,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 1,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          344.668,
+          124.578
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Chapter 1 Durable Products",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b2",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 2,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          388.152,
+          175.588
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "This chapter defines the product strategy and market loops.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b3",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 3,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "1",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-001",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Chapter 1 Durable Products"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p2-b4",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_content_family": "index",
+      "pdf_page_family": "index",
+      "pdf_page_family_source": "content_signature",
+      "reading_order_index": 4,
+      "recovery_flags": [
+       "page_family_index",
+       "page_family_source_content_signature"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          106.175,
+          199.809,
+          121.289
+         ],
+         "page_number": 2
+        },
+        {
+         "bbox": [
+          72.0,
+          134.175,
+          179.613,
+          149.289
+         ],
+         "page_number": 2
+        },
+        {
+         "bbox": [
+          72.0,
+          162.175,
+          161.254,
+          177.289
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "advantage, durable 12, 16 network effects 18, 21 switching costs 24",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b7",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_content_family": "index",
+      "pdf_page_family": "index",
+      "pdf_page_family_source": "content_signature",
+      "reading_order_index": 5,
+      "recovery_flags": [
+       "page_family_index",
+       "page_family_source_content_signature"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": false
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "2",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-002",
+   "href": "pdf://page/2",
+   "metadata": {
+    "pdf_section_family": "index",
+    "source_page_end": 2,
+    "source_page_start": 2,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Index"
+  }
+ ],
+ "language": "en",
+ "metadata": {
+  "author": "Test Author",
+  "document_title_resolution_source": "extraction_metadata",
+  "format": "PDF 1.4",
+  "outline_entry_count": 0,
+  "pdf_extractor": "pymupdf",
+  "pdf_page_evidence": {
+   "extractor_kind": "pymupdf",
+   "page_count": 2,
+   "pdf_outline_entries": [],
+   "pdf_pages": [
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 1,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": "index",
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_index",
+      "page_family_source_content_signature",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": false,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "index",
+     "page_family_heading": null,
+     "page_family_source": "content_signature",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 2,
+     "raw_block_count": 4,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 2,
+     "recovery_flags": [
+      "page_family_index",
+      "page_family_source_content_signature"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1
+     },
+     "toc_entries": []
+    }
+   ],
+   "schema_version": 1
+  },
+  "pdf_profile": {
+   "academic_paper_candidate": false,
+   "average_span_count": 1.0,
+   "average_text_density": 76.0,
+   "extractor_kind": "pymupdf",
+   "fragment_page_count": 0,
+   "has_extractable_text": true,
+   "layout_risk": "low",
+   "multi_column_page_count": 0,
+   "ocr_required": false,
+   "outline_present": false,
+   "page_count": 2,
+   "pdf_kind": "text_pdf",
+   "recovery_lane": null,
+   "suspicious_page_numbers": [],
+   "trailing_reference_page_count": 0
+  },
+  "title": "Headingless Index Sample"
+ },
+ "title": "Headingless Index Sample"
+}

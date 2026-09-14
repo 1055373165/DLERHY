@@ -1,0 +1,173 @@
+{
+ "author": null,
+ "chapters": [
+  {
+   "blocks": [
+    {
+     "anchor": "p1-img1",
+     "block_type": "image",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "image_ext": null,
+      "image_height_px": null,
+      "image_type": "vector_drawing",
+      "image_width_px": null,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "image",
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 1,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          24.0,
+          32.0,
+          588.0,
+          740.0
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.66,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "[Image]",
+     "translatability": "translate_none"
+    },
+    {
+     "anchor": "p1-b2",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 2,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          720.0,
+          105.35,
+          733.74
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.65,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Fig. 2.1",
+     "translatability": "translate_all"
+    }
+   ],
+   "chapter_id": "pdf-chapter-001",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Chapter 1"
+  }
+ ],
+ "language": "en",
+ "metadata": {
+  "document_title_resolution_source": "source_filename",
+  "format": "PDF 1.7",
+  "outline_entry_count": 0,
+  "pdf_extractor": "pymupdf",
+  "pdf_page_evidence": {
+   "extractor_kind": "pymupdf",
+   "page_count": 1,
+   "pdf_outline_entries": [],
+   "pdf_pages": [
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "ocr_overlay",
+     "extraction_intent_reasons": [
+      "ocr_scanned_page",
+      "scanned_or_ocr_required"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": false,
+     "is_toc_page": false,
+     "layout_signals": [
+      "ocr_scanned_page"
+     ],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [
+      "ocr_scanned_page"
+     ],
+     "page_layout_risk": "high",
+     "page_number": 1,
+     "raw_block_count": 1,
+     "raw_image_block_count": 1,
+     "recovered_block_count": 2,
+     "recovery_flags": [],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "image": 1
+     },
+     "toc_entries": []
+    }
+   ],
+   "schema_version": 1
+  },
+  "pdf_profile": {
+   "academic_paper_candidate": false,
+   "average_span_count": 1.0,
+   "average_text_density": 8.0,
+   "extractor_kind": "pymupdf",
+   "fragment_page_count": 0,
+   "has_extractable_text": false,
+   "layout_risk": "high",
+   "multi_column_page_count": 0,
+   "ocr_required": true,
+   "outline_present": false,
+   "page_count": 1,
+   "pdf_kind": "scanned_pdf",
+   "recovery_lane": null,
+   "suspicious_page_numbers": [],
+   "trailing_reference_page_count": 0
+  }
+ },
+ "title": "fixture"
+}

@@ -1,0 +1,1043 @@
+{
+ "author": "Test Author",
+ "chapters": [
+  {
+   "blocks": [
+    {
+     "anchor": "p1-b1",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 1,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 1,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          120.0,
+          60.5,
+          601.26,
+          87.98
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Forming Effective Human-AI Teams: Building Machine",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b2",
+     "block_type": "list_item",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "detected_by": "bullet_pattern",
+      "nontranslatable_reason": null,
+      "pdf_block_role": "list_item",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 2,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          180.0,
+          99.1,
+          528.78,
+          115.588
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "P. Hemmer, S. Schellhammer, M. Vossing, J. Jakubik, G. Satzger",
+     "translatability": "translate_all"
+    }
+   ],
+   "chapter_id": "pdf-chapter-001",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Forming Effective Human-AI Teams: Building Machine"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p1-b3-s1",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_heading_recovery_source": "embedded_abstract_heading_recovered",
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 3,
+      "recovery_flags": [
+       "embedded_abstract_heading_recovered"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          145.1,
+          598.176,
+          161.588
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Abstract",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b3-s2",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_heading_recovery_source": "embedded_abstract_heading_recovered",
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 4,
+      "recovery_flags": [
+       "embedded_abstract_heading_recovered"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          145.1,
+          598.176,
+          161.588
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "This paper studies how to recover section-aware structure from dual-column academic PD",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b4",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 5,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.84,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "1",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-002",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Abstract"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p2-b5",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 6,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          102.95,
+          156.826,
+          122.186
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "1 Introduction",
+     "translatability": "translate_all"
+    }
+   ],
+   "chapter_id": "pdf-chapter-003",
+   "href": "pdf://page/2",
+   "metadata": {
+    "pdf_section_family": "frontmatter",
+    "source_page_end": 2,
+    "source_page_start": 2,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "1 Introduction"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p2-b6",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 7,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          330.0,
+          102.95,
+          426.474,
+          122.186
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "2 Related Work",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b7",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 8,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          146.175,
+          598.383,
+          161.289
+         ],
+         "page_number": 2
+        },
+        {
+         "bbox": [
+          330.0,
+          146.175,
+          595.309,
+          161.289
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "Introduction left column explains why human-AI teamwork papers need section-faithful recovery before trans Related work in the right column compares prior deferr",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b9",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 9,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          182.175,
+          594.764,
+          197.289
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "The introduction continues in the left column before the reader should move to the second top-level section.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b10",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 10,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          330.0,
+          182.175,
+          596.563,
+          197.289
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 4,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "The right column continues only after the left column in",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b11",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Front Matter",
+      "pdf_page_family_source": "inline_heading",
+      "reading_order_index": 11,
+      "recovery_flags": [
+       "page_family_frontmatter",
+       "page_family_source_inline_heading"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": false
+     },
+     "ordinal": 5,
+     "parse_confidence": 0.84,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "2",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-004",
+   "href": "pdf://page/2",
+   "metadata": {
+    "pdf_section_family": "frontmatter",
+    "source_page_end": 2,
+    "source_page_start": 2,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "2 Related Work"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p3-b12",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 12,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          102.95,
+          143.596,
+          122.186
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "3 Approach",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p3-b13",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 13,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          146.175,
+          569.651,
+          161.289
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "The approach section formalizes the classifier and allocation system as a coordinated human-AI team.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p3-b14",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 14,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.84,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "3",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-005",
+   "href": "pdf://page/3",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 3,
+    "source_page_start": 3,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "3 Approach"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p4-b15",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 15,
+      "recovery_flags": [
+       "page_family_references"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          244.0,
+          76.8,
+          325.808,
+          98.784
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "References",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p4-b16",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 16,
+      "recovery_flags": [
+       "page_family_references"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          131.25,
+          602.22,
+          144.99
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.82,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL. [2] C. Author and D. W",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p4-b17",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 17,
+      "recovery_flags": [
+       "page_family_references"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.84,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "4",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-006",
+   "href": "pdf://page/4",
+   "metadata": {
+    "pdf_section_family": "references",
+    "source_page_end": 4,
+    "source_page_start": 4,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "References"
+  }
+ ],
+ "language": "en",
+ "metadata": {
+  "author": "Test Author",
+  "document_title_resolution_source": "extraction_metadata",
+  "format": "PDF 1.4",
+  "outline_entry_count": 4,
+  "pdf_extractor": "pymupdf",
+  "pdf_page_evidence": {
+   "extractor_kind": "pymupdf",
+   "page_count": 4,
+   "pdf_outline_entries": [
+    {
+     "level": 1,
+     "page_number": 2,
+     "title": "1 Introduction"
+    },
+    {
+     "level": 1,
+     "page_number": 2,
+     "title": "2 Related Work"
+    },
+    {
+     "level": 1,
+     "page_number": 3,
+     "title": "3 Approach"
+    },
+    {
+     "level": 1,
+     "page_number": 4,
+     "title": "References"
+    }
+   ],
+   "pdf_pages": [
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 1,
+     "raw_block_count": 4,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 5,
+     "recovery_flags": [
+      "embedded_abstract_heading_recovered"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 2,
+      "list_item": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_frontmatter",
+      "page_family_source_inline_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "frontmatter",
+     "page_family_heading": "Front Matter",
+     "page_family_source": "inline_heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 2,
+     "raw_block_count": 7,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 6,
+     "recovery_flags": [
+      "page_family_frontmatter",
+      "page_family_source_inline_heading"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 3,
+      "footer": 1,
+      "heading": 2
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 3,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_references",
+      "page_family_source_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "references",
+     "page_family_heading": "References",
+     "page_family_source": "heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 4,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [
+      "page_family_references"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    }
+   ],
+   "schema_version": 1
+  },
+  "pdf_profile": {
+   "academic_paper_candidate": true,
+   "average_span_count": 1.0,
+   "average_text_density": 199.75,
+   "extractor_kind": "pymupdf",
+   "fragment_page_count": 0,
+   "has_extractable_text": true,
+   "layout_risk": "medium",
+   "multi_column_page_count": 0,
+   "ocr_required": false,
+   "outline_present": true,
+   "page_count": 4,
+   "pdf_kind": "text_pdf",
+   "recovery_lane": "academic_paper",
+   "suspicious_page_numbers": [],
+   "trailing_reference_page_count": 1
+  },
+  "title": "Forming Effective Human-AI Teams"
+ },
+ "title": "Forming Effective Human-AI Teams"
+}
