@@ -2091,7 +2091,7 @@ class DocumentWorkflowService:
             return False
         artifacts = ChapterConceptAutoLockService(
             self.session,
-            resolver=build_default_concept_resolver(),
+            resolver=build_default_concept_resolver(translation_worker=self.translation_service.worker),
         ).auto_lock_chapter_concepts(
             issue.chapter_id,
             source_terms=[source_term],

@@ -13,7 +13,7 @@ from book_agent.core.logging import configure_logging
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
 from book_agent.workers.providers import ProviderHTTPError, ProviderNetworkError, ProviderTransportError
-from book_agent.workers.factory import build_translation_worker, resolve_translation_worker
+from book_agent.workers.factory import TranslationWorkerProvider
 
 
 def _database_error_detail(*, exc: OperationalError) -> str:
@@ -85,35 +85,26 @@ def create_app() -> FastAPI:
     app.state.ensure_database_state = lambda: _ensure_database_state(app, settings=settings)
     app.state.export_root = str(settings.export_root)
     app.state.upload_root = str(settings.upload_root)
-    # `translation_worker` is an explicit override (embedders/tests). When it is
-    # unset, the worker is built lazily from the active provider credential and
-    # cached per credential revision, so provider swaps
-    # (POST /v1/providers/.../activate) apply without a restart.
-    app.state.translation_worker = None
-    app.state.resolved_translation_worker = None
-    app.state.translation_worker_revision = -1
     app.state.document_run_executor = None
 
-    def _resolve_translation_worker_state():
-        from book_agent.services.provider_credentials import current_revision
-
-        override = getattr(app.state, "translation_worker", None)
-        if override is not None:
-            return override
-        revision = current_revision()
-        cached = getattr(app.state, "resolved_translation_worker", None)
-        if cached is not None and getattr(app.state, "translation_worker_revision", -1) == revision:
-            return cached
+    def _session_factory():
         if app.state.session_factory is None:
             _ensure_database_state(app, settings=settings)
-        with app.state.session_factory() as session:
-            worker = resolve_translation_worker(session, settings)
-            session.commit()
-        app.state.resolved_translation_worker = worker
-        app.state.translation_worker_revision = revision
-        return worker
+        return app.state.session_factory
 
-    app.state.resolve_translation_worker = _resolve_translation_worker_state
+    # `translation_worker` is an explicit override (embedders/tests); otherwise
+    # the provider resolves the active credential's worker.
+    app.state.translation_worker = None
+    app.state.translation_worker_provider = TranslationWorkerProvider(
+        settings=settings,
+        session_factory=_session_factory,
+    )
+
+    def _resolve_translation_worker():
+        override = app.state.translation_worker
+        return override if override is not None else app.state.translation_worker_provider.get()
+
+    app.state.resolve_translation_worker = _resolve_translation_worker
 
     @app.exception_handler(OperationalError)
     async def handle_operational_error(_request, _exc) -> JSONResponse:

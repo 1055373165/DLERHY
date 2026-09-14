@@ -166,6 +166,4 @@ def get_active_provider(
 
 def _invalidate_app_worker(request: Request) -> None:
     """Clear the cached worker so the next packet rebuilds from DB."""
-    state = request.app.state
-    state.translation_worker_revision = -1
-    state.resolved_translation_worker = None
+    request.app.state.translation_worker_provider.invalidate()

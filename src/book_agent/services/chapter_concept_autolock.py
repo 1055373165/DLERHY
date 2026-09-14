@@ -318,9 +318,28 @@ class OpenAICompatibleConceptResolver:
         )
 
 
-def build_default_concept_resolver(settings: Settings | None = None) -> ConceptResolver:
-    effective_settings = settings or get_settings()
+def build_default_concept_resolver(
+    settings: Settings | None = None,
+    *,
+    translation_worker: object | None = None,
+) -> ConceptResolver:
     heuristic = HeuristicConceptResolver()
+    if translation_worker is not None:
+        # Resolve concepts with the provider the translation run uses (the
+        # active stored credential), not a second client built from .env.
+        client = getattr(translation_worker, "client", None)
+        if not isinstance(client, OpenAICompatibleTranslationClient):
+            return heuristic
+        return FallbackConceptResolver(
+            resolvers=(
+                OpenAICompatibleConceptResolver(
+                    client=client,
+                    model_name=translation_worker.metadata().model_name,
+                ),
+                heuristic,
+            )
+        )
+    effective_settings = settings or get_settings()
     backend = effective_settings.translation_backend.lower().strip()
     if backend != "openai_compatible" or not effective_settings.translation_openai_api_key:
         return heuristic

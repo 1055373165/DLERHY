@@ -78,14 +78,15 @@
 
 ## P2 统一基础设施
 
-- [ ] **Composition root**（`app/composition.py`）：Settings、engine/session factory、`TranslationWorkerProvider`（感知凭据 revision）、`ArtifactStore`（根目录 + CAS）；API / 执行器 / CLI / 脚本共用。消除 4 份 worker 构造。
-- [ ] **类型化 provider 异常**（Retryable / Fatal / SchemaViolation / InsufficientBalance），按类型分类重试，替代消息子串匹配。
-- [ ] **事务策略**：LLM 调用不在 DB 事务内；POST 在返回前显式提交；`translate/review/export` POST 改为入队 run。
-- [ ] **队列**：`claim_next` 用 `FOR UPDATE SKIP LOCKED`；租约 CAS 键含 lease token；租约丢失协作取消。
-- [ ] **Run 状态**：条件 UPDATE 实现 CAS 状态转移并必写审计；用量计数改 SQL 自增；停止整列重写 `status_detail_json`。
-- [ ] 审核/导出不在 run 线程上内联阻塞。
-- [ ] 数据层：应用只支持 Postgres（SQLite 仅纯单测）；`JSONB` variant；枚举 CHECK 由枚举生成；去掉 `has_table` 探测；审计写入仅插入。
-- [ ] `service.sh` 的 SQLite 模式修正/删除；Docker/compose 增加迁移步骤。
+已确认：`translate_full` 的审校与导出为必需阶段（已完成）；P2 完整执行，含 POST translate/review/export 改为入队。
+
+- [x] **P2.1 Worker provider**：`workers.factory.TranslationWorkerProvider`（按凭据 revision 缓存、线程安全）；API / 执行器 / CLI / 概念解析器共用；凭据 worker 与 settings worker 同一构造（prompt profile、单价来自 settings）。
+- [ ] **P2.2 类型化 provider 异常**（Retryable / Fatal / SchemaViolation / InsufficientBalance），按类型分类重试，替代消息子串匹配。
+- [ ] **P2.3 租约丢失与队列**：心跳发现租约丢失即协作取消，结果不再落库；`claim_next` 在 Postgres 上用 `FOR UPDATE SKIP LOCKED`；执行器 `stop()` 取消 work 线程后再 dispose engine。
+- [ ] **P2.4 Run 状态**：条件 UPDATE 实现 CAS 状态转移并必写审计；用量计数改 SQL 自增 / 独立列；停止整列重写 `status_detail_json`。
+- [ ] **P2.5 事务与线程**：LLM 调用不在 DB 事务内；审核/导出不在 run 线程上内联阻塞。
+- [ ] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建对应 run（执行器支持 `translate_targeted` / `review_full` / `export_full`）并立即返回；GET 下载不再触发生成。
+- [ ] **P2.7 数据层**：应用只支持 Postgres（SQLite 仅纯单测）；`JSONB` variant；枚举 CHECK 由枚举生成；去掉 `has_table` 探测；审计写入仅插入；`service.sh` SQLite 模式与 Docker 迁移步骤。
 
 ---
 

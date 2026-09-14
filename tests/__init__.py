@@ -22,6 +22,9 @@ if str(SRC) not in sys.path:
 # provider-backed worker construct Settings or clients explicitly.
 os.environ["BOOK_AGENT_TRANSLATION_BACKEND"] = "echo"
 os.environ["BOOK_AGENT_TRANSLATION_MODEL"] = "echo-worker"
+# Without a configured key, services.secrets generates one and writes it into
+# the project .env; give tests a fixed throwaway Fernet key instead.
+os.environ["BOOK_AGENT_SECRET_KEY"] = "dGVzdC1vbmx5LWZlcm5ldC1rZXktMzItYnl0ZXMhISE="
 
 # Redirect tempfile root to a project-local directory so the
 # `exports_file_path_no_tempdir_check` CHECK constraint (which rejects

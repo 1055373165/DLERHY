@@ -24,11 +24,6 @@ from book_agent.workers.providers.openai_compatible import (
     ProviderNetworkError,
     ProviderTransportError,
 )
-from book_agent.workers.translator import (
-    EchoTranslationWorker,
-    LLMTranslationWorker,
-    TranslationWorker,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -195,48 +190,6 @@ def api_key_preview(record: ProviderCredential) -> str | None:
     if len(plain) <= 6:
         return "*" * len(plain)
     return f"{plain[:3]}{'*' * 4}{plain[-4:]}"
-
-
-def build_worker_from_credential(record: ProviderCredential) -> TranslationWorker:
-    """Materialize a TranslationWorker from a stored credential."""
-    if record.provider_kind == ProviderKind.ECHO:
-        return EchoTranslationWorker(
-            model_name=record.model_name,
-            prompt_version="p0.echo.v1",
-        )
-    if record.provider_kind != ProviderKind.OPENAI_COMPATIBLE:
-        raise ValueError(f"Unsupported provider_kind: {record.provider_kind}")
-    api_key = decrypt_secret(record.api_key_ciphertext) or ""
-    if not api_key:
-        raise ValueError(
-            f"Provider '{record.name}' is openai_compatible but has no API key."
-        )
-    client = OpenAICompatibleTranslationClient(
-        api_key=api_key,
-        base_url=record.base_url,
-        timeout_seconds=record.timeout_seconds,
-        max_retries=record.max_retries,
-        retry_backoff_seconds=record.retry_backoff_seconds_x10 / 10.0,
-        max_output_tokens=record.max_output_tokens,
-        streaming=bool(record.streaming),
-    )
-    return LLMTranslationWorker(
-        client,
-        model_name=record.model_name,
-        prompt_version="p0.openai-compatible.v1",
-        prompt_profile="tech-column-meta-v1",
-        runtime_config={
-            "provider": "openai_compatible",
-            "credential_id": record.id,
-            "credential_name": record.name,
-            "base_url": record.base_url,
-            "streaming": bool(record.streaming),
-            "timeout_seconds": record.timeout_seconds,
-            "max_retries": record.max_retries,
-            "retry_backoff_seconds": record.retry_backoff_seconds_x10 / 10.0,
-            "max_output_tokens": record.max_output_tokens,
-        },
-    )
 
 
 def test_credential_connection(record: ProviderCredential) -> TestOutcome:

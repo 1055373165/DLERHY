@@ -56,7 +56,7 @@ class ExecutorWorkerResolutionTests(unittest.TestCase):
         app = create_app()
         app.state.session_factory = self.session_factory
         app.state.export_root = self.export_root
-        with patch("book_agent.app.main.resolve_translation_worker", return_value=resolved):
+        with patch("book_agent.workers.factory.resolve_translation_worker", return_value=resolved):
             with TestClient(app):
                 executor = app.state.document_run_executor
                 self.assertIsNotNone(executor)
@@ -69,7 +69,7 @@ class ExecutorWorkerResolutionTests(unittest.TestCase):
         override = _SentinelWorker()
         app = create_app()
         app.state.session_factory = self.session_factory
-        with patch("book_agent.app.main.resolve_translation_worker", return_value=EchoTranslationWorker()):
+        with patch("book_agent.workers.factory.resolve_translation_worker", return_value=EchoTranslationWorker()):
             self.assertIsNot(app.state.resolve_translation_worker(), override)
             app.state.translation_worker = override
             self.assertIs(app.state.resolve_translation_worker(), override)

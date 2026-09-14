@@ -10,7 +10,7 @@ from book_agent.core.config import get_settings
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.session import build_session_factory, session_scope
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.factory import build_translation_worker
+from book_agent.workers.factory import resolve_translation_worker
 
 
 def _json_default(value: Any) -> Any:
@@ -74,13 +74,13 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     session_factory = build_session_factory(database_url=args.database_url or settings.database_url)
     export_root = args.export_root or str(settings.export_root)
-    translation_worker = build_translation_worker(settings)
 
     with session_scope(session_factory) as session:
         service = DocumentWorkflowService(
             session,
             export_root=export_root,
-            translation_worker=translation_worker,
+            # Same resolution as the API: the active stored credential, else settings.
+            translation_worker=resolve_translation_worker(session, settings),
         )
 
         if args.command == "bootstrap":

@@ -68,7 +68,6 @@ from book_agent.services.workflows import (
     DocumentTranslationResult,
     DocumentWorkflowService,
 )
-from book_agent.workers.factory import build_translation_worker
 
 router = APIRouter()
 _ALLOWED_UPLOAD_SUFFIXES = {".epub", ".pdf"}
@@ -711,19 +710,10 @@ def _serialize_issue_activity_breakdown_entry(entry) -> dict | None:
 
 
 def _workflow_service(request: Request, session: Session) -> DocumentWorkflowService:
-    export_root = getattr(request.app.state, "export_root", "artifacts/exports")
-    resolver = getattr(request.app.state, "resolve_translation_worker", None)
-    if callable(resolver):
-        translation_worker = resolver()
-    else:
-        translation_worker = getattr(request.app.state, "translation_worker", None)
-        if translation_worker is None:
-            settings = get_settings()
-            translation_worker = build_translation_worker(settings)
     return DocumentWorkflowService(
         session,
-        export_root=export_root,
-        translation_worker=translation_worker,
+        export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
+        translation_worker=request.app.state.resolve_translation_worker(),
     )
 
 
