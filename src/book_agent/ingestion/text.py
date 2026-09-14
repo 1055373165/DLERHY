@@ -36,13 +36,16 @@ _CODE_IMPORT_LINE_PATTERN = re.compile(
     r"^(?:"
     r"from\s+\S+\s+import\b.+"           # Python from-import
     r"|import\s+\S+.+"                     # Python/Java/Kotlin/Swift import
-    r"|use\s+\S+.+"                        # Rust use / PHP use
+    # The statements below double as English verbs ("use RSI smoothed
+    # indicator, you come close."), so they only match their code shape:
+    # a path plus terminator, or a single quoted/identifier argument.
+    r"|use\s+[\\\w:]+(?:::\{[^}]*\}|::\*)?(?:\s+as\s+\w+)?\s*;"  # Rust use / PHP use
     r"|#include\s*[<\"].+[>\"]"            # C/C++ #include
-    r"|require(?:_relative|_once)?\s*[\s(].+" # Ruby require / PHP require
-    r"|using\s+\S+.+"                      # C# using
-    r"|include\s+\S+.+"                    # Ruby include / PHP include
-    r"|package\s+\S+"                      # Go/Java/Kotlin package
-    r"|module\s+\S+"                       # Rust/Ruby module
+    r"|require(?:_relative|_once)?\s*\(?\s*['\"][^'\"]+['\"]\s*\)?\s*;?"  # Ruby require / PHP require
+    r"|using\s+(?:static\s+)?[\w.]+(?:\s*=\s*[\w.<>]+)?\s*;"  # C# using
+    r"|include\s+(?:['\"][^'\"]+['\"]|[A-Z][\w:]*)\s*;?"  # Ruby include / PHP include
+    r"|package\s+[\w.]+\s*;?"              # Go/Java/Kotlin package
+    r"|module\s+[\w:.]+(?:\s+where)?\s*;?"   # Rust/Ruby/Haskell module
     r")$",
     re.IGNORECASE,
 )
@@ -599,13 +602,23 @@ def _looks_like_labeled_prose_line(text: str) -> bool:
     match = _PROSE_LABEL_LINE_PATTERN.match(normalized)
     if match is None:
         return False
-    label = re.sub(r"\s+", " ", match.group("label")).strip().casefold()
-    if label not in _PROSE_LABEL_TITLES:
-        return False
+    raw_label = re.sub(r"\s+", " ", match.group("label")).strip()
+    label = raw_label.casefold()
     body = match.group("body").strip()
     if not body or any(marker in body for marker in ("{", "}", "[", "]", "=>", "::", "->")):
         return False
     tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", body.casefold())
+    if label not in _PROSE_LABEL_TITLES:
+        # Book callout labels ("Note:", "Important Tip:") are capitalized words
+        # followed by a sentence; data keys are identifiers followed by values.
+        return (
+            raw_label[:1].isupper()
+            and len(raw_label.split()) <= 3
+            and "=" not in body
+            and len(tokens) >= 8
+            and body[:1].isupper()
+            and any(token in _PROSE_CONTINUATION_STOPWORDS for token in tokens)
+        )
     if len(tokens) < 8:
         return False
     stopword_hits = sum(1 for token in tokens if token in _PROSE_CONTINUATION_STOPWORDS)
