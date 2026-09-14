@@ -7,8 +7,9 @@ from book_agent.domain.enums import MemoryProposalStatus
 from book_agent.domain.models import ChapterMemoryProposal, MemorySnapshot
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
+from book_agent.services.glossary_service import GlossaryService
 from book_agent.translation.chapter_memory import ChapterMemory
-from book_agent.translation.contracts import CompiledTranslationContext, ContextPacket
+from book_agent.translation.contracts import CompiledTranslationContext, ContextPacket, RelevantTerm
 
 
 @dataclass(slots=True)
@@ -50,6 +51,7 @@ class MemoryService:
             packet,
             chapter_memory_snapshot=chapter_memory_snapshot,
             options=options,
+            document_terms=self._document_prompt_terms(packet.document_id),
         )
         merged_open_questions = list(compiled_packet.open_questions)
         for hint in rerun_hints:
@@ -71,6 +73,15 @@ class MemoryService:
             context=compiled_context,
             chapter_memory_snapshot=chapter_memory_snapshot,
         )
+
+    def _document_prompt_terms(self, document_id: str) -> list[RelevantTerm]:
+        # PDF v2 M2.7b: the document glossary feeds the compiled terms and goes
+        # through the same relevance filter. A lookup failure must not block
+        # translation.
+        try:
+            return GlossaryService(self.chapter_memory_repository.session).prompt_terms(document_id)
+        except Exception:  # pragma: no cover - defensive
+            return []
 
     def record_translation_proposals(
         self,

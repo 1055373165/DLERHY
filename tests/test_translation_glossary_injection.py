@@ -1,12 +1,10 @@
 # ruff: noqa: E402
-"""Tests for M2.7b prompt injection — glossary feeds into ContextPacket.
+"""Tests for M2.7b prompt injection — the document glossary feeds compiled context terms.
 
-Verifies `TranslationService._inject_locked_glossary` correctly merges
-document-level locked glossary entries into `compiled_context_packet
-.relevant_terms`. The existing prompt builder
-(`workers.translator._sorted_term_lines`) already renders these in the
-system prompt, so we additionally end-to-end-check that the glossary
-text appears in the rendered prompt string.
+`MemoryService.load_compiled_context` resolves active document glossary
+entries and the context compiler merges them with the packet's termbase terms
+and chapter concepts, applying the same relevance filter to all of them. The
+prompt builder (`workers.translator._sorted_term_lines`) renders the result.
 """
 
 import os
@@ -30,11 +28,13 @@ from book_agent.domain.enums import DocumentStatus, SourceType
 from book_agent.domain.models import Document
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
-from book_agent.infra.repositories.translation import TranslationRepository
+from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.glossary_service import GlossaryService
-from book_agent.services.translation import TranslationService
+from book_agent.services.context_compile import ChapterContextCompiler
+from book_agent.services.memory_service import MemoryService
 from book_agent.translation.contracts import (
     CompiledTranslationContext,
+    ContextPacket,
     PacketBlock,
     RelevantTerm,
 )
@@ -47,21 +47,17 @@ def _enable_sqlite_fk(dbapi_conn, _):
     cursor.close()
 
 
-def _mk_compiled_context(
+def _mk_context_packet(
     document_id: str,
     *,
     relevant_terms: list[RelevantTerm] | None = None,
-) -> CompiledTranslationContext:
-    return CompiledTranslationContext(
+) -> ContextPacket:
+    return ContextPacket(
         packet_id="packet-1",
-        source_packet_id="packet-1",
         document_id=document_id,
         chapter_id="chap-1",
         packet_type="translate",
         book_profile_version=1,
-        context_compile_version="v1",
-        memory_version_used=None,
-        compile_metadata={},
         current_blocks=[
             PacketBlock(
                 block_id="b1",
@@ -103,57 +99,54 @@ class GlossaryPromptInjectionTests(unittest.TestCase):
             )
             session.commit()
 
-    def _service(self, session) -> TranslationService:
-        return TranslationService(repository=TranslationRepository(session))
+    def _compile(self, session, *, relevant_terms: list[RelevantTerm] | None = None) -> CompiledTranslationContext:
+        packet = _mk_context_packet(self.doc_id, relevant_terms=relevant_terms)
+        return MemoryService(
+            chapter_memory_repository=ChapterTranslationMemoryRepository(session),
+            context_compiler=ChapterContextCompiler(),
+        ).load_compiled_context(packet=packet).context
 
-    def test_empty_glossary_leaves_context_unchanged(self) -> None:
+    def test_empty_glossary_adds_no_terms(self) -> None:
         with self.session_factory() as session:
-            svc = self._service(session)
-            ctx = _mk_compiled_context(self.doc_id)
-            result = svc._inject_locked_glossary(ctx)
-            self.assertIs(result, ctx)
-            self.assertEqual(result.relevant_terms, [])
+            self.assertEqual(self._compile(session).relevant_terms, [])
 
-    def test_locked_terms_are_merged_into_relevant_terms(self) -> None:
+    def test_relevant_locked_terms_are_merged_into_relevant_terms(self) -> None:
         with self.session_factory() as session:
             gs = GlossaryService(session)
             gs.lock_term(self.doc_id, "Agent", "智能体")
             gs.lock_term(self.doc_id, "Transformer", "变换器")
             session.commit()
         with self.session_factory() as session:
-            svc = self._service(session)
-            ctx = _mk_compiled_context(self.doc_id)
-            result = svc._inject_locked_glossary(ctx)
-            term_map = {t.source_term: t for t in result.relevant_terms}
-            self.assertIn("Agent", term_map)
-            self.assertIn("Transformer", term_map)
-            self.assertEqual(term_map["Agent"].target_term, "智能体")
-            self.assertEqual(term_map["Agent"].lock_level, "locked")
-            self.assertEqual(term_map["Transformer"].target_term, "变换器")
+            term_map = {t.source_term: t for t in self._compile(session).relevant_terms}
+        self.assertEqual(term_map["Agent"].target_term, "智能体")
+        self.assertEqual(term_map["Agent"].lock_level, "locked")
+        self.assertEqual(term_map["Transformer"].target_term, "变换器")
 
-    def test_existing_relevant_terms_win_on_conflict(self) -> None:
-        # Context compiler may have already chosen a chapter-scope target
-        # for a term; the document-level injection must NOT override it.
+    def test_glossary_terms_absent_from_the_packet_are_filtered_out(self) -> None:
+        # The glossary used to be appended wholesale; it now goes through the
+        # same relevance filter as the packet's own terms.
+        with self.session_factory() as session:
+            gs = GlossaryService(session)
+            gs.lock_term(self.doc_id, "Agent", "智能体")
+            gs.lock_term(self.doc_id, "Retrieval", "检索")
+            session.commit()
+        with self.session_factory() as session:
+            source_terms = [t.source_term for t in self._compile(session).relevant_terms]
+        self.assertEqual(source_terms, ["Agent"])
+
+    def test_packet_terms_win_over_glossary_on_conflict(self) -> None:
         with self.session_factory() as session:
             GlossaryService(session).lock_term(self.doc_id, "Agent", "智能体")
             session.commit()
         with self.session_factory() as session:
-            svc = self._service(session)
-            preexisting = [
-                RelevantTerm(source_term="Agent", target_term="代理人", lock_level="preferred")
-            ]
-            ctx = _mk_compiled_context(self.doc_id, relevant_terms=preexisting)
-            result = svc._inject_locked_glossary(ctx)
-            agent_terms = [t for t in result.relevant_terms if t.source_term == "Agent"]
-            self.assertEqual(len(agent_terms), 1)
-            self.assertEqual(agent_terms[0].target_term, "代理人")
-            self.assertEqual(agent_terms[0].lock_level, "preferred")
+            preexisting = [RelevantTerm(source_term="Agent", target_term="代理人", lock_level="preferred")]
+            agent_terms = [t for t in self._compile(session, relevant_terms=preexisting).relevant_terms if t.source_term == "Agent"]
+        self.assertEqual([(t.target_term, t.lock_level) for t in agent_terms], [("代理人", "preferred")])
 
     def test_suggested_entries_with_empty_target_are_skipped(self) -> None:
-        # SUGGESTED rows from upsert_candidates have empty target_term.
-        # We must not surface "Agent => " to the LLM.
         with self.session_factory() as session:
             from book_agent.services.terminology_miner import TermCandidate
+
             cand = TermCandidate(
                 term="Agent",
                 frequency=3,
@@ -168,45 +161,18 @@ class GlossaryPromptInjectionTests(unittest.TestCase):
             GlossaryService(session).upsert_candidates(self.doc_id, [cand])
             session.commit()
         with self.session_factory() as session:
-            svc = self._service(session)
-            ctx = _mk_compiled_context(self.doc_id)
-            result = svc._inject_locked_glossary(ctx)
-            self.assertEqual(result.relevant_terms, [])
+            self.assertEqual(self._compile(session).relevant_terms, [])
 
-    def test_injected_terms_appear_in_rendered_prompt(self) -> None:
+    def test_glossary_terms_appear_in_rendered_prompt_locked_first(self) -> None:
         with self.session_factory() as session:
-            GlossaryService(session).lock_term(self.doc_id, "Agent", "智能体")
+            GlossaryService(session).lock_term(self.doc_id, "Transformer", "变换器")
             session.commit()
         with self.session_factory() as session:
-            svc = self._service(session)
-            ctx = _mk_compiled_context(self.doc_id)
-            merged = svc._inject_locked_glossary(ctx)
-            # Use the worker's existing renderer to verify the prompt text.
-            lines = _sorted_term_lines(merged)
-            joined = "\n".join(lines)
-            self.assertIn("Agent => 智能体", joined)
-            self.assertIn("(locked)", joined)
-
-    def test_locked_terms_sort_before_suggested_in_prompt(self) -> None:
-        # Mix of locked + preferred + suggested; renderer must put
-        # locked first so the LLM sees them at top.
-        with self.session_factory() as session:
-            gs = GlossaryService(session)
-            gs.lock_term(self.doc_id, "RAG", "检索增强生成")  # locked
-            session.commit()
-        with self.session_factory() as session:
-            svc = self._service(session)
-            preexisting = [
-                RelevantTerm(source_term="Apple", target_term="苹果", lock_level="suggested"),
-                RelevantTerm(source_term="Banana", target_term="香蕉", lock_level="preferred"),
-            ]
-            ctx = _mk_compiled_context(self.doc_id, relevant_terms=preexisting)
-            merged = svc._inject_locked_glossary(ctx)
-            lines = _sorted_term_lines(merged)
-            self.assertEqual(len(lines), 3)
-            # First line should be the locked term (lowest sort key).
-            self.assertIn("(locked)", lines[0])
-            self.assertIn("RAG", lines[0])
+            preexisting = [RelevantTerm(source_term="Agent", target_term="代理", lock_level="suggested")]
+            lines = _sorted_term_lines(self._compile(session, relevant_terms=preexisting))
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Transformer => 变换器", lines[0])
+        self.assertIn("(locked)", lines[0])
 
 
 if __name__ == "__main__":

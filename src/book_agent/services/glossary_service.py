@@ -39,10 +39,11 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.core.ids import stable_id
 from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, TermType
 from book_agent.domain.models.translation import TermEntry
 from book_agent.services.terminology_miner import TermCandidate
-from book_agent.core.ids import stable_id
+from book_agent.translation.contracts import RelevantTerm
 
 
 @dataclass(slots=True, frozen=True)
@@ -89,6 +90,18 @@ class GlossaryService:
         if not include_superseded:
             stmt = stmt.where(TermEntry.status == TermStatus.ACTIVE)
         return list(self.session.scalars(stmt).all())
+
+    def prompt_terms(self, document_id: str) -> list[RelevantTerm]:
+        """Active document glossary entries that carry a target rendering, as prompt terms."""
+        return [
+            RelevantTerm(
+                source_term=entry.source_term,
+                target_term=entry.target_term,
+                lock_level=entry.lock_level.value,
+            )
+            for entry in self.list_document_entries(document_id)
+            if entry.target_term and entry.target_term.strip()
+        ]
 
     # --- Mutations ---
 
