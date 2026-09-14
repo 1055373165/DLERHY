@@ -38,7 +38,6 @@ class FinalizeStageSnapshotsOnSuccessTests(unittest.TestCase):
             session_factory=self.session_factory,
             export_root=self.export_root,
             translation_worker=None,
-            enable_controller_runner=False,
         )
 
     def _seed_run(self, *, stages: dict) -> str:

@@ -309,7 +309,6 @@ class WorkItemStage(StrEnum):
     BOOTSTRAP = "bootstrap"
     TRANSLATE = "translate"
     REVIEW = "review"
-    REPAIR = "repair"
     EXPORT = "export"
 
 
@@ -365,82 +364,6 @@ class InvalidatedObjectType(StrEnum):
     ALIGNMENT_EDGE = "alignment_edge"
     MEMORY_SNAPSHOT = "memory_snapshot"
     EXPORT = "export"
-
-
-class ChapterRunPhase(StrEnum):
-    PACKETIZE = "packetize"
-    TRANSLATE = "translate"
-    REVIEW = "review"
-    EXPORT = "export"
-    COMPLETE = "complete"
-
-
-class ChapterRunStatus(StrEnum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class PacketTaskAction(StrEnum):
-    TRANSLATE = "translate"
-    RETRANSLATE = "retranslate"
-
-
-class PacketTaskStatus(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ReviewSessionStatus(StrEnum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ReviewTerminalityState(StrEnum):
-    OPEN = "open"
-    APPROVED = "approved"
-    BLOCKED = "blocked"
-
-
-class RuntimeIncidentKind(StrEnum):
-    EXPORT_MISROUTING = "export_misrouting"
-    RUNTIME_DEFECT = "runtime_defect"
-    REVIEW_DEADLOCK = "review_deadlock"
-    PACKET_RUNTIME_DEFECT = "packet_runtime_defect"
-
-
-class RuntimeIncidentStatus(StrEnum):
-    OPEN = "open"
-    DIAGNOSING = "diagnosing"
-    PATCH_PROPOSED = "patch_proposed"
-    VALIDATING = "validating"
-    PUBLISHED = "published"
-    RESOLVED = "resolved"
-    FAILED = "failed"
-    FROZEN = "frozen"
-
-
-class RuntimePatchProposalStatus(StrEnum):
-    PROPOSED = "proposed"
-    VALIDATING = "validating"
-    VALIDATED = "validated"
-    PUBLISHED = "published"
-    REJECTED = "rejected"
-    ROLLED_BACK = "rolled_back"
-
-
-class RuntimeBundleRevisionStatus(StrEnum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ROLLED_BACK = "rolled_back"
 
 
 class ProviderKind(StrEnum):

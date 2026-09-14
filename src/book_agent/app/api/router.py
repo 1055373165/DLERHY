@@ -4,7 +4,6 @@ from book_agent.app.api.routes import (
     actions,
     documents,
     health,
-    patches,
     providers,
     run_cost,
     run_stream,
@@ -18,5 +17,4 @@ api_router.include_router(actions.router, prefix="/actions", tags=["actions"])
 api_router.include_router(runs.router, prefix="/runs", tags=["runs"])
 api_router.include_router(run_stream.router, prefix="/runs", tags=["runs"])
 api_router.include_router(run_cost.router, prefix="/runs", tags=["runs"])
-api_router.include_router(patches.router, prefix="/patches", tags=["patches"])
 api_router.include_router(providers.router, prefix="/providers", tags=["providers"])

@@ -47,15 +47,6 @@ REVIEW_ISSUE_OPENED: Final = "review.issue.opened"
 REVIEW_ISSUE_CLOSED: Final = "review.issue.closed"
 ACTION_DISPATCHED: Final = "action.dispatched"
 
-# --- Patch proposal lifecycle ------------------------------------------------
-PATCH_PROPOSED: Final = "patch.proposed"
-PATCH_STAGED: Final = "patch.staged"
-PATCH_APPROVED: Final = "patch.approved"
-PATCH_REJECTED: Final = "patch.rejected"
-PATCH_APPLIED: Final = "patch.applied"
-PATCH_REVERTED: Final = "patch.reverted"
-PATCH_VERIFIED: Final = "patch.verified"
-
 # --- Cost / budget -----------------------------------------------------------
 COST_BUDGET_WARNING: Final = "cost.budget.warning"
 COST_BUDGET_EXCEEDED: Final = "cost.budget.exceeded"
@@ -90,13 +81,6 @@ EVENT_KINDS: frozenset[str] = frozenset(
         REVIEW_ISSUE_OPENED,
         REVIEW_ISSUE_CLOSED,
         ACTION_DISPATCHED,
-        PATCH_PROPOSED,
-        PATCH_STAGED,
-        PATCH_APPROVED,
-        PATCH_REJECTED,
-        PATCH_APPLIED,
-        PATCH_REVERTED,
-        PATCH_VERIFIED,
         COST_BUDGET_WARNING,
         COST_BUDGET_EXCEEDED,
         AGENT_TRACE_STARTED,

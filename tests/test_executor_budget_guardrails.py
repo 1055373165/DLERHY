@@ -29,7 +29,6 @@ class ExecutorBudgetGuardrailTests(unittest.TestCase):
             session_factory=self.session_factory,
             export_root="artifacts/exports",
             translation_worker=None,
-            enable_controller_runner=False,
             state_reconciler_interval_seconds=0,
         )
 

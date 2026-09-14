@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
 
 from book_agent.domain.enums import (
     ActorType,
@@ -14,7 +13,7 @@ from book_agent.domain.enums import (
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models.ops import RunAuditEvent, WorkItem
+from book_agent.domain.models.ops import RunAuditEvent
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
 from book_agent.orchestrator.stage_status import (
     OPTIONAL_PIPELINE_STAGES,
@@ -26,7 +25,6 @@ from book_agent.orchestrator.stage_status import (
     classify_run_outcome,
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
-from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
 
 
 def _utcnow() -> datetime:
@@ -98,10 +96,6 @@ class RunExecutionService:
         )
         if created:
             run = self.repository.get_run(run_id)
-            if run.runtime_bundle_revision_id is not None:
-                for work_item in created:
-                    work_item.runtime_bundle_revision_id = run.runtime_bundle_revision_id
-                self.repository.session.flush()
             detail = dict(run.status_detail_json or {})
             counters = dict(detail.get("control_counters") or {})
             counters["seeded_work_item_count"] = int(counters.get("seeded_work_item_count", 0)) + len(created)
@@ -147,189 +141,6 @@ class RunExecutionService:
                 }
             ),
         )
-
-    def ensure_repair_dispatch_work_item(
-        self,
-        *,
-        run_id: str,
-        proposal_id: str,
-        incident_id: str,
-        repair_dispatch_json: dict[str, Any],
-        repair_plan_json: dict[str, Any] | None = None,
-        priority: int = 40,
-    ) -> str:
-        input_bundle = build_runtime_repair_request_input_bundle(
-            proposal_id=proposal_id,
-            incident_id=incident_id,
-            repair_dispatch_json=repair_dispatch_json,
-            repair_plan_json=repair_plan_json,
-        )
-        work_item_ids = self.ensure_scope_replay_work_items(
-            run_id=run_id,
-            stage=WorkItemStage.REPAIR,
-            scope_type=WorkItemScopeType.ISSUE_ACTION,
-            scope_ids=[proposal_id],
-            priority=priority,
-            input_version_bundle_by_scope_id={proposal_id: input_bundle},
-        )
-        return work_item_ids[0]
-
-    def claim_repair_dispatch_work_item(
-        self,
-        *,
-        work_item_id: str,
-        worker_name: str,
-        worker_instance_id: str,
-        lease_seconds: int,
-        ) -> ClaimedRunWorkItem | None:
-        return self.claim_work_item_by_id(
-            work_item_id=work_item_id,
-            worker_name=worker_name,
-            worker_instance_id=worker_instance_id,
-            lease_seconds=lease_seconds,
-        )
-
-    def resume_repair_dispatch_work_item(
-        self,
-        *,
-        work_item_id: str,
-        actor_id: str,
-        note: str | None = None,
-    ) -> WorkItem:
-        now = _utcnow()
-        work_item = self.repository.resume_repair_work_item(
-            work_item_id=work_item_id,
-            resumed_at=now,
-        )
-        if work_item is None:
-            raise ValueError(f"Repair work item is not resumable: {work_item_id}")
-        run = self.repository.get_run(work_item.run_id)
-        self.repository.save_run(
-            run,
-            audit_event=RunAuditEvent(
-                run_id=run.id,
-                work_item_id=work_item.id,
-                event_type="work_item.resumed",
-                actor_type=ActorType.HUMAN,
-                actor_id=actor_id,
-                created_at=now,
-                payload_json={
-                    "stage": work_item.stage.value,
-                    "scope_type": work_item.scope_type.value,
-                    "scope_id": work_item.scope_id,
-                    "note": note or "",
-                    "attempt": work_item.attempt,
-                },
-            ),
-        )
-        return work_item
-
-    def ensure_scope_replay_work_items(
-        self,
-        *,
-        run_id: str,
-        stage: WorkItemStage,
-        scope_type: WorkItemScopeType,
-        scope_ids: list[str],
-        priority: int = 100,
-        input_version_bundle_by_scope_id: dict[str, dict[str, Any]] | None = None,
-    ) -> list[str]:
-        normalized_scope_ids = [scope_id for scope_id in scope_ids if scope_id]
-        if not normalized_scope_ids:
-            return []
-
-        statuses = [
-            WorkItemStatus.PENDING,
-            WorkItemStatus.RETRYABLE_FAILED,
-            WorkItemStatus.LEASED,
-            WorkItemStatus.RUNNING,
-        ]
-        if stage == WorkItemStage.REPAIR:
-            statuses.append(WorkItemStatus.TERMINAL_FAILED)
-        existing_items_raw = self.repository.session.scalars(
-            select(WorkItem)
-            .where(
-                WorkItem.run_id == run_id,
-                WorkItem.stage == stage,
-                WorkItem.scope_type == scope_type,
-                WorkItem.scope_id.in_(normalized_scope_ids),
-                WorkItem.status.in_(statuses),
-            )
-            .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
-        ).all()
-        existing_items = [
-            item
-            for item in existing_items_raw
-            if item.status
-            in {
-                WorkItemStatus.PENDING,
-                WorkItemStatus.RETRYABLE_FAILED,
-                WorkItemStatus.LEASED,
-                WorkItemStatus.RUNNING,
-            }
-            or (stage == WorkItemStage.REPAIR and self._terminal_repair_item_blocks_reseed(item))
-        ]
-        existing_scope_ids = {item.scope_id for item in existing_items}
-        missing_scope_ids = [scope_id for scope_id in normalized_scope_ids if scope_id not in existing_scope_ids]
-
-        run = self.repository.get_run(run_id)
-        created_items: list[WorkItem] = []
-        version_map = input_version_bundle_by_scope_id or {}
-        now = _utcnow()
-        for scope_id in missing_scope_ids:
-            work_item = WorkItem(
-                run_id=run_id,
-                stage=stage,
-                scope_type=scope_type,
-                scope_id=scope_id,
-                priority=priority,
-                status=WorkItemStatus.PENDING,
-                runtime_bundle_revision_id=run.runtime_bundle_revision_id,
-                input_version_bundle_json=version_map.get(scope_id, {}),
-                output_artifact_refs_json={},
-                error_detail_json={},
-                created_at=now,
-                updated_at=now,
-            )
-            self.repository.session.add(work_item)
-            created_items.append(work_item)
-        self.repository.session.flush()
-
-        replay_item_ids = [item.id for item in existing_items] + [item.id for item in created_items]
-        self.repository.save_run(
-            run,
-            audit_event=RunAuditEvent(
-                run_id=run_id,
-                work_item_id=None,
-                event_type="run.scope_replay_ensured",
-                actor_type=ActorType.SYSTEM,
-                actor_id="run-executor",
-                created_at=now,
-                payload_json={
-                    "stage": stage.value,
-                    "scope_type": scope_type.value,
-                    "scope_ids": normalized_scope_ids,
-                    "existing_work_item_ids": [item.id for item in existing_items],
-                    "created_work_item_ids": [item.id for item in created_items],
-                },
-            ),
-        )
-        return replay_item_ids
-
-    @staticmethod
-    def _terminal_repair_item_blocks_reseed(work_item: WorkItem) -> bool:
-        if work_item.status != WorkItemStatus.TERMINAL_FAILED:
-            return False
-        error_detail = dict(work_item.error_detail_json or {})
-        repair_result_json = error_detail.get("repair_result_json")
-        if not isinstance(repair_result_json, dict):
-            repair_result_json = {}
-        decision = str(
-            error_detail.get("repair_agent_decision")
-            or repair_result_json.get("repair_agent_decision")
-            or ""
-        ).strip()
-        return decision == "manual_escalation_required"
 
     def claim_next_work_item(
         self,

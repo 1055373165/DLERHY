@@ -9,28 +9,22 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from book_agent.app.runtime.controller_runner import ControllerRunner
-from book_agent.app.runtime.controllers.export_controller import ExportController
-from book_agent.app.runtime.controllers.incident_controller import IncidentController
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
-    JobScopeType,
     DocumentRunStatus,
     DocumentRunType,
     ExportType,
     PacketStatus,
-    RuntimeIncidentKind,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Block, Chapter
-from book_agent.domain.models.ops import DocumentRun, RuntimeIncident, RuntimePatchProposal, WorkItem
-from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
+from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
 from book_agent.infra.repositories.run_control import RunControlRepository
@@ -58,37 +52,12 @@ from book_agent.orchestrator.state_machine import (
 )
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
-from book_agent.services.runtime_repair_executor import RuntimeRepairExecutorRegistry
-from book_agent.services.runtime_repair_registry import RuntimeRepairWorkerRegistry
-from book_agent.services.runtime_repair_worker import RuntimeRepairDecisionError
-from book_agent.services.export_routing import ExportRoutingError
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.translator import TranslationWorker
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _append_recovered_lineage(
-    runtime_v2: dict[str, Any],
-    *,
-    lineage_entry: dict[str, Any],
-) -> None:
-    existing_entries = [
-        dict(entry)
-        for entry in (runtime_v2.get("recovered_lineage") or [])
-        if isinstance(entry, dict)
-    ]
-    proposal_id = lineage_entry.get("proposal_id")
-    if proposal_id:
-        existing_entries = [
-            entry
-            for entry in existing_entries
-            if entry.get("proposal_id") != proposal_id
-        ]
-    existing_entries.append(lineage_entry)
-    runtime_v2["recovered_lineage"] = existing_entries
 
 
 def _is_retryable_exception(exc: Exception) -> bool:
@@ -123,8 +92,6 @@ def _is_retryable_exception(exc: Exception) -> bool:
         "database is locked",
         "structured json output payload",
         "translationworkeroutput schema",
-        "export misrouting",
-        "selected route",
     ]
     return any(marker in message for marker in retryable_markers)
 
@@ -164,9 +131,7 @@ class DocumentRunExecutor:
         translation_worker: TranslationWorker | None,
         translation_worker_resolver: Callable[[], TranslationWorker] | None = None,
         poll_interval_seconds: float = 1.0,
-        controller_reconcile_interval_seconds: float = 10.0,
         state_reconciler_interval_seconds: float = 30.0,
-        enable_controller_runner: bool = True,
         lease_seconds: int = 120,
         review_lease_seconds: int = 1800,
         heartbeat_interval_seconds: int = 15,
@@ -182,9 +147,6 @@ class DocumentRunExecutor:
         # resolver is supplied.
         self.translation_worker_resolver = translation_worker_resolver
         self.poll_interval_seconds = poll_interval_seconds
-        self.controller_reconcile_interval_seconds = max(0.0, float(controller_reconcile_interval_seconds))
-        self._controller_runner = ControllerRunner(session_factory) if enable_controller_runner else None
-        self._controller_last_reconcile_at_by_run: dict[str, float] = {}
         self.state_reconciler_interval_seconds = max(
             0.0, float(state_reconciler_interval_seconds)
         )
@@ -195,40 +157,12 @@ class DocumentRunExecutor:
         self.default_max_auto_followup_attempts = default_max_auto_followup_attempts
         self.default_max_blocker_repair_rounds = max(1, int(default_max_blocker_repair_rounds))
         self.default_max_parallel_workers = max(1, int(default_max_parallel_workers))
-        self._runtime_repair_registry = RuntimeRepairWorkerRegistry(session_factory=session_factory)
-        self._runtime_repair_executor_registry = RuntimeRepairExecutorRegistry(session_factory=session_factory)
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
         self._supervisor_thread: threading.Thread | None = None
         self._active_run_threads: dict[str, threading.Thread] = {}
         self._active_work_threads: dict[str, dict[str, threading.Thread]] = {}
         self._lock = threading.Lock()
-
-    def _maybe_reconcile_controllers(self, run_id: str) -> None:
-        """
-        Phase A: best-effort controller reconcile integration.
-
-        Contract (for now):
-        - Mirror-only: controllers may only create/update Runtime V2 resources/checkpoints.
-        - Must not block or fail the existing V1 run loop.
-        """
-
-        runner = self._controller_runner
-        if runner is None:
-            return
-        now = time.monotonic()
-        last = self._controller_last_reconcile_at_by_run.get(run_id)
-        if last is not None and (now - last) < self.controller_reconcile_interval_seconds:
-            return
-        self._controller_last_reconcile_at_by_run[run_id] = now
-
-        try:
-            runner.reconcile_run(run_id=run_id)
-        except OperationalError:
-            return
-        except Exception:
-            # Keep Phase A wiring strictly non-invasive (no behavior change to V1 runner).
-            return
 
     def _maybe_reconcile_state(self, run_id: str) -> None:
         """Throttled read-only drift scan over stage cache vs physical state.
@@ -415,13 +349,10 @@ class DocumentRunExecutor:
                 return
 
             try:
-                self._maybe_reconcile_controllers(run_id)
                 self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
                 if self._enforce_budget_guardrails(run_id):
                     return
-                if self._process_repair_stage(run_id):
-                    continue
                 if self._process_translate_stage(run_id):
                     continue
                 if self._process_review_stage(run_id):
@@ -573,38 +504,6 @@ class DocumentRunExecutor:
             self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage="review")
         return False
 
-    def _process_repair_stage(self, run_id: str) -> bool:
-        with session_scope(self.session_factory) as session:
-            execution = self._run_execution_service(session)
-            repair_items = self._list_stage_items(session, run_id, WorkItemStage.REPAIR)
-            if not repair_items:
-                return False
-            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in repair_items):
-                return False
-
-            claimed_items: list[ClaimedRunWorkItem] = []
-            if any(item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED} for item in repair_items):
-                claimed = execution.claim_next_work_item(
-                    run_id=run_id,
-                    stage=WorkItemStage.REPAIR,
-                    worker_name="app.run.repair",
-                    worker_instance_id=f"app.repair:{uuid4()}",
-                    lease_seconds=self.lease_seconds,
-                )
-                if claimed is not None:
-                    claimed_items.append(claimed)
-
-        if claimed_items:
-            for claimed in claimed_items:
-                self._ensure_work_thread(
-                    run_id=run_id,
-                    work_item_id=claimed.work_item_id,
-                    thread_name=f"book-agent-repair-{claimed.work_item_id}",
-                    target=lambda claimed=claimed: self._execute_repair_work_item(run_id, claimed),
-                )
-            return True
-        return False
-
     def _seed_translate_frontier_work_items(
         self,
         *,
@@ -746,73 +645,51 @@ class DocumentRunExecutor:
             stop_reason = "unknown"
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                if claimed.scope_type == WorkItemScopeType.CHAPTER.value:
-                    chapter_id = str(input_bundle.get("chapter_id") or claimed.scope_id)
-                    document_id = str(input_bundle.get("document_id") or "")
-                    artifacts = workflow.review_service.review_chapter(chapter_id)
-                    remaining_blocking_issue_count = int(artifacts.summary.blocking_issue_count or 0)
-                    payload = {
-                        "document_id": document_id,
-                        "chapter_id": chapter_id,
-                        "total_issue_count": len(artifacts.issues),
-                        "total_action_count": len(artifacts.actions),
-                        "chapter_count": 1,
-                        "auto_followup_requested": False,
-                        "auto_followup_applied": False,
-                        "auto_followup_attempt_count": 0,
-                        "blocker_repair_requested": False,
-                        "blocker_repair_applied": False,
-                        "blocker_repair_round_count": 0,
-                        "blocker_repair_round_limit": 0,
-                        "blocker_repair_execution_count": 0,
-                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
-                    }
-                else:
-                    document_id = str(input_bundle.get("document_id") or claimed.scope_id)
-                    initial_result = workflow.review_document(
+                document_id = str(input_bundle.get("document_id") or claimed.scope_id)
+                initial_result = workflow.review_document(
+                    document_id,
+                    auto_execute_packet_followups=True,
+                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                )
+                repair_result = workflow.repair_document_blockers_until_exportable(
+                    document_id,
+                    max_rounds=self._max_blocker_repair_rounds(session, run_id),
+                )
+                result = initial_result
+                if repair_result.applied:
+                    result = workflow.review_document(
                         document_id,
-                        auto_execute_packet_followups=True,
-                        max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                        auto_execute_packet_followups=False,
                     )
-                    repair_result = workflow.repair_document_blockers_until_exportable(
-                        document_id,
-                        max_rounds=self._max_blocker_repair_rounds(session, run_id),
-                    )
-                    result = initial_result
-                    if repair_result.applied:
-                        result = workflow.review_document(
-                            document_id,
-                            auto_execute_packet_followups=False,
-                        )
-                    remaining_blocking_issue_count = repair_result.blocking_issue_count_after
-                    stop_reason = repair_result.stop_reason or "unknown"
-                    payload = {
-                        "document_id": document_id,
-                        "total_issue_count": result.total_issue_count,
-                        "total_action_count": result.total_action_count,
-                        "chapter_count": len(result.chapter_results),
-                        "examined_chapter_count": result.examined_chapter_count,
-                        "skipped_chapter_count": result.skipped_chapter_count,
-                        "total_chapter_count": result.total_chapter_count,
-                        "skipped_chapters": [
-                            {
-                                "chapter_id": s.chapter_id,
-                                "reason": s.reason,
-                                "pending_packet_count": s.pending_packet_count,
-                                "failed_packet_count": s.failed_packet_count,
-                            }
-                            for s in result.skipped_chapters
-                        ],
-                        "auto_followup_requested": initial_result.auto_followup_requested,
-                        "auto_followup_applied": initial_result.auto_followup_applied,
-                        "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
-                        "blocker_repair_requested": repair_result.requested,
-                        "blocker_repair_applied": repair_result.applied,
-                        "blocker_repair_round_count": repair_result.round_count,
-                        "blocker_repair_round_limit": repair_result.round_limit,
-                        "blocker_repair_execution_count": len(repair_result.executions),
-                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
-                    }
+                remaining_blocking_issue_count = repair_result.blocking_issue_count_after
+                stop_reason = repair_result.stop_reason or "unknown"
+                payload = {
+                    "document_id": document_id,
+                    "total_issue_count": result.total_issue_count,
+                    "total_action_count": result.total_action_count,
+                    "chapter_count": len(result.chapter_results),
+                    "examined_chapter_count": result.examined_chapter_count,
+                    "skipped_chapter_count": result.skipped_chapter_count,
+                    "total_chapter_count": result.total_chapter_count,
+                    "skipped_chapters": [
+                        {
+                            "chapter_id": s.chapter_id,
+                            "reason": s.reason,
+                            "pending_packet_count": s.pending_packet_count,
+                            "failed_packet_count": s.failed_packet_count,
+                        }
+                        for s in result.skipped_chapters
+                    ],
+                    "auto_followup_requested": initial_result.auto_followup_requested,
+                    "auto_followup_applied": initial_result.auto_followup_applied,
+                    "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
+                    "blocker_repair_requested": repair_result.requested,
+                    "blocker_repair_applied": repair_result.applied,
+                    "blocker_repair_round_count": repair_result.round_count,
+                    "blocker_repair_round_limit": repair_result.round_limit,
+                    "blocker_repair_execution_count": len(repair_result.executions),
+                    "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                }
             if remaining_blocking_issue_count > 0:
                 self._update_pipeline_stage(
                     run_id,
@@ -915,41 +792,6 @@ class DocumentRunExecutor:
             worker_fn=_run_export,
             on_success=_on_success,
             stage_key=pipeline_key,
-            lease_seconds=self.lease_seconds,
-        )
-
-    def _execute_repair_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
-        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-        repair_agent = None
-        repair_executor = None
-
-        def _prepare_repair_execution() -> dict[str, Any]:
-            nonlocal repair_agent, repair_executor
-            repair_agent = self._runtime_repair_registry.resolve_for_input_bundle(input_bundle)
-            repair_executor = self._runtime_repair_executor_registry.resolve_for_input_bundle(
-                input_bundle=input_bundle,
-                repair_agent=repair_agent,
-            )
-            return repair_executor.prepare_execution(
-                claimed=claimed,
-                input_bundle=input_bundle,
-            )
-
-        def _complete_repair_execution(payload: dict[str, Any], lease_token: str) -> None:
-            if repair_executor is None:
-                raise RuntimeError("Repair executor was not resolved before completion.")
-            repair_executor.complete_execution(
-                run_id=run_id,
-                payload=payload,
-                lease_token=lease_token,
-            )
-
-        self._execute_claimed_work_item(
-            run_id=run_id,
-            claimed=claimed,
-            worker_fn=_prepare_repair_execution,
-            on_success=_complete_repair_execution,
-            stage_key="repair",
             lease_seconds=self.lease_seconds,
         )
 
@@ -1065,25 +907,13 @@ class DocumentRunExecutor:
         exc: Exception,
         stage_key: str,
     ) -> None:
-        export_misrouting = isinstance(exc, ExportRoutingError)
-        retryable = _is_retryable_exception(exc) or export_misrouting
+        retryable = _is_retryable_exception(exc)
         pause_reason = _pause_reason_for_exception(exc)
         error_class = exc.__class__.__name__
         error_detail = {
             "message": str(exc),
             "traceback": traceback.format_exc(limit=8),
         }
-        repair_result_json: dict[str, Any] | None = None
-        if isinstance(exc, RuntimeRepairDecisionError):
-            retryable = exc.retryable
-            repair_result_json = dict(exc.result_json or {})
-            error_class = exc.__class__.__name__
-            if exc.decision:
-                error_detail["repair_agent_decision"] = exc.decision
-            if exc.decision_reason:
-                error_detail["repair_agent_decision_reason"] = exc.decision_reason
-            if repair_result_json:
-                error_detail["repair_result_json"] = dict(repair_result_json)
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_work_item_failure(
@@ -1092,21 +922,6 @@ class DocumentRunExecutor:
                 error_detail_json=error_detail,
                 retryable=retryable,
             )
-            if claimed.stage == WorkItemStage.REPAIR.value:
-                input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-                proposal_id = str(input_bundle.get("proposal_id") or claimed.scope_id)
-                try:
-                    result_json = dict(repair_result_json or {})
-                    result_json.setdefault("error_class", error_class)
-                    result_json.setdefault("error_message", str(exc))
-                    IncidentController(session=session).record_repair_dispatch_execution(
-                        proposal_id=proposal_id,
-                        succeeded=False,
-                        result_json=result_json,
-                        manage_work_item_lifecycle=False,
-                    )
-                except Exception:
-                    pass
             if (
                 claimed.stage == WorkItemStage.TRANSLATE.value
                 and claimed.scope_type == WorkItemScopeType.PACKET.value
@@ -1122,13 +937,6 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     work_item_id=claimed.work_item_id,
                     attempt=claimed.attempt,
-                )
-            if export_misrouting and claimed.stage == WorkItemStage.EXPORT.value:
-                self._recover_export_misrouting(
-                    session=session,
-                    run_id=run_id,
-                    claimed=claimed,
-                    exc=exc,
                 )
             if pause_reason is not None:
                 control = self._run_control_service(session)
@@ -1159,252 +967,6 @@ class DocumentRunExecutor:
         if summary.status in {"failed", "paused", "cancelled"}:
             self._sync_pipeline_status(run_id, summary.status)
         self.wake(run_id)
-
-    def _recover_export_misrouting(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        claimed: ClaimedRunWorkItem,
-        exc: Exception,
-    ) -> None:
-        export_error = exc if isinstance(exc, ExportRoutingError) else None
-        route_evidence_json = dict(getattr(export_error, "route_evidence_json", {}) or {})
-        route_candidates = list(getattr(export_error, "expected_route_candidates", []) or [])
-        selected_route = str(
-            getattr(export_error, "selected_route", "")
-            or route_evidence_json.get("selected_route")
-            or ""
-        )
-        source_type = str(route_evidence_json.get("source_type") or "epub")
-        runtime_bundle_revision_id = route_evidence_json.get("runtime_bundle_revision_id")
-        export_type = str(route_evidence_json.get("export_type") or "rebuilt_pdf")
-        run = session.get(DocumentRun, run_id)
-        if run is not None:
-            status_detail = dict(run.status_detail_json or {})
-            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-            runtime_v2["last_export_route_evidence"] = route_evidence_json
-            status_detail["runtime_v2"] = runtime_v2
-            run.status_detail_json = status_detail
-            run.updated_at = _utcnow()
-            session.add(run)
-            session.flush()
-        try:
-            controller = ExportController(session=session)
-            recovery = controller.recover_export_misrouting(
-                run_id=run_id,
-                work_item_id=claimed.work_item_id,
-                scope_id=claimed.scope_id,
-                source_type=source_type,
-                selected_route=selected_route,
-                runtime_bundle_revision_id=(
-                    str(runtime_bundle_revision_id) if runtime_bundle_revision_id is not None else None
-                ),
-                route_candidates=route_candidates,
-                route_evidence_json=route_evidence_json,
-                error_message=str(exc),
-                export_type=export_type,
-            )
-        except Exception as recovery_exc:  # pragma: no cover - defensive recovery path
-            if run is not None:
-                status_detail = dict(run.status_detail_json or {})
-                runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-                runtime_v2["last_export_route_recovery_error"] = {
-                    "error_class": recovery_exc.__class__.__name__,
-                    "error_message": str(recovery_exc),
-                }
-                status_detail["runtime_v2"] = runtime_v2
-                run.status_detail_json = status_detail
-                run.updated_at = _utcnow()
-                session.add(run)
-                session.flush()
-            return
-
-        if run is not None:
-            status_detail = dict(run.status_detail_json or {})
-            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-            runtime_v2["pending_export_route_repair"] = {
-                "incident_id": recovery.incident_id,
-                "proposal_id": recovery.proposal_id,
-                "repair_work_item_id": recovery.repair_work_item_id,
-                "selected_route": selected_route,
-                "corrected_route": recovery.corrected_route,
-                "route_candidates": route_candidates,
-                "replay_scope_id": claimed.scope_id,
-            }
-            status_detail["runtime_v2"] = runtime_v2
-            run.status_detail_json = status_detail
-            run.updated_at = _utcnow()
-            session.add(run)
-            session.flush()
-        self.wake(run_id)
-
-    def _finalize_export_route_repair(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        incident: RuntimeIncident,
-        proposal: RuntimePatchProposal,
-        bundle_revision_id: str,
-        corrected_route: str | None = None,
-    ) -> None:
-        run = session.get(DocumentRun, run_id)
-        if run is None:
-            return
-        proposal_detail = dict(proposal.status_detail_json or {})
-        bundle_guard = dict(proposal_detail.get("bundle_guard") or {})
-        route_candidates = list((incident.bundle_json or {}).get("route_candidates") or [])
-        export_type = (incident.bundle_json or {}).get("export_type")
-        route_evidence_json = dict(incident.route_evidence_json or {})
-        published_bundle_revision_id = proposal.published_bundle_revision_id or bundle_revision_id
-        active_bundle_revision_id = str(
-            bundle_guard.get("effective_revision_id")
-            or run.runtime_bundle_revision_id
-            or published_bundle_revision_id
-        )
-        rollback_target_revision_id = bundle_guard.get("rollback_target_revision_id")
-        rollback_performed = bool(bundle_guard.get("rollback_performed"))
-        bound_work_item_ids = [
-            str(work_item_id)
-            for work_item_id in list(proposal_detail.get("bound_work_item_ids") or [])
-            if str(work_item_id).strip()
-        ]
-        repair_dispatch = dict(proposal_detail.get("repair_dispatch") or {})
-        replay_scope_id = str((repair_dispatch.get("replay") or {}).get("scope_id") or incident.scope_id)
-        replay_work_item_id = bound_work_item_ids[0] if bound_work_item_ids else ""
-        corrected_route = str(
-            corrected_route
-            or (repair_dispatch.get("last_result") or {}).get("result_json", {}).get("corrected_route")
-            or (route_evidence_json.get("corrected_route"))
-            or ""
-        )
-        lineage_entry = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "published_bundle_revision_id": published_bundle_revision_id,
-            "active_bundle_revision_id": active_bundle_revision_id,
-            "rollback_performed": rollback_performed,
-            "rollback_target_revision_id": rollback_target_revision_id,
-            "replay_scope_id": replay_scope_id,
-            "replay_work_item_id": replay_work_item_id,
-            "bound_work_item_ids": bound_work_item_ids,
-            "recorded_at": _utcnow().isoformat(),
-        }
-        status_detail = dict(run.status_detail_json or {})
-        runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-        runtime_v2["last_export_route_recovery"] = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "bundle_revision_id": published_bundle_revision_id,
-            "published_bundle_revision_id": published_bundle_revision_id,
-            "active_bundle_revision_id": active_bundle_revision_id,
-            "selected_route": incident.selected_route,
-            "rollback_performed": rollback_performed,
-            "rollback_target_revision_id": rollback_target_revision_id,
-            "corrected_route": corrected_route,
-            "route_candidates": route_candidates,
-            "export_type": export_type,
-            "replay_scope_id": replay_scope_id,
-            "replay_work_item_id": replay_work_item_id,
-            "bound_work_item_ids": bound_work_item_ids,
-        }
-        runtime_v2["active_runtime_bundle_revision_id"] = active_bundle_revision_id
-        runtime_v2["runtime_bundle_revision_id"] = active_bundle_revision_id
-        runtime_v2.pop("pending_export_route_repair", None)
-        runtime_v2["last_export_route_evidence"] = route_evidence_json
-        _append_recovered_lineage(runtime_v2, lineage_entry=lineage_entry)
-        status_detail["runtime_v2"] = runtime_v2
-        run.status_detail_json = status_detail
-        run.runtime_bundle_revision_id = active_bundle_revision_id
-        run.updated_at = _utcnow()
-        session.add(run)
-        session.flush()
-
-    def _finalize_review_deadlock_repair(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        incident: RuntimeIncident,
-        proposal: RuntimePatchProposal,
-        bundle_revision_id: str,
-        validation_report_json: dict[str, Any],
-    ) -> None:
-        runtime_repo = RuntimeResourcesRepository(session)
-        route_evidence = dict(incident.route_evidence_json or {})
-        chapter_run_id = str(route_evidence.get("chapter_run_id") or (incident.bundle_json or {}).get("chapter_run_id") or "")
-        review_session_id = str(route_evidence.get("review_session_id") or (incident.bundle_json or {}).get("review_session_id") or "")
-        chapter_id = str((proposal.status_detail_json or {}).get("repair_plan", {}).get("replay", {}).get("scope_id") or incident.scope_id)
-        if not chapter_run_id or not review_session_id or not chapter_id:
-            return
-        review_session = runtime_repo.get_review_session(review_session_id)
-        chapter_run = runtime_repo.get_chapter_run(chapter_run_id)
-        replay_work_item_ids = RunExecutionService(RunControlRepository(session)).ensure_scope_replay_work_items(
-            run_id=run_id,
-            stage=WorkItemStage.REVIEW,
-            scope_type=WorkItemScopeType.CHAPTER,
-            scope_ids=[chapter_id],
-            input_version_bundle_by_scope_id={
-                chapter_id: {
-                    "document_id": chapter_run.document_id,
-                    "chapter_id": chapter_id,
-                    "chapter_run_id": chapter_run.id,
-                    "review_session_id": review_session.id,
-                }
-            },
-        )
-        proposal_detail = dict(proposal.status_detail_json or {})
-        bound_work_item_ids = [
-            str(work_item_id)
-            for work_item_id in list(proposal_detail.get("bound_work_item_ids") or [])
-            if str(work_item_id).strip()
-        ]
-        recovery_payload = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "bundle_revision_id": bundle_revision_id,
-            "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
-            "replay_scope_id": chapter_id,
-            "replay_work_item_ids": replay_work_item_ids,
-            "bound_work_item_ids": bound_work_item_ids,
-            "reason_code": route_evidence.get("reason_code"),
-            "lane_health_state": route_evidence.get("lane_health_state"),
-            "status": "published",
-        }
-        runtime_repo.merge_review_session_status_detail(
-            review_session.id,
-            {
-                "runtime_v2": {
-                    "last_deadlock_recovery": recovery_payload,
-                }
-            },
-        )
-        runtime_repo.append_chapter_recovered_lineage(
-            chapter_run_id=chapter_run.id,
-            lineage_event={
-                "source": "runtime.review_deadlock",
-                "incident_id": incident.id,
-                "proposal_id": proposal.id,
-                "bundle_revision_id": bundle_revision_id,
-                "replay_scope_id": chapter_id,
-                "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
-                "status": "published",
-            },
-        )
-        runtime_repo.upsert_checkpoint(
-            run_id=run_id,
-            scope_type=JobScopeType.CHAPTER,
-            scope_id=chapter_id,
-            checkpoint_key="review_controller.deadlock_recovery",
-            checkpoint_json={
-                "chapter_run_id": chapter_run.id,
-                "review_session_id": review_session.id,
-                "recovery": recovery_payload,
-                "validation_report": validation_report_json,
-            },
-            generation=int(chapter_run.generation or 1),
-        )
 
     def _claim_translate_work_items(
         self,

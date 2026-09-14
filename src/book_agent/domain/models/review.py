@@ -163,8 +163,3 @@ class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stale_reason: Mapped[str | None] = mapped_column(Text)
 
-    @property
-    def runtime_v2_context(self) -> dict[str, Any] | None:
-        payload = dict(self.input_version_bundle_json or {})
-        runtime_v2 = payload.get("runtime_v2")
-        return runtime_v2 if isinstance(runtime_v2, dict) else None

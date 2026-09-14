@@ -9750,8 +9750,6 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
 
         export_service = ExportService(
             repository=SimpleNamespace(session=None),
-            runtime_bundle_service=object(),
-            export_routing_service=object(),
         )
         availability = export_service._probe_pdf_original_asset(
             _FakeDocument(),

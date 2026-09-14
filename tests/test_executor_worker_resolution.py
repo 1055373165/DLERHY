@@ -46,7 +46,6 @@ class ExecutorWorkerResolutionTests(unittest.TestCase):
             export_root=self.export_root,
             translation_worker=None,
             translation_worker_resolver=lambda: resolved,
-            enable_controller_runner=False,
         )
         with self.session_factory() as session:
             worker = executor._workflow_service(session).translation_service.worker
@@ -74,15 +73,6 @@ class ExecutorWorkerResolutionTests(unittest.TestCase):
             self.assertIsNot(app.state.resolve_translation_worker(), override)
             app.state.translation_worker = override
             self.assertIs(app.state.resolve_translation_worker(), override)
-
-    def test_disabling_controller_runner_is_honored(self) -> None:
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root=self.export_root,
-            translation_worker=None,
-            enable_controller_runner=False,
-        )
-        self.assertIsNone(executor._controller_runner)
 
 
 if __name__ == "__main__":

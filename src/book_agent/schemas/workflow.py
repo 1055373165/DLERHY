@@ -70,7 +70,6 @@ class DocumentSummaryResponse(BaseSchema):
     latest_run_status: str | None = None
     latest_run_current_stage: str | None = None
     latest_run_updated_at: str | None = None
-    runtime_v2_context: dict[str, Any] | None = None
     chapters: list[ChapterSummaryResponse] = Field(default_factory=list)
 
 
@@ -96,7 +95,6 @@ class DocumentHistoryEntryResponse(BaseSchema):
     latest_run_current_stage: str | None = None
     latest_run_completed_work_item_count: int | None = None
     latest_run_total_work_item_count: int | None = None
-    latest_run_runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentHistoryPageResponse(BaseSchema):
@@ -248,7 +246,6 @@ class ExportDocumentResponse(BaseSchema):
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list[ExportAutoFollowupExecutionResponse] = Field(default_factory=list)
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class ExportAutoFollowupSummaryResponse(BaseSchema):
@@ -637,7 +634,6 @@ class ExportRecordSummaryResponse(BaseSchema):
     translation_usage_highlights: TranslationUsageHighlightsResponse | None = None
     export_auto_followup_summary: ExportAutoFollowupSummaryResponse | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummaryResponse | None = None
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentExportDashboardResponse(BaseSchema):
@@ -691,7 +687,6 @@ class ExportDetailResponse(BaseSchema):
     export_auto_followup_summary: ExportAutoFollowupSummaryResponse | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummaryResponse | None = None
     version_evidence_summary: ExportVersionEvidenceSummaryResponse
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class RebuiltSnapshotEvidenceResponse(BaseSchema):

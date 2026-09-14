@@ -84,7 +84,6 @@ def create_app() -> FastAPI:
     app.state.session_factory = None
     app.state.ensure_database_state = lambda: _ensure_database_state(app, settings=settings)
     app.state.export_root = str(settings.export_root)
-    app.state.runtime_bundle_root = str(settings.runtime_bundle_root)
     app.state.upload_root = str(settings.upload_root)
     # `translation_worker` is an explicit override (embedders/tests). When it is
     # unset, the worker is built lazily from the active provider credential and

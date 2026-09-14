@@ -10,8 +10,6 @@ from book_agent.core.config import get_settings
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.session import build_session_factory, session_scope
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.tools.forge_migrate import migrate_autopilot_round_to_forge
-from book_agent.tools.forge_supervisor import run_supervisor_loop, run_supervisor_once
 from book_agent.workers.factory import build_translation_worker
 
 
@@ -66,85 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
 
-    forge_supervisor = subparsers.add_parser(
-        "forge-supervisor",
-        help="Run the real Forge supervisor against a .forge workspace",
-    )
-    forge_supervisor.add_argument(
-        "--workspace",
-        default=".",
-        help="Workspace root containing .forge/",
-    )
-    forge_supervisor.add_argument(
-        "--codex-command",
-        action="append",
-        default=[],
-        help="Override the codex launcher command, one token per flag occurrence",
-    )
-    forge_supervisor.add_argument(
-        "--codex-reasoning-effort",
-        default="high",
-        help="Reasoning effort override applied to spawned `codex exec` child runs",
-    )
-    forge_supervisor.add_argument(
-        "--cooldown-seconds",
-        type=float,
-        default=15.0,
-        help="Cooldown before spawning the same supervisor reason again",
-    )
-    forge_supervisor_sub = forge_supervisor.add_subparsers(dest="forge_supervisor_command", required=True)
-
-    forge_supervisor_once = forge_supervisor_sub.add_parser("once", help="Run one supervisor harvest/dispatch tick")
-
-    forge_supervisor_loop = forge_supervisor_sub.add_parser("loop", help="Run the supervisor loop continuously")
-    forge_supervisor_loop.add_argument(
-        "--poll-interval-seconds",
-        type=float,
-        default=5.0,
-        help="Polling interval for the continuous supervisor loop",
-    )
-
-    forge_migrate = subparsers.add_parser(
-        "forge-migrate-autopilot",
-        help="Import an in-flight .autopilot round into .forge and sync the Forge framework docs",
-    )
-    forge_migrate.add_argument(
-        "--workspace",
-        default=".",
-        help="Workspace root containing the source .autopilot directory",
-    )
-
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-
-    if args.command == "forge-supervisor":
-        codex_command = args.codex_command or None
-        if args.forge_supervisor_command == "once":
-            _dump(
-                run_supervisor_once(
-                    args.workspace,
-                    codex_command=codex_command,
-                    codex_reasoning_effort=args.codex_reasoning_effort,
-                    cooldown_seconds=args.cooldown_seconds,
-                )
-            )
-            return 0
-        if args.forge_supervisor_command == "loop":
-            run_supervisor_loop(
-                args.workspace,
-                codex_command=codex_command,
-                codex_reasoning_effort=args.codex_reasoning_effort,
-                cooldown_seconds=args.cooldown_seconds,
-                poll_interval_seconds=args.poll_interval_seconds,
-            )
-            return 0
-    if args.command == "forge-migrate-autopilot":
-        _dump(migrate_autopilot_round_to_forge(args.workspace))
-        return 0
 
     settings = get_settings()
     session_factory = build_session_factory(database_url=args.database_url or settings.database_url)

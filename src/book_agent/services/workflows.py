@@ -28,7 +28,7 @@ from book_agent.domain.enums import (
     SourceType,
 )
 from book_agent.domain.models import Chapter, ChapterMemoryProposal, ChapterWorklistAssignment, Document, MemorySnapshot, Sentence
-from book_agent.domain.models.ops import AuditEvent, DocumentRun, RunAuditEvent
+from book_agent.domain.models.ops import AuditEvent, DocumentRun
 from book_agent.domain.models.review import (
     ChapterQualitySummary as PersistedChapterQualitySummary,
     Export,
@@ -49,15 +49,12 @@ from book_agent.services.actions import ActionExecutionArtifacts, IssueActionExe
 from book_agent.services.bootstrap import BootstrapArtifacts
 from book_agent.services.chapter_concept_autolock import ChapterConceptAutoLockService, build_default_concept_resolver
 from book_agent.services.export import ExportArtifacts, ExportGateError, ExportService
-from book_agent.services.export_routing import ExportRoutingService
 from book_agent.services.epub_structure_refresh import EpubStructureRefreshArtifacts, EpubStructureRefreshService
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshArtifacts, PdfStructureRefreshService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
 from book_agent.services.rerun import RerunExecutionArtifacts, RerunService
 from book_agent.services.review import NaturalnessSummary as ReviewNaturalnessSummary, ReviewArtifacts, ReviewService
-from book_agent.services.runtime_repair_blockage import summarize_runtime_repair_blockage
-from book_agent.services.runtime_bundle import RuntimeBundleService
 from book_agent.services.translation import TranslationExecutionArtifacts, TranslationService
 from book_agent.workers.translator import TranslationWorker
 
@@ -146,7 +143,6 @@ class DocumentSummary:
     latest_run_status: str | None
     latest_run_current_stage: str | None
     latest_run_updated_at: str | None
-    runtime_v2_context: dict[str, Any] | None = None
     chapters: list[ChapterSummary] = field(default_factory=list)
 
 
@@ -173,7 +169,6 @@ class DocumentHistoryEntry:
     latest_run_current_stage: str | None
     latest_run_completed_work_item_count: int | None
     latest_run_total_work_item_count: int | None
-    latest_run_runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -411,8 +406,6 @@ class DocumentExportResult:
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list["ExportAutoFollowupExecution"] | None = None
-    route_evidence_json: dict[str, Any] | None = None
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -657,7 +650,6 @@ class ExportRecordSummary:
     translation_usage_highlights: TranslationUsageHighlights | None = None
     export_auto_followup_summary: ExportAutoFollowupSummary | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummary | None = None
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -851,7 +843,6 @@ class ExportDetail:
     export_auto_followup_summary: ExportAutoFollowupSummary | None
     export_time_misalignment_counts: ExportMisalignmentCountSummary | None
     version_evidence_summary: ExportVersionEvidenceSummary
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -899,10 +890,6 @@ class DocumentWorkflowService:
         self.review_repository = ReviewRepository(session)
         self.export_repository = ExportRepository(session)
         self.run_control_repository = RunControlRepository(session)
-        self.runtime_bundle_service = RuntimeBundleService(session)
-        self.export_routing_service = ExportRoutingService(
-            runtime_bundle_service=self.runtime_bundle_service
-        )
         self.translation_service = TranslationService(
             TranslationRepository(session),
             worker=translation_worker,
@@ -913,8 +900,6 @@ class DocumentWorkflowService:
         self.export_service = ExportService(
             self.export_repository,
             output_root=export_root,
-            runtime_bundle_service=self.runtime_bundle_service,
-            export_routing_service=self.export_routing_service,
         )
         self.ops_repository = OpsRepository(session)
         self.action_executor = IssueActionExecutor(self.ops_repository)
@@ -971,7 +956,6 @@ class DocumentWorkflowService:
         latest_run = self._latest_document_run(document_id)
         latest_run_current_stage, _, _ = _history_run_progress(latest_run)
         chapter_pdf_image_summary_map = self._chapter_pdf_image_summary_map(bundle)
-        runtime_v2_context = self._runtime_v2_context_for_run(latest_run)
 
         chapter_summaries: list[ChapterSummary] = []
         block_count = 0
@@ -1025,7 +1009,6 @@ class DocumentWorkflowService:
             latest_run_status=(latest_run.status.value if latest_run is not None else None),
             latest_run_current_stage=latest_run_current_stage,
             latest_run_updated_at=(latest_run.updated_at.isoformat() if latest_run is not None else None),
-            runtime_v2_context=runtime_v2_context,
             chapters=chapter_summaries,
         )
 
@@ -1094,7 +1077,6 @@ class DocumentWorkflowService:
         for document in documents:
             latest_run = latest_runs.get(document.id)
             current_stage, completed_work_item_count, total_work_item_count = _history_run_progress(latest_run)
-            latest_run_runtime_v2_context = self._runtime_v2_context_for_run(latest_run)
             entries.append(
                 DocumentHistoryEntry(
                     document_id=document.id,
@@ -1118,7 +1100,6 @@ class DocumentWorkflowService:
                     latest_run_current_stage=current_stage,
                     latest_run_completed_work_item_count=completed_work_item_count,
                     latest_run_total_work_item_count=total_work_item_count,
-                    latest_run_runtime_v2_context=latest_run_runtime_v2_context,
                 )
             )
         if latest_run_status is not None:
@@ -2318,13 +2299,6 @@ class DocumentWorkflowService:
         if export_type == ExportType.MERGED_HTML:
             artifacts = self.export_service.export_document_merged_html(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
-            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
-            self._persist_document_export_runtime_v2_context(
-                document_id=document_id,
-                export_type=export_type,
-                export_records=[artifacts.export_record],
-                runtime_v2_context=runtime_v2_context,
-            )
             return DocumentExportResult(
                 document_id=document_id,
                 export_type=export_type.value,
@@ -2337,19 +2311,10 @@ class DocumentWorkflowService:
                 auto_followup_attempt_count=len(auto_followup_executions),
                 auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
                 auto_followup_executions=auto_followup_executions,
-                route_evidence_json=artifacts.route_evidence_json,
-                runtime_v2_context=runtime_v2_context,
             )
         if export_type == ExportType.MERGED_MARKDOWN:
             artifacts = self.export_service.export_document_merged_markdown(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
-            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
-            self._persist_document_export_runtime_v2_context(
-                document_id=document_id,
-                export_type=export_type,
-                export_records=[artifacts.export_record],
-                runtime_v2_context=runtime_v2_context,
-            )
             return DocumentExportResult(
                 document_id=document_id,
                 export_type=export_type.value,
@@ -2362,19 +2327,10 @@ class DocumentWorkflowService:
                 auto_followup_attempt_count=len(auto_followup_executions),
                 auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
                 auto_followup_executions=auto_followup_executions,
-                route_evidence_json=artifacts.route_evidence_json,
-                runtime_v2_context=runtime_v2_context,
             )
         if export_type == ExportType.REBUILT_EPUB:
             artifacts = self.export_service.export_document_rebuilt_epub(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
-            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
-            self._persist_document_export_runtime_v2_context(
-                document_id=document_id,
-                export_type=export_type,
-                export_records=[artifacts.export_record],
-                runtime_v2_context=runtime_v2_context,
-            )
             return DocumentExportResult(
                 document_id=document_id,
                 export_type=export_type.value,
@@ -2387,19 +2343,10 @@ class DocumentWorkflowService:
                 auto_followup_attempt_count=len(auto_followup_executions),
                 auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
                 auto_followup_executions=auto_followup_executions,
-                route_evidence_json=artifacts.route_evidence_json,
-                runtime_v2_context=runtime_v2_context,
             )
         if export_type == ExportType.ZH_EPUB:
             artifacts = self.export_service.export_document_zh_epub(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
-            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
-            self._persist_document_export_runtime_v2_context(
-                document_id=document_id,
-                export_type=export_type,
-                export_records=[artifacts.export_record],
-                runtime_v2_context=runtime_v2_context,
-            )
             return DocumentExportResult(
                 document_id=document_id,
                 export_type=export_type.value,
@@ -2412,19 +2359,10 @@ class DocumentWorkflowService:
                 auto_followup_attempt_count=len(auto_followup_executions),
                 auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
                 auto_followup_executions=auto_followup_executions,
-                route_evidence_json=artifacts.route_evidence_json,
-                runtime_v2_context=runtime_v2_context,
             )
         if export_type == ExportType.REBUILT_PDF:
             artifacts = self.export_service.export_document_rebuilt_pdf(document_id)
             document = self.session.get(type(bundle.document), document_id) or bundle.document
-            runtime_v2_context = self._runtime_v2_context_for_run(self._latest_document_run(document_id))
-            self._persist_document_export_runtime_v2_context(
-                document_id=document_id,
-                export_type=export_type,
-                export_records=[artifacts.export_record],
-                runtime_v2_context=runtime_v2_context,
-            )
             return DocumentExportResult(
                 document_id=document_id,
                 export_type=export_type.value,
@@ -2437,8 +2375,6 @@ class DocumentWorkflowService:
                 auto_followup_attempt_count=len(auto_followup_executions),
                 auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
                 auto_followup_executions=auto_followup_executions,
-                route_evidence_json=artifacts.route_evidence_json,
-                runtime_v2_context=runtime_v2_context,
             )
 
         for chapter_bundle in bundle.chapters:
@@ -2467,8 +2403,6 @@ class DocumentWorkflowService:
             auto_followup_attempt_count=len(auto_followup_executions),
             auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
             auto_followup_executions=auto_followup_executions,
-            route_evidence_json=None,
-            runtime_v2_context=self._runtime_v2_context_for_run(self._latest_document_run(document_id)),
         )
 
     def execute_action(self, action_id: str, run_followup: bool = False) -> ActionWorkflowResult:
@@ -2751,146 +2685,6 @@ class DocumentWorkflowService:
             export_auto_followup_summary=self._to_export_auto_followup_summary(export),
             export_time_misalignment_counts=self._to_export_misalignment_summary(export),
             version_evidence_summary=self._to_export_version_evidence_summary(export),
-            runtime_v2_context=export.runtime_v2_context,
-        )
-
-    def _runtime_v2_context_for_run(self, run: DocumentRun | None) -> dict[str, Any] | None:
-        if run is None:
-            return None
-        status_detail = dict(run.status_detail_json or {})
-        runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-        active_bundle_revision_id = runtime_v2.get("active_runtime_bundle_revision_id") or run.runtime_bundle_revision_id
-        evidence = dict(runtime_v2.get("last_export_route_evidence") or {})
-        pending_repair = dict(runtime_v2.get("pending_export_route_repair") or {})
-        blockage_summary = summarize_runtime_repair_blockage(runtime_v2)
-        blockage_source = str((blockage_summary or {}).get("repair_blockage_source") or "").strip()
-        bounded_recovery = dict(runtime_v2.get(blockage_source) or {}) if blockage_source else {}
-        export_recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
-        if (
-            not active_bundle_revision_id
-            and not bounded_recovery
-            and not export_recovery
-            and not evidence
-            and not pending_repair
-        ):
-            return None
-        context: dict[str, Any] = {
-            "active_runtime_bundle_revision_id": active_bundle_revision_id,
-            "runtime_bundle_revision_id": runtime_v2.get("runtime_bundle_revision_id") or run.runtime_bundle_revision_id,
-            "recovered": bool(export_recovery),
-            "last_export_route_recovery": export_recovery or None,
-            "last_export_route_evidence": evidence or None,
-            "pending_export_route_repair": pending_repair or None,
-        }
-        if blockage_summary is not None:
-            context.update(blockage_summary)
-        if bounded_recovery:
-            bound_work_item_ids = [
-                str(work_item_id)
-                for work_item_id in (
-                    bounded_recovery.get("bound_work_item_ids")
-                    or bounded_recovery.get("replay_work_item_ids")
-                    or []
-                )
-                if str(work_item_id).strip()
-            ]
-            replay_work_item_id = bounded_recovery.get("replay_work_item_id") or (
-                bound_work_item_ids[0] if bound_work_item_ids else None
-            )
-            context.update(
-                {
-                    "incident_id": bounded_recovery.get("incident_id"),
-                    "proposal_id": bounded_recovery.get("proposal_id"),
-                    "bundle_revision_id": bounded_recovery.get("bundle_revision_id"),
-                    "repair_work_item_id": bounded_recovery.get("repair_work_item_id"),
-                    "recovery_status": bounded_recovery.get("status"),
-                    "replay_scope_id": bounded_recovery.get("replay_scope_id"),
-                    "bound_work_item_ids": bound_work_item_ids,
-                    "replay_work_item_id": replay_work_item_id,
-                }
-            )
-            if blockage_source == "last_export_route_recovery" or blockage_source == "pending_export_route_repair":
-                context.update(
-                    {
-                        "selected_route": bounded_recovery.get("selected_route"),
-                        "corrected_route": bounded_recovery.get("corrected_route"),
-                        "route_candidates": list(bounded_recovery.get("route_candidates") or []),
-                    }
-                )
-            else:
-                context.update(
-                    {
-                        "reason_code": bounded_recovery.get("reason_code"),
-                        "lane_health_state": bounded_recovery.get("lane_health_state"),
-                    }
-                )
-        elif pending_repair:
-            context.update(
-                {
-                    "incident_id": pending_repair.get("incident_id"),
-                    "proposal_id": pending_repair.get("proposal_id"),
-                    "bundle_revision_id": pending_repair.get("bundle_revision_id"),
-                    "repair_work_item_id": pending_repair.get("repair_work_item_id"),
-                    "selected_route": pending_repair.get("selected_route"),
-                    "corrected_route": pending_repair.get("corrected_route"),
-                    "route_candidates": list(pending_repair.get("route_candidates") or []),
-                    "replay_scope_id": pending_repair.get("replay_scope_id"),
-                    "bound_work_item_ids": list(pending_repair.get("bound_work_item_ids") or []),
-                    "replay_work_item_id": pending_repair.get("replay_work_item_id"),
-                }
-            )
-        if evidence:
-            context["route_fingerprint"] = evidence.get("route_fingerprint")
-            context["export_type"] = evidence.get("export_type")
-            context["source_type"] = evidence.get("source_type")
-        return context
-
-    def _persist_document_export_runtime_v2_context(
-        self,
-        *,
-        document_id: str,
-        export_type: ExportType,
-        export_records: list[Export],
-        runtime_v2_context: dict[str, Any] | None,
-    ) -> None:
-        if not export_records:
-            return
-        runtime_v2_payload = dict(runtime_v2_context or {})
-        for export in export_records:
-            payload = dict(export.input_version_bundle_json or {})
-            if runtime_v2_payload:
-                payload["runtime_v2"] = runtime_v2_payload
-            export.input_version_bundle_json = payload
-            self.export_repository.save_export(export)
-        if not runtime_v2_payload.get("recovered"):
-            return
-        latest_run = self._latest_document_run(document_id)
-        if latest_run is None:
-            return
-        recovery = dict(runtime_v2_payload.get("last_export_route_recovery") or {})
-        evidence = dict(runtime_v2_payload.get("last_export_route_evidence") or {})
-        replay_work_item_id = runtime_v2_payload.get("replay_work_item_id")
-        self.run_control_repository.record_run_event(
-            RunAuditEvent(
-                run_id=latest_run.id,
-                work_item_id=replay_work_item_id,
-                event_type="runtime_v2.export.replayed",
-                actor_type=ActorType.SYSTEM,
-                actor_id="runtime.export-controller",
-                created_at=_utcnow(),
-                payload_json={
-                    "document_id": document_id,
-                    "export_type": export_type.value,
-                    "runtime_v2": runtime_v2_payload,
-                    "incident_id": recovery.get("incident_id"),
-                    "proposal_id": recovery.get("proposal_id"),
-                    "bundle_revision_id": recovery.get("bundle_revision_id"),
-                    "replay_scope_id": runtime_v2_payload.get("replay_scope_id"),
-                    "replay_work_item_id": replay_work_item_id,
-                    "bound_work_item_ids": list(runtime_v2_payload.get("bound_work_item_ids") or []),
-                    "route_fingerprint": evidence.get("route_fingerprint"),
-                },
-            )
         )
 
     def get_document_chapter_worklist(
@@ -3334,7 +3128,6 @@ class DocumentWorkflowService:
             ),
             export_auto_followup_summary=self._to_export_auto_followup_summary(export),
             export_time_misalignment_counts=self._to_export_misalignment_summary(export),
-            runtime_v2_context=export.runtime_v2_context,
         )
 
     def _to_export_auto_followup_summary(self, export) -> ExportAutoFollowupSummary | None:

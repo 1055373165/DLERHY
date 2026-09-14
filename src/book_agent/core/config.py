@@ -62,12 +62,7 @@ class Settings(BaseSettings):
     )
     docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
-    runtime_bundle_root: Path = Path("artifacts/runtime-bundles")
     upload_root: Path = Path("artifacts/uploads")
-    runtime_repair_transport_command: str | None = None
-    runtime_repair_transport_http_url: str | None = None
-    runtime_repair_transport_http_timeout_seconds: int = 60
-    runtime_repair_transport_http_bearer_token: str | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"

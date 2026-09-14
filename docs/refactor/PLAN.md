@@ -55,12 +55,13 @@
 ## P1 瘦身
 
 ### P1.1 删除自愈层
-- [ ] `services/runtime_repair_*`、`runtime_bundle`、`bundle_guard`、`patch_review`、`runtime_patch_validation`、`incident_triage`、`recovery_matrix`（保留仍被重试分类使用的纯函数，如有）。
-- [ ] `app/runtime/controllers/*` 与 `controller_runner`（仅保留执行器真正读取的部分；ChapterRun / PacketTask / ReviewSession 投影若无人读则删除）。
-- [ ] `tools/runtime_repair_*`、`tools/forge_*`、`forge_v2_stop_guard.py`，CLI 中 forge 子命令。
-- [ ] 路由 `patches.py`；执行器中的 `_finalize_*` 死副本、REPAIR 阶段。
-- [ ] 对应测试（`test_runtime_repair_*`、`test_req_mx_*`、`test_req_ex_02_*`、`test_incident_*`、`test_patch_review`、`test_forge_*` 等）。
-- [ ] Alembic 迁移：删除相关表（新迁移，不改旧迁移）。
+- [x] `services/runtime_repair_*`、`runtime_bundle`、`bundle_guard`、`patch_review`、`runtime_patch_validation`、`incident_triage`、`recovery_matrix`、`runtime_lane_health`、`export_routing`。
+- [x] `app/runtime/controllers/*` 与 `controller_runner`；`infra/repositories/runtime_resources.py`（ChapterRun / PacketTask / ReviewSession / RuntimeCheckpoint 投影无人读取，一并删除）。
+- [x] `tools/runtime_repair_*`、`tools/forge_*`、`forge_v2_stop_guard.py`，CLI 中 forge 子命令，`runtime_repair_transport_*` / `runtime_bundle_root` 配置。
+- [x] 路由 `patches.py`；执行器中的 controller 调和、REPAIR 阶段、导出误路由恢复、`_finalize_*` 死副本；`run_control` 摘要里的 `runtime_v2` 投影；导出/文档 API 的 `runtime_v2_context` 与 `route_evidence_json`。
+- [x] 对应测试（34 个文件及 `test_run_execution` / `test_api_workflow` / `test_run_control_api` 中的相关用例）。
+- [x] Alembic `20260914_0030`：删除 7 张表、REPAIR 阶段与 `runtime_bundle_revision_id` 列（在临时 Postgres 16 上验证：种子数据迁移、CHECK 拒绝 repair、ORM 与库表一致）。
+- [ ] 执行器中 controller/reconciler 以外仍被吞掉的异常记日志（并入 P0.2 剩余项）。
 
 ### P1.2 删除非产品代码
 - [ ] 仅被脚本/测试使用的模块：`pdf_inplace`、`packet_experiment*`、`translation_chapter_smoke`、`translation_prompt_ab`、`translate_rollout_supervisor`、`translate_benchmark_draft_generator`、`extraction_router`、`chapter_memory_backfill`（评估）、`tools/pdf_smoke`（评估）。
