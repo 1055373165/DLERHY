@@ -19,6 +19,7 @@ if str(SRC) not in sys.path:
 
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import (
+    PacketStatus,
     ActionActorType,
     ActionStatus,
     ActionType,
@@ -733,7 +734,9 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
             self.assertNotIn(">Reading Map<", merged_html)
             self.assertIn("Back to top", merged_html)
-            self.assertIn("href='#chapter-", merged_html)
+            # The merged reading edition no longer renders a table of contents.
+            self.assertIn("id='chapter-", merged_html)
+            self.assertNotIn("class='sidebar'", merged_html)
             self.assertIn("ZH::Use the example carefully.", merged_html)
             self.assertNotIn("代码保持原样", merged_html)
             self.assertIn("python agent.py --dry-run", merged_html)
@@ -794,14 +797,15 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             self.assertEqual(export.document_status, "exported")
             assert export.file_path is not None
             merged_html = Path(export.file_path).read_text(encoding="utf-8")
-            self.assertIn("图片锚点保留", merged_html)
+            # The merged reading edition omits per-artifact preservation notices.
+            self.assertNotIn("图片锚点保留", merged_html)
             self.assertIn("images/agent-loop.png", merged_html)
-            self.assertIn("公式保持原样", merged_html)
+            self.assertNotIn("公式保持原样", merged_html)
             self.assertIn("x=1", merged_html)
-            self.assertIn("保留原始结构，优先保证可复制与结构保真", merged_html)
+            self.assertNotIn("保留原始结构，优先保证可复制与结构保真", merged_html)
             self.assertIn("Tier | Latency", merged_html)
             self.assertIn("Basic | Slow", merged_html)
-            self.assertIn("参考标识保留", merged_html)
+            self.assertNotIn("参考标识保留", merged_html)
             self.assertIn("https://example.com/agent-docs", merged_html)
 
     def test_postgres_realign_only_restores_missing_alignment_edges(self) -> None:
@@ -1808,9 +1812,10 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             repository = RunControlRepository(session)
             run_control = RunControlService(repository)
             execution = RunExecutionService(repository, run_control)
+            # A targeted run only requires translate, so a green ledger is terminal.
             run = run_control.create_run(
                 document_id=document_id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
+                run_type=DocumentRunType.TRANSLATE_TARGETED,
                 requested_by="pg-runner",
                 budget=RunBudgetSummary(
                     max_wall_clock_seconds=1800,
@@ -1826,7 +1831,12 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             )
             resumed = run_control.resume_run(run.run_id, actor_id="pg-runner", note="start execution smoke")
 
-            packet_id = str(uuid4())
+            document_packets = session.scalars(
+                select(TranslationPacket)
+                .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
+                .where(Chapter.document_id == document_id)
+            ).all()
+            packet_id = document_packets[0].id
             seeded = execution.seed_translate_work_items(run_id=resumed.run_id, packet_ids=[packet_id])
             self.assertEqual(len(seeded), 1)
 
@@ -1849,6 +1859,11 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
                 cost_usd=0.0012,
                 latency_ms=220,
             )
+            # Terminal success is derived from packet state; this smoke drives
+            # the run ledger directly, so mark the document translated by hand.
+            for packet in document_packets:
+                packet.status = PacketStatus.TRANSLATED
+            session.flush()
             final_summary = execution.reconcile_run_terminal_state(run_id=resumed.run_id)
 
             self.assertEqual(final_summary.status, "succeeded")

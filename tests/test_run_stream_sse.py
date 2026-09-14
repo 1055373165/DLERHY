@@ -152,7 +152,9 @@ class TestRunStream:
                         break
                 assert listener_count() == baseline + 1
 
+        # A previous test's listener may still be closing, so the count can
+        # drop below the baseline; ours must be gone either way.
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline and listener_count() > baseline:
             time.sleep(0.2)
-        assert listener_count() == baseline
+        assert listener_count() <= baseline

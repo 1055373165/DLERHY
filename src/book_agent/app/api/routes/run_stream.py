@@ -140,8 +140,10 @@ def stream_run_events(
         finally:
             # Synchronous on purpose: this also runs while the task is being
             # cancelled, where awaiting the threadpool would be cancelled too.
+            # Invalidate instead of close: close() would return the connection
+            # to the pool with LISTEN still registered on its backend.
             try:
-                raw.close()
+                raw.invalidate()
             except Exception:
                 pass
 
@@ -195,7 +197,7 @@ def _open_listener(engine: Engine):
         with raw.cursor() as cur:
             cur.execute("LISTEN events_channel")
     except Exception:
-        raw.close()
+        raw.invalidate()
         raise
     return raw
 
