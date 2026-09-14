@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import median
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from book_agent.ingestion.pdf.ocr_reextraction import (
@@ -4167,35 +4166,25 @@ class PdfStructureRecoveryService:
         return pdf_chapters.looks_like_frontmatter_chunk(blocks)
 
 
-# PDF v2 M2.3 closure: single source of truth for the default recovery
-# service used by both the text-layer PDFParser and the scanned
-# OcrPdfParser. When the BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION env flag
-# is enabled ("1" / "true" / "yes"), we inject a SuryaOcrReextractionAdapter
-# so sanity-failed pages route through real OCR at recover() time.
-# The flag defaults to OFF to preserve existing behaviour for all callers
-# that have not yet opted in to the repair pass.
-_SANITY_OCR_FLAG_ENV: Final[str] = "BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION"
 
 
-def _sanity_ocr_reextraction_enabled() -> bool:
-    raw = os.getenv(_SANITY_OCR_FLAG_ENV, "")
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+def build_default_recovery_service(
+    *,
+    settings: Any | None = None,
+    allow_ocr_reextraction: bool = True,
+) -> PdfStructureRecoveryService:
+    """Construct a PdfStructureRecoveryService configured from ``Settings``.
 
-
-def build_default_recovery_service(*, allow_ocr_reextraction: bool = True) -> PdfStructureRecoveryService:
-    """Construct a PdfStructureRecoveryService with env-driven defaults.
-
-    When sanity-driven OCR re-extraction is enabled (and allowed), we attach a
-    `SuryaOcrReextractionAdapter`; otherwise we return a plain service. The
-    OCR parser disallows it: its pages already come from OCR.
+    When ``settings.pdf_sanity_ocr_reextraction`` is on (and allowed), we
+    attach a `SuryaOcrReextractionAdapter`; otherwise we return a plain
+    service. The OCR parser disallows it: its pages already come from OCR.
     Callers that want explicit control can instantiate
     `PdfStructureRecoveryService(ocr_reextraction_adapter=...)` directly.
-
-    Figure clustering config is sourced from ``Settings`` lazily so test
-    harnesses that patch settings still reach the parser.
     """
-    figure_config = _resolve_default_figure_cluster_config()
-    if not allow_ocr_reextraction or not _sanity_ocr_reextraction_enabled():
+    if settings is None:
+        settings = _default_settings()
+    figure_config = _resolve_default_figure_cluster_config(settings)
+    if not allow_ocr_reextraction or not getattr(settings, "pdf_sanity_ocr_reextraction", False):
         return PdfStructureRecoveryService(figure_cluster_config=figure_config)
     # Lazy import to avoid pulling Surya-runtime deps into every code path
     # that merely constructs a parser.
@@ -4209,21 +4198,23 @@ def build_default_recovery_service(*, allow_ocr_reextraction: bool = True) -> Pd
     )
 
 
-def _resolve_default_figure_cluster_config() -> FigureClusterConfig | None:
-    """Read figure-cluster knobs from ``Settings`` if importable.
-
-    Falls back to ``None`` (algorithm defaults) if settings can't be
-    loaded — e.g. during tests that import the parser before env is set.
-    """
+def _default_settings() -> Any | None:
+    """The application settings, or None when they cannot be loaded."""
     try:
         from book_agent.core.config import get_settings
-        from book_agent.domain.structure.figure_clustering import (
-            figure_cluster_config_from_settings,
-        )
 
-        return figure_cluster_config_from_settings(get_settings())
+        return get_settings()
     except Exception:
         return None
+
+
+def _resolve_default_figure_cluster_config(settings: Any | None) -> FigureClusterConfig | None:
+    """Figure-cluster knobs from ``settings``; None (algorithm defaults) without settings."""
+    if settings is None:
+        return None
+    from book_agent.domain.structure.figure_clustering import figure_cluster_config_from_settings
+
+    return figure_cluster_config_from_settings(settings)
 
 
 class PDFParser:

@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     figure_cluster_max_prose_neighbors_in_zone: int = 1
     figure_cluster_inline_absorb_requires_inside_anchor: bool = True
     figure_cluster_min_anchor_area_pt2: float = 1800.0
+    # PDF OCR. Re-extract pages that fail the text-layer sanity gate through
+    # Surya OCR, and runtime knobs for the Surya subprocess.
+    pdf_sanity_ocr_reextraction: bool = False
+    ocr_status_path: str | None = None
+    ocr_heartbeat_seconds: float = 5.0
+    ocr_max_runtime_seconds: float | None = None
+    ocr_chunk_page_count: int = 32
 
     model_config = SettingsConfigDict(
         env_prefix="BOOK_AGENT_",

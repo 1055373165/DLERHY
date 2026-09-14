@@ -13,7 +13,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.ingestion.pdf.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
+from book_agent.core.config import Settings
+from book_agent.ingestion.pdf.ocr import OcrPdfParser, build_ocr_pdf_parser, OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfExtraction
 
@@ -66,14 +67,6 @@ class OcrRuntimeTests(unittest.TestCase):
                 return _FakeProcess()
 
             with (
-                patch.dict(
-                    os.environ,
-                    {
-                        "BOOK_AGENT_OCR_STATUS_PATH": str(status_path),
-                        "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "0.1",
-                    },
-                    clear=False,
-                ),
                 patch(
                     "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
@@ -81,7 +74,7 @@ class OcrRuntimeTests(unittest.TestCase):
                 patch("book_agent.ingestion.pdf.ocr.subprocess.Popen", side_effect=_fake_popen),
                 patch("book_agent.ingestion.pdf.ocr.time.sleep", return_value=None),
             ):
-                results_path = UvSuryaOcrRunner().run(
+                results_path = UvSuryaOcrRunner(status_path=str(status_path), heartbeat_interval_seconds=0.1).run(
                     file_path="scan-sample.pdf",
                     output_dir=output_dir,
                 )
@@ -144,15 +137,6 @@ class OcrRuntimeTests(unittest.TestCase):
                     return datetime.fromisoformat("2026-04-04T10:00:02+00:00")
 
             with (
-                patch.dict(
-                    os.environ,
-                    {
-                        "BOOK_AGENT_OCR_STATUS_PATH": str(status_path),
-                        "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "0.1",
-                        "BOOK_AGENT_OCR_MAX_RUNTIME_SECONDS": "1",
-                    },
-                    clear=False,
-                ),
                 patch(
                     "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
@@ -161,7 +145,7 @@ class OcrRuntimeTests(unittest.TestCase):
                 patch("book_agent.ingestion.pdf.ocr._utcnow", side_effect=_fake_utcnow),
             ):
                 with self.assertRaisesRegex(RuntimeError, "exceeded max runtime 1.0s"):
-                    UvSuryaOcrRunner().run(
+                    UvSuryaOcrRunner(status_path=str(status_path), heartbeat_interval_seconds=0.1, max_runtime_seconds=1).run(
                         file_path="scan-sample.pdf",
                         output_dir=output_dir,
                     )
@@ -263,6 +247,27 @@ class OcrPdfParserRecoveryServiceTests(unittest.TestCase):
             parser = OcrPdfParser()
 
         self.assertIs(parser.recovery_service._figure_cluster_config, figure_config)
+        self.assertIsNone(parser.recovery_service._ocr_reextraction_adapter)
+
+
+class BuildOcrPdfParserTests(unittest.TestCase):
+    def test_parser_is_configured_from_settings(self) -> None:
+        settings = Settings(
+            ocr_status_path="/var/tmp/ocr-status.json",
+            ocr_heartbeat_seconds=2.5,
+            ocr_max_runtime_seconds=90,
+            ocr_chunk_page_count=8,
+            pdf_sanity_ocr_reextraction=True,
+        )
+
+        parser = build_ocr_pdf_parser(settings)
+
+        runner = parser.extractor.runner
+        self.assertEqual(runner.status_path, "/var/tmp/ocr-status.json")
+        self.assertEqual(runner.heartbeat_interval_seconds, 2.5)
+        self.assertEqual(runner.max_runtime_seconds, 90)
+        self.assertEqual(parser.extractor.chunk_page_count, 8)
+        # Pages already come from OCR, so sanity re-extraction stays off.
         self.assertIsNone(parser.recovery_service._ocr_reextraction_adapter)
 
 

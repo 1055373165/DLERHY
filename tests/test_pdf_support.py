@@ -6151,14 +6151,6 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
                 return _FakeProcess()
 
             with (
-                patch.dict(
-                    os.environ,
-                    {
-                        "BOOK_AGENT_OCR_STATUS_PATH": str(status_path),
-                        "BOOK_AGENT_OCR_HEARTBEAT_SECONDS": "0.1",
-                    },
-                    clear=False,
-                ),
                 patch(
                     "book_agent.ingestion.pdf.ocr.shutil.which",
                     side_effect=["/opt/homebrew/bin/uv", "/opt/homebrew/bin/python3.13"],
@@ -6166,7 +6158,7 @@ class BasicPdfOutlineRecoveryTests(unittest.TestCase):
                 patch("book_agent.ingestion.pdf.ocr.subprocess.Popen", side_effect=_fake_popen),
                 patch("book_agent.ingestion.pdf.ocr.time.sleep", return_value=None),
             ):
-                results_path = UvSuryaOcrRunner().run(
+                results_path = UvSuryaOcrRunner(status_path=str(status_path), heartbeat_interval_seconds=0.1).run(
                     file_path="scan-sample.pdf",
                     output_dir=output_dir,
                 )

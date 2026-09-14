@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 from typing import Final, Iterable
 
+from book_agent.core.config import get_settings
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
@@ -44,7 +45,7 @@ from book_agent.domain.models import (
 from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
 from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
 from book_agent.domain.structure.epub import EPUBParser
-from book_agent.ingestion.pdf.ocr import OcrPdfParser
+from book_agent.ingestion.pdf.ocr import OcrPdfParser, build_ocr_pdf_parser
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfFileProfile
@@ -257,7 +258,7 @@ class ParseService:
     ):
         self.epub_parser = epub_parser or EPUBParser()
         self.pdf_parser = pdf_parser or PDFParser(image_output_dir=image_output_dir)
-        self.ocr_pdf_parser = ocr_pdf_parser or OcrPdfParser()
+        self.ocr_pdf_parser = ocr_pdf_parser or build_ocr_pdf_parser(get_settings())
         self.parse_ir_service = parse_ir_service or ParseIrService()
         # Explicit override > env. None means "consult env at parse time".
         self._modality_options_override = modality_options

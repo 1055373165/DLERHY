@@ -218,6 +218,11 @@ All settings use the `BOOK_AGENT_` prefix and can be set via environment variabl
 | `BOOK_AGENT_TRANSLATION_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `BOOK_AGENT_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:55432/book_agent` | PostgreSQL connection string (the only supported database) |
 | `BOOK_AGENT_LOG_LEVEL` | `INFO` | Logging level |
+| `BOOK_AGENT_PDF_SANITY_OCR_REEXTRACTION` | `false` | Re-extract text-layer PDF pages that fail the sanity gate through Surya OCR |
+| `BOOK_AGENT_OCR_STATUS_PATH` | *(unset)* | JSON file the Surya OCR subprocess status is written to |
+| `BOOK_AGENT_OCR_HEARTBEAT_SECONDS` | `5.0` | OCR status heartbeat interval |
+| `BOOK_AGENT_OCR_MAX_RUNTIME_SECONDS` | *(unset)* | Kill the OCR subprocess after this many seconds |
+| `BOOK_AGENT_OCR_CHUNK_PAGE_COUNT` | `32` | Pages per OCR subprocess run |
 | `BOOK_AGENT_CORS_ALLOW_ORIGINS` | `[]` | Allowed CORS origins (comma-separated or JSON array) |
 
 ### Minimal `.env` for DeepSeek

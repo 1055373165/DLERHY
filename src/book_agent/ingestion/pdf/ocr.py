@@ -93,29 +93,22 @@ class UvSuryaOcrRunner:
     max_runtime_seconds: float | None = None
 
     def __post_init__(self) -> None:
-        if self.status_path is None:
-            env_status_path = os.getenv("BOOK_AGENT_OCR_STATUS_PATH")
-            if env_status_path:
-                self.status_path = env_status_path
-        if self.heartbeat_interval_seconds is None:
-            env_heartbeat = os.getenv("BOOK_AGENT_OCR_HEARTBEAT_SECONDS")
-            if env_heartbeat:
-                try:
-                    self.heartbeat_interval_seconds = float(env_heartbeat)
-                except ValueError:
-                    self.heartbeat_interval_seconds = None
         if self.heartbeat_interval_seconds is None:
             self.heartbeat_interval_seconds = 5.0
         self.heartbeat_interval_seconds = max(float(self.heartbeat_interval_seconds), 0.1)
-        if self.max_runtime_seconds is None:
-            env_max_runtime = os.getenv("BOOK_AGENT_OCR_MAX_RUNTIME_SECONDS")
-            if env_max_runtime:
-                try:
-                    self.max_runtime_seconds = float(env_max_runtime)
-                except ValueError:
-                    self.max_runtime_seconds = None
         if self.max_runtime_seconds is not None and self.max_runtime_seconds <= 0:
             self.max_runtime_seconds = None
+
+    @classmethod
+    def from_settings(cls, settings: Any, **overrides: Any) -> "UvSuryaOcrRunner":
+        return cls(
+            **{
+                "status_path": settings.ocr_status_path,
+                "heartbeat_interval_seconds": settings.ocr_heartbeat_seconds,
+                "max_runtime_seconds": settings.ocr_max_runtime_seconds,
+                **overrides,
+            }
+        )
 
     def _build_command(self, *, file_path: str | Path, output_dir: str | Path) -> list[str]:
         # Surya 0.17.1 currently breaks under transformers 5.x during decoder generation.
@@ -381,10 +374,7 @@ class _OcrLine:
 class OcrPdfTextExtractor:
     def __init__(self, runner: OcrCommandRunner | None = None, chunk_page_count: int | None = None):
         self.runner = runner or UvSuryaOcrRunner()
-        self.chunk_page_count = max(
-            int(chunk_page_count or os.getenv("BOOK_AGENT_OCR_CHUNK_PAGE_COUNT") or 32),
-            1,
-        )
+        self.chunk_page_count = max(int(chunk_page_count or 32), 1)
 
     def extract(self, file_path: str | Path, *, page_count: int | None = None) -> PdfExtraction:
         resolved_path = Path(file_path).resolve()
@@ -679,3 +669,14 @@ class OcrPdfParser:
                 extractor_kind="surya_ocr",
             )
         return self.recovery_service.recover(file_path, extraction, effective_profile)
+
+
+def build_ocr_pdf_parser(settings: Any) -> OcrPdfParser:
+    """The OCR PDF parser configured from ``Settings``."""
+    return OcrPdfParser(
+        extractor=OcrPdfTextExtractor(
+            runner=UvSuryaOcrRunner.from_settings(settings),
+            chunk_page_count=settings.ocr_chunk_page_count,
+        ),
+        recovery_service=build_default_recovery_service(settings=settings, allow_ocr_reextraction=False),
+    )
