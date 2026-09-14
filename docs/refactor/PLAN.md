@@ -132,6 +132,9 @@
 - [ ] 将 `export_chapter_zh_html.py` 独有的改进（caption 链接、图 bbox 扩展、stub 过滤、列表拆分等）移植到 `export/assembly/normalize`。**阻塞**：脚本依赖的源 PDF（`artifacts/uploads/.../llm-book.pdf`）已不在磁盘或 git 中，无法以 `verify_chapter.py` 对照验证，脚本暂不删除。
 - [ ] 明确“译文选择”规则（脚本：首个 edge；服务：最新 run），有意统一。
 - [ ] 以 `verify_chapter.py` 作为 oracle，对 ch1–ch9 新旧产出对照。
+  - 2026-09-15 以新测试书（RSI 交易书，calibre 生成的 70 页 PDF，仅本地、不入库）用 echo worker 跑完整链路并对照脚本：脚本 `repair_stats` 在该书上全部为 0（其启发式针对 llm-book 的 "Figure N.M" 版式，本书无从验证），而产品导出在表格（脚本跳过）和列表上已优于脚本。`verify_chapter.py` 的规则依赖脚本 HTML 结构（`h2`/`p`），对产品双语章节 HTML 检查为空，不能直接当 oracle。结论：脚本删除仍需一本具备 llm-book 版式的书来验证其独有改进。
+  - 该书暴露并已修复的产品问题（均有合成 PDF 回归测试，golden 未变）：无字体依据的词形标题切分（"As John" | "Murphy …"）→ 改按粗体/字号切分；跨块多行章标题；带副标题的 Introduction 被并入 Front Matter；带线表格被拆成逐格文本导致整书导出被 layout gate 拦截（`find_tables` 恢复为管道行、跨页合并、空单元格保留）；矢量圆点列表合并为段落；"use …"/"Note: …"/"If …:" 等散文被判为代码；以数字编号的粗体小节标题被当列表项；"[Figure]" 占位符被渲染为图注；"Rs. 20" 处断句。
+  - 仍未处理：目录页 "Index" 与首个条目合并为标题；合并 HTML 中列表项仍渲染为 `<p>`（项目符号在文本内）。
 - [ ] 删除脚本导出链路及依赖 `.test-tmp/` 的构建脚本（先确认所需输入已迁出）。
 - [x] 双语整书下载改为打包各章最新双语导出；移除未实现的 `BILINGUAL_MARKDOWN` / `ZH_PDF` / `JSONL`（迁移 0032）。前端下载在 404 时先入队导出 run、等待完成再下载。
 - [x] 前端：`scripts/generate_frontend_api_types.py` 由 OpenAPI 生成 `api-types.gen.ts`（测试保证与后端同步），`api.ts` 中与生成类型兼容的 16 个类型改为别名。
