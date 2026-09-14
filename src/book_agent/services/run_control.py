@@ -560,7 +560,7 @@ class RunControlService:
         stop_reason: str,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
             return self.get_run_summary(run_id)
         return self._transition_run(
@@ -580,7 +580,7 @@ class RunControlService:
         *,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.SUCCEEDED:
             return self.get_run_summary(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
@@ -609,7 +609,7 @@ class RunControlService:
         # The allowed_from set matches :meth:`succeed_run_system`; only a
         # live / draining run can soft-succeed, not one that was paused
         # by the operator or otherwise held.
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.SUCCEEDED_WITH_WARNINGS:
             return self.get_run_summary(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
@@ -632,7 +632,7 @@ class RunControlService:
         stop_reason: str,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.FAILED:
             return self.get_run_summary(run_id)
         if run.status not in {
@@ -693,7 +693,7 @@ class RunControlService:
         detail_json: dict[str, Any] | None,
         actor_type: ActorType = ActorType.HUMAN,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status not in allowed_from:
             allowed_values = ", ".join(sorted(status.value for status in allowed_from))
             raise RunControlTransitionError(

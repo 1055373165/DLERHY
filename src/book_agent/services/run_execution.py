@@ -85,6 +85,7 @@ class RunExecutionService:
         priority: int = 100,
         input_version_bundle_by_scope_id: dict[str, dict[str, Any]] | None = None,
     ) -> list[str]:
+        run = self.repository.get_run_for_update(run_id)
         created = self.repository.seed_work_items(
             run_id=run_id,
             stage=stage,
@@ -94,7 +95,6 @@ class RunExecutionService:
             input_version_bundle_by_scope_id=input_version_bundle_by_scope_id,
         )
         if created:
-            run = self.repository.get_run(run_id)
             detail = dict(run.status_detail_json or {})
             counters = dict(detail.get("control_counters") or {})
             counters["seeded_work_item_count"] = int(counters.get("seeded_work_item_count", 0)) + len(created)
@@ -289,6 +289,7 @@ class RunExecutionService:
     ) -> ClaimedRunWorkItem:
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
             status=WorkItemStatus.SUCCEEDED,
@@ -298,7 +299,6 @@ class RunExecutionService:
                 "translation_run_id": translation_run_id,
             },
         )
-        run = self.repository.get_run(work_item.run_id)
         detail = self._bump_success_progress(
             run.status_detail_json or {},
             token_in=token_in,
@@ -340,13 +340,13 @@ class RunExecutionService:
     ) -> ClaimedRunWorkItem:
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
             status=WorkItemStatus.SUCCEEDED,
             released_at=now,
             output_artifact_refs_json=output_artifact_refs_json,
         )
-        run = self.repository.get_run(work_item.run_id)
         self.repository.save_run(
             run,
             audit_event=RunAuditEvent(
@@ -376,6 +376,7 @@ class RunExecutionService:
     ) -> ClaimedRunWorkItem:
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item_before = self.repository.get_work_item(lease.work_item_id)
         budget = self.repository.get_budget_for_run(lease.run_id)
         max_retry_count = budget.max_retry_count_per_work_item if budget is not None else None
@@ -388,7 +389,6 @@ class RunExecutionService:
             error_class=error_class,
             error_detail_json=error_detail_json,
         )
-        run = self.repository.get_run(work_item.run_id)
         detail = self._bump_failure_progress(
             run.status_detail_json or {},
             error_class=error_class,
@@ -424,7 +424,7 @@ class RunExecutionService:
         reclaimed_ids: list[str] = []
         if not expired_leases:
             return ReclaimExpiredLeaseResult(expired_lease_count=0, reclaimed_work_item_ids=[])
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         for lease in expired_leases:
             work_item = self.repository.expire_lease(
                 lease_id=lease.id,

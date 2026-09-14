@@ -58,6 +58,27 @@ class RunControlRepository:
             raise ValueError(f"Document run not found: {run_id}")
         return run
 
+    def get_run_for_update(self, run_id: str) -> DocumentRun:
+        """Load the run with a row lock held until the transaction ends.
+
+        Every writer of a run's status or status_detail_json reads it through
+        here, so concurrent read-modify-write cycles (usage counters, pipeline
+        cache, status transitions) serialize instead of overwriting each
+        other. Lock the run before touching its work items to keep one lock
+        order.
+        """
+        # Flush first so refreshing the locked row cannot discard pending changes.
+        self.session.flush()
+        run = self.session.scalar(
+            select(DocumentRun)
+            .where(DocumentRun.id == run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if run is None:
+            raise ValueError(f"Document run not found: {run_id}")
+        return run
+
     def list_runs_for_document(self, document_id: str) -> list[DocumentRun]:
         return list(
             self.session.scalars(

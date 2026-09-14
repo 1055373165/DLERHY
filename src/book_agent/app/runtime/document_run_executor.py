@@ -1531,7 +1531,7 @@ class DocumentRunExecutor:
         current_stage: str | None,
     ) -> None:
         repository = RunControlRepository(session)
-        run = repository.get_run(run_id)
+        run = repository.get_run_for_update(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
         stages = dict(read_cached_stages(pipeline) or {})
@@ -1581,7 +1581,7 @@ class DocumentRunExecutor:
         # status — the cache becomes a snapshot of truth, never a
         # fabrication.
         repository = RunControlRepository(session)
-        run = repository.get_run(run_id)
+        run = repository.get_run_for_update(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
         stages = dict(read_cached_stages(pipeline) or {})
