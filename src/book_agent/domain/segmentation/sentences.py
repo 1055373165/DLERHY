@@ -29,6 +29,9 @@ _ABBREVIATIONS = [
     "a.m.",
     "p.m.",
 ]
+# Labels that abbreviate before a number ("Rs. 20", "pp. 12", "Vol. 3"); only
+# protected when a number follows, so "... paid in Rs. Then ..." still splits.
+_NUMBER_LABEL_ABBREVIATION = re.compile(r"\b(Rs|Re|Nos|pp|Vol|vol|Ch|ch|Sec|sec|approx|Approx|Ref|ref)\.(?=\s*\d)")
 _SENTINEL = "<DOT>"
 
 
@@ -55,6 +58,7 @@ class EnglishSentenceSegmenter:
         protected = normalized
         for abbr in _ABBREVIATIONS:
             protected = protected.replace(abbr, abbr.replace(".", _SENTINEL))
+        protected = _NUMBER_LABEL_ABBREVIATION.sub(rf"\1{_SENTINEL}", protected)
         protected = re.sub(r"(\d)\.(\d)", rf"\1{_SENTINEL}\2", protected)
 
         raw_parts = re.split(r'(?<=[.!?])\s+(?=(?:"|\'|“|‘|\()?[A-Z0-9])', protected)
