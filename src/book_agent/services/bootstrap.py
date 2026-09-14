@@ -481,7 +481,7 @@ class ParseService:
             return parsed
         try:
             new_parsed, summary = enhance_parsed_document(
-                parsed, options=modality_options
+                parsed, options=modality_options, source_path=document.source_path
             )
         except Exception:  # pragma: no cover - defensive
             return parsed

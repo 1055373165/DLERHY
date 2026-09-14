@@ -94,6 +94,7 @@ def enhance_parsed_document(
     document: ParsedDocument,
     *,
     options: ModalityPipelineOptions | None = None,
+    source_path: str | None = None,
 ) -> tuple[ParsedDocument, ModalityPipelineSummary]:
     """Run the M3 modality enhancers over `document` per `options`.
 
@@ -101,6 +102,10 @@ def enhance_parsed_document(
     Each modality is independently togglable; a disabled modality is
     recorded in `summary.skipped_due_to_disabled` so observability can
     distinguish "ran and produced nothing" from "wasn't asked to run".
+
+    ``source_path`` is the PDF the document was parsed from; the TATR table
+    pass needs it to render pages. Recovered documents do not carry it in
+    their metadata.
     """
     opts = options or ModalityPipelineOptions()
     summary = ModalityPipelineSummary()
@@ -140,7 +145,9 @@ def enhance_parsed_document(
         # got NO heuristic markdown, ask TATR to try at the page level.
         if opts.page_image_table_extractor is not None:
             current, tatr_count = _apply_tatr_post_pass(
-                current, extractor=opts.page_image_table_extractor
+                current,
+                extractor=opts.page_image_table_extractor,
+                pdf_path=source_path or _document_pdf_path(current),
             )
             summary.tatr_tables_recovered = tatr_count
     else:
@@ -225,6 +232,7 @@ def _apply_tatr_post_pass(
     document: ParsedDocument,
     *,
     extractor: "PageImageTableExtractor",
+    pdf_path: str | None,
 ) -> tuple[ParsedDocument, int]:
     """Run TATR on every table block that lacks heuristic markdown.
 
@@ -239,14 +247,12 @@ def _apply_tatr_post_pass(
 
     # Build a per-page index of (bbox, text) once for cell-text mapping.
     page_text_blocks_by_page: dict[int, list[tuple]] = {}
-    pdf_path: str | None = None
     page_dims_by_page: dict[int, tuple[float, float]] = {}
     for chapter in document.chapters:
         for block in chapter.blocks:
             page = int(block.metadata.get("source_page_start") or 0)
             if page <= 0:
                 continue
-            pdf_path = pdf_path or _document_pdf_path(document)
             bboxes = (block.metadata.get("source_bbox_json", {}) or {}).get(
                 "regions"
             ) or []

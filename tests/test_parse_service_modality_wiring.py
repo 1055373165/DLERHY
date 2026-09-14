@@ -30,7 +30,7 @@ from book_agent.services.bootstrap import (
     _build_modality_options_from_env,
     _flag_is_truthy,
 )
-from book_agent.services.modality_pipeline import ModalityPipelineOptions
+from book_agent.services.modality_pipeline import ModalityPipelineOptions, ModalityPipelineSummary
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +227,17 @@ class ParseServiceApplyModalityPipelineTests(unittest.TestCase):
         # And the parsed doc was rewritten — figure block protected.
         figure_block = rewritten.chapters[0].blocks[1]
         self.assertEqual(figure_block.translatability, TRANSLATE_NONE)
+
+    def test_pipeline_receives_the_document_source_path(self) -> None:
+        service = ParseService(modality_options=ModalityPipelineOptions(enable_tables=True))
+        parsed = self._make_parsed_doc()
+        with mock.patch(
+            "book_agent.services.bootstrap.enhance_parsed_document",
+            return_value=(parsed, ModalityPipelineSummary()),
+        ) as enhance:
+            service._apply_modality_pipeline(parsed, self.document)
+
+        self.assertEqual(enhance.call_args.kwargs["source_path"], "test.pdf")
 
     def test_no_override_no_env_skips_pipeline(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=False):
