@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 import re
@@ -20,6 +20,10 @@ from book_agent.services.bootstrap import ParseService
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _collapse_whitespace(text: str | None) -> str:
+    return " ".join(str(text or "").split())
 
 
 def _chapter_href(chapter: Chapter) -> str | None:
@@ -67,6 +71,11 @@ class PdfStructureRefreshArtifacts:
     refreshed_document_image_count: int
     skipped_chapter_count: int
     skipped_block_count: int
+    # Blocks whose refreshed source text no longer matches their existing
+    # sentences. Refresh does not re-segment: sentences are referenced by
+    # packets, translations and alignment edges, so these blocks need a
+    # packet rebuild and retranslation before their translations are trusted.
+    stale_sentence_block_ids: list[str] = field(default_factory=list)
 
 
 class PdfStructureRefreshService:
@@ -117,6 +126,14 @@ class PdfStructureRefreshService:
             for block in chapter_bundle.blocks
             if isinstance(block.source_anchor, str) and block.source_anchor.strip()
         }
+        existing_sentence_text_by_block_id: dict[str, str] = {}
+        for chapter_bundle in bundle.chapters:
+            for sentence in sorted(chapter_bundle.sentences, key=lambda item: (item.block_id, item.ordinal_in_block)):
+                existing_sentence_text_by_block_id[sentence.block_id] = " ".join(
+                    part
+                    for part in (existing_sentence_text_by_block_id.get(sentence.block_id), sentence.source_text)
+                    if part
+                )
         existing_images_by_block_id = {
             image.block_id: image
             for image in bundle.document_images
@@ -159,6 +176,7 @@ class PdfStructureRefreshService:
         created_document_image_ids: list[str] = []
         updated_document_image_ids: list[str] = []
         invalidated_block_ids: list[str] = []
+        stale_sentence_block_ids: list[str] = []
         skipped_chapter_count = 0
         skipped_block_count = 0
 
@@ -204,6 +222,15 @@ class PdfStructureRefreshService:
                 refreshed_source_span,
                 refreshed_split_fragments=refreshed_split_fragments,
             )
+            existing_sentence_text = existing_sentence_text_by_block_id.get(existing_block.id)
+            if existing_sentence_text is not None and _collapse_whitespace(existing_sentence_text) != _collapse_whitespace(
+                existing_block.source_text
+            ):
+                existing_block.source_span_json = {
+                    **existing_block.source_span_json,
+                    "refresh_sentences_stale": True,
+                }
+                stale_sentence_block_ids.append(existing_block.id)
             existing_block.updated_at = now
             self.session.merge(existing_block)
             refreshed_block_ids.append(existing_block.id)
@@ -257,6 +284,7 @@ class PdfStructureRefreshService:
                 "refreshed_block_count": len(refreshed_block_ids),
                 "refreshed_document_image_count": len(created_document_image_ids) + len(updated_document_image_ids),
                 "invalidated_block_count": len(invalidated_block_ids),
+                "stale_sentence_block_count": len(stale_sentence_block_ids),
                 "chapter_scope_ids": sorted(selected_chapter_ids),
             },
         }
@@ -281,6 +309,7 @@ class PdfStructureRefreshService:
             refreshed_document_image_count=len(created_document_image_ids) + len(updated_document_image_ids),
             skipped_chapter_count=skipped_chapter_count,
             skipped_block_count=skipped_block_count,
+            stale_sentence_block_ids=stale_sentence_block_ids,
         )
 
     def _merge_preserved_block_metadata(

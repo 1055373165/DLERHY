@@ -108,13 +108,14 @@
 - [x] 资产写入函数返回 `DocumentImageMaterialization`，由调用方 `apply_document_image_materializations` 显式落到行上。
 
 ### P3.3 `domain/structure/pdf.py`（9.5k）
-- [ ] characterization：所有夹具 PDF 的 `ParsedDocument` 快照（锚点、类型、角色、章节）。
-- [ ] 叶子辅助函数 → `ingestion/text`、`ingestion/pdf/classify`；提取器/画像器 → `ingestion/pdf/extract`。
-- [ ] 显式 Pass 流水线 + 不可变 `RecoveryContext`（去掉 `_current_recovery_lane` 实例状态）。
-- [ ] 章节构建 / TOC 偏移独立模块。
+- [x] characterization：`tests/test_pdf_structure_golden.py`，56 个夹具 PDF（test_pdf_support 的 41 个 writer + golden_pdfs 的 15 个）的 `ParsedDocument` 快照。
+- [x] 按依赖分层拆出 `ingestion/text` → `ingestion/pdf/models` → `ingestion/pdf/classify` → `ingestion/pdf/extract`；导入方改为直接依赖新模块。
+- [x] `_BLOCK_RECOVERY_PASSES` 有序表 + 冻结的 `RecoveryContext`；学术 lane 显式传参，去掉 `_current_recovery_lane`。
+- [x] 章节构建 / TOC 偏移移到 `ingestion/pdf/chapters.py`（19 个函数）。`pdf.py` 9.6k → ~4.3k 行。
 - [ ] 去重：可翻译性判定、caption 正则、group-context 几何、prose-continuation 启发式。
 - [ ] OCR / 文件 IO 移出 domain；配置注入替代 env 读取。
-- [ ] 修复：TATR `source_path`、IR 在 modality 之前构建、OCR parser 工厂、refresh 不重建句子。
+- [x] 修复：TATR 显式拿到 `source_path`；modality 先于 IR 构建；OCR parser 走默认恢复服务工厂。
+- [ ] refresh 不重建句子：目前只检测并上报（`stale_sentence_block_ids` + `refresh_sentences_stale`）。真正重建需要先定句子退役模型（句子被 packet、译文、对齐边引用，没有失效状态），再串联 packet 重建与重译。
 
 ### P3.4 翻译核心
 - [ ] DTO 从 `workers/contracts.py` 移至 `translation/contracts`（修复 domain→workers、infra→workers 依赖）。
