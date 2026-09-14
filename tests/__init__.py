@@ -15,6 +15,12 @@ if str(SRC) not in sys.path:
 # The constraint is intentionally strict for prod; the test environment
 # satisfies it by living under the repo's `.test-tmp/` rather than the OS
 # default. See domain/models/review.py:120 for the constraint definition.
+# Tests must never call a real translation provider configured in the
+# developer's .env (process env beats dotenv in Settings). Tests that need a
+# provider-backed worker construct Settings or clients explicitly.
+os.environ["BOOK_AGENT_TRANSLATION_BACKEND"] = "echo"
+os.environ["BOOK_AGENT_TRANSLATION_MODEL"] = "echo-worker"
+
 _PROJECT_TMP_ROOT = ROOT / ".test-tmp"
 _PROJECT_TMP_ROOT.mkdir(parents=True, exist_ok=True)
 os.environ["TMPDIR"] = str(_PROJECT_TMP_ROOT)

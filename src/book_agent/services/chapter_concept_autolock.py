@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import re
 from typing import Protocol
 
@@ -13,6 +14,8 @@ from book_agent.schemas.common import BaseSchema
 from book_agent.services.chapter_concept_lock import ChapterConceptLockResult, ChapterConceptLockService
 from book_agent.workers.contracts import TranslationUsage
 from book_agent.workers.providers import OpenAICompatibleTranslationClient
+
+logger = logging.getLogger(__name__)
 
 
 class ConceptTranslationExample(BaseSchema):
@@ -215,12 +218,23 @@ class FallbackConceptResolver:
         examples: list[ConceptTranslationExample],
     ) -> tuple[ConceptResolutionPayload | None, TranslationUsage | None]:
         for resolver in self.resolvers:
-            resolution, usage = resolver.resolve(
-                source_term=source_term,
-                chapter_title=chapter_title,
-                chapter_brief=chapter_brief,
-                examples=examples,
-            )
+            try:
+                resolution, usage = resolver.resolve(
+                    source_term=source_term,
+                    chapter_title=chapter_title,
+                    chapter_brief=chapter_brief,
+                    examples=examples,
+                )
+            except Exception:
+                # A provider outage (e.g. HTTP 402) must fall through to the next
+                # resolver instead of failing the whole review.
+                logger.warning(
+                    "Concept resolver %s failed for %r; trying the next resolver",
+                    type(resolver).__name__,
+                    source_term,
+                    exc_info=True,
+                )
+                continue
             if resolution is not None and resolution.canonical_zh:
                 return resolution, usage
         return None, None
