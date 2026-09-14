@@ -10,23 +10,19 @@ from datetime import datetime, timezone
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
-    ActionActorType,
-    ActionStatus,
     ActionType,
     Detector,
     IssueStatus,
-    JobScopeType,
     RootCauseLayer,
     SentenceStatus,
     Severity,
     TargetSegmentStatus,
 )
-from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.domain.models.review import ReviewIssue
 from book_agent.export.models import (
     ExportMisalignmentEvidence,
 )
 from book_agent.infra.repositories.export import ChapterExportBundle
-from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
 
 
 def snapshot_version_map(bundle: ChapterExportBundle) -> dict[str, int]:
@@ -308,41 +304,3 @@ def packet_current_sentence_ids(packet) -> list[str]:
     return sentence_ids
 
 
-def build_action(issue: ReviewIssue) -> IssueAction:
-    action_type = resolve_action(
-        IssueRoutingContext(
-            issue_type=issue.issue_type,
-            root_cause_layer=issue.root_cause_layer,
-            translation_content_ok=True,
-        )
-    )
-    scope_type, scope_id = scope_for_action(issue, action_type)
-    return IssueAction(
-        id=stable_id("issue-action", issue.id, action_type.value),
-        issue_id=issue.id,
-        action_type=action_type,
-        scope_type=scope_type,
-        scope_id=scope_id,
-        status=ActionStatus.PLANNED,
-        reason_json={"issue_type": issue.issue_type, "packet_id": issue.packet_id, "root_cause_layer": issue.root_cause_layer.value},
-        created_by=ActionActorType.SYSTEM,
-        created_at=issue.created_at,
-        updated_at=issue.updated_at,
-    )
-
-
-def scope_for_action(issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
-    if action_type in {ActionType.RERUN_PACKET, ActionType.REBUILD_PACKET_THEN_RERUN, ActionType.REALIGN_ONLY} and issue.packet_id:
-        return JobScopeType.PACKET, issue.packet_id
-    if action_type in {
-        ActionType.RESEGMENT_CHAPTER,
-        ActionType.REPARSE_CHAPTER,
-        ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED,
-        ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED,
-        ActionType.REBUILD_CHAPTER_BRIEF,
-        ActionType.REEXPORT_ONLY,
-    }:
-        return JobScopeType.CHAPTER, issue.chapter_id
-    if action_type == ActionType.REPARSE_DOCUMENT:
-        return JobScopeType.DOCUMENT, issue.document_id
-    return JobScopeType.SENTENCE, issue.sentence_id

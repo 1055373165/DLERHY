@@ -28,11 +28,10 @@ from book_agent.domain.enums import (
     ExportStatus,
     ExportType,
     IssueStatus,
-    JobScopeType,
     RootCauseLayer,
     SourceType,
 )
-from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
+from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.domain.structure.epub import (
     _parse_xml_document,
@@ -72,6 +71,7 @@ from book_agent.infra.repositories.export import (
     DocumentExportBundle,
     ExportRepository,
 )
+from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.layout_validate import LayoutValidationService
 
 
@@ -1001,7 +1001,7 @@ class ExportService:
             self.repository.session.merge(issue)
         self.repository.session.flush()
 
-        actions = [alignment.build_action(issue) for issue in issues]
+        actions = [build_issue_action(issue) for issue in issues]
         for action in actions:
             self.repository.session.merge(action)
         self.repository.session.flush()
@@ -1044,7 +1044,7 @@ class ExportService:
             self.repository.session.merge(current)
         self.repository.session.flush()
 
-        actions = [alignment.build_action(current) for current in issues]
+        actions = [build_issue_action(current) for current in issues]
         for action in actions:
             self.repository.session.merge(action)
         self.repository.session.flush()
@@ -1125,12 +1125,6 @@ class ExportService:
 
     def _packet_current_sentence_ids(self, packet) -> list[str]:
         return alignment.packet_current_sentence_ids(packet)
-
-    def _build_action(self, issue: ReviewIssue) -> IssueAction:
-        return alignment.build_action(issue)
-
-    def _scope_for_action(self, issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
-        return alignment.scope_for_action(issue, action_type)
 
     def _pdf_preserve_evidence_payload(
         self,

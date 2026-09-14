@@ -7,14 +7,10 @@ from typing import Any
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
-    ActionActorType,
-    ActionStatus,
-    ActionType,
     BlockType,
     ChapterStatus,
     Detector,
     IssueStatus,
-    JobScopeType,
     LockLevel,
     RootCauseLayer,
     RunStatus,
@@ -28,7 +24,7 @@ from book_agent.domain.structure.artifact_grouping import normalize_artifact_rol
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
-from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
+from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.style_drift import STYLE_DRIFT_RULES
@@ -392,7 +388,7 @@ class ReviewService:
         actions: list[IssueAction] = []
         rerun_plans: list[RerunPlan] = []
         for issue in issues:
-            action = self._build_action(issue)
+            action = build_issue_action(issue)
             actions.append(action)
             rerun_plans.append(build_rerun_plan(issue, action))
 
@@ -1924,59 +1920,3 @@ class ReviewService:
             updated_at=now,
         )
 
-    def _build_action(self, issue: ReviewIssue) -> IssueAction:
-        action_type = resolve_action(
-            IssueRoutingContext(
-                issue_type=issue.issue_type,
-                root_cause_layer=issue.root_cause_layer,
-                involves_locked_term=issue.issue_type == "TERM_CONFLICT",
-                translation_content_ok=issue.issue_type != "OMISSION",
-                requires_packet_rerun=bool((issue.evidence_json or {}).get("requires_packet_rerun")),
-            )
-        )
-        scope_type, scope_id = self._scope_for_action(issue, action_type)
-        return IssueAction(
-            id=stable_id("issue-action", issue.id, action_type.value),
-            issue_id=issue.id,
-            action_type=action_type,
-            scope_type=scope_type,
-            scope_id=scope_id,
-            status=ActionStatus.PLANNED,
-            reason_json={"issue_type": issue.issue_type, "packet_id": issue.packet_id},
-            created_by=ActionActorType.SYSTEM,
-            created_at=issue.created_at,
-            updated_at=issue.updated_at,
-        )
-
-    def _scope_for_action(self, issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
-        if action_type in {ActionType.RERUN_PACKET, ActionType.REBUILD_PACKET_THEN_RERUN, ActionType.REALIGN_ONLY} and issue.packet_id:
-            return JobScopeType.PACKET, issue.packet_id
-        if (
-            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
-            and issue.issue_type == "TERM_CONFLICT"
-            and issue.packet_id
-        ):
-            return JobScopeType.PACKET, issue.packet_id
-        if (
-            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
-            and issue.issue_type == "UNLOCKED_KEY_CONCEPT"
-            and issue.packet_id
-        ):
-            packet_ids_seen = [
-                str(packet_id).strip()
-                for packet_id in list((issue.evidence_json or {}).get("packet_ids_seen") or [])
-                if str(packet_id).strip()
-            ]
-            if len(packet_ids_seen) == 1:
-                return JobScopeType.PACKET, issue.packet_id
-        if action_type in {
-            ActionType.RESEGMENT_CHAPTER,
-            ActionType.REPARSE_CHAPTER,
-            ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED,
-            ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED,
-            ActionType.REBUILD_CHAPTER_BRIEF,
-        }:
-            return JobScopeType.CHAPTER, issue.chapter_id
-        if action_type == ActionType.REPARSE_DOCUMENT:
-            return JobScopeType.DOCUMENT, issue.document_id
-        return JobScopeType.SENTENCE, issue.sentence_id

@@ -13,7 +13,7 @@ if str(SRC) not in sys.path:
 from book_agent.domain.enums import ActionActorType, ActionStatus, ActionType, Detector, IssueStatus, JobScopeType, RootCauseLayer, Severity
 from book_agent.domain.models.review import IssueAction, ReviewIssue
 from book_agent.orchestrator.rerun import build_rerun_plan
-from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
+from book_agent.orchestrator.rule_engine import IssueRoutingContext, build_issue_action, resolve_action
 
 
 class RuleEngineTests(unittest.TestCase):
@@ -244,6 +244,56 @@ class RuleEngineTests(unittest.TestCase):
 
         self.assertEqual(plan.scope_type, JobScopeType.PACKET)
         self.assertEqual(plan.scope_ids, ["pkt-2", "pkt-4"])
+
+
+
+class BuildIssueActionTests(unittest.TestCase):
+    """Review and the export gate share one issue -> action mapping."""
+
+    def _issue(self, issue_type: str, root_cause_layer: RootCauseLayer, **overrides) -> ReviewIssue:
+        values = {
+            "id": "issue-1",
+            "document_id": "document-1",
+            "chapter_id": "chapter-1",
+            "sentence_id": "sentence-1",
+            "packet_id": "packet-1",
+            "issue_type": issue_type,
+            "root_cause_layer": root_cause_layer,
+            "evidence_json": {},
+        }
+        values.update(overrides)
+        return ReviewIssue(**values)
+
+    def test_export_alignment_failure_realigns_the_packet(self) -> None:
+        action = build_issue_action(self._issue("ALIGNMENT_FAILURE", RootCauseLayer.EXPORT))
+
+        self.assertEqual(action.action_type, ActionType.REALIGN_ONLY)
+        self.assertEqual((action.scope_type, action.scope_id), (JobScopeType.PACKET, "packet-1"))
+        self.assertEqual(action.reason_json["root_cause_layer"], "export")
+
+    def test_reexport_only_is_chapter_scoped(self) -> None:
+        action = build_issue_action(self._issue("EXPORT_FAILURE", RootCauseLayer.EXPORT))
+
+        self.assertEqual(action.action_type, ActionType.REEXPORT_ONLY)
+        self.assertEqual((action.scope_type, action.scope_id), (JobScopeType.CHAPTER, "chapter-1"))
+
+    def test_locked_term_conflict_reruns_only_its_packet(self) -> None:
+        action = build_issue_action(self._issue("TERM_CONFLICT", RootCauseLayer.MEMORY))
+
+        self.assertEqual(action.action_type, ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED)
+        self.assertEqual((action.scope_type, action.scope_id), (JobScopeType.PACKET, "packet-1"))
+
+    def test_evidence_can_force_a_packet_rerun_for_alignment_failures(self) -> None:
+        action = build_issue_action(
+            self._issue("ALIGNMENT_FAILURE", RootCauseLayer.PACKET, evidence_json={"requires_packet_rerun": True})
+        )
+
+        self.assertEqual(action.action_type, ActionType.RERUN_PACKET)
+
+    def test_action_id_is_stable_per_issue_and_action_type(self) -> None:
+        issue = self._issue("OMISSION", RootCauseLayer.TRANSLATION)
+
+        self.assertEqual(build_issue_action(issue).id, build_issue_action(issue).id)
 
 
 if __name__ == "__main__":
