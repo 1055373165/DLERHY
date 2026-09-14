@@ -81,7 +81,7 @@
 已确认：`translate_full` 的审校与导出为必需阶段（已完成）；P2 完整执行，含 POST translate/review/export 改为入队。
 
 - [x] **P2.1 Worker provider**：`workers.factory.TranslationWorkerProvider`（按凭据 revision 缓存、线程安全）；API / 执行器 / CLI / 概念解析器共用；凭据 worker 与 settings worker 同一构造（prompt profile、单价来自 settings）。
-- [ ] **P2.2 类型化 provider 异常**（Retryable / Fatal / SchemaViolation / InsufficientBalance），按类型分类重试，替代消息子串匹配。
+- [x] **P2.2 类型化 provider 异常**：`workers.failures.classify_failure` 按异常类型给出 retry / pause / fail（402 → 暂停「余额不足」，401/403 → 暂停「认证失败」）；新增 `ProviderResponseFormatError`；删除消息子串匹配。
 - [ ] **P2.3 租约丢失与队列**：心跳发现租约丢失即协作取消，结果不再落库；`claim_next` 在 Postgres 上用 `FOR UPDATE SKIP LOCKED`；执行器 `stop()` 取消 work 线程后再 dispose engine。
 - [ ] **P2.4 Run 状态**：条件 UPDATE 实现 CAS 状态转移并必写审计；用量计数改 SQL 自增 / 独立列；停止整列重写 `status_detail_json`。
 - [ ] **P2.5 事务与线程**：LLM 调用不在 DB 事务内；审核/导出不在 run 线程上内联阻塞。

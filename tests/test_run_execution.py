@@ -2,11 +2,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from book_agent.app.runtime.document_run_executor import (
-    DocumentRunExecutor,
-    _is_retryable_exception,
-    _pause_reason_for_exception,
-)
+from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+from book_agent.workers.providers import ProviderHTTPError
 from book_agent.domain.enums import (
     ArtifactStatus,
     BlockType,
@@ -638,17 +635,6 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(guardrail.stop_reason, "budget.consecutive_failures_exceeded")
         self.assertEqual(guardrail.run_summary.status, "failed")
 
-    def test_retryable_exception_helper_treats_http_429_as_retryable(self) -> None:
-        exc = RuntimeError("Provider returned HTTP 429: rate limit exceeded")
-        self.assertTrue(_is_retryable_exception(exc))
-
-    def test_retryable_exception_helper_treats_http_402_insufficient_balance_as_non_retryable(self) -> None:
-        exc = RuntimeError(
-            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
-        )
-        self.assertFalse(_is_retryable_exception(exc))
-        self.assertEqual(_pause_reason_for_exception(exc), "provider.insufficient_balance")
-
     def test_provider_insufficient_balance_pauses_run_immediately(self) -> None:
         run_id = self._create_running_run(
             budget=RunBudgetSummary(
@@ -684,9 +670,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             export_root="/tmp",
             translation_worker=None,
         )
-        exc = RuntimeError(
-            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
-        )
+        exc = ProviderHTTPError(402, '{"error":{"message":"Insufficient Balance","type":"unknown_error"}}')
         executor._complete_failure(
             run_id=run_id,
             claimed=claimed,

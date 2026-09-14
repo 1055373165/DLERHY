@@ -5,6 +5,7 @@ from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderHTTPError,
     ProviderNetworkError,
+    ProviderResponseFormatError,
     ProviderTransportError,
     UrllibJSONTransport,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "OpenAICompatibleTranslationClient",
     "ProviderHTTPError",
     "ProviderNetworkError",
+    "ProviderResponseFormatError",
     "ProviderTransportError",
     "UrllibJSONTransport",
 ]

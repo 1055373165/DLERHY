@@ -24,6 +24,10 @@ class ProviderHTTPError(ProviderTransportError):
         super().__init__(f"Provider returned HTTP {code}: {detail}")
 
 
+class ProviderResponseFormatError(RuntimeError):
+    """The provider answered, but not with the structured payload we asked for."""
+
+
 class ProviderNetworkError(ProviderTransportError):
     def __init__(self, reason: str) -> None:
         self.reason = reason
@@ -237,7 +241,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         try:
             output = TranslationWorkerOutput.model_validate(output_payload)
         except Exception as exc:
-            raise RuntimeError("Provider response did not match TranslationWorkerOutput schema.") from exc
+            raise ProviderResponseFormatError("Provider response did not match TranslationWorkerOutput schema.") from exc
         return TranslationWorkerResult(
             output=output,
             usage=self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms),
@@ -443,20 +447,20 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     if payload is not None:
                         return payload
 
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
 
     def _extract_generic_output_payload(self, response: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
         if api_mode == "chat_completions":
             choices = response.get("choices")
             if not isinstance(choices, list) or not choices:
-                raise RuntimeError("Provider response did not include chat completion choices.")
+                raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
             message = choices[0].get("message")
             if not isinstance(message, dict):
-                raise RuntimeError("Provider response did not include a chat completion message.")
+                raise ProviderResponseFormatError("Provider response did not include a chat completion message.")
             payload = self._extract_json_object_from_content(message.get("content"))
             if payload is not None:
                 return payload
-            raise RuntimeError("Provider response did not include a structured JSON output payload.")
+            raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
         if isinstance(response.get("output_parsed"), dict):
             return response["output_parsed"]
 
@@ -469,20 +473,20 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                 if payload is not None:
                     return payload
 
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
 
     def _extract_chat_completions_payload(self, response: dict[str, Any]) -> dict[str, Any]:
         choices = response.get("choices")
         if not isinstance(choices, list) or not choices:
-            raise RuntimeError("Provider response did not include chat completion choices.")
+            raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
         message = choices[0].get("message")
         if not isinstance(message, dict):
-            raise RuntimeError("Provider response did not include a chat completion message.")
+            raise ProviderResponseFormatError("Provider response did not include a chat completion message.")
         content = message.get("content")
         payload = self._extract_payload_from_content(content)
         if payload is not None:
             return payload
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
 
     def _extract_usage(self, response: dict[str, Any], *, api_mode: str, latency_ms: int) -> TranslationUsage:
         usage_payload = response.get("usage")

@@ -54,6 +54,7 @@ from book_agent.orchestrator.state_machine import (
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
+from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import TranslationWorker
 
 
@@ -62,49 +63,6 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _is_retryable_exception(exc: Exception) -> bool:
-    message = str(exc).lower()
-    non_retryable_markers = [
-        "http 400",
-        "http 401",
-        "http 402",
-        "http 403",
-        "http 404",
-        "insufficient balance",
-        "invalid api key",
-        "authentication failed",
-    ]
-    if any(marker in message for marker in non_retryable_markers):
-        return False
-    retryable_markers = [
-        "http 408",
-        "http 409",
-        "http 429",
-        "http 500",
-        "http 502",
-        "http 503",
-        "http 504",
-        "request failed",
-        "timed out",
-        "timeout",
-        "temporarily unavailable",
-        "connection reset",
-        "connection aborted",
-        "connection refused",
-        "database is locked",
-        "structured json output payload",
-        "translationworkeroutput schema",
-    ]
-    return any(marker in message for marker in retryable_markers)
-
-
-def _pause_reason_for_exception(exc: Exception) -> str | None:
-    message = str(exc).lower()
-    if "http 402" in message and "insufficient balance" in message:
-        return "provider.insufficient_balance"
-    return None
 
 
 def ensure_document_run_executor(app) -> "DocumentRunExecutor":
@@ -915,11 +873,13 @@ class DocumentRunExecutor:
         exc: Exception,
         stage_key: str,
     ) -> None:
-        retryable = _is_retryable_exception(exc)
-        pause_reason = _pause_reason_for_exception(exc)
+        failure = classify_failure(exc)
+        retryable = failure.retryable
+        pause_reason = failure.pause_reason
         error_class = exc.__class__.__name__
         error_detail = {
             "message": str(exc),
+            "failure_reason": failure.reason,
             "traceback": traceback.format_exc(limit=8),
         }
         with session_scope(self.session_factory) as session:
