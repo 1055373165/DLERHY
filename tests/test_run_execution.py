@@ -149,8 +149,10 @@ class RunExecutionServiceTests(unittest.TestCase):
         return document_id, packet_ids_by_chapter
 
     def test_run_execution_success_lifecycle_updates_usage_and_terminal_state(self) -> None:
-        run_id = self._create_running_run()
-        packet_id = str(uuid4())
+        # Terminal success is derived from real packet state, so seed an actual packet.
+        document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
+        packet_id = packet_ids_by_chapter[0][0]
+        run_id = self._create_running_run_for_document(document_id)
 
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))
@@ -174,6 +176,10 @@ class RunExecutionServiceTests(unittest.TestCase):
                 cost_usd=0.0035,
                 latency_ms=750,
             )
+            # The translation service marks the packet translated; this test drives
+            # the run ledger directly, so apply that effect by hand.
+            session.get(TranslationPacket, packet_id).status = PacketStatus.TRANSLATED
+            session.commit()
             summary = execution.reconcile_run_terminal_state(run_id=run_id)
 
         self.assertEqual(summary.status, "succeeded")
@@ -463,6 +469,36 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertTrue(executor._reclaim_expired_leases(run_id))
 
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            self.assertEqual(len(refreshed_items), 1)
+            self.assertEqual(refreshed_items[0].status, WorkItemStatus.RETRYABLE_FAILED)
+            self.assertEqual(str(refreshed_items[0].scope_id), first_packet_id)
+
+            blocked_seedable = executor._plan_translate_frontier(
+                session=session,
+                run_id=run_id,
+                document_id=document_id,
+                translate_items=refreshed_items,
+            ).packet_ids
+            self.assertEqual(blocked_seedable, [])
+
+            reclaimed_claim = executor._claim_translate_work_items(
+                session=session,
+                execution=execution,
+                run_id=run_id,
+                translate_items=refreshed_items,
+            )
+            self.assertEqual(len(reclaimed_claim), 1)
+            self.assertEqual(reclaimed_claim[0].scope_id, first_packet_id)
+            self.assertEqual(reclaimed_claim[0].attempt, 2)
+
+            waiting_packet = session.get(TranslationPacket, second_packet_id)
+            self.assertIsNotNone(waiting_packet)
+            assert waiting_packet is not None
+            self.assertEqual(waiting_packet.packet_json["runtime_state"]["substate"], "ready")
+
     def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_review(self) -> None:
         document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
         packet_id = packet_ids_by_chapter[0][0]
@@ -512,36 +548,6 @@ class RunExecutionServiceTests(unittest.TestCase):
         pipeline = summary.status_detail_json["pipeline"]
         cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
         self.assertEqual(cached_stages["translate"]["status"], "succeeded")
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
-            self.assertEqual(len(refreshed_items), 1)
-            self.assertEqual(refreshed_items[0].status, WorkItemStatus.RETRYABLE_FAILED)
-            self.assertEqual(str(refreshed_items[0].scope_id), first_packet_id)
-
-            blocked_seedable = executor._plan_translate_frontier(
-                session=session,
-                run_id=run_id,
-                document_id=document_id,
-                translate_items=refreshed_items,
-            ).packet_ids
-            self.assertEqual(blocked_seedable, [])
-
-            reclaimed_claim = executor._claim_translate_work_items(
-                session=session,
-                execution=execution,
-                run_id=run_id,
-                translate_items=refreshed_items,
-            )
-            self.assertEqual(len(reclaimed_claim), 1)
-            self.assertEqual(reclaimed_claim[0].scope_id, first_packet_id)
-            self.assertEqual(reclaimed_claim[0].attempt, 2)
-
-            waiting_packet = session.get(TranslationPacket, second_packet_id)
-            self.assertIsNotNone(waiting_packet)
-            assert waiting_packet is not None
-            self.assertEqual(waiting_packet.packet_json["runtime_state"]["substate"], "ready")
 
     def test_budget_guardrail_pauses_run_when_cost_limit_is_exceeded(self) -> None:
         run_id = self._create_running_run(
