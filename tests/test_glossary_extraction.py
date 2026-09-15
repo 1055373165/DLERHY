@@ -93,6 +93,13 @@ class MergeProposalsTest(unittest.TestCase):
         self.assertTrue(by_term["RSI divergence"].recommended_lock)
         self.assertFalse(by_term["head & shoulders"].recommended_lock)
 
+    def test_plural_proposals_merge_into_the_singular_entry(self) -> None:
+        suggestions, _ = merge_proposals(
+            [_proposal("Divergence", "背离"), _proposal("divergences", "背离"), _proposal("failure swings", "失败摆动")],
+            self.SOURCE,
+        )
+        self.assertEqual(sorted(item.source_term for item in suggestions), ["Divergence", "failure swings"])
+
     def test_single_mention_concepts_are_not_glossary_entries(self) -> None:
         suggestions, _ = merge_proposals([_proposal("trending market", "趋势市场")], self.SOURCE)
         self.assertEqual(suggestions, [])

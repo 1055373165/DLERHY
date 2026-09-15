@@ -149,8 +149,13 @@ def _coerce_term_type(value: object) -> TermType:
 
 
 def term_occurrence_pattern(source_term: str) -> re.Pattern[str]:
-    """Case-insensitive whole-word match that also accepts a plural suffix."""
-    words = [re.escape(word) for word in _normalize_space(source_term).split()]
+    """Case-insensitive whole-word match of the term's singular or plural form."""
+    words = _normalize_space(source_term).split()
+    last = words[-1] if words else ""
+    if len(last) > 4 and last[-1:].lower() == "s" and last[-2:].lower() not in {"ss", "us", "is"}:
+        # A plural proposal ("failure swings") must also match the singular in the text.
+        words[-1] = last[:-2] if last[-2:].lower() == "es" and last[-3:-2].lower() in {"s", "x", "z", "h"} else last[:-1]
+    words = [re.escape(word) for word in words]
     return re.compile(r"(?<![A-Za-z0-9])" + r"\s+".join(words) + r"(?:s|es)?(?![A-Za-z0-9])", re.IGNORECASE)
 
 
@@ -193,6 +198,13 @@ def merge_proposals(
         key = source.casefold()
         grouped[key].append(proposal)
         spelling.setdefault(key, source)
+
+    # Plural proposals join their singular entry; the occurrence pattern already counts both.
+    for key in sorted(grouped, key=len, reverse=True):
+        for singular in (key[:-2] if key.endswith("es") else None, key[:-1] if key.endswith("s") else None):
+            if singular and singular in grouped and singular != key:
+                grouped[singular].extend(grouped.pop(key))
+                break
 
     suggestions: list[GlossarySuggestion] = []
     dropped: list[str] = []
