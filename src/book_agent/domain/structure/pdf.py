@@ -2709,9 +2709,27 @@ class PdfStructureRecoveryService:
             ):
                 first_substantive_anchor_by_page[block.page_start] = block.anchor
 
+        body_font_chars: Counter[float] = Counter()
+        for block in recovered_blocks:
+            if block.role == "body" and block.font_size_avg > 0:
+                body_font_chars[round(block.font_size_avg, 1)] += len(block.text)
+        # The size most body text is set in; a median over blocks is skewed by short display lines.
+        body_font_size = body_font_chars.most_common(1)[0][0] if body_font_chars else 0.0
         split_blocks: list[_RecoveredBlock] = []
         reading_order_index = 0
         for block in recovered_blocks:
+            if font_emphasis_available and self._is_standalone_styled_numbered_heading(block, body_font_size):
+                block = replace(
+                    block,
+                    role="heading",
+                    block_type=BlockType.HEADING,
+                    flags=list(dict.fromkeys([*block.flags, "embedded_book_styled_heading_recovered"])),
+                    metadata={
+                        **block.metadata,
+                        "pdf_heading_recovery_source": "embedded_book_styled_heading_recovered",
+                        "heading_level": 2,
+                    },
+                )
             segments = self._split_embedded_page_heading_segments(
                 block,
                 is_first_substantive_page_block=(
@@ -2923,6 +2941,11 @@ class PdfStructureRecoveryService:
         if block.role != "body" or block.block_type != BlockType.PARAGRAPH:
             return False
         if str(block.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        emphasis_text = _normalize_text(str(block.metadata.get("pdf_leading_emphasis_text") or ""))
+        if emphasis_text and _normalize_text(block.text) != emphasis_text:
+            # Only a styled prefix is emphasized ("Index" above a TOC entry);
+            # the embedded-heading pass splits it off instead.
             return False
         if _normalize_text(block.text).casefold() in _TOC_HEADING_TITLES:
             if block.page_start != block.page_end or not block.bbox_regions:
@@ -3199,6 +3222,19 @@ class PdfStructureRecoveryService:
         if heading_text is None or recovery_flag is None:
             return [replace(block)]
         return self._heading_and_body_segments(block, heading_text, remainder, recovery_flag, recovered_heading_level)
+
+    def _is_standalone_styled_numbered_heading(self, block: _RecoveredBlock, body_font_size: float) -> bool:
+        """A numbered item that is entirely bold and set larger than body text ("9. Divergences ...")."""
+        if block.role != "list_item" or block.block_type != BlockType.LIST_ITEM or body_font_size <= 0:
+            return False
+        if str(block.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        text = _normalize_text(block.text)
+        if not re.match(r"^\d{1,3}[.)]\s", text) or len(text.split()) > 16:
+            return False
+        if text != _normalize_text(str(block.metadata.get("pdf_leading_emphasis_text") or "")):
+            return False
+        return block.font_size_avg >= body_font_size + 1.0
 
     def _heading_and_body_segments(
         self,
