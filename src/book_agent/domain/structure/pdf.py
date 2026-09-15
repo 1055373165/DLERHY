@@ -2718,7 +2718,10 @@ class PdfStructureRecoveryService:
         split_blocks: list[_RecoveredBlock] = []
         reading_order_index = 0
         for block in recovered_blocks:
-            if font_emphasis_available and self._is_standalone_styled_numbered_heading(block, body_font_size):
+            if font_emphasis_available and (
+                self._is_standalone_styled_numbered_heading(block, body_font_size)
+                or self._is_standalone_styled_heading_line(block)
+            ):
                 block = replace(
                     block,
                     role="heading",
@@ -3235,6 +3238,23 @@ class PdfStructureRecoveryService:
         if text != _normalize_text(str(block.metadata.get("pdf_leading_emphasis_text") or "")):
             return False
         return block.font_size_avg >= body_font_size + 1.0
+
+    def _is_standalone_styled_heading_line(self, block: _RecoveredBlock) -> bool:
+        """A short, fully bold body line that reads as a title ("How to Calculate Price Target?").
+
+        Bold sentences ("This is used by forex day traders.") and run-in labels
+        ("Important Tip:") keep their paragraph role.
+        """
+        if block.role != "body" or block.block_type != BlockType.PARAGRAPH:
+            return False
+        if str(block.metadata.get("pdf_page_family") or "body") != "body":
+            return False
+        text = _normalize_text(block.text)
+        if not text or text != _normalize_text(str(block.metadata.get("pdf_leading_emphasis_text") or "")):
+            return False
+        if "\n" in block.text.strip() or not 1 <= len(text.split()) <= 12:
+            return False
+        return text[:1].isupper() and not text.endswith((".", ",", ";", ":", "!"))
 
     def _heading_and_body_segments(
         self,

@@ -79,6 +79,10 @@ def _write_numbered_section_pdf(path: Path) -> None:
     page.insert_text((72, 290), "3. Divergences (discussed at length in chapter 5)", fontname="hebo", fontsize=11.5)
     page.insert_text((72, 320), "4. Reversals", fontname="hebo", fontsize=11.5)
     page.insert_text((72, 336), "A reversal is the mirror image of a divergence and appears in trending markets.", fontsize=10)
+    page.insert_text((72, 380), "Technical Requirements of a Bullish Divergence", fontname="hebo", fontsize=10)
+    page.insert_text((72, 410), "1. Price makes a new recent high and then pulls back for at least one candle.", fontsize=10)
+    page.insert_text((72, 440), "This is used by forex day traders.", fontname="hebo", fontsize=10)
+    page.insert_text((72, 470), "It works best when the market is quiet and ranges between two levels.", fontsize=10)
     page = document.new_page()
     page.insert_text((72, 100), "Index", fontname="hebo")
     page.insert_text((72, 112), "Introduction: Why momentum matters so much", fontsize=10)
@@ -158,6 +162,8 @@ class StyledHeadingRecoveryTest(unittest.TestCase):
         self.assertIn((BlockType.HEADING.value, "3. Divergences (discussed at length in chapter 5)"), blocks)
         self.assertIn((BlockType.HEADING.value, "4. Reversals"), blocks)
         self.assertIn((BlockType.HEADING.value, "Index"), blocks)
+        self.assertIn((BlockType.HEADING.value, "Technical Requirements of a Bullish Divergence"), blocks)
+        self.assertIn((BlockType.PARAGRAPH.value, "This is used by forex day traders."), blocks)
         self.assertIn((BlockType.PARAGRAPH.value, "Introduction: Why momentum matters so much"), blocks)
         self.assertTrue(
             any(
