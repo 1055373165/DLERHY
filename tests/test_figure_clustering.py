@@ -115,6 +115,31 @@ class FigureClusteringTests(unittest.TestCase):
         report = cluster_figure_regions(blocks)
         self.assertEqual(len(report.clusters), 2)
 
+    def test_prose_sentence_between_close_anchors_keeps_figures_separate(self) -> None:
+        """Two charts with a one-line body sentence between them (gap < max_anchor_gap_pt)
+        used to merge into one figure that swallowed the sentence."""
+        sentence = "Inverted Head & Shoulders is just the opposite of Head & Shoulders, as you can see below."
+        blocks = [
+            _image_block((100.0, 100.0, 400.0, 250.0), image_type="embedded_image", anchor="img-1"),
+            _text_block(sentence, (100.0, 254.0, 420.0, 266.0), anchor="para-1"),
+            _image_block((100.0, 270.0, 400.0, 450.0), image_type="embedded_image", anchor="img-2"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(len(report.clusters), 2)
+        self.assertNotIn(1, {index for cluster in report.clusters for index in cluster.inline_label_indices})
+
+    def test_prose_sentence_inside_anchor_is_not_absorbed_as_label(self) -> None:
+        blocks = [
+            _image_block((100.0, 100.0, 400.0, 400.0), anchor="img-1"),
+            _text_block(
+                "Price makes a new high while the indicator fails to confirm it.",
+                (120.0, 240.0, 380.0, 252.0),
+                anchor="para-1",
+            ),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(report.clusters[0].inline_label_indices, ())
+
     def test_anchor_below_min_area_dropped(self) -> None:
         """Tiny vector rules (e.g. 18×18 page-divider lines) are filtered."""
         blocks = [

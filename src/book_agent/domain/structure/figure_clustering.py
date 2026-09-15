@@ -310,12 +310,14 @@ def _merge_close_anchors(
     anchor_entries: list[tuple[int, _Bbox, str]],
     *,
     config: FigureClusterConfig,
+    separator_bboxes: Sequence[_Bbox] = (),
 ) -> list[tuple[list[int], _Bbox, str]]:
     """Greedy merge of overlapping/adjacent anchor bboxes.
 
     Iterates anchors in (top, left) order; each anchor either joins an
     existing cluster (if both horizontal and vertical gaps are within
-    ``max_anchor_gap_pt``) or starts a new one.
+    ``max_anchor_gap_pt`` and no prose sentence sits between them) or
+    starts a new one.
     """
     clusters: list[tuple[list[int], _Bbox, str]] = []
     sorted_entries = sorted(anchor_entries, key=lambda item: (round(item[1][1], 2), round(item[1][0], 2)))
@@ -326,7 +328,11 @@ def _merge_close_anchors(
         merged_into: int | None = None
         for cluster_idx, (_, cluster_bbox, cluster_kind) in enumerate(clusters):
             horizontal, vertical = _bbox_gap(cluster_bbox, bbox)
-            if horizontal <= threshold and vertical <= threshold:
+            if (
+                horizontal <= threshold
+                and vertical <= threshold
+                and not any(_separates_vertically(cluster_bbox, bbox, separator) for separator in separator_bboxes)
+            ):
                 merged_into = cluster_idx
                 clusters[cluster_idx] = (
                     [*clusters[cluster_idx][0], index],
@@ -337,6 +343,23 @@ def _merge_close_anchors(
         if merged_into is None:
             clusters.append(([index], bbox, image_type))
     return clusters
+
+
+def _separates_vertically(upper_or_lower: _Bbox, other: _Bbox, separator: _Bbox) -> bool:
+    """Whether ``separator`` lies in the vertical gap between two boxes and overlaps them horizontally."""
+    top_box, bottom_box = sorted((upper_or_lower, other), key=lambda bbox: bbox[1])
+    center_y = (separator[1] + separator[3]) / 2
+    if not top_box[3] - 1.0 <= center_y <= bottom_box[1] + 1.0:
+        return False
+    left = max(min(top_box[0], bottom_box[0]), separator[0])
+    right = min(max(top_box[2], bottom_box[2]), separator[2])
+    return right > left
+
+
+def _looks_like_prose_sentence(text: str) -> bool:
+    """A full sentence of body text, never a figure-internal label."""
+    normalized = " ".join(text.split())
+    return len(normalized.split()) >= 8 and normalized.endswith((".", "?", "!", ":"))
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +419,7 @@ def _classify_text_for_anchor(
       * ``"caption"`` — translate, link to figure (default A path)
       * ``"inline_label"`` — absorb into figure (B fallback)
       * ``"reject_long"`` — leave as prose (too long)
+      * ``"reject_sentence"`` — leave as prose (a full sentence, not a label)
       * ``"reject_size"`` — leave as prose (font too different)
       * ``"reject_outside_anchor"`` — leave as prose (B requires inside)
       * ``"reject_real_heading"`` — leave as prose (genuine section title)
@@ -421,6 +445,9 @@ def _classify_text_for_anchor(
 
     if char_count > config.max_label_chars:
         return "reject_long", f"len={char_count} > {config.max_label_chars}"
+
+    if _looks_like_prose_sentence(text):
+        return "reject_sentence", "full prose sentence between or beside figure panels"
 
     if baseline_size > 0.0 and block.font_size_avg > 0.0:
         size_ratio = block.font_size_avg / baseline_size
@@ -525,7 +552,11 @@ def cluster_figure_regions(
         if not anchors:
             continue
 
-        merged_anchor_clusters = _merge_close_anchors(anchors, config=cfg)
+        merged_anchor_clusters = _merge_close_anchors(
+            anchors,
+            config=cfg,
+            separator_bboxes=[bbox for _, block, bbox in text_entries if _looks_like_prose_sentence(block.text or "")],
+        )
         if not merged_anchor_clusters:
             continue
 
