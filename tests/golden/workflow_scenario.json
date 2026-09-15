@@ -165,13 +165,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -187,13 +197,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -208,13 +228,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -222,13 +252,23 @@
     },
     "issue_activity_timeline": [
       {
+        "blocking_created_issue_count": 0,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 0,
+        "estimated_open_issue_count": 0,
+        "net_issue_delta": -1,
+        "resolved_issue_count": 1,
+        "wontfix_issue_count": 0
+      },
+      {
         "blocking_created_issue_count": 1,
         "bucket_granularity": "day",
         "bucket_start": "<date>",
         "created_issue_count": 1,
-        "estimated_open_issue_count": 0,
-        "net_issue_delta": 0,
-        "resolved_issue_count": 1,
+        "estimated_open_issue_count": 1,
+        "net_issue_delta": 1,
+        "resolved_issue_count": 0,
         "wontfix_issue_count": 0
       }
     ],
@@ -945,13 +985,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -967,13 +1017,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -988,13 +1048,23 @@
         "root_cause_layer": "export",
         "timeline": [
           {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
             "blocking_created_issue_count": 1,
             "bucket_granularity": "day",
             "bucket_start": "<date>",
             "created_issue_count": 1,
-            "estimated_open_issue_count": 0,
-            "net_issue_delta": 0,
-            "resolved_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
             "wontfix_issue_count": 0
           }
         ]
@@ -1002,13 +1072,23 @@
     },
     "issue_activity_timeline": [
       {
+        "blocking_created_issue_count": 0,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 0,
+        "estimated_open_issue_count": 0,
+        "net_issue_delta": -1,
+        "resolved_issue_count": 1,
+        "wontfix_issue_count": 0
+      },
+      {
         "blocking_created_issue_count": 1,
         "bucket_granularity": "day",
         "bucket_start": "<date>",
         "created_issue_count": 1,
-        "estimated_open_issue_count": 0,
-        "net_issue_delta": 0,
-        "resolved_issue_count": 1,
+        "estimated_open_issue_count": 1,
+        "net_issue_delta": 1,
+        "resolved_issue_count": 0,
         "wontfix_issue_count": 0
       }
     ],

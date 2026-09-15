@@ -113,7 +113,10 @@ def run_scenario(session_factory, root: Path) -> dict[str, Any]:
                 ReviewIssue.root_cause_layer == RootCauseLayer.EXPORT,
             )
         ).one()
-        issue.created_at = datetime.now(timezone.utc) - timedelta(hours=5)
+        # Backdate into the previous UTC day (and at least 5h old, so SLAs are breached): the
+        # issue-activity timeline buckets by day, so "now - 5h" changed shape with the time of day.
+        start_of_today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        issue.created_at = start_of_today - timedelta(hours=5)
         issue_chapter_id = issue.chapter_id
         action_id = session.scalars(select(IssueAction.id).where(IssueAction.issue_id == issue.id)).first()
 
