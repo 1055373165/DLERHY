@@ -6,6 +6,7 @@ import html
 import json
 import mimetypes
 import re
+import filecmp
 import shutil
 import zipfile
 from collections.abc import Callable
@@ -80,6 +81,18 @@ from book_agent.infra.repositories.export import (
 )
 from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.layout_validate import LayoutValidationService
+
+
+def _copy_asset_if_changed(source_path: Path, target_path: Path) -> None:
+    """Copy an asset into an export directory unless an identical file is already there.
+
+    Assets are named by block id, so a file left by an earlier export of the same
+    document must be replaced when the source image changed (for example after the
+    PDF structure was refreshed); only skipping on existence kept stale pictures.
+    """
+    if target_path.exists() and filecmp.cmp(source_path, target_path, shallow=False):
+        return
+    shutil.copy2(source_path, target_path)
 
 
 class ExportGateError(ValueError):
@@ -2679,8 +2692,7 @@ class ExportService:
                 continue
             suffix = source_path.suffix or ".bin"
             target_path = asset_root / f"{block_id}{suffix}"
-            if not target_path.exists():
-                shutil.copy2(source_path, target_path)
+            _copy_asset_if_changed(source_path, target_path)
             exported[block_id] = PurePosixPath(
                 "assets",
                 "document-images",
@@ -2898,8 +2910,7 @@ class ExportService:
                 asset_root.mkdir(parents=True, exist_ok=True)
                 suffix = Path(materialized_src).suffix or ".png"
                 target_path = asset_root / f"{block.block_id}{suffix}"
-                if not target_path.exists():
-                    shutil.copy2(materialized_src, target_path)
+                _copy_asset_if_changed(Path(materialized_src), target_path)
                 relative_path_by_block_id[block.block_id] = f"assets/pdf-images/{block.block_id}{suffix}"
             else:
                 remaining_blocks.append(block)
@@ -2983,8 +2994,7 @@ class ExportService:
                                     original_asset_availability=original_asset_availability,
                                 )
                             )
-                    if not target_path.exists():
-                        shutil.copy2(materialized_path, target_path)
+                    _copy_asset_if_changed(Path(materialized_path), target_path)
                 elif not target_path.exists():
                     pdf_crop.save_pdf_asset(
                         document,

@@ -3,6 +3,8 @@
 * Two different pictures on one page were exported as the same picture: the
   embedded-image lookup returned the first already-materialized image on the
   page instead of the image nearest to the block.
+* After the parse was fixed, re-exporting kept the wrong picture: export copied
+  an asset only when no file of that (block-id) name existed yet.
 * A bold numbered section title ending in "etc." was recognised as a heading by
   the parser and then demoted to a paragraph by the export's prose-shape rules.
 """
@@ -20,6 +22,7 @@ from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export.models import MergedRenderBlock
 from book_agent.export.render_repair import should_demote_book_heading_to_paragraph
+from book_agent.services.export import _copy_asset_if_changed
 
 
 def _solid_png(color: tuple[int, int, int]) -> bytes:
@@ -54,6 +57,19 @@ class SamePageImagesTest(unittest.TestCase):
         self.assertEqual(len(images), 2)
         self.assertEqual(len(set(xrefs)), 2)
         self.assertEqual(len(contents), 2)
+
+
+class ExportAssetCopyTest(unittest.TestCase):
+    def test_changed_source_replaces_a_stale_export_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source, target = root / "source.png", root / "block-1.png"
+            target.write_bytes(b"old picture")
+            source.write_bytes(b"new picture")
+            _copy_asset_if_changed(source, target)
+            self.assertEqual(target.read_bytes(), b"new picture")
+            _copy_asset_if_changed(source, target)  # identical: left as is
+            self.assertEqual(target.read_bytes(), b"new picture")
 
 
 def _heading(text: str, flags: list[str]) -> MergedRenderBlock:
