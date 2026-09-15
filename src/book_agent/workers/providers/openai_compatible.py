@@ -231,13 +231,16 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     # stream=true via SSE and reassemble client-side. The flag is opt-in
     # because OpenAI's own /v1/responses endpoint is fine without it.
     streaming: bool = False
+    # Provider-specific top-level request fields merged into every payload,
+    # e.g. {"thinking": {"type": "disabled"}} to turn off DeepSeek reasoning.
+    request_overrides: dict[str, Any] = field(default_factory=dict)
 
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult:
         endpoint_url, api_mode = self._resolve_endpoint()
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
             url=endpoint_url,
-            payload=self._build_payload(request, api_mode=api_mode),
+            payload={**self._build_payload(request, api_mode=api_mode), **self.request_overrides},
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         output_payload = self._extract_output_payload(response, api_mode=api_mode)
@@ -264,14 +267,17 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
             url=endpoint_url,
-            payload=self._build_structured_payload(
-                model_name=model_name,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                response_schema=response_schema,
-                schema_name=schema_name,
-                api_mode=api_mode,
-            ),
+            payload={
+                **self._build_structured_payload(
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    response_schema=response_schema,
+                    schema_name=schema_name,
+                    api_mode=api_mode,
+                ),
+                **self.request_overrides,
+            },
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         payload = self._extract_generic_output_payload(response, api_mode=api_mode)

@@ -44,6 +44,7 @@ def _openai_compatible_worker(
         input_cost_per_1m_tokens=settings.translation_input_cost_per_1m_tokens,
         output_cost_per_1m_tokens=settings.translation_output_cost_per_1m_tokens,
         streaming=streaming,
+        request_overrides=dict(settings.translation_openai_request_overrides),
     )
     return LLMTranslationWorker(
         client,
@@ -58,6 +59,7 @@ def _openai_compatible_worker(
             "max_retries": max_retries,
             "retry_backoff_seconds": retry_backoff_seconds,
             "max_output_tokens": max_output_tokens,
+            "request_overrides": dict(settings.translation_openai_request_overrides),
             **runtime_config,
         },
     )

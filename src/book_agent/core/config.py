@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     # only respond reliably with stream=true. Enabling this flag makes the
     # client send SSE and reassemble locally.
     translation_openai_streaming: bool = False
+    # Extra top-level request fields for the OpenAI-compatible client, as JSON in
+    # BOOK_AGENT_TRANSLATION_OPENAI_REQUEST_OVERRIDES, e.g. '{"thinking": {"type": "disabled"}}'.
+    translation_openai_request_overrides: dict[str, Any] = Field(default_factory=dict)
 
     # Figure clustering pass — see book_agent.domain.structure.figure_clustering
     # for the algorithm and full docstring on each tunable. All distances

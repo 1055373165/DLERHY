@@ -60,6 +60,34 @@ class WorkerFactoryTests(unittest.TestCase):
         self.assertEqual(worker.metadata().runtime_config["provider"], "openai_compatible")
 
 
+    def test_request_overrides_reach_the_provider_payload(self) -> None:
+        settings = Settings(
+            translation_backend="openai_compatible",
+            translation_model="deepseek-v4-flash",
+            translation_openai_api_key="sk-settings",
+            translation_openai_base_url="https://api.deepseek.com",
+            translation_openai_request_overrides={"thinking": {"type": "disabled"}},
+        )
+        worker = build_translation_worker(settings)
+        self.assertEqual(worker.metadata().runtime_config["request_overrides"], {"thinking": {"type": "disabled"}})
+
+        calls: list[dict] = []
+
+        class RecordingTransport:
+            def post_json(self, *, url, headers, payload, timeout_seconds):
+                calls.append(payload)
+                return {"choices": [{"message": {"content": "{}"}}], "usage": {}}
+
+        worker.client.transport = RecordingTransport()
+        worker.client.generate_structured_object(
+            model_name="deepseek-v4-flash",
+            system_prompt="system",
+            user_prompt="user",
+            response_schema={"type": "object"},
+        )
+        self.assertEqual(calls[0]["thinking"], {"type": "disabled"})
+        self.assertEqual(calls[0]["response_format"], {"type": "json_object"})
+
     def test_concept_resolver_reuses_the_translation_workers_provider(self) -> None:
         worker = build_translation_worker(self._settings())
 
