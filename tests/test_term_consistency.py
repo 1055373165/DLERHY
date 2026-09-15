@@ -172,6 +172,24 @@ class DecisionRulesTest(unittest.TestCase):
         self.assertIsNone(replace_rendering("时间周期与周期指标", "周期", "时间框架", expected_occurrences=1))  # ambiguous
         self.assertIsNone(replace_rendering("头肩形态出现", "头肩形", "头肩形态", expected_occurrences=1))  # inside canonical
 
+    def test_spans_with_extra_words_or_other_concepts_are_never_replaced(self) -> None:
+        # Seen in a real run: replacing these dropped meaning or changed the concept.
+        for text, rendering, canonical in (
+            ("该指数继续上涨", "该指数", "指数"),
+            ("散户投资者往往追涨", "散户投资者", "投资者"),
+            ("Nifty 50 指数", "Nifty 50", "Nifty"),
+            ("价格逆势上行", "逆势", "趋势"),
+            ("突破时放量", "放量", "成交量"),
+            ("RSI 上穿 50", "上穿", "交叉"),
+            ("在那个时期", "时期", "周期"),
+        ):
+            with self.subTest(rendering=rendering):
+                self.assertIsNone(replace_rendering(text, rendering, canonical, expected_occurrences=1))
+        self.assertEqual(
+            replace_rendering("出现动量摆动指标背离", "动量摆动指标", "动量振荡指标", expected_occurrences=1),
+            "出现动量振荡指标背离",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

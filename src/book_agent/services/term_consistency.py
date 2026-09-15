@@ -55,14 +55,20 @@ SURVEY_TEXT_CHARS = 600
 MIN_MAJORITY_SHARE = 0.7
 MAX_DISTINCT_RENDERINGS = 3
 MIN_RENDERING_CHARS = 2
+# A minority rendering is only swapped when it shares more than half of its characters
+# with the canonical one (失败摆动 / 失败摇摆); different concepts (逆势 / 趋势,
+# 放量 / 成交量, 上穿 / 交叉) share little and are left alone.
+MIN_SHARED_CHARACTER_RATIO = 0.5
 _CJK = re.compile(r"[一-鿿]")
 
 SURVEY_SYSTEM_PROMPT = (
     "You audit terminology in an English-to-Simplified-Chinese book translation. "
     "For each item you get an English passage, its Chinese translation and one English term. "
     "Report how the Chinese renders that term in this passage: rendering_zh must be the exact contiguous "
-    "characters copied from the Chinese that translate the term (no added or changed characters), or an "
-    "empty string when the term is not expressed in the Chinese. Set sense to \"term\" when the English "
+    "characters copied from the Chinese that translate the term itself (no added or changed characters), "
+    "without modifiers, demonstratives or words that translate other parts of the sentence, or an empty "
+    "string when the term is not expressed on its own (for example when one Chinese word also carries "
+    "another meaning such as a direction or a change). Set sense to \"term\" when the English "
     "word is used in its technical meaning in this field, or \"other\" when it is used in another sense "
     "(an idiom, an everyday meaning, part of a different expression). Do not suggest corrections. "
     'Return one JSON object: {"items": [{"id": str, "rendering_zh": str, "sense": "term" | "other"}]}, '
@@ -177,10 +183,25 @@ def decide_canonical(
     return (proposed if proposed in leaders else leaders[0]), None
 
 
+def renders_canonical(rendering: str, canonical: str) -> bool:
+    """A surveyed span that already contains the canonical rendering ("大投资者" for "投资者")."""
+    return normalize_target(canonical) in normalize_target(rendering)
+
+
+def shared_character_ratio(first: str, second: str) -> float:
+    left, right = Counter(normalize_target(first)), Counter(normalize_target(second))
+    shorter = min(sum(left.values()), sum(right.values()))
+    return sum((left & right).values()) / shorter if shorter else 0.0
+
+
 def replace_rendering(text_zh: str, rendering: str, canonical: str, *, expected_occurrences: int) -> str | None:
     """Swap a minority rendering for the canonical one, or None when that is not safe to do blindly."""
+    if renders_canonical(rendering, canonical):
+        return None  # already consistent; the span only carries extra words
     if len(normalize_target(rendering)) < MIN_RENDERING_CHARS:
         return None  # e.g. a single "图": too many unrelated matches
+    if shared_character_ratio(rendering, canonical) <= MIN_SHARED_CHARACTER_RATIO:
+        return None  # likely a different concept, not a variant of the term
     if canonical in text_zh and rendering in canonical:
         return None  # the span is part of the canonical rendering already present
     if text_zh.count(rendering) != expected_occurrences:
@@ -313,7 +334,9 @@ class TermConsistencyService:
         term_observations = [item for item in observations if item.sense == "term" and item.rendering]
         counts = Counter(item.rendering for item in term_observations)
         canonical, skipped = decide_canonical(counts, proposed=suggestion.target_term)
-        consistent = counts.get(canonical, 0) if canonical else 0
+        consistent = (
+            sum(count for rendering, count in counts.items() if renders_canonical(rendering, canonical)) if canonical else 0
+        )
         return TermDecision(
             key=key,
             source_term=suggestion.source_term,
@@ -345,7 +368,11 @@ class TermConsistencyService:
         changes: dict[str, list[tuple[TermDecision, str]]] = defaultdict(list)
         for decision in ordered:
             for observation in observations[decision.key]:
-                if observation.sense != "term" or not observation.rendering or observation.rendering == decision.canonical_zh:
+                if (
+                    observation.sense != "term"
+                    or not observation.rendering
+                    or renders_canonical(observation.rendering, decision.canonical_zh)
+                ):
                     continue
                 unit = units_by_id[observation.segment_id]
                 replaced = replace_rendering(
