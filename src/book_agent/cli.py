@@ -9,6 +9,8 @@ from typing import Any
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.services.glossary_extraction import GlossaryExtractionService, read_glossary_csv, write_glossary_csv
+from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.factory import resolve_translation_worker
 
@@ -59,6 +61,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh_pdf_structure.add_argument("--document-id", required=True)
     refresh_pdf_structure.add_argument("--chapter-id", action="append", default=[])
+
+    glossary_extract = subparsers.add_parser(
+        "glossary-extract",
+        help="Propose a book-wide glossary with the translation provider and write it as a CSV for review",
+    )
+    glossary_extract.add_argument("--document-id", required=True)
+    glossary_extract.add_argument("--output", required=True, help="CSV path to write")
+    glossary_extract.add_argument("--max-chunk-chars", type=int, default=12000)
+
+    glossary_lock = subparsers.add_parser(
+        "glossary-lock",
+        help="Lock the glossary rows marked in a reviewed CSV (review then flags and reruns conflicts)",
+    )
+    glossary_lock.add_argument("--document-id", required=True)
+    glossary_lock.add_argument("--input", required=True, help="Reviewed CSV from glossary-extract")
 
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
@@ -116,6 +133,34 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
             )
+            return 0
+        if args.command == "glossary-extract":
+            worker = service.translation_service.worker
+            client = getattr(worker, "client", None)
+            if client is None or not hasattr(client, "generate_structured_object"):
+                parser.error("glossary-extract needs an LLM translation provider; the echo worker cannot propose terms.")
+            result = GlossaryExtractionService(
+                session, client, model_name=worker.metadata().model_name
+            ).extract(args.document_id, max_chunk_chars=args.max_chunk_chars)
+            write_glossary_csv(args.output, result.suggestions)
+            _dump(
+                {
+                    "output": args.output,
+                    "term_count": len(result.suggestions),
+                    "chunk_count": result.chunk_count,
+                    "proposed_term_count": result.proposed_term_count,
+                    "dropped_absent_terms": result.dropped_absent_terms,
+                    "token_in": result.token_in,
+                    "token_out": result.token_out,
+                }
+            )
+            return 0
+        if args.command == "glossary-lock":
+            glossary = GlossaryService(session)
+            rows = read_glossary_csv(args.input)
+            for row in rows:
+                glossary.lock_term(args.document_id, row.source_term, row.target_term, term_type=row.term_type)
+            _dump({"locked_term_count": len(rows)})
             return 0
         if args.command == "execute-action":
             result = service.execute_action(args.action_id, run_followup=args.run_followup)
