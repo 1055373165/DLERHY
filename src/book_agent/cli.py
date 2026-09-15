@@ -9,8 +9,16 @@ from typing import Any
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.session import build_session_factory, session_scope
-from book_agent.services.glossary_extraction import GlossaryExtractionService, read_glossary_csv, write_glossary_csv
+from book_agent.services.glossary_extraction import (
+    GlossaryExtractionService,
+    read_glossary_csv,
+    write_glossary_csv,
+)
 from book_agent.services.glossary_service import GlossaryService
+from book_agent.services.term_consistency import (
+    TermConsistencyService,
+    render_consistency_report_markdown,
+)
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.workers.factory import resolve_translation_worker
 
@@ -76,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     glossary_lock.add_argument("--document-id", required=True)
     glossary_lock.add_argument("--input", required=True, help="Reviewed CSV from glossary-extract")
+
+    term_consistency = subparsers.add_parser(
+        "term-consistency",
+        help="Unify terminology across a translated document (extract, decide, minimally edit, lock, report)",
+    )
+    term_consistency.add_argument("--document-id", required=True)
+    term_consistency.add_argument("--report", required=True, help="Markdown report path")
+    term_consistency.add_argument("--dry-run", action="store_true", help="Measure and propose without editing or locking")
 
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
@@ -161,6 +177,28 @@ def main(argv: list[str] | None = None) -> int:
             for row in rows:
                 glossary.lock_term(args.document_id, row.source_term, row.target_term, term_type=row.term_type)
             _dump({"locked_term_count": len(rows)})
+            return 0
+        if args.command == "term-consistency":
+            worker = service.translation_service.worker
+            client = getattr(worker, "client", None)
+            if client is None or not hasattr(client, "generate_structured_object"):
+                parser.error("term-consistency needs an LLM translation provider; the echo worker cannot edit terms.")
+            report = TermConsistencyService(session, client, model_name=worker.metadata().model_name).run(
+                args.document_id, apply=not args.dry_run
+            )
+            Path(args.report).write_text(render_consistency_report_markdown(report), encoding="utf-8")
+            _dump(
+                {
+                    "report": args.report,
+                    "consistency_before": report.consistency(after=False),
+                    "consistency_after": report.consistency(after=True),
+                    "edited_segments": sum(1 for item in report.edits if item.status == "edited"),
+                    "rejected_edits": sum(1 for item in report.edits if item.status == "rejected"),
+                    "locked_terms": report.locked_term_count,
+                    "token_in": report.token_in,
+                    "token_out": report.token_out,
+                }
+            )
             return 0
         if args.command == "execute-action":
             result = service.execute_action(args.action_id, run_followup=args.run_followup)
