@@ -23,7 +23,6 @@ and its packet follow-ups retranslate them with the locked terms in context.
 from __future__ import annotations
 
 import csv
-import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -36,6 +35,11 @@ from sqlalchemy.orm import Session
 from book_agent.domain.enums import BlockType, TargetSegmentStatus, TermType
 from book_agent.domain.models import Block, Chapter, Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
+from book_agent.domain.terminology.matching import (
+    SourceTermIndex,
+    source_term_key,
+    target_has_rendering,
+)
 
 DEFAULT_MAX_CHUNK_CHARS = 12000
 _NAME_TYPES = {TermType.PERSON, TermType.ORG, TermType.TITLE}
@@ -137,26 +141,11 @@ def _normalize_space(text: str | None) -> str:
     return " ".join(str(text or "").split())
 
 
-def _compact(text: str) -> str:
-    return re.sub(r"\s+", "", text)
-
-
 def _coerce_term_type(value: object) -> TermType:
     try:
         return TermType(str(value or "").strip().lower())
     except ValueError:
         return TermType.OTHER
-
-
-def term_occurrence_pattern(source_term: str) -> re.Pattern[str]:
-    """Case-insensitive whole-word match of the term's singular or plural form."""
-    words = _normalize_space(source_term).split()
-    last = words[-1] if words else ""
-    if len(last) > 4 and last[-1:].lower() == "s" and last[-2:].lower() not in {"ss", "us", "is"}:
-        # A plural proposal ("failure swings") must also match the singular in the text.
-        words[-1] = last[:-2] if last[-2:].lower() == "es" and last[-3:-2].lower() in {"s", "x", "z", "h"} else last[:-1]
-    words = [re.escape(word) for word in words]
-    return re.compile(r"(?<![A-Za-z0-9])" + r"\s+".join(words) + r"(?:s|es)?(?![A-Za-z0-9])", re.IGNORECASE)
 
 
 def chunk_texts(texts: Iterable[str], *, max_chars: int) -> list[str]:
@@ -185,33 +174,32 @@ def merge_proposals(
 ) -> tuple[list[GlossarySuggestion], list[str]]:
     """Merge per-chunk proposals into one suggestion per term, grounded in the source text.
 
-    ``aligned_targets`` pairs each translated sentence's source with its aligned
-    Chinese text; when given, suggestions report ``current_mismatches``.
+    Proposals are grouped by source-term key, so case, plural, hyphen/space and
+    "&"/"and" spellings of one term become one suggestion. Occurrences use
+    whole-token, longest-match counting. ``aligned_targets`` pairs each
+    translated sentence's source with its aligned Chinese text; when given,
+    suggestions report ``current_mismatches``.
     """
     grouped: dict[str, list[_Proposal]] = defaultdict(list)
     spelling: dict[str, str] = {}
     for proposal in proposals:
         source = _normalize_space(proposal.source_term)
         target = _normalize_space(proposal.target_term)
-        if not source or not target:
+        key = source_term_key(source)
+        if not key or not target:
             continue
-        key = source.casefold()
         grouped[key].append(proposal)
         spelling.setdefault(key, source)
 
-    # Plural proposals join their singular entry; the occurrence pattern already counts both.
-    for key in sorted(grouped, key=len, reverse=True):
-        for singular in (key[:-2] if key.endswith("es") else None, key[:-1] if key.endswith("s") else None):
-            if singular and singular in grouped and singular != key:
-                grouped[singular].extend(grouped.pop(key))
-                break
+    index = SourceTermIndex(spelling.values())
+    occurrences_by_key = index.count(source_texts)
+    sentence_keys = [(index.keys_in(source), zh) for source, zh in aligned_targets]
 
     suggestions: list[GlossarySuggestion] = []
     dropped: list[str] = []
     for key, items in grouped.items():
         source = spelling[key]
-        pattern = term_occurrence_pattern(source)
-        occurrences = sum(len(pattern.findall(text)) for text in source_texts)
+        occurrences = occurrences_by_key.get(key, 0)
         term_type = Counter(item.term_type for item in items).most_common(1)[0][0]
         if occurrences == 0:
             dropped.append(source)
@@ -223,21 +211,7 @@ def merge_proposals(
         note = next((item.note for item in items if _normalize_space(item.note)), "")
         mismatches: int | None = None
         if aligned_targets:
-            # Sentences where a longer term containing this one matches belong to that term
-            # ("Inverted Head & Shoulders" is not a mismatch for "Head & Shoulders").
-            longer_patterns = [
-                term_occurrence_pattern(spelling[other])
-                for other in grouped
-                if other != key and key in other
-            ]
-            compact_target = _compact(target)
-            mismatches = sum(
-                1
-                for sentence_source, zh in aligned_targets
-                if pattern.search(sentence_source)
-                and not any(longer.search(sentence_source) for longer in longer_patterns)
-                and compact_target not in _compact(zh)
-            )
+            mismatches = sum(1 for keys, zh in sentence_keys if key in keys and not target_has_rendering(zh, [target]))
         suggestions.append(
             GlossarySuggestion(
                 source_term=source,

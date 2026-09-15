@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, TermType
 from book_agent.domain.models.translation import TermEntry
+from book_agent.domain.terminology.matching import source_term_key
 from book_agent.services.terminology_miner import TermCandidate
 from book_agent.translation.contracts import RelevantTerm
 
@@ -120,7 +121,7 @@ class GlossaryService:
         total = 0
         for cand in candidates:
             total += 1
-            key = cand.term.casefold()
+            key = source_term_key(cand.term)
             if key in existing and existing[key].lock_level in {
                 LockLevel.PREFERRED,
                 LockLevel.LOCKED,
@@ -165,14 +166,22 @@ class GlossaryService:
         target_term: str,
         *,
         term_type: TermType = TermType.CONCEPT,
+        target_variants: Iterable[str] = (),
     ) -> TermEntry:
         """Promote or create a LOCKED entry. Existing ACTIVE entries for
         the same source are SUPERSEDED and version-incremented.
+
+        ``target_variants`` are other renderings that count as the term.
         """
         if not source_term.strip() or not target_term.strip():
             raise ValueError("source_term and target_term must be non-empty")
         source_clean = source_term.strip()
         target_clean = target_term.strip()
+        variants = [
+            variant
+            for variant in dict.fromkeys(str(item).strip() for item in target_variants)
+            if variant and variant != target_clean
+        ]
 
         existing = self._matching_active_entries(document_id, source_clean)
         latest_version = max((e.version for e in existing), default=0)
@@ -182,6 +191,7 @@ class GlossaryService:
             if (
                 latest.lock_level == LockLevel.LOCKED
                 and latest.target_term == target_clean
+                and list(latest.target_variants_json or []) == variants
             ):
                 return latest  # idempotent
             for entry in existing:
@@ -202,6 +212,7 @@ class GlossaryService:
             scope_id=None,
             source_term=source_clean,
             target_term=target_clean,
+            target_variants_json=variants,
             term_type=term_type,
             lock_level=LockLevel.LOCKED,
             status=TermStatus.ACTIVE,
@@ -258,7 +269,7 @@ class GlossaryService:
         rows = self.list_document_entries(document_id, include_superseded=False)
         out: dict[str, TermEntry] = {}
         for row in rows:
-            key = row.source_term.casefold()
+            key = source_term_key(row.source_term)
             prior = out.get(key)
             if prior is None or row.version > prior.version:
                 out[key] = row
@@ -269,6 +280,6 @@ class GlossaryService:
         document_id: str,
         source_term: str,
     ) -> list[TermEntry]:
-        key = source_term.casefold()
+        key = source_term_key(source_term)
         rows = self.list_document_entries(document_id, include_superseded=False)
-        return [r for r in rows if r.source_term.casefold() == key]
+        return [r for r in rows if source_term_key(r.source_term) == key]

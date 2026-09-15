@@ -234,4 +234,6 @@ class TermEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=False),
         ForeignKey("sentences.id", ondelete="SET NULL"),
     )
+    # Other renderings that count as this term ("头肩形" for "头肩形态").
+    target_variants_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

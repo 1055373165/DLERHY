@@ -163,8 +163,12 @@ class GlossaryExtractionServiceTest(unittest.TestCase):
                 with session_scope(session_factory) as session:
                     glossary = GlossaryService(session)
                     glossary.lock_term(document_id, "pricing power", "定价权")
+                    glossary.lock_term(document_id, "time frame", "时间框架")
+                    # Another spelling of the same term supersedes it instead of adding a second entry.
+                    glossary.lock_term(document_id, "Time-Frames", "时间周期", target_variants=["周期", "时间周期"])
                     locked = glossary.get_locked_terms(document_id)
                     entries = glossary.list_document_entries(document_id)
+                    variants = {entry.source_term: entry.target_variants_json for entry in entries}
             finally:
                 engine.dispose()
 
@@ -173,7 +177,8 @@ class GlossaryExtractionServiceTest(unittest.TestCase):
         # "switching cost" never occurs in the fixture book, so it is dropped rather than suggested.
         self.assertIn("switching cost", result.dropped_absent_terms)
         self.assertNotIn("switching cost", [item.source_term for item in result.suggestions])
-        self.assertEqual(locked, {"pricing power": "定价权"})
+        self.assertEqual(locked, {"pricing power": "定价权", "Time-Frames": "时间周期"})
+        self.assertEqual(variants["Time-Frames"], ["周期"])
         self.assertEqual({entry.lock_level for entry in entries}, {LockLevel.LOCKED})
 
 

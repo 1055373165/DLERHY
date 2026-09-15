@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
@@ -14,21 +14,30 @@ from book_agent.domain.enums import (
     LockLevel,
     RootCauseLayer,
     RunStatus,
-    SourceType,
-    TargetSegmentStatus,
     SentenceStatus,
     Severity,
+    SourceType,
+    TargetSegmentStatus,
 )
-from book_agent.domain.models.review import ChapterQualitySummary as ChapterQualitySummaryRecord, IssueAction, ReviewIssue
-from book_agent.domain.structure.artifact_grouping import normalize_artifact_role, resolve_artifact_group_context_ids
+from book_agent.domain.models.review import ChapterQualitySummary as ChapterQualitySummaryRecord
+from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.domain.structure.artifact_grouping import (
+    normalize_artifact_role,
+    resolve_artifact_group_context_ids,
+)
+from book_agent.domain.terminology.matching import (
+    SourceTermIndex,
+    source_term_key,
+    target_has_rendering,
+)
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
-from book_agent.translation.heuristics import heuristics_pack_for_document
 from book_agent.services.term_normalization import normalize_term_rendering
+from book_agent.translation.heuristics import heuristics_pack_for_document
 
 
 def _utcnow() -> datetime:
@@ -341,12 +350,22 @@ class ReviewService:
         active_locked_terms = [
             term for term in bundle.term_entries if term.lock_level == LockLevel.LOCKED and term.status.value == "active"
         ]
+        # Whole-token, variant-tolerant matching with longest-term ownership: "bull" does not
+        # match "bullish", and "Inverted Head & Shoulders" sentences belong to that term only.
+        term_index = SourceTermIndex(term.source_term for term in active_locked_terms)
+        sentence_term_keys = {
+            sentence.id: term_index.keys_in(sentence.normalized_text or sentence.source_text)
+            for sentence in bundle.sentences
+            if sentence.translatable
+        }
         for term in active_locked_terms:
             expected_target_term = normalize_term_rendering(term.source_term, term.target_term)
+            accepted_renderings = [expected_target_term, *(term.target_variants_json or [])]
+            term_key = source_term_key(term.source_term)
             for sentence in bundle.sentences:
                 if not sentence.translatable:
                     continue
-                if term.source_term.lower() not in (sentence.normalized_text or sentence.source_text).lower():
+                if term_key not in sentence_term_keys.get(sentence.id, ()):
                     continue
                 aligned_text = self._aligned_text_for_sentence(
                     sentence.id,
@@ -361,8 +380,8 @@ class ReviewService:
                     aligned_text=aligned_text,
                 ):
                     continue
-                # Chinese renderings are compared without whitespace: "RSI背离" honours "RSI 背离".
-                if re.sub(r"\s+", "", expected_target_term) not in re.sub(r"\s+", "", aligned_text):
+                # Whitespace, punctuation and Latin case are ignored ("RSI背离" honours "RSI 背离").
+                if not target_has_rendering(aligned_text, accepted_renderings):
                     issues.append(
                         self._make_issue(
                             now=now,
