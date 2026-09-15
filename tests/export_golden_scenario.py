@@ -45,6 +45,8 @@ _TEXT_SUFFIXES = {".html", ".xhtml", ".md", ".json", ".css", ".opf", ".ncx", ".x
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\b[0-9a-f]{32}\b")
 _SHA256 = re.compile(r"\b[0-9a-f]{64}\b")
 _ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
+# Usage timelines bucket by calendar day; the bucket date is the day the test runs.
+_ISO_DATE = re.compile(r"(?<![\d-])\d{4}-\d{2}-\d{2}(?![\d-])")
 
 
 def write_epub(root: Path) -> Path:
@@ -99,6 +101,7 @@ def snapshot_exports(export_root: Path, root: Path) -> dict[str, object]:
         text = text.replace(str(root.resolve()), "<root>").replace(str(root), "<root>")
         text = _SHA256.sub("<sha256>", text)
         text = _ISO_TIMESTAMP.sub("<ts>", text)
+        text = _ISO_DATE.sub("<date>", text)
         return _UUID.sub(lambda match: ids.setdefault(match.group(0), f"<id{len(ids) + 1}>"), text)
 
     def entry(name: str, data: bytes) -> object:
