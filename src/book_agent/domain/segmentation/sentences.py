@@ -32,6 +32,12 @@ _ABBREVIATIONS = [
 # Labels that abbreviate before a number ("Rs. 20", "pp. 12", "Vol. 3"); only
 # protected when a number follows, so "... paid in Rs. Then ..." still splits.
 _NUMBER_LABEL_ABBREVIATION = re.compile(r"\b(Rs|Re|Nos|pp|Vol|vol|Ch|ch|Sec|sec|approx|Approx|Ref|ref)\.(?=\s*\d)")
+# A capital initial inside a name: followed by another initial or by a two-word name
+# ("J. R. R. Tolkien", "J. Welles Wilder"); "plan B. The first ..." still splits.
+_NAME_INITIAL = re.compile(
+    r"(?<![A-Za-z.])([A-Z])\.(?=\s+[A-Z]\.|\s+[A-Z][a-z]+\s+[A-Z][a-z])"
+    r"|(?<=[A-Z]\.\s)([A-Z])\.(?=\s+[A-Z][a-z])"  # the last initial of a run: "R. R. Tolkien"
+)
 _SENTINEL = "<DOT>"
 
 
@@ -59,6 +65,7 @@ class EnglishSentenceSegmenter:
         for abbr in _ABBREVIATIONS:
             protected = protected.replace(abbr, abbr.replace(".", _SENTINEL))
         protected = _NUMBER_LABEL_ABBREVIATION.sub(rf"\1{_SENTINEL}", protected)
+        protected = _NAME_INITIAL.sub(lambda match: f"{match.group(1) or match.group(2)}{_SENTINEL}", protected)
         protected = re.sub(r"(\d)\.(\d)", rf"\1{_SENTINEL}\2", protected)
 
         raw_parts = re.split(r'(?<=[.!?])\s+(?=(?:"|\'|“|‘|\()?[A-Z0-9])', protected)

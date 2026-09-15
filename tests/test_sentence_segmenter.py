@@ -33,6 +33,16 @@ class SentenceSegmenterTests(unittest.TestCase):
             ["Prices are quoted in Rs.", "Then we compare."],
         )
 
+    def test_name_initials_do_not_end_sentences(self) -> None:
+        self.assertEqual(
+            self.segmenter.segment_text("RSI was invented by J. Welles Wilder in 1978. The book by J. R. R. Tolkien is long."),
+            ["RSI was invented by J. Welles Wilder in 1978.", "The book by J. R. R. Tolkien is long."],
+        )
+        self.assertEqual(
+            self.segmenter.segment_text("Use plan B. The first plan failed."),
+            ["Use plan B.", "The first plan failed."],
+        )
+
     def test_heading_is_single_sentence(self) -> None:
         block = ParsedBlock(
             block_type="heading",
