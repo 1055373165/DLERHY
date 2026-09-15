@@ -1,8 +1,10 @@
-"""Bulleted lists whose bullets are vector shapes rather than text glyphs.
+"""Lists that reach the text layer as a single text block.
 
 Some converters draw list bullets as small filled circles; the text layer then
 holds only the item text, so a whole list arrived as a single paragraph with
-items run together. Items are now split at lines preceded by such a mark.
+items run together. Items are now split at lines preceded by such a mark. A
+block whose every line is the next number of an enumeration ("1. ...", "2. ...")
+is split into items too.
 """
 
 from __future__ import annotations
@@ -62,6 +64,23 @@ class VectorBulletListTest(unittest.TestCase):
             (BlockType.PARAGRAPH.value, "Now we will watch how the line moves between these zones on a daily chart."),
             blocks,
         )
+
+    def test_block_of_consecutively_numbered_lines_splits_into_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "numbered.pdf"
+            document = fitz.open()
+            document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+            page = document.new_page()
+            page.insert_text((72, 100), "In this chapter, we will discuss the signals that can be used for trading purposes:")
+            titles = ["Tops and Bottoms", "Failure Swings", "Support and Resistance", "Centreline Crossover", "Range Shift",
+                      "Channels", "Chart Patterns", "Average Crossover", "Divergences", "Reversals"]
+            for index, title in enumerate(titles, start=1):
+                page.insert_text((72, 120 + 12 * index), f"{index}. {title}")
+            document.save(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        items = [block.text for chapter in parsed.chapters for block in chapter.blocks if block.block_type == BlockType.LIST_ITEM.value]
+        self.assertEqual(items, [f"{index}. {title}" for index, title in enumerate(titles, start=1)])
 
 
 if __name__ == "__main__":

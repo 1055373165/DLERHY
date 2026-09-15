@@ -153,6 +153,51 @@ def _split_vector_bullet_blocks(
     return result
 
 
+_LINE_ENUMERATOR = re.compile(r"^(\d{1,3})[.)]\s+\S")
+
+
+def _lines_are_consecutive_enumeration(lines: list[str]) -> bool:
+    matches = [_LINE_ENUMERATOR.match(line) for line in lines]
+    if len(lines) < 2 or not all(matches):
+        return False
+    numbers = [int(match.group(1)) for match in matches]
+    return numbers == list(range(numbers[0], numbers[0] + len(numbers)))
+
+
+def _split_enumerated_line_blocks(
+    blocks: list[PdfTextBlock],
+    line_bboxes_by_block: dict[int, list[tuple[float, float, float, float]]],
+) -> list[PdfTextBlock]:
+    """Split a block whose every line is the next item of a numbered list ("1. ...", "2. ...").
+
+    Such a list arrives as one text block; past a few lines it is no longer
+    recognised as a list item and reads as one run-on paragraph.
+    """
+    result: list[PdfTextBlock] = []
+    for block in blocks:
+        line_bboxes = line_bboxes_by_block.get(id(block))
+        if (
+            not line_bboxes
+            or len(line_bboxes) != len(block.line_texts)
+            or not _lines_are_consecutive_enumeration(block.line_texts)
+        ):
+            result.append(block)
+            continue
+        for index, line in enumerate(block.line_texts):
+            result.append(
+                replace(
+                    block,
+                    text=line,
+                    bbox=line_bboxes[index],
+                    line_texts=[line],
+                    line_count=1,
+                    line_styles=block.line_styles[index : index + 1],
+                    raw_text=None,
+                )
+            )
+    return result
+
+
 def _table_cell_text(cell: Any) -> str:
     # Merged cells come back as None; "|" would split the recovered row.
     return " ".join(str(cell or "").split()).replace("|", "/")
@@ -322,6 +367,7 @@ class PyMuPDFTextExtractor:
                 except Exception:
                     drawings = []
                 blocks = _split_vector_bullet_blocks(blocks, line_bboxes_by_block, drawings)
+                blocks = _split_enumerated_line_blocks(blocks, line_bboxes_by_block)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 image_blocks.extend(
                     self._extract_vector_drawing_blocks(
