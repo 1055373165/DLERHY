@@ -1,17 +1,16 @@
-"""Automatic terminology consistency: decide, minimally edit, validate, lock, report."""
+"""Automatic terminology consistency: survey renderings, tally, replace exact spans, lock, report."""
 
 from __future__ import annotations
 
 import tempfile
 import unittest
 import zipfile
+from collections import Counter
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import select
 
 import tests.test_api_workflow as api_fixtures
-from book_agent.domain.enums import LockLevel
 from book_agent.domain.models import Sentence
 from book_agent.domain.models.ops import Event
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
@@ -20,8 +19,10 @@ from book_agent.infra.db.session import build_engine, build_session_factory, ses
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.term_consistency import (
     TermConsistencyService,
-    accept_segment_edit,
+    decide_canonical,
+    exact_span,
     render_consistency_report_markdown,
+    replace_rendering,
 )
 from book_agent.services.workflows import DocumentWorkflowService
 from book_agent.translation.contracts import TranslationUsage
@@ -34,14 +35,34 @@ CHAPTER = """<?xml version="1.0" encoding="UTF-8"?>
     <p>A failure swing appears at the top of the range.</p>
     <p>Two failure swings confirm the reversal signal.</p>
     <p>The failure swing is a reliable warning.</p>
+    <p>Another failure swing formed last week.</p>
+    <p>No other tool can hold a candle to a candle chart.</p>
+    <p>Each candle shows the open and the close.</p>
+    <p>A red candle closes lower than it opens.</p>
   </body>
 </html>
 """
 
+# failure swing: 失败摆动 x3 (majority) vs 失败摇摆 x1; candle: K线 in its technical sense, 一个成语 once.
 TRANSLATIONS = {
     "A failure swing appears at the top of the range.": "区间顶部出现失败摆动。",
     "Two failure swings confirm the reversal signal.": "两次失败摇摆确认了反转信号。",
-    "The failure swing is a reliable warning.": "失败摇摆是可靠的警示。",
+    "The failure swing is a reliable warning.": "失败摆动是可靠的警示。",
+    "Another failure swing formed last week.": "上周又形成了一次失败摆动。",
+    "No other tool can hold a candle to a candle chart.": "没有别的工具能与蜡烛图相提并论。",
+    "Each candle shows the open and the close.": "每根K线显示开盘价和收盘价。",
+    "A red candle closes lower than it opens.": "阴K线的收盘价低于开盘价。",
+}
+
+SURVEY = {
+    # (term, zh) -> (rendering, sense)
+    ("failure swing", "区间顶部出现失败摆动。"): ("失败摆动", "term"),
+    ("failure swing", "两次失败摇摆确认了反转信号。"): ("失败摇摆", "term"),
+    ("failure swing", "失败摆动是可靠的警示。"): ("失败摆动", "term"),
+    ("failure swing", "上周又形成了一次失败摆动。"): ("失败摆动", "term"),
+    ("candle", "没有别的工具能与蜡烛图相提并论。"): ("相提并论", "other"),
+    ("candle", "每根K线显示开盘价和收盘价。"): ("K线", "term"),
+    ("candle", "阴K线的收盘价低于开盘价。"): ("K线", "term"),
 }
 
 
@@ -57,7 +78,7 @@ def _write_book(root: Path) -> Path:
     return path
 
 
-class FakeTerminologyClient:
+class FakeSurveyClient:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
@@ -65,25 +86,26 @@ class FakeTerminologyClient:
         self.calls.append(schema_name)
         usage = TranslationUsage(token_in=100, token_out=20)
         if schema_name == "glossary_extraction":
-            return {"terms": [{"source_term": "failure swing", "target_term": "失败摆动", "term_type": "concept"}]}, usage
-        if schema_name == "term_decisions":
             return {
-                "decisions": [
-                    {"source_term": "Failure Swing", "canonical_zh": "失败摆动", "accepted_variants": ["失败摆动形态"], "context_dependent": False}
+                "terms": [
+                    {"source_term": "failure swing", "target_term": "失败摆动", "term_type": "concept"},
+                    {"source_term": "candle", "target_term": "K线", "term_type": "concept"},
                 ]
             }, usage
-        if schema_name == "terminology_edits":
-            segments: list[dict[str, Any]] = []
-            for block in user_prompt.split("### Segment id: ")[1:]:
-                segment_id = block.split("\n", 1)[0].strip()
-                zh = next(line[4:] for line in block.splitlines() if line.startswith("ZH: "))
-                segments.append({"id": segment_id, "text_zh": zh.replace("失败摇摆", "失败摆动"), "changed": True})
-            return {"segments": segments}, usage
-        raise AssertionError(schema_name)
+        if schema_name == "term_survey":
+            items = []
+            for block in user_prompt.split("### Item id: ")[1:]:
+                lines = block.splitlines()
+                term = lines[1].removeprefix("Term: ")
+                zh = next(line[4:] for line in lines if line.startswith("ZH: "))
+                rendering, sense = SURVEY[(term, zh)]
+                items.append({"id": lines[0].strip(), "rendering_zh": rendering, "sense": sense})
+            return {"items": items}, usage
+        raise AssertionError(f"unexpected call {schema_name}: the pass must not ask the model to edit text")
 
 
 class TermConsistencyServiceTest(unittest.TestCase):
-    def test_harmonizes_inconsistent_segments_and_reports(self) -> None:
+    def test_majority_rendering_replaces_minority_spans_and_other_senses_are_untouched(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             engine = build_engine(f"sqlite+pysqlite:///{root / 'terms.db'}")
@@ -104,55 +126,51 @@ class TermConsistencyServiceTest(unittest.TestCase):
                     for segment, source_text in rows:
                         segment.text_zh = TRANSLATIONS.get(source_text, segment.text_zh)
 
-                client = FakeTerminologyClient()
+                client = FakeSurveyClient()
                 with session_scope(session_factory) as session:
                     report = TermConsistencyService(session, client, model_name="fake").run(document_id)
                 with session_scope(session_factory) as session:
-                    texts = sorted(
-                        segment.text_zh for segment in session.scalars(select(TargetSegment)) if "失败" in segment.text_zh
-                    )
-                    locked = GlossaryService(session).list_document_entries(document_id)
+                    texts = {segment.text_zh for segment in session.scalars(select(TargetSegment))}
+                    locked = GlossaryService(session).get_locked_terms(document_id)
                     events = [event for event in session.scalars(select(Event)) if event.kind == "glossary.updated"]
             finally:
                 engine.dispose()
 
-        self.assertEqual(client.calls, ["glossary_extraction", "term_decisions", "terminology_edits"])
-        self.assertEqual(texts, ["两次失败摆动确认了反转信号。", "区间顶部出现失败摆动。", "失败摆动是可靠的警示。"])
-        decision = report.decisions[0]
-        self.assertEqual((decision.segment_count, decision.consistent_before, decision.consistent_after), (3, 1, 3))
-        self.assertAlmostEqual(report.consistency(after=False), 1 / 3)
-        self.assertEqual(report.consistency(after=True), 1.0)
-        self.assertEqual([item.status for item in report.edits], ["edited", "edited"])
-        self.assertEqual(len(events), 2)
-        self.assertEqual(
-            [(entry.source_term, entry.target_term, entry.lock_level, entry.target_variants_json) for entry in locked],
-            [("failure swing", "失败摆动", LockLevel.LOCKED, ["失败摆动形态"])],
-        )
-        markdown = render_consistency_report_markdown(report)
-        self.assertIn("33.3% → 100.0%", markdown)
+        self.assertEqual(set(Counter(client.calls)), {"glossary_extraction", "term_survey"})
+        self.assertIn("两次失败摆动确认了反转信号。", texts)
+        self.assertNotIn("两次失败摇摆确认了反转信号。", texts)
+        self.assertIn("没有别的工具能与蜡烛图相提并论。", texts)  # idiom: not a term occurrence
+        by_term = {decision.source_term: decision for decision in report.decisions}
+        swing = by_term["failure swing"]
+        self.assertEqual((swing.canonical_zh, swing.expressed_segments, swing.consistent_before, swing.consistent_after), ("失败摆动", 4, 3, 4))
+        candle = by_term["candle"]
+        self.assertEqual((candle.canonical_zh, candle.other_sense_segments, candle.replaced), ("K线", 1, 0))
+        self.assertEqual(report.edited_segments, 1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(locked, {"failure swing": "失败摆动", "candle": "K线"})
+        self.assertIn("严格一致率（只算标准译法）：83.3% → 100.0%", render_consistency_report_markdown(report))
 
 
-class AcceptSegmentEditTest(unittest.TestCase):
-    def test_small_term_replacement_is_accepted(self) -> None:
-        self.assertIsNone(accept_segment_edit("两次失败摇摆确认了反转信号。", "两次失败摆动确认了反转信号。", [["失败摆动"]]))
+class DecisionRulesTest(unittest.TestCase):
+    def test_majority_wins_and_unclear_or_scattered_terms_are_skipped(self) -> None:
+        self.assertEqual(decide_canonical(Counter({"失败摆动": 3, "失败摇摆": 1}), proposed="失败摇摆"), ("失败摆动", None))
+        self.assertEqual(decide_canonical(Counter({"图表": 3, "走势图": 2}), proposed=None), (None, "no_clear_majority"))
+        self.assertEqual(decide_canonical(Counter({"A": 1, "B": 1}), proposed="B"), (None, "no_clear_majority"))
+        self.assertEqual(
+            decide_canonical(Counter({"图表": 5, "走势图": 1, "价格图": 1, "图形": 1}), proposed="图表"),
+            (None, "many_renderings_context_dependent"),
+        )
+        self.assertEqual(decide_canonical(Counter({"背离": 1}), proposed="背离"), (None, "too_few_occurrences"))
 
-    def test_rewrites_and_missing_terms_are_rejected(self) -> None:
+    def test_spans_must_exist_and_replacements_must_be_unambiguous(self) -> None:
+        self.assertIsNone(exact_span("两次失败摇摆确认信号。", "失败摆动"))
+        self.assertEqual(exact_span("两次失败摇摆确认信号。", " 失败摇摆 "), "失败摇摆")
         self.assertEqual(
-            accept_segment_edit("两次失败摇摆确认了反转信号。", "反转信号。", [["失败摆动"]]),
-            "term_missing_after_edit",
+            replace_rendering("两次失败摇摆确认信号。", "失败摇摆", "失败摆动", expected_occurrences=1), "两次失败摆动确认信号。"
         )
-        self.assertEqual(
-            accept_segment_edit(
-                "两次失败摇摆确认了反转信号。",
-                "失败摆动出现两次之后，交易者便可以相当有把握地认定趋势即将发生逆转。",
-                [["失败摆动"]],
-            ),
-            "length_changed_too_much",
-        )
-        self.assertEqual(
-            accept_segment_edit("两次失败摇摆确认了反转信号。", "失败摆动再现，市场随后调头向下。", [["失败摆动"]]),
-            "edit_too_large",
-        )
+        self.assertIsNone(replace_rendering("小时图上的图形", "图", "图表", expected_occurrences=1))  # too short
+        self.assertIsNone(replace_rendering("时间周期与周期指标", "周期", "时间框架", expected_occurrences=1))  # ambiguous
+        self.assertIsNone(replace_rendering("头肩形态出现", "头肩形", "头肩形态", expected_occurrences=1))  # inside canonical
 
 
 if __name__ == "__main__":

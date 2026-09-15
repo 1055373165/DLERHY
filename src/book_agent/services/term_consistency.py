@@ -1,27 +1,31 @@
 """Automatic terminology consistency for a translated document.
 
-No glossary work is asked of the user. After translation this pass:
+No glossary work is asked of the user, and the model never rewrites text:
 
-1. extracts candidate terms (``GlossaryExtractionService``),
-2. decides one canonical Chinese rendering per inconsistent term, with the
-   renderings the translation already uses as evidence, plus accepted surface
-   variants; terms whose correct Chinese depends on the sentence are left out,
-3. edits only the translated segments that miss a decided term, asking for the
-   smallest change, and keeps an edit only if the term is now present, the
-   rest of the text is essentially unchanged and the length is plausible,
-4. locks the decided terms (with variants) so later reruns and review use them,
-5. reports consistency before and after, and every segment it could not fix.
+1. **Extract** candidate terms (``GlossaryExtractionService``).
+2. **Survey** every translated segment that contains a term: the model only
+   reports the exact span of the Chinese that renders the term, or that the
+   word is used in another sense there (an idiom, an everyday meaning). A span
+   that does not literally occur in the translation is discarded.
+3. **Tally** the surveyed renderings per term. The book's own majority
+   rendering becomes canonical. Terms without a clear majority, or with many
+   scattered renderings, are treated as context-dependent and left alone.
+4. **Replace** minority spans with the canonical rendering by exact string
+   replacement, only when the span is unambiguous in its segment. Every change
+   is recorded as a ``glossary.updated`` event with the before/after text.
+5. **Lock** the canonical terms and **report** strict consistency (exactly the
+   canonical rendering) before and after, plus everything that was skipped.
 
-Consistency is measured per translated segment with the variant-tolerant
-matcher: a segment whose source contains a term is consistent when its Chinese
-contains the canonical rendering or an accepted variant.
+An earlier version let the model edit segments and accept "variants" itself;
+it declared different wordings consistent and forced terms into idioms and
+sentences that never expressed them. Keeping the model to reporting spans makes
+every change and every number checkable against the text.
 """
 
 from __future__ import annotations
 
-import difflib
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -37,7 +41,6 @@ from book_agent.domain.terminology.matching import (
     SourceTermIndex,
     normalize_target,
     source_term_key,
-    target_has_rendering,
 )
 from book_agent.infra.repositories.events import emit_event
 from book_agent.services.glossary_extraction import (
@@ -47,77 +50,42 @@ from book_agent.services.glossary_extraction import (
 )
 from book_agent.services.glossary_service import GlossaryService
 
-DECISION_BATCH_SIZE = 8
-EDIT_BATCH_SIZE = 6
-EVIDENCE_PER_TERM = 6
-EVIDENCE_TEXT_CHARS = 320
-MIN_EDIT_SIMILARITY = 0.75
-EDIT_LENGTH_RATIO = (0.7, 1.4)
+SURVEY_BATCH_SIZE = 16
+SURVEY_TEXT_CHARS = 600
+MIN_MAJORITY_SHARE = 0.7
+MAX_DISTINCT_RENDERINGS = 3
+MIN_RENDERING_CHARS = 2
 _CJK = re.compile(r"[一-鿿]")
 
-DECISION_SYSTEM_PROMPT = (
-    "You are the terminology editor of an English-to-Simplified-Chinese book translation. "
-    "For each term you get the rendering proposed for the glossary and sample translated passages. "
-    "Decide the single canonical Chinese rendering the whole book should use: prefer the rendering the "
-    "translation already uses most when it is a correct, professional term in this field; otherwise choose "
-    "the established professional term. List accepted_variants only for surface forms of the same rendering "
-    "that readers would take as identical (for example with or without a trailing classifier such as 形态), "
-    "never different wordings. Set context_dependent to true when the English word needs different Chinese "
-    "in different sentences (an everyday word that is only sometimes a technical term); such terms will not "
-    "be harmonized. "
-    'Return one JSON object: {"decisions": [{"source_term": str, "canonical_zh": str, '
-    '"accepted_variants": [str], "context_dependent": bool}]}, one entry per input term.'
+SURVEY_SYSTEM_PROMPT = (
+    "You audit terminology in an English-to-Simplified-Chinese book translation. "
+    "For each item you get an English passage, its Chinese translation and one English term. "
+    "Report how the Chinese renders that term in this passage: rendering_zh must be the exact contiguous "
+    "characters copied from the Chinese that translate the term (no added or changed characters), or an "
+    "empty string when the term is not expressed in the Chinese. Set sense to \"term\" when the English "
+    "word is used in its technical meaning in this field, or \"other\" when it is used in another sense "
+    "(an idiom, an everyday meaning, part of a different expression). Do not suggest corrections. "
+    'Return one JSON object: {"items": [{"id": str, "rendering_zh": str, "sense": "term" | "other"}]}, '
+    "one entry per input item."
 )
 
-EDIT_SYSTEM_PROMPT = (
-    "You are a copy editor applying a fixed terminology to an existing Simplified Chinese translation. "
-    "For each segment, change the Chinese as little as possible so that every listed term uses its required "
-    "rendering. Replace only the words that translate the term and adjust at most the immediately adjacent "
-    "words for grammar; keep all other wording, punctuation, numbers and formatting exactly as they are. "
-    "If a term is not actually expressed in the Chinese (it is implied or referred to by a pronoun) and "
-    "inserting it would read unnaturally, leave the text unchanged. "
-    'Return one JSON object: {"segments": [{"id": str, "text_zh": str, "changed": bool, "reason": str}]}, '
-    "one entry per input segment; reason is a few words when changed is false."
-)
-
-DECISION_SCHEMA: dict[str, Any] = {
+SURVEY_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "decisions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "source_term": {"type": "string"},
-                    "canonical_zh": {"type": "string"},
-                    "accepted_variants": {"type": "array", "items": {"type": "string"}},
-                    "context_dependent": {"type": "boolean"},
-                },
-                "required": ["source_term", "canonical_zh"],
-            },
-        }
-    },
-    "required": ["decisions"],
-}
-
-EDIT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "segments": {
+        "items": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string"},
-                    "text_zh": {"type": "string"},
-                    "changed": {"type": "boolean"},
-                    "reason": {"type": "string"},
+                    "rendering_zh": {"type": "string"},
+                    "sense": {"type": "string"},
                 },
-                "required": ["id", "text_zh"],
+                "required": ["id", "rendering_zh"],
             },
         }
     },
-    "required": ["segments"],
+    "required": ["items"],
 }
 
 
@@ -131,35 +99,37 @@ class SegmentUnit:
 
 
 @dataclass(slots=True)
+class TermObservation:
+    segment_id: str
+    rendering: str | None  # exact span in the Chinese; None when not expressed or unusable
+    sense: str  # term | other | unknown
+
+
+@dataclass(slots=True)
 class TermDecision:
     key: str
     source_term: str
     term_type: TermType
-    canonical_zh: str
-    accepted_variants: list[str]
-    context_dependent: bool
-    segment_count: int
+    canonical_zh: str | None
+    rendering_counts: dict[str, int]
+    expressed_segments: int
+    other_sense_segments: int
+    skipped_reason: str | None
     consistent_before: int
     consistent_after: int = 0
+    replaced: int = 0
+    unreplaced: dict[str, int] = field(default_factory=dict)
 
     @property
-    def renderings(self) -> list[str]:
-        return [self.canonical_zh, *self.accepted_variants]
-
-
-@dataclass(slots=True)
-class SegmentEditOutcome:
-    segment_id: str
-    status: str  # edited | kept | rejected
-    reason: str
-    term_keys: list[str]
+    def harmonized(self) -> bool:
+        return self.skipped_reason is None and self.canonical_zh is not None
 
 
 @dataclass(slots=True)
 class TermConsistencyReport:
     document_id: str
     decisions: list[TermDecision]
-    edits: list[SegmentEditOutcome]
+    edited_segments: int
     locked_term_count: int
     token_in: int
     token_out: int
@@ -167,32 +137,55 @@ class TermConsistencyReport:
 
     @property
     def harmonized_decisions(self) -> list[TermDecision]:
-        return [decision for decision in self.decisions if not decision.context_dependent]
+        return [decision for decision in self.decisions if decision.harmonized]
 
     def consistency(self, *, after: bool) -> float | None:
         decisions = self.harmonized_decisions
-        total = sum(decision.segment_count for decision in decisions)
+        total = sum(decision.expressed_segments for decision in decisions)
         if not total:
             return None
         consistent = sum(decision.consistent_after if after else decision.consistent_before for decision in decisions)
         return consistent / total
 
 
-def accept_segment_edit(original: str, edited: str, renderings_by_term: Sequence[Sequence[str]]) -> str | None:
-    """Return None when a minimal terminology edit is acceptable, else the rejection reason."""
-    if not edited.strip() or not _CJK.search(edited):
-        return "empty_or_not_chinese"
-    for renderings in renderings_by_term:
-        if not target_has_rendering(edited, renderings):
-            return "term_missing_after_edit"
-    original_normalized, edited_normalized = normalize_target(original), normalize_target(edited)
-    if original_normalized:
-        ratio = len(edited_normalized) / len(original_normalized)
-        if not EDIT_LENGTH_RATIO[0] <= ratio <= EDIT_LENGTH_RATIO[1]:
-            return "length_changed_too_much"
-    if difflib.SequenceMatcher(None, original_normalized, edited_normalized).ratio() < MIN_EDIT_SIMILARITY:
-        return "edit_too_large"
-    return None
+def exact_span(text_zh: str, rendering: str) -> str | None:
+    """The rendering if it literally occurs in the translation (surrounding whitespace ignored)."""
+    rendering = (rendering or "").strip()
+    return rendering if rendering and rendering in text_zh else None
+
+
+def decide_canonical(
+    counts: Counter[str],
+    *,
+    proposed: str | None,
+    min_share: float = MIN_MAJORITY_SHARE,
+    max_distinct: int = MAX_DISTINCT_RENDERINGS,
+) -> tuple[str | None, str | None]:
+    """Return (canonical rendering, skip reason) from surveyed rendering counts."""
+    total = sum(counts.values())
+    if total < 2:
+        return None, "too_few_occurrences"
+    if len(counts) > max_distinct:
+        return None, "many_renderings_context_dependent"
+    ranked = counts.most_common()
+    top_count = ranked[0][1]
+    leaders = [rendering for rendering, count in ranked if count == top_count]
+    if len(leaders) > 1 and proposed not in leaders:
+        return None, "no_clear_majority"
+    if top_count / total < min_share:
+        return None, "no_clear_majority"
+    return (proposed if proposed in leaders else leaders[0]), None
+
+
+def replace_rendering(text_zh: str, rendering: str, canonical: str, *, expected_occurrences: int) -> str | None:
+    """Swap a minority rendering for the canonical one, or None when that is not safe to do blindly."""
+    if len(normalize_target(rendering)) < MIN_RENDERING_CHARS:
+        return None  # e.g. a single "图": too many unrelated matches
+    if canonical in text_zh and rendering in canonical:
+        return None  # the span is part of the canonical rendering already present
+    if text_zh.count(rendering) != expected_occurrences:
+        return None  # the span also appears outside this term: ambiguous
+    return text_zh.replace(rendering, canonical)
 
 
 def _batched(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:
@@ -200,7 +193,7 @@ def _batched(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:
         yield items[start : start + size]
 
 
-def _clip(text: str, limit: int = EVIDENCE_TEXT_CHARS) -> str:
+def _clip(text: str, limit: int = SURVEY_TEXT_CHARS) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
@@ -215,7 +208,7 @@ class TermConsistencyService:
 
     def run(self, document_id: str, *, apply: bool = True, min_segments: int = 2) -> TermConsistencyReport:
         # Touch the glossary before any provider call: a schema or database problem
-        # must fail here, not after every extraction, decision and edit was paid for.
+        # must fail here, not after every provider call was paid for.
         GlossaryService(self.session).list_document_entries(document_id)
         extraction = GlossaryExtractionService(self.session, self.client, model_name=self.model_name).extract(document_id)
         self._token_in += extraction.token_in
@@ -224,46 +217,36 @@ class TermConsistencyService:
         units = self._load_segment_units(document_id)
         suggestions = {source_term_key(item.source_term): item for item in extraction.suggestions}
         index = SourceTermIndex(item.source_term for item in suggestions.values())
+        occurrences_in_unit: dict[tuple[str, str], int] = {}
         for unit in units:
-            unit.term_keys = index.keys_in(unit.source_text)
+            for occurrence in index.find(unit.source_text):
+                unit.term_keys.add(occurrence.key)
+                pair = (unit.segment_id, occurrence.key)
+                occurrences_in_unit[pair] = occurrences_in_unit.get(pair, 0) + 1
         units_by_key: dict[str, list[SegmentUnit]] = defaultdict(list)
         for unit in units:
             for key in unit.term_keys:
                 units_by_key[key].append(unit)
+        surveyed_keys = [key for key in suggestions if len(units_by_key.get(key, [])) >= min_segments]
 
-        decisions = self._decide(suggestions, units_by_key, min_segments=min_segments)
-        for decision in decisions:
-            decision.consistent_before = sum(
-                1 for unit in units_by_key[decision.key] if target_has_rendering(unit.text_zh, decision.renderings)
-            )
+        observations = self._survey(surveyed_keys, suggestions, units_by_key)
+        decisions = [self._decide(key, suggestions[key], observations[key]) for key in surveyed_keys]
 
-        edits = self._harmonize(units, decisions, apply=apply)
-
-        for decision in decisions:
-            decision.consistent_after = sum(
-                1 for unit in units_by_key[decision.key] if target_has_rendering(unit.text_zh, decision.renderings)
-            )
+        edited = self._replace(units, decisions, observations, occurrences_in_unit, apply=apply)
 
         locked = 0
         if apply:
             glossary = GlossaryService(self.session)
             for decision in decisions:
-                if decision.context_dependent:
-                    continue
-                glossary.lock_term(
-                    document_id,
-                    decision.source_term,
-                    decision.canonical_zh,
-                    term_type=decision.term_type,
-                    target_variants=decision.accepted_variants,
-                )
-                locked += 1
+                if decision.harmonized:
+                    glossary.lock_term(document_id, decision.source_term, decision.canonical_zh, term_type=decision.term_type)
+                    locked += 1
             self.session.flush()
 
         return TermConsistencyReport(
             document_id=document_id,
-            decisions=sorted(decisions, key=lambda item: (-item.segment_count, item.source_term.casefold())),
-            edits=edits,
+            decisions=sorted(decisions, key=lambda item: (-item.expressed_segments, item.source_term.casefold())),
+            edited_segments=edited,
             locked_term_count=locked,
             token_in=self._token_in,
             token_out=self._token_out,
@@ -292,159 +275,120 @@ class TermConsistencyService:
                 unit.source_text = f"{unit.source_text} {source_text}"
         return list(units.values())
 
-    # --- Decisions -----------------------------------------------------------
+    # --- Survey --------------------------------------------------------------
 
-    def _decide(
+    def _survey(
         self,
+        keys: Sequence[str],
         suggestions: dict[str, GlossarySuggestion],
         units_by_key: dict[str, list[SegmentUnit]],
-        *,
-        min_segments: int,
-    ) -> list[TermDecision]:
-        decisions: list[TermDecision] = []
-        needs_model: list[tuple[str, GlossarySuggestion]] = []
-        for key, suggestion in suggestions.items():
-            matched = units_by_key.get(key, [])
-            if len(matched) < min_segments:
-                continue
-            if all(target_has_rendering(unit.text_zh, [suggestion.target_term]) for unit in matched):
-                # Already consistent with the proposed rendering: nothing to decide.
-                decisions.append(self._decision(key, suggestion, suggestion.target_term, [], False, len(matched)))
-            else:
-                needs_model.append((key, suggestion))
-
-        for batch in _batched(needs_model, DECISION_BATCH_SIZE):
-            lines: list[str] = []
-            for key, suggestion in batch:
-                matched = units_by_key[key]
-                with_proposed = [unit for unit in matched if target_has_rendering(unit.text_zh, [suggestion.target_term])]
-                without = [unit for unit in matched if unit not in with_proposed]
-                samples = without[: EVIDENCE_PER_TERM - 2] + with_proposed[:2]
-                lines.append(
-                    f"### Term: {suggestion.source_term}\n"
-                    f"Proposed rendering: {suggestion.target_term} "
-                    f"(found in {len(with_proposed)} of {len(matched)} translated segments)\n"
-                    + "\n".join(f"- EN: {_clip(unit.source_text)}\n  ZH: {_clip(unit.text_zh)}" for unit in samples)
-                )
-            payload = self._call(DECISION_SYSTEM_PROMPT, "\n\n".join(lines), DECISION_SCHEMA, "term_decisions")
-            by_key = {
-                source_term_key(str(item.get("source_term") or "")): item
-                for item in payload.get("decisions") or []
-                if isinstance(item, dict)
+    ) -> dict[str, list[TermObservation]]:
+        work = [(key, unit) for key in keys for unit in units_by_key[key]]
+        observations: dict[str, list[TermObservation]] = defaultdict(list)
+        for batch in _batched(work, SURVEY_BATCH_SIZE):
+            lines = [
+                f"### Item id: i{position}\nTerm: {suggestions[key].source_term}\n"
+                f"EN: {_clip(unit.source_text)}\nZH: {_clip(unit.text_zh)}"
+                for position, (key, unit) in enumerate(batch, start=1)
+            ]
+            payload = self._call(SURVEY_SYSTEM_PROMPT, "\n\n".join(lines), SURVEY_SCHEMA, "term_survey")
+            results = {
+                str(item.get("id") or "").strip(): item for item in payload.get("items") or [] if isinstance(item, dict)
             }
-            for key, suggestion in batch:
-                item = by_key.get(key)
-                canonical = " ".join(str((item or {}).get("canonical_zh") or "").split())
-                if not item or not canonical:
-                    continue  # no usable decision: leave the term alone
-                variants = [
-                    " ".join(str(variant).split())
-                    for variant in item.get("accepted_variants") or []
-                    if str(variant).strip() and " ".join(str(variant).split()) != canonical
-                ]
-                decisions.append(
-                    self._decision(
-                        key,
-                        suggestion,
-                        canonical,
-                        variants,
-                        item.get("context_dependent") is True,
-                        len(units_by_key[key]),
-                    )
-                )
-        return decisions
+            for position, (key, unit) in enumerate(batch, start=1):
+                item = results.get(f"i{position}") or {}
+                sense = str(item.get("sense") or "unknown").strip().lower()
+                if sense not in {"term", "other"}:
+                    sense = "unknown"
+                rendering = exact_span(unit.text_zh, str(item.get("rendering_zh") or ""))
+                if rendering is not None and not _CJK.search(rendering) and not re.search(r"[A-Za-z]", rendering):
+                    rendering = None
+                observations[key].append(TermObservation(unit.segment_id, rendering, sense))
+        return observations
+
+    # --- Decisions -----------------------------------------------------------
 
     @staticmethod
-    def _decision(
-        key: str,
-        suggestion: GlossarySuggestion,
-        canonical: str,
-        variants: list[str],
-        context_dependent: bool,
-        segment_count: int,
-    ) -> TermDecision:
+    def _decide(key: str, suggestion: GlossarySuggestion, observations: Sequence[TermObservation]) -> TermDecision:
+        term_observations = [item for item in observations if item.sense == "term" and item.rendering]
+        counts = Counter(item.rendering for item in term_observations)
+        canonical, skipped = decide_canonical(counts, proposed=suggestion.target_term)
+        consistent = counts.get(canonical, 0) if canonical else 0
         return TermDecision(
             key=key,
             source_term=suggestion.source_term,
             term_type=suggestion.term_type,
             canonical_zh=canonical,
-            accepted_variants=variants,
-            context_dependent=context_dependent,
-            segment_count=segment_count,
-            consistent_before=0,
+            rendering_counts=dict(counts.most_common()),
+            expressed_segments=len(term_observations),
+            other_sense_segments=sum(1 for item in observations if item.sense == "other"),
+            skipped_reason=skipped,
+            consistent_before=consistent,
+            consistent_after=consistent,
         )
 
-    # --- Harmonization -------------------------------------------------------
+    # --- Replacement ---------------------------------------------------------
 
-    def _harmonize(self, units: list[SegmentUnit], decisions: list[TermDecision], *, apply: bool) -> list[SegmentEditOutcome]:
-        active = {decision.key: decision for decision in decisions if not decision.context_dependent}
-        pending: list[tuple[SegmentUnit, list[TermDecision]]] = []
-        for unit in units:
-            missing = [
-                active[key]
-                for key in sorted(unit.term_keys)
-                if key in active and not target_has_rendering(unit.text_zh, active[key].renderings)
-            ]
-            if missing:
-                pending.append((unit, missing))
+    def _replace(
+        self,
+        units: Sequence[SegmentUnit],
+        decisions: Sequence[TermDecision],
+        observations: dict[str, list[TermObservation]],
+        occurrences_in_unit: dict[tuple[str, str], int],
+        *,
+        apply: bool,
+    ) -> int:
+        units_by_id = {unit.segment_id: unit for unit in units}
+        original_text = {unit.segment_id: unit.text_zh for unit in units}
+        # Longer canonical renderings first, so a replacement never lands inside another term's span.
+        ordered = sorted((d for d in decisions if d.harmonized), key=lambda d: -len(d.canonical_zh or ""))
+        changes: dict[str, list[tuple[TermDecision, str]]] = defaultdict(list)
+        for decision in ordered:
+            for observation in observations[decision.key]:
+                if observation.sense != "term" or not observation.rendering or observation.rendering == decision.canonical_zh:
+                    continue
+                unit = units_by_id[observation.segment_id]
+                replaced = replace_rendering(
+                    unit.text_zh,
+                    observation.rendering,
+                    decision.canonical_zh,
+                    expected_occurrences=occurrences_in_unit.get((unit.segment_id, decision.key), 1),
+                )
+                if replaced is None:
+                    decision.unreplaced[observation.rendering] = decision.unreplaced.get(observation.rendering, 0) + 1
+                    continue
+                unit.text_zh = replaced
+                decision.replaced += 1
+                decision.consistent_after += 1
+                changes[unit.segment_id].append((decision, observation.rendering))
 
-        outcomes: list[SegmentEditOutcome] = []
-        segments: dict[str, TargetSegment] = {}
-        if apply and pending:
-            pending_ids = [unit.segment_id for unit, _ in pending]
+        if apply and changes:
             segments = {
                 segment.id: segment
-                for segment in self.session.scalars(select(TargetSegment).where(TargetSegment.id.in_(pending_ids)))
+                for segment in self.session.scalars(select(TargetSegment).where(TargetSegment.id.in_(list(changes))))
             }
-        for batch in _batched(pending, EDIT_BATCH_SIZE):
-            request_lines = []
-            for position, (unit, missing) in enumerate(batch, start=1):
-                terms = "; ".join(f"{decision.source_term} → {decision.canonical_zh}" for decision in missing)
-                request_lines.append(
-                    f"### Segment id: s{position}\nEN: {unit.source_text}\nZH: {unit.text_zh}\nRequired terms: {terms}"
+            for segment_id, applied in changes.items():
+                segment = segments[segment_id]
+                after = units_by_id[segment_id].text_zh
+                emit_event(
+                    self.session,
+                    kind=GLOSSARY_UPDATED,
+                    chapter_id=segment.chapter_id,
+                    actor_kind="agent",
+                    actor_id="services.term_consistency",
+                    payload={
+                        "change": "segment_terminology_harmonized",
+                        "target_segment_id": segment_id,
+                        "replacements": [
+                            {"source_term": decision.source_term, "from": rendering, "to": decision.canonical_zh}
+                            for decision, rendering in applied
+                        ],
+                        "before": original_text[segment_id],
+                        "after": after,
+                    },
                 )
-            payload = self._call(EDIT_SYSTEM_PROMPT, "\n\n".join(request_lines), EDIT_SCHEMA, "terminology_edits")
-            results = {
-                str(item.get("id") or "").strip(): item for item in payload.get("segments") or [] if isinstance(item, dict)
-            }
-            for position, (unit, missing) in enumerate(batch, start=1):
-                keys = [decision.key for decision in missing]
-                item = results.get(f"s{position}")
-                if item is None:
-                    outcomes.append(SegmentEditOutcome(unit.segment_id, "rejected", "no_response", keys))
-                    continue
-                edited = str(item.get("text_zh") or "")
-                if item.get("changed") is False or normalize_target(edited) == normalize_target(unit.text_zh):
-                    reason = " ".join(str(item.get("reason") or "unchanged").split())
-                    outcomes.append(SegmentEditOutcome(unit.segment_id, "kept", reason, keys))
-                    continue
-                rejection = accept_segment_edit(unit.text_zh, edited, [decision.renderings for decision in missing])
-                if rejection is not None:
-                    outcomes.append(SegmentEditOutcome(unit.segment_id, "rejected", rejection, keys))
-                    continue
-                if apply:
-                    segment = segments[unit.segment_id]
-                    emit_event(
-                        self.session,
-                        kind=GLOSSARY_UPDATED,
-                        chapter_id=unit.chapter_id,
-                        actor_kind="agent",
-                        actor_id="services.term_consistency",
-                        payload={
-                            "change": "segment_terminology_harmonized",
-                            "target_segment_id": unit.segment_id,
-                            "terms": [
-                                {"source_term": decision.source_term, "canonical_zh": decision.canonical_zh}
-                                for decision in missing
-                            ],
-                            "before": unit.text_zh,
-                            "after": edited,
-                        },
-                    )
-                    segment.text_zh = edited
-                unit.text_zh = edited
-                outcomes.append(SegmentEditOutcome(unit.segment_id, "edited", "", keys))
-        return outcomes
+                segment.text_zh = after
+        return len(changes)
 
     def _call(self, system_prompt: str, user_prompt: str, schema: dict[str, Any], schema_name: str) -> dict[str, Any]:
         payload, usage = self.client.generate_structured_object(
@@ -459,37 +403,50 @@ class TermConsistencyService:
         return payload if isinstance(payload, dict) else {}
 
 
+_SKIP_REASON_ZH = {
+    "too_few_occurrences": "术语义出现少于 2 次",
+    "many_renderings_context_dependent": "译法过多，视为随语境变化",
+    "no_clear_majority": "没有明显的多数译法",
+}
+
+
 def render_consistency_report_markdown(report: TermConsistencyReport) -> str:
     def percent(value: float | None) -> str:
         return "-" if value is None else f"{value * 100:.1f}%"
 
-    edited = sum(1 for item in report.edits if item.status == "edited")
-    kept = [item for item in report.edits if item.status == "kept"]
-    rejected = [item for item in report.edits if item.status == "rejected"]
-    rejection_counts: dict[str, int] = defaultdict(int)
-    for item in rejected:
-        rejection_counts[item.reason] += 1
-    decisions = report.harmonized_decisions
-    skipped = [decision for decision in report.decisions if decision.context_dependent]
+    harmonized = report.harmonized_decisions
+    skipped = [decision for decision in report.decisions if not decision.harmonized]
+    unreplaced = sum(sum(decision.unreplaced.values()) for decision in harmonized)
     lines = [
         "# 术语一致性报告",
         "",
-        f"- 统一的术语：{len(decisions)} 个（随语境变化、未统一：{len(skipped)} 个）",
-        f"- 术语一致率：{percent(report.consistency(after=False))} → {percent(report.consistency(after=True))}",
-        f"- 修改的译文片段：{edited}；模型判断无需修改：{len(kept)}；校验未通过、保留原文：{len(rejected)}",
+        f"- 统一的术语：{len(harmonized)} 个；跳过：{len(skipped)} 个",
+        f"- 严格一致率（只算标准译法）：{percent(report.consistency(after=False))} → {percent(report.consistency(after=True))}",
+        f"- 修改的译文片段：{report.edited_segments}；因不安全而未替换的出现：{unreplaced}",
         f"- 已锁定术语：{report.locked_term_count}{'' if report.applied else '（试运行，未写入）'}",
         f"- Token：输入 {report.token_in}，输出 {report.token_out}",
+        "",
+        "## 统一的术语",
+        "",
+        "| 英文 | 标准译法（全书多数） | 其他译法（次数） | 术语义出现 | 修改前 | 修改后 | 未替换 |",
+        "|---|---|---|---|---|---|---|",
     ]
-    if rejection_counts:
-        lines.append("- 未通过校验的原因：" + "，".join(f"{reason} {count}" for reason, count in sorted(rejection_counts.items())))
-    lines += ["", "## 术语明细", "", "| 英文 | 标准译法 | 可接受变体 | 片段数 | 修改前 | 修改后 |", "|---|---|---|---|---|---|"]
-    for decision in decisions:
-        before = decision.consistent_before / decision.segment_count
-        after = decision.consistent_after / decision.segment_count
+    for decision in harmonized:
+        others = "、".join(
+            f"{rendering}({count})" for rendering, count in decision.rendering_counts.items() if rendering != decision.canonical_zh
+        )
         lines.append(
-            f"| {decision.source_term} | {decision.canonical_zh} | {' / '.join(decision.accepted_variants) or '-'} "
-            f"| {decision.segment_count} | {percent(before)} | {percent(after)} |"
+            f"| {decision.source_term} | {decision.canonical_zh} | {others or '-'} | {decision.expressed_segments} "
+            f"| {percent(decision.consistent_before / decision.expressed_segments)} "
+            f"| {percent(decision.consistent_after / decision.expressed_segments)} "
+            f"| {sum(decision.unreplaced.values()) or '-'} |"
         )
     if skipped:
-        lines += ["", "## 随语境变化、未统一的词", "", "、".join(decision.source_term for decision in skipped)]
+        lines += ["", "## 跳过的术语", "", "| 英文 | 原因 | 译法（次数） | 其他词义出现 |", "|---|---|---|---|"]
+        for decision in skipped:
+            renderings = "、".join(f"{rendering}({count})" for rendering, count in decision.rendering_counts.items())
+            lines.append(
+                f"| {decision.source_term} | {_SKIP_REASON_ZH.get(decision.skipped_reason or '', decision.skipped_reason)} "
+                f"| {renderings or '-'} | {decision.other_sense_segments or '-'} |"
+            )
     return "\n".join(lines) + "\n"
