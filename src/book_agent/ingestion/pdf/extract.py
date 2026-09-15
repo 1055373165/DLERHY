@@ -154,6 +154,48 @@ def _split_vector_bullet_blocks(
 
 
 _LINE_ENUMERATOR = re.compile(r"^(\d{1,3})[.)]\s+\S")
+_DETACHED_ENUMERATOR = re.compile(r"^\d{1,3}[.)]$")
+
+
+def _join_detached_enumerator_lines(
+    lines: list[str],
+    line_styles: list[tuple[float, bool]],
+    line_bboxes: list[tuple[float, float, float, float]],
+) -> tuple[list[str], list[tuple[float, bool]], list[tuple[float, float, float, float]]]:
+    """Join a list number set apart from its item ("1." / "RSI + Support") into one line.
+
+    Numbers placed in their own column come out as separate lines, which hides
+    the enumeration from list detection and splits sentences after the number.
+    """
+    joined_lines: list[str] = []
+    joined_styles: list[tuple[float, bool]] = []
+    joined_bboxes: list[tuple[float, float, float, float]] = []
+    index = 0
+    while index < len(lines):
+        if (
+            _DETACHED_ENUMERATOR.match(lines[index])
+            and index + 1 < len(lines)
+            and not _DETACHED_ENUMERATOR.match(lines[index + 1])
+            and not _LINE_ENUMERATOR.match(lines[index + 1])
+        ):
+            number_bbox, item_bbox = line_bboxes[index], line_bboxes[index + 1]
+            joined_lines.append(f"{lines[index]} {lines[index + 1]}")
+            joined_styles.append(line_styles[index + 1])
+            joined_bboxes.append(
+                (
+                    min(number_bbox[0], item_bbox[0]),
+                    min(number_bbox[1], item_bbox[1]),
+                    max(number_bbox[2], item_bbox[2]),
+                    max(number_bbox[3], item_bbox[3]),
+                )
+            )
+            index += 2
+            continue
+        joined_lines.append(lines[index])
+        joined_styles.append(line_styles[index])
+        joined_bboxes.append(line_bboxes[index])
+        index += 1
+    return joined_lines, joined_styles, joined_bboxes
 
 
 def _lines_are_consecutive_enumeration(lines: list[str]) -> bool:
@@ -320,6 +362,7 @@ class PyMuPDFTextExtractor:
                             line_styles.append((dominant_size, line_bold and bool(size_weights)))
                             line_bboxes.append(tuple(float(value) for value in line.get("bbox", (0, 0, 0, 0))))
 
+                    lines, line_styles, line_bboxes = _join_detached_enumerator_lines(lines, line_styles, line_bboxes)
                     text = _normalize_multiline_text("\n".join(lines))
                     if not text:
                         continue
