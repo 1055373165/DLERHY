@@ -182,6 +182,8 @@ class DecisionRulesTest(unittest.TestCase):
             ("突破时放量", "放量", "成交量"),
             ("RSI 上穿 50", "上穿", "交叉"),
             ("在那个时期", "时期", "周期"),
+            ("或倒头肩形等形态时", "倒头肩形", "倒头肩形态"),  # short form: "倒头肩形态等形态"
+            ("股票的日线RSI并未", "日线", "日线图"),  # short form: "日线图RSI"
         ):
             with self.subTest(rendering=rendering):
                 self.assertIsNone(replace_rendering(text, rendering, canonical, expected_occurrences=1))

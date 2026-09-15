@@ -184,8 +184,17 @@ def decide_canonical(
 
 
 def renders_canonical(rendering: str, canonical: str) -> bool:
-    """A surveyed span that already contains the canonical rendering ("大投资者" for "投资者")."""
-    return normalize_target(canonical) in normalize_target(rendering)
+    """A surveyed span that already counts as the canonical rendering.
+
+    Either it contains the canonical rendering with extra words ("大投资者" for
+    "投资者"), or it is a short form contained in it ("日线" for "日线图",
+    "倒头肩形" for "倒头肩形态"). Expanding a short form in place produced text
+    such as "倒头肩形态等形态" and "日线图RSI".
+    """
+    normalized_rendering, normalized_canonical = normalize_target(rendering), normalize_target(canonical)
+    return bool(normalized_rendering) and (
+        normalized_canonical in normalized_rendering or normalized_rendering in normalized_canonical
+    )
 
 
 def shared_character_ratio(first: str, second: str) -> float:
