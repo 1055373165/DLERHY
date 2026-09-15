@@ -214,6 +214,9 @@ class TermConsistencyService:
         self._token_out = 0
 
     def run(self, document_id: str, *, apply: bool = True, min_segments: int = 2) -> TermConsistencyReport:
+        # Touch the glossary before any provider call: a schema or database problem
+        # must fail here, not after every extraction, decision and edit was paid for.
+        GlossaryService(self.session).list_document_entries(document_id)
         extraction = GlossaryExtractionService(self.session, self.client, model_name=self.model_name).extract(document_id)
         self._token_in += extraction.token_in
         self._token_out += extraction.token_out
