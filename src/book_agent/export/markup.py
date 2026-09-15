@@ -32,6 +32,8 @@ from book_agent.infra.repositories.export import ChapterExportBundle
 
 # Text the PDF parser gives image and clustered-figure blocks; never a caption.
 ARTIFACT_PLACEHOLDER_TEXTS = frozenset({"", "[Image]", "[Figure]"})
+# A bullet glyph opening a list item, optionally after a translator prefix such as "ZH::".
+_LEADING_BULLET_GLYPH = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0-]\s+")
 
 
 def render_block_markdown(
@@ -585,9 +587,18 @@ def render_block_html(
         else ""
     )
     block_class = "quote" if block.block_type == BlockType.QUOTE.value else block.block_type
+    display_html = target_html or source_html
+    if block.block_type == BlockType.LIST_ITEM.value:
+        # PDF list items carry their bullet glyph in the text; draw it as a
+        # hanging marker instead so wrapped item lines align.
+        display_text = block.target_text or block.source_text
+        unbulleted = _LEADING_BULLET_GLYPH.sub(r"\1", display_text, count=1)
+        if unbulleted != display_text:
+            block_class = f"{block_class} bulleted"
+            display_html = format_inline_text(unbulleted)
     return (
         f"<section class='block {html.escape(block_class)}'>"
-        f"<div class='zh'>{target_html or source_html}</div>"
+        f"<div class='zh'>{display_html}</div>"
         f"{source_details}"
         "</section>"
     )

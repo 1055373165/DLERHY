@@ -26,6 +26,8 @@ a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
 .block .zh{font-size:19px;color:#16202a;max-width:min(100%,52em);text-wrap:pretty;}
 .heading .zh{font-family:var(--font-display);font-size:28px;line-height:1.12;color:#17313a;}
 .paragraph .zh,.list_item .zh,.quote .zh{hyphens:auto;}
+.list_item.bulleted .zh{position:relative;padding-left:1.4em;}
+.list_item.bulleted .zh::before{content:"\2022";position:absolute;left:0.35em;}
 .block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}
 .block details summary{cursor:pointer;font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
 .block .source{margin-top:8px;color:var(--muted);font-family:var(--font-ui);font-size:14px;white-space:pre-wrap;}
