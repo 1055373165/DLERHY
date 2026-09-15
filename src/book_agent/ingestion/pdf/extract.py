@@ -674,11 +674,11 @@ class PyMuPDFTextExtractor:
         bx0, by0, bx2, by2 = bbox[:4]
         bcx, bcy = (bx0 + bx2) / 2.0, (by0 + by2) / 2.0
 
+        # Pick the nearest image first and consult the materialized cache only
+        # afterwards: returning on the first already-materialized image made
+        # every later image on the page reuse the page's first picture.
         for img_info in page_images:
             xref = int(img_info[0])
-            # Fast dedup: if already materialized, reuse path.
-            if xref in materialized_xrefs:
-                return materialized_xrefs[xref], xref
             # Estimate image position by checking all image instances on page.
             try:
                 img_rects = page.get_image_rects(img_info)

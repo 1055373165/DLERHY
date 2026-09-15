@@ -733,6 +733,9 @@ def should_clear_suspicious_short_source_target_text(block: MergedRenderBlock) -
     return should_drop_demoted_book_code_target_text(block)
 
 
+_FONT_EMPHASIS_HEADING_FLAGS = frozenset({"embedded_book_styled_heading_recovered", "styled_heading_line_merged"})
+
+
 def should_demote_book_heading_to_paragraph(
     bundle: ChapterExportBundle,
     index: int,
@@ -755,6 +758,10 @@ def should_demote_book_heading_to_paragraph(
     token_count = len(re.findall(r"[A-Za-z][A-Za-z'-]*", normalized))
     if page_family == "references" and lowered not in _BOOK_ALLOWED_REFERENCE_HEADINGS:
         return True
+    if _FONT_EMPHASIS_HEADING_FLAGS.intersection(block.source_metadata.get("recovery_flags") or ()):
+        # The parser saw the line set apart in bold/larger type; the prose-shape rules
+        # below would demote titles such as "7. Chart patterns like Triangles, ... etc."
+        return False
     if _CHAPTER_LOWERCASE_TAIL_PATTERN.match(normalized):
         return True
     if normalized[:1].islower() and token_count >= 4:
