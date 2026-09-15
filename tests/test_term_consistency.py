@@ -11,6 +11,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 import tests.test_api_workflow as api_fixtures
+from book_agent.domain.enums import LockLevel
 from book_agent.domain.models import Sentence
 from book_agent.domain.models.ops import Event
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
@@ -131,7 +132,12 @@ class TermConsistencyServiceTest(unittest.TestCase):
                     report = TermConsistencyService(session, client, model_name="fake").run(document_id)
                 with session_scope(session_factory) as session:
                     texts = {segment.text_zh for segment in session.scalars(select(TargetSegment))}
-                    locked = GlossaryService(session).get_locked_terms(document_id)
+                    glossary = GlossaryService(session)
+                    locked = glossary.get_locked_terms(document_id)
+                    preferred = {
+                        entry.source_term: (entry.target_term, entry.lock_level)
+                        for entry in glossary.list_document_entries(document_id)
+                    }
                     events = [event for event in session.scalars(select(Event)) if event.kind == "glossary.updated"]
             finally:
                 engine.dispose()
@@ -147,7 +153,11 @@ class TermConsistencyServiceTest(unittest.TestCase):
         self.assertEqual((candle.canonical_zh, candle.other_sense_segments, candle.replaced), ("K线", 1, 0))
         self.assertEqual(report.edited_segments, 1)
         self.assertEqual(len(events), 1)
-        self.assertEqual(locked, {"failure swing": "失败摆动", "candle": "K线"})
+        self.assertEqual(locked, {})  # nothing LOCKED: review must not block on judged exceptions
+        self.assertEqual(
+            preferred,
+            {"failure swing": ("失败摆动", LockLevel.PREFERRED), "candle": ("K线", LockLevel.PREFERRED)},
+        )
         self.assertIn("严格一致率（只算标准译法）：83.3% → 100.0%", render_consistency_report_markdown(report))
 
 

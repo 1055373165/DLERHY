@@ -13,7 +13,8 @@ No glossary work is asked of the user, and the model never rewrites text:
 4. **Replace** minority spans with the canonical rendering by exact string
    replacement, only when the span is unambiguous in its segment. Every change
    is recorded as a ``glossary.updated`` event with the before/after text.
-5. **Lock** the canonical terms and **report** strict consistency (exactly the
+5. **Record** the canonical terms as PREFERRED glossary entries (they guide later
+   translation prompts without making review block) and **report** strict consistency (exactly the
    canonical rendering) before and after, plus everything that was skipped.
 
 An earlier version let the model edit segments and accept "variants" itself;
@@ -33,7 +34,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import TargetSegmentStatus, TermType
+from book_agent.domain.enums import LockLevel, TargetSegmentStatus, TermType
 from book_agent.domain.event_kinds import GLOSSARY_UPDATED
 from book_agent.domain.models import Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
@@ -269,7 +270,16 @@ class TermConsistencyService:
             glossary = GlossaryService(self.session)
             for decision in decisions:
                 if decision.harmonized:
-                    glossary.lock_term(document_id, decision.source_term, decision.canonical_zh, term_type=decision.term_type)
+                    # PREFERRED, not LOCKED: the pass has already judged the occurrences it left
+                    # alone (other senses, short forms, unsafe spans); strict locked-term review
+                    # would turn each of them into an export-blocking conflict.
+                    glossary.lock_term(
+                        document_id,
+                        decision.source_term,
+                        decision.canonical_zh,
+                        term_type=decision.term_type,
+                        lock_level=LockLevel.PREFERRED,
+                    )
                     locked += 1
             self.session.flush()
 
@@ -459,7 +469,7 @@ def render_consistency_report_markdown(report: TermConsistencyReport) -> str:
         f"- 统一的术语：{len(harmonized)} 个；跳过：{len(skipped)} 个",
         f"- 严格一致率（只算标准译法）：{percent(report.consistency(after=False))} → {percent(report.consistency(after=True))}",
         f"- 修改的译文片段：{report.edited_segments}；因不安全而未替换的出现：{unreplaced}",
-        f"- 已锁定术语：{report.locked_term_count}{'' if report.applied else '（试运行，未写入）'}",
+        f"- 记为首选译法的术语：{report.locked_term_count}{'' if report.applied else '（试运行，未写入）'}",
         f"- Token：输入 {report.token_in}，输出 {report.token_out}",
         "",
         "## 统一的术语",

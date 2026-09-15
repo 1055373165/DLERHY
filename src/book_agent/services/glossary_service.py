@@ -167,11 +167,15 @@ class GlossaryService:
         *,
         term_type: TermType = TermType.CONCEPT,
         target_variants: Iterable[str] = (),
+        lock_level: LockLevel = LockLevel.LOCKED,
     ) -> TermEntry:
-        """Promote or create a LOCKED entry. Existing ACTIVE entries for
-        the same source are SUPERSEDED and version-incremented.
+        """Promote or create an entry at ``lock_level`` (LOCKED by default).
+        Existing ACTIVE entries for the same source are SUPERSEDED and
+        version-incremented.
 
         ``target_variants`` are other renderings that count as the term.
+        PREFERRED entries guide translation prompts without making review
+        block on sentences that use another rendering.
         """
         if not source_term.strip() or not target_term.strip():
             raise ValueError("source_term and target_term must be non-empty")
@@ -189,7 +193,7 @@ class GlossaryService:
         if existing:
             latest = max(existing, key=lambda e: e.version)
             if (
-                latest.lock_level == LockLevel.LOCKED
+                latest.lock_level == lock_level
                 and latest.target_term == target_clean
                 and list(latest.target_variants_json or []) == variants
             ):
@@ -214,7 +218,7 @@ class GlossaryService:
             target_term=target_clean,
             target_variants_json=variants,
             term_type=term_type,
-            lock_level=LockLevel.LOCKED,
+            lock_level=lock_level,
             status=TermStatus.ACTIVE,
             version=next_version,
         )
