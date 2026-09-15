@@ -24,8 +24,8 @@ from book_agent.translation.contracts import TranslationUsage
 from tests.workflow_golden_scenario import write_epub
 
 
-def _proposal(source: str, target: str, term_type: TermType = TermType.CONCEPT) -> _Proposal:
-    return _Proposal(source_term=source, target_term=target, term_type=term_type, note="")
+def _proposal(source: str, target: str, term_type: TermType = TermType.CONCEPT, *, required: bool = False) -> _Proposal:
+    return _Proposal(source_term=source, target_term=target, term_type=term_type, note="", required=required)
 
 
 class MergeProposalsTest(unittest.TestCase):
@@ -62,7 +62,36 @@ class MergeProposalsTest(unittest.TestCase):
         self.assertEqual(by_term["divergence"].occurrences, 3)
         self.assertIn("Wilder", by_term)  # a name mentioned once is kept
         self.assertEqual(dropped, ["overbought", "stochastic crossover"])  # never in the source
-        self.assertEqual([item.source_term for item in suggestions][0], "divergence")
+        # Recommended locks (names here) come first, then by frequency.
+        self.assertEqual([item.source_term for item in suggestions][:2], ["Wilder", "divergence"])
+
+    def test_mismatches_ignore_spacing_and_sentences_owned_by_longer_terms(self) -> None:
+        suggestions, _ = merge_proposals(
+            [
+                _proposal("RSI divergence", "RSI 背离", required=True),
+                _proposal("head & shoulders", "头肩顶"),
+                _proposal("inverted head & shoulders", "头肩底"),
+            ],
+            [
+                "An RSI divergence formed.",
+                "Another RSI divergence formed.",
+                "A head & shoulders top formed.",
+                "An inverted head & shoulders bottom formed.",
+                "A second head & shoulders top formed.",
+            ],
+            aligned_targets=[
+                ("An RSI divergence formed.", "形成了RSI背离。"),
+                ("Another RSI divergence formed.", "又形成了 RSI 背离。"),
+                ("A head & shoulders top formed.", "形成了头肩顶。"),
+                ("An inverted head & shoulders bottom formed.", "形成了头肩底。"),
+                ("A second head & shoulders top formed.", "又形成了头肩形态。"),
+            ],
+        )
+        by_term = {item.source_term: item for item in suggestions}
+        self.assertEqual(by_term["RSI divergence"].current_mismatches, 0)
+        self.assertEqual(by_term["head & shoulders"].current_mismatches, 1)
+        self.assertTrue(by_term["RSI divergence"].recommended_lock)
+        self.assertFalse(by_term["head & shoulders"].recommended_lock)
 
     def test_single_mention_concepts_are_not_glossary_entries(self) -> None:
         suggestions, _ = merge_proposals([_proposal("trending market", "趋势市场")], self.SOURCE)
@@ -75,17 +104,25 @@ class MergeProposalsTest(unittest.TestCase):
 class GlossaryCsvRoundTripTest(unittest.TestCase):
     def test_reviewer_edits_and_unmarked_rows(self) -> None:
         suggestions, _ = merge_proposals(
-            [_proposal("failure swing", "失败摆动"), _proposal("divergence", "背离")],
+            [
+                _proposal("failure swing", "失败摆动", required=True),
+                _proposal("divergence", "背离", required=True),
+                _proposal("Wilder", "Wilder", TermType.PERSON),
+            ],
             MergeProposalsTest.SOURCE,
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "glossary.csv"
             write_glossary_csv(path, suggestions)
+            # The reviewer edits one rendering, unmarks a row, and marks nothing else.
             text = path.read_text(encoding="utf-8-sig").replace("失败摆动", "失败波动").replace("y,divergence", ",divergence")
             path.write_text(text, encoding="utf-8-sig")
             rows = read_glossary_csv(path)
 
-        self.assertEqual([(row.source_term, row.target_term) for row in rows], [("failure swing", "失败波动")])
+        self.assertEqual(
+            [(row.source_term, row.target_term) for row in rows],
+            [("failure swing", "失败波动"), ("Wilder", "Wilder")],
+        )
 
 
 class FakeStructuredClient:

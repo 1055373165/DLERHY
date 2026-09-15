@@ -53,13 +53,16 @@ GLOSSARY_EXTRACTION_SYSTEM_PROMPT = (
     "From the excerpt, list the terms whose translation must stay consistent across the whole book: "
     "domain concepts and jargon, named indicators, patterns, signals, strategies and methods, "
     "abbreviations, and the names of people, organisations, websites and books. "
-    "Skip ordinary vocabulary that any translator would render the same way. "
+    "Skip ordinary vocabulary, and skip everyday words whose correct Chinese depends on the sentence "
+    "(a word that is sometimes a technical term and sometimes plain English is not a glossary entry). "
     "For each term give the rendering a Chinese professional publication in this field would use. "
     "Keep widely used abbreviations (for example RSI, MACD, SMA) unchanged, keep person, company and "
     "website names in their original form unless a standard Chinese name exists, and translate book titles. "
     "Use the term's base form exactly as it is spelled in the excerpt (singular for countable nouns). "
     'Return one JSON object: {"terms": [{"source_term": str, "target_term": str, '
-    '"term_type": "concept" | "abbr" | "person" | "org" | "title" | "place" | "other", "note": str}]}. '
+    '"term_type": "concept" | "abbr" | "person" | "org" | "title" | "place" | "other", '
+    '"required": bool, "note": str}]}. '
+    "Set required to true only when every occurrence in the book must use exactly this rendering. "
     "The note is a few Chinese words explaining the term when that helps a reviewer, otherwise an empty string."
 )
 
@@ -74,6 +77,7 @@ GLOSSARY_EXTRACTION_RESPONSE_SCHEMA: dict[str, Any] = {
                     "source_term": {"type": "string"},
                     "target_term": {"type": "string"},
                     "term_type": {"type": "string"},
+                    "required": {"type": "boolean"},
                     "note": {"type": "string"},
                 },
                 "required": ["source_term", "target_term"],
@@ -105,6 +109,8 @@ class GlossarySuggestion:
     current_mismatches: int | None = None
     note: str = ""
     alternative_targets: list[str] = field(default_factory=list)
+    # Proposed for locking: the model marked it required, or it is a name/abbreviation.
+    recommended_lock: bool = False
 
 
 @dataclass(slots=True)
@@ -124,10 +130,15 @@ class _Proposal:
     target_term: str
     term_type: TermType
     note: str
+    required: bool = False
 
 
 def _normalize_space(text: str | None) -> str:
     return " ".join(str(text or "").split())
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"\s+", "", text)
 
 
 def _coerce_term_type(value: object) -> TermType:
@@ -200,8 +211,20 @@ def merge_proposals(
         note = next((item.note for item in items if _normalize_space(item.note)), "")
         mismatches: int | None = None
         if aligned_targets:
+            # Sentences where a longer term containing this one matches belong to that term
+            # ("Inverted Head & Shoulders" is not a mismatch for "Head & Shoulders").
+            longer_patterns = [
+                term_occurrence_pattern(spelling[other])
+                for other in grouped
+                if other != key and key in other
+            ]
+            compact_target = _compact(target)
             mismatches = sum(
-                1 for sentence_source, zh in aligned_targets if pattern.search(sentence_source) and target not in zh
+                1
+                for sentence_source, zh in aligned_targets
+                if pattern.search(sentence_source)
+                and not any(longer.search(sentence_source) for longer in longer_patterns)
+                and compact_target not in _compact(zh)
             )
         suggestions.append(
             GlossarySuggestion(
@@ -212,9 +235,10 @@ def merge_proposals(
                 current_mismatches=mismatches,
                 note=_normalize_space(note),
                 alternative_targets=[candidate for candidate in target_counts if candidate != target],
+                recommended_lock=term_type in _NAME_TYPES | {TermType.ABBR} or any(item.required for item in items),
             )
         )
-    suggestions.sort(key=lambda item: (-item.occurrences, item.source_term.casefold()))
+    suggestions.sort(key=lambda item: (not item.recommended_lock, -item.occurrences, item.source_term.casefold()))
     return suggestions, sorted(dropped, key=str.casefold)
 
 
@@ -254,6 +278,7 @@ class GlossaryExtractionService:
                             target_term=str(item.get("target_term") or ""),
                             term_type=_coerce_term_type(item.get("term_type")),
                             note=str(item.get("note") or ""),
+                            required=item.get("required") is True,
                         )
                     )
         suggestions, dropped = merge_proposals(
@@ -314,14 +339,17 @@ _TRUTHY = {"y", "yes", "1", "true", "x", "是", "锁定"}
 
 
 def write_glossary_csv(path: str | Path, suggestions: Sequence[GlossarySuggestion]) -> None:
-    """Write suggestions for review: edit ``target_term``, clear ``lock`` to skip a row."""
+    """Write suggestions for review: edit ``target_term``; only rows with ``lock`` set are locked.
+
+    Rows the model marked required, and names and abbreviations, start marked.
+    """
     with Path(path).open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=GLOSSARY_CSV_FIELDS)
         writer.writeheader()
         for item in suggestions:
             writer.writerow(
                 {
-                    "lock": "y",
+                    "lock": "y" if item.recommended_lock else "",
                     "source_term": item.source_term,
                     "target_term": item.target_term,
                     "term_type": item.term_type.value,

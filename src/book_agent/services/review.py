@@ -361,7 +361,8 @@ class ReviewService:
                     aligned_text=aligned_text,
                 ):
                     continue
-                if expected_target_term not in aligned_text:
+                # Chinese renderings are compared without whitespace: "RSI背离" honours "RSI 背离".
+                if re.sub(r"\s+", "", expected_target_term) not in re.sub(r"\s+", "", aligned_text):
                     issues.append(
                         self._make_issue(
                             now=now,
