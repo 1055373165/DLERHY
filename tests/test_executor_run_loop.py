@@ -60,7 +60,8 @@ class ExecutorRunLoopTests(unittest.TestCase):
                 run_type=DocumentRunType.TRANSLATE_FULL,
                 requested_by="budget-test",
                 budget=budget,
-            )
+                # These tests drive the translate stage directly.
+                status_detail_json={"run_request": {"terminology": "skip"}})
             control.resume_run(run.run_id, actor_id="budget-test", note="start")
             session.commit()
             return run.run_id

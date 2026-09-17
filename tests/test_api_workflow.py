@@ -1488,7 +1488,11 @@ class ApiWorkflowTests(unittest.TestCase):
                 "document_id": document_id,
                 "run_type": "translate_full",
                 "requested_by": "api-test",
-                "status_detail_json": {"source": "sqlite-stage-update-deadlock-test"},
+                "status_detail_json": {
+                    "source": "sqlite-stage-update-deadlock-test",
+                    # The test drives the translate stage directly.
+                    "run_request": {"terminology": "skip"},
+                },
             },
         )
         self.assertEqual(created.status_code, 201)

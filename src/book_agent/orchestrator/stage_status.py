@@ -45,7 +45,9 @@ from book_agent.domain.models.ops import StageTransition, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 
 
-PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
+PIPELINE_STAGES = ("terminology", "translate", "review", "bilingual_html", "merged_html")
+# Agent stages map a pipeline key to the agent kind carried in the work item bundle.
+AGENT_STAGE_KINDS: dict[str, str] = {"terminology": "terminology"}
 
 # Stage classification (spec Phase 2). A *required* stage must reach
 # ``SUCCEEDED`` before the run can reach ``SUCCEEDED`` / ``SUCCEEDED_WITH_WARNINGS``;
@@ -176,9 +178,51 @@ class StageStatusCalculator:
             return self._translate_evidence(run_id, document_id, packet_ids=packet_ids)
         if stage == "review":
             return self._work_item_stage_evidence(run_id, WorkItemStage.REVIEW, "review")
+        if stage in AGENT_STAGE_KINDS:
+            return self._agent_stage_evidence(run_id, AGENT_STAGE_KINDS[stage], stage)
         if stage in {export_type.value for export_type in ExportType}:
             return self._export_stage_evidence(run_id, ExportType(stage), stage)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
+
+    def _agent_stage_evidence(self, run_id: str, agent_kind: str, stage_key: str) -> StageEvidence:
+        """Work items of stage AGENT for this kind, judged by the agent turn they drive.
+
+        A turn waiting for an approval or paused on budget keeps the stage
+        RUNNING even though the work item that ran it succeeded; the stage
+        only succeeds once the latest turn itself succeeded.
+        """
+        from book_agent.domain.enums import AgentTurnStatus
+        from book_agent.domain.models.agent import AgentTurn
+
+        items = [
+            item
+            for item in self._session.scalars(
+                select(WorkItem).where(WorkItem.run_id == run_id, WorkItem.stage == WorkItemStage.AGENT)
+            ).all()
+            if (item.input_version_bundle_json or {}).get("agent_kind") == agent_kind
+        ]
+        counts = _WorkItemCounts.from_items(items)
+        status = self._wi_status_from_counts(counts)
+        if counts.total:
+            turn = self._session.scalars(
+                select(AgentTurn)
+                .where(AgentTurn.run_id == run_id, AgentTurn.agent_kind == agent_kind)
+                .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
+                .limit(1)
+            ).first()
+            if turn is not None:
+                if turn.status == AgentTurnStatus.FAILED:
+                    status = StageStatus.FAILED
+                elif turn.status != AgentTurnStatus.SUCCEEDED and status == StageStatus.SUCCEEDED:
+                    status = StageStatus.RUNNING
+        return StageEvidence(
+            stage=stage_key,
+            status=status,
+            total_work_items=counts.total,
+            succeeded_work_items=counts.succeeded,
+            failed_work_items=counts.failed,
+            running_work_items=counts.running,
+        )
 
     # --- internals -----------------------------------------------------
 
@@ -488,6 +532,7 @@ def _caller_site() -> str:
 
 
 __all__ = [
+    "AGENT_STAGE_KINDS",
     "OPTIONAL_PIPELINE_STAGES",
     "PIPELINE_STAGES",
     "REQUIRED_PIPELINE_STAGES",

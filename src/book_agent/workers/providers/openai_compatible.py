@@ -399,6 +399,137 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
         return payload, usage
 
+    def generate_agent_step(
+        self,
+        *,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """One agent step: OpenAI-style chat messages plus function tools.
+
+        Returns ``{"text", "tool_calls": [{"call_id", "name", "arguments"}],
+        "usage": TranslationUsage, "finish_reason", "raw"}``.
+        """
+        endpoint_url, api_mode = self._resolve_endpoint()
+        request_started_at = time.perf_counter()
+        if api_mode == "chat_completions":
+            payload: dict[str, Any] = {"model": model_name, "messages": messages}
+            if tools:
+                payload["tools"] = tools
+                payload["tool_choice"] = "auto"
+            if self.max_output_tokens is not None:
+                payload["max_tokens"] = self.max_output_tokens
+        else:
+            payload = {"model": model_name, "input": self._responses_input_from_messages(messages)}
+            if tools:
+                payload["tools"] = [
+                    {
+                        "type": "function",
+                        "name": tool["function"]["name"],
+                        "description": tool["function"].get("description", ""),
+                        "parameters": tool["function"].get("parameters", {}),
+                    }
+                    for tool in tools
+                ]
+        response = self._request_with_retries(url=endpoint_url, payload={**payload, **self.request_overrides})
+        latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
+        usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
+        if api_mode == "chat_completions":
+            text, tool_calls, finish_reason = self._parse_chat_agent_step(response)
+        else:
+            text, tool_calls, finish_reason = self._parse_responses_agent_step(response)
+        return {"text": text, "tool_calls": tool_calls, "usage": usage, "finish_reason": finish_reason, "raw": response}
+
+    def _parse_chat_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        choices = response.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
+        choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        text = message.get("content") if isinstance(message.get("content"), str) else None
+        tool_calls: list[dict[str, Any]] = []
+        for index, raw_call in enumerate(message.get("tool_calls") or []):
+            if not isinstance(raw_call, dict):
+                continue
+            function = raw_call.get("function") if isinstance(raw_call.get("function"), dict) else {}
+            name = str(function.get("name") or "").strip()
+            if not name:
+                continue
+            tool_calls.append(
+                {
+                    "call_id": str(raw_call.get("id") or f"call_{index}"),
+                    "name": name,
+                    "arguments": self._parse_tool_arguments(function.get("arguments")),
+                }
+            )
+        finish_reason = choice.get("finish_reason") if isinstance(choice.get("finish_reason"), str) else None
+        return text, tool_calls, finish_reason
+
+    def _parse_responses_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        texts: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
+        for index, block in enumerate(response.get("output") or []):
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "function_call":
+                name = str(block.get("name") or "").strip()
+                if name:
+                    tool_calls.append(
+                        {
+                            "call_id": str(block.get("call_id") or block.get("id") or f"call_{index}"),
+                            "name": name,
+                            "arguments": self._parse_tool_arguments(block.get("arguments")),
+                        }
+                    )
+            elif block_type == "message":
+                for content in block.get("content") or []:
+                    if isinstance(content, dict) and isinstance(content.get("text"), str):
+                        texts.append(content["text"])
+        text = "\n".join(texts) if texts else None
+        return text, tool_calls, self._coerce_str(response.get("status"))
+
+    def _parse_tool_arguments(self, raw: Any) -> dict[str, Any]:
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, str) and raw.strip():
+            parsed = self._parse_json_dict_candidate(raw)
+            if parsed is not None:
+                return parsed
+            salvaged = self._extract_balanced_json_dict(raw)
+            if salvaged is not None:
+                return salvaged
+        return {}
+
+    def _responses_input_from_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for message in messages:
+            role = str(message.get("role") or "user")
+            if role == "tool":
+                items.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": str(message.get("tool_call_id") or ""),
+                        "output": str(message.get("content") or ""),
+                    }
+                )
+                continue
+            content = message.get("content")
+            if isinstance(content, str) and content:
+                items.append({"role": role, "content": [{"type": "input_text" if role != "assistant" else "output_text", "text": content}]})
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") if isinstance(call, dict) else {}
+                items.append(
+                    {
+                        "type": "function_call",
+                        "call_id": str(call.get("id") or ""),
+                        "name": str((function or {}).get("name") or ""),
+                        "arguments": str((function or {}).get("arguments") or "{}"),
+                    }
+                )
+        return items
+
     def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.api_key}",

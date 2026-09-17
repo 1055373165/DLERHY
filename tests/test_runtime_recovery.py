@@ -140,7 +140,8 @@ class RuntimeRecoveryTests(unittest.TestCase):
                 run_type=run_type,
                 requested_by="test",
                 budget=budget,
-                status_detail_json=status_detail_json,
+                # These tests drive the translate stage directly.
+                status_detail_json=status_detail_json or {"run_request": {"terminology": "skip"}},
             )
             control.resume_run(created.run_id, actor_id="test")
             session.commit()

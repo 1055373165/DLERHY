@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ExportType
 from book_agent.orchestrator.stage_status import (
+    AGENT_STAGE_KINDS,
     PIPELINE_STAGES,
     StageEvidence,
     StageStatus,
@@ -33,7 +34,10 @@ from book_agent.orchestrator.stage_status import (
 
 
 STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
-    "translate": (),
+    "terminology": (),
+    # Only when the run plans a terminology stage (plan_stages filtering);
+    # targeted translate runs have none and start immediately.
+    "translate": ("terminology",),
     "review": ("translate",),
     "bilingual_html": ("translate", "review"),
     "merged_html": ("translate", "review", "bilingual_html"),
@@ -116,6 +120,10 @@ class StageGateKeeper:
         upstream_stages = _dependencies_for(stage)
         if plan_stages is not None:
             upstream_stages = tuple(upstream for upstream in upstream_stages if upstream in plan_stages)
+        else:
+            # Agent stages exist only when a run plans them; without a plan
+            # they cannot be required upstream.
+            upstream_stages = tuple(upstream for upstream in upstream_stages if upstream not in AGENT_STAGE_KINDS)
         upstream_statuses: dict[str, StageStatus] = {
             upstream: self._calculator.stage_status(run_id, document_id, upstream)
             for upstream in upstream_stages

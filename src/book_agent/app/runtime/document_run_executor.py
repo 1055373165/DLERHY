@@ -16,6 +16,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import bind_run_context
+from book_agent.domain.enums import AgentTurnStatus
+from book_agent.harness.agents.terminology import AGENT_KIND as TerminologyAgent_KIND
+from book_agent.harness.agents.terminology import TerminologyAgent
+from book_agent.harness.kernel.openai_model import agent_model_for_worker
+from book_agent.harness.kernel.turn import AgentTurnRunner
+from book_agent.infra.repositories.agent import AgentLedgerRepository
 from book_agent.domain.enums import (
     DocumentRunStatus,
     ExportType,
@@ -35,7 +41,7 @@ from book_agent.orchestrator.pipeline_stage_cache import (
     write_cached_stages,
 )
 from book_agent.orchestrator.reconciler import Reconciler
-from book_agent.orchestrator.run_plan import translate_packet_scope, EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run
+from book_agent.orchestrator.run_plan import AGENT_STAGES, EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run, translate_packet_scope
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
     StageStatus,
@@ -94,6 +100,7 @@ class DocumentRunExecutor:
         export_root: str | Path,
         translation_worker: TranslationWorker | None,
         translation_worker_resolver: Callable[[], TranslationWorker] | None = None,
+        agent_model_resolver: Callable[[TranslationWorker], Any] | None = None,
         poll_interval_seconds: float = 1.0,
         state_reconciler_interval_seconds: float = 30.0,
         lease_seconds: int = 120,
@@ -110,6 +117,9 @@ class DocumentRunExecutor:
         # initialization are picked up; a fixed worker is used only when no
         # resolver is supplied.
         self.translation_worker_resolver = translation_worker_resolver
+        # Builds the agent model from the resolved translation worker; tests
+        # inject scripted models here.
+        self.agent_model_resolver = agent_model_resolver or agent_model_for_worker
         self.poll_interval_seconds = poll_interval_seconds
         self.state_reconciler_interval_seconds = max(
             0.0, float(state_reconciler_interval_seconds)
@@ -339,6 +349,8 @@ class DocumentRunExecutor:
                 if self._enforce_budget_guardrails(run_id):
                     return
                 plan = plan_for_run(run_summary.run_type, run_summary.status_detail_json)
+                if any(self._process_agent_stage(run_id, stage, plan) for stage in plan.agent_stages):
+                    continue
                 if plan.includes("translate") and self._process_translate_stage(run_id, plan):
                     continue
                 if plan.includes("review") and self._process_review_stage(run_id, plan):
@@ -438,6 +450,10 @@ class DocumentRunExecutor:
             packet_scope = plan.packet_ids
             next_stage = self._next_stage_label(plan, "translate")
             document_id = run.document_id
+            if plan.agent_stages and not StageGateKeeper(session).can_start(
+                run_id, document_id, "translate", plan_stages=plan.stages
+            ):
+                return False
             if self._downstream_stage_in_flight(session, run_id):
                 # A review or export thread owns the packets it re-opens for
                 # followup translation; seeding them here as well would translate
@@ -560,6 +576,196 @@ class DocumentRunExecutor:
             input_version_bundle_by_packet_id=self._translate_input_versions(session, plan.packet_ids),
         )
         return plan.packet_ids
+
+    def _process_agent_stage(self, run_id: str, stage_key: str, plan: RunPlan | None = None) -> bool:
+        """Drive an agent stage: one AGENT work item per turn attempt.
+
+        The turn is the durable state. A new work item is seeded when there is
+        no turn yet, or when the latest turn is RUNNING again after an approval
+        or budget decision and nobody is executing it. A turn waiting for a
+        decision leaves the stage RUNNING without seeding anything.
+        """
+        agent_kind = AGENT_STAGES[stage_key]
+        with session_scope(self.session_factory) as session:
+            repository = RunControlRepository(session)
+            execution = self._run_execution_service(session)
+            run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
+            if not StageGateKeeper(session).can_start(run_id, run.document_id, stage_key, plan_stages=plan.stages):
+                return False
+            items = [
+                item
+                for item in self._list_stage_items(session, run_id, WorkItemStage.AGENT)
+                if (item.input_version_bundle_json or {}).get("agent_kind") == agent_kind
+            ]
+            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in items):
+                return False
+            if any(item.status in {WorkItemStatus.LEASED, WorkItemStatus.RUNNING} for item in items):
+                return False
+            turn = AgentLedgerRepository(session).latest_turn(document_id=run.document_id, agent_kind=agent_kind, run_id=run_id)
+            claimable = [item for item in items if item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}]
+            if not claimable:
+                if turn is not None and turn.status in {AgentTurnStatus.AWAITING_APPROVAL, AgentTurnStatus.PAUSED}:
+                    self._update_pipeline_stage(
+                        run_id, stage_key, status="running",
+                        extra={"turn_id": turn.id, "turn_status": turn.status.value, "stop_reason": turn.stop_reason},
+                        current_stage=stage_key, session=session,
+                    )
+                    return False
+                if turn is not None and turn.status in {AgentTurnStatus.SUCCEEDED, AgentTurnStatus.CANCELLED}:
+                    if turn.status == AgentTurnStatus.SUCCEEDED:
+                        self._update_pipeline_stage(
+                            run_id, stage_key, status="succeeded",
+                            extra={"turn_id": turn.id}, current_stage=self._next_stage_label(plan, stage_key), session=session,
+                        )
+                    return False
+                if turn is not None and turn.status == AgentTurnStatus.FAILED:
+                    return False
+                # No turn yet, or a turn resumed after a decision: seed an attempt.
+                scope_id = stable_id("document-run-agent", run_id, agent_kind, str(len(items) + 1))
+                execution.seed_work_items(
+                    run_id=run_id,
+                    stage=WorkItemStage.AGENT,
+                    scope_type=WorkItemScopeType.DOCUMENT,
+                    scope_ids=[scope_id],
+                    input_version_bundle_by_scope_id={
+                        scope_id: {
+                            "document_id": run.document_id,
+                            "agent_kind": agent_kind,
+                            "stage": stage_key,
+                            "terminology_mode": plan.terminology_mode,
+                            **({"resume_turn_id": turn.id} if turn is not None else {}),
+                        }
+                    },
+                )
+                self._update_pipeline_stage(run_id, stage_key, status="running", current_stage=stage_key, session=session)
+                return True
+            self._update_pipeline_stage(run_id, stage_key, status="running", current_stage=stage_key, session=session)
+            claimed = execution.claim_work_item_by_id(
+                work_item_id=claimable[0].id,
+                worker_name=f"app.run.agent.{agent_kind}",
+                worker_instance_id=f"app.agent:{uuid4()}",
+                lease_seconds=self.review_lease_seconds,
+            )
+        if claimed is None:
+            return False
+        self._ensure_work_thread(
+            run_id=run_id,
+            work_item_id=claimed.work_item_id,
+            thread_name=f"book-agent-agent-{agent_kind}-{claimed.work_item_id}",
+            target=lambda claimed=claimed: self._execute_agent_work_item(run_id, claimed, stage_key, plan),
+        )
+        return True
+
+    def _execute_agent_work_item(self, run_id: str, claimed: ClaimedRunWorkItem, stage_key: str, plan: RunPlan | None) -> None:
+        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+        agent_kind = str(input_bundle.get("agent_kind") or AGENT_STAGES.get(stage_key, stage_key))
+        next_stage = self._next_stage_label(plan, stage_key) if plan is not None else "translate"
+
+        def _lease_check(session) -> None:
+            self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+
+        def _run_agent() -> dict[str, Any]:
+            worker = self._current_translation_worker()
+            model = self.agent_model_resolver(worker)
+            registry, policy = self._agent_tools(agent_kind)
+            with session_scope(self.session_factory) as session:
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                resume_turn_id = input_bundle.get("resume_turn_id")
+                if resume_turn_id:
+                    turn_id = str(resume_turn_id)
+                else:
+                    turn_id = self._start_agent_turn(
+                        session,
+                        agent_kind=agent_kind,
+                        document_id=str(input_bundle.get("document_id") or ""),
+                        run_id=run_id,
+                        work_item_id=claimed.work_item_id,
+                        worker=worker,
+                        input_bundle=input_bundle,
+                    )
+            runner = AgentTurnRunner(
+                session_factory=self.session_factory,
+                model=model,
+                registry=registry,
+                policy=policy,
+                lease_check=_lease_check,
+            )
+            try:
+                outcome = runner.run(turn_id)
+            except LeaseLostError:
+                raise
+            except Exception as exc:
+                runner.fail(turn_id, error=exc)
+                raise
+            if outcome.status == AgentTurnStatus.FAILED:
+                raise RuntimeError(f"agent turn {turn_id} failed: {outcome.stop_reason}")
+            return {
+                "document_id": str(input_bundle.get("document_id") or ""),
+                "agent_kind": agent_kind,
+                "turn_id": turn_id,
+                "turn_status": outcome.status.value,
+                "stop_reason": outcome.stop_reason,
+                "usage": outcome.usage,
+            }
+
+        def _on_success(payload: dict[str, Any], lease_token: str) -> None:
+            with session_scope(self.session_factory) as session:
+                execution = self._run_execution_service(session)
+                execution.complete_work_item_success(
+                    lease_token=lease_token,
+                    output_artifact_refs_json={"turn_id": payload["turn_id"], "agent_kind": agent_kind},
+                    payload_json=payload,
+                )
+                succeeded = payload.get("turn_status") == AgentTurnStatus.SUCCEEDED.value
+                self._update_pipeline_stage(
+                    run_id,
+                    stage_key,
+                    status="succeeded" if succeeded else "running",
+                    extra=payload,
+                    current_stage=next_stage if succeeded else stage_key,
+                    session=session,
+                )
+
+        self._execute_claimed_work_item(
+            run_id=run_id,
+            claimed=claimed,
+            worker_fn=_run_agent,
+            on_success=_on_success,
+            stage_key=stage_key,
+            lease_seconds=self.review_lease_seconds,
+        )
+
+    def _agent_tools(self, agent_kind: str):
+        if agent_kind == TerminologyAgent_KIND:
+            return TerminologyAgent.registry(), TerminologyAgent.policy()
+        raise RuntimeError(f"unknown agent kind: {agent_kind}")
+
+    def _start_agent_turn(
+        self,
+        session,
+        *,
+        agent_kind: str,
+        document_id: str,
+        run_id: str,
+        work_item_id: str,
+        worker,
+        input_bundle: dict[str, Any],
+    ) -> str:
+        if agent_kind == TerminologyAgent_KIND:
+            client = getattr(worker, "client", None)
+            extraction_client = client if client is not None and hasattr(client, "generate_structured_object") else None
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = TerminologyAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                extraction_client=extraction_client,
+                mode=str(input_bundle.get("terminology_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        raise RuntimeError(f"unknown agent kind: {agent_kind}")
 
     def _process_review_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
         with session_scope(self.session_factory) as session:

@@ -231,6 +231,9 @@ class TranslationWorkerMetadata:
 class TranslationTask:
     context_packet: ContextPacket
     current_sentences: list[Sentence]
+    # Book-level guidance rendered from BOOK.md decisions; identical for every
+    # packet of the book, so it sits in its own cache-friendly system message.
+    book_guidance: str | None = None
 
 
 class TranslationWorker(Protocol):
@@ -826,6 +829,8 @@ def build_translation_prompt_request(
     system_prompt_dynamic = system_prompt_parts.dynamic_prompt
     system_prompt = system_prompt_parts.combined_prompt
     messages: list[PromptMessage] = [PromptMessage("system", system_prompt_static)]
+    if task.book_guidance and task.book_guidance.strip():
+        messages.append(PromptMessage("system", task.book_guidance.strip()))
     if system_prompt_dynamic:
         messages.append(PromptMessage("system", "Dynamic Packet Guidance:\n" + system_prompt_dynamic))
     messages.append(PromptMessage("user", user_prompt))

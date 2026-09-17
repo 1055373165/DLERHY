@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import current_run_id
+from book_agent.harness.context.book_md import book_prompt_guidance
 from book_agent.domain.enums import (
     ActorType,
     PacketStatus,
@@ -335,6 +336,7 @@ class TranslationService:
             task=TranslationTask(
                 context_packet=compiled_context_packet,
                 current_sentences=bundle.current_sentences,
+                book_guidance=book_prompt_guidance(self.repository.session, compiled_context_packet.document_id) or None,
             ),
             worker_metadata=worker_metadata,
             chapter_memory_snapshot_id=(

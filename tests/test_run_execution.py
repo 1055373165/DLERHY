@@ -93,6 +93,8 @@ class RunExecutionServiceTests(unittest.TestCase):
                 run_type=run_type,
                 requested_by="test-runner",
                 budget=budget,
+                # These tests drive the translate stage directly.
+                status_detail_json={"run_request": {"terminology": "skip"}},
             )
             resumed = control.resume_run(run.run_id, actor_id="test-runner", note="start")
             session.commit()

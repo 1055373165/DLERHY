@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from book_agent.app.api.routes import (
     actions,
     documents,
+    harness,
     health,
     providers,
     run_cost,
@@ -13,6 +14,8 @@ from book_agent.app.api.routes import (
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["system"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(harness.documents_router, prefix="/documents", tags=["harness"])
+api_router.include_router(harness.approvals_router, prefix="/approvals", tags=["harness"])
 api_router.include_router(actions.router, prefix="/actions", tags=["actions"])
 api_router.include_router(runs.router, prefix="/runs", tags=["runs"])
 api_router.include_router(run_stream.router, prefix="/runs", tags=["runs"])

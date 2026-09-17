@@ -17,7 +17,12 @@ from book_agent.domain.enums import DocumentRunType, ExportType
 
 RUN_REQUEST_KEY = "run_request"
 
-FULL_PIPELINE_STAGES: tuple[str, ...] = ("translate", "review", "bilingual_html", "merged_html")
+TERMINOLOGY_STAGE = "terminology"
+TERMINOLOGY_MODES: tuple[str, ...] = ("sampled", "thorough", "skip")
+DEFAULT_TERMINOLOGY_MODE = "sampled"
+# Agent stages: pipeline stage key -> agent kind executed as an AGENT work item.
+AGENT_STAGES: dict[str, str] = {TERMINOLOGY_STAGE: "terminology"}
+FULL_PIPELINE_STAGES: tuple[str, ...] = (TERMINOLOGY_STAGE, "translate", "review", "bilingual_html", "merged_html")
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
 
 
@@ -32,6 +37,8 @@ class RunPlan:
     review_repairs_blockers: bool = True
     auto_followup_on_export_gate: bool = True
     max_auto_followup_attempts: int | None = None
+    # How the terminology agent samples the book: sampled | thorough | skip.
+    terminology_mode: str = DEFAULT_TERMINOLOGY_MODE
 
     def includes(self, stage: str) -> bool:
         return stage in self.stages
@@ -39,6 +46,10 @@ class RunPlan:
     @property
     def export_stages(self) -> tuple[str, ...]:
         return tuple(stage for stage in self.stages if stage in EXPORT_STAGE_KEYS)
+
+    @property
+    def agent_stages(self) -> tuple[str, ...]:
+        return tuple(stage for stage in self.stages if stage in AGENT_STAGES)
 
     @property
     def required_stages(self) -> frozenset[str]:
@@ -54,7 +65,11 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
     run_type = DocumentRunType(run_type)
     request = run_request(status_detail_json)
     if run_type == DocumentRunType.TRANSLATE_FULL:
-        return RunPlan(run_type=run_type, stages=FULL_PIPELINE_STAGES)
+        mode = str(request.get("terminology") or DEFAULT_TERMINOLOGY_MODE).strip().lower()
+        if mode not in TERMINOLOGY_MODES:
+            mode = DEFAULT_TERMINOLOGY_MODE
+        stages = FULL_PIPELINE_STAGES if mode != "skip" else tuple(s for s in FULL_PIPELINE_STAGES if s != TERMINOLOGY_STAGE)
+        return RunPlan(run_type=run_type, stages=stages, terminology_mode=mode)
     if run_type == DocumentRunType.TRANSLATE_TARGETED:
         packet_ids = [str(packet_id) for packet_id in request.get("packet_ids") or [] if str(packet_id)]
         return RunPlan(

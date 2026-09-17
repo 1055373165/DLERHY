@@ -248,35 +248,12 @@ class GlossaryExtractionService:
             source_texts.extend(chapter_texts)
             for chunk in chunk_texts(chapter_texts, max_chars=max_chunk_chars):
                 chunk_count += 1
-                with observed_llm_call(
-                    self.session,
-                    call_kind=CALL_KIND_GLOSSARY_EXTRACT,
-                    model=self.model_name,
-                    chapter_id=chapter.id,
-                    payload={"document_id": document_id, "chunk_index": chunk_count},
-                ) as call:
-                    payload, usage = self.client.generate_structured_object(
-                        model_name=self.model_name,
-                        system_prompt=GLOSSARY_EXTRACTION_SYSTEM_PROMPT,
-                        user_prompt=f"Chapter: {chapter.title_src or ''}\n\nExcerpt:\n{chunk}",
-                        response_schema=GLOSSARY_EXTRACTION_RESPONSE_SCHEMA,
-                        schema_name="glossary_extraction",
-                    )
-                    call.complete(usage)
+                payload, usage = self._extract_chunk(
+                    document_id, chunk, chapter_title=chapter.title_src, chapter_id=chapter.id, chunk_index=chunk_count
+                )
                 token_in += int(getattr(usage, "token_in", 0) or 0)
                 token_out += int(getattr(usage, "token_out", 0) or 0)
-                for item in payload.get("terms") or []:
-                    if not isinstance(item, dict):
-                        continue
-                    proposals.append(
-                        _Proposal(
-                            source_term=str(item.get("source_term") or ""),
-                            target_term=str(item.get("target_term") or ""),
-                            term_type=_coerce_term_type(item.get("term_type")),
-                            note=str(item.get("note") or ""),
-                            required=item.get("required") is True,
-                        )
-                    )
+                proposals.extend(self._proposals_from_payload(payload))
         suggestions, dropped = merge_proposals(
             proposals, source_texts, aligned_targets=self._aligned_translations(document_id)
         )
@@ -289,6 +266,57 @@ class GlossaryExtractionService:
             token_in=token_in,
             token_out=token_out,
         )
+
+    def extract_from_texts(
+        self, document_id: str, texts: list[str], *, max_chunk_chars: int = DEFAULT_MAX_CHUNK_CHARS
+    ) -> list[GlossarySuggestion]:
+        """Extract from caller-chosen texts (a sample) but count occurrences over the whole book."""
+        proposals: list[_Proposal] = []
+        for index, chunk in enumerate(chunk_texts(texts, max_chars=max_chunk_chars), start=1):
+            payload, _usage = self._extract_chunk(document_id, chunk, chapter_title=None, chapter_id=None, chunk_index=index)
+            proposals.extend(self._proposals_from_payload(payload))
+        source_texts = [text for (text,) in self.session.execute(
+            select(Sentence.source_text).where(Sentence.document_id == document_id, Sentence.translatable.is_(True))
+        ) if _normalize_space(text)]
+        suggestions, _dropped = merge_proposals(
+            proposals, source_texts, aligned_targets=self._aligned_translations(document_id)
+        )
+        return suggestions
+
+    def _extract_chunk(self, document_id: str, chunk: str, *, chapter_title: str | None, chapter_id: str | None, chunk_index: int):
+        with observed_llm_call(
+            self.session,
+            call_kind=CALL_KIND_GLOSSARY_EXTRACT,
+            model=self.model_name,
+            chapter_id=chapter_id,
+            payload={"document_id": document_id, "chunk_index": chunk_index},
+        ) as call:
+            payload, usage = self.client.generate_structured_object(
+                model_name=self.model_name,
+                system_prompt=GLOSSARY_EXTRACTION_SYSTEM_PROMPT,
+                user_prompt=f"Chapter: {chapter_title or ''}\n\nExcerpt:\n{chunk}",
+                response_schema=GLOSSARY_EXTRACTION_RESPONSE_SCHEMA,
+                schema_name="glossary_extraction",
+            )
+            call.complete(usage)
+        return payload, usage
+
+    @staticmethod
+    def _proposals_from_payload(payload: Any) -> list[_Proposal]:
+        proposals: list[_Proposal] = []
+        for item in (payload or {}).get("terms") or []:
+            if not isinstance(item, dict):
+                continue
+            proposals.append(
+                _Proposal(
+                    source_term=str(item.get("source_term") or ""),
+                    target_term=str(item.get("target_term") or ""),
+                    term_type=_coerce_term_type(item.get("term_type")),
+                    note=str(item.get("note") or ""),
+                    required=item.get("required") is True,
+                )
+            )
+        return proposals
 
     def _chapter_source_texts(self, chapter_id: str) -> list[str]:
         rows = self.session.execute(

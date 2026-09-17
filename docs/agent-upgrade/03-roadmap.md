@@ -30,13 +30,13 @@
 
 目标：AgentTurn 成为 work item；ToolRegistry、权限、审批、trace 落地；Terminology Agent 上线并可度量。
 
-- [ ] 表：`agent_turns`、`agent_items`、`approvals`、`decisions`（见 02 §4）；`WorkItemStage.AGENT`；执行器新增 `_execute_agent_work_item`（复用租约/心跳/预算）。
+- [x] 表：`agent_turns`、`agent_items`、`approvals`、`decisions`（迁移 0035，PG 升降级已验证）；`WorkItemStage.AGENT`；执行器 `_process_agent_stage` / `_execute_agent_work_item`（复用租约/心跳/预算；turn 是持久状态，work item 只是执行尝试；等待审批时阶段保持 running，审批后播种新的尝试）。
 - [ ] **设计评审**：解析版本分叉方案（新 parse revision + 新句子集 + 指纹搬运 + 跨版本映射表）与稳定锚点格式定稿，附 dry-run 迁移脚本；不在 H1 实施。
-- [ ] `harness/` 包：`Turn`（无状态请求、只追加 item、compaction）、`ToolRegistry`（pydantic 输入输出、权限等级、幂等键）、`PermissionPolicy`、`Hooks`（pre_tool / post_tool / pre_persist）、`Trace`（OTel span ↔ events）。
-- [ ] 工具 v1（只读 + 可逆写）：`search_book`、`read_block`、`read_chapter_outline`、`get_glossary`、`propose_term`、`record_decision`、`request_approval`。
-- [ ] **Terminology Agent**：`run_plan` 新增 `terminology` stage，仅 `translate_full` 默认启用（`run_request.terminology ∈ {sampled(默认), thorough, skip}`）；sampled 模式对标题、首段、索引/术语页分层抽样调用 `GlossaryExtractionService`，之后每章翻译前做增量补充；输出 BOOK.md 术语段与 `term_entries`；锁定按自动策略（人名/缩写/高频无歧义 → LOCKED，其余 PREFERRED），例外走审批。
-- [ ] BOOK.md v1：术语表 + 体裁/语域 + 保留策略；进入翻译 prompt 的书级段（替代硬编码 `tech-column-meta-v1` 人设，profile 改为 skill 选择）。
-- [ ] 前端：审批收件箱（approvals）、BOOK.md 查看。
+- [x] `harness/` 包（2026-09-17）：`kernel/turn.py`（从账本重建消息、无 session 采样、只追加 item、compaction、预算暂停、崩溃后续跑）、`tools/registry.py`（pydantic 输入 → provider schema、权限等级）、`tools/permissions.py`（read / write_reversible 直接执行，write_irreversible 需审批，AutoApproveRule 自动批准并记 AUTO_APPROVED）、`tools/hooks.py`（每 turn 调用上限、审计）、`kernel/trace.py`（agent.turn/tool/approval 事件）。未做：pre_persist hook（翻译期术语拦截仍在原 hook）、OTel span。
+- [x] 工具 v1（`harness/tools/book_tools.py`）：`search_book`、`read_block`、`read_chapter_outline`、`get_glossary`、`propose_term`（PREFERRED）、`lock_term`（LOCKED，需审批；人名/机构/缩写/书名/地名与出现 ≥10 句的术语自动批准）、`record_decision`。审批不是工具而是权限层产生的对象。
+- [x] **Terminology Agent**（`harness/agents/terminology.py`）：`translate_full` 计划以 `terminology` 为第一阶段（`run_request.terminology ∈ {sampled(默认), thorough, skip}`），translate 阶段门禁等待它；sampled 模式取标题、每章前两段与每第 8 个散文块（≤40k 字符），`GlossaryExtractionService.extract_from_texts` 在样本上抽取候选、全书计数，再由 agent turn 用工具核实并写入。Echo worker 配 `EchoAgentModel` 让离线流水线直接通过。未做：逐章增量补充。
+- [x] BOOK.md v1（`harness/context/book_md.py`）：由 `decisions` + 术语表渲染；决策部分以独立 system 消息进入翻译 prompt（`TranslationTask.book_guidance`，无决策时不出现，golden 不变）。未做：替代 `tech-column-meta-v1` 人设、profile → skill。
+- [ ] 前端：审批收件箱（approvals）、BOOK.md 查看。后端已提供 `GET /documents/{id}/approvals|decisions|book-guide|agent-turns` 与 `POST /approvals/{id}/approve|reject`（决定后唤醒执行器）。
 
 验收：术语一致率 eval（用 RSI 测试书与一本 EPUB）首轮 ≥ 95%；每个 turn 的 trace 可在 UI 回放；预算超限时 turn 被暂停且可 resume。
 
