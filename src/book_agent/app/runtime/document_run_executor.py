@@ -780,6 +780,7 @@ class DocumentRunExecutor:
                             "terminology_mode": plan.terminology_mode,
                             "model_review_mode": plan.model_review_mode,
                             "structure_review_mode": plan.structure_review_mode,
+                            "structure_edits": plan.structure_edits,
                             "export_review_mode": plan.export_review_mode,
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
@@ -815,7 +816,7 @@ class DocumentRunExecutor:
         def _run_agent() -> dict[str, Any]:
             worker = self._current_translation_worker()
             model = self.agent_model_resolver(worker)
-            registry, policy = self._agent_tools(agent_kind)
+            registry, policy = self._agent_tools(agent_kind, input_bundle)
             with session_scope(self.session_factory) as session:
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
                 resume_turn_id = input_bundle.get("resume_turn_id")
@@ -892,7 +893,7 @@ class DocumentRunExecutor:
             lease_seconds=self.review_lease_seconds,
         )
 
-    def _agent_tools(self, agent_kind: str):
+    def _agent_tools(self, agent_kind: str, input_bundle: dict[str, Any] | None = None):
         if agent_kind == TerminologyAgent_KIND:
             return TerminologyAgent.registry(), TerminologyAgent.policy()
         if agent_kind == ReviewerAgent_KIND:
@@ -900,7 +901,8 @@ class DocumentRunExecutor:
         if agent_kind == RepairAgent_KIND:
             return RepairAgent.registry(), RepairAgent.policy()
         if agent_kind == StructureAgent_KIND:
-            return StructureAgent.registry(), StructureAgent.policy()
+            allow_edits = bool((input_bundle or {}).get("structure_edits"))
+            return StructureAgent.registry(allow_edits=allow_edits), StructureAgent.policy()
         if agent_kind == ExportReviewAgent_KIND:
             return ExportReviewAgent.registry(), ExportReviewAgent.policy()
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
@@ -955,6 +957,7 @@ class DocumentRunExecutor:
                 document_id=document_id,
                 model_name=model_name,
                 mode=str(input_bundle.get("structure_review_mode") or "sampled"),
+                allow_edits=bool(input_bundle.get("structure_edits")),
                 run_id=run_id,
                 work_item_id=work_item_id,
             )

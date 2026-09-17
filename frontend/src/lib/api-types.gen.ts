@@ -1008,6 +1008,38 @@ export interface StoredChapterQualitySummaryResponse {
   format_pollution_count: number;
 }
 
+export interface StructureEditListResponse {
+  document_id: string;
+  edits: StructureEditResponse[];
+}
+
+export interface StructureEditRequest {
+  kind: "relabel_block" | "merge_blocks" | "link_caption";
+  reason: string;
+  block_id?: string | null;
+  block_type?: string | null;
+  heading_level?: number | null;
+  first_block_id?: string | null;
+  second_block_id?: string | null;
+  caption_block_id?: string | null;
+  artifact_block_id?: string | null;
+}
+
+export interface StructureEditResponse {
+  edit_id: string;
+  kind: string;
+  status: string;
+  block_ids?: string[];
+  args?: Record<string, unknown>;
+  actor_id: string;
+  reason?: string | null;
+  turn_id?: string | null;
+  replay_of_edit_id?: string | null;
+  parse_revision_version?: number | null;
+  retranslate_packet_count?: number;
+  created_at?: string | null;
+}
+
 export interface StructureRefreshResponse {
   document_id: string;
   source_type: string;

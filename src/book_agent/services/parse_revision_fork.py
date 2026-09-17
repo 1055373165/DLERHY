@@ -62,6 +62,11 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _sentence_signature(sentences: list[Sentence]) -> list[tuple[str, bool]]:
+    """Text and translatability: a relabel that protects a block (or unprotects it) is a change too."""
+    return [(normalize_sentence(sentence.source_text), bool(sentence.translatable)) for sentence in sentences]
+
+
 @dataclass(slots=True)
 class ForkResult:
     document_id: str
@@ -129,7 +134,10 @@ class ParseRevisionForkService:
         reason: str,
         actor_id: str = "services.parse_revision_fork",
         run_id: str | None = None,
+        align_across_blocks: bool = False,
     ) -> ForkResult:
+        """``align_across_blocks``: match old and new sentences over all the blocks together (a merge
+        moves sentences into another block); by default each block is aligned on its own."""
         document = self.session.get(Document, document_id)
         if document is None:
             raise ValueError(f"Document not found: {document_id}")
@@ -154,7 +162,7 @@ class ParseRevisionForkService:
                 if block.status == ArtifactStatus.ACTIVE
                 else []
             )
-            if [normalize_sentence(s.source_text) for s in old] == [normalize_sentence(s.source_text) for s in fresh]:
+            if _sentence_signature(old) == _sentence_signature(fresh):
                 self._clear_stale_flag(block, now)
                 continue
             if revision is None:
@@ -169,20 +177,8 @@ class ParseRevisionForkService:
                 sentence.source_span_json = {**(sentence.source_span_json or {}), "parse_revision_id": revision.id}
                 self.session.add(sentence)
             self.session.flush()
-            block_links = align_sentences(
-                [(s.id, s.source_text) for s in old], [(s.id, s.source_text) for s in fresh]
-            )
-            for link in block_links:
-                self.session.add(
-                    SentenceLineage(
-                        parse_revision_id=revision.id,
-                        from_sentence_id=link.from_id,
-                        to_sentence_id=link.to_id,
-                        relation=link.relation,
-                        similarity=link.similarity,
-                    )
-                )
-            links.extend(block_links)
+            if not align_across_blocks:
+                links.extend(self._write_lineage(revision, old, fresh))
             retired_by_block[block.id] = old
             new_by_block[block.id] = fresh
             self._clear_stale_flag(block, now)
@@ -191,6 +187,16 @@ class ParseRevisionForkService:
         if revision is None:
             self.session.flush()
             return result
+        if align_across_blocks:
+            # Blocks in reading order, so a sentence moved into the previous block lines up.
+            ordered = sorted(result.block_ids, key=lambda block_id: self.session.get(Block, block_id).ordinal)
+            links.extend(
+                self._write_lineage(
+                    revision,
+                    [sentence for block_id in ordered for sentence in retired_by_block[block_id]],
+                    [sentence for block_id in ordered for sentence in new_by_block[block_id]],
+                )
+            )
         self.session.flush()
 
         result.parse_revision_id = revision.id
@@ -251,6 +257,20 @@ class ParseRevisionForkService:
         return result
 
     # --- steps ----------------------------------------------------------------------
+
+    def _write_lineage(self, revision: DocumentParseRevision, old: list[Sentence], fresh: list[Sentence]) -> list[SentenceLink]:
+        block_links = align_sentences([(s.id, s.source_text) for s in old], [(s.id, s.source_text) for s in fresh])
+        for link in block_links:
+            self.session.add(
+                SentenceLineage(
+                    parse_revision_id=revision.id,
+                    from_sentence_id=link.from_id,
+                    to_sentence_id=link.to_id,
+                    relation=link.relation,
+                    similarity=link.similarity,
+                )
+            )
+        return block_links
 
     def _active_sentences(self, block_id: str) -> list[Sentence]:
         return list(
@@ -359,6 +379,12 @@ class ParseRevisionForkService:
                 ).all()
             ) if segments else []
             remapped: dict[str, list[tuple[AlignmentEdge, str]]] = {}
+            candidate_ids = {same_map.get(edge.sentence_id, edge.sentence_id) for edge in edges}
+            protected_ids = set(
+                self.session.scalars(
+                    select(Sentence.id).where(Sentence.id.in_(candidate_ids), Sentence.translatable.is_(False))
+                ).all()
+            ) if candidate_ids else set()
             for edge in edges:
                 if edge.sentence_id in same_map:
                     target_sentence = same_map[edge.sentence_id]
@@ -366,6 +392,9 @@ class ParseRevisionForkService:
                     continue
                 else:
                     target_sentence = edge.sentence_id
+                if target_sentence in protected_ids:
+                    # The block became protected (e.g. relabelled as code): its text is no longer translated.
+                    continue
                 remapped.setdefault(edge.target_segment_id, []).append((edge, target_sentence))
             kept = [segment for segment in segments if segment.id in remapped]
             if kept:

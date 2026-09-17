@@ -10,6 +10,7 @@ from book_agent.domain.models.document import (
     MemorySnapshot,
     Sentence,
     SentenceLineage,
+    StructureEdit,
 )
 from book_agent.domain.models.parse_revision import DocumentParseRevision, DocumentParseRevisionArtifact
 from book_agent.domain.models.ops import (
@@ -78,6 +79,7 @@ __all__ = [
     "ReviewIssueEvent",
     "Sentence",
     "SentenceLineage",
+    "StructureEdit",
     "TargetSegment",
     "TermEntry",
     "TranslationPacket",

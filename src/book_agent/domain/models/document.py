@@ -207,6 +207,39 @@ class SentenceLineage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     similarity: Mapped[float | None] = mapped_column(Numeric(4, 3))
 
 
+class StructureEdit(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One structure edit (relabel, merge, caption link) as applied, re-applied after a reparse, or found stale.
+
+    Append-only: a replay writes a new row pointing at the original edit.
+    ``blocks_json`` fingerprints the blocks as they were before the edit so a
+    replay can tell whether the parser gave back the same structure.
+    """
+
+    __tablename__ = "structure_edits"
+    __table_args__ = (
+        CheckConstraint("kind IN ('relabel_block', 'merge_blocks', 'link_caption')", name="ck_structure_edits_kind"),
+        CheckConstraint("status IN ('applied', 'reapplied', 'stale')", name="ck_structure_edits_status"),
+        Index("idx_structure_edits_document", "document_id", "created_at"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    args_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    blocks_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    replay_of_edit_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("structure_edits.id", ondelete="CASCADE")
+    )
+    parse_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("document_parse_revisions.id", ondelete="SET NULL")
+    )
+    turn_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    actor_id: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+
+
 class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "book_profiles"
     __table_args__ = (UniqueConstraint("document_id", "version", name="uq_book_profiles_document_version"),)

@@ -74,6 +74,9 @@ class RunPlan:
     repair_agent: bool = False
     # How many doubtful PDF pages the Structure Agent reviews: sampled | full | skip (default).
     structure_review_mode: str = DEFAULT_STRUCTURE_REVIEW_MODE
+    # Opt-in (run request structure_edits=on): the Structure Agent may propose block edits
+    # (relabel, merge, caption link); each needs a person's approval before it is applied.
+    structure_edits: bool = False
     # How many exported HTML artifacts the Export QA Agent reviews: sampled | full | skip (default).
     export_review_mode: str = DEFAULT_EXPORT_REVIEW_MODE
 
@@ -111,6 +114,7 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         review_mode = _mode(request.get("model_review"), MODEL_REVIEW_MODES, DEFAULT_MODEL_REVIEW_MODE)
         repair_agent = str(request.get("repair_agent") or "off").strip().lower() in {"on", "true", "1", "yes"}
         structure_mode = _mode(request.get("structure_review"), STRUCTURE_REVIEW_MODES, DEFAULT_STRUCTURE_REVIEW_MODE)
+        structure_edits = str(request.get("structure_edits") or "off").strip().lower() in {"on", "true", "1", "yes"}
         skipped = {TERMINOLOGY_STAGE} if mode == "skip" else set()
         if structure_mode == "skip":
             skipped.add(STRUCTURE_REVIEW_STAGE)
@@ -129,6 +133,7 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             model_review_mode=review_mode,
             repair_agent=repair_agent,
             structure_review_mode=structure_mode,
+            structure_edits=structure_edits,
             export_review_mode=export_review_mode,
         )
     if run_type == DocumentRunType.TRANSLATE_TARGETED:

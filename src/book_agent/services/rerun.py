@@ -114,8 +114,16 @@ class RerunService:
             if self.parse_revision_fork is not None:
                 # Blocks whose text changed get a new sentence set; their packets are
                 # rebuilt with carried translations and whatever is left is retranslated.
+                from book_agent.services.structure_edits import StructureEditService
+
+                replay = StructureEditService(
+                    self.ops_repository.session, fork_service=self.parse_revision_fork
+                ).replay(issue_document_id)
                 fork = self.parse_revision_fork.resegment_blocks(
                     issue_document_id,
+                    block_ids=list(
+                        dict.fromkeys([*self.parse_revision_fork.stale_block_ids(issue_document_id), *replay.block_ids])
+                    ),
                     reason=f"reparse action for issue {issue_id}",
                 )
                 structure_refresh_artifacts.parse_revision_fork = fork

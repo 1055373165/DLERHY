@@ -23,6 +23,9 @@ from book_agent.schemas.workflow import (
     RecoverySkillResponse,
     RecoverySkillsResponse,
     RecoverySkillsUpdateRequest,
+    StructureEditListResponse,
+    StructureEditRequest,
+    StructureEditResponse,
     StructureRefreshResponse,
     ExportVersionHistoryResponse,
     ExportVersionResponse,
@@ -520,6 +523,78 @@ def refresh_document_structure(
         carried_ratio=round(fork.carried_ratio, 3) if fork is not None and fork.forked else None,
         retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
     )
+
+
+def _structure_edit_response(edit, *, block_ids: list[str] | None = None, fork=None) -> StructureEditResponse:
+    return StructureEditResponse(
+        edit_id=edit.id,
+        kind=edit.kind,
+        status=edit.status,
+        block_ids=block_ids if block_ids is not None else [item.get("block_id") for item in edit.blocks_json or []],
+        args=dict(edit.args_json or {}),
+        actor_id=edit.actor_id,
+        reason=edit.reason,
+        turn_id=edit.turn_id,
+        replay_of_edit_id=edit.replay_of_edit_id,
+        parse_revision_version=fork.parse_revision_version if fork is not None else None,
+        retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
+        created_at=edit.created_at.isoformat() if edit.created_at else None,
+    )
+
+
+@router.get("/{document_id}/structure-edits", response_model=StructureEditListResponse)
+def list_structure_edits(document_id: str, session: Session = Depends(get_db_session)) -> StructureEditListResponse:
+    """Structure edits of the document, as applied and as replayed or found stale after reparses."""
+    from sqlalchemy import select
+
+    from book_agent.domain.models import StructureEdit
+
+    _load_document_or_404(session, document_id)
+    edits = session.scalars(
+        select(StructureEdit).where(StructureEdit.document_id == document_id).order_by(StructureEdit.created_at, StructureEdit.id)
+    ).all()
+    return StructureEditListResponse(document_id=document_id, edits=[_structure_edit_response(edit) for edit in edits])
+
+
+@router.post("/{document_id}/structure-edits", response_model=StructureEditResponse, status_code=status.HTTP_201_CREATED)
+def create_structure_edit(
+    document_id: str,
+    payload: StructureEditRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> StructureEditResponse:
+    """Relabel a block, merge a block into the one before it, or link a caption; sentences fork and packets rebuild."""
+    from book_agent.domain.models import StructureEdit
+    from book_agent.services.structure_edits import StructureEditRejected, StructureEditService
+
+    _load_document_or_404(session, document_id)
+    principal = current_principal(request)
+    actor_id = f"api:{principal.subject or principal.key_id or 'local'}"
+    service = StructureEditService(session)
+
+    def required(*names: str) -> list[str]:
+        values = [getattr(payload, name) for name in names]
+        missing = [name for name, value in zip(names, values, strict=True) if not value]
+        if missing:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{payload.kind} needs {', '.join(missing)}")
+        return values
+
+    try:
+        if payload.kind == "relabel_block":
+            block_id, block_type = required("block_id", "block_type")
+            outcome = service.relabel_block(
+                document_id, block_id, block_type, heading_level=payload.heading_level, actor_id=actor_id, reason=payload.reason
+            )
+        elif payload.kind == "merge_blocks":
+            first, second = required("first_block_id", "second_block_id")
+            outcome = service.merge_blocks(document_id, first, second, actor_id=actor_id, reason=payload.reason)
+        else:
+            caption, artifact = required("caption_block_id", "artifact_block_id")
+            outcome = service.link_caption(document_id, caption, artifact, actor_id=actor_id, reason=payload.reason)
+    except StructureEditRejected as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    edit = session.get(StructureEdit, outcome.edit_id)
+    return _structure_edit_response(edit, block_ids=outcome.block_ids, fork=outcome.fork)
 
 
 @router.get("/{document_id}/exports/{export_id}/versions", response_model=ExportVersionHistoryResponse)

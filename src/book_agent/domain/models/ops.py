@@ -371,3 +371,12 @@ def _reject_update(_mapper, _connection, target) -> None:
 
 for _model in APPEND_ONLY_MODELS:
     event.listen(_model, "before_update", _reject_update)
+
+
+def _install_structure_edit_guard() -> None:
+    from book_agent.domain.models.document import StructureEdit
+
+    event.listen(StructureEdit, "before_update", _reject_update)
+
+
+_install_structure_edit_guard()

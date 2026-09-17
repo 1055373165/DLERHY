@@ -51,6 +51,7 @@ from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.services.structure_edits import StructureEditService
 from book_agent.services.actions import IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts
 from book_agent.services.parse_revision_fork import ParseRevisionForkService
@@ -189,8 +190,12 @@ class DocumentWorkflowService:
         chapter_ids: list[str] | None = None,
     ) -> PdfStructureRefreshArtifacts:
         artifacts = self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        # Structure edits come back on top of the parser's blocks before sentences are compared.
+        replay = StructureEditService(self.session, fork_service=self.parse_revision_fork).replay(document_id)
         artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
-            document_id, reason="pdf structure refresh"
+            document_id,
+            block_ids=list(dict.fromkeys([*self.parse_revision_fork.stale_block_ids(document_id), *replay.block_ids])),
+            reason="pdf structure refresh",
         )
         return artifacts
 
@@ -201,9 +206,14 @@ class DocumentWorkflowService:
         chapter_ids: list[str] | None = None,
     ) -> EpubStructureRefreshArtifacts:
         artifacts = self.epub_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        replay = StructureEditService(self.session, fork_service=self.parse_revision_fork).replay(document_id)
         artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
             document_id,
-            block_ids=[*artifacts.refreshed_block_ids, *artifacts.created_block_ids, *artifacts.invalidated_block_ids],
+            block_ids=list(
+                dict.fromkeys(
+                    [*artifacts.refreshed_block_ids, *artifacts.created_block_ids, *artifacts.invalidated_block_ids, *replay.block_ids]
+                )
+            ),
             reason="epub structure refresh",
         )
         return artifacts

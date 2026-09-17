@@ -752,6 +752,41 @@ class RecoverySkillsUpdateRequest(BaseSchema):
     skills: dict[str, bool] = Field(default_factory=dict)
 
 
+class StructureEditRequest(BaseSchema):
+    kind: Literal["relabel_block", "merge_blocks", "link_caption"]
+    reason: str = Field(min_length=1, max_length=2000)
+    # relabel_block
+    block_id: str | None = None
+    block_type: str | None = None
+    heading_level: int | None = Field(default=None, ge=1, le=6)
+    # merge_blocks
+    first_block_id: str | None = None
+    second_block_id: str | None = None
+    # link_caption
+    caption_block_id: str | None = None
+    artifact_block_id: str | None = None
+
+
+class StructureEditResponse(BaseSchema):
+    edit_id: str
+    kind: str
+    status: str
+    block_ids: list[str] = Field(default_factory=list)
+    args: dict[str, Any] = Field(default_factory=dict)
+    actor_id: str
+    reason: str | None = None
+    turn_id: str | None = None
+    replay_of_edit_id: str | None = None
+    parse_revision_version: int | None = None
+    retranslate_packet_count: int = 0
+    created_at: str | None = None
+
+
+class StructureEditListResponse(BaseSchema):
+    document_id: str
+    edits: list[StructureEditResponse]
+
+
 class StructureRefreshResponse(BaseSchema):
     document_id: str
     source_type: str

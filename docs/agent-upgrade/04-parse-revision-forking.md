@@ -84,3 +84,9 @@ revision_links   (new): object_type, from_object_id, to_object_id  （issue / ap
 
 未做（有意留到 H3）：块级分叉（新增/拆分块获得新 id 与新 packet；目前新增块若不在任何 packet 的块范围内，会列入 `unpacketed_block_ids` 并由 review 报 OMISSION，run 失败而不是静默丢失）、章级分叉、Structure Agent 的结构编辑回放、dry-run 统计脚本。
 
+## 10. 实施记录（H3 结构编辑，2026-09-18）
+
+- 块级编辑没有新建块：`relabel_block` 改类型（与保护策略），`merge_blocks` 把后一块文本并入前一块并把后一块置为 INVALIDATED（packet 边界若指向它则改指相邻活动块），`link_caption` 只改块元数据。之后对涉及的块调用 `resegment_blocks(..., align_across_blocks=True)`。
+- 分叉判断「块有无变化」时除文本外也比较可译性；译文搬运跳过已变为受保护的句子。
+- `structure_edits` 表（迁移 0042，追加式）取代设计中的「结构编辑指令」：记录编辑类型、参数、编辑前块指纹、产生的 parse revision、turn 与执行者。回放在刷新之后、分叉之前执行，状态为 reapplied 或 stale。
+- 仍未做：`split_block`（依赖按稳定锚点而非序号匹配的刷新）、章级分叉、dry-run 统计脚本。
