@@ -4,6 +4,7 @@ retry guards, review-time frontier yield, pool timeouts, targeted-run scope."""
 from __future__ import annotations
 
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -73,6 +74,23 @@ class RuntimeRecoveryTests(unittest.TestCase):
             export_root=str(Path(self.tempdir.name) / "exports"),
             translation_worker=None,
         )
+        # Registered last so it runs first: work threads a stage may have started
+        # must finish before the engine and the temporary database go away.
+        self.addCleanup(self._join_work_threads)
+
+    def _join_work_threads(self) -> None:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            alive = [
+                thread
+                for threads in list(self.executor._active_work_threads.values())
+                for thread in list(threads.values())
+                if thread.is_alive()
+            ]
+            if not alive:
+                return
+            for thread in alive:
+                thread.join(timeout=1)
 
     # --- fixtures -----------------------------------------------------------
 
