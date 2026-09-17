@@ -80,6 +80,7 @@
 - [ ] Evals harness：`evals/` 目录 + CLI，每次发布跑翻译/审校/结构/导出四类 eval，结果连同 harness 配置写入 manifest。
 - [ ] 多实例：SKIP LOCKED、leader 或按 run 分片、凭据 revision 落库、迁移 advisory lock。
 - [ ] 观测：OTel 导出、Prometheus 指标（tick 时延、租约过期、池占用、每 agent 成本）。
+  - 进度（2026-09-17）：Prometheus 指标已完成，无新依赖（`infra/metrics.py` + `app/metrics_route.py`，`GET /metrics`）：HTTP 请求数与时延（按路由模板）、run loop tick 时延、work item 结束结果（按阶段）、回收的过期租约、模型调用次数/token/费用/时延（按 call_kind，agent 调用各有自己的 call_kind）；抓取时读取连接池占用、各状态 run 数、未结束 work item 数。访问：`BOOK_AGENT_METRICS_TOKEN` 作为 bearer；未设时开启鉴权则要 admin key。每个进程一份计数，按进程抓取。未做：OTel trace 导出。
 
 ## 依赖与并行关系
 

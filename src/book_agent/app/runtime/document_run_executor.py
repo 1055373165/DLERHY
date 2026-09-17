@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from book_agent.infra import metrics
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import AgentTurnStatus
@@ -358,6 +359,7 @@ class DocumentRunExecutor:
             if run_summary.status not in {"running", "draining"}:
                 return
 
+            tick_started = time.monotonic()
             try:
                 self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
@@ -395,6 +397,8 @@ class DocumentRunExecutor:
                 logger.exception("Run loop for %s failed with an unhandled exception", run_id)
                 self._fail_run(run_id, stop_reason="runner.unhandled_exception", exc=exc)
                 return
+            finally:
+                metrics.EXECUTOR_TICK.observe(time.monotonic() - tick_started)
 
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
@@ -454,6 +458,8 @@ class DocumentRunExecutor:
                         work_item_id=item.id,
                         attempt=item.attempt,
                     )
+        if reclaimed.expired_lease_count:
+            metrics.LEASES_RECLAIMED.inc(reclaimed.expired_lease_count)
         return reclaimed.expired_lease_count > 0
 
     def _process_translate_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
@@ -1274,8 +1280,10 @@ class DocumentRunExecutor:
             payload = worker_fn()
             self._stop_heartbeat(heartbeat_thread, stop_event)
             on_success(payload, claimed.lease_token)
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="succeeded")
             self.wake(run_id)
         except LeaseLostError:
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="lease_lost")
             self._stop_heartbeat(heartbeat_thread, stop_event)
             # The lease expired and the work item was reclaimed; its new owner
             # records the outcome, so discard this attempt without touching it.
@@ -1285,6 +1293,7 @@ class DocumentRunExecutor:
             )
             self.wake(run_id)
         except Exception as exc:
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="failed")
             self._stop_heartbeat(heartbeat_thread, stop_event)
             try:
                 self._complete_failure(

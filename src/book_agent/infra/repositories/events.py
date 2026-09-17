@@ -20,6 +20,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
+from book_agent.infra.metrics import record_llm_event
 from book_agent.domain.event_kinds import EVENT_KINDS, VALID_ACTOR_KINDS
 from book_agent.domain.models.ops import Event
 
@@ -55,4 +57,6 @@ def emit_event(
     )
     session.add(event)
     session.flush()
+    if kind in (LLM_CALL_COMPLETED, LLM_CALL_FAILED):
+        record_llm_event(kind, event.payload or {})
     return event

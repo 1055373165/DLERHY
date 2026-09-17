@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     # Provider base URLs that resolve to private or loopback addresses are
     # refused when auth is on or in prod (SSRF), unless this is set.
     provider_allow_private_hosts: bool = False
+    # Bearer token for GET /metrics (Prometheus). Unset: admin API key when auth is on, open otherwise.
+    metrics_token: str | None = None
     # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
     frontend_dist_dir: Path | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
