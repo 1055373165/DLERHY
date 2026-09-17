@@ -45,7 +45,7 @@ class EnumPersistenceTests(unittest.TestCase):
             self.assertIn(f"'{snapshot_type.value}'", migration_text)
 
     def test_latest_work_item_stage_constraint_migration_matches_work_item_stages(self) -> None:
-        migration_path = ROOT / "alembic" / "versions" / "20260914_0030_drop_runtime_self_repair.py"
+        migration_path = ROOT / "alembic" / "versions" / "20260917_0035_agent_harness_ledger.py"
         migration_text = migration_path.read_text(encoding="utf-8")
 
         for stage in WorkItemStage:

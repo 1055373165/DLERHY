@@ -238,7 +238,7 @@ class RunControlService:
                 ),
                 stage_counts=self._with_default_keys(
                     work_item_stage_counts,
-                    ["bootstrap", "translate", "review", "export"],
+                    ["bootstrap", "translate", "review", "export", "agent"],
                 ),
             ),
             worker_leases=RunLeaseSummary(

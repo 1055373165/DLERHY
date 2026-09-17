@@ -307,6 +307,9 @@ class WorkItemStage(StrEnum):
     TRANSLATE = "translate"
     REVIEW = "review"
     EXPORT = "export"
+    # An agent turn (harness kernel) executed as a work item; the concrete
+    # agent is named in the item's input bundle (``agent_kind``).
+    AGENT = "agent"
 
 
 class WorkItemScopeType(StrEnum):
@@ -374,3 +377,40 @@ class ProviderTestStatus(StrEnum):
     UNKNOWN = "unknown"
     OK = "ok"
     FAILED = "failed"
+
+
+# --- Agent harness ----------------------------------------------------------
+
+
+class AgentTurnStatus(StrEnum):
+    RUNNING = "running"
+    AWAITING_APPROVAL = "awaiting_approval"
+    PAUSED = "paused"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentItemKind(StrEnum):
+    SYSTEM = "system"
+    DEVELOPER = "developer"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    COMPACTION = "compaction"
+    APPROVAL_REQUEST = "approval_request"
+    APPROVAL_RESULT = "approval_result"
+
+
+class ApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    AUTO_APPROVED = "auto_approved"
+    EXPIRED = "expired"
+
+
+class DecisionScope(StrEnum):
+    BOOK = "book"
+    CHAPTER = "chapter"

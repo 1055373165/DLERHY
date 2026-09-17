@@ -55,6 +55,12 @@ COST_BUDGET_EXCEEDED: Final = "cost.budget.exceeded"
 AGENT_TRACE_STARTED: Final = "agent.trace.started"
 AGENT_TRACE_COMPLETED: Final = "agent.trace.completed"
 AGENT_HELP_REQUESTED: Final = "agent.help.requested"
+AGENT_TURN_STARTED: Final = "agent.turn.started"
+AGENT_TURN_FINISHED: Final = "agent.turn.finished"
+AGENT_TOOL_CALLED: Final = "agent.tool.called"
+AGENT_TOOL_RETURNED: Final = "agent.tool.returned"
+AGENT_APPROVAL_REQUESTED: Final = "agent.approval.requested"
+AGENT_APPROVAL_DECIDED: Final = "agent.approval.decided"
 
 
 EVENT_KINDS: frozenset[str] = frozenset(
@@ -86,6 +92,12 @@ EVENT_KINDS: frozenset[str] = frozenset(
         AGENT_TRACE_STARTED,
         AGENT_TRACE_COMPLETED,
         AGENT_HELP_REQUESTED,
+        AGENT_TURN_STARTED,
+        AGENT_TURN_FINISHED,
+        AGENT_TOOL_CALLED,
+        AGENT_TOOL_RETURNED,
+        AGENT_APPROVAL_REQUESTED,
+        AGENT_APPROVAL_DECIDED,
     }
 )
 
