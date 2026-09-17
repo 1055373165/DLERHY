@@ -896,7 +896,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("publication-grade English-to-Chinese translator and localizer", brief_prompt.system_prompt)
         self.assertIn("Paragraph Intent Priorities:", brief_prompt.system_prompt)
         self.assertIn("Literalism Guardrails:", brief_prompt.system_prompt)
-        self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.user_prompt)
+        self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.system_prompt)
 
     def test_build_translation_prompt_request_exposes_static_and_dynamic_system_prompt_parts_for_native_profiles(self) -> None:
         context_packet = ContextPacket(
