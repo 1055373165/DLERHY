@@ -52,6 +52,17 @@ class EnumPersistenceTests(unittest.TestCase):
             self.assertIn(f"'{stage.value}'", migration_text)
         self.assertNotIn("'repair',", migration_text)
 
+    def test_review_issue_event_constraints_match_enums(self) -> None:
+        from book_agent.domain.enums import IssueEventKind, IssueStatus
+
+        migration_path = ROOT / "alembic" / "versions" / "20260917_0036_review_issue_versioning.py"
+        migration_text = migration_path.read_text(encoding="utf-8")
+
+        for kind in IssueEventKind:
+            self.assertIn(f"'{kind.value}'", migration_text)
+        for status in IssueStatus:
+            self.assertIn(f"'{status.value}'", migration_text)
+
 
 if __name__ == "__main__":
     unittest.main()

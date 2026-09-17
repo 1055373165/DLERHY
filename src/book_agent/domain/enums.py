@@ -210,6 +210,45 @@ class IssueStatus(StrEnum):
     WONTFIX = "wontfix"
 
 
+class IssueType(StrEnum):
+    """Known review issue types. The column stays TEXT so model-detected
+    types can be added without a migration; producers should use this enum."""
+
+    OMISSION = "OMISSION"
+    LOW_CONFIDENCE = "LOW_CONFIDENCE"
+    FORMAT_POLLUTION = "FORMAT_POLLUTION"
+    TERM_CONFLICT = "TERM_CONFLICT"
+    UNLOCKED_KEY_CONCEPT = "UNLOCKED_KEY_CONCEPT"
+    STALE_CHAPTER_BRIEF = "STALE_CHAPTER_BRIEF"
+    STYLE_DRIFT = "STYLE_DRIFT"
+    DUPLICATION = "DUPLICATION"
+    MISORDERING = "MISORDERING"
+    ALIGNMENT_FAILURE = "ALIGNMENT_FAILURE"
+    CONTEXT_FAILURE = "CONTEXT_FAILURE"
+    STRUCTURE_POLLUTION = "STRUCTURE_POLLUTION"
+    FOOTNOTE_RECOVERY_REQUIRED = "FOOTNOTE_RECOVERY_REQUIRED"
+    IMAGE_CAPTION_RECOVERY_REQUIRED = "IMAGE_CAPTION_RECOVERY_REQUIRED"
+    ARTIFACT_GROUP_RECOVERY_REQUIRED = "ARTIFACT_GROUP_RECOVERY_REQUIRED"
+    LAYOUT_VALIDATION_FAILURE = "LAYOUT_VALIDATION_FAILURE"
+    # Model-detected (Reviewer Agent) types; routed by rule_engine.resolve_action.
+    MISTRANSLATION_SEMANTIC = "MISTRANSLATION_SEMANTIC"
+    MISTRANSLATION_LOGIC = "MISTRANSLATION_LOGIC"
+    MISTRANSLATION_REFERENCE = "MISTRANSLATION_REFERENCE"
+
+
+class IssueEventKind(StrEnum):
+    """Append-only history of a review issue; one row per state change."""
+
+    OPENED = "opened"
+    UPDATED = "updated"
+    REOPENED = "reopened"
+    SEEN_WHILE_CLOSED = "seen_while_closed"
+    RESOLVED = "resolved"
+    TRIAGED = "triaged"
+    WONTFIX = "wontfix"
+    ACTION_REPLANNED = "action_replanned"
+
+
 class ActionType(StrEnum):
     EDIT_TARGET_ONLY = "EDIT_TARGET_ONLY"
     REALIGN_ONLY = "REALIGN_ONLY"

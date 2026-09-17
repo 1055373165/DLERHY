@@ -81,9 +81,30 @@ class OpsRepository:
         return packet
 
     def mark_issue_triaged(self, issue: ReviewIssue, note: str) -> None:
+        from datetime import datetime, timezone
+
+        from book_agent.domain.enums import IssueEventKind
+        from book_agent.domain.models.review import ReviewIssueEvent
+
+        from_status = issue.status
         issue.status = IssueStatus.TRIAGED
         issue.resolution_note = note
+        issue.version = int(issue.version or 1) + 1
         self.session.merge(issue)
+        self.session.add(
+            ReviewIssueEvent(
+                issue_id=issue.id,
+                version=issue.version,
+                kind=IssueEventKind.TRIAGED,
+                from_status=from_status,
+                to_status=IssueStatus.TRIAGED,
+                actor_kind="system",
+                actor_id="services.actions",
+                note=note,
+                evidence_json=dict(issue.evidence_json or {}),
+                created_at=datetime.now(timezone.utc),
+            )
+        )
 
     def mark_packet_ready_for_rerun(self, packet_id: str) -> TranslationPacket:
         packet = self.get_packet(packet_id)

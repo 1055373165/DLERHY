@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
+from sqlalchemy import select
+
 from book_agent.domain.enums import ActionType, IssueStatus, JobScopeType, PacketStatus
+from book_agent.domain.models.review import ChapterQualitySummary
 from book_agent.infra.repositories.ops import OpsRepository
+from book_agent.infra.repositories.review import is_export_gate_issue
 from book_agent.orchestrator.rerun import (
     RerunPlan,
     concept_overrides_for_issue,
@@ -39,8 +44,13 @@ class RerunService:
         targeted_rebuild_service: TargetedRebuildService,
         realign_service: RealignService,
         pdf_structure_refresh_service: PdfStructureRefreshService | None = None,
+        export_gate_revalidator: Callable[[str], None] | None = None,
     ):
         self.ops_repository = ops_repository
+        # Re-runs the export gate checks for a chapter (without raising). The
+        # review pass does not own export-time issues, so a follow-up for one
+        # of them is validated by the check that created it.
+        self.export_gate_revalidator = export_gate_revalidator
         self.translation_service = translation_service
         self.review_service = review_service
         self.targeted_rebuild_service = targeted_rebuild_service
@@ -129,6 +139,13 @@ class RerunService:
             JobScopeType.DOCUMENT,
         }:
             review_artifacts = self.review_service.review_chapter(issue_chapter_id)
+            if self.export_gate_revalidator is not None and is_export_gate_issue(issue):
+                self.export_gate_revalidator(issue_chapter_id)
+                if review_artifacts is not None:
+                    refreshed = self.ops_repository.get_issue(issue_id)
+                    if refreshed.status == IssueStatus.RESOLVED and issue_id not in review_artifacts.resolved_issue_ids:
+                        review_artifacts.resolved_issue_ids.append(issue_id)
+                        self._count_followup_resolution(issue_chapter_id)
 
         try:
             refreshed_issue = self.ops_repository.get_issue(issue_id)
@@ -144,6 +161,14 @@ class RerunService:
             rebuild_artifacts=rebuild_artifacts,
             structure_refresh_artifacts=structure_refresh_artifacts,
         )
+
+    def _count_followup_resolution(self, chapter_id: str) -> None:
+        """The persisted chapter summary was written by the review pass before the
+        export gate closed the issue; count that resolution on it too."""
+        session = self.ops_repository.session
+        summary = session.scalar(select(ChapterQualitySummary).where(ChapterQualitySummary.chapter_id == chapter_id))
+        if summary is not None:
+            summary.resolved_issue_count = int(summary.resolved_issue_count or 0) + 1
 
     def _packet_ids_for_plan(self, rerun_plan: RerunPlan) -> list[str]:
         if rerun_plan.scope_type == JobScopeType.PACKET:

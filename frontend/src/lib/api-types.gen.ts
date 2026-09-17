@@ -540,6 +540,18 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface IssueActionResponse {
+  id: string;
+  issue_id: string;
+  action_type: string;
+  scope_type: string;
+  scope_id?: string | null;
+  status: string;
+  reason_json?: Record<string, unknown>;
+  created_by: string;
+  updated_at?: string | null;
+}
+
 export interface IssueActivityBreakdownEntryResponse {
   issue_type: string;
   root_cause_layer: string;
@@ -662,6 +674,34 @@ export interface IssueChapterQueueEntryResponse {
   memory_proposals: ChapterMemoryProposalQueueSummaryResponse;
 }
 
+export interface IssueDecisionRequest {
+  actor_id: string;
+  note?: string | null;
+}
+
+export interface IssueDetailResponse {
+  issue: IssueResponse;
+  events?: IssueEventResponse[];
+  actions?: IssueActionResponse[];
+  source_text?: string | null;
+  target_text?: string | null;
+  chapter_title?: string | null;
+}
+
+export interface IssueEventResponse {
+  id: string;
+  issue_id: string;
+  version: number;
+  kind: string;
+  from_status?: string | null;
+  to_status: string;
+  actor_kind: string;
+  actor_id?: string | null;
+  note?: string | null;
+  evidence_json?: Record<string, unknown>;
+  created_at?: string | null;
+}
+
 export interface IssueHotspotEntryResponse {
   issue_type: string;
   root_cause_layer: string;
@@ -673,6 +713,41 @@ export interface IssueHotspotEntryResponse {
   blocking_issue_count: number;
   chapter_count: number;
   latest_seen_at?: string | null;
+}
+
+export interface IssueListResponse {
+  document_id: string;
+  total_count: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  entries?: IssueResponse[];
+}
+
+export interface IssueResponse {
+  id: string;
+  document_id: string;
+  chapter_id?: string | null;
+  block_id?: string | null;
+  sentence_id?: string | null;
+  packet_id?: string | null;
+  issue_type: string;
+  root_cause_layer: string;
+  severity: string;
+  blocking: boolean;
+  detector: string;
+  confidence?: number | null;
+  status: string;
+  version: number;
+  reopen_count: number;
+  suggested_action?: string | null;
+  resolution_note?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  evidence_json?: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  last_seen_at?: string | null;
 }
 
 export type MemoryProposalStatus = "proposed" | "committed" | "rejected";

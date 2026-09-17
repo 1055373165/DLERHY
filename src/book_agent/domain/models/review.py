@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, Text, Uuid
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
+    IssueEventKind,
     ActionActorType,
     ActionStatus,
     ActionType,
@@ -16,11 +17,28 @@ from book_agent.domain.enums import (
     RootCauseLayer,
     Severity,
 )
-from book_agent.infra.db.base import Base, JsonDocument, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
+from book_agent.infra.db.base import (
+    Base,
+    CreatedAtMixin,
+    JsonDocument,
+    TimestampMixin,
+    UUIDPrimaryKeyMixin,
+    enum_value_type,
+)
 
 
 class ReviewIssue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Current projection of a review issue.
+
+    The row is upserted by every detection pass (review, export gate) through
+    ``ReviewRepository.sync_issues``: ``created_at`` is the first sighting and
+    never reset, ``version`` grows on every material change, and human
+    decisions (``decided_by`` set, WONTFIX or RESOLVED) are never overturned
+    by a detector. The history lives in ``review_issue_events``.
+    """
+
     __tablename__ = "review_issues"
+    __table_args__ = (Index("idx_review_issues_document_id", "document_id"),)
 
     document_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
@@ -60,6 +78,38 @@ class ReviewIssue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     suggested_action: Mapped[str | None] = mapped_column(Text)
     resolution_note: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reopen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set by a human transition (triage / wontfix / resolve / reopen); detectors
+    # respect it and only record that they saw the problem again.
+    decided_by: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def human_decided(self) -> bool:
+        return self.decided_by is not None and self.status in (IssueStatus.WONTFIX, IssueStatus.RESOLVED)
+
+
+class ReviewIssueEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """Append-only issue history: one row per transition, carrying the issue version it produced."""
+
+    __tablename__ = "review_issue_events"
+    __table_args__ = (Index("idx_review_issue_events_issue_created", "issue_id", "created_at"),)
+
+    issue_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("review_issues.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[IssueEventKind] = mapped_column(enum_value_type(IssueEventKind, name="issue_event_kind"), nullable=False)
+    from_status: Mapped[IssueStatus | None] = mapped_column(enum_value_type(IssueStatus, name="issue_status"))
+    to_status: Mapped[IssueStatus] = mapped_column(enum_value_type(IssueStatus, name="issue_status"), nullable=False)
+    actor_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class ChapterQualitySummary(UUIDPrimaryKeyMixin, TimestampMixin, Base):

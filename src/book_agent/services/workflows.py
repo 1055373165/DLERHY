@@ -122,6 +122,7 @@ class DocumentWorkflowService:
             self.targeted_rebuild_service,
             RealignService(self.ops_repository),
             self.pdf_structure_refresh_service,
+            export_gate_revalidator=self._revalidate_export_gate,
         )
         self.memory_proposals = ChapterMemoryProposalService(session, self.memory_service)
         self.issue_queries = IssueQueries(session)
@@ -164,6 +165,12 @@ class DocumentWorkflowService:
         artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path)
         self.bootstrap_repository.save(artifacts)
         return self.documents.get_document_summary(artifacts.document.id)
+
+    def _revalidate_export_gate(self, chapter_id: str) -> None:
+        """Re-run the final-export gate checks for one chapter and sync their issues, without raising."""
+        bundle = self.export_repository.load_chapter_bundle(chapter_id)
+        evaluation = self.export_service.evaluate_chapter_gate(bundle, ExportType.BILINGUAL_HTML)
+        self.export_service.sync_gate_issues(bundle, evaluation)
 
     def bootstrap_epub(self, source_path: str | Path) -> DocumentSummary:
         return self.bootstrap_document(source_path)

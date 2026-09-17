@@ -74,6 +74,7 @@ from book_agent.export.pdf_crop import (
     apply_document_image_materializations,
     plan_document_image_materialization,
 )
+from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.export import (
     ChapterExportBundle,
     DocumentExportBundle,
@@ -935,30 +936,26 @@ class ExportService:
         *,
         resolution_note: str,
     ) -> ExportIssueSyncArtifacts:
-        active_issue_ids = {issue.id for issue in plan.issues}
-        for issue in plan.existing:
-            if issue.id in active_issue_ids:
-                continue
-            if issue.status in {IssueStatus.OPEN, IssueStatus.TRIAGED}:
-                issue.status = IssueStatus.RESOLVED
-                issue.resolution_note = resolution_note
-                issue.updated_at = plan.now
-                self.repository.session.merge(issue)
-
-        for issue in plan.issues:
-            self.repository.session.merge(issue)
-        self.repository.session.flush()
-
-        actions = [build_issue_action(issue) for issue in plan.issues]
-        for action in actions:
-            self.repository.session.merge(action)
-        self.repository.session.flush()
-
-        retained_issue_ids = {issue.id for issue in plan.existing if issue.status != IssueStatus.RESOLVED}
+        """Reconcile the export-time issues with the ledger (R8: no reopen
+        resets, human WONTFIX/RESOLVED never overturned) and re-plan actions."""
+        sync = ReviewRepository(self.repository.session).sync_issues(
+            plan.issues,
+            [build_issue_action(issue) for issue in plan.issues],
+            owned_existing=plan.existing,
+            resolution_note=resolution_note,
+            actor_id="services.export.gate",
+            now=plan.now,
+        )
+        active_issues = [issue for issue in sync.issues if issue.status in (IssueStatus.OPEN, IssueStatus.TRIAGED)]
+        active_ids = {issue.id for issue in active_issues}
+        existing_ids = {issue.id for issue in plan.existing}
         bundle.review_issues = [
-            issue for issue in bundle.review_issues if issue.id not in retained_issue_ids
-        ] + plan.issues
-        return ExportIssueSyncArtifacts(issues=plan.issues, actions=actions)
+            issue for issue in bundle.review_issues if issue.id not in existing_ids and issue.id not in active_ids
+        ] + [issue for issue in plan.existing if issue.id not in active_ids] + active_issues
+        return ExportIssueSyncArtifacts(
+            issues=active_issues,
+            actions=[action for action in sync.actions if action.issue_id in active_ids],
+        )
 
     def _build_export_alignment_issues(
         self,

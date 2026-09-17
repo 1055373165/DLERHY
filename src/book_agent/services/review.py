@@ -31,7 +31,7 @@ from book_agent.domain.terminology.matching import (
     target_has_rendering,
 )
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
-from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
+from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository, review_pass_owns
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
@@ -130,11 +130,19 @@ class ReviewService:
     def review_chapter(self, chapter_id: str) -> ReviewArtifacts:
         bundle = self.repository.load_chapter_bundle(chapter_id)
         artifacts = self._build_review_artifacts(bundle)
-        resolved = self.repository.resolve_missing_issues(
-            chapter_id,
-            {issue.id for issue in artifacts.issues},
+        sync = self.repository.sync_issues(
+            artifacts.issues,
+            artifacts.actions,
+            owned_existing=[issue for issue in bundle.existing_issues if review_pass_owns(issue)],
             resolution_note="Resolved by latest QA pass.",
+            actor_id="services.review",
         )
+        # From here on the persisted rows are the truth: a human WONTFIX stays
+        # closed and must not block the chapter or reject its memory.
+        artifacts.issues = [issue for issue in sync.issues if issue.status in (IssueStatus.OPEN, IssueStatus.TRIAGED)]
+        artifacts.actions = [action for action in sync.actions if action.issue_id in {issue.id for issue in artifacts.issues}]
+        artifacts.summary = self._recount_summary(artifacts.summary, artifacts.issues)
+        resolved = sync.resolved
         structure_severity = self._max_issue_severity(artifacts.issues, RootCauseLayer.STRUCTURE)
         if structure_severity is not None and _severity_rank(structure_severity) > _severity_rank(bundle.chapter.risk_level):
             bundle.chapter.risk_level = structure_severity
@@ -154,6 +162,19 @@ class ReviewService:
         )
         self.repository.session.flush()
         return artifacts
+
+    def _recount_summary(self, summary: ChapterQualitySummary, issues: list[ReviewIssue]) -> ChapterQualitySummary:
+        """Recompute the flags after the ledger sync dropped human-closed issues."""
+        return ChapterQualitySummary(
+            coverage_ok=not any(issue.issue_type == "OMISSION" for issue in issues),
+            alignment_ok=not any(issue.root_cause_layer == RootCauseLayer.ALIGNMENT for issue in issues),
+            term_ok=not any(issue.issue_type == "TERM_CONFLICT" for issue in issues),
+            format_ok=not any(issue.issue_type == "FORMAT_POLLUTION" for issue in issues),
+            blocking_issue_count=sum(1 for issue in issues if issue.blocking),
+            low_confidence_count=sum(1 for issue in issues if issue.issue_type == "LOW_CONFIDENCE"),
+            format_pollution_count=sum(1 for issue in issues if issue.issue_type == "FORMAT_POLLUTION"),
+            naturalness_summary=summary.naturalness_summary,
+        )
 
     def _commit_review_approved_memory(self, bundle: ChapterReviewBundle) -> None:
         latest_run_ids_by_packet: dict[str, str] = {}

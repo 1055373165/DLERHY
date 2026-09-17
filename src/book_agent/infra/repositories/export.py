@@ -260,12 +260,16 @@ class ExportRepository:
             chapters=[self.load_chapter_bundle(chapter.id) for chapter in chapters],
         )
 
+    # Active = OPEN or TRIAGED, the same notion the blocker-repair loop uses;
+    # a triaged blocker is awaiting rerun validation and must still block.
+    _ACTIVE_STATUSES = (IssueStatus.OPEN, IssueStatus.TRIAGED)
+
     def has_open_blocking_issues(self, chapter_id: str) -> bool:
         issue = self.session.scalars(
             select(ReviewIssue.id).where(
                 ReviewIssue.chapter_id == chapter_id,
                 ReviewIssue.blocking.is_(True),
-                ReviewIssue.status == IssueStatus.OPEN,
+                ReviewIssue.status.in_(self._ACTIVE_STATUSES),
             )
         ).first()
         return issue is not None
@@ -275,7 +279,7 @@ class ExportRepository:
             select(ReviewIssue).where(
                 ReviewIssue.chapter_id == chapter_id,
                 ReviewIssue.blocking.is_(True),
-                ReviewIssue.status == IssueStatus.OPEN,
+                ReviewIssue.status.in_(self._ACTIVE_STATUSES),
             )
         ).all()
 
