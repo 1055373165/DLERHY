@@ -63,6 +63,7 @@ from book_agent.orchestrator.state_machine import (
     packet_runtime_state,
 )
 from book_agent.services.export import ExportGateError, ExportUnavailableError
+from book_agent.services.export_qa import AUDITED_EXPORT_TYPES, ExportQaService
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
@@ -1122,6 +1123,7 @@ class DocumentRunExecutor:
                     session.commit()
                     raise
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+            qa_summary = self._audit_export(document_id, export_type, result)
             return {
                 "document_id": document_id,
                 "export_type": export_type.value,
@@ -1129,6 +1131,7 @@ class DocumentRunExecutor:
                 "manifest_path": result.manifest_path,
                 "chapter_export_count": len(result.chapter_results),
                 "chapter_export_ids": [chapter.export_id for chapter in result.chapter_results],
+                **({"qa": qa_summary} if qa_summary is not None else {}),
             }
 
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:
@@ -1156,6 +1159,22 @@ class DocumentRunExecutor:
             stage_key=pipeline_key,
             lease_seconds=self.lease_seconds,
         )
+
+    def _audit_export(self, document_id: str, export_type: ExportType, result) -> dict[str, Any] | None:
+        """Export QA after a successful export; a QA problem is recorded, never raised."""
+        if export_type not in AUDITED_EXPORT_TYPES:
+            return None
+        artifacts: list[tuple[str | None, Path]] = (
+            [(chapter.chapter_id, Path(chapter.file_path)) for chapter in result.chapter_results]
+            if result.chapter_results
+            else ([(None, Path(result.file_path))] if result.file_path else [])
+        )
+        try:
+            with session_scope(self.session_factory) as session:
+                return ExportQaService(session).audit(document_id, export_type, artifacts).to_json()
+        except Exception as exc:  # the export already succeeded
+            logger.exception("Export QA failed for document %s (%s)", document_id, export_type.value)
+            return {"export_type": export_type.value, "error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
     def _execute_claimed_work_item(
         self,

@@ -128,6 +128,10 @@ class DocumentRunEndpointTests(unittest.TestCase):
         export_done = self._wait_for_terminal(export["run_id"])
         self.assertEqual(export_done["status"], "succeeded")
         self.assertEqual(_nonzero(export_done["work_items"]["stage_counts"]), {"export": 1})
+        # Export QA ran after the export and wrote its report; a sensor, it never fails the run.
+        qa = read_cached_stages(export_done["status_detail_json"]["pipeline"])["merged_html"]["qa"]
+        self.assertEqual(qa["export_type"], "merged_html")
+        self.assertTrue(Path(qa["report_paths"][0]).is_file())
         with self.session_factory() as session:
             exports = session.scalars(
                 select(Export).where(Export.document_id == document_id, Export.export_type == ExportType.MERGED_HTML)
