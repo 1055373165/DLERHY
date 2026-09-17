@@ -81,11 +81,14 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     if callable(ensure_database_state):
         ensure_database_state()
     resolver = getattr(app.state, "resolve_translation_worker", None)
+    from book_agent.core.config import get_settings
+
     executor = DocumentRunExecutor(
         session_factory=app.state.session_factory,
         export_root=app.state.export_root,
         translation_worker=getattr(app.state, "translation_worker", None),
         translation_worker_resolver=resolver if callable(resolver) else None,
+        translation_max_output_repairs=get_settings().translation_max_output_repairs,
     )
     executor.start()
     app.state.document_run_executor = executor
@@ -109,10 +112,12 @@ class DocumentRunExecutor:
         default_max_auto_followup_attempts: int = 2,
         default_max_blocker_repair_rounds: int = 10,
         default_max_parallel_workers: int = 8,
+        translation_max_output_repairs: int = 1,
     ) -> None:
         self.session_factory = session_factory
         self.export_root = str(Path(export_root).resolve())
         self.translation_worker = translation_worker
+        self.translation_max_output_repairs = max(0, int(translation_max_output_repairs))
         # Resolved per workflow service so provider swaps and late app-state
         # initialization are picked up; a fixed worker is used only when no
         # resolver is supplied.
@@ -233,6 +238,7 @@ class DocumentRunExecutor:
             session,
             export_root=self.export_root,
             translation_worker=self._current_translation_worker(),
+            translation_max_output_repairs=self.translation_max_output_repairs,
         )
 
     def _run_control_service(self, session) -> RunControlService:

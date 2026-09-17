@@ -14,6 +14,7 @@ from book_agent.translation.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.translation.output_validation import OutputCorrection
 from book_agent.translation.prompt_profiles import (
     COMPACT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT,
@@ -234,6 +235,10 @@ class TranslationTask:
     # Book-level guidance rendered from BOOK.md decisions; identical for every
     # packet of the book, so it sits in its own cache-friendly system message.
     book_guidance: str | None = None
+    # Set on the repair call after the output guardrail rejected an output: the
+    # prompt replays the rejected answer and the findings after the packet
+    # message, so the cached prefix is untouched.
+    correction: OutputCorrection | None = None
 
 
 class TranslationWorker(Protocol):
@@ -834,6 +839,8 @@ def build_translation_prompt_request(
     if system_prompt_dynamic:
         messages.append(PromptMessage("system", "Dynamic Packet Guidance:\n" + system_prompt_dynamic))
     messages.append(PromptMessage("user", user_prompt))
+    if task.correction is not None:
+        messages.extend(_correction_messages(task.correction, sentence_alias_map))
     return TranslationPromptRequest(
         packet_id=packet.packet_id,
         model_name=model_name,
@@ -846,6 +853,46 @@ def build_translation_prompt_request(
         sentence_alias_map=sentence_alias_map,
         messages=tuple(messages),
     )
+
+
+def _correction_messages(
+    correction: OutputCorrection, sentence_alias_map: dict[str, str]
+) -> list[PromptMessage]:
+    """Replay the rejected answer (in alias form) and ask for a corrected one."""
+    alias_of = {sentence_id: alias for alias, sentence_id in sentence_alias_map.items()}
+
+    def _aliases(values: list[str]) -> list[str]:
+        return [alias_of.get(value, value) for value in values]
+
+    previous = correction.previous_output.model_copy(
+        update={
+            "target_segments": [
+                segment.model_copy(update={"source_sentence_ids": _aliases(segment.source_sentence_ids)})
+                for segment in correction.previous_output.target_segments
+            ],
+            "alignment_suggestions": [
+                suggestion.model_copy(update={"source_sentence_ids": _aliases(suggestion.source_sentence_ids)})
+                for suggestion in correction.previous_output.alignment_suggestions
+            ],
+            "low_confidence_flags": [
+                flag.model_copy(update={"sentence_id": alias_of.get(flag.sentence_id, flag.sentence_id)})
+                for flag in correction.previous_output.low_confidence_flags
+            ],
+        }
+    )
+    findings = correction.report.findings(alias_of)
+    lines = [
+        f"Your previous answer (repair attempt {correction.attempt}) failed validation:",
+        *(f"- {line}" for line in findings),
+        "",
+        "Return the complete corrected JSON for the whole packet, not only the fixed parts. "
+        "Keep the same schema, keep the sentence aliases, and make sure every current sentence is "
+        "translated and aligned exactly once.",
+    ]
+    return [
+        PromptMessage("assistant", previous.model_dump_json(exclude_none=True)),
+        PromptMessage("user", "\n".join(lines)),
+    ]
 
 
 class EchoTranslationWorker:

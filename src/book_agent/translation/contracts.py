@@ -159,6 +159,9 @@ class TranslationUsage(BaseSchema):
 class TranslationWorkerResult(BaseSchema):
     output: TranslationWorkerOutput
     usage: TranslationUsage = Field(default_factory=TranslationUsage)
+    # Filled by TranslationService.call_worker: outputs the guardrail rejected
+    # before this one was accepted (or before the repair budget ran out).
+    rejected_outputs: list[dict[str, Any]] = Field(default_factory=list)
 
     @property
     def packet_id(self) -> str:

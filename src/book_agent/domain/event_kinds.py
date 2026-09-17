@@ -29,6 +29,8 @@ PACKET_BUILT: Final = "packet.built"
 PACKET_LEASED: Final = "packet.leased"
 PACKET_TRANSLATED: Final = "packet.translated"
 PACKET_FAILED: Final = "packet.failed"
+# The output guardrail rejected a worker answer and asked for a repair.
+TRANSLATION_OUTPUT_REJECTED: Final = "translation.output.rejected"
 
 # --- LLM calls ---------------------------------------------------------------
 LLM_CALL_STARTED: Final = "llm.call.started"
@@ -75,6 +77,7 @@ EVENT_KINDS: frozenset[str] = frozenset(
         PACKET_BUILT,
         PACKET_LEASED,
         PACKET_TRANSLATED,
+        TRANSLATION_OUTPUT_REJECTED,
         PACKET_FAILED,
         LLM_CALL_STARTED,
         LLM_CALL_COMPLETED,

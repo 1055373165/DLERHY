@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     translation_max_retries: int = 1
     translation_retry_backoff_seconds: float = 1.5
     translation_max_output_tokens: int = 8192
+    # Output guardrail: how many times a rejected worker answer (coverage gap,
+    # echoed source, empty or implausibly sized translation) is sent back to
+    # the model for correction within the same packet turn. 0 disables repair;
+    # the last answer is then persisted with its error_code as before.
+    translation_max_output_repairs: int = 1
     translation_input_cache_hit_cost_per_1m_tokens: float | None = None
     translation_input_cost_per_1m_tokens: float | None = None
     translation_output_cost_per_1m_tokens: float | None = None

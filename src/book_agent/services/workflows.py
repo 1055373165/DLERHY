@@ -82,6 +82,7 @@ class DocumentWorkflowService:
         export_root: str | Path = "artifacts/exports",
         translation_worker: TranslationWorker | None = None,
         translation_auto_commit_memory: bool = False,
+        translation_max_output_repairs: int = 1,
     ):
         self.session = session
         self.bootstrap_repository = BootstrapRepository(session)
@@ -92,6 +93,7 @@ class DocumentWorkflowService:
             TranslationRepository(session),
             worker=translation_worker,
             default_auto_commit_memory=translation_auto_commit_memory,
+            max_output_repairs=translation_max_output_repairs,
         )
         self.memory_service = self.translation_service.memory_service
         self.review_service = ReviewService(self.review_repository)

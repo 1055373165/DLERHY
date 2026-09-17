@@ -76,6 +76,9 @@ from book_agent.workers.translator import (
 
 def TranslationService(*args, **kwargs):
     kwargs.setdefault("default_auto_commit_memory", True)
+    # These tests script partial worker outputs on purpose and count calls;
+    # the output guardrail repair loop is covered by test_translation_output_guardrail.
+    kwargs.setdefault("max_output_repairs", 0)
     return _TranslationService(*args, **kwargs)
 
 

@@ -19,6 +19,7 @@ from book_agent.domain.enums import (
     TargetSegmentStatus,
 )
 from book_agent.domain.event_kinds import (
+    TRANSLATION_OUTPUT_REJECTED,
     GLOSSARY_VIOLATION,
     LLM_CALL_COMPLETED,
     LLM_CALL_FAILED,
@@ -43,7 +44,7 @@ from book_agent.translation.contracts import (
     TranslationWorkerResult,
 )
 from book_agent.translation.heuristics import DEFAULT_HEURISTICS
-from book_agent.translation.output_validation import OutputValidator
+from book_agent.translation.output_validation import OutputCorrection, OutputRejection, OutputValidator
 from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import (
     EchoTranslationWorker,
@@ -259,6 +260,7 @@ class TranslationService:
         default_auto_commit_memory: bool = False,
         post_translation_hooks: Sequence[PostTranslationHook] | None = None,
         output_validator: OutputValidator | None = None,
+        max_output_repairs: int = 1,
     ):
         self.repository = repository
         self.worker = worker or EchoTranslationWorker()
@@ -272,6 +274,7 @@ class TranslationService:
         )
         self.default_auto_commit_memory = default_auto_commit_memory
         self.output_validator = output_validator or OutputValidator()
+        self.max_output_repairs = max(0, int(max_output_repairs))
         self.post_translation_hooks: tuple[PostTranslationHook, ...] = (
             tuple(post_translation_hooks)
             if post_translation_hooks is not None
@@ -365,8 +368,50 @@ class TranslationService:
         return prepared
 
     def call_worker(self, prepared: PreparedPacketTranslation) -> TranslationWorkerResult:
-        """Run the translation worker. Touches no database state."""
-        return self._coerce_worker_result(self.worker.translate(prepared.task))
+        """Run the translation worker behind the output guardrail. Touches no database state.
+
+        A rejected answer is sent back to the model with the findings
+        (``TranslationTask.correction``) up to ``max_output_repairs`` times.
+        The returned result carries the summed usage of every call and the
+        rejected outputs for the audit trail; when the budget runs out the
+        last answer is returned and persisted with its error_code.
+        """
+        task = prepared.task
+        result = self._coerce_worker_result(self.worker.translate(task))
+        report = self.output_validator.validate_task(task, result.output)
+        usage = result.usage
+        rejections: list[OutputRejection] = []
+        while not report.ok and len(rejections) < self.max_output_repairs:
+            rejections.append(
+                OutputRejection(
+                    attempt=len(rejections) + 1,
+                    report=report,
+                    token_in=int(result.usage.token_in or 0),
+                    token_out=int(result.usage.token_out or 0),
+                )
+            )
+            repair_task = replace(
+                task,
+                correction=OutputCorrection(
+                    previous_output=result.output,
+                    report=report,
+                    attempt=len(rejections),
+                ),
+            )
+            result = self._coerce_worker_result(self.worker.translate(repair_task))
+            usage = _merge_usage(usage, result.usage)
+            report = self.output_validator.validate_task(task, result.output)
+        if not rejections:
+            return result
+        return result.model_copy(
+            update={
+                "usage": usage,
+                "rejected_outputs": [
+                    {"attempt": item.attempt, "token_in": item.token_in, "token_out": item.token_out, **item.report.to_json()}
+                    for item in rejections
+                ],
+            }
+        )
 
     def record_worker_failure(self, prepared: PreparedPacketTranslation, exc: Exception) -> None:
         """Record a failed attempt: a FAILED translation run with its error code, and the event."""
@@ -455,9 +500,16 @@ class TranslationService:
         validation = self.output_validator.validate(
             [sentence.id for sentence in bundle.current_sentences],
             worker_result.output,
+            source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code
+        if worker_result.rejected_outputs:
+            artifacts.translation_run.model_config_json = {
+                **(artifacts.translation_run.model_config_json or {}),
+                "output_repairs": len(worker_result.rejected_outputs),
+            }
+            self._emit_output_rejections(prepared, worker_result, accepted=validation.ok)
         self.repository.save_translation_artifacts(
             translation_run=artifacts.translation_run,
             target_segments=artifacts.target_segments,
@@ -473,6 +525,8 @@ class TranslationService:
         }
         if not validation.ok:
             translated_payload["output_validation"] = validation.to_json()
+        if worker_result.rejected_outputs:
+            translated_payload["output_repairs"] = len(worker_result.rejected_outputs)
         emit_event(
             self.repository.session,
             kind=PACKET_TRANSLATED,
@@ -495,6 +549,35 @@ class TranslationService:
             hook.after_packet_translated(self, outcome)
         self.repository.session.flush()
         return artifacts
+
+    def _emit_output_rejections(
+        self,
+        prepared: PreparedPacketTranslation,
+        worker_result: TranslationWorkerResult,
+        *,
+        accepted: bool,
+    ) -> None:
+        """One audit event per rejected answer, written with the persisted result."""
+        metadata = prepared.worker_metadata
+        for rejection in worker_result.rejected_outputs:
+            emit_event(
+                self.repository.session,
+                kind=TRANSLATION_OUTPUT_REJECTED,
+                run_id=prepared.run_id,
+                chapter_id=prepared.chapter_id,
+                packet_id=prepared.packet_id,
+                actor_kind="system",
+                actor_id="services.translation.output_guardrail",
+                correlation_id=prepared.correlation_id,
+                payload={
+                    "call_id": prepared.call_id,
+                    "backend": metadata.worker_name,
+                    "model": metadata.model_name,
+                    "repair_budget": self.max_output_repairs,
+                    "repaired": accepted,
+                    **rejection,
+                },
+            )
 
     def _emit_glossary_violations(
         self,
@@ -835,6 +918,22 @@ class TranslationService:
         if isinstance(payload, TranslationWorkerOutput):
             return TranslationWorkerResult(output=payload, usage=TranslationUsage())
         raise TypeError(f"Unsupported translation worker payload: {type(payload)!r}")
+
+
+def _merge_usage(first: TranslationUsage, second: TranslationUsage) -> TranslationUsage:
+    """Sum the usage of a rejected call and its repair call; provider fields come from the last call."""
+    cost = None
+    if first.cost_usd is not None or second.cost_usd is not None:
+        cost = float(first.cost_usd or 0.0) + float(second.cost_usd or 0.0)
+    return TranslationUsage(
+        token_in=int(first.token_in or 0) + int(second.token_in or 0),
+        token_out=int(first.token_out or 0) + int(second.token_out or 0),
+        total_tokens=int(first.total_tokens or 0) + int(second.total_tokens or 0),
+        latency_ms=int(first.latency_ms or 0) + int(second.latency_ms or 0),
+        cost_usd=cost,
+        provider_request_id=second.provider_request_id or first.provider_request_id,
+        raw_usage={**second.raw_usage, "merged_calls": int(first.raw_usage.get("merged_calls", 1)) + 1},
+    )
 
 
 @dataclass(slots=True)
