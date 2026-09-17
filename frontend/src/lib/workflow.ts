@@ -34,6 +34,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     description: "导入源文件并完成章节切分。",
   },
   {
+    key: "terminology",
+    label: "术语与 BOOK.md",
+    description: "术语代理确定全书术语表与翻译决策，例外项等待审批。",
+  },
+  {
     key: "translate",
     label: "全文翻译",
     description: "逐 packet 产出中文译文并写回进度。",
@@ -82,6 +87,8 @@ const STATUS_LABELS: Record<string, string> = {
   running: "进行中",
   draining: "收尾中",
   succeeded: "已完成",
+  succeeded_with_warnings: "已完成（有警告）",
+  awaiting_approval: "等待审批",
   partial: "部分完成",
   failed: "失败",
   retryable_failed: "待重试",

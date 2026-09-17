@@ -404,6 +404,12 @@ export interface RunControlPayload {
   detail_json?: Record<string, unknown>;
 }
 
+export type Approval = Generated.ApprovalResponse;
+export type ApprovalDecision = Generated.ApprovalDecisionRequest;
+export type BookGuide = Generated.BookGuideResponse;
+export type Decision = Generated.DecisionResponse;
+export type AgentTurn = Generated.AgentTurnResponse;
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
 
 export const SERVICE_LINKS = {
@@ -805,4 +811,32 @@ export async function downloadChapterExport(
     )}/exports/download?export_type=bilingual_html`
   );
   return saveBinaryResponse(response, `${chapterId}-bilingual_html.zip`);
+}
+
+export async function listApprovals(documentId: string, status: "pending" | "all" = "pending"): Promise<Approval[]> {
+  return requestJson<Approval[]>(`/documents/${documentId}/approvals?status=${status}`);
+}
+
+export async function decideApproval(
+  approvalId: string,
+  approved: boolean,
+  payload: ApprovalDecision,
+): Promise<Approval> {
+  return requestJson<Approval>(`/approvals/${approvalId}/${approved ? "approve" : "reject"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getBookGuide(documentId: string): Promise<BookGuide> {
+  return requestJson<BookGuide>(`/documents/${documentId}/book-guide`);
+}
+
+export async function listDecisions(documentId: string): Promise<Decision[]> {
+  return requestJson<Decision[]>(`/documents/${documentId}/decisions`);
+}
+
+export async function listAgentTurns(documentId: string): Promise<AgentTurn[]> {
+  return requestJson<AgentTurn[]>(`/documents/${documentId}/agent-turns`);
 }
