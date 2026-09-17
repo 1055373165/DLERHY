@@ -351,6 +351,7 @@ class TranslationService:
             correlation_id=prepared.correlation_id,
             payload={
                 "call_id": prepared.call_id,
+                "call_kind": "translate",
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "sentence_count": len(bundle.current_sentences),
@@ -394,6 +395,7 @@ class TranslationService:
             correlation_id=prepared.correlation_id,
             payload={
                 "call_id": prepared.call_id,
+                "call_kind": "translate",
                 "backend": metadata.worker_name,
                 "model": metadata.model_name,
                 "error_class": type(exc).__name__,
@@ -434,6 +436,7 @@ class TranslationService:
             correlation_id=prepared.correlation_id,
             payload={
                 "call_id": prepared.call_id,
+                "call_kind": "translate",
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "token_in": int(_usage.token_in or 0),

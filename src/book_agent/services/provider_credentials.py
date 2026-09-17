@@ -18,6 +18,8 @@ from book_agent.core.config import Settings
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
 from book_agent.domain.models.provider_credential import ProviderCredential
 from book_agent.services.secrets import decrypt_secret, encrypt_secret
+from book_agent.translation.contracts import TranslationUsage
+from book_agent.workers.llm_calls import CALL_KIND_PROVIDER_TEST, observed_llm_call, record_llm_usage
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderHTTPError,
@@ -37,6 +39,11 @@ class TestOutcome:
     message: str | None
     elapsed_ms: int | None
     sample_output: str | None
+    # Set when a network round-trip happened, so the smoke test is billed like
+    # every other model call once the outcome is recorded.
+    usage: TranslationUsage | None = None
+    error: Exception | None = None
+    model_name: str | None = None
 
 
 def list_credentials(session: Session) -> list[ProviderCredential]:
@@ -177,8 +184,29 @@ def record_test_outcome(
     record.last_test_status = outcome.status
     record.last_test_at = datetime.now(timezone.utc)
     record.last_test_message = outcome.message
+    _record_test_call(session, record, outcome)
     session.flush()
     return record
+
+
+def _record_test_call(session: Session, record: ProviderCredential, outcome: TestOutcome) -> None:
+    if outcome.usage is None and outcome.error is None:
+        return
+    model = outcome.model_name or record.model_name
+    payload = {"credential_id": record.id, "credential_name": record.name}
+    if outcome.error is not None:
+        try:
+            with observed_llm_call(session, call_kind=CALL_KIND_PROVIDER_TEST, model=model, payload=payload):
+                raise outcome.error
+        except Exception:
+            return
+    record_llm_usage(
+        session,
+        call_kind=CALL_KIND_PROVIDER_TEST,
+        model=model,
+        usage=outcome.usage,
+        payload=payload,
+    )
 
 
 def api_key_preview(record: ProviderCredential) -> str | None:
@@ -226,7 +254,7 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
         "properties": {"translation": {"type": "string"}},
     }
     try:
-        payload, _usage = client.generate_structured_object(
+        payload, usage = client.generate_structured_object(
             model_name=record.model_name,
             system_prompt=(
                 "You are a translation engine. Reply with a JSON object that has "
@@ -244,6 +272,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             message=f"HTTP {exc.code}: {exc.detail[:200]}",
             elapsed_ms=elapsed,
             sample_output=None,
+            error=exc,
+            model_name=record.model_name,
         )
     except ProviderNetworkError as exc:
         elapsed = int((time.perf_counter() - started) * 1000)
@@ -252,6 +282,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             message=f"Network error: {exc.reason}",
             elapsed_ms=elapsed,
             sample_output=None,
+            error=exc,
+            model_name=record.model_name,
         )
     except ProviderTransportError as exc:
         elapsed = int((time.perf_counter() - started) * 1000)
@@ -260,6 +292,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             message=f"Transport error: {exc}",
             elapsed_ms=elapsed,
             sample_output=None,
+            error=exc,
+            model_name=record.model_name,
         )
     except RuntimeError as exc:
         # Network round-trip succeeded but parsing failed. Surface as "ok"
@@ -271,6 +305,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             message=f"connected, response parse warning: {str(exc)[:120]}",
             elapsed_ms=elapsed,
             sample_output=None,
+            error=exc,
+            model_name=record.model_name,
         )
     except Exception as exc:  # pragma: no cover - defensive: any wrapper bug
         elapsed = int((time.perf_counter() - started) * 1000)
@@ -279,6 +315,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             message=f"{type(exc).__name__}: {str(exc)[:200]}",
             elapsed_ms=elapsed,
             sample_output=None,
+            error=exc,
+            model_name=record.model_name,
         )
     elapsed = int((time.perf_counter() - started) * 1000)
     translation = payload.get("translation") if isinstance(payload, dict) else None
@@ -288,6 +326,8 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
         message="connection ok",
         elapsed_ms=elapsed,
         sample_output=sample,
+        usage=usage,
+        model_name=record.model_name,
     )
 
 

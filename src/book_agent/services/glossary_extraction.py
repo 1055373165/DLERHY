@@ -32,6 +32,8 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.workers.llm_calls import CALL_KIND_GLOSSARY_EXTRACT, observed_llm_call
+
 from book_agent.domain.enums import BlockType, TargetSegmentStatus, TermType
 from book_agent.domain.models import Block, Chapter, Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
@@ -246,13 +248,21 @@ class GlossaryExtractionService:
             source_texts.extend(chapter_texts)
             for chunk in chunk_texts(chapter_texts, max_chars=max_chunk_chars):
                 chunk_count += 1
-                payload, usage = self.client.generate_structured_object(
-                    model_name=self.model_name,
-                    system_prompt=GLOSSARY_EXTRACTION_SYSTEM_PROMPT,
-                    user_prompt=f"Chapter: {chapter.title_src or ''}\n\nExcerpt:\n{chunk}",
-                    response_schema=GLOSSARY_EXTRACTION_RESPONSE_SCHEMA,
-                    schema_name="glossary_extraction",
-                )
+                with observed_llm_call(
+                    self.session,
+                    call_kind=CALL_KIND_GLOSSARY_EXTRACT,
+                    model=self.model_name,
+                    chapter_id=chapter.id,
+                    payload={"document_id": document_id, "chunk_index": chunk_count},
+                ) as call:
+                    payload, usage = self.client.generate_structured_object(
+                        model_name=self.model_name,
+                        system_prompt=GLOSSARY_EXTRACTION_SYSTEM_PROMPT,
+                        user_prompt=f"Chapter: {chapter.title_src or ''}\n\nExcerpt:\n{chunk}",
+                        response_schema=GLOSSARY_EXTRACTION_RESPONSE_SCHEMA,
+                        schema_name="glossary_extraction",
+                    )
+                    call.complete(usage)
                 token_in += int(getattr(usage, "token_in", 0) or 0)
                 token_out += int(getattr(usage, "token_out", 0) or 0)
                 for item in payload.get("terms") or []:

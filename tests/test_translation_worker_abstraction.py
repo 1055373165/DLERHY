@@ -5,10 +5,10 @@ import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timezone
-from http.client import IncompleteRead
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 from sqlalchemy import select
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +64,7 @@ from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderNetworkError,
-    UrllibJSONTransport,
+    HttpxJSONTransport,
 )
 from book_agent.workers.translator import (
     LLMTranslationWorker,
@@ -2553,113 +2553,63 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(call["payload"]["response_format"]["type"], "json_object")
         self.assertEqual(call["payload"]["max_tokens"], 8192)
 
-    def test_openai_compatible_client_retries_after_incomplete_read_in_live_transport(self) -> None:
-        class StubHTTPResponse:
-            def __init__(self, *, payload: bytes | None = None, read_exc: Exception | None = None) -> None:
-                self.payload = payload
-                self.read_exc = read_exc
-
-            def __enter__(self) -> "StubHTTPResponse":
-                return self
-
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-            def read(self) -> bytes:
-                if self.read_exc is not None:
-                    raise self.read_exc
-                return self.payload or b""
-
-        client = OpenAICompatibleTranslationClient(
+    def _retrying_chat_client(self, handler) -> OpenAICompatibleTranslationClient:
+        transport = HttpxJSONTransport(client=httpx.Client(transport=httpx.MockTransport(handler)))
+        return OpenAICompatibleTranslationClient(
             api_key="test-key",
             base_url="https://api.deepseek.com",
             timeout_seconds=45,
             max_retries=1,
             retry_backoff_seconds=0,
-            transport=UrllibJSONTransport(),
+            transport=transport,
+            sleep=lambda _seconds: None,
         )
 
-        with patch(
-            "book_agent.workers.providers.openai_compatible.urlopen",
-            side_effect=[
-                StubHTTPResponse(read_exc=IncompleteRead(b"")),
-                StubHTTPResponse(
-                    payload=(
-                        '{"id":"chatcmpl_retry_123",'
-                        '"usage":{"prompt_tokens":88,"completion_tokens":22,"total_tokens":110},'
-                        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
-                    ).encode("utf-8")
-                ),
-            ],
-        ) as mocked_urlopen:
-            output = client.generate_translation(
-                TranslationPromptRequest(
-                    packet_id="pkt_1",
-                    model_name="deepseek-chat",
-                    prompt_version="p0.llm.v1",
-                    system_prompt="system",
-                    user_prompt="user",
-                    response_schema=TranslationWorkerOutput.model_json_schema(),
-                )
-            )
+    _RETRY_OK_BODY = (
+        '{"id":"chatcmpl_retry_123",'
+        '"usage":{"prompt_tokens":88,"completion_tokens":22,"total_tokens":110},'
+        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
+    )
+
+    def _retry_request(self) -> TranslationPromptRequest:
+        return TranslationPromptRequest(
+            packet_id="pkt_1",
+            model_name="deepseek-chat",
+            prompt_version="p0.llm.v1",
+            system_prompt="system",
+            user_prompt="user",
+            response_schema=TranslationWorkerOutput.model_json_schema(),
+        )
+
+    def test_openai_compatible_client_retries_after_truncated_response(self) -> None:
+        calls: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+            return httpx.Response(200, content=self._RETRY_OK_BODY.encode("utf-8"))
+
+        output = self._retrying_chat_client(handler).generate_translation(self._retry_request())
 
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
-        self.assertEqual(mocked_urlopen.call_count, 2)
+        self.assertEqual(len(calls), 2)
 
-    def test_openai_compatible_client_retries_after_timeout_during_response_read(self) -> None:
-        class StubHTTPResponse:
-            def __init__(self, *, payload: bytes | None = None, read_exc: Exception | None = None) -> None:
-                self.payload = payload
-                self.read_exc = read_exc
+    def test_openai_compatible_client_retries_after_read_timeout(self) -> None:
+        calls: list[int] = []
 
-            def __enter__(self) -> "StubHTTPResponse":
-                return self
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.ReadTimeout("The read operation timed out")
+            return httpx.Response(200, content=self._RETRY_OK_BODY.encode("utf-8"))
 
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-            def read(self) -> bytes:
-                if self.read_exc is not None:
-                    raise self.read_exc
-                return self.payload or b""
-
-        client = OpenAICompatibleTranslationClient(
-            api_key="test-key",
-            base_url="https://api.deepseek.com",
-            timeout_seconds=45,
-            max_retries=1,
-            retry_backoff_seconds=0,
-            transport=UrllibJSONTransport(),
-        )
-
-        with patch(
-            "book_agent.workers.providers.openai_compatible.urlopen",
-            side_effect=[
-                StubHTTPResponse(read_exc=TimeoutError("The read operation timed out")),
-                StubHTTPResponse(
-                    payload=(
-                        '{"id":"chatcmpl_retry_timeout_123",'
-                        '"usage":{"prompt_tokens":77,"completion_tokens":19,"total_tokens":96},'
-                        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
-                    ).encode("utf-8")
-                ),
-            ],
-        ) as mocked_urlopen:
-            output = client.generate_translation(
-                TranslationPromptRequest(
-                    packet_id="pkt_1",
-                    model_name="deepseek-chat",
-                    prompt_version="p0.llm.v1",
-                    system_prompt="system",
-                    user_prompt="user",
-                    response_schema=TranslationWorkerOutput.model_json_schema(),
-                )
-            )
+        output = self._retrying_chat_client(handler).generate_translation(self._retry_request())
 
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
-        self.assertEqual(mocked_urlopen.call_count, 2)
+        self.assertEqual(len(calls), 2)
 
     def test_openai_compatible_client_preserves_provider_network_error_type(self) -> None:
         client = OpenAICompatibleTranslationClient(

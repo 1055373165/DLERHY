@@ -34,6 +34,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.workers.llm_calls import CALL_KIND_TERM_SURVEY, observed_llm_call
+
 from book_agent.domain.enums import LockLevel, TargetSegmentStatus, TermType
 from book_agent.domain.event_kinds import GLOSSARY_UPDATED
 from book_agent.domain.models import Sentence
@@ -437,13 +439,20 @@ class TermConsistencyService:
         return len(changes)
 
     def _call(self, system_prompt: str, user_prompt: str, schema: dict[str, Any], schema_name: str) -> dict[str, Any]:
-        payload, usage = self.client.generate_structured_object(
-            model_name=self.model_name,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=schema,
-            schema_name=schema_name,
-        )
+        with observed_llm_call(
+            self.session,
+            call_kind=CALL_KIND_TERM_SURVEY,
+            model=self.model_name,
+            payload={"schema_name": schema_name},
+        ) as call:
+            payload, usage = self.client.generate_structured_object(
+                model_name=self.model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_schema=schema,
+                schema_name=schema_name,
+            )
+            call.complete(usage)
         self._token_in += int(getattr(usage, "token_in", 0) or 0)
         self._token_out += int(getattr(usage, "token_out", 0) or 0)
         return payload if isinstance(payload, dict) else {}

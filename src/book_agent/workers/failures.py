@@ -15,9 +15,8 @@ from book_agent.workers.providers.openai_compatible import (
     ProviderHTTPError,
     ProviderResponseFormatError,
     ProviderTransportError,
+    is_retryable_http_status,
 )
-
-_RETRYABLE_HTTP_CODES = frozenset({408, 409, 425, 429})
 
 
 class FailureDisposition(StrEnum):
@@ -67,6 +66,6 @@ def _classify_http_error(exc: ProviderHTTPError) -> FailureClassification:
             f"provider.http_{code}",
             pause_reason="provider.authentication_failed",
         )
-    if code in _RETRYABLE_HTTP_CODES or 500 <= code <= 599:
+    if is_retryable_http_status(code):
         return FailureClassification(FailureDisposition.RETRY, f"provider.http_{code}")
     return FailureClassification(FailureDisposition.FAIL, f"provider.http_{code}")

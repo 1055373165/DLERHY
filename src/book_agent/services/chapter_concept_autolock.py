@@ -16,6 +16,7 @@ from book_agent.services.chapter_concept_lock import (
     ChapterConceptLockService,
 )
 from book_agent.translation.contracts import TranslationUsage
+from book_agent.workers.llm_calls import CALL_KIND_CONCEPT_RESOLVE, record_llm_usage
 from book_agent.workers.providers import OpenAICompatibleTranslationClient
 
 logger = logging.getLogger(__name__)
@@ -452,6 +453,15 @@ class ChapterConceptAutoLockService:
                     else None,
                     examples=examples,
                 )
+            if usage is not None:
+                record_llm_usage(
+                    self.session,
+                    call_kind=CALL_KIND_CONCEPT_RESOLVE,
+                    model=self._resolver_model_name(),
+                    usage=usage,
+                    chapter_id=chapter_id,
+                    payload={"source_term": source_term},
+                )
             if resolution is None or not resolution.canonical_zh:
                 skipped_source_terms.append(source_term)
                 continue
@@ -469,6 +479,14 @@ class ChapterConceptAutoLockService:
             locked_records=locked_records,
             skipped_source_terms=skipped_source_terms,
         )
+
+    def _resolver_model_name(self) -> str:
+        resolver = self.resolver
+        for candidate in (resolver, *getattr(resolver, "resolvers", ())):
+            model_name = getattr(candidate, "model_name", None)
+            if isinstance(model_name, str) and model_name:
+                return model_name
+        return "unknown"
 
     def _candidate_source_terms(
         self,
