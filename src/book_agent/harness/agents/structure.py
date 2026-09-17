@@ -8,11 +8,10 @@ type, a missed or false heading, text wrongly merged or split, a caption
 linked to the wrong artifact, reading order.
 
 With the run request ``structure_edits=on`` it also gets ``relabel_block``,
-``merge_blocks`` and ``link_caption``. They are irreversible-tier tools: the
+``split_block``, ``merge_blocks`` and ``link_caption``. They are irreversible-tier tools: the
 turn waits for a person to approve each call, which is then applied through
 ``services/structure_edits.py`` (a parse-revision fork that keeps
-translations) and logged for replay after later reparses. Splitting a block
-stays an issue for a person.
+translations) and logged for replay after later reparses.
 """
 
 from __future__ import annotations
@@ -273,6 +272,14 @@ class RelabelBlockArgs(BaseModel):
     reason: str = Field(min_length=1, description="What on the page shows this; a person reads it before approving.")
 
 
+class SplitBlockArgs(BaseModel):
+    block_id: str
+    second_part_starts_with: str = Field(
+        min_length=3, description="Exact text where the second block begins; it must occur once in the block, not at its start."
+    )
+    reason: str = Field(min_length=1)
+
+
 class MergeBlocksArgs(BaseModel):
     first_block_id: str
     second_block_id: str = Field(description="Must directly follow the first block, with the same type.")
@@ -305,6 +312,16 @@ def relabel_block(ctx: ToolContext, args: RelabelBlockArgs) -> dict[str, Any]:
     )
 
 
+def split_block(ctx: ToolContext, args: SplitBlockArgs) -> dict[str, Any]:
+    return _edit(
+        ctx,
+        lambda service: service.split_block(
+            ctx.document_id, args.block_id, args.second_part_starts_with,
+            actor_id=f"agent:{AGENT_KIND}", reason=args.reason, turn_id=ctx.turn_id,
+        ),
+    )
+
+
 def merge_blocks(ctx: ToolContext, args: MergeBlocksArgs) -> dict[str, Any]:
     return _edit(
         ctx,
@@ -325,14 +342,14 @@ def link_caption(ctx: ToolContext, args: LinkCaptionArgs) -> dict[str, Any]:
     )
 
 
-EDIT_TOOL_NAMES = ("relabel_block", "merge_blocks", "link_caption")
+EDIT_TOOL_NAMES = ("relabel_block", "split_block", "merge_blocks", "link_caption")
 
 EDIT_PROMPT = """
-You can also fix structure directly with relabel_block (wrong block type or heading level), merge_blocks (one
-paragraph or item cut into two adjacent blocks of the same type) and link_caption (a caption attached to the wrong
-artifact or to none). A person approves every edit before it is applied, so give a concrete reason from the page
+You can also fix structure directly with relabel_block (wrong block type or heading level), split_block (two
+paragraphs or items joined into one block), merge_blocks (one paragraph or item cut into two adjacent blocks of the
+same type) and link_caption (a caption attached to the wrong artifact or to none). A person approves every edit before it is applied, so give a concrete reason from the page
 image. Prefer an edit over report_structure_problem when one of these tools fixes the problem exactly; report
-everything else (e.g. a bad merge that needs a split, reading order, lost content)."""
+everything else (e.g. reading order, lost content)."""
 
 
 def structure_tool_registry(*, allow_edits: bool = False) -> ToolRegistry:
@@ -345,6 +362,7 @@ def structure_tool_registry(*, allow_edits: bool = False) -> ToolRegistry:
     if allow_edits:
         tools += [
             ToolSpec("relabel_block", "Change a block's type (and heading level). Needs approval.", RelabelBlockArgs, ToolPermission.WRITE_IRREVERSIBLE, relabel_block, max_calls_per_turn=200),
+            ToolSpec("split_block", "Split a block in two where the given text begins. Needs approval.", SplitBlockArgs, ToolPermission.WRITE_IRREVERSIBLE, split_block, max_calls_per_turn=200),
             ToolSpec("merge_blocks", "Merge a block into the block right before it. Needs approval.", MergeBlocksArgs, ToolPermission.WRITE_IRREVERSIBLE, merge_blocks, max_calls_per_turn=200),
             ToolSpec("link_caption", "Attach a caption to its figure, table or other artifact. Needs approval.", LinkCaptionArgs, ToolPermission.WRITE_IRREVERSIBLE, link_caption, max_calls_per_turn=200),
         ]

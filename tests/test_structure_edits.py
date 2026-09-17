@@ -34,9 +34,10 @@ from tests.test_translation_worker_abstraction import CONTAINER_XML, CONTENT_OPF
 FIRST = "The solution to this problem is"
 SECOND = "context engineering, which is a discipline."
 OTHER = "A separate paragraph about agents."
+JOINED = "Agents plan their work. Tools carry it out."
 
 
-def _chapter(second: str = SECOND) -> str:
+def _chapter(second: str = SECOND, joined: str = JOINED) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>
@@ -44,6 +45,7 @@ def _chapter(second: str = SECOND) -> str:
     <p>{FIRST}</p>
     <p>{second}</p>
     <p>{OTHER}</p>
+    <p>{joined}</p>
     <blockquote>Figure 1. The agent loop.</blockquote>
   </body>
 </html>
@@ -192,6 +194,61 @@ class StructureEditTests(unittest.TestCase):
             service.link_caption(self.document_id, caption_id, self.blocks[FIRST], actor_id="t", reason="r")
             session.commit()
             self.assertNotIn("linked_caption_block_id", session.get(Block, code_id).source_span_json)
+
+    def test_split_inserts_a_block_shifts_ordinals_and_carries_translations(self) -> None:
+        joined_id, quote_id = self.blocks[JOINED], self.blocks["Figure 1. The agent loop."]
+        with self.session_factory() as session:
+            before = {s.source_text: active_target_texts(session, [s.id])[s.id] for s in self._active_sentences(session, joined_id)}
+            quote_ordinal = session.get(Block, quote_id).ordinal
+            outcome = self._edit(session).split_block(self.document_id, joined_id, "Tools carry", actor_id="t", reason="two paragraphs")
+            session.commit()
+            new_id = outcome.block_ids[1]
+            original, new_block = session.get(Block, joined_id), session.get(Block, new_id)
+            self.assertEqual((original.source_text, new_block.source_text), ("Agents plan their work.", "Tools carry it out."))
+            self.assertEqual(new_block.ordinal, original.ordinal + 1)
+            self.assertEqual(session.get(Block, quote_id).ordinal, quote_ordinal + 1)
+            self.assertEqual(outcome.fork.relation_counts, {"same": 2})
+            self.assertEqual(outcome.fork.unpacketed_block_ids, [])
+            moved = self._active_sentences(session, new_id)
+            self.assertEqual([s.source_text for s in moved], ["Tools carry it out."])
+            self.assertEqual(active_target_texts(session, [moved[0].id])[moved[0].id], before["Tools carry it out."])
+            service = self._edit(session)
+            for marker, message in (("Agents plan", "after its start"), ("nowhere to be found", "after its start"), ("Ag", "at least")):
+                with self.assertRaisesRegex(StructureEditRejected, message):
+                    service.split_block(self.document_id, self.blocks[OTHER], marker, actor_id="t", reason="r")
+            with self.assertRaisesRegex(StructureEditRejected, "more than once"):
+                service.split_block(self.document_id, self.blocks[SECOND], "ine", actor_id="t", reason="r")
+
+    def test_refresh_keeps_a_split_and_parks_it_when_the_source_changes(self) -> None:
+        joined_id, quote_id = self.blocks[JOINED], self.blocks["Figure 1. The agent loop."]
+        with self.session_factory() as session:
+            outcome = self._edit(session).split_block(self.document_id, joined_id, "Tools carry", actor_id="t", reason="r")
+            session.commit()
+            new_id = outcome.block_ids[1]
+            sentence_ids = [s.id for s in self._active_sentences(session, joined_id) + self._active_sentences(session, new_id)]
+            quote_ordinal = session.get(Block, quote_id).ordinal
+        with self.session_factory() as session:
+            refreshed = DocumentWorkflowService(session, export_root=Path(self.tempdir.name) / "exports").refresh_epub_structure(self.document_id)
+            session.commit()
+            self.assertFalse(refreshed.parse_revision_fork.forked)
+            self.assertEqual(session.get(Block, joined_id).source_text, "Agents plan their work.")
+            self.assertEqual(session.get(Block, new_id).status, ArtifactStatus.ACTIVE)
+            self.assertEqual(session.get(Block, quote_id).ordinal, quote_ordinal)
+            self.assertEqual([s.id for s in self._active_sentences(session, joined_id) + self._active_sentences(session, new_id)], sentence_ids)
+            self.assertEqual(session.get(Block, quote_id).source_text, "Figure 1. The agent loop.")
+
+        self._write_epub(_chapter(joined="Agents plan their work carefully. Tools carry it out."))
+        with self.session_factory() as session:
+            DocumentWorkflowService(session, export_root=Path(self.tempdir.name) / "exports").refresh_epub_structure(self.document_id)
+            session.commit()
+            original, parked = session.get(Block, joined_id), session.get(Block, new_id)
+            self.assertEqual(original.source_text, "Agents plan their work carefully. Tools carry it out.")
+            self.assertEqual(parked.status, ArtifactStatus.INVALIDATED)
+            self.assertGreaterEqual(parked.ordinal, 1_000_000)
+            self.assertEqual(self._active_sentences(session, new_id), [])
+            self.assertEqual(session.get(Block, quote_id).ordinal, quote_ordinal - 1)
+            stale = [row.replay_of_edit_id for row in session.scalars(select(StructureEdit).where(StructureEdit.status == "stale"))]
+            self.assertEqual(stale, [outcome.edit_id])
 
     # --- replay -----------------------------------------------------------------------
 

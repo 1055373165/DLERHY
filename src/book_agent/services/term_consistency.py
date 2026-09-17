@@ -240,6 +240,7 @@ class TermConsistencyService:
         self._token_out = 0
 
     def run(self, document_id: str, *, apply: bool = True, min_segments: int = 2) -> TermConsistencyReport:
+        self._document_id = document_id
         # Touch the glossary before any provider call: a schema or database problem
         # must fail here, not after every provider call was paid for.
         GlossaryService(self.session).list_document_entries(document_id)
@@ -444,6 +445,7 @@ class TermConsistencyService:
             self.session,
             call_kind=CALL_KIND_TERM_SURVEY,
             model=self.model_name,
+            document_id=getattr(self, "_document_id", None),
             payload={"schema_name": schema_name},
         ) as call:
             payload, usage = self.client.generate_structured_object(

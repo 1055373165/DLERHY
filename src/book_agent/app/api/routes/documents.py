@@ -563,7 +563,7 @@ def create_structure_edit(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> StructureEditResponse:
-    """Relabel a block, merge a block into the one before it, or link a caption; sentences fork and packets rebuild."""
+    """Relabel or split a block, merge a block into the one before it, or link a caption; sentences fork and packets rebuild."""
     from book_agent.domain.models import StructureEdit
     from book_agent.services.structure_edits import StructureEditRejected, StructureEditService
 
@@ -585,6 +585,9 @@ def create_structure_edit(
             outcome = service.relabel_block(
                 document_id, block_id, block_type, heading_level=payload.heading_level, actor_id=actor_id, reason=payload.reason
             )
+        elif payload.kind == "split_block":
+            block_id, marker = required("block_id", "second_part_starts_with")
+            outcome = service.split_block(document_id, block_id, marker, actor_id=actor_id, reason=payload.reason)
         elif payload.kind == "merge_blocks":
             first, second = required("first_block_id", "second_block_id")
             outcome = service.merge_blocks(document_id, first, second, actor_id=actor_id, reason=payload.reason)

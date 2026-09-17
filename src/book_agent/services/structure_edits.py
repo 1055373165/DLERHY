@@ -1,4 +1,4 @@
-"""Block-level structure edits: relabel a block, merge two adjacent blocks, link a caption to its artifact.
+"""Block-level structure edits: relabel, split, merge two adjacent blocks, link a caption to its artifact.
 
 Edits change the active blocks in place and then run the parse-revision fork
 on the blocks involved, so sentences are re-segmented with lineage, packets
@@ -12,18 +12,22 @@ exactly as they were when it was first applied is applied again (so the
 fork sees no change and keeps translations); an edit whose blocks changed is
 logged as stale and left for a person or the Structure Agent.
 
-Splitting a block is not offered: refresh matches blocks by ordinal, and
-inserting a block would shift every later ordinal in the chapter.
+A split inserts the second part as a new block right after the original and
+shifts the later ordinals of the chapter by one. EPUB refresh matches blocks
+by ordinal, so ``prepare_for_refresh`` parks split-off blocks outside the
+ordinal range, restores the original text and compacts the ordinals before a
+refresh; ``replay`` then splits again.
 """
 
 from __future__ import annotations
 
 import hashlib
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.block_rules import protected_policy_for_block
@@ -34,7 +38,13 @@ from book_agent.domain.structure.sentence_alignment import normalize_sentence
 from book_agent.services.parse_revision_fork import ForkResult, ParseRevisionForkService
 
 RELABEL = "relabel_block"
+SPLIT = "split_block"
 MERGE = "merge_blocks"
+# Split-off blocks waiting for replay live above every real ordinal.
+PARKED_ORDINAL_BASE = 1_000_000
+_ORDINAL_SHIFT_OFFSET = 2_000_000
+SPLIT_OF_KEY = "structure_split_of"
+MIN_SPLIT_MARKER = 3
 LINK_CAPTION = "link_caption"
 
 # Types an edit may give or take away. Tables, figures and images carry extracted artifacts
@@ -164,6 +174,43 @@ class StructureEditService:
             turn_id=turn_id,
         )
         return EditOutcome(edit_id=edit.id, kind=RELABEL, block_ids=[block.id], fork=fork)
+
+    def split_block(
+        self,
+        document_id: str,
+        block_id: str,
+        second_part_starts_with: str,
+        *,
+        actor_id: str,
+        reason: str,
+        turn_id: str | None = None,
+    ) -> EditOutcome:
+        block = self._active_block(document_id, block_id)
+        if block.block_type not in MERGEABLE_TYPES:
+            raise StructureEditRejected(
+                "only " + ", ".join(sorted(t.value for t in MERGEABLE_TYPES)) + f" blocks can be split, not {block.block_type.value}"
+            )
+        self._split_point(block.source_text, second_part_starts_with)
+        snapshot = [_snapshot(block)]
+        text_before = block.source_text
+        new_block = self._apply_split(block, second_part_starts_with, str(uuid.uuid4()))
+        fork = self._fork(document_id, [block.id, new_block.id], reason=f"structure edit: split {block.id}", actor_id=actor_id)
+        edit = self._log(
+            document_id,
+            SPLIT,
+            {
+                "block_id": block.id,
+                "second_part_starts_with": second_part_starts_with,
+                "new_block_id": new_block.id,
+                "text_before": text_before,
+            },
+            snapshot,
+            fork=fork,
+            actor_id=actor_id,
+            reason=reason,
+            turn_id=turn_id,
+        )
+        return EditOutcome(edit_id=edit.id, kind=SPLIT, block_ids=[block.id, new_block.id], fork=fork)
 
     def merge_blocks(
         self,
@@ -301,6 +348,23 @@ class StructureEditService:
                 return "stale", []
             self._apply_relabel(block, new_type, level)
             return "reapplied", [block.id]
+        if edit.kind == SPLIT:
+            block = blocks[args["block_id"]]
+            split_off = self.session.get(Block, args["new_block_id"])
+            if split_off is not None and split_off.status == ArtifactStatus.ACTIVE and split_off.ordinal < PARKED_ORDINAL_BASE:
+                return None
+            if (
+                split_off is None
+                or block.status != ArtifactStatus.ACTIVE
+                or _fingerprint(block.source_text) != before[block.id]["text_sha1"]
+            ):
+                return "stale", []
+            try:
+                self._split_point(block.source_text, args["second_part_starts_with"])
+            except StructureEditRejected:
+                return "stale", []
+            self._apply_split(block, args["second_part_starts_with"], split_off.id)
+            return "reapplied", [block.id, split_off.id]
         if edit.kind == MERGE:
             first, second = blocks[args["first_block_id"]], blocks[args["second_block_id"]]
             if (
@@ -339,7 +403,171 @@ class StructureEditService:
             return "reapplied", []
         return "stale", []
 
+    def prepare_for_refresh(self, document_id: str) -> list[str]:
+        """Undo splits before a structure refresh so blocks line up with the parser's ordinals.
+
+        Split-off blocks are parked (invalidated, ordinal above every real
+        one), originals get their pre-split text back and ordinals are
+        compacted. ``replay`` after the refresh splits again when the parser
+        returns the same text. Returns the chapters touched.
+        """
+        split_edits = list(
+            self.session.scalars(
+                select(StructureEdit)
+                .where(
+                    StructureEdit.document_id == document_id,
+                    StructureEdit.kind == SPLIT,
+                    StructureEdit.replay_of_edit_id.is_(None),
+                )
+                .order_by(StructureEdit.created_at, StructureEdit.id)
+            ).all()
+        )
+        touched: list[str] = []
+        now = _utcnow()
+        # Newest splits first, so a block split twice gets its text back in the right order.
+        for edit in reversed(split_edits):
+            args = edit.args_json or {}
+            split_off = self.session.get(Block, args.get("new_block_id")) if args.get("new_block_id") else None
+            if split_off is None or split_off.status != ArtifactStatus.ACTIVE or split_off.ordinal >= PARKED_ORDINAL_BASE:
+                continue
+            original = self.session.get(Block, args.get("block_id"))
+            if original is not None and original.status == ArtifactStatus.ACTIVE:
+                expected_first = self._split_parts(args["text_before"], args["second_part_starts_with"])[0]
+                if normalize_sentence(original.source_text) == normalize_sentence(expected_first):
+                    original.source_text = args["text_before"]
+                    original.normalized_text = " ".join(args["text_before"].split())
+                    original.updated_at = now
+                self._move_packet_bounds(split_off, original)
+            parked = self.session.scalar(
+                select(func.count(Block.id)).where(
+                    Block.chapter_id == split_off.chapter_id, Block.ordinal >= PARKED_ORDINAL_BASE
+                )
+            ) or 0
+            split_off.ordinal = PARKED_ORDINAL_BASE + int(parked) + 1
+            split_off.status = ArtifactStatus.INVALIDATED
+            split_off.updated_at = now
+            self.session.flush()
+            touched.append(split_off.chapter_id)
+        for chapter_id in dict.fromkeys(touched):
+            self._compact_ordinals(chapter_id)
+        return list(dict.fromkeys(touched))
+
     # --- helpers ----------------------------------------------------------------------
+
+    @staticmethod
+    def _split_parts(text: str, marker: str) -> tuple[str, str]:
+        index = (text or "").find(marker)
+        return (text[:index].rstrip(), text[index:].lstrip()) if index > 0 else (text, "")
+
+    def _split_point(self, text: str, marker: str) -> int:
+        if len((marker or "").strip()) < MIN_SPLIT_MARKER:
+            raise StructureEditRejected(f"second_part_starts_with needs at least {MIN_SPLIT_MARKER} characters")
+        index = (text or "").find(marker)
+        if index <= 0:
+            raise StructureEditRejected("second_part_starts_with must occur in the block text after its start")
+        if text.find(marker, index + 1) != -1:
+            raise StructureEditRejected("second_part_starts_with occurs more than once; quote a longer piece")
+        first, second = self._split_parts(text, marker)
+        if not first or not second:
+            raise StructureEditRejected("both parts of the split must have text")
+        return index
+
+    def _set_ordinals(self, moves: list[tuple[Block, int]]) -> None:
+        """Renumber blocks without tripping the (chapter, ordinal) unique constraint."""
+        if not moves:
+            return
+        for block, _ in moves:
+            block.ordinal = block.ordinal + _ORDINAL_SHIFT_OFFSET
+        self.session.flush()
+        for block, ordinal in moves:
+            block.ordinal = ordinal
+        self.session.flush()
+
+    def _compact_ordinals(self, chapter_id: str) -> None:
+        blocks = list(
+            self.session.scalars(
+                select(Block)
+                .where(Block.chapter_id == chapter_id, Block.ordinal < PARKED_ORDINAL_BASE)
+                .order_by(Block.ordinal)
+            ).all()
+        )
+        self._set_ordinals([(block, index) for index, block in enumerate(blocks, start=1) if block.ordinal != index])
+
+    def _move_packet_bounds(self, from_block: Block, to_block: Block) -> None:
+        for packet in self.session.scalars(
+            select(TranslationPacket).where(
+                TranslationPacket.chapter_id == from_block.chapter_id,
+                (TranslationPacket.block_start_id == from_block.id) | (TranslationPacket.block_end_id == from_block.id),
+            )
+        ).all():
+            if packet.block_start_id == from_block.id:
+                packet.block_start_id = to_block.id
+            if packet.block_end_id == from_block.id:
+                packet.block_end_id = to_block.id
+            packet.updated_at = _utcnow()
+
+    def _apply_split(self, block: Block, marker: str, new_block_id: str) -> Block:
+        now = _utcnow()
+        first, second = self._split_parts(block.source_text, marker)
+        later = list(
+            self.session.scalars(
+                select(Block)
+                .where(
+                    Block.chapter_id == block.chapter_id,
+                    Block.ordinal > block.ordinal,
+                    Block.ordinal < PARKED_ORDINAL_BASE,
+                )
+                .order_by(Block.ordinal)
+            ).all()
+        )
+        self._set_ordinals([(item, item.ordinal + 1) for item in later])
+        span = dict(block.source_span_json or {})
+        split_off = self.session.get(Block, new_block_id)
+        if split_off is None:
+            kept = {"source_path", "source_page_start", "source_page_end", "source_bbox_json", "pdf_page_family", "heading_level"}
+            split_off = Block(
+                id=new_block_id,
+                chapter_id=block.chapter_id,
+                ordinal=block.ordinal + 1,
+                block_type=block.block_type,
+                parse_revision_id=block.parse_revision_id,
+                source_text=second,
+                normalized_text=" ".join(second.split()),
+                source_anchor=f"{block.source_anchor or block.id}::split",
+                source_span_json={key: value for key, value in span.items() if key in kept} | {SPLIT_OF_KEY: block.id},
+                parse_confidence=block.parse_confidence,
+                protected_policy=block.protected_policy,
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(split_off)
+        else:
+            split_off.ordinal = block.ordinal + 1
+            split_off.block_type = block.block_type
+            split_off.source_text = second
+            split_off.normalized_text = " ".join(second.split())
+            split_off.protected_policy = block.protected_policy
+            split_off.status = ArtifactStatus.ACTIVE
+            split_off.updated_at = now
+        block.source_text = first
+        block.normalized_text = " ".join(first.split())
+        block.source_span_json = {
+            **span,
+            "structure_split_block_ids": list(dict.fromkeys([*span.get("structure_split_block_ids", []), new_block_id])),
+        }
+        block.updated_at = now
+        self.session.flush()
+        # The new block belongs to the packet that ended with the original.
+        for packet in self.session.scalars(
+            select(TranslationPacket).where(
+                TranslationPacket.chapter_id == block.chapter_id, TranslationPacket.block_end_id == block.id
+            )
+        ).all():
+            packet.block_end_id = split_off.id
+            packet.updated_at = now
+        self.session.flush()
+        return split_off
 
     def _active_block(self, document_id: str, block_id: str) -> Block:
         block = self.session.get(Block, block_id)

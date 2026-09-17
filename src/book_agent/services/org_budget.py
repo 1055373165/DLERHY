@@ -1,10 +1,11 @@
 """Monthly model-spend budgets per organisation.
 
-Spend is the cost of ``llm.call.completed`` events attributed to the
-organisation's runs since the start of the calendar month (UTC), the same
-ledger run budgets and the cost endpoint read. Model calls made outside a
-run (synchronous API actions, provider smoke tests) are not attributed to an
-organisation and do not count.
+Spend is the cost of ``llm.call.completed`` events of the organisation since
+the start of the calendar month (UTC), the same ledger run budgets and the
+cost endpoint read. Events carry their organisation (``emit_event`` resolves
+it from the run, packet, chapter or document), so calls made outside a run
+(synchronous API actions, glossary tools) count too, and a provider smoke
+test counts for the organisation that owns the credential.
 
 With a budget set and exhausted, runs of the organisation cannot be started,
 resumed or retried, and running ones are paused by the executor
@@ -20,12 +21,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Document
-from book_agent.domain.models.auth import Org
+from book_agent.domain.models.auth import DEFAULT_ORG_ID, Org
 from book_agent.domain.models.ops import DocumentRun, Event
 
 STOP_REASON = "budget.org_monthly_exhausted"
@@ -75,30 +76,19 @@ def budget_status(session: Session, org_id: str, *, now: datetime | None = None)
     if org is None:
         raise LookupError("organisation not found")
     start = month_start(now)
-    run_ids = [
-        str(run_id)
-        for run_id in session.scalars(
-            select(DocumentRun.id)
-            .join(Document, Document.id == DocumentRun.document_id)
-            .where(
-                Document.org_id == org_id,
-                # Runs that finished before the month cannot have spent in it.
-                or_(DocumentRun.finished_at.is_(None), DocumentRun.finished_at >= start),
+    # Events carry the owning organisation (resolved from their run, packet, chapter or document);
+    # rows written before that used the literal "default" for the default organisation.
+    org_keys = [org_id, "default"] if org_id == DEFAULT_ORG_ID else [org_id]
+    spent = float(
+        session.scalar(
+            select(func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)).where(
+                Event.kind == LLM_CALL_COMPLETED,
+                Event.org_id.in_(org_keys),
+                Event.occurred_at >= start,
             )
         )
-    ]
-    spent = 0.0
-    if run_ids:
-        spent = float(
-            session.scalar(
-                select(func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)).where(
-                    Event.kind == LLM_CALL_COMPLETED,
-                    Event.run_id.in_(run_ids),
-                    Event.occurred_at >= start,
-                )
-            )
-            or 0.0
-        )
+        or 0.0
+    )
     budget = org.monthly_budget_usd
     return OrgBudgetStatus(
         org_id=str(org.id),

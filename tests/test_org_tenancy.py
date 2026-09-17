@@ -233,6 +233,36 @@ class BudgetEnforcementTests(_Db):
             status = org_budget.budget_status(session, self.other_org_id)
         self.assertEqual((status.spent_usd, status.remaining_usd, status.exhausted), (2.0, 1.0, False))
 
+    def test_calls_outside_runs_count_for_the_owning_organisation(self) -> None:
+        from sqlalchemy import select
+
+        from book_agent.domain.models.ops import Event
+        from book_agent.domain.models.provider_credential import ProviderCredential
+        from book_agent.services.provider_credentials import TestOutcome, _record_test_call
+        from book_agent.domain.enums import ProviderTestStatus
+        from book_agent.translation.contracts import TranslationUsage
+        from book_agent.workers.llm_calls import record_llm_usage
+
+        document_id = self._document(self.other_org_id)
+        with self.session_factory() as session:
+            # A synchronous glossary call: no run, only the document.
+            record_llm_usage(session, call_kind="glossary.extract", model="m", usage=TranslationUsage(cost_usd=0.5), document_id=document_id)
+            # A smoke test of the organisation's own credential.
+            credential = _echo(session, "acme", "acme-model", scope=self.other_org_id)
+            _record_test_call(
+                session,
+                credential,
+                TestOutcome(status=ProviderTestStatus.OK, message="ok", elapsed_ms=1, sample_output=None, usage=TranslationUsage(cost_usd=0.25)),
+            )
+            # A call about nothing in particular belongs to the default organisation.
+            record_llm_usage(session, call_kind="glossary.extract", model="m", usage=TranslationUsage(cost_usd=4.0))
+            session.commit()
+            org_ids = [event.org_id for event in session.scalars(select(Event).order_by(Event.id))]
+            self.assertEqual(org_ids, [self.other_org_id, self.other_org_id, DEFAULT_ORG_ID])
+            self.assertIsInstance(session.get(ProviderCredential, credential.id), ProviderCredential)
+            self.assertEqual(org_budget.budget_status(session, self.other_org_id).spent_usd, 0.75)
+            self.assertEqual(org_budget.budget_status(session, DEFAULT_ORG_ID).spent_usd, 4.0)
+
     def test_running_runs_pause_once_the_budget_is_used_up(self) -> None:
         run_id = self._queued_run(self.other_org_id)
         with self.session_factory() as session:

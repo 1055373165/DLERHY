@@ -76,6 +76,8 @@ def observed_llm_call(
     actor_id: str | None = None,
     correlation_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    document_id: str | None = None,
+    org_id: str | None = None,
 ) -> Iterator[LLMCallObservation]:
     """Record one provider call as an ``llm.call.completed`` / ``llm.call.failed`` event.
 
@@ -113,6 +115,8 @@ def observed_llm_call(
             run_id=run_id,
             chapter_id=chapter_id,
             packet_id=packet_id,
+            document_id=document_id,
+            org_id=org_id,
             actor_kind="agent",
             actor_id=actor,
             correlation_id=correlation_id,
@@ -134,6 +138,8 @@ def observed_llm_call(
         run_id=run_id,
         chapter_id=chapter_id,
         packet_id=packet_id,
+        document_id=document_id,
+        org_id=org_id,
         actor_kind="agent",
         actor_id=actor,
         correlation_id=correlation_id,
@@ -153,6 +159,8 @@ def record_llm_usage(
     packet_id: str | None = None,
     actor_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    document_id: str | None = None,
+    org_id: str | None = None,
 ) -> None:
     """Record a call that already happened elsewhere (usage in hand, no exception)."""
     with observed_llm_call(
@@ -165,5 +173,7 @@ def record_llm_usage(
         packet_id=packet_id,
         actor_id=actor_id,
         payload=payload,
+        document_id=document_id,
+        org_id=org_id,
     ) as observation:
         observation.complete(usage)

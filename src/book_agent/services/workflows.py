@@ -189,9 +189,11 @@ class DocumentWorkflowService:
         *,
         chapter_ids: list[str] | None = None,
     ) -> PdfStructureRefreshArtifacts:
+        edits = StructureEditService(self.session, fork_service=self.parse_revision_fork)
+        edits.prepare_for_refresh(document_id)
         artifacts = self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
         # Structure edits come back on top of the parser's blocks before sentences are compared.
-        replay = StructureEditService(self.session, fork_service=self.parse_revision_fork).replay(document_id)
+        replay = edits.replay(document_id)
         artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
             document_id,
             block_ids=list(dict.fromkeys([*self.parse_revision_fork.stale_block_ids(document_id), *replay.block_ids])),
@@ -205,13 +207,22 @@ class DocumentWorkflowService:
         *,
         chapter_ids: list[str] | None = None,
     ) -> EpubStructureRefreshArtifacts:
+        edits = StructureEditService(self.session, fork_service=self.parse_revision_fork)
+        edits.prepare_for_refresh(document_id)
         artifacts = self.epub_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
-        replay = StructureEditService(self.session, fork_service=self.parse_revision_fork).replay(document_id)
+        replay = edits.replay(document_id)
         artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
             document_id,
             block_ids=list(
                 dict.fromkeys(
-                    [*artifacts.refreshed_block_ids, *artifacts.created_block_ids, *artifacts.invalidated_block_ids, *replay.block_ids]
+                    [
+                        *artifacts.refreshed_block_ids,
+                        *artifacts.created_block_ids,
+                        *artifacts.invalidated_block_ids,
+                        *replay.block_ids,
+                        # Parked split-off blocks whose split went stale still hold sentences.
+                        *self.parse_revision_fork.stale_block_ids(document_id),
+                    ]
                 )
             ),
             reason="epub structure refresh",

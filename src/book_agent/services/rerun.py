@@ -101,6 +101,12 @@ class RerunService:
         elif effective_rerun_plan.action_type in {ActionType.REPARSE_CHAPTER, ActionType.REPARSE_DOCUMENT}:
             if self.pdf_structure_refresh_service is None:
                 raise ValueError("PDF structure refresh service is not configured for reparse actions.")
+            from book_agent.services.structure_edits import StructureEditService
+
+            structure_edits = StructureEditService(self.ops_repository.session, fork_service=self.parse_revision_fork)
+            if self.parse_revision_fork is not None:
+                # Only when the fork (and with it the replay) runs after the refresh.
+                structure_edits.prepare_for_refresh(issue_document_id)
             structure_refresh_artifacts = self.pdf_structure_refresh_service.refresh_document(
                 issue_document_id,
                 chapter_ids=(
@@ -114,11 +120,7 @@ class RerunService:
             if self.parse_revision_fork is not None:
                 # Blocks whose text changed get a new sentence set; their packets are
                 # rebuilt with carried translations and whatever is left is retranslated.
-                from book_agent.services.structure_edits import StructureEditService
-
-                replay = StructureEditService(
-                    self.ops_repository.session, fork_service=self.parse_revision_fork
-                ).replay(issue_document_id)
+                replay = structure_edits.replay(issue_document_id)
                 fork = self.parse_revision_fork.resegment_blocks(
                     issue_document_id,
                     block_ids=list(

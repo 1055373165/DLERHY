@@ -155,6 +155,7 @@ class AgentTurnRunner:
                 call_kind=f"agent.{turn.agent_kind}",
                 model=prepared.model_name,
                 run_id=turn.run_id,
+                document_id=turn.document_id,
                 payload={"turn_id": turn.id, "step": int((turn.usage_json or {}).get("steps", 0)) + 1},
             ) as call:
                 call.complete(step.usage)

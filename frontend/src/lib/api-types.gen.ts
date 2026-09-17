@@ -1014,11 +1014,12 @@ export interface StructureEditListResponse {
 }
 
 export interface StructureEditRequest {
-  kind: "relabel_block" | "merge_blocks" | "link_caption";
+  kind: "relabel_block" | "split_block" | "merge_blocks" | "link_caption";
   reason: string;
   block_id?: string | null;
   block_type?: string | null;
   heading_level?: number | null;
+  second_part_starts_with?: string | null;
   first_block_id?: string | null;
   second_block_id?: string | null;
   caption_block_id?: string | null;

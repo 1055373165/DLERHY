@@ -89,4 +89,5 @@ revision_links   (new): object_type, from_object_id, to_object_id  （issue / ap
 - 块级编辑没有新建块：`relabel_block` 改类型（与保护策略），`merge_blocks` 把后一块文本并入前一块并把后一块置为 INVALIDATED（packet 边界若指向它则改指相邻活动块），`link_caption` 只改块元数据。之后对涉及的块调用 `resegment_blocks(..., align_across_blocks=True)`。
 - 分叉判断「块有无变化」时除文本外也比较可译性；译文搬运跳过已变为受保护的句子。
 - `structure_edits` 表（迁移 0042，追加式）取代设计中的「结构编辑指令」：记录编辑类型、参数、编辑前块指纹、产生的 parse revision、turn 与执行者。回放在刷新之后、分叉之前执行，状态为 reapplied 或 stale。
-- 仍未做：`split_block`（依赖按稳定锚点而非序号匹配的刷新）、章级分叉、dry-run 统计脚本。
+- `split_block`（迁移 0043 放开类型约束）：新块插在原块之后并平移后续序号；刷新前停放拆出块并压实序号，使 EPUB 按序号匹配仍对得上，刷新后回放。
+- 仍未做：章级分叉、dry-run 统计脚本。

@@ -753,12 +753,14 @@ class RecoverySkillsUpdateRequest(BaseSchema):
 
 
 class StructureEditRequest(BaseSchema):
-    kind: Literal["relabel_block", "merge_blocks", "link_caption"]
+    kind: Literal["relabel_block", "split_block", "merge_blocks", "link_caption"]
     reason: str = Field(min_length=1, max_length=2000)
     # relabel_block
     block_id: str | None = None
     block_type: str | None = None
     heading_level: int | None = Field(default=None, ge=1, le=6)
+    # split_block (with block_id)
+    second_part_starts_with: str | None = None
     # merge_blocks
     first_block_id: str | None = None
     second_block_id: str | None = None

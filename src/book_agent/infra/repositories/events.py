@@ -26,6 +26,59 @@ from book_agent.domain.event_kinds import EVENT_KINDS, VALID_ACTOR_KINDS
 from book_agent.domain.models.ops import Event
 
 
+_ORG_CACHE_LIMIT = 8192
+_org_cache: dict[tuple[str, str], str] = {}
+
+
+def resolve_event_org(
+    session: Session,
+    *,
+    run_id: str | None = None,
+    packet_id: str | None = None,
+    chapter_id: str | None = None,
+    document_id: str | None = None,
+) -> str:
+    """The organisation that owns the run, packet, chapter or document an event is about (default org otherwise)."""
+    from sqlalchemy import select
+
+    from book_agent.domain.models import Chapter, Document
+    from book_agent.domain.models.auth import DEFAULT_ORG_ID
+    from book_agent.domain.models.ops import DocumentRun
+    from book_agent.domain.models.translation import TranslationPacket
+
+    lookups = (
+        ("run", run_id, lambda value: select(Document.org_id).join(DocumentRun, DocumentRun.document_id == Document.id).where(DocumentRun.id == value)),
+        (
+            "packet",
+            packet_id,
+            lambda value: select(Document.org_id)
+            .join(Chapter, Chapter.document_id == Document.id)
+            .join(TranslationPacket, TranslationPacket.chapter_id == Chapter.id)
+            .where(TranslationPacket.id == value),
+        ),
+        ("chapter", chapter_id, lambda value: select(Document.org_id).join(Chapter, Chapter.document_id == Document.id).where(Chapter.id == value)),
+        ("document", document_id, lambda value: select(Document.org_id).where(Document.id == value)),
+    )
+    for scope, value, statement in lookups:
+        if not value:
+            continue
+        key = (scope, str(value))
+        cached = _org_cache.get(key)
+        if cached is not None:
+            return cached
+        try:
+            org_id = session.scalar(statement(str(value)))
+        except (ValueError, TypeError):
+            org_id = None
+        if org_id is not None:
+            if len(_org_cache) >= _ORG_CACHE_LIMIT:
+                _org_cache.clear()
+            # Owners never change for these ids, so the cache needs no invalidation.
+            _org_cache[key] = str(org_id)
+            return str(org_id)
+    return DEFAULT_ORG_ID
+
+
 def emit_event(
     session: Session,
     *,
@@ -35,15 +88,25 @@ def emit_event(
     packet_id: str | None = None,
     actor_kind: str = "system",
     actor_id: str = "system",
-    org_id: str = "default",
+    org_id: str | None = None,
+    document_id: str | None = None,
     correlation_id: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> Event:
+    """``org_id`` defaults to the owner of the run, packet, chapter or ``document_id`` the event is about."""
     if kind not in EVENT_KINDS:
         raise ValueError(f"Unknown event kind: {kind!r}. Add it to event_kinds.py first.")
     if actor_kind not in VALID_ACTOR_KINDS:
         raise ValueError(f"Invalid actor_kind: {actor_kind!r}. Must be one of {sorted(VALID_ACTOR_KINDS)}.")
 
+    if org_id is None:
+        org_id = resolve_event_org(
+            session,
+            run_id=run_id,
+            packet_id=packet_id,
+            chapter_id=chapter_id,
+            document_id=document_id or (payload or {}).get("document_id"),
+        )
     event = Event(
         kind=kind,
         run_id=run_id,

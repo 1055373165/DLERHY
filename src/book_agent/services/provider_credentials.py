@@ -232,9 +232,13 @@ def _record_test_call(session: Session, record: ProviderCredential, outcome: Tes
         return
     model = outcome.model_name or record.model_name
     payload = {"credential_id": record.id, "credential_name": record.name}
+    from book_agent.domain.models.auth import DEFAULT_ORG_ID
+
+    # A smoke test is spent by the scope that owns the credential.
+    org_id = record.org_id or DEFAULT_ORG_ID
     if outcome.error is not None:
         try:
-            with observed_llm_call(session, call_kind=CALL_KIND_PROVIDER_TEST, model=model, payload=payload):
+            with observed_llm_call(session, call_kind=CALL_KIND_PROVIDER_TEST, model=model, payload=payload, org_id=org_id):
                 raise outcome.error
         except Exception:
             return
@@ -244,6 +248,7 @@ def _record_test_call(session: Session, record: ProviderCredential, outcome: Tes
         model=model,
         usage=outcome.usage,
         payload=payload,
+        org_id=org_id,
     )
 
 
