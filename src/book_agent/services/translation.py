@@ -32,7 +32,7 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.services.glossary_enforcement import detect_violations
+from book_agent.domain.terminology.enforcement import LockedTerm, find_term_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
@@ -243,6 +243,9 @@ class PreparedPacketTranslation:
     chapter_memory_snapshot_id: str | None
     call_id: str
     started_at: datetime
+    # Glossary locks for the chapter, loaded with the packet so the output
+    # guardrail can enforce them without a database session.
+    locked_terms: tuple[LockedTerm, ...] = ()
 
     @property
     def correlation_id(self) -> str:
@@ -347,6 +350,11 @@ class TranslationService:
             ),
             call_id=stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp())),
             started_at=_utcnow(),
+            locked_terms=tuple(
+                GlossaryService(self.repository.session).locked_terms_for_chapter(
+                    compiled_context_packet.document_id, bundle.packet.chapter_id
+                )
+            ),
         )
         emit_event(
             self.repository.session,
@@ -378,7 +386,7 @@ class TranslationService:
         """
         task = prepared.task
         result = self._coerce_worker_result(self.worker.translate(task))
-        report = self.output_validator.validate_task(task, result.output)
+        report = self.output_validator.validate_task(task, result.output, locked_terms=prepared.locked_terms)
         usage = result.usage
         rejections: list[OutputRejection] = []
         while not report.ok and len(rejections) < self.max_output_repairs:
@@ -400,7 +408,7 @@ class TranslationService:
             )
             result = self._coerce_worker_result(self.worker.translate(repair_task))
             usage = _merge_usage(usage, result.usage)
-            report = self.output_validator.validate_task(task, result.output)
+            report = self.output_validator.validate_task(task, result.output, locked_terms=prepared.locked_terms)
         if not rejections:
             return result
         return result.model_copy(
@@ -501,6 +509,7 @@ class TranslationService:
             [sentence.id for sentence in bundle.current_sentences],
             worker_result.output,
             source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
+            locked_terms=prepared.locked_terms,
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code
@@ -599,16 +608,20 @@ class TranslationService:
         document_id = bundle.context_packet.document_id
         if not document_id:
             return
-        glossary_service = GlossaryService(self.repository.session)
-        locked = glossary_service.get_locked_terms(document_id)
-        if not locked:
+        locked_terms = GlossaryService(self.repository.session).locked_terms_for_chapter(
+            document_id, bundle.packet.chapter_id
+        )
+        if not locked_terms:
             return
         source_text = "\n".join(s.source_text for s in bundle.current_sentences if s.source_text)
         target_text = "\n".join(
             seg.text_zh for seg in artifacts.target_segments if getattr(seg, "text_zh", None)
         )
-        violations = detect_violations(source_text, target_text, locked)
-        for v in violations:
+        seen: set[str] = set()
+        for violation in find_term_violations([(bundle.packet.id, source_text, target_text)], locked_terms):
+            if violation.source_term in seen:
+                continue
+            seen.add(violation.source_term)
             emit_event(
                 self.repository.session,
                 kind=GLOSSARY_VIOLATION,
@@ -620,11 +633,13 @@ class TranslationService:
                 payload={
                     "translation_run_id": artifacts.translation_run.id,
                     "document_id": document_id,
-                    "source_term": v.source_term,
-                    "expected_target": v.expected_target,
-                    "source_match_count": v.source_match_count,
-                    "target_match_count": v.target_match_count,
-                    "severity_hint": v.severity_hint,
+                    "source_term": violation.source_term,
+                    "expected_target": violation.expected_target_term,
+                    "accepted_renderings": list(violation.accepted_renderings),
+                    "source_match_count": violation.source_occurrences,
+                    # The shared matcher is presence-based: no accepted rendering was found.
+                    "target_match_count": 0,
+                    "severity_hint": "hard",
                 },
             )
 

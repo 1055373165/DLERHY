@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from book_agent.domain.terminology.enforcement import LockedTerm
 from book_agent.translation.contracts import ConceptCandidate, RelevantTerm
 from book_agent.translation.heuristics import DEFAULT_HEURISTICS
 
@@ -47,3 +48,11 @@ def normalize_concept_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if canonical_zh:
         normalized["canonical_zh"] = normalize_term_rendering(source_term, canonical_zh)
     return normalized
+
+
+def locked_term_from_entry(entry: Any) -> LockedTerm:
+    """A glossary entry as the shared enforcement matcher sees it: expected rendering first, then variants."""
+    expected = normalize_term_rendering(entry.source_term, entry.target_term)
+    variants = [str(variant) for variant in (getattr(entry, "target_variants_json", None) or []) if str(variant).strip()]
+    return LockedTerm(source_term=str(entry.source_term or ""), renderings=tuple([expected, *variants]))
+

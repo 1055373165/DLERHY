@@ -10,7 +10,8 @@ from sqlalchemy import select
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import PacketSentenceRole
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, TRANSLATION_OUTPUT_REJECTED
-from book_agent.domain.models import Event
+from book_agent.domain.models import Chapter, Event
+from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
@@ -195,6 +196,38 @@ class OutputGuardrailTests(unittest.TestCase):
         self.assertIn("failed validation", second.messages[-1].content)
         self.assertIn('"source_sentence_ids":["S1"]', second.messages[-2].content)
         self.assertNotIn(second.sentence_alias_map["S1"], second.messages[-2].content)
+
+    def test_locked_term_violation_is_repaired_before_persisting(self) -> None:
+        from book_agent.services.glossary_service import GlossaryService
+        from book_agent.translation.output_validation import LOCKED_TERM_VIOLATED
+
+        with self.session_factory() as session:
+            packet = session.get(TranslationPacket, self.packet_id)
+            chapter = session.get(Chapter, packet.chapter_id)
+            GlossaryService(session).lock_term(chapter.document_id, "context engineering", "上下文工程")
+            session.commit()
+
+        def wrong(task):
+            output = _segments(task)
+            for segment in output.target_segments:
+                segment.text_zh = "语境设计是一门学科。"
+            return output
+
+        def right(task):
+            output = _segments(task)
+            for segment in output.target_segments:
+                segment.text_zh = "上下文工程是一门学科。"
+            return output
+
+        worker = ScriptedWorker([wrong, right])
+        with self.session_factory() as session:
+            artifacts = self._service(session, worker, repairs=1).execute_packet(self.packet_id)
+            session.commit()
+
+        self.assertEqual(len(worker.tasks), 2)
+        self.assertEqual(worker.tasks[1].correction.report.error_code, LOCKED_TERM_VIOLATED)
+        self.assertIsNone(artifacts.translation_run.error_code)
+        self.assertEqual(artifacts.target_segments[0].text_zh, "上下文工程是一门学科。")
 
     def test_prompt_without_correction_is_unchanged(self) -> None:
         with self.session_factory() as session:

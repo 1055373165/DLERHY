@@ -25,18 +25,14 @@ from book_agent.domain.structure.artifact_grouping import (
     normalize_artifact_role,
     resolve_artifact_group_context_ids,
 )
-from book_agent.domain.terminology.matching import (
-    SourceTermIndex,
-    source_term_key,
-    target_has_rendering,
-)
+from book_agent.domain.terminology.enforcement import find_term_violations
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository, review_pass_owns
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
 from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
-from book_agent.services.term_normalization import normalize_term_rendering
+from book_agent.services.term_normalization import locked_term_from_entry
 from book_agent.translation.heuristics import heuristics_pack_for_document
 
 
@@ -371,28 +367,38 @@ class ReviewService:
         active_locked_terms = [
             term for term in bundle.term_entries if term.lock_level == LockLevel.LOCKED and term.status.value == "active"
         ]
-        # Whole-token, variant-tolerant matching with longest-term ownership: "bull" does not
-        # match "bullish", and "Inverted Head & Shoulders" sentences belong to that term only.
-        term_index = SourceTermIndex(term.source_term for term in active_locked_terms)
-        sentence_term_keys = {
-            sentence.id: term_index.keys_in(sentence.normalized_text or sentence.source_text)
+        # The same matcher the translation output guardrail uses (domain.terminology.enforcement):
+        # whole-token, variant-tolerant source matching with longest-term ownership ("bull" does not
+        # match "bullish"; "Inverted Head & Shoulders" sentences belong to that term only), and
+        # whitespace/punctuation/case-insensitive rendering lookup ("RSI背离" honours "RSI 背离").
+        locked_terms = [locked_term_from_entry(term) for term in active_locked_terms]
+        aligned_text_by_sentence = {
+            sentence.id: self._aligned_text_for_sentence(
+                sentence.id,
+                alignment_state.active_alignments_by_sentence,
+                alignment_state.active_target_map,
+            )
             for sentence in bundle.sentences
             if sentence.translatable
         }
-        for term in active_locked_terms:
-            expected_target_term = normalize_term_rendering(term.source_term, term.target_term)
-            accepted_renderings = [expected_target_term, *(term.target_variants_json or [])]
-            term_key = source_term_key(term.source_term)
+        violations = {
+            (violation.term_index, violation.unit_id): violation
+            for violation in find_term_violations(
+                (
+                    (sentence.id, sentence.normalized_text or sentence.source_text, aligned_text_by_sentence[sentence.id])
+                    for sentence in bundle.sentences
+                    if sentence.translatable
+                ),
+                locked_terms,
+            )
+        }
+        for term_position, term in enumerate(active_locked_terms):
+            expected_target_term = locked_terms[term_position].expected_target_term
             for sentence in bundle.sentences:
-                if not sentence.translatable:
+                violation = violations.get((term_position, sentence.id))
+                if violation is None:
                     continue
-                if term_key not in sentence_term_keys.get(sentence.id, ()):
-                    continue
-                aligned_text = self._aligned_text_for_sentence(
-                    sentence.id,
-                    alignment_state.active_alignments_by_sentence,
-                    alignment_state.active_target_map,
-                )
+                aligned_text = violation.target_text
                 if self._should_skip_locked_term_conflict(
                     bundle=bundle,
                     sentence=sentence,
@@ -401,28 +407,26 @@ class ReviewService:
                     aligned_text=aligned_text,
                 ):
                     continue
-                # Whitespace, punctuation and Latin case are ignored ("RSI背离" honours "RSI 背离").
-                if not target_has_rendering(aligned_text, accepted_renderings):
-                    issues.append(
-                        self._make_issue(
-                            now=now,
-                            chapter_id=bundle.chapter.id,
-                            document_id=bundle.chapter.document_id,
-                            sentence_id=sentence.id,
-                            packet_id=self._find_packet_for_sentence(bundle, sentence.id),
-                            issue_type="TERM_CONFLICT",
-                            root_cause_layer=RootCauseLayer.MEMORY,
-                            severity=Severity.HIGH,
-                            blocking=True,
-                            evidence={
-                                "source_term": term.source_term,
-                                "source_terms": [term.source_term],
-                                "expected_target_term": expected_target_term,
-                                "actual_target_text": aligned_text,
-                            },
-                            unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
-                        )
+                issues.append(
+                    self._make_issue(
+                        now=now,
+                        chapter_id=bundle.chapter.id,
+                        document_id=bundle.chapter.document_id,
+                        sentence_id=sentence.id,
+                        packet_id=self._find_packet_for_sentence(bundle, sentence.id),
+                        issue_type="TERM_CONFLICT",
+                        root_cause_layer=RootCauseLayer.MEMORY,
+                        severity=Severity.HIGH,
+                        blocking=True,
+                        evidence={
+                            "source_term": term.source_term,
+                            "source_terms": [term.source_term],
+                            "expected_target_term": expected_target_term,
+                            "actual_target_text": aligned_text,
+                        },
+                        unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
                     )
+                )
 
         issues = self._dedupe_issues(issues)
 

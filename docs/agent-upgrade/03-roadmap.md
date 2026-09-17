@@ -49,7 +49,7 @@
 - [ ] **解析版本分叉落地**：`document_parse_revisions` 成为一等版本；重解析产生新句子集，旧集 `retired`；句级指纹搬运译文；`revision_links` 映射 issue/审批/审计；`pdf/epub_structure_refresh` 改走该路径（替代「只标 stale 不重建」）。
 - [x] **Reviewer Agent**（`Detector.MODEL`，设计见 `05-reviewer-and-repair-agents.md`）：`translate_full` 新增 `model_review` 阶段（translate 之后、review 之前；run 请求 `model_review=sampled|full|skip`，默认 sampled，每章 3 个最可疑 packet）。工具 `next_review_batch / report_issue / finish_packet` + H1 只读工具；发现写入同一 issue 账本并复用规则引擎的类型与动作；同句同族规则 issue 去重；高置信度严重问题才阻断；重译自动关闭模型 issue，复现两次升级为阻断；模型 evidence 变成重译提示。与计划的差异：文档级单 turn（队列工具推进），不是按章 turn；`edit_segment` 留给 Repair Agent。
 - [ ] **Repair Agent**：输入 issue 束 + 规则引擎给出的候选动作；工具 `retranslate_packet`（新 attempt）、`edit_segment`（新 attempt，最小改动）、`lock_term`（审批）、`mark_wontfix`（审批或阈值）；替换现有三个循环中的「自动跟进」决策，保留硬上限与人工保留阈值。
-- [ ] 术语 hook 统一（翻译期与审校期同一匹配器），pre-persist 拦截。
+- [x] 术语 hook 统一（翻译期与审校期同一匹配器），pre-persist 拦截。`domain/terminology/enforcement.py` 是唯一判定：review 的 TERM_CONFLICT、翻译输出 guardrail（`output_locked_term_violation`，同 turn 修复）、`glossary.violation` 事件都用它；锁定术语集合 = 文档级 + 本章级 LOCKED（`GlossaryService.locked_terms_for_chapter`，随 packet 在 prepare 阶段加载）。旧的计数式 `detect_violations` 删除。review 的「修饰语变体」跳过规则仍只在审校期生效。
 - [ ] 前端：issue 工作台（evidence、源/译对照、一键动作）、SSE 接入替代轮询（R20 一部分）。
 
 验收：审校 eval 集（人工标注 200 句）上模型审校的精确率/召回率；自纠正后阻断 issue 数下降；无循环失控（审计可证）。

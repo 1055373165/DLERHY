@@ -443,7 +443,7 @@ CLI：`term-consistency --document-id --report x.md [--dry-run]`（`cli.py:181-1
 ### 12.1 明确 bug
 1. `workers/providers/openai_compatible.py:513-519` —— Anthropic 风格缓存字段 `cache_creation_input_tokens`（写/未命中）被当作 hit，`cache_read_input_tokens`（命中）被当作 miss，价格算反。
 2. `workers/providers/openai_compatible.py:559-560` —— 死分支：521-522 已保证 miss=token_in 时 hit=0 且 miss≠0。
-3. `services/glossary_enforcement.py:77-80` 与 `services/review.py:350-405` —— 同一 LOCKED 术语两套判定（子串 vs normalize+variants+修饰词豁免）。
+3. `services/glossary_enforcement.py:77-80` 与 `services/review.py:350-405` —— 同一 LOCKED 术语两套判定（子串 vs normalize+variants+修饰词豁免）。（**H2 已修复**：统一到 `domain/terminology/enforcement.py`，见 `agent-upgrade/03-roadmap.md` H2。）
 4. `services/memory_service.py:198-206` vs `220-255` —— 单条批准校验 base version、批量 review 提交不校验；review 之后 API 批准旧 proposal 必然 ValueError。
 5. `services/translation.py:365-404` —— `record_worker_failure` 无租约校验，过期 worker 会写入 FAILED run 占用 attempt。
 6. `services/context_compile.py:585-594` —— 章节概念只要有 `canonical_zh` 即以 `locked` 注入 prompt，与概念 `status` 无关。

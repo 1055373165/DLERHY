@@ -511,7 +511,7 @@ API：`GET/POST /documents/{id}/chapters/{cid}/memory-proposals[/{pid}/approve|r
 
 ### 14.1 正确性 / 语义 bug
 
-1. **issue 重开时 `created_at` 被重置、`resolution_note` 残留、TRIAGED 被覆盖**——`services/review.py:1925-1942` 每轮用 `now` 构造 issue，`infra/repositories/review.py:125` 直接 `merge`。已用探针验证。后果：SLA/age 永不累积、时间线失真、重开 issue 带「已解决」备注。
+1. （**H2 已修复**，§14.1-1…5 见 `production/gaps-and-risks.md` F 节）**issue 重开时 `created_at` 被重置、`resolution_note` 残留、TRIAGED 被覆盖**——`services/review.py:1925-1942` 每轮用 `now` 构造 issue，`infra/repositories/review.py:125` 直接 `merge`。已用探针验证。后果：SLA/age 永不累积、时间线失真、重开 issue 带「已解决」备注。
 2. **`issue_actions.status` 每轮 review / 每次导出 gate 被重置为 PLANNED**——`orchestrator/rule_engine.py:121` + `infra/repositories/review.py:128` + `services/export.py:952-955`。已验证。`ActionStatus` 表面上有 5 个状态，实际 COMPLETED 只在两次 review 之间可见；`ChapterWorklistAction.status` 展示给用户的值不可信。
 3. **`IssueActionExecutor.execute` 无任何前置状态检查**——`services/actions.py:41-46`：COMPLETED/RUNNING 的 action、RESOLVED 的 issue 都能再次执行，且 PACKET/CHAPTER 作用域会再次 SUPERSEDE 全部活动译文（103-133）。公开端点 `routes/actions.py:11-25` 直接暴露。
 4. **导出 gate 的 `has_open_blocking_issues` 只看 `OPEN`**（`infra/repositories/export.py:263-280`），而阻塞修复循环把 TRIAGED 也视为活跃（`application/review_repair.py:285-296`）。一个 blocking issue 被 `execute_action(run_followup=False)` 置为 TRIAGED 后，若章节状态恰好仍是 QA_CHECKED/APPROVED（例如 SENTENCE 作用域 action 不改章节状态），`_raise_for_gate` 的最后一道检查（export.py:745）会放行。当前 review 产生的 blocking issue 都会把章节置 REVIEW_REQUIRED，所以实际触发需要状态被别处改回，风险为「防线不一致」，待构造复现。
@@ -534,7 +534,7 @@ API：`GET/POST /documents/{id}/chapters/{cid}/memory-proposals[/{pid}/approve|r
 18. `resolve_action` 中 `ENTITY_CONFLICT`、`MISTRANSLATION_*`、`EXPORT_FAILURE`、PARSE/SEGMENT 层、`EDIT_TARGET_ONLY` 兜底（rule_engine.py:25, 29, 47, 55, 63, 65, 67）无任何生产者；`ActionType.MANUAL_FINALIZE`、`ActionStatus.FAILED/CANCELLED`、`IssueStatus.WONTFIX`、`Detector.MODEL/HUMAN` 全库无写入。
 19. `TargetedRebuildService._refresh_entity_snapshot` 是空操作（rebuild.py:271-273），`UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED` 实际等价于「重建 packet + 重译」。
 20. `services/style_drift.py` 只是 `DEFAULT_HEURISTICS` 的转发（20 行），且只用默认包，不随文档的 heuristics pack 变化（与 review.py:561 按文档选包不一致）。
-21. `services/glossary_enforcement.py` 与 review 无关：只在 `services/translation.py:499-523` 发 `GLOSSARY_VIOLATION` 事件，不产生 issue；README 层面的「术语一致性审校」实际由 review 的 TERM_CONFLICT 承担，两套逻辑（`_count_occurrences` vs `SourceTermIndex/target_has_rendering`）匹配语义不同。
+21. `services/glossary_enforcement.py` 与 review 无关：只在 `services/translation.py:499-523` 发 `GLOSSARY_VIOLATION` 事件，不产生 issue；README 层面的「术语一致性审校」实际由 review 的 TERM_CONFLICT 承担，两套逻辑（`_count_occurrences` vs `SourceTermIndex/target_has_rendering`）匹配语义不同。（**H2 已修复**：统一到 `domain/terminology/enforcement.py`，见 `agent-upgrade/03-roadmap.md` H2。）
 22. `DocumentWorkflowService.bootstrap_epub`（workflows.py:166）纯别名。
 23. `schemas/workflow.py:196 ReviewDocumentResponse` 已无路由使用且字段落后于 `DocumentReviewResult`（待确认前端）。
 24. `analytics.issue_chapter_queue` 用 lambda-IIFE 构造 entry（analytics.py:705-790），可读性差且 `chapter_activity.get(entry.chapter_id, [None])[0]` 重复四次。

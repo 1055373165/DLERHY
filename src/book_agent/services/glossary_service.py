@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, TermType
 from book_agent.domain.models.translation import TermEntry
+from book_agent.domain.terminology.enforcement import LockedTerm
 from book_agent.domain.terminology.matching import source_term_key
 from book_agent.services.terminology_miner import TermCandidate
 from book_agent.translation.contracts import RelevantTerm
@@ -59,6 +60,37 @@ class GlossaryService:
         self.session = session
 
     # --- Queries ---
+
+    def locked_terms_for_chapter(self, document_id: str, chapter_id: str | None) -> list[LockedTerm]:
+        """Active LOCKED entries that apply to a chapter: document-wide ones plus that chapter's own.
+
+        Review (TERM_CONFLICT) and the translation output guardrail both
+        enforce exactly this set through ``domain.terminology.enforcement``.
+        """
+        from uuid import UUID
+
+        from sqlalchemy import or_
+
+        from book_agent.services.term_normalization import locked_term_from_entry
+
+        scope = TermEntry.scope_type == MemoryScopeType.GLOBAL
+        try:
+            if chapter_id:
+                UUID(str(chapter_id))
+                scope = or_(scope, (TermEntry.scope_type == MemoryScopeType.CHAPTER) & (TermEntry.scope_id == chapter_id))
+        except ValueError:
+            pass
+        rows = self.session.scalars(
+            select(TermEntry)
+            .where(
+                TermEntry.document_id == document_id,
+                TermEntry.lock_level == LockLevel.LOCKED,
+                TermEntry.status == TermStatus.ACTIVE,
+                scope,
+            )
+            .order_by(TermEntry.source_term, TermEntry.id)
+        ).all()
+        return [locked_term_from_entry(row) for row in rows]
 
     def get_locked_terms(self, document_id: str) -> dict[str, str]:
         """Return `{source_term: target_term}` for every ACTIVE LOCKED

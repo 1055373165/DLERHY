@@ -12,6 +12,9 @@ Checks, in error-code priority order:
 - coverage: every current sentence is aligned to a returned target segment;
 - echo: a target segment repeats its source text instead of translating it;
 - empty: a target segment has no text;
+- locked terms: a sentence containing a locked glossary term is aligned to
+  a translation without any accepted rendering (the same matcher review
+  uses for TERM_CONFLICT, ``domain.terminology.enforcement``);
 - length ratio: the translated length of an aligned group is implausible
   for the amount of source text (truncation or runaway generation).
 """
@@ -19,16 +22,18 @@ Checks, in error-code priority order:
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from book_agent.domain.terminology.enforcement import LockedTerm, TermViolation, find_term_violations
 from book_agent.translation.contracts import TranslationWorkerOutput
 
 COVERAGE_INCOMPLETE = "output_sentence_coverage_incomplete"
 SOURCE_ECHOED = "output_source_echoed"
 TARGET_EMPTY = "output_target_empty"
 LENGTH_RATIO_ABNORMAL = "output_length_ratio_abnormal"
+LOCKED_TERM_VIOLATED = "output_locked_term_violation"
 
 _WHITESPACE = re.compile(r"\s+")
 _LETTERS = re.compile(r"[A-Za-z一-鿿]")
@@ -58,21 +63,16 @@ class OutputValidationReport:
     echoed_sentence_ids: tuple[str, ...] = ()
     empty_target_temp_ids: tuple[str, ...] = ()
     length_ratio_findings: tuple[LengthRatioFinding, ...] = ()
+    term_violations: tuple[TermViolation, ...] = ()
 
     @property
     def error_code(self) -> str | None:
-        if self.uncovered_sentence_ids:
-            return COVERAGE_INCOMPLETE
-        if self.echoed_sentence_ids:
-            return SOURCE_ECHOED
-        if self.empty_target_temp_ids:
-            return TARGET_EMPTY
-        if self.length_ratio_findings:
-            return LENGTH_RATIO_ABNORMAL
-        return None
+        codes = self.error_codes
+        return codes[0] if codes else None
 
     @property
     def error_codes(self) -> tuple[str, ...]:
+        """Every failed check, most severe first."""
         codes: list[str] = []
         if self.uncovered_sentence_ids:
             codes.append(COVERAGE_INCOMPLETE)
@@ -80,6 +80,8 @@ class OutputValidationReport:
             codes.append(SOURCE_ECHOED)
         if self.empty_target_temp_ids:
             codes.append(TARGET_EMPTY)
+        if self.term_violations:
+            codes.append(LOCKED_TERM_VIOLATED)
         if self.length_ratio_findings:
             codes.append(LENGTH_RATIO_ABNORMAL)
         return tuple(codes)
@@ -92,6 +94,7 @@ class OutputValidationReport:
             or self.unknown_target_temp_ids
             or self.echoed_sentence_ids
             or self.empty_target_temp_ids
+            or self.term_violations
             or self.length_ratio_findings
         )
 
@@ -113,6 +116,15 @@ class OutputValidationReport:
                     "ratio": round(item.ratio, 3),
                 }
                 for item in self.length_ratio_findings
+            ],
+            "term_violations": [
+                {
+                    "sentence_id": item.unit_id,
+                    "source_term": item.source_term,
+                    "expected_target_term": item.expected_target_term,
+                    "accepted_renderings": list(item.accepted_renderings),
+                }
+                for item in self.term_violations
             ],
         }
 
@@ -152,6 +164,12 @@ class OutputValidationReport:
                 "Target segments with empty text_zh: "
                 + ", ".join(self.empty_target_temp_ids)
                 + ". Every segment must carry the translation."
+            )
+        for violation in self.term_violations:
+            accepted = ", ".join(f'"{rendering}"' for rendering in violation.accepted_renderings)
+            lines.append(
+                f'{name(violation.unit_id)} contains the locked term "{violation.source_term}", '
+                f"which must be translated as one of: {accepted}. Use the locked rendering."
             )
         for finding in self.length_ratio_findings:
             lines.append(
@@ -201,11 +219,13 @@ class OutputValidator:
         output: TranslationWorkerOutput,
         *,
         source_texts: Mapping[str, str] | None = None,
+        locked_terms: Sequence[LockedTerm] = (),
     ) -> OutputValidationReport:
         """A sentence is covered when an alignment links it to a target segment the worker returned.
 
-        ``source_texts`` (sentence id -> source text) enables the echo and
-        length-ratio checks; without it only coverage is validated.
+        ``source_texts`` (sentence id -> source text) enables the echo,
+        locked-term and length-ratio checks; without it only coverage is
+        validated. ``locked_terms`` are the glossary locks for the chapter.
         """
         expected = list(dict.fromkeys(current_sentence_ids))
         expected_set = set(expected)
@@ -215,6 +235,7 @@ class OutputValidator:
         unknown_targets: list[str] = []
         echoed: list[str] = []
         ratio_findings: list[LengthRatioFinding] = []
+        term_units: list[tuple[str, str, str]] = []
         for suggestion in output.alignment_suggestions:
             valid_targets = [temp_id for temp_id in suggestion.target_temp_ids if temp_id in segments_by_temp_id]
             unknown_targets.extend(temp_id for temp_id in suggestion.target_temp_ids if temp_id not in segments_by_temp_id)
@@ -232,6 +253,9 @@ class OutputValidator:
             source_text = " ".join(source_texts.get(sentence_id) or "" for sentence_id in known_sources)
             if self.check_echo and self._is_echo(source_text, target_text):
                 echoed.extend(known_sources)
+            if locked_terms:
+                # Each sentence is checked against the translation of its aligned group.
+                term_units.extend((sentence_id, source_texts.get(sentence_id) or "", target_text) for sentence_id in known_sources)
             if self.check_length_ratio and not self._ratio_exempt_group(valid_targets, segments_by_temp_id):
                 finding = self._length_ratio_finding(known_sources, valid_targets, source_text, target_text)
                 if finding is not None:
@@ -239,6 +263,9 @@ class OutputValidator:
         empty_targets = tuple(
             segment.temp_id for segment in output.target_segments if not (segment.text_zh or "").strip()
         )
+        term_violations: dict[tuple[str, str], TermViolation] = {}
+        for violation in find_term_violations(term_units, locked_terms, skip_empty_targets=True):
+            term_violations.setdefault((violation.unit_id, violation.source_term), violation)
         return OutputValidationReport(
             uncovered_sentence_ids=tuple(sentence_id for sentence_id in expected if sentence_id not in covered),
             unknown_source_sentence_ids=tuple(dict.fromkeys(unknown_sources)),
@@ -246,15 +273,19 @@ class OutputValidator:
             echoed_sentence_ids=tuple(dict.fromkeys(echoed)),
             empty_target_temp_ids=empty_targets,
             length_ratio_findings=tuple(ratio_findings),
+            term_violations=tuple(term_violations.values()),
         )
 
-    def validate_task(self, task: Any, output: TranslationWorkerOutput) -> OutputValidationReport:
+    def validate_task(
+        self, task: Any, output: TranslationWorkerOutput, *, locked_terms: Sequence[LockedTerm] = ()
+    ) -> OutputValidationReport:
         """Validate against a ``TranslationTask`` (current sentences with source text)."""
         sentences = list(task.current_sentences)
         return self.validate(
             [sentence.id for sentence in sentences],
             output,
             source_texts={sentence.id: (sentence.source_text or "") for sentence in sentences},
+            locked_terms=locked_terms,
         )
 
     def _is_echo(self, source_text: str, target_text: str) -> bool:
