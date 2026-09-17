@@ -341,6 +341,10 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     # Provider-specific top-level request fields merged into every payload,
     # e.g. {"thinking": {"type": "disabled"}} to turn off DeepSeek reasoning.
     request_overrides: dict[str, Any] = field(default_factory=dict)
+    # chat/completions structured output: "json_object" (schema described in
+    # the static system message; works everywhere) or "json_schema"
+    # (schema-constrained decoding where the provider supports it).
+    structured_output_mode: str = "json_object"
     # Injection points for tests; production uses the real clock.
     sleep: Callable[[float], None] = field(default=time.sleep)
     monotonic: Callable[[], float] = field(default=time.monotonic)
@@ -493,14 +497,35 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         return is_retryable_http_status(code)
 
     def _build_payload(self, request: TranslationPromptRequest, *, api_mode: str) -> dict[str, Any]:
+        """Lay the prompt out so providers can cache the shared prefix.
+
+        Messages arrive ordered static -> chapter -> packet. In chat mode the
+        JSON schema (constant per profile) is appended to the first, static
+        system message rather than to the packet, and only the packet-specific
+        ``packet_id`` requirement goes with the user message.
+        """
+        messages = list(request.effective_messages())
         if api_mode == "chat_completions":
+            chat_messages = [{"role": message.role, "content": message.content} for message in messages]
+            if self.structured_output_mode == "json_schema":
+                response_format: dict[str, Any] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": "translation_worker_output", "schema": request.response_schema},
+                }
+            else:
+                response_format = {"type": "json_object"}
+                chat_messages[0] = {
+                    "role": chat_messages[0]["role"],
+                    "content": chat_messages[0]["content"] + "\n" + self._chat_completions_schema_contract(request),
+                }
+            chat_messages[-1] = {
+                "role": chat_messages[-1]["role"],
+                "content": chat_messages[-1]["content"] + f"\npacket_id must equal: {request.packet_id}",
+            }
             payload = {
                 "model": request.model_name,
-                "messages": [
-                    {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": self._chat_completions_user_prompt(request)},
-                ],
-                "response_format": {"type": "json_object"},
+                "messages": chat_messages,
+                "response_format": response_format,
             }
             if self.max_output_tokens is not None:
                 payload["max_tokens"] = self.max_output_tokens
@@ -509,13 +534,10 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             "model": request.model_name,
             "input": [
                 {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": request.system_prompt}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": request.user_prompt}],
-                },
+                    "role": message.role,
+                    "content": [{"type": "input_text", "text": message.content}],
+                }
+                for message in messages
             ],
             "text": {
                 "format": {
@@ -569,19 +591,19 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             },
         }
 
-    def _chat_completions_user_prompt(self, request: TranslationPromptRequest) -> str:
+    def _chat_completions_schema_contract(self, request: TranslationPromptRequest) -> str:
+        """Packet-independent output contract for providers without schema-constrained decoding."""
         schema_json = json.dumps(request.response_schema, ensure_ascii=False, separators=(",", ":"))
-        output_contract = (
+        return (
             "Return exactly one JSON object with these top-level keys only: "
             "packet_id, target_segments, alignment_suggestions, low_confidence_flags, notes.\n"
-            f"packet_id must equal: {request.packet_id}\n"
+            "packet_id must equal the value given at the end of the user message.\n"
             "Do not use top-level keys like translation or translations.\n"
             "Every current source sentence must be covered through target_segments and alignment_suggestions.\n"
             "When confidence is normal, low_confidence_flags should be []. notes may be [].\n"
             "Required JSON schema:\n"
             f"{schema_json}"
         )
-        return f"{request.user_prompt}\n{output_contract}"
 
     def _extract_output_payload(self, response: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
         if api_mode == "chat_completions":

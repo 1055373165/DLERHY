@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     # only respond reliably with stream=true. Enabling this flag makes the
     # client send SSE and reassemble locally.
     translation_openai_streaming: bool = False
+    # "json_object" (default, schema in prompt) or "json_schema" (constrained decoding).
+    translation_openai_structured_output_mode: str = "json_object"
     # Extra top-level request fields for the OpenAI-compatible client, as JSON in
     # BOOK_AGENT_TRANSLATION_OPENAI_REQUEST_OVERRIDES, e.g. '{"thinking": {"type": "disabled"}}'.
     translation_openai_request_overrides: dict[str, Any] = Field(default_factory=dict)

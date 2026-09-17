@@ -242,7 +242,24 @@ class TranslationWorker(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class PromptMessage:
+    role: str
+    content: str
+
+
+@dataclass(frozen=True, slots=True)
 class TranslationPromptRequest:
+    """One packet's prompt, laid out for provider prompt caching.
+
+    ``messages`` is ordered by volatility so the longest possible prefix is
+    byte-identical between packets: the static system message (profile
+    persona, translation contract, style and memory rules, and the output
+    schema when the provider needs it in text) comes first, then the
+    chapter-level guidance, then the packet itself. ``system_prompt`` and
+    ``user_prompt`` are the same text joined for callers that want two
+    strings.
+    """
+
     packet_id: str
     model_name: str
     prompt_version: str
@@ -252,6 +269,15 @@ class TranslationPromptRequest:
     system_prompt_static: str = ""
     system_prompt_dynamic: str = ""
     sentence_alias_map: dict[str, str] = field(default_factory=dict)
+    messages: tuple[PromptMessage, ...] = ()
+
+    def effective_messages(self) -> tuple[PromptMessage, ...]:
+        if self.messages:
+            return self.messages
+        return (
+            PromptMessage("system", self.system_prompt),
+            PromptMessage("user", self.user_prompt),
+        )
 
 
 PromptLayout = Literal["paragraph-led", "sentence-led"]
@@ -274,12 +300,27 @@ PromptProfile = Literal[
 
 @dataclass(frozen=True, slots=True)
 class TranslationSystemPromptParts:
+    """Static persona/contract lines, packet-invariant sections, and chapter-level guidance."""
+
     static_lines: tuple[str, ...]
     dynamic_lines: tuple[str, ...] = ()
+    # Sections that do not change from packet to packet (contract, style,
+    # memory rules); they live in the static system message so the cached
+    # prefix covers them.
+    static_section_lines: tuple[str, ...] = ()
+    labelled: bool = False
 
     @property
     def static_prompt(self) -> str:
-        return "\n".join(line.strip() for line in self.static_lines if line.strip())
+        lines = [line.strip() for line in self.static_lines if line.strip()]
+        if self.labelled and lines:
+            lines = ["Static Translation Contract:", *lines]
+        sections = [line for line in self.static_section_lines if line.strip()]
+        if sections:
+            if lines:
+                lines.append("")
+            lines.extend(sections)
+        return "\n".join(lines).strip()
 
     @property
     def dynamic_prompt(self) -> str:
@@ -289,7 +330,6 @@ class TranslationSystemPromptParts:
     def combined_prompt(self) -> str:
         sections: list[str] = []
         if self.static_prompt:
-            sections.append("Static Translation Contract:")
             sections.extend(self.static_prompt.splitlines())
         if self.dynamic_prompt:
             sections.append("")
@@ -580,10 +620,13 @@ def _build_split_system_prompt(
     *,
     static_lines: list[str],
     packet: ContextPacket,
+    static_section_lines: list[str] | None = None,
 ) -> TranslationSystemPromptParts:
     return TranslationSystemPromptParts(
         static_lines=tuple(static_lines),
         dynamic_lines=tuple(_packet_dynamic_system_lines(packet)),
+        static_section_lines=tuple(static_section_lines or ()),
+        labelled=True,
     )
 
 
@@ -685,10 +728,10 @@ def build_translation_prompt_request(
             )
             contract_lines[4] = "- Use the current sentences as the primary translation ledger and keep paragraph context coherent."
     if literalism_guardrail_lines:
-        contract_lines.insert(
-            2,
-            "- If Source-Aware Literalism Guardrails are present, follow them over generic smoothing: keep the source's level of concreteness and do not rewrite concrete imagery into abstract service or slogan-like Chinese.",
-        )
+        literalism_guardrail_lines = [
+            "- When guardrails are listed here, follow them over generic smoothing: keep the source's level of concreteness and do not rewrite concrete imagery into abstract service or slogan-like Chinese.",
+            *literalism_guardrail_lines,
+        ]
 
     style_lines: list[str] = []
     memory_handling_lines: list[str] = []
@@ -707,23 +750,28 @@ def build_translation_prompt_request(
     if not compact_prompt and profile.memory_handling_lines:
         memory_handling_lines = list(profile.memory_handling_lines)
 
-    sections = [
+    # Packet-invariant sections go to the static system message; everything
+    # that depends on the packet stays in the user message (see
+    # TranslationPromptRequest for why the order matters).
+    static_sections = [
         *_format_section("Core Translation Contract:", contract_lines),
     ]
     if style_lines:
         style_title = "Chinese Style Priorities:"
         if material_aware_prompt:
             style_title = "Material-Specific Style Target:"
-        _extend_section(sections, style_title, style_lines)
+        _extend_section(static_sections, style_title, style_lines)
+    if memory_handling_lines:
+        _extend_section(static_sections, "Memory and Ambiguity Handling:", memory_handling_lines)
+    if not compact_prompt:
+        for title, lines in profile.extra_sections:
+            _extend_section(static_sections, title, list(lines))
+
+    sections: list[str] = []
     if (not compact_prompt and profile.role_style) or profile.material_aware:
         _extend_section(sections, "Section-Level Scaffolding:", section_scaffolding_lines)
         _extend_section(sections, "Paragraph Intent Signal:", paragraph_intent_lines)
         _extend_section(sections, "Source-Aware Literalism Guardrails:", literalism_guardrail_lines)
-    if memory_handling_lines:
-        _extend_section(sections, "Memory and Ambiguity Handling:", memory_handling_lines)
-    if not compact_prompt:
-        for title, lines in profile.extra_sections:
-            _extend_section(sections, title, list(lines))
     if packet.open_questions:
         _extend_section(
             sections,
@@ -752,30 +800,35 @@ def build_translation_prompt_request(
         _extend_section(sections, "Current Paragraph:", current_paragraph_lines)
         _extend_section(sections, "Sentence Ledger:", sentence_lines)
     user_prompt = "\n".join(sections)
-    system_prompt_parts: TranslationSystemPromptParts | None = None
     if profile.split_system_static_lines:
         system_prompt_parts = _build_split_system_prompt(
             static_lines=list(profile.split_system_static_lines),
             packet=packet,
+            static_section_lines=static_sections,
         )
-    elif profile.fixed_system_prompt is not None:
-        system_prompt = profile.fixed_system_prompt
-    elif material_aware_prompt:
-        system_prompt = _material_system_prompt(
-            translation_material,
-            minimal=minimal_material_prompt,
+    else:
+        if profile.fixed_system_prompt is not None:
+            base_system_prompt = profile.fixed_system_prompt
+        elif material_aware_prompt:
+            base_system_prompt = _material_system_prompt(
+                translation_material,
+                minimal=minimal_material_prompt,
+            )
+        elif compact_prompt:
+            base_system_prompt = COMPACT_SYSTEM_PROMPT
+        else:
+            base_system_prompt = profile.system_prompt or DEFAULT_SYSTEM_PROMPT
+        system_prompt_parts = TranslationSystemPromptParts(
+            static_lines=(base_system_prompt,),
+            static_section_lines=tuple(static_sections),
         )
-    elif compact_prompt:
-        system_prompt = COMPACT_SYSTEM_PROMPT
-    else:
-        system_prompt = profile.system_prompt or DEFAULT_SYSTEM_PROMPT
-    if system_prompt_parts is not None:
-        system_prompt_static = system_prompt_parts.static_prompt
-        system_prompt_dynamic = system_prompt_parts.dynamic_prompt
-        system_prompt = system_prompt_parts.combined_prompt
-    else:
-        system_prompt_static = system_prompt
-        system_prompt_dynamic = ""
+    system_prompt_static = system_prompt_parts.static_prompt
+    system_prompt_dynamic = system_prompt_parts.dynamic_prompt
+    system_prompt = system_prompt_parts.combined_prompt
+    messages: list[PromptMessage] = [PromptMessage("system", system_prompt_static)]
+    if system_prompt_dynamic:
+        messages.append(PromptMessage("system", "Dynamic Packet Guidance:\n" + system_prompt_dynamic))
+    messages.append(PromptMessage("user", user_prompt))
     return TranslationPromptRequest(
         packet_id=packet.packet_id,
         model_name=model_name,
@@ -786,6 +839,7 @@ def build_translation_prompt_request(
         user_prompt=user_prompt,
         response_schema=TranslationWorkerOutput.model_json_schema(),
         sentence_alias_map=sentence_alias_map,
+        messages=tuple(messages),
     )
 
 

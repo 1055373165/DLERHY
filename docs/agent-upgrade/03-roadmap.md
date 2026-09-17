@@ -20,7 +20,7 @@
 - [x] **部署与密钥**（2026-09-17）：compose 以 `BOOK_AGENT_APP_SCOPE=prod` 运行、挂载整个 `/app/artifacts`、显式传入 `BOOK_AGENT_SECRET_KEY`（缺失则拒绝启动）与 `BOOK_AGENT_TRANSLATION_OPENAI_API_KEY`（Settings 接受这个命名空间变量，仍忽略裸 `OPENAI_API_KEY`）；prod scope 拒绝 echo backend 与 echo 凭据激活（409），不再自动生成密钥；dev 默认仍为 echo（测试与 smoke 依赖），启动时保持原行为。顺带修复 R14 的 SQLite 部分唯一索引。
 - [x] **工程护栏**（2026-09-17）：`.env.example` 入库；dev 工具改为 `[dependency-groups]`（`uv sync` 不再卸掉 pytest/ruff）；`ruff check src tests` 清零（tests/scripts 对 E402 豁免）；`.github/workflows/ci.yml`：lint、PostgreSQL service 上迁移到 head、golden 4 件、`scripts/run_tests_per_file.sh` 逐文件跑全套、前端 tsc/vitest/build；`tests/conftest.py` 提供 SQLite/临时目录/echo 夹具供新测试使用（旧 unittest 模块未迁）；parse-IR 输出走 `Settings.parse_ir_root`、测试指到进程临时目录，OCR 的 uv 缓存改到用户缓存目录（R21）。未做：`ruff format`（226 文件待重排，另行一次性提交）。
 - [ ] **公开前历史清洗**：H0 收尾时在全新克隆上运行 `scripts/scrub_history.sh`，核对后强推所有分支，再把仓库设为公开。
-- [ ] **Prompt 缓存前缀**：把已有的 `system_prompt_static/dynamic` 真正按「静态契约 → 书级段 → 章级段 → packet 段」发送；schema 不再塞 user prompt（Responses 模式用 `json_schema`，Chat 模式用 tool-call）。golden 更新一次并记录原因。
+- [x] **Prompt 缓存前缀**（2026-09-17）：`TranslationPromptRequest.messages` 按「静态 system（人设 + Core Translation Contract + 风格/记忆规则 + profile 附加段）→ 章级 system（Dynamic Packet Guidance）→ packet user」发送；chat 模式把 JSON schema 契约放进静态 system 消息，user 消息只带 `packet_id must equal`；新增 `translation_openai_structured_output_mode=json_schema` 走约束解码。守护线 guardrail 优先句移入 guardrail 段。prompt golden 因此更新一次（内容不变、位置变化）。书级 BOOK.md 段留到 H1。
 
 验收：全部 golden 通过；新增 `test_llm_call_accounting`（任意路径的调用都有事件与成本）；kill -9 恢复测试；PG 并发测试进 CI。
 

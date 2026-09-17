@@ -45,6 +45,7 @@ def _openai_compatible_worker(
         output_cost_per_1m_tokens=settings.translation_output_cost_per_1m_tokens,
         streaming=streaming,
         request_overrides=dict(settings.translation_openai_request_overrides),
+        structured_output_mode=settings.translation_openai_structured_output_mode,
     )
     return LLMTranslationWorker(
         client,
