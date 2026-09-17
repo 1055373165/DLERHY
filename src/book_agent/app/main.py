@@ -55,6 +55,9 @@ def create_app() -> FastAPI:
     validate_app_scope(settings)
     require_configured_secret_key()
     configure_logging(settings.log_level)
+    from book_agent.infra.tracing import configure_tracing
+
+    configure_tracing(settings.otel_traces_enabled)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

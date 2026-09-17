@@ -579,6 +579,38 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         url: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        from urllib.parse import urlsplit
+
+        from book_agent.infra import tracing
+
+        with tracing.span(
+            "llm.request",
+            **{
+                "gen_ai.request.model": payload.get("model"),
+                "server.address": urlsplit(url).hostname,
+                "url.path": urlsplit(url).path,
+                "book_agent.streaming": bool(self.streaming),
+            },
+        ) as current:
+            response = self._request_with_retries_untraced(url=url, payload=payload)
+            if current is not None:
+                usage = response.get("usage") if isinstance(response, dict) else None
+                if isinstance(usage, dict):
+                    tracing.set_attributes(
+                        current,
+                        **{
+                            "gen_ai.usage.input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
+                            "gen_ai.usage.output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
+                        },
+                    )
+            return response
+
+    def _request_with_retries_untraced(
+        self,
+        *,
+        url: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         request_payload = self._prepare_request_payload(payload)
         deadline_at = self.monotonic() + self.effective_deadline_seconds()
         attempt = 0
@@ -603,6 +635,9 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                 if attempt >= self.max_retries:
                     raise
                 attempt += 1
+                from book_agent.infra import tracing
+
+                tracing.annotate_current(**{"book_agent.retries": attempt, "book_agent.last_retry_error": type(exc).__name__})
                 delay = self.backoff_seconds(attempt)
                 retry_after = getattr(exc, "retry_after_seconds", None)
                 if retry_after is not None:

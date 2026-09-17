@@ -6,6 +6,7 @@ import socket
 import threading
 import time
 import traceback
+from contextlib import ExitStack
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,7 +17,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from book_agent.infra import metrics
+from book_agent.infra import metrics, tracing
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import AgentTurnStatus
@@ -441,6 +442,8 @@ class DocumentRunExecutor:
                 return
 
             tick_started = time.monotonic()
+            tick_span = ExitStack()
+            tick_span.enter_context(tracing.span("executor.tick", **{"book_agent.run_id": run_id}))
             try:
                 self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
@@ -476,10 +479,12 @@ class DocumentRunExecutor:
                 logger.warning("Run loop tick for %s hit a transient database error", run_id, exc_info=True)
             except Exception as exc:
                 logger.exception("Run loop for %s failed with an unhandled exception", run_id)
+                tracing.record_error(exc)
                 self._fail_run(run_id, stop_reason="runner.unhandled_exception", exc=exc)
                 return
             finally:
                 metrics.EXECUTOR_TICK.observe(time.monotonic() - tick_started)
+                tick_span.close()
 
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
@@ -1314,7 +1319,16 @@ class DocumentRunExecutor:
             },
             daemon=True,
         )
-        with bind_run_context(run_id):
+        with bind_run_context(run_id), tracing.span(
+            f"work_item.{claimed.stage}",
+            **{
+                "book_agent.run_id": run_id,
+                "book_agent.work_item_id": claimed.work_item_id,
+                "book_agent.scope_type": claimed.scope_type,
+                "book_agent.scope_id": claimed.scope_id,
+                "book_agent.attempt": claimed.attempt,
+            },
+        ):
             self._execute_claimed_work_item_in_context(
                 run_id=run_id,
                 claimed=claimed,
@@ -1362,9 +1376,11 @@ class DocumentRunExecutor:
             self._stop_heartbeat(heartbeat_thread, stop_event)
             on_success(payload, claimed.lease_token)
             metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="succeeded")
+            tracing.annotate_current(**{"book_agent.outcome": "succeeded"})
             self.wake(run_id)
         except LeaseLostError:
             metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="lease_lost")
+            tracing.annotate_current(**{"book_agent.outcome": "lease_lost"})
             self._stop_heartbeat(heartbeat_thread, stop_event)
             # The lease expired and the work item was reclaimed; its new owner
             # records the outcome, so discard this attempt without touching it.
@@ -1375,6 +1391,8 @@ class DocumentRunExecutor:
             self.wake(run_id)
         except Exception as exc:
             metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="failed")
+            tracing.annotate_current(**{"book_agent.outcome": "failed"})
+            tracing.record_error(exc)
             self._stop_heartbeat(heartbeat_thread, stop_event)
             try:
                 self._complete_failure(

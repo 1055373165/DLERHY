@@ -131,7 +131,17 @@ class AgentTurnRunner:
     # --- step 2: the model, with no session open ---------------------------
 
     def _sample(self, prepared: "_PreparedStep") -> AgentStep:
-        return self.model.step(model_name=prepared.model_name, messages=prepared.messages, tools=prepared.tools)
+        from book_agent.infra import tracing
+
+        with tracing.span(
+            "agent.step",
+            **{"gen_ai.request.model": prepared.model_name, "book_agent.messages": len(prepared.messages)},
+        ) as current:
+            step = self.model.step(model_name=prepared.model_name, messages=prepared.messages, tools=prepared.tools)
+            tracing.set_attributes(
+                current, **{"book_agent.tool_calls": len(step.tool_calls), "gen_ai.response.finish_reason": step.finish_reason}
+            )
+            return step
 
     # --- step 3: record and act ------------------------------------------
 
@@ -251,6 +261,22 @@ class AgentTurnRunner:
         return None
 
     def _run_tool(self, ctx: ToolContext, tool: ToolSpec, arguments: BaseModel) -> ToolOutcome:
+        from book_agent.infra import tracing
+
+        with tracing.span(
+            f"agent.tool {tool.name}",
+            **{
+                "book_agent.turn_id": ctx.turn_id,
+                "book_agent.agent_kind": ctx.agent_kind,
+                "book_agent.run_id": ctx.run_id,
+                "book_agent.tool_permission": tool.permission.value,
+            },
+        ) as current:
+            outcome = self._run_tool_untraced(ctx, tool, arguments)
+            tracing.set_attributes(current, **{"book_agent.tool_ok": outcome.ok, "book_agent.tool_error": outcome.error})
+            return outcome
+
+    def _run_tool_untraced(self, ctx: ToolContext, tool: ToolSpec, arguments: BaseModel) -> ToolOutcome:
         trace.tool_called(
             ctx.session,
             turn_id=ctx.turn_id,

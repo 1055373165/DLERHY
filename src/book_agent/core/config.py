@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     metrics_token: str | None = None
     # Multi-instance: API-only replicas set this to false; replicas that run the
     # executor share runs through per-run ownership leases (document_runs.executor_owner).
+    # OpenTelemetry traces (needs the otel extra); exporter settings use the standard OTEL_* variables.
+    otel_traces_enabled: bool = False
     run_executor_enabled: bool = True
     run_ownership_ttl_seconds: int = 30
     # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).

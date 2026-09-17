@@ -24,7 +24,7 @@ COPY src ./src
 COPY alembic ./alembic
 
 RUN pip install --upgrade pip \
-    && pip install .
+    && pip install ".[otel]"
 
 COPY --from=frontend /frontend/dist ./frontend/dist
 

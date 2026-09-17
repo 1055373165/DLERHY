@@ -26,12 +26,19 @@ dependencies = [
 # dev.sh and service.sh run) installs them; `uv sync --no-dev` for images.
 [dependency-groups]
 dev = [
+  "opentelemetry-sdk>=1.30,<2.0",
   "pytest>=8.3,<9.0",
   "ruff>=0.11,<1.0",
 ]
 
 [project.scripts]
 book-agent = "book_agent.cli:main"
+
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2.0",
+    "opentelemetry-sdk>=1.30,<2.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/book_agent"]

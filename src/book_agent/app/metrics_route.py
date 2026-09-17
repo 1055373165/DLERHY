@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 
 from book_agent.core.config import get_settings
 from book_agent.domain.models.ops import DocumentRun, WorkItem
-from book_agent.infra import metrics
+from book_agent.infra import metrics, tracing
 
 
 def install_metrics(app: FastAPI) -> None:
@@ -23,16 +23,22 @@ def install_metrics(app: FastAPI) -> None:
     async def http_metrics(request: Request, call_next):
         started = time.perf_counter()
         status = 500
-        try:
-            response = await call_next(request)
-            status = response.status_code
-            return response
-        finally:
-            route = request.scope.get("route")
-            template = getattr(route, "path", None) or "unmatched"
-            if template != "/metrics":
-                metrics.HTTP_REQUESTS.inc(method=request.method, route=template, status=str(status))
-                metrics.HTTP_DURATION.observe(time.perf_counter() - started, method=request.method, route=template)
+        with tracing.span(
+            f"HTTP {request.method}",
+            parent_headers=request.headers,
+            **{"http.request.method": request.method, "url.path": request.url.path},
+        ) as current:
+            try:
+                response = await call_next(request)
+                status = response.status_code
+                return response
+            finally:
+                route = request.scope.get("route")
+                template = getattr(route, "path", None) or "unmatched"
+                if current is not None:
+                    current.update_name(f"{request.method} {template}")
+                    tracing.set_attributes(current, **{"http.route": template, "http.response.status_code": status})
+                _observe(request.method, template, status, started)
 
     @app.get("/metrics", include_in_schema=False)
     def prometheus_metrics(request: Request) -> Response:
@@ -40,6 +46,12 @@ def install_metrics(app: FastAPI) -> None:
         lines = metrics.render_registry()
         lines.extend(_scrape_time_gauges(request))
         return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+def _observe(method: str, template: str, status: int, started: float) -> None:
+    if template != "/metrics":
+        metrics.HTTP_REQUESTS.inc(method=method, route=template, status=str(status))
+        metrics.HTTP_DURATION.observe(time.perf_counter() - started, method=method, route=template)
 
 
 def _authorize(request: Request) -> None:
