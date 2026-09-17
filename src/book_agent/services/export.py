@@ -70,6 +70,7 @@ from book_agent.export.models import (
     ExportMisalignmentEvidence,
     MergedRenderBlock,
 )
+from book_agent.export.atomic import atomic_path, atomic_write_text, export_lock
 from book_agent.export.pdf_crop import (
     apply_document_image_materializations,
     plan_document_image_materialization,
@@ -246,15 +247,16 @@ class ExportService:
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / renderer.file_name
         manifest_path = output_dir / renderer.manifest_name
-        rendered_text = renderer.render(self, bundle, output_dir, file_path, upstream_exports)
-        if rendered_text is not None:
-            self._write_document_export_alias(output_dir, bundle.document, renderer.export_type, rendered_text)
-        manifest_path.write_text(
-            json.dumps(renderer.manifest(self, bundle, file_path, upstream_exports), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        export = self._record_document_export(bundle, renderer.export_type, file_path, manifest_path)
-        self.repository.save_export(export)
+        with export_lock(output_dir, renderer.export_type.value):
+            rendered_text = renderer.render(self, bundle, output_dir, file_path, upstream_exports)
+            if rendered_text is not None:
+                self._write_document_export_alias(output_dir, bundle.document, renderer.export_type, rendered_text)
+            atomic_write_text(
+                manifest_path,
+                json.dumps(renderer.manifest(self, bundle, file_path, upstream_exports), ensure_ascii=False, indent=2),
+            )
+            export = self._record_document_export(bundle, renderer.export_type, file_path, manifest_path)
+            export = self.repository.save_export(export, manifest_path=manifest_path)
         if renderer.apply_status_updates is not None:
             renderer.apply_status_updates(self, bundle)
         self.repository.session.flush()
@@ -347,7 +349,7 @@ class ExportService:
             if candidate == alias_path:
                 continue
             candidate.unlink(missing_ok=True)
-        alias_path.write_text(content, encoding="utf-8")
+        atomic_write_text(alias_path, content)
 
     def _manifest_path_from_export_record(self, export: Export) -> Path | None:
         raw_path = str((export.input_version_bundle_json or {}).get("sidecar_manifest_path") or "").strip()
@@ -399,9 +401,10 @@ class ExportService:
         self._enforce_gate(bundle, export_type)
         output_dir = self.output_root / bundle.chapter.document_id
         output_dir.mkdir(parents=True, exist_ok=True)
-        file_path, manifest_path = self._export_files(bundle, export_type, output_dir)
-        export = self._record(bundle, export_type, file_path, manifest_path)
-        self.repository.save_export(export)
+        with export_lock(output_dir, f"{export_type.value}-{bundle.chapter.id}"):
+            file_path, manifest_path = self._export_files(bundle, export_type, output_dir)
+            export = self._record(bundle, export_type, file_path, manifest_path)
+            export = self.repository.save_export(export, manifest_path=manifest_path)
         self._apply_status_updates(bundle, export_type)
         self.repository.session.flush()
         return ExportArtifacts(export_record=export, file_path=file_path, manifest_path=manifest_path)
@@ -414,22 +417,16 @@ class ExportService:
     ) -> tuple[Path, Path | None]:
         if export_type == ExportType.REVIEW_PACKAGE:
             file_path = output_dir / f"review-package-{bundle.chapter.id}.json"
-            file_path.write_text(
-                json.dumps(self._build_review_package(bundle), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            atomic_write_text(file_path, json.dumps(self._build_review_package(bundle), ensure_ascii=False, indent=2))
             return file_path, None
         if export_type == ExportType.BILINGUAL_HTML:
             file_path = output_dir / f"bilingual-{bundle.chapter.id}.html"
             asset_path_by_block_id = self._export_epub_assets_for_chapter_bundle(bundle, output_dir)
-            file_path.write_text(
-                self._build_bilingual_html(bundle, asset_path_by_block_id),
-                encoding="utf-8",
-            )
+            atomic_write_text(file_path, self._build_bilingual_html(bundle, asset_path_by_block_id))
             manifest_path = output_dir / f"bilingual-{bundle.chapter.id}.manifest.json"
-            manifest_path.write_text(
+            atomic_write_text(
+                manifest_path,
                 json.dumps(self._build_bilingual_manifest(bundle, file_path), ensure_ascii=False, indent=2),
-                encoding="utf-8",
             )
             return file_path, manifest_path
         raise ExportGateError(f"{export_type.value} is a whole-document export, not a per-chapter export.")
@@ -2512,7 +2509,7 @@ class ExportService:
             "</rootfiles></container>"
         )
 
-        with zipfile.ZipFile(file_path, mode="w") as archive:
+        with atomic_path(file_path) as temporary, zipfile.ZipFile(temporary, mode="w") as archive:
             archive.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
             archive.writestr("META-INF/container.xml", container_xml, compress_type=zipfile.ZIP_DEFLATED)
             archive.writestr("OEBPS/content.opf", content_opf, compress_type=zipfile.ZIP_DEFLATED)
@@ -2553,7 +2550,11 @@ class ExportService:
                 patch_sources.setdefault(chapter_href, {})[anchor] = block.target_text
 
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(source_path) as source_archive, zipfile.ZipFile(file_path, mode="w") as target_archive:
+        with (
+            atomic_path(file_path) as temporary,
+            zipfile.ZipFile(source_path) as source_archive,
+            zipfile.ZipFile(temporary, mode="w") as target_archive,
+        ):
             for info in source_archive.infolist():
                 raw = source_archive.read(info.filename)
                 if info.filename.endswith((".xhtml", ".html", ".htm")):
@@ -2637,7 +2638,8 @@ class ExportService:
                     page = browser.new_page()
                     page.emulate_media(media="print")
                     page.goto(html_path.resolve().as_uri(), wait_until="load")
-                    page.pdf(path=str(pdf_path), print_background=True, format="A4")
+                    with atomic_path(pdf_path) as temporary:
+                        page.pdf(path=str(temporary), print_background=True, format="A4")
                 finally:
                     browser.close()
         except ExportGateError:
@@ -3063,7 +3065,7 @@ def _render_merged(builder_name: str) -> Callable[[ExportService, DocumentExport
     def render(service: ExportService, bundle: DocumentExportBundle, output_dir: Path, file_path: Path, _upstream: dict) -> str:
         asset_path_by_block_id = service._export_epub_assets_for_document_bundle(bundle, output_dir)
         text = getattr(service, builder_name)(bundle, asset_path_by_block_id)
-        file_path.write_text(text, encoding="utf-8")
+        atomic_write_text(file_path, text)
         return text
 
     return render

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
@@ -25,8 +27,25 @@ from book_agent.domain.models import (
     MemorySnapshot,
     Sentence,
 )
-from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
+from book_agent.domain.models.review import ChapterQualitySummary, Export, ExportVersion, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+
+
+# Version rows kept per export artifact (the blob reaper frees older bytes).
+EXPORT_VERSION_RETENTION = 10
+
+
+def _file_digest(path: Path) -> tuple[str | None, int | None]:
+    try:
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+                size += len(chunk)
+        return digest.hexdigest(), size
+    except OSError:
+        return None, None
 
 
 @dataclass(slots=True)
@@ -299,5 +318,50 @@ class ExportRepository:
             )
         ).all()
 
-    def save_export(self, export: Export) -> None:
-        self.session.merge(export)
+    def save_export(self, export: Export, *, manifest_path: Path | None = None) -> Export:
+        """Upsert the current export row and append a version row for what was just written.
+
+        A re-export keeps the row's first ``created_at`` (it used to be reset on
+        every export) and bumps ``version``; the file digest recorded on the
+        version row lets the blob store keep earlier bytes.
+        """
+        existing = self.session.get(Export, export.id)
+        if existing is not None:
+            export.created_at = existing.created_at
+            export.version = int(existing.version or 1) + 1
+        else:
+            export.version = 1
+        persisted = self.session.merge(export)
+        self.session.flush()
+        sha256, byte_count = _file_digest(Path(persisted.file_path))
+        self.session.add(
+            ExportVersion(
+                export_id=persisted.id,
+                document_id=persisted.document_id,
+                export_type=persisted.export_type,
+                version=persisted.version,
+                file_path=persisted.file_path,
+                manifest_path=str(manifest_path) if manifest_path is not None else None,
+                content_sha256=sha256,
+                byte_count=byte_count,
+                input_version_bundle_json=dict(persisted.input_version_bundle_json or {}),
+                created_at=persisted.updated_at,
+            )
+        )
+        self.session.flush()
+        stale = self.session.scalars(
+            select(ExportVersion)
+            .where(ExportVersion.export_id == persisted.id)
+            .order_by(ExportVersion.version.desc())
+            .offset(EXPORT_VERSION_RETENTION)
+        ).all()
+        for row in stale:
+            self.session.delete(row)
+        return persisted
+
+    def list_export_versions(self, export_id: str) -> list[ExportVersion]:
+        return list(
+            self.session.scalars(
+                select(ExportVersion).where(ExportVersion.export_id == export_id).order_by(ExportVersion.version.desc())
+            ).all()
+        )

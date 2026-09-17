@@ -714,3 +714,21 @@ class ExecuteActionResponse(BaseSchema):
     rerun_translation_run_ids: list[str] = Field(default_factory=list)
     issue_resolved: bool | None = None
     recheck_issue_count: int | None = None
+
+
+class ExportVersionResponse(BaseSchema):
+    version: int
+    file_path: str
+    manifest_path: str | None = None
+    content_sha256: str | None = None
+    byte_count: int | None = None
+    created_at: str | None = None
+
+
+class ExportVersionHistoryResponse(BaseSchema):
+    document_id: str
+    export_id: str
+    export_type: str
+    current_version: int
+    versions: list[ExportVersionResponse] = Field(default_factory=list)
+

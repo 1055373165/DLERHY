@@ -19,6 +19,8 @@ from book_agent.app.api.export_downloads import chapter_export_response, cleanup
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
+    ExportVersionHistoryResponse,
+    ExportVersionResponse,
     ChapterMemoryProposalResponse,
     ChapterMemoryProposalDecisionRequest,
     ChapterMemoryProposalDecisionResponse,
@@ -405,6 +407,39 @@ def download_document_export(
         document_id,
         export_type,
         artifact_roots=_artifact_roots(request),
+    )
+
+
+@router.get("/{document_id}/exports/{export_id}/versions", response_model=ExportVersionHistoryResponse)
+def get_document_export_versions(
+    document_id: str,
+    export_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> ExportVersionHistoryResponse:
+    """What each re-export of this artifact produced, newest first (bytes kept in the blob store)."""
+    from book_agent.domain.models.review import Export
+
+    export = session.get(Export, export_id)
+    if export is None or export.document_id != document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="export not found")
+    versions = _workflow_service(request, session).export_repository.list_export_versions(export_id)
+    return ExportVersionHistoryResponse(
+        document_id=document_id,
+        export_id=export_id,
+        export_type=export.export_type.value,
+        current_version=int(export.version or 1),
+        versions=[
+            ExportVersionResponse(
+                version=row.version,
+                file_path=row.file_path,
+                manifest_path=row.manifest_path,
+                content_sha256=row.content_sha256,
+                byte_count=row.byte_count,
+                created_at=row.created_at.isoformat() if row.created_at else None,
+            )
+            for row in versions
+        ],
     )
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -212,4 +212,40 @@ class Export(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     byte_count: Mapped[int | None] = mapped_column(BigInteger)
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stale_reason: Mapped[str | None] = mapped_column(Text)
+    # Incremented on every re-export of this artifact; history in export_versions.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class ExportVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """Append-only history of one export artifact: what each re-export produced.
+
+    The bytes live in the content-addressed blob store under ``content_sha256``
+    (the blob reaper counts these rows as references), so an earlier version
+    can be compared or restored after the canonical file was overwritten.
+    Only the newest ``EXPORT_VERSION_RETENTION`` rows per export are kept.
+    """
+
+    __tablename__ = "export_versions"
+    __table_args__ = (
+        UniqueConstraint("export_id", "version", name="uq_export_versions_export_version"),
+        Index("idx_export_versions_document_created", "document_id", "created_at"),
+    )
+
+    export_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("exports.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    export_type: Mapped[ExportType] = mapped_column(enum_value_type(ExportType, name="export_type"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest_path: Mapped[str | None] = mapped_column(Text)
+    content_sha256: Mapped[str | None] = mapped_column(Text)
+    byte_count: Mapped[int | None] = mapped_column(BigInteger)
+    input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 

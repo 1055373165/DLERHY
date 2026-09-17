@@ -15,7 +15,8 @@ This script:
 2. Loads the set of referenced sha256s from the DB — rows that are
    ``status='succeeded'`` with a non-NULL ``content_sha256`` and no
    ``stale_reason`` and whose ``file_path`` is not the
-   ``unrecoverable://`` sentinel.
+   ``unrecoverable://`` sentinel, plus every retained ``export_versions``
+   row (export history).
 3. For each blob not in the referenced set, checks its mtime is older
    than ``--min-age-minutes`` (default 60) and — if ``--apply`` was
    passed — unlinks it.
@@ -102,7 +103,10 @@ def _referenced_shas(session) -> set[str]:
             "WHERE status = 'succeeded' "
             "  AND content_sha256 IS NOT NULL "
             "  AND stale_reason IS NULL "
-            "  AND file_path NOT LIKE 'unrecoverable://%'"
+            "  AND file_path NOT LIKE 'unrecoverable://%' "
+            # Retained export history keeps its bytes (see ExportVersion).
+            "UNION SELECT DISTINCT content_sha256 FROM export_versions "
+            "WHERE content_sha256 IS NOT NULL"
         )
     ).all()
     return {str(r[0]) for r in rows if r[0]}

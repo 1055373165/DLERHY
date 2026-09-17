@@ -532,6 +532,23 @@ export interface ExportVersionEvidenceSummaryResponse {
   active_snapshot_versions?: Record<string, number>;
 }
 
+export interface ExportVersionHistoryResponse {
+  document_id: string;
+  export_id: string;
+  export_type: string;
+  current_version: number;
+  versions?: ExportVersionResponse[];
+}
+
+export interface ExportVersionResponse {
+  version: number;
+  file_path: string;
+  manifest_path?: string | null;
+  content_sha256?: string | null;
+  byte_count?: number | null;
+  created_at?: string | null;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }
