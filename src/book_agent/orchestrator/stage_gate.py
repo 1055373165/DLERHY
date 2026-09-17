@@ -48,6 +48,7 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "repair": ("review",),
     "bilingual_html": ("translate", "review", "repair"),
     "merged_html": ("translate", "review", "repair", "bilingual_html"),
+    "export_review": ("bilingual_html", "merged_html"),
 }
 # Other export types (standalone export runs) follow translation and review.
 _DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")

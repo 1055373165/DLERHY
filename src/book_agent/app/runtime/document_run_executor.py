@@ -19,6 +19,8 @@ from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import AgentTurnStatus
 from book_agent.harness.agents.repair import AGENT_KIND as RepairAgent_KIND
 from book_agent.harness.agents.repair import RepairAgent, remaining_blockers
+from book_agent.harness.agents.export_review import AGENT_KIND as ExportReviewAgent_KIND
+from book_agent.harness.agents.export_review import ExportReviewAgent
 from book_agent.harness.agents.reviewer import AGENT_KIND as ReviewerAgent_KIND
 from book_agent.harness.agents.structure import AGENT_KIND as StructureAgent_KIND
 from book_agent.harness.agents.structure import StructureAgent
@@ -649,6 +651,7 @@ class DocumentRunExecutor:
                             "terminology_mode": plan.terminology_mode,
                             "model_review_mode": plan.model_review_mode,
                             "structure_review_mode": plan.structure_review_mode,
+                            "export_review_mode": plan.export_review_mode,
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
                     },
@@ -769,6 +772,8 @@ class DocumentRunExecutor:
             return RepairAgent.registry(), RepairAgent.policy()
         if agent_kind == StructureAgent_KIND:
             return StructureAgent.registry(), StructureAgent.policy()
+        if agent_kind == ExportReviewAgent_KIND:
+            return ExportReviewAgent.registry(), ExportReviewAgent.policy()
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
 
     def _start_agent_turn(
@@ -801,6 +806,16 @@ class DocumentRunExecutor:
                 document_id=document_id,
                 model_name=model_name,
                 mode=str(input_bundle.get("model_review_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == ExportReviewAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = ExportReviewAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("export_review_mode") or "sampled"),
                 run_id=run_id,
                 work_item_id=work_item_id,
             )

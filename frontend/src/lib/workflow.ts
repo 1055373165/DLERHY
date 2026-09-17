@@ -73,6 +73,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     label: "中文阅读稿",
     description: "输出最终整书阅读包。",
   },
+  {
+    key: "export_review",
+    label: "导出审读",
+    description: "（可选）导出审读代理查看渲染后的页面截图，把缺图、表格错乱、漏译、乱码等问题记为建议。",
+  },
 ];
 
 export const DELIVERY_ASSETS = [

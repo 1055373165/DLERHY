@@ -54,6 +54,7 @@ PIPELINE_STAGES = (
     "repair",
     "bilingual_html",
     "merged_html",
+    "export_review",
 )
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.
 AGENT_STAGE_KINDS: dict[str, str] = {
@@ -61,6 +62,7 @@ AGENT_STAGE_KINDS: dict[str, str] = {
     "terminology": "terminology",
     "model_review": "reviewer",
     "repair": "repair",
+    "export_review": "export_review",
 }
 
 # Stage classification (spec Phase 2). A *required* stage must reach
