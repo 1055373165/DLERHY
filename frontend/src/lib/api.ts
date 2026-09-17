@@ -414,6 +414,10 @@ export type IssueDetail = Generated.IssueDetailResponse;
 export type IssueList = Generated.IssueListResponse;
 export type IssueDecision = Generated.IssueDecisionRequest;
 export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
+export type OrgBudget = Generated.OrgBudgetResponse;
+export type StructureEditRequest = Generated.StructureEditRequest;
+export type StructureEdit = Generated.StructureEditResponse;
+export type StructureEditList = Generated.StructureEditListResponse;
 
 export interface IssueFilter {
   status?: "active" | "all" | "open" | "triaged" | "resolved" | "wontfix";
@@ -933,3 +937,19 @@ export async function transitionIssue(
   });
 }
 
+/** Model spend of the caller's organisation this month and its cap (null: unlimited). */
+export async function getCurrentOrgBudget(): Promise<OrgBudget> {
+  return requestJson<OrgBudget>("/orgs/current/budget");
+}
+
+export async function listStructureEdits(documentId: string): Promise<StructureEditList> {
+  return requestJson<StructureEditList>(`/documents/${documentId}/structure-edits`);
+}
+
+export async function createStructureEdit(documentId: string, payload: StructureEditRequest): Promise<StructureEdit> {
+  return requestJson<StructureEdit>(`/documents/${documentId}/structure-edits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}

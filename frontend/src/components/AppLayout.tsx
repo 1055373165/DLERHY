@@ -1,4 +1,5 @@
 import { ApiKeySetting } from "./ApiKeySetting";
+import { BudgetMeter } from "./BudgetMeter";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -109,6 +110,7 @@ export function AppLayout() {
         </nav>
 
         <div className={s.sidebarFooter}>
+          <BudgetMeter />
           <ApiKeySetting />
           <div className={s.systemLinks}>
             <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>

@@ -16,6 +16,7 @@ import {
 } from "../../lib/api";
 import { formatDate } from "../../lib/workflow";
 import s from "./IssuesPage.module.css";
+import { StructureEditForm } from "./StructureEditForm";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
 type Tone = "active" | "success" | "warning" | "danger" | "muted";
@@ -308,6 +309,10 @@ export function IssuesPage() {
               ))}
             </div>
             {feedback ? <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div> : null}
+
+            {selected.issue_type === "STRUCTURE_SUGGESTION" && documentId && (selected.status === "open" || selected.status === "triaged") ? (
+              <StructureEditForm key={selected.id} documentId={documentId} issue={selected} />
+            ) : null}
 
             <div className={s.fieldLabel}>修复动作</div>
             {(detail.actions ?? []).length === 0 ? (
