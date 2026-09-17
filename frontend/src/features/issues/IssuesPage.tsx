@@ -9,6 +9,7 @@ import {
   type Issue,
   type IssueFilter,
   type IssueTransition,
+  executeIssueAction,
   getIssueDetail,
   listIssues,
   transitionIssue,
@@ -138,6 +139,23 @@ export function IssuesPage() {
     },
     onError: (err) => {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "操作失败" });
+    },
+  });
+
+  const runAction = useMutation({
+    mutationFn: async (actionId: string) => executeIssueAction(actionId, { runFollowup: true }),
+    onSuccess: async (result) => {
+      setFeedback({
+        tone: result.issue_resolved ? "success" : "error",
+        text: result.issue_resolved
+          ? `动作已执行，问题已解决（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`
+          : `动作已执行，问题仍在（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["issues", documentId] });
+      await queryClient.invalidateQueries({ queryKey: ["issue", selectedId] });
+    },
+    onError: (err) => {
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "执行失败" });
     },
   });
 
@@ -297,8 +315,20 @@ export function IssuesPage() {
             ) : (
               <ul className={s.plainList}>
                 {(detail.actions ?? []).map((action) => (
-                  <li key={action.id} className={s.meta}>
-                    {action.action_type} · {action.scope_type} · {action.status}
+                  <li key={action.id} className={s.actionRow}>
+                    <span className={s.meta}>
+                      {action.action_type} · {action.scope_type} · {action.status}
+                    </span>
+                    {action.status === "planned" && (selected.status === "open" || selected.status === "triaged") ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={runAction.isPending}
+                        onClick={() => runAction.mutate(action.id)}
+                      >
+                        {runAction.isPending ? "执行中…" : "执行并复核"}
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -38,7 +38,7 @@ function installFetchMock() {
       return json({ total_count: 0, record_count: 0, offset: 0, limit: 12, has_more: false, entries: [] });
     }
     if (url.includes(`/v1/documents/${DOCUMENT_ID}/issues`)) {
-      const decided = posts.length > 0;
+      const decided = posts.some((item) => item.includes("/wontfix"));
       return json({
         document_id: DOCUMENT_ID,
         total_count: 1,
@@ -48,11 +48,14 @@ function installFetchMock() {
         entries: [decided ? { ...ISSUE, status: "wontfix", version: 2, decided_by: "human:alice" } : ISSUE],
       });
     }
+    if (url.includes("/v1/actions/a1/execute")) {
+      return json({ action_id: "a1", status: "completed", invalidation_count: 1, rerun_scope_type: "packet", rerun_packet_ids: ["p1"], issue_resolved: true });
+    }
     if (url.includes(`/v1/issues/${ISSUE_ID}/wontfix`)) {
       return json({ ...ISSUE, status: "wontfix", version: 2, decided_by: "human:alice" });
     }
     if (url.includes(`/v1/issues/${ISSUE_ID}`)) {
-      const decided = posts.length > 0;
+      const decided = posts.some((item) => item.includes("/wontfix"));
       return json({
         issue: decided ? { ...ISSUE, status: "wontfix", version: 2, decided_by: "human:alice" } : ISSUE,
         events: [
@@ -124,6 +127,11 @@ describe("IssuesPage", () => {
     expect(await screen.findByText("Momentum persists.")).toBeInTheDocument();
     expect(screen.getByText("动量消失。")).toBeInTheDocument();
     expect(screen.getByText(/RERUN_PACKET/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "执行并复核" }));
+    await waitFor(() =>
+      expect(posts.some((url) => url.includes("/v1/actions/a1/execute") && url.includes("run_followup=true"))).toBe(true),
+    );
+    await screen.findByText(/问题已解决/);
     expect(screen.queryByRole("button", { name: "重新打开" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("处理人"), { target: { value: "alice" } });
     fireEvent.change(screen.getByLabelText("备注"), { target: { value: "keep" } });
