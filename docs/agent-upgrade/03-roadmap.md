@@ -54,6 +54,8 @@
 
 验收：审校 eval 集（人工标注 200 句）上模型审校的精确率/召回率；自纠正后阻断 issue 数下降；无循环失控（审计可证）。
 
+**H2 收口记录（2026-09-17）**：提交 `ba8634e` → `1581275`。逐文件全套 124 个测试文件通过（负载 40–65 时 `test_api_workflow` 的 20–30 秒等待偶发超时，单独重跑均通过）；PostgreSQL 16 上迁移到 `20260917_0037` 并逐个回退验证，PG 漂移/并发/工作流/事件/SSE 测试 31 个通过；前端 tsc / vitest 通过。未完成的验收项：审校 eval（人工标注 200 句上模型审校的精确率/召回率）与「自纠正后阻断 issue 数下降」需要真实 provider 运行，产生费用，待用户同意后执行；Repair Agent 默认关闭直到该评估完成。
+
 ## H3 · 结构与交付 agent（约 6 周）
 
 - [ ] **Structure Agent**：只对 `parse_confidence` 低 / `layout_risk` 高 / sanity 失败的页触发；工具 `render_page_image`（多模态读页）、`split_block`、`merge_blocks`、`relabel_block`、`link_caption`；每个结构改动经 H2 的解析版本分叉产生新 revision。H2 之前可先以顾问模式上线（只 `open_issue`）。
