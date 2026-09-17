@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "../components/AppLayout";
 import { ApprovalsPage } from "../features/approvals/ApprovalsPage";
+import { IssuesPage } from "../features/issues/IssuesPage";
 import { DeliverablesPage } from "../features/deliverables/DeliverablesPage";
 import { LibraryPage } from "../features/library/LibraryPage";
 import { RunsPage } from "../features/runs/RunsPage";
@@ -19,6 +20,7 @@ export function App() {
             <Route path="/" element={<WorkspacePage />} />
             <Route path="/runs" element={<RunsPage />} />
             <Route path="/deliverables" element={<DeliverablesPage />} />
+            <Route path="/issues" element={<IssuesPage />} />
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/library" element={<LibraryPage />} />
           </Route>

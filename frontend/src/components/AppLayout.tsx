@@ -35,6 +35,13 @@ const Icons = {
       <rect x="4" y="11.5" width="8" height="3" rx="1" />
     </svg>
   ),
+  issues: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 1.5l6.5 12h-13z" />
+      <path d="M8 6v3.5" />
+      <path d="M8 11.5v.01" />
+    </svg>
+  ),
   approve: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="8" cy="8" r="6.5" />
@@ -47,6 +54,7 @@ const NAV_ITEMS = [
   { to: "/", label: "WORK", zh: "工作台", icon: Icons.work },
   { to: "/runs", label: "RUNS", zh: "运行", icon: Icons.runs },
   { to: "/deliverables", label: "SHIP", zh: "交付", icon: Icons.ship },
+  { to: "/issues", label: "ISSUES", zh: "问题", icon: Icons.issues },
   { to: "/approvals", label: "APPROVE", zh: "审批", icon: Icons.approve },
   { to: "/library", label: "LIB", zh: "书库", icon: Icons.lib },
 ] as const;

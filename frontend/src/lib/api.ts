@@ -409,6 +409,21 @@ export type ApprovalDecision = Generated.ApprovalDecisionRequest;
 export type BookGuide = Generated.BookGuideResponse;
 export type Decision = Generated.DecisionResponse;
 export type AgentTurn = Generated.AgentTurnResponse;
+export type Issue = Generated.IssueResponse;
+export type IssueDetail = Generated.IssueDetailResponse;
+export type IssueList = Generated.IssueListResponse;
+export type IssueDecision = Generated.IssueDecisionRequest;
+export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
+
+export interface IssueFilter {
+  status?: "active" | "all" | "open" | "triaged" | "resolved" | "wontfix";
+  blocking?: boolean;
+  detector?: "rule" | "model" | "human";
+  issueType?: string;
+  chapterId?: string;
+  offset?: number;
+  limit?: number;
+}
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
 
@@ -840,3 +855,32 @@ export async function listDecisions(documentId: string): Promise<Decision[]> {
 export async function listAgentTurns(documentId: string): Promise<AgentTurn[]> {
   return requestJson<AgentTurn[]>(`/documents/${documentId}/agent-turns`);
 }
+
+export async function listIssues(documentId: string, filter: IssueFilter = {}): Promise<IssueList> {
+  const params = new URLSearchParams();
+  params.set("status", filter.status ?? "active");
+  if (filter.blocking !== undefined) params.set("blocking", String(filter.blocking));
+  if (filter.detector) params.set("detector", filter.detector);
+  if (filter.issueType) params.set("issue_type", filter.issueType);
+  if (filter.chapterId) params.set("chapter_id", filter.chapterId);
+  params.set("offset", String(filter.offset ?? 0));
+  params.set("limit", String(filter.limit ?? 50));
+  return requestJson<IssueList>(`/documents/${documentId}/issues?${params.toString()}`);
+}
+
+export async function getIssueDetail(issueId: string): Promise<IssueDetail> {
+  return requestJson<IssueDetail>(`/issues/${issueId}`);
+}
+
+export async function transitionIssue(
+  issueId: string,
+  transition: IssueTransition,
+  payload: IssueDecision,
+): Promise<Issue> {
+  return requestJson<Issue>(`/issues/${issueId}/${transition}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
