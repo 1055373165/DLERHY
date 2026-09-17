@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     provider_allow_private_hosts: bool = False
     # Bearer token for GET /metrics (Prometheus). Unset: admin API key when auth is on, open otherwise.
     metrics_token: str | None = None
+    # Multi-instance: API-only replicas set this to false; replicas that run the
+    # executor share runs through per-run ownership leases (document_runs.executor_owner).
+    run_executor_enabled: bool = True
+    run_ownership_ttl_seconds: int = 30
     # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
     frontend_dist_dir: Path | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)

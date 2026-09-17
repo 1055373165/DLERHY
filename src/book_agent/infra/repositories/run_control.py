@@ -359,14 +359,7 @@ class RunControlRepository:
             )
         ) or 0
 
-    def list_claimable_work_item_ids(
-        self,
-        run_id: str,
-        *,
-        stage: WorkItemStage | None = None,
-        limit: int = 32,
-    ) -> list[str]:
-        scan_limit = max(limit * 8, limit)
+    def claimable_work_items_statement(self, run_id: str, *, stage: WorkItemStage | None, scan_limit: int):
         stmt = (
             select(WorkItem)
             .where(
@@ -375,9 +368,23 @@ class RunControlRepository:
             )
             .order_by(WorkItem.priority.asc(), WorkItem.created_at.asc(), WorkItem.id.asc())
             .limit(scan_limit)
+            # PostgreSQL: rows another transaction is claiming are skipped instead of
+            # contended for; the claim CAS stays the correctness guard. SQLite renders
+            # no FOR clause (it serialises writers anyway).
+            .with_for_update(skip_locked=True)
         )
         if stage is not None:
             stmt = stmt.where(WorkItem.stage == stage)
+        return stmt
+
+    def list_claimable_work_item_ids(
+        self,
+        run_id: str,
+        *,
+        stage: WorkItemStage | None = None,
+        limit: int = 32,
+    ) -> list[str]:
+        stmt = self.claimable_work_items_statement(run_id, stage=stage, scan_limit=max(limit * 8, limit))
         now = _utcnow()
         claimable_ids: list[str] = []
         for work_item in self.session.scalars(stmt).all():

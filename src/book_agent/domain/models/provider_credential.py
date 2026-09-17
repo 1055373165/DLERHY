@@ -51,6 +51,10 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Integer, nullable=False, default=20
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Bumped on every change that affects the worker built from this row
+    # (config edits, activation); worker caches in every process compare
+    # (active id, config_revision) against their cached key.
+    config_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     last_test_status: Mapped[ProviderTestStatus] = mapped_column(
         enum_value_type(ProviderTestStatus, name="provider_test_status"),
         nullable=False,

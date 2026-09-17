@@ -480,6 +480,8 @@ RCR:61-89：`session.flush()` → `UPDATE document_runs SET updated_at=updated_a
 
 ### 11.1 多实例部署
 
+> 2026-09-18 更新：本节描述的是升级前状态。现在每个 run 同一时间只有一个实例跑 run loop（`document_runs.executor_owner` 租约），候选 work item 查询带 `SKIP LOCKED`，凭据缓存按库内 `config_revision` 跨进程失效，迁移持 advisory lock，可用 `BOOK_AGENT_RUN_EXECUTOR_ENABLED=false` 部署纯 API 副本。见 `docs/agent-upgrade/03-roadmap.md` H4「多实例」。
+
 - 没有 leader 选举或 run 所有权：每个进程的 supervisor 都会为每个 RUNNING run 起 run loop（EXE:311-324）。正确性主要靠 DB 层：claim CAS（RCR:334-355）、播种唯一索引（IntegrityError 被当瞬态，EXE:361-364）、run 行锁、租约锁。并行度限制读取 DB 中的 LEASED/RUNNING 数（EXE:1125-1130）所以是全局的。
 - 副作用：N 倍的 tick 查询与 `get_run_summary` 全表扫描；每个实例都写 Reconciler 漂移行；`wake()` 只唤醒本进程；`worker_instance_id` 只是 `app.translate:{uuid}`（EXE:1182）没有主机/进程标识，无法定位租约属于哪台机器。
 - `ensure_document_run_executor` 每个进程一份；uvicorn `--workers N` 即 N 个执行器（无开关可关闭某进程的执行器，也不能部署"纯 worker"进程：`scripts/run_real_book_live.py` 用自己的线程池驱动 `RunExecutionService`，与 app 内执行器并存时会抢同一 run 的 work item——CAS 保证不重复，但实验脚本不会更新 pipeline 缓存）。

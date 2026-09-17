@@ -157,7 +157,7 @@ def update_credential(
     # Any change to the active provider's config invalidates the worker cache
     # so the next request picks the new values.
     if record.is_active:
-        _bump_revision()
+        _bump_revision(record)
     session.flush()
     return record
 
@@ -189,8 +189,8 @@ def _activate_internal(session: Session, record: ProviderCredential) -> None:
         ProviderCredential.id != record.id,
     ).update({ProviderCredential.is_active: False}, synchronize_session=False)
     record.is_active = True
+    _bump_revision(record)
     session.flush()
-    _bump_revision()
 
 
 def record_test_outcome(
@@ -359,18 +359,32 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
 # Worker resolution + caching
 # ---------------------------------------------------------------------------
 
-# A cheap monotonic revision counter; bumped whenever any active-affecting
-# change is committed, so app-state caches can invalidate.
+# Two invalidation signals for worker caches. The process-local counter makes a
+# change visible in this process at once (before commit, for the request that
+# made it); ``config_revision`` on the active row makes it visible to every
+# other process once committed (see ``active_credential_key``).
 _revision = 0
 
 
-def _bump_revision() -> None:
+def _bump_revision(record: ProviderCredential | None = None) -> None:
     global _revision
     _revision += 1
+    if record is not None:
+        record.config_revision = int(record.config_revision or 1) + 1
 
 
 def current_revision() -> int:
     return _revision
+
+
+def active_credential_key(session: Session) -> tuple[str, int] | None:
+    """(active credential id, config_revision): changes whenever any process changes the active worker config."""
+    row = session.execute(
+        select(ProviderCredential.id, ProviderCredential.config_revision)
+        .where(ProviderCredential.is_active.is_(True))
+        .limit(1)
+    ).first()
+    return (str(row[0]), int(row[1] or 1)) if row is not None else None
 
 
 def resolve_active_credential(

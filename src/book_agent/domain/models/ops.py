@@ -148,6 +148,11 @@ class DocumentRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status_detail_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Which executor instance runs this run's loop, until when. Instances take
+    # a run over only after the lease expires; work item claims stay the
+    # correctness guard, ownership keeps N instances from all ticking one run.
+    executor_owner: Mapped[str | None] = mapped_column(Text)
+    executor_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class WorkItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):

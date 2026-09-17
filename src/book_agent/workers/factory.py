@@ -152,33 +152,59 @@ class TranslationWorkerProvider:
     """The one place that decides which translation worker the app uses.
 
     The worker is built from the active provider credential and cached per
-    credential revision, so activating another provider applies to the next
-    request or work item without a restart.
+    (process revision, active credential id, credential config_revision), so
+    activating or editing a provider applies to the next request or work item
+    in every process without a restart. The database key is re-read at most
+    every ``db_check_interval_seconds``.
     """
 
-    def __init__(self, *, settings: Settings, session_factory: Callable[[], sessionmaker]) -> None:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        session_factory: Callable[[], sessionmaker],
+        db_check_interval_seconds: float = 2.0,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
+        import time
+
         self._settings = settings
         self._session_factory = session_factory
         self._lock = threading.Lock()
         self._worker: TranslationWorker | None = None
         self._revision = -1
+        self._db_key: object = None
+        self._db_checked_at: float | None = None
+        self._db_check_interval = max(0.0, float(db_check_interval_seconds))
+        self._clock = clock or time.monotonic
 
     def get(self) -> TranslationWorker:
-        from book_agent.services.provider_credentials import current_revision
+        from book_agent.services.provider_credentials import active_credential_key, current_revision
 
         revision = current_revision()
         with self._lock:
-            if self._worker is not None and self._revision == revision:
+            now = self._clock()
+            db_check_due = self._db_checked_at is None or now - self._db_checked_at >= self._db_check_interval
+            if self._worker is not None and self._revision == revision and not db_check_due:
                 return self._worker
             with self._session_factory()() as session:
+                key = active_credential_key(session)
+                if self._worker is not None and self._revision == revision and key == self._db_key:
+                    self._db_checked_at = now
+                    return self._worker
                 worker = resolve_translation_worker(session, self._settings)
                 # Resolving may seed a credential from settings on first use.
                 session.commit()
+                key = active_credential_key(session)
             self._worker = worker
             self._revision = current_revision()
+            self._db_key = key
+            self._db_checked_at = now
             return worker
 
     def invalidate(self) -> None:
         with self._lock:
             self._worker = None
             self._revision = -1
+            self._db_key = None
+            self._db_checked_at = None

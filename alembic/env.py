@@ -23,6 +23,9 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Arbitrary constant shared by every process that migrates this database.
+MIGRATION_LOCK_KEY = 7_311_842_905
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -48,6 +51,11 @@ def run_migrations_online() -> None:
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
+            if connection.dialect.name == "postgresql":
+                # Replicas that run `alembic upgrade head` at the same time queue here;
+                # the lock is released with the migration transaction, and a waiter
+                # then reads the already-upgraded alembic_version and has nothing to do.
+                connection.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)" % MIGRATION_LOCK_KEY)
             context.run_migrations()
 
 

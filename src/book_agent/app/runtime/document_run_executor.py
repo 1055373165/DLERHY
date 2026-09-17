@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import logging
+import os
+import socket
 import threading
 import time
 import traceback
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -87,22 +89,49 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     executor = getattr(app.state, "document_run_executor", None)
     if executor is not None:
         return executor
+    from book_agent.core.config import get_settings
+
+    settings = get_settings()
+    if not settings.run_executor_enabled:
+        executor = DisabledRunExecutor()
+        app.state.document_run_executor = executor
+        return executor
     ensure_database_state = getattr(app.state, "ensure_database_state", None)
     if callable(ensure_database_state):
         ensure_database_state()
     resolver = getattr(app.state, "resolve_translation_worker", None)
-    from book_agent.core.config import get_settings
 
     executor = DocumentRunExecutor(
         session_factory=app.state.session_factory,
         export_root=app.state.export_root,
         translation_worker=getattr(app.state, "translation_worker", None),
         translation_worker_resolver=resolver if callable(resolver) else None,
-        translation_max_output_repairs=get_settings().translation_max_output_repairs,
+        translation_max_output_repairs=settings.translation_max_output_repairs,
+        run_ownership_ttl_seconds=settings.run_ownership_ttl_seconds,
     )
     executor.start()
     app.state.document_run_executor = executor
     return executor
+
+
+def executor_instance_id() -> str:
+    """host:pid:random, so a lease or run owner can be traced to a machine and process."""
+    return f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
+
+
+class DisabledRunExecutor:
+    """Stands in on API-only replicas (``run_executor_enabled=false``): runs are executed elsewhere."""
+
+    instance_id = None
+
+    def start(self) -> None:
+        return None
+
+    def stop(self, *, work_timeout_seconds: float = 30.0) -> bool:
+        return True
+
+    def wake(self, run_id: str | None = None) -> None:
+        return None
 
 
 class DocumentRunExecutor:
@@ -123,8 +152,15 @@ class DocumentRunExecutor:
         default_max_blocker_repair_rounds: int = 10,
         default_max_parallel_workers: int = 8,
         translation_max_output_repairs: int = 1,
+        run_ownership_ttl_seconds: float = 30.0,
+        instance_id: str | None = None,
     ) -> None:
         self.session_factory = session_factory
+        self.instance_id = instance_id or executor_instance_id()
+        # A run loop belongs to one instance at a time; the supervisor renews
+        # ownership every poll, so another instance takes a run over only when
+        # this one has stopped renewing for this long.
+        self.run_ownership_ttl_seconds = max(float(poll_interval_seconds) * 3, float(run_ownership_ttl_seconds))
         self.export_root = str(Path(export_root).resolve())
         self.translation_worker = translation_worker
         self.translation_max_output_repairs = max(0, int(translation_max_output_repairs))
@@ -222,6 +258,9 @@ class DocumentRunExecutor:
         all_stopped = not any(
             thread is not None and thread.is_alive() for thread in [supervisor, *run_threads, *work_threads]
         )
+        # Hand the runs to other instances now instead of after the ownership TTL;
+        # work items still leased by lingering work threads stay protected by their leases.
+        self._release_run_ownership()
         with self._lock:
             self._active_run_threads = {}
             self._active_work_threads = {}
@@ -263,7 +302,7 @@ class DocumentRunExecutor:
             try:
                 self._reap_finished_threads()
                 runnable_run_ids = self._list_runnable_run_ids()
-                for run_id in runnable_run_ids:
+                for run_id in self._acquire_run_ownership(runnable_run_ids):
                     self._ensure_run_thread(run_id)
                 self._reclaim_inactive_run_leases()
             except Exception:
@@ -351,8 +390,50 @@ class DocumentRunExecutor:
                 ).all()
             )
 
+    def _acquire_run_ownership(self, run_ids: list[str]) -> list[str]:
+        """Take or renew ownership of runnable runs; returns the ones this instance owns now."""
+        if not run_ids:
+            return []
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(seconds=self.run_ownership_ttl_seconds)
+        owned: list[str] = []
+        with session_scope(self.session_factory) as session:
+            for run_id in run_ids:
+                result = session.execute(
+                    update(DocumentRun)
+                    .where(
+                        DocumentRun.id == run_id,
+                        or_(
+                            DocumentRun.executor_owner.is_(None),
+                            DocumentRun.executor_owner == self.instance_id,
+                            DocumentRun.executor_lease_expires_at.is_(None),
+                            DocumentRun.executor_lease_expires_at < now,
+                        ),
+                    )
+                    .values(executor_owner=self.instance_id, executor_lease_expires_at=expires_at)
+                    .execution_options(synchronize_session=False)
+                )
+                if result.rowcount == 1:
+                    owned.append(run_id)
+        return owned
+
+    def _release_run_ownership(self) -> None:
+        try:
+            with session_scope(self.session_factory) as session:
+                session.execute(
+                    update(DocumentRun)
+                    .where(DocumentRun.executor_owner == self.instance_id)
+                    .values(executor_owner=None, executor_lease_expires_at=None)
+                    .execution_options(synchronize_session=False)
+                )
+        except Exception:
+            logger.warning("Could not release run ownership for %s", self.instance_id, exc_info=True)
+
     def _run_loop(self, run_id: str) -> None:
         while not self._stop_event.is_set():
+            if not self._acquire_run_ownership([run_id]):
+                # Another instance owns the run (this one stopped renewing in time).
+                return
             with session_scope(self.session_factory) as session:
                 run_control = self._run_control_service(session)
                 run_summary = run_control.get_run_summary(run_id)
@@ -668,7 +749,7 @@ class DocumentRunExecutor:
             claimed = execution.claim_work_item_by_id(
                 work_item_id=claimable[0].id,
                 worker_name=f"app.run.agent.{agent_kind}",
-                worker_instance_id=f"app.agent:{uuid4()}",
+                worker_instance_id=f"app.agent:{self.instance_id}:{uuid4()}",
                 lease_seconds=self.review_lease_seconds,
             )
         if claimed is None:
@@ -875,7 +956,7 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     stage=WorkItemStage.REVIEW,
                     worker_name="app.run.review",
-                    worker_instance_id=f"app.review:{uuid4()}",
+                    worker_instance_id=f"app.review:{self.instance_id}:{uuid4()}",
                     lease_seconds=self.lease_seconds,
                 )
             else:
@@ -944,7 +1025,7 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     stage=WorkItemStage.EXPORT,
                     worker_name=f"app.run.export.{export_type.value}",
-                    worker_instance_id=f"app.export.{export_type.value}:{uuid4()}",
+                    worker_instance_id=f"app.export.{export_type.value}:{self.instance_id}:{uuid4()}",
                     lease_seconds=self.lease_seconds,
                 )
             else:
@@ -1543,7 +1624,7 @@ class DocumentRunExecutor:
             claimed = execution.claim_work_item_by_id(
                 work_item_id=item.id,
                 worker_name="app.run.translate",
-                worker_instance_id=f"app.translate:{uuid4()}",
+                worker_instance_id=f"app.translate:{self.instance_id}:{uuid4()}",
                 lease_seconds=self.lease_seconds,
             )
             if claimed is None:
