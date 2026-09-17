@@ -59,6 +59,9 @@ services:
       BOOK_AGENT_UPLOAD_ROOT: /app/artifacts/uploads
     ports:
       - "58000:8000"
+    # The image runs as uid 10001 and serves the built frontend on "/". A volume created by an older
+    # image (running as root) needs ownership fixed once:
+    #   docker compose run --rm --user root app chown -R 10001:10001 /app/artifacts
     volumes:
       - app_artifacts:/app/artifacts
     healthcheck:

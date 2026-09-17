@@ -425,7 +425,16 @@ export interface IssueFilter {
   limit?: number;
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
+declare global {
+  interface Window {
+    __BOOK_AGENT_CONFIG__?: { apiBaseUrl?: string };
+  }
+}
+
+// Runtime config (served by the API in production) wins over the build-time value.
+const RUNTIME_API_BASE_URL =
+  typeof window !== "undefined" ? window.__BOOK_AGENT_CONFIG__?.apiBaseUrl : undefined;
+const API_BASE_URL = (RUNTIME_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
 
 export const SERVICE_LINKS = {
   docs: `${API_BASE_URL}/docs`,

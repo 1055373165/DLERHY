@@ -62,7 +62,7 @@
 - [ ] 把 22 个 recovery pass 中书籍/出版社特定的部分（Listing 规则、词形标题猜测等）改为 skills，可按书启用。
 - [ ] **Export QA Agent**：读渲染后的 HTML/PDF 截图与 manifest，按验收清单（图覆盖率、未译比例、标题层级、空块）产出报告与 issue；替代 `verify_chapter.py` 的 R1–R8 并删除脚本链路（P4 剩余项）。
 - [ ] 导出版本化与原子写（R16、R17）；表格按单元格翻译路径（B-20）。
-- [ ] 前端生产托管（多阶段 Dockerfile、StaticFiles 或反向代理、运行时配置注入）。
+- [x] 前端生产托管：多阶段 Dockerfile（node 构建 `frontend/dist` → python 镜像，非 root 用户 uid 10001）；`BOOK_AGENT_FRONTEND_DIST_DIR` 配置时 API 进程托管 SPA（`app/ui/spa.py`：`/assets` 长缓存、深链接回退 `index.html`、`/runtime-config.js` 运行时注入 API 前缀）；未配置时保留原状态页。验证：`tests/test_frontend_hosting.py`、本地 `vite build`；**镜像构建未验证**（2026-09-17 本机拉取基础镜像时网络中断，Docker 守护进程随之退出）。
 
 验收：56 个 golden PDF 上结构 eval 不退化；新书（非训练集）上 Structure Agent 介入后误判率低于纯启发式；交付验收报告随导出产出。
 

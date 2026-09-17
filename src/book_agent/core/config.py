@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     # Canonical parse-IR sidecars (one directory per document / parser version).
     parse_ir_root: Path = Path("artifacts/parse-ir")
     upload_root: Path = Path("artifacts/uploads")
+    # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
+    frontend_dist_dir: Path | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"

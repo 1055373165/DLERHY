@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError
 from book_agent.app.api.router import api_router
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.app.ui.router import router as ui_router
+from book_agent.app.ui.spa import frontend_available, mount_frontend
 from book_agent.services.secrets import require_configured_secret_key
 from book_agent.core.config import get_settings, validate_app_scope
 from book_agent.core.logging import configure_logging
@@ -133,8 +134,13 @@ def create_app() -> FastAPI:
             content={"detail": str(_exc)},
         )
 
-    app.include_router(ui_router)
-    app.include_router(api_router, prefix=settings.api_prefix)
+    if frontend_available(settings.frontend_dist_dir):
+        # API routes first: the SPA fallback is a catch-all.
+        app.include_router(api_router, prefix=settings.api_prefix)
+        mount_frontend(app, settings.frontend_dist_dir, api_prefix=settings.api_prefix)
+    else:
+        app.include_router(ui_router)
+        app.include_router(api_router, prefix=settings.api_prefix)
     return app
 
 

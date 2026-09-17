@@ -12,3 +12,7 @@ artifacts
 tests
 docs
 uv.lock
+frontend/node_modules
+frontend/dist
+frontend/artifacts
+.test-tmp
