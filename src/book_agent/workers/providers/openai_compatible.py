@@ -518,6 +518,14 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             content = message.get("content")
             if isinstance(content, str) and content:
                 items.append({"role": role, "content": [{"type": "input_text" if role != "assistant" else "output_text", "text": content}]})
+            elif isinstance(content, list) and content:
+                parts: list[dict[str, Any]] = []
+                for part in content:
+                    if part.get("type") == "text":
+                        parts.append({"type": "input_text", "text": str(part.get("text") or "")})
+                    elif part.get("type") == "image_url":
+                        parts.append({"type": "input_image", "image_url": str((part.get("image_url") or {}).get("url") or "")})
+                items.append({"role": role, "content": parts})
             for call in message.get("tool_calls") or []:
                 function = call.get("function") if isinstance(call, dict) else {}
                 items.append(

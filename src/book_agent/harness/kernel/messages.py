@@ -15,12 +15,37 @@ from book_agent.domain.enums import AgentItemKind
 from book_agent.domain.models.agent import AgentItem
 
 
+# A tool may return images under this key of its output dict (e.g. a rendered
+# page); they are stored on the tool_result item and sent as an image message.
+IMAGE_OUTPUT_KEY = "_images"
+# Rough provider cost of one page-sized image, for budgets and compaction.
+IMAGE_TOKEN_ESTIMATE = 1_000
+
+
+def _image_message(item_name: str, images: list[dict[str, Any]]) -> dict[str, Any]:
+    parts: list[dict[str, Any]] = [{"type": "text", "text": f"Image(s) returned by {item_name}:"}]
+    for image in images:
+        media_type = str(image.get("media_type") or "image/png")
+        parts.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{image.get('data', '')}"}})
+    return {"role": "user", "content": parts}
+
+
 def assemble_messages(items: list[AgentItem]) -> list[dict[str, Any]]:
     system_messages: list[dict[str, Any]] = []
     conversation: list[dict[str, Any]] = []
     compaction: dict[str, Any] | None = None
+    # Chat APIs need every tool message right after its assistant message, so
+    # image messages wait until the run of tool messages ends.
+    pending_images: list[dict[str, Any]] = []
+
+    def flush_images() -> None:
+        conversation.extend(pending_images)
+        pending_images.clear()
+
     for item in items:
         content = item.content_json or {}
+        if item.kind != AgentItemKind.TOOL_RESULT and item.kind not in (AgentItemKind.TOOL_CALL, AgentItemKind.APPROVAL_REQUEST, AgentItemKind.APPROVAL_RESULT):
+            flush_images()
         if item.kind in (AgentItemKind.SYSTEM, AgentItemKind.DEVELOPER):
             system_messages.append({"role": "system", "content": str(content.get("text", ""))})
         elif item.kind == AgentItemKind.COMPACTION:
@@ -49,8 +74,11 @@ def assemble_messages(items: list[AgentItem]) -> list[dict[str, Any]]:
                     "content": json.dumps(content.get("result") or {}, ensure_ascii=False),
                 }
             )
+            if content.get("images"):
+                pending_images.append(_image_message(str(content.get("name") or "tool"), list(content["images"])))
         # tool_call / approval_request / approval_result items are bookkeeping;
         # the model only ever sees the resulting tool_result.
+    flush_images()
     messages = list(system_messages)
     if compaction is not None:
         messages.append(compaction)
@@ -73,5 +101,9 @@ def conversation_size(items: list[AgentItem]) -> int:
         if item.kind == AgentItemKind.COMPACTION:
             total = 0
             continue
-        total += item.token_count or estimate_tokens(json.dumps(item.content_json or {}, ensure_ascii=False))
+        if item.token_count:
+            total += item.token_count
+            continue
+        content = {k: v for k, v in (item.content_json or {}).items() if k != "images"}
+        total += estimate_tokens(json.dumps(content, ensure_ascii=False)) + IMAGE_TOKEN_ESTIMATE * len((item.content_json or {}).get("images") or [])
     return total

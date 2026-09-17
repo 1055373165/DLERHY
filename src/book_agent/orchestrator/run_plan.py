@@ -24,13 +24,19 @@ MODEL_REVIEW_STAGE = "model_review"
 MODEL_REVIEW_MODES: tuple[str, ...] = ("sampled", "full", "skip")
 DEFAULT_MODEL_REVIEW_MODE = "sampled"
 REPAIR_STAGE = "repair"
+STRUCTURE_REVIEW_STAGE = "structure_review"
+STRUCTURE_REVIEW_MODES: tuple[str, ...] = ("sampled", "full", "skip")
+# Opt-in: the Structure Agent needs a model that reads images.
+DEFAULT_STRUCTURE_REVIEW_MODE = "skip"
 # Agent stages: pipeline stage key -> agent kind executed as an AGENT work item.
 AGENT_STAGES: dict[str, str] = {
+    STRUCTURE_REVIEW_STAGE: "structure",
     TERMINOLOGY_STAGE: "terminology",
     MODEL_REVIEW_STAGE: "reviewer",
     REPAIR_STAGE: "repair",
 }
 FULL_PIPELINE_STAGES: tuple[str, ...] = (
+    STRUCTURE_REVIEW_STAGE,
     TERMINOLOGY_STAGE,
     "translate",
     MODEL_REVIEW_STAGE,
@@ -60,6 +66,8 @@ class RunPlan:
     # Opt-in (run request repair_agent=on): blockers left after rule repair go
     # to the Repair Agent stage instead of failing the review stage.
     repair_agent: bool = False
+    # How many doubtful PDF pages the Structure Agent reviews: sampled | full | skip (default).
+    structure_review_mode: str = DEFAULT_STRUCTURE_REVIEW_MODE
 
     def includes(self, stage: str) -> bool:
         return stage in self.stages
@@ -94,7 +102,10 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         mode = _mode(request.get("terminology"), TERMINOLOGY_MODES, DEFAULT_TERMINOLOGY_MODE)
         review_mode = _mode(request.get("model_review"), MODEL_REVIEW_MODES, DEFAULT_MODEL_REVIEW_MODE)
         repair_agent = str(request.get("repair_agent") or "off").strip().lower() in {"on", "true", "1", "yes"}
+        structure_mode = _mode(request.get("structure_review"), STRUCTURE_REVIEW_MODES, DEFAULT_STRUCTURE_REVIEW_MODE)
         skipped = {TERMINOLOGY_STAGE} if mode == "skip" else set()
+        if structure_mode == "skip":
+            skipped.add(STRUCTURE_REVIEW_STAGE)
         if review_mode == "skip":
             skipped.add(MODEL_REVIEW_STAGE)
         if not repair_agent:
@@ -106,6 +117,7 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             terminology_mode=mode,
             model_review_mode=review_mode,
             repair_agent=repair_agent,
+            structure_review_mode=structure_mode,
         )
     if run_type == DocumentRunType.TRANSLATE_TARGETED:
         packet_ids = [str(packet_id) for packet_id in request.get("packet_ids") or [] if str(packet_id)]

@@ -20,6 +20,8 @@ from book_agent.domain.enums import AgentTurnStatus
 from book_agent.harness.agents.repair import AGENT_KIND as RepairAgent_KIND
 from book_agent.harness.agents.repair import RepairAgent, remaining_blockers
 from book_agent.harness.agents.reviewer import AGENT_KIND as ReviewerAgent_KIND
+from book_agent.harness.agents.structure import AGENT_KIND as StructureAgent_KIND
+from book_agent.harness.agents.structure import StructureAgent
 from book_agent.harness.agents.reviewer import ReviewerAgent
 from book_agent.harness.agents.terminology import AGENT_KIND as TerminologyAgent_KIND
 from book_agent.harness.agents.terminology import TerminologyAgent
@@ -646,6 +648,7 @@ class DocumentRunExecutor:
                             "stage": stage_key,
                             "terminology_mode": plan.terminology_mode,
                             "model_review_mode": plan.model_review_mode,
+                            "structure_review_mode": plan.structure_review_mode,
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
                     },
@@ -764,6 +767,8 @@ class DocumentRunExecutor:
             return ReviewerAgent.registry(), ReviewerAgent.policy()
         if agent_kind == RepairAgent_KIND:
             return RepairAgent.registry(), RepairAgent.policy()
+        if agent_kind == StructureAgent_KIND:
+            return StructureAgent.registry(), StructureAgent.policy()
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
 
     def _start_agent_turn(
@@ -796,6 +801,16 @@ class DocumentRunExecutor:
                 document_id=document_id,
                 model_name=model_name,
                 mode=str(input_bundle.get("model_review_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == StructureAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = StructureAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("structure_review_mode") or "sampled"),
                 run_id=run_id,
                 work_item_id=work_item_id,
             )

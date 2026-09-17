@@ -34,7 +34,9 @@ from book_agent.orchestrator.stage_status import (
 
 
 STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
-    "terminology": (),
+    "structure_review": (),
+    # Opt-in stages are only waited for by runs that plan them.
+    "terminology": ("structure_review",),
     # Only when the run plans a terminology stage (plan_stages filtering);
     # targeted translate runs have none and start immediately.
     "translate": ("terminology",),

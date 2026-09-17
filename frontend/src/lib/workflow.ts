@@ -34,6 +34,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     description: "导入源文件并完成章节切分。",
   },
   {
+    key: "structure_review",
+    label: "结构审查",
+    description: "（可选）结构代理查看版面可疑的 PDF 页面图像，把块类型、标题、合并拆分等问题记为建议。",
+  },
+  {
     key: "terminology",
     label: "术语与 BOOK.md",
     description: "术语代理确定全书术语表与翻译决策，例外项等待审批。",

@@ -27,7 +27,13 @@ from book_agent.domain.enums import AgentItemKind, AgentTurnStatus, ApprovalStat
 from book_agent.domain.models.agent import AgentItem, AgentTurn
 from book_agent.harness.kernel import trace
 from book_agent.harness.kernel.budget import TurnBudget
-from book_agent.harness.kernel.messages import assemble_messages, conversation_size, estimate_tokens
+from book_agent.harness.kernel.messages import (
+    IMAGE_OUTPUT_KEY,
+    IMAGE_TOKEN_ESTIMATE,
+    assemble_messages,
+    conversation_size,
+    estimate_tokens,
+)
 from book_agent.harness.kernel.model import AgentModelClient, AgentStep, ToolCall
 from book_agent.harness.tools.hooks import DEFAULT_HOOKS, ToolHook
 from book_agent.harness.tools.permissions import PermissionKind, PermissionPolicy
@@ -290,14 +296,22 @@ class AgentTurnRunner:
         *,
         approved_by: str | None = None,
     ) -> None:
+        images: list[dict[str, Any]] = []
+        if outcome.ok and isinstance(outcome.output, dict) and IMAGE_OUTPUT_KEY in outcome.output:
+            # Images travel next to the JSON result; the model receives them as an image message.
+            images = [dict(image) for image in outcome.output.get(IMAGE_OUTPUT_KEY) or []]
+            outcome = ToolOutcome(ok=True, output={k: v for k, v in outcome.output.items() if k != IMAGE_OUTPUT_KEY})
         content = {"call_id": call.call_id, "name": call.name, "result": outcome.to_content()}
         if approved_by is not None:
             content["approved_by"] = approved_by
+        token_count = estimate_tokens(json.dumps(content, ensure_ascii=False)) + IMAGE_TOKEN_ESTIMATE * len(images)
+        if images:
+            content["images"] = images
         ledger.append_item(
             turn.id,
             kind=AgentItemKind.TOOL_RESULT,
             content=content,
-            token_count=estimate_tokens(json.dumps(content, ensure_ascii=False)),
+            token_count=token_count,
         )
 
     # --- approvals: resume ----------------------------------------------------
