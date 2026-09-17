@@ -78,6 +78,8 @@ def required_role(request: Request) -> str:
     path = _api_path(request)
     if path.startswith(_ADMIN_PATH_PREFIXES):
         return "admin"
+    if path.startswith("/orgs") and request.method.upper() not in _READ_METHODS:
+        return "admin"
     return "viewer" if request.method.upper() in _READ_METHODS else "editor"
 
 

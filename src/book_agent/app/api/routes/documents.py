@@ -46,7 +46,7 @@ from book_agent.schemas.workflow import (
 )
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
 from book_agent.schemas.run_control import DocumentRunSummaryResponse
-from book_agent.services.run_control import RunControlService
+from book_agent.services.run_control import RunControlService, RunControlTransitionError
 from book_agent.services.workflows import DocumentBusyError, DocumentWorkflowService
 
 router = APIRouter()
@@ -87,7 +87,7 @@ def _workflow_service(request: Request, session: Session) -> DocumentWorkflowSer
     return DocumentWorkflowService(
         session,
         export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
-        translation_worker=request.app.state.resolve_translation_worker(),
+        translation_worker=request.app.state.resolve_translation_worker(current_principal(request).org_id),
     )
 
 
@@ -665,7 +665,11 @@ def _enqueue_document_run(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    summary = control.resume_run(created.run_id, actor_id="api.documents", note="enqueued")
+    try:
+        summary = control.resume_run(created.run_id, actor_id="api.documents", note="enqueued")
+    except RunControlTransitionError as exc:
+        # E.g. the organisation's monthly budget is used up; the queued run is rolled back.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     # The executor reads the run from its own session; commit before waking it.
     session.commit()
     ensure_document_run_executor(request.app).wake(summary.run_id)

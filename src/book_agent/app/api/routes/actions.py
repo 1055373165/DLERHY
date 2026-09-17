@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import current_principal
 from book_agent.app.api.deps import get_db_session
 from book_agent.schemas.workflow import ExecuteActionResponse
 from book_agent.services.actions import ActionNotExecutable
@@ -20,7 +21,7 @@ def execute_action(
         result = DocumentWorkflowService(
             session,
             export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
-            translation_worker=request.app.state.resolve_translation_worker(),
+            translation_worker=request.app.state.resolve_translation_worker(current_principal(request).org_id),
         ).execute_action(action_id, run_followup=run_followup)
     except ActionNotExecutable as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

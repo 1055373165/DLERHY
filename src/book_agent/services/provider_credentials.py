@@ -47,9 +47,25 @@ class TestOutcome:
     model_name: str | None = None
 
 
-def list_credentials(session: Session) -> list[ProviderCredential]:
+def credential_scope(org_id: str | None) -> str | None:
+    """The credential scope an organisation manages: None (shared) for the default organisation."""
+    from book_agent.domain.models.auth import DEFAULT_ORG_ID
+
+    if org_id is None or str(org_id) == DEFAULT_ORG_ID:
+        return None
+    return str(org_id)
+
+
+def _in_scope(scope: str | None):
+    return ProviderCredential.org_id.is_(None) if scope is None else ProviderCredential.org_id == scope
+
+
+def list_credentials(session: Session, scope: str | None = None) -> list[ProviderCredential]:
+    """Credentials of one scope: shared (None) or an organisation's own."""
     rows = session.execute(
-        select(ProviderCredential).order_by(
+        select(ProviderCredential)
+        .where(_in_scope(scope))
+        .order_by(
             ProviderCredential.is_active.desc(),
             ProviderCredential.updated_at.desc(),
         )
@@ -57,16 +73,17 @@ def list_credentials(session: Session) -> list[ProviderCredential]:
     return list(rows)
 
 
-def get_credential(session: Session, credential_id: str) -> ProviderCredential:
+def get_credential(session: Session, credential_id: str, scope: str | None | object = ...) -> ProviderCredential:
+    """``scope`` given: a credential of another scope is reported as not found."""
     row = session.get(ProviderCredential, credential_id)
-    if row is None:
+    if row is None or (scope is not ... and row.org_id != scope):
         raise LookupError(_NOT_FOUND_MESSAGE)
     return row
 
 
-def get_active_credential(session: Session) -> ProviderCredential | None:
+def get_active_credential(session: Session, scope: str | None = None) -> ProviderCredential | None:
     return session.execute(
-        select(ProviderCredential).where(ProviderCredential.is_active.is_(True)).limit(1)
+        select(ProviderCredential).where(ProviderCredential.is_active.is_(True), _in_scope(scope)).limit(1)
     ).scalar_one_or_none()
 
 
@@ -94,6 +111,7 @@ def create_credential(
     max_retries: int,
     retry_backoff_seconds: float,
     activate: bool,
+    scope: str | None = None,
 ) -> ProviderCredential:
     check_provider_base_url(base_url, provider_kind)
     ciphertext = encrypt_secret(api_key) if api_key else None
@@ -109,6 +127,7 @@ def create_credential(
         max_retries=max_retries,
         retry_backoff_seconds_x10=int(round(retry_backoff_seconds * 10)),
         is_active=False,
+        org_id=scope,
     )
     session.add(record)
     session.flush()
@@ -182,11 +201,12 @@ def _activate_internal(session: Session, record: ProviderCredential) -> None:
             "the echo provider cannot be activated in prod scope: it copies the source "
             "text instead of translating it"
         )
-    # Step 1: deactivate everyone else inside the same transaction so the
-    # partial unique index never sees two active rows.
+    # Step 1: deactivate the rest of the scope inside the same transaction so
+    # the partial unique index never sees two active rows.
     session.query(ProviderCredential).filter(
         ProviderCredential.is_active.is_(True),
         ProviderCredential.id != record.id,
+        _in_scope(record.org_id),
     ).update({ProviderCredential.is_active: False}, synchronize_session=False)
     record.is_active = True
     _bump_revision(record)
@@ -377,21 +397,31 @@ def current_revision() -> int:
     return _revision
 
 
-def active_credential_key(session: Session) -> tuple[str, int] | None:
-    """(active credential id, config_revision): changes whenever any process changes the active worker config."""
-    row = session.execute(
-        select(ProviderCredential.id, ProviderCredential.config_revision)
-        .where(ProviderCredential.is_active.is_(True))
-        .limit(1)
-    ).first()
-    return (str(row[0]), int(row[1] or 1)) if row is not None else None
+def active_credential_key(session: Session, org_id: str | None = None) -> tuple[str, int] | None:
+    """(id, config_revision) of the credential ``org_id`` would use; changes whenever any process changes it."""
+    scope = credential_scope(org_id)
+    scopes = [scope, None] if scope is not None else [None]
+    for candidate in scopes:
+        row = session.execute(
+            select(ProviderCredential.id, ProviderCredential.config_revision)
+            .where(ProviderCredential.is_active.is_(True), _in_scope(candidate))
+            .limit(1)
+        ).first()
+        if row is not None:
+            return (str(row[0]), int(row[1] or 1))
+    return None
 
 
 def resolve_active_credential(
-    session: Session, settings: Settings
+    session: Session, settings: Settings, org_id: str | None = None
 ) -> ProviderCredential | None:
-    """Return the active credential, auto-migrating from .env on first run."""
-    active = get_active_credential(session)
+    """The organisation's own active credential, else the shared one (seeded from .env on first run)."""
+    scope = credential_scope(org_id)
+    if scope is not None:
+        own = get_active_credential(session, scope)
+        if own is not None:
+            return own
+    active = get_active_credential(session, None)
     if active is not None:
         return active
     bootstrapped = _bootstrap_from_settings(session, settings)
@@ -403,8 +433,8 @@ def resolve_active_credential(
 def _bootstrap_from_settings(
     session: Session, settings: Settings
 ) -> ProviderCredential | None:
-    """Seed the table from .env on first launch so users keep working without manual setup."""
-    if list_credentials(session):
+    """Seed the shared scope from .env on first launch so users keep working without manual setup."""
+    if list_credentials(session, None):
         return None
     backend = (settings.translation_backend or "").lower().strip()
     if backend == "echo":

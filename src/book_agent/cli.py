@@ -106,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Serve book-agent's read and reversible tools over MCP (stdio) for Claude Code, Codex and other clients",
     )
 
+    org_budget = subparsers.add_parser("set-org-budget", help="Set or clear an organisation's monthly model budget (USD)")
+    org_budget.add_argument("--org", required=True, help="Organisation name")
+    org_budget.add_argument("--monthly-usd", required=True, help="Amount in USD, or 'none' to remove the cap")
+
     evaluate = subparsers.add_parser("eval", help="Run the release evals (evals/README.md) and write a report")
     evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
     evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
@@ -158,6 +162,19 @@ def main(argv: list[str] | None = None) -> int:
             org = service.ensure_org(args.org)
             created = service.create(org_id=org.id, name=args.name, role=args.role)
             _dump({"org": org.name, "org_id": org.id, "name": created.key.name, "role": created.key.role, "key": created.plaintext})
+            return 0
+        if args.command == "set-org-budget":
+            from sqlalchemy import select
+
+            from book_agent.domain.models.auth import Org
+            from book_agent.services.org_budget import budget_status, set_monthly_budget
+
+            org = session.scalar(select(Org).where(Org.name == args.org))
+            if org is None:
+                parser.error(f"unknown organisation: {args.org}")
+            amount = None if str(args.monthly_usd).strip().lower() == "none" else float(args.monthly_usd)
+            set_monthly_budget(session, org.id, amount)
+            _dump(budget_status(session, org.id).to_json())
             return 0
         service = DocumentWorkflowService(
             session,

@@ -803,6 +803,20 @@ export interface MetaResponse {
   docs_path: string;
 }
 
+export interface OrgBudgetResponse {
+  org_id: string;
+  org_name: string;
+  monthly_budget_usd: number | null;
+  spent_usd: number;
+  remaining_usd?: number | null;
+  exhausted: boolean;
+  period_start: string;
+}
+
+export interface OrgBudgetUpdate {
+  monthly_budget_usd?: number | null;
+}
+
 export interface ProviderCredentialCreate {
   name: string;
   provider_kind: ProviderKind;
@@ -830,6 +844,7 @@ export interface ProviderCredentialRead {
   id: string;
   is_active: boolean;
   api_key_preview?: string | null;
+  shared?: boolean;
   last_test_status: ProviderTestStatus;
   last_test_at?: string | null;
   last_test_message?: string | null;

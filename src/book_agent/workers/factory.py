@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -134,15 +135,15 @@ def build_worker_from_credential(record: ProviderCredential, settings: Settings)
     )
 
 
-def resolve_translation_worker(session: Session, settings: Settings) -> TranslationWorker:
-    """Build the worker from the active stored credential, falling back to settings.
+def resolve_translation_worker(session: Session, settings: Settings, org_id: str | None = None) -> TranslationWorker:
+    """Build the worker from the organisation's (else the shared) active credential, falling back to settings.
 
     Imports happen lazily to avoid an import cycle between
     workers.factory and services.provider_credentials.
     """
     from book_agent.services.provider_credentials import resolve_active_credential
 
-    record = resolve_active_credential(session, settings)
+    record = resolve_active_credential(session, settings, org_id)
     if record is not None:
         return build_worker_from_credential(record, settings)
     return build_translation_worker(settings)
@@ -151,8 +152,9 @@ def resolve_translation_worker(session: Session, settings: Settings) -> Translat
 class TranslationWorkerProvider:
     """The one place that decides which translation worker the app uses.
 
-    The worker is built from the active provider credential and cached per
-    (process revision, active credential id, credential config_revision), so
+    Workers are built from the active provider credential of an organisation
+    (its own, else the shared one) and cached per organisation scope under the
+    key (process revision, credential id, credential config_revision), so
     activating or editing a provider applies to the next request or work item
     in every process without a restart. The database key is re-read at most
     every ``db_check_interval_seconds``.
@@ -171,40 +173,40 @@ class TranslationWorkerProvider:
         self._settings = settings
         self._session_factory = session_factory
         self._lock = threading.Lock()
-        self._worker: TranslationWorker | None = None
-        self._revision = -1
-        self._db_key: object = None
-        self._db_checked_at: float | None = None
+        self._entries: dict[str | None, _CachedWorker] = {}
         self._db_check_interval = max(0.0, float(db_check_interval_seconds))
         self._clock = clock or time.monotonic
 
-    def get(self) -> TranslationWorker:
-        from book_agent.services.provider_credentials import active_credential_key, current_revision
+    def get(self, org_id: str | None = None) -> TranslationWorker:
+        from book_agent.services.provider_credentials import active_credential_key, credential_scope, current_revision
 
+        scope = credential_scope(org_id)
         revision = current_revision()
         with self._lock:
             now = self._clock()
-            db_check_due = self._db_checked_at is None or now - self._db_checked_at >= self._db_check_interval
-            if self._worker is not None and self._revision == revision and not db_check_due:
-                return self._worker
+            entry = self._entries.get(scope)
+            if entry is not None and entry.revision == revision and now - entry.checked_at < self._db_check_interval:
+                return entry.worker
             with self._session_factory()() as session:
-                key = active_credential_key(session)
-                if self._worker is not None and self._revision == revision and key == self._db_key:
-                    self._db_checked_at = now
-                    return self._worker
-                worker = resolve_translation_worker(session, self._settings)
+                key = active_credential_key(session, scope)
+                if entry is not None and entry.revision == revision and key == entry.db_key:
+                    entry.checked_at = now
+                    return entry.worker
+                worker = resolve_translation_worker(session, self._settings, scope)
                 # Resolving may seed a credential from settings on first use.
                 session.commit()
-                key = active_credential_key(session)
-            self._worker = worker
-            self._revision = current_revision()
-            self._db_key = key
-            self._db_checked_at = now
+                key = active_credential_key(session, scope)
+            self._entries[scope] = _CachedWorker(worker=worker, revision=current_revision(), db_key=key, checked_at=now)
             return worker
 
     def invalidate(self) -> None:
         with self._lock:
-            self._worker = None
-            self._revision = -1
-            self._db_key = None
-            self._db_checked_at = None
+            self._entries.clear()
+
+
+@dataclass(slots=True)
+class _CachedWorker:
+    worker: TranslationWorker
+    revision: int
+    db_key: object
+    checked_at: float

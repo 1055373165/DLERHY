@@ -8,6 +8,7 @@ from book_agent.app.api.routes import (
     harness,
     issues,
     health,
+    orgs,
     providers,
     run_cost,
     run_stream,
@@ -31,3 +32,4 @@ api_router.include_router(run_stream.router, prefix="/runs", tags=["runs"], depe
 api_router.include_router(run_cost.router, prefix="/runs", tags=["runs"], dependencies=_protected)
 api_router.include_router(providers.router, prefix="/providers", tags=["providers"], dependencies=_protected)
 api_router.include_router(api_keys.router, prefix="/api-keys", tags=["auth"], dependencies=_protected)
+api_router.include_router(orgs.router, prefix="/orgs", tags=["auth"], dependencies=_protected)

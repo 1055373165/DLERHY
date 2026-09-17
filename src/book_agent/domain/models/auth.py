@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, Uuid, event
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, Text, Uuid, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.infra.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -19,8 +20,15 @@ API_KEY_ROLES = ("viewer", "editor", "admin")
 
 class Org(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "orgs"
+    __table_args__ = (
+        CheckConstraint(
+            "monthly_budget_usd IS NULL OR monthly_budget_usd >= 0", name="ck_orgs_monthly_budget_non_negative"
+        ),
+    )
 
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # Model spend cap per calendar month (UTC); NULL means unlimited.
+    monthly_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
 
 
 class ApiKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

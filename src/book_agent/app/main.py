@@ -116,9 +116,9 @@ def create_app() -> FastAPI:
         session_factory=_session_factory,
     )
 
-    def _resolve_translation_worker():
+    def _resolve_translation_worker(org_id: str | None = None):
         override = app.state.translation_worker
-        return override if override is not None else app.state.translation_worker_provider.get()
+        return override if override is not None else app.state.translation_worker_provider.get(org_id)
 
     app.state.resolve_translation_worker = _resolve_translation_worker
 

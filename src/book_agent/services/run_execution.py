@@ -484,6 +484,15 @@ class RunExecutionService:
 
     def enforce_budget_guardrails(self, *, run_id: str) -> RunBudgetGuardrailResult:
         run = self.repository.get_run(run_id)
+        from book_agent.services import org_budget
+
+        org_id = org_budget.org_id_for_run(self.repository.session, run_id)
+        exhausted = org_budget.cached_exhausted_status(self.repository.session, org_id) if org_id else None
+        if exhausted is not None:
+            summary = self.control_service.pause_run_system(
+                run_id, stop_reason=org_budget.STOP_REASON, detail_json=exhausted.to_json()
+            )
+            return RunBudgetGuardrailResult(summary, True, org_budget.STOP_REASON)
         budget = self.repository.get_budget_for_run(run_id)
         if budget is None:
             return RunBudgetGuardrailResult(

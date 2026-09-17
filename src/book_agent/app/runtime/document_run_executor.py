@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.infra import metrics, tracing
 from book_agent.core.ids import stable_id
-from book_agent.core.run_context import bind_run_context
+from book_agent.core.run_context import bind_run_context, current_run_id
 from book_agent.domain.enums import AgentTurnStatus
 from book_agent.harness.agents.repair import AGENT_KIND as RepairAgent_KIND
 from book_agent.harness.agents.repair import RepairAgent, remaining_blockers
@@ -42,7 +42,7 @@ from book_agent.domain.enums import (
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models import Block, Chapter
+from book_agent.domain.models import Block, Chapter, Document
 from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
@@ -115,6 +115,21 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     return executor
 
 
+def _accepts_positional_argument(function: Callable[..., Any] | None) -> bool:
+    if function is None:
+        return False
+    import inspect
+
+    try:
+        parameters = inspect.signature(function).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD, parameter.VAR_POSITIONAL)
+        for parameter in parameters
+    )
+
+
 def executor_instance_id() -> str:
     """host:pid:random, so a lease or run owner can be traced to a machine and process."""
     return f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
@@ -169,6 +184,8 @@ class DocumentRunExecutor:
         # initialization are picked up; a fixed worker is used only when no
         # resolver is supplied.
         self.translation_worker_resolver = translation_worker_resolver
+        self._resolver_takes_org = _accepts_positional_argument(translation_worker_resolver)
+        self._run_org_cache: dict[str, str | None] = {}
         # Builds the agent model from the resolved translation worker; tests
         # inject scripted models here.
         self.agent_model_resolver = agent_model_resolver or agent_model_for_worker
@@ -278,10 +295,30 @@ class DocumentRunExecutor:
             with self._lock:
                 self._active_run_threads.pop(run_id, None)
 
-    def _current_translation_worker(self) -> TranslationWorker | None:
-        if self.translation_worker_resolver is not None:
+    def _current_translation_worker(self, run_id: str | None = None) -> TranslationWorker | None:
+        """The worker for the organisation that owns the run (work threads bind the run id)."""
+        if self.translation_worker_resolver is None:
+            return self.translation_worker
+        if not self._resolver_takes_org:
             return self.translation_worker_resolver()
-        return self.translation_worker
+        return self.translation_worker_resolver(self._org_for_run(run_id or current_run_id()))
+
+    def _org_for_run(self, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        with self._lock:
+            if run_id in self._run_org_cache:
+                return self._run_org_cache[run_id]
+        with session_scope(self.session_factory) as session:
+            org_id = session.scalar(
+                select(Document.org_id).join(DocumentRun, DocumentRun.document_id == Document.id).where(DocumentRun.id == run_id)
+            )
+        with self._lock:
+            # A run never changes organisation; bound the cache anyway.
+            if len(self._run_org_cache) > 4096:
+                self._run_org_cache.clear()
+            self._run_org_cache[run_id] = str(org_id) if org_id is not None else None
+        return self._run_org_cache[run_id]
 
     def _workflow_service(self, session) -> DocumentWorkflowService:
         return DocumentWorkflowService(

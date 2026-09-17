@@ -50,6 +50,10 @@ class ProviderCredentialRead(ProviderCredentialBase):
         default=None,
         description="Masked summary of the stored API key, e.g. 'sk-****-1234'. None when no key is stored.",
     )
+    shared: bool = Field(
+        default=True,
+        description="True for a credential shared by every organisation without its own active provider.",
+    )
     last_test_status: ProviderTestStatus
     last_test_at: datetime | None = None
     last_test_message: str | None = None

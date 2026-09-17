@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import text, Boolean, DateTime, Index, Integer, LargeBinary, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
@@ -16,23 +16,34 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """User-configured translation provider, stored in DB so model swaps
     don't require a server restart or .env edit.
 
-    Exactly one row may have ``is_active=True`` at a time; the partial
-    unique index enforces that on PostgreSQL and SQLite alike (without the
-    ``sqlite_where`` clause SQLite would treat it as a plain unique index
-    and refuse a second inactive row).
+    At most one row per scope may have ``is_active=True``: one shared row
+    (``org_id`` NULL) and one per organisation. The partial unique indexes
+    enforce that on PostgreSQL and SQLite alike (without the ``sqlite_where``
+    clause SQLite would treat them as plain unique indexes and refuse a second
+    inactive row).
     """
 
     __tablename__ = "provider_credentials"
     __table_args__ = (
+        # One active credential per scope: shared (org_id NULL) and each organisation.
         Index(
-            "uq_provider_credentials_one_active",
+            "uq_provider_credentials_one_active_shared",
             "is_active",
             unique=True,
-            postgresql_where=text("is_active"),
-            sqlite_where=text("is_active"),
+            postgresql_where=text("is_active AND org_id IS NULL"),
+            sqlite_where=text("is_active AND org_id IS NULL"),
+        ),
+        Index(
+            "uq_provider_credentials_one_active_per_org",
+            "org_id",
+            unique=True,
+            postgresql_where=text("is_active AND org_id IS NOT NULL"),
+            sqlite_where=text("is_active AND org_id IS NOT NULL"),
         ),
     )
 
+    # NULL: shared by every organisation that has no active credential of its own.
+    org_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("orgs.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     provider_kind: Mapped[ProviderKind] = mapped_column(
         enum_value_type(ProviderKind, name="provider_kind"),
