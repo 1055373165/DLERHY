@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any
+
+from book_agent.domain.structure import recovery_skills as recovery_skill_registry
 
 if TYPE_CHECKING:
     from book_agent.ingestion.pdf.ocr_reextraction import (
@@ -207,6 +209,8 @@ class PdfStructureRecoveryService:
         file_path: str | Path,
         extraction: PdfExtraction,
         profile: PdfFileProfile,
+        *,
+        recovery_skills: Mapping[str, object] | None = None,
     ) -> ParsedDocument:
         ordered_pages = sorted(extraction.pages, key=lambda page: page.page_number)
         context = RecoveryContext(
@@ -226,7 +230,10 @@ class PdfStructureRecoveryService:
             extraction.outline_entries,
             profile,
         )
+        skipped_passes = recovery_skill_registry.disabled_passes(recovery_skills)
         for block_pass in _BLOCK_RECOVERY_PASSES:
+            if block_pass.name in skipped_passes:
+                continue
             recovered_blocks = block_pass.run(self, recovered_blocks, context)
         chapters = pdf_chapters.build_chapters(
             recovered_blocks,
@@ -285,6 +292,9 @@ class PdfStructureRecoveryService:
                 profile,
             ),
         }
+        if skipped_passes:
+            # Only non-default parses record their skills, so default parses stay byte-identical.
+            metadata["recovery_skills"] = recovery_skill_registry.resolve(recovery_skills)
         return ParsedDocument(
             title=title,
             author=extraction.author,
@@ -4379,6 +4389,8 @@ class PDFParser:
         self,
         file_path: str | Path,
         profile: PdfFileProfile | dict[str, Any] | None = None,
+        *,
+        recovery_skills: Mapping[str, object] | None = None,
     ) -> ParsedDocument:
         extraction = self.extractor.extract(file_path)
         if isinstance(profile, PdfFileProfile):
@@ -4387,7 +4399,7 @@ class PDFParser:
             effective_profile = PdfFileProfile.from_dict(profile)
         else:
             effective_profile = self.profiler.profile_from_extraction(extraction)
-        return self.recovery_service.recover(file_path, extraction, effective_profile)
+        return self.recovery_service.recover(file_path, extraction, effective_profile, recovery_skills=recovery_skills)
 
 
 @dataclass(frozen=True, slots=True)

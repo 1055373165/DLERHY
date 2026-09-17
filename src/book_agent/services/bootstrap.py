@@ -7,12 +7,13 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import re
-from typing import Final, Iterable
+from typing import Any, Final, Iterable
 
 from book_agent.core.config import get_settings
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
+from book_agent.domain.structure.recovery_skills import METADATA_KEY as RECOVERY_SKILLS_KEY
 from book_agent.domain.structure.table_cells import translatable_cells
 from book_agent.domain.context.builders import (
     BookProfileBuilder,
@@ -247,6 +248,12 @@ class IngestService:
         raise ValueError(f"Unsupported source file type: {path.suffix}")
 
 
+def _recovery_skill_kwargs(document: Document) -> dict[str, Any]:
+    """Pass recovery skills only when the document has settings, so parsers without the option still work."""
+    overrides = (document.metadata_json or {}).get(RECOVERY_SKILLS_KEY)
+    return {"recovery_skills": overrides} if isinstance(overrides, dict) and overrides else {}
+
+
 class ParseService:
     def __init__(
         self,
@@ -270,13 +277,25 @@ class ParseService:
             parsed = self.epub_parser.parse(file_path)
         elif document.source_type == SourceType.PDF_TEXT:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         elif document.source_type == SourceType.PDF_MIXED:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.ocr_pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         elif document.source_type == SourceType.PDF_SCAN:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.ocr_pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         else:
             raise ValueError(f"Unsupported source type: {document.source_type}")
 

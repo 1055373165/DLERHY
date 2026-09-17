@@ -732,3 +732,34 @@ class ExportVersionHistoryResponse(BaseSchema):
     current_version: int
     versions: list[ExportVersionResponse] = Field(default_factory=list)
 
+
+class RecoverySkillResponse(BaseSchema):
+    name: str
+    title: str
+    description: str
+    passes: list[str] = Field(default_factory=list)
+    default_enabled: bool
+    enabled: bool
+
+
+class RecoverySkillsResponse(BaseSchema):
+    document_id: str
+    applies_to: str
+    skills: list[RecoverySkillResponse] = Field(default_factory=list)
+
+
+class RecoverySkillsUpdateRequest(BaseSchema):
+    skills: dict[str, bool] = Field(default_factory=dict)
+
+
+class StructureRefreshResponse(BaseSchema):
+    document_id: str
+    source_type: str
+    refreshed_chapter_count: int
+    refreshed_block_count: int
+    parse_revision_version: int | None = None
+    retired_sentence_count: int = 0
+    created_sentence_count: int = 0
+    carried_ratio: float | None = None
+    retranslate_packet_count: int = 0
+

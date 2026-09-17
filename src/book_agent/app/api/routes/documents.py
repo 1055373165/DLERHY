@@ -19,6 +19,10 @@ from book_agent.app.api.export_downloads import chapter_export_response, cleanup
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
+    RecoverySkillResponse,
+    RecoverySkillsResponse,
+    RecoverySkillsUpdateRequest,
+    StructureRefreshResponse,
     ExportVersionHistoryResponse,
     ExportVersionResponse,
     ChapterMemoryProposalResponse,
@@ -407,6 +411,93 @@ def download_document_export(
         document_id,
         export_type,
         artifact_roots=_artifact_roots(request),
+    )
+
+
+def _recovery_skills_response(document) -> RecoverySkillsResponse:
+    from book_agent.domain.structure import recovery_skills as registry
+
+    enabled = registry.resolve((document.metadata_json or {}).get(registry.METADATA_KEY))
+    return RecoverySkillsResponse(
+        document_id=document.id,
+        applies_to="pdf",
+        skills=[
+            RecoverySkillResponse(
+                name=skill.name,
+                title=skill.title,
+                description=skill.description,
+                passes=list(skill.passes),
+                default_enabled=skill.default_enabled,
+                enabled=enabled[skill.name],
+            )
+            for skill in registry.RECOVERY_SKILLS
+        ],
+    )
+
+
+def _load_document_or_404(session: Session, document_id: str):
+    from book_agent.domain.models import Document
+
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    return document
+
+
+@router.get("/{document_id}/recovery-skills", response_model=RecoverySkillsResponse)
+def get_recovery_skills(document_id: str, session: Session = Depends(get_db_session)) -> RecoverySkillsResponse:
+    """PDF recovery skills (publisher- or genre-specific passes) and whether this document uses them."""
+    return _recovery_skills_response(_load_document_or_404(session, document_id))
+
+
+@router.put("/{document_id}/recovery-skills", response_model=RecoverySkillsResponse)
+def update_recovery_skills(
+    document_id: str,
+    payload: RecoverySkillsUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> RecoverySkillsResponse:
+    """Switch skills on or off for this document; takes effect at the next structure refresh."""
+    from book_agent.domain.structure import recovery_skills as registry
+
+    document = _load_document_or_404(session, document_id)
+    try:
+        overrides = registry.validate_overrides(payload.skills)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    metadata = dict(document.metadata_json or {})
+    metadata[registry.METADATA_KEY] = {**dict(metadata.get(registry.METADATA_KEY) or {}), **overrides}
+    document.metadata_json = metadata
+    session.flush()
+    return _recovery_skills_response(document)
+
+
+@router.post("/{document_id}/structure-refresh", response_model=StructureRefreshResponse)
+def refresh_document_structure(
+    document_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> StructureRefreshResponse:
+    """Reparse the source file with the document's current recovery skills and fork changed sentences."""
+    document = _load_document_or_404(session, document_id)
+    workflow = _workflow_service(request, session)
+    try:
+        if document.source_type == SourceType.EPUB:
+            artifacts = workflow.refresh_epub_structure(document_id)
+        else:
+            artifacts = workflow.refresh_pdf_structure(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    fork = artifacts.parse_revision_fork
+    return StructureRefreshResponse(
+        document_id=document_id,
+        source_type=document.source_type.value,
+        refreshed_chapter_count=len(artifacts.refreshed_chapter_ids),
+        refreshed_block_count=len(artifacts.refreshed_block_ids),
+        parse_revision_version=fork.parse_revision_version if fork is not None else None,
+        retired_sentence_count=fork.retired_sentence_count if fork is not None else 0,
+        created_sentence_count=fork.created_sentence_count if fork is not None else 0,
+        carried_ratio=round(fork.carried_ratio, 3) if fork is not None and fork.forked else None,
+        retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
     )
 
 

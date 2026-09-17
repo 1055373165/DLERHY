@@ -59,7 +59,7 @@
 ## H3 · 结构与交付 agent（约 6 周）
 
 - [ ] **Structure Agent**：只对 `parse_confidence` 低 / `layout_risk` 高 / sanity 失败的页触发；工具 `render_page_image`（多模态读页）、`split_block`、`merge_blocks`、`relabel_block`、`link_caption`；每个结构改动经 H2 的解析版本分叉产生新 revision。H2 之前可先以顾问模式上线（只 `open_issue`）。
-- [ ] 把 22 个 recovery pass 中书籍/出版社特定的部分（Listing 规则、词形标题猜测等）改为 skills，可按书启用。
+- [x] 把 22 个 recovery pass 中书籍/出版社特定的部分改为 skills，可按书启用：`domain/structure/recovery_skills.py` 注册 manning-listings、academic-sections、text-only-figures、contextual-image-legends 四个技能（默认全开，与原行为一致），指南在 `skills/structure/<name>/SKILL.md`；`PUT /v1/documents/{id}/recovery-skills` 按书关闭，`POST /v1/documents/{id}/structure-refresh` 以新配置重解析并分叉。未拆出的：`recover_embedded_page_headings` 内部的词形标题猜测（与其它分支交织在一个 pass 里），`_lock_listing_scope` 的词表仍在代码中。
 - [ ] **Export QA Agent**：读渲染后的 HTML/PDF 截图与 manifest，按验收清单（图覆盖率、未译比例、标题层级、空块）产出报告与 issue；替代 `verify_chapter.py` 的 R1–R8 并删除脚本链路（P4 剩余项）。
   - 进度（2026-09-17）：确定性部分已完成。`export/qa.py` 承载 R1–R8（`scripts/verify_chapter.py` 改为同参数、同报告格式的薄 CLI，交付脚本链路照常可用）并新增标题层级、空块、未译比例检查；`services/export_qa.py` 在每次 run 驱动的 HTML 导出后审计，写 `*.qa.json` 报告，失败项记为非阻断 `EXPORT_QA_FAILURE` issue（通过后自动解决，人工决定优先），结果进入 stage payload。未做：读截图的模型部分（需要多模态工具与 Playwright 截图）、删除脚本链路。
 - [ ] 导出版本化与原子写（R16、R17）；表格按单元格翻译路径（B-20）。

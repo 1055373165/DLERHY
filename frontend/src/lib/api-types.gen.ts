@@ -841,6 +841,25 @@ export interface RebuiltSnapshotEvidenceResponse {
   version: number;
 }
 
+export interface RecoverySkillResponse {
+  name: string;
+  title: string;
+  description: string;
+  passes?: string[];
+  default_enabled: boolean;
+  enabled: boolean;
+}
+
+export interface RecoverySkillsResponse {
+  document_id: string;
+  applies_to: string;
+  skills?: RecoverySkillResponse[];
+}
+
+export interface RecoverySkillsUpdateRequest {
+  skills?: Record<string, boolean>;
+}
+
 export interface RunAuditEventPageResponse {
   run_id: string;
   event_count: number;
@@ -946,6 +965,18 @@ export interface StoredChapterQualitySummaryResponse {
   blocking_issue_count: number;
   low_confidence_count: number;
   format_pollution_count: number;
+}
+
+export interface StructureRefreshResponse {
+  document_id: string;
+  source_type: string;
+  refreshed_chapter_count: number;
+  refreshed_block_count: number;
+  parse_revision_version?: number | null;
+  retired_sentence_count?: number;
+  created_sentence_count?: number;
+  carried_ratio?: number | null;
+  retranslate_packet_count?: number;
 }
 
 export interface TranslateDocumentRequest {

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -655,6 +656,8 @@ class OcrPdfParser:
         self,
         file_path: str | Path,
         profile: PdfFileProfile | dict[str, Any] | None = None,
+        *,
+        recovery_skills: Mapping[str, object] | None = None,
     ) -> ParsedDocument:
         if isinstance(profile, PdfFileProfile):
             effective_profile = profile
@@ -673,7 +676,7 @@ class OcrPdfParser:
                 ocr_required=False,
                 extractor_kind="surya_ocr",
             )
-        return self.recovery_service.recover(file_path, extraction, effective_profile)
+        return self.recovery_service.recover(file_path, extraction, effective_profile, recovery_skills=recovery_skills)
 
 
 def build_ocr_pdf_parser(settings: Any) -> OcrPdfParser:
