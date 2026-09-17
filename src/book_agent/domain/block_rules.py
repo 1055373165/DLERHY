@@ -4,6 +4,7 @@ from typing import Any
 
 from book_agent.domain.enums import BlockType, ProtectedPolicy, SentenceStatus
 from book_agent.domain.models import Block
+from book_agent.domain.structure.table_cells import translatable_cells
 
 _NONTRANSLATABLE_PDF_ROLES = {"header", "footer", "toc_entry"}
 _NONTRANSLATABLE_PDF_PAGE_FAMILIES = {"backmatter"}
@@ -52,5 +53,12 @@ def translatability_for_block(
 
 
 def block_is_context_translatable(block: Block) -> bool:
+    """Whether a block takes part in translation packets.
+
+    Tables stay protected artifacts, but one with translatable cell text is
+    packeted so its cells (segmented as sentences) get translated (06 B-20).
+    """
     translatable, _reason, _status = translatability_for_block(block.block_type, block.source_span_json)
-    return translatable
+    if translatable:
+        return True
+    return bool(translatable_cells(block.block_type, block.source_text, block.source_span_json))

@@ -2769,8 +2769,9 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertNotIn("公式保持原样", merged_html)
         self.assertIn("x=1", merged_html)
         self.assertNotIn("保留原始结构，优先保证可复制与结构保真", merged_html)
-        self.assertIn("<th style='text-align:left'>Tier</th>", merged_html)
-        self.assertIn("<td style='text-align:left'>Slow</td>", merged_html)
+        # Table cell text is translated in place; the grid stays (06 B-20).
+        self.assertIn("<th style='text-align:left'>ZH::Tier</th>", merged_html)
+        self.assertIn("<td style='text-align:left'>ZH::Slow</td>", merged_html)
         self.assertNotIn("参考标识保留", merged_html)
         self.assertIn("https://example.com/agent-docs", merged_html)
 

@@ -1808,8 +1808,22 @@ class ExportService:
             if block.id in skipped_block_ids:
                 continue
             block_sentences = sentences_by_block.get(block.id, [])
-            target_ids = alignment.target_ids_for_block_sentences(block_sentences, sentence_targets, target_map)
             source_metadata = dict(block.source_span_json or {})
+            cell_sentences = [
+                sentence for sentence in block_sentences if (sentence.source_span_json or {}).get("table_cell")
+            ]
+            if cell_sentences:
+                # Translated table cells go back into the grid, not into a Chinese paragraph (06 B-20).
+                cell_translations = {}
+                for sentence in cell_sentences:
+                    cell_target_ids = alignment.target_ids_for_block_sentences([sentence], sentence_targets, target_map)
+                    text = " ".join(target_map[target_id].text_zh for target_id in cell_target_ids if target_map[target_id].text_zh)
+                    if text.strip():
+                        cell_translations[" ".join(sentence.source_text.split())] = text.strip()
+                if cell_translations:
+                    source_metadata["table_cell_translations"] = cell_translations
+                block_sentences = [sentence for sentence in block_sentences if sentence not in cell_sentences]
+            target_ids = alignment.target_ids_for_block_sentences(block_sentences, sentence_targets, target_map)
             if bool(source_metadata.get("repair_hidden_from_export")):
                 continue
             if source_metadata.get("pdf_block_role") in {"header", "footer", "toc_entry"}:
@@ -1827,7 +1841,8 @@ class ExportService:
                 document=bundle.document,
             )
             render_source_text = str(source_metadata.get("repair_source_text") or block.source_text or "")
-            render_source_sentence_ids = [sentence.id for sentence in block_sentences]
+            # Cell sentences stay traceable to the table even though they render inside the grid.
+            render_source_sentence_ids = [sentence.id for sentence in [*block_sentences, *cell_sentences]]
             target_block_type = effective_block_type
             linked_caption_block_id = source_metadata.get("linked_caption_block_id")
             linked_caption_block = (

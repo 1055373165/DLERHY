@@ -63,7 +63,7 @@
 - [ ] **Export QA Agent**：读渲染后的 HTML/PDF 截图与 manifest，按验收清单（图覆盖率、未译比例、标题层级、空块）产出报告与 issue；替代 `verify_chapter.py` 的 R1–R8 并删除脚本链路（P4 剩余项）。
   - 进度（2026-09-17）：确定性部分已完成。`export/qa.py` 承载 R1–R8（`scripts/verify_chapter.py` 改为同参数、同报告格式的薄 CLI，交付脚本链路照常可用）并新增标题层级、空块、未译比例检查；`services/export_qa.py` 在每次 run 驱动的 HTML 导出后审计，写 `*.qa.json` 报告，失败项记为非阻断 `EXPORT_QA_FAILURE` issue（通过后自动解决，人工决定优先），结果进入 stage payload。未做：读截图的模型部分（需要多模态工具与 Playwright 截图）、删除脚本链路。
 - [ ] 导出版本化与原子写（R16、R17）；表格按单元格翻译路径（B-20）。
-  - 进度（2026-09-17）：R16、R17 已修（原子写、按产物加锁、`export_versions` 历史与 blob 引用、门禁单次执行、审校包不再落阻断 issue、`ExportUnavailableError` 与门禁错误分离、布局 issue 不再引用合成块 id）。B-20 表格按单元格翻译未做。
+  - 进度（2026-09-17）：R16、R17 已修（原子写、按产物加锁、`export_versions` 历史与 blob 引用、门禁单次执行、审校包不再落阻断 issue、`ExportUnavailableError` 与门禁错误分离、布局 issue 不再引用合成块 id）。B-20 表格按单元格翻译已做：表格块仍是受保护制品，单元格中的文字（`domain/structure/table_cells.py` 判定：含单词、非数字/单位/缩写/代码/URL）按去重后的单元格切成可译句子，表格进入翻译 packet，导出时把译文替换回表格网格（HTML、Markdown、EPUB 各渲染路径）。已有文档需重解析（结构刷新或解析版本分叉）后才会得到单元格句子。
 - [x] 前端生产托管：多阶段 Dockerfile（node 构建 `frontend/dist` → python 镜像，非 root 用户 uid 10001）；`BOOK_AGENT_FRONTEND_DIST_DIR` 配置时 API 进程托管 SPA（`app/ui/spa.py`：`/assets` 长缓存、深链接回退 `index.html`、`/runtime-config.js` 运行时注入 API 前缀）；未配置时保留原状态页。验证：`tests/test_frontend_hosting.py`、本地 `vite build`；**镜像构建未验证**（2026-09-17 本机拉取基础镜像时网络中断，Docker 守护进程随之退出）。
 
 验收：56 个 golden PDF 上结构 eval 不退化；新书（非训练集）上 Structure Agent 介入后误判率低于纯启发式；交付验收报告随导出产出。

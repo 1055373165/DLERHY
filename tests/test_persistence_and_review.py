@@ -2705,8 +2705,8 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertIn("![Agent loop architecture](assets/agent-loop.png)", markdown_text)
         self.assertIn("```python", markdown_text)
         self.assertIn('return "ok"', markdown_text)
-        self.assertIn("| Tier | Latency |", markdown_text)
-        self.assertIn("| Basic | Slow |", markdown_text)
+        self.assertIn("| ZH::Tier | ZH::Latency |", markdown_text)
+        self.assertIn("| ZH::Basic | ZH::Slow |", markdown_text)
         self.assertIn("https://example.com/agent-docs", markdown_text)
 
     def test_workflow_exports_rebuilt_epub_with_manifest_and_assets(self) -> None:

@@ -435,7 +435,7 @@ manifest（merged/rebuilt）：`document_id, title, title_src, title_tgt, author
 | B-17 | R | CAS 优先读：stamp 失败（hash IOError）时旧 sha 仍在，`resolve_artifact_path` 优先返回旧 blob → 下载到上一版内容 | `infra/storage/blobs.py:115-122`；`export_downloads.py:206-209` |
 | B-18 | R | 读者交付物内嵌「翻译统计」（调用次数、token、估算费用、延迟），费用按硬编码公开价目表估算（含 `claude-opus-4` 等），与 `Settings.translation_*_cost_per_1m_tokens` / run 上的 `cost_usd` 三处定价 | `services/export.py:522-641`；`core/config.py:73-75` |
 | B-19 | R | KaTeX 走 jsdelivr CDN；rebuilt_pdf 在离线/受限网络下公式不渲染且 `wait_until="load"` 可能长时间等待（无超时） | `services/export.py:1339, 1351, 2380, 2393, 2642` |
-| B-20 | R | 表格/代码/公式/图整块 `PROTECT`（句子 `translatable=False`）→ 文字型表格永远不翻译；导出无按单元格翻译路径 | `domain/block_rules.py:29-40`；`render_repair.py:1670-1673` |
+| B-20 | R | 表格/代码/公式/图整块 `PROTECT`（句子 `translatable=False`）→ 文字型表格永远不翻译；导出无按单元格翻译路径 | `domain/block_rules.py:29-40`；`render_repair.py:1670-1673` |（**H3 已修复**：单元格句子与导出时替换，见 `agent-upgrade/03-roadmap.md`。）
 | B-21 | R | 译文选择按**句**独立取最高秩 run；块内不同句可能来自不同 run，n:1 / 1:n 对齐跨 run 时会重复或漏文本（`orphan` 只在首选 run 内检测，跨 run 的重叠不报） | `export/alignment.py:43-60, 86-119, 163-178` |
 | B-22 | R | 门禁重复执行：用例层与服务层各装载 bundle、各算对齐/布局、各写 issue 一次；PDF 的 render blocks 每章至少构建两次 | `application/export_use_case.py:189-193`；`services/export.py:236-237, 398` |
 | B-23 | R | `_apply_document_export_status_updates` 把**所有**章（含被 `_visible_merged_chapters` 跳过/合并的）标 EXPORTED；rebuilt_epub/rebuilt_pdf 本身不改状态但它们触发的上游 merged 会改 → 状态语义与「哪个文件真正交付了」脱节 | `services/export.py:773-783, 3120-3196` |

@@ -13,6 +13,7 @@ from book_agent.core.config import get_settings
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
+from book_agent.domain.structure.table_cells import translatable_cells
 from book_agent.domain.context.builders import (
     BookProfileBuilder,
     ChapterBriefBuilder,
@@ -20,6 +21,7 @@ from book_agent.domain.context.builders import (
     ContextPacketBuilder,
 )
 from book_agent.domain.enums import (
+    SentenceStatus,
     ArtifactStatus,
     BlockType,
     ChapterStatus,
@@ -726,6 +728,12 @@ class SegmentationService:
         # inflate sentence counts or participate in downstream sentence-based workflows.
         if not translatable and str((block.source_span_json or {}).get("image_src") or "").strip():
             return []
+        # A protected table with prose in its cells: one translatable sentence per distinct
+        # cell text; the table layout itself is never translated (06 B-20).
+        cells = translatable_cells(block.block_type, block.source_text, block.source_span_json)
+        if cells:
+            segmented = cells
+            translatable, nontranslatable_reason, initial_status = True, None, SentenceStatus.PENDING
         parse_revision_id = block.parse_revision_id or (block.source_span_json or {}).get("parse_revision_id")
         block_canonical_node_id = block.canonical_node_id or (block.source_span_json or {}).get("canonical_node_id")
         output: list[Sentence] = []
@@ -762,6 +770,7 @@ class SegmentationService:
                         "ordinal_in_block": ordinal,
                         "parse_revision_id": parse_revision_id,
                         "canonical_node_id": sentence_canonical_node_id,
+                        **({"table_cell": True} if cells else {}),
                     },
                     upstream_confidence=block.parse_confidence,
                     sentence_status=initial_status,

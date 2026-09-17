@@ -14,6 +14,13 @@ from pathlib import PurePosixPath
 from book_agent.domain.enums import (
     BlockType,
 )
+# Table parsing lives in the domain now; the names stay importable from here for existing callers.
+from book_agent.domain.structure.table_cells import (  # noqa: F401
+    is_table_separator_row,
+    parse_structured_table_rows,
+    split_table_candidate_line,
+    translate_cell,
+)
 from book_agent.export import code_text, render_repair, stylesheets
 from book_agent.export.common import (
     _LIST_MARKER_PATTERN,
@@ -142,7 +149,9 @@ def render_block_markdown(
             return f"### {heading_text}".strip()
     if block.block_type == BlockType.TABLE.value:
         table_source = target_text or source_text
-        markdown_table = markdown_table_from_source_text(table_source)
+        markdown_table = markdown_table_from_source_text(
+            table_source, cell_translations=table_cell_translations(block.source_metadata)
+        )
         if markdown_table:
             return markdown_table
     list_markdown = markdown_list_text(target_text or source_text)
@@ -211,11 +220,13 @@ def markdown_fenced_block(text: str, *, language: str = "") -> str:
     return f"{opener}\n{content}\n{fence}"
 
 
-def markdown_table_from_source_text(text: str) -> str | None:
+def markdown_table_from_source_text(text: str, *, cell_translations: dict[str, str] | None = None) -> str | None:
     parsed_rows = parse_structured_table_rows(text)
     if parsed_rows is None:
         return None
     header, body_rows = parsed_rows
+    header = [translate_cell(cell, cell_translations) for cell in header]
+    body_rows = [[translate_cell(cell, cell_translations) for cell in row] for row in body_rows]
     escaped_header = [cell.replace("|", "\\|") for cell in header]
     lines = [
         f"| {' | '.join(escaped_header)} |",
@@ -225,66 +236,6 @@ def markdown_table_from_source_text(text: str) -> str | None:
         escaped_row = [cell.replace("|", "\\|") for cell in row]
         lines.append(f"| {' | '.join(escaped_row)} |")
     return "\n".join(lines)
-
-
-def parse_structured_table_rows(text: str) -> tuple[list[str], list[list[str]]] | None:
-    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
-    if len(lines) < 2:
-        return None
-
-    rows = [split_table_candidate_line(line) for line in lines]
-    if any(row is None for row in rows):
-        return None
-    normalized_rows = [row for row in rows if row]
-    if len(normalized_rows) < 2:
-        return None
-
-    separator_index = 1 if len(normalized_rows) >= 3 and is_table_separator_row(normalized_rows[1]) else None
-    if separator_index is not None:
-        normalized_rows.pop(separator_index)
-    if len(normalized_rows) < 2:
-        return None
-
-    column_count = max(len(row) for row in normalized_rows)
-    if column_count < 2 or column_count > 12:
-        return None
-    padded_rows: list[list[str]] = [
-        row + [""] * (column_count - len(row)) if len(row) < column_count else row
-        for row in normalized_rows
-    ]
-
-    header = padded_rows[0]
-    body_rows = padded_rows[1:]
-    if not body_rows:
-        return None
-    return header, body_rows
-
-
-def split_table_candidate_line(line: str) -> list[str] | None:
-    bare = line.strip()
-    if len(bare) > 2 and bare.startswith("|") and bare.endswith("|"):
-        # A fully delimited row keeps its empty cells so later cells stay in their columns.
-        cells = [cell.strip() for cell in bare[1:-1].split("|")]
-        if len(cells) >= 2 and any(cells):
-            return cells
-    stripped = bare.strip("|").strip()
-    if not stripped:
-        return None
-    if "|" in stripped:
-        cells = [cell.strip() for cell in stripped.split("|")]
-        cells = [cell for cell in cells if cell]
-        if len(cells) >= 2:
-            return cells
-    cells = [cell.strip() for cell in re.split(r"\t+|\s{2,}", stripped) if cell.strip()]
-    if len(cells) >= 2:
-        return cells
-    return None
-
-
-def is_table_separator_row(row: list[str]) -> bool:
-    if not row:
-        return False
-    return all(bool(re.fullmatch(r":?-{2,}:?|={2,}", cell.strip())) for cell in row)
 
 
 def markdown_language_for_artifact(artifact_kind: str | None, text: str) -> str:
@@ -571,7 +522,9 @@ def render_block_html(
         )
     if block.block_type == BlockType.TABLE.value:
         table_source = block.target_text or block.source_text or ""
-        table_html = render_structured_table_html(table_source)
+        table_html = render_structured_table_html(
+            table_source, cell_translations=table_cell_translations(block.source_metadata)
+        )
         if table_html:
             return (
                 f"<section class='block artifact {html.escape(block.block_type)}'>"
@@ -629,11 +582,14 @@ def format_preformatted_text(
     return html.escape(code_text.normalize_code_artifact_text(text, block=block))
 
 
-def render_structured_table_html(text: str) -> str | None:
+def render_structured_table_html(text: str, *, cell_translations: dict[str, str] | None = None) -> str | None:
     parsed_rows = parse_structured_table_rows(text)
     if parsed_rows is None:
         return None
     header, body_rows = parsed_rows
+    if cell_translations:
+        header = [translate_cell(cell, cell_translations) for cell in header]
+        body_rows = [[translate_cell(cell, cell_translations) for cell in row] for row in body_rows]
     # Detect numeric columns for right-alignment
     alignments: list[str] = []
     for col_idx in range(len(header)):
@@ -695,15 +651,22 @@ def render_table_html_metadata_aware(
     source-text-driven structured table heuristic.
     """
     md = source_metadata or {}
+    translations = table_cell_translations(md)
     markdown = str(md.get("table_markdown") or "").strip()
     if markdown:
-        html_table = markdown_table_to_html(markdown)
+        html_table = markdown_table_to_html(markdown, cell_translations=translations)
         if html_table:
             return html_table
-    return render_structured_table_html(source_text)
+    return render_structured_table_html(source_text, cell_translations=translations)
 
 
-def markdown_table_to_html(markdown: str) -> str | None:
+def table_cell_translations(source_metadata: dict[str, object] | None) -> dict[str, str] | None:
+    """Cell source text -> translation, set on table render blocks by the exporter."""
+    raw = (source_metadata or {}).get("table_cell_translations")
+    return {str(key): str(value) for key, value in raw.items()} if isinstance(raw, dict) and raw else None
+
+
+def markdown_table_to_html(markdown: str, *, cell_translations: dict[str, str] | None = None) -> str | None:
     """Convert a `| a | b |\n| --- | --- |\n| 1 | 2 |` block to HTML.
 
     Returns None if the input doesn't look like a markdown table.
@@ -724,8 +687,8 @@ def markdown_table_to_html(markdown: str) -> str | None:
         inner = row.strip().strip("|")
         return [cell.strip() for cell in inner.split("|")]
 
-    header_cells = _split_row(lines[0])
-    body_rows = [_split_row(line) for line in lines[2:]]
+    header_cells = [translate_cell(cell, cell_translations) for cell in _split_row(lines[0])]
+    body_rows = [[translate_cell(cell, cell_translations) for cell in _split_row(line)] for line in lines[2:]]
 
     thead = "".join(f"<th>{html.escape(cell)}</th>" for cell in header_cells)
     body_html = ""
@@ -807,10 +770,22 @@ def render_table_markdown_metadata_aware(
     Otherwise fall back to the source-text-driven table heuristic.
     """
     md = source_metadata or {}
+    translations = table_cell_translations(md)
     markdown = str(md.get("table_markdown") or "").strip()
     if markdown:
-        return markdown
-    return markdown_table_from_source_text(source_text)
+        if not translations:
+            return markdown
+        rows = [line for line in markdown.splitlines()]
+        translated = []
+        for index, line in enumerate(rows):
+            stripped = line.strip()
+            if index == 1 or not (stripped.startswith("|") and stripped.endswith("|")):
+                translated.append(line)
+                continue
+            cells = [translate_cell(cell.strip(), translations).replace("|", "\\|") for cell in stripped[1:-1].split("|")]
+            translated.append(f"| {' | '.join(cells)} |")
+        return "\n".join(translated)
+    return markdown_table_from_source_text(source_text, cell_translations=translations)
 
 
 def epub_relative_asset_path(asset_path: str) -> str:
@@ -854,7 +829,9 @@ def render_block_rebuilt_epub_xhtml(
                 f"<pre><code>{format_preformatted_text(block.source_text, block=block)}</code></pre>"
             )
         elif block.artifact_kind == "table":
-            table_html = render_structured_table_html(block.source_text)
+            table_html = render_structured_table_html(
+                block.source_text, cell_translations=table_cell_translations(block.source_metadata)
+            )
             body_html = table_html or f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
         else:
             body_html = f"<div>{source_html}</div>"
@@ -867,7 +844,9 @@ def render_block_rebuilt_epub_xhtml(
             artifact_html = f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
         elif block.artifact_kind == "table":
             artifact_html = (
-                render_structured_table_html(block.source_text)
+                render_structured_table_html(
+                block.source_text, cell_translations=table_cell_translations(block.source_metadata)
+            )
                 or f"<pre><code>{html.escape(block.source_text or '')}</code></pre>"
             )
         else:
