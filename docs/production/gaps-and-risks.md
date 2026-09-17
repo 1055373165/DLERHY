@@ -75,3 +75,4 @@
 | 2026-09-17 | R12 | `d88fdfa`、`0fcca44` | 统一 provider client；所有模型调用都产生带 `call_kind` 的事件；run 花费从事件聚合；缓存 token 字段修正 |
 | 2026-09-17 | R15 | `0fcca44` | 物化视图与 `refresh_cost_rollup()` 删除（迁移 0034），成本端点直接聚合事件 |
 | 2026-09-17 | R3、R4、R5、R10、R11、R13 | 本次提交 | 见 `docs/agent-upgrade/03-roadmap.md` H0「运行时正确性」条目；R5 只堵住了双写入口，review 期重译改为独立 work item 留到 H2 |
+| 2026-09-17 | R2、R6、R14（索引部分） | 本次提交 | compose 挂载整个 artifacts、prod scope 强制密钥与非 echo；命名空间 API key 变量；`uq_provider_credentials_one_active` 在 SQLite 上也是部分索引。R14 其余两项（memory_snapshots 全局唯一、seed 去重语义）未处理 |

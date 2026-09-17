@@ -14,7 +14,8 @@ COPY alembic ./alembic
 RUN pip install --upgrade pip \
     && pip install -e .
 
-RUN mkdir -p /app/artifacts/exports
+RUN mkdir -p /app/artifacts/exports /app/artifacts/uploads /app/artifacts/blobs \
+    /app/artifacts/parse-ir /app/artifacts/document-images
 
 EXPOSE 8000
 

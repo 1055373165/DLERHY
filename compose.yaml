@@ -1,3 +1,10 @@
+# Production-shaped stack: PostgreSQL 16, a one-shot migration, the app.
+#
+# Values come from the project .env (compose reads it for ${...} interpolation).
+# Required there: OPENAI_API_KEY and BOOK_AGENT_SECRET_KEY (a Fernet key; the
+# app refuses to invent one in prod scope). Everything under /app/artifacts —
+# uploads, parse IR, images, exports, blobs — lives on one named volume so a
+# rebuilt container keeps the source files its database rows point at.
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: book_agent
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "55432:5432"
     volumes:
@@ -22,9 +29,8 @@ services:
     image: book-agent:local
     container_name: book-agent-migrate
     command: ["alembic", "upgrade", "head"]
-    env_file: .env
     environment:
-      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/book_agent
+      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/book_agent
     restart: "no"
     depends_on:
       postgres:
@@ -36,18 +42,35 @@ services:
     image: book-agent:local
     container_name: book-agent-app
     restart: unless-stopped
-    env_file: .env
     environment:
-      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/book_agent
+      BOOK_AGENT_APP_SCOPE: prod
+      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/book_agent
+      BOOK_AGENT_SECRET_KEY: ${BOOK_AGENT_SECRET_KEY:?set BOOK_AGENT_SECRET_KEY in .env (see .env.example)}
+      BOOK_AGENT_TRANSLATION_BACKEND: ${BOOK_AGENT_TRANSLATION_BACKEND:-openai_compatible}
+      BOOK_AGENT_TRANSLATION_MODEL: ${BOOK_AGENT_TRANSLATION_MODEL:-deepseek-chat}
+      # The app deliberately ignores a bare OPENAI_API_KEY in its environment;
+      # the namespaced variable is the explicit, intended hand-off.
+      BOOK_AGENT_TRANSLATION_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BOOK_AGENT_TRANSLATION_OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com/v1}
+      BOOK_AGENT_TRANSLATION_TIMEOUT_SECONDS: ${BOOK_AGENT_TRANSLATION_TIMEOUT_SECONDS:-120}
+      BOOK_AGENT_TRANSLATION_MAX_RETRIES: ${BOOK_AGENT_TRANSLATION_MAX_RETRIES:-2}
+      BOOK_AGENT_CORS_ALLOW_ORIGINS: ${BOOK_AGENT_CORS_ALLOW_ORIGINS:-}
       BOOK_AGENT_EXPORT_ROOT: /app/artifacts/exports
+      BOOK_AGENT_UPLOAD_ROOT: /app/artifacts/uploads
     ports:
       - "58000:8000"
     volumes:
-      - app_exports:/app/artifacts/exports
+      - app_artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       migrate:
         condition: service_completed_successfully
 
 volumes:
   postgres_data:
-  app_exports:
+  app_artifacts:

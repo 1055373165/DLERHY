@@ -1,4 +1,5 @@
 import json
+import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -38,14 +39,26 @@ class AppScope(str, Enum):
 
 
 class _SanitizedEnvSettingsSource:
+    """Process-environment source that ignores the generic ``OPENAI_API_KEY``.
+
+    A developer's shell often carries a global ``OPENAI_API_KEY`` meant for
+    other tools; picking it up silently would bill the wrong account. The
+    key is therefore accepted from the project ``.env`` file, or from the
+    namespaced ``BOOK_AGENT_TRANSLATION_OPENAI_API_KEY`` variable, which is
+    explicit enough to be intentional and is what containers set.
+    """
+
     def __init__(self, delegate: Any):
         self._delegate = delegate
 
     def __call__(self) -> dict[str, Any]:
         payload = dict(self._delegate())
+        namespaced = os.environ.get("BOOK_AGENT_TRANSLATION_OPENAI_API_KEY", "").strip()
         payload.pop("translation_openai_api_key", None)
         payload.pop("BOOK_AGENT_TRANSLATION_OPENAI_API_KEY", None)
         payload.pop("OPENAI_API_KEY", None)
+        if namespaced:
+            payload["translation_openai_api_key"] = namespaced
         return payload
 
 
@@ -186,3 +199,13 @@ def validate_app_scope(settings: Settings) -> None:
             f"(got {url.split(':', 1)[0]!r}). SQLite is only supported by unit tests and "
             "the smoke/e2e scopes."
         )
+    if settings.app_scope == AppScope.PROD:
+        backend = (settings.translation_backend or "").lower().strip()
+        if backend == "echo":
+            # Echo copies the source text as the "translation". Fine for
+            # pipelines under test; in production it would silently produce
+            # an untranslated book.
+            raise AppScopeViolation(
+                "app_scope=prod refuses translation_backend=echo; configure an "
+                "OpenAI-compatible provider (BOOK_AGENT_TRANSLATION_BACKEND=openai_compatible)."
+            )

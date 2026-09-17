@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from book_agent.core.config import Settings
+from book_agent.core.config import AppScope, Settings, get_settings
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
 from book_agent.domain.models.provider_credential import ProviderCredential
 from book_agent.services.secrets import decrypt_secret, encrypt_secret
@@ -164,6 +164,11 @@ def activate_credential(session: Session, credential_id: str) -> ProviderCredent
 
 
 def _activate_internal(session: Session, record: ProviderCredential) -> None:
+    if record.provider_kind == ProviderKind.ECHO and get_settings().app_scope == AppScope.PROD:
+        raise ValueError(
+            "the echo provider cannot be activated in prod scope: it copies the source "
+            "text instead of translating it"
+        )
     # Step 1: deactivate everyone else inside the same transaction so the
     # partial unique index never sees two active rows.
     session.query(ProviderCredential).filter(

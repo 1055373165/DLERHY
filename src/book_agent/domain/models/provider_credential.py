@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, LargeBinary, Text
+from sqlalchemy import text, Boolean, DateTime, Index, Integer, LargeBinary, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
@@ -16,9 +16,10 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """User-configured translation provider, stored in DB so model swaps
     don't require a server restart or .env edit.
 
-    Exactly one row may have ``is_active=True`` at a time. The partial
-    unique index enforces that on PostgreSQL; on SQLite (used in some
-    dev/test paths) the service layer enforces it inside a transaction.
+    Exactly one row may have ``is_active=True`` at a time; the partial
+    unique index enforces that on PostgreSQL and SQLite alike (without the
+    ``sqlite_where`` clause SQLite would treat it as a plain unique index
+    and refuse a second inactive row).
     """
 
     __tablename__ = "provider_credentials"
@@ -27,7 +28,8 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "uq_provider_credentials_one_active",
             "is_active",
             unique=True,
-            postgresql_where=("is_active"),
+            postgresql_where=text("is_active"),
+            sqlite_where=text("is_active"),
         ),
     )
 

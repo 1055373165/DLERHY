@@ -58,20 +58,23 @@ def create_provider(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> ProviderCredentialRead:
-    record = svc.create_credential(
-        session,
-        name=payload.name,
-        provider_kind=payload.provider_kind,
-        model_name=payload.model_name,
-        base_url=payload.base_url,
-        api_key=payload.api_key,
-        streaming=payload.streaming,
-        max_output_tokens=payload.max_output_tokens,
-        timeout_seconds=payload.timeout_seconds,
-        max_retries=payload.max_retries,
-        retry_backoff_seconds=payload.retry_backoff_seconds,
-        activate=payload.activate,
-    )
+    try:
+        record = svc.create_credential(
+            session,
+            name=payload.name,
+            provider_kind=payload.provider_kind,
+            model_name=payload.model_name,
+            base_url=payload.base_url,
+            api_key=payload.api_key,
+            streaming=payload.streaming,
+            max_output_tokens=payload.max_output_tokens,
+            timeout_seconds=payload.timeout_seconds,
+            max_retries=payload.max_retries,
+            retry_backoff_seconds=payload.retry_backoff_seconds,
+            activate=payload.activate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     if payload.activate:
         _invalidate_app_worker(request)
     return _to_read(record)
@@ -129,6 +132,8 @@ def activate_provider(
         record = svc.activate_credential(session, credential_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     _invalidate_app_worker(request)
     return _to_read(record)
 
