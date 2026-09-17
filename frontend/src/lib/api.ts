@@ -433,6 +433,10 @@ export const SERVICE_LINKS = {
   health: `${API_BASE_URL}/health`,
 };
 
+export function runStreamUrl(runId: string): string {
+  return withApiBase(`/runs/${encodeURIComponent(runId)}/stream`);
+}
+
 function withApiBase(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;
