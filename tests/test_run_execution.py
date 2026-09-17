@@ -28,6 +28,28 @@ from book_agent.services.run_control import RunBudgetSummary, RunControlService
 from book_agent.services.run_execution import RunExecutionService
 
 
+
+def _emit_completed_call(session, *, run_id: str, token_in: int, token_out: int, cost_usd: float, latency_ms: int) -> None:
+    """Record the provider call the way the translation service does; run spend is read from these events."""
+    from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+    from book_agent.infra.repositories.events import emit_event
+
+    emit_event(
+        session,
+        kind=LLM_CALL_COMPLETED,
+        run_id=run_id,
+        actor_kind="agent",
+        actor_id="test.worker",
+        payload={
+            "call_kind": "translate",
+            "token_in": token_in,
+            "token_out": token_out,
+            "total_tokens": token_in + token_out,
+            "cost_usd": cost_usd,
+            "latency_ms": latency_ms,
+        },
+    )
+
 class RunExecutionServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = build_engine("sqlite+pysqlite:///:memory:")
@@ -170,6 +192,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             assert claimed is not None
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
             self.assertTrue(execution.heartbeat_work_item(lease_token=claimed.lease_token, lease_seconds=60))
+            _emit_completed_call(session, run_id=run_id, token_in=120, token_out=45, cost_usd=0.0035, latency_ms=750)
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,
@@ -580,6 +603,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             self.assertIsNotNone(claimed)
             assert claimed is not None
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            _emit_completed_call(session, run_id=run_id, token_in=10, token_out=5, cost_usd=0.005, latency_ms=100)
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,

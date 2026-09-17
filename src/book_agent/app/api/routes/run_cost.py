@@ -1,109 +1,62 @@
-"""Cost dashboard endpoint backed by ``cost_rollup_*`` materialized views.
+"""Cost dashboard endpoint.
 
-Reads aggregated spend (token_in / token_out / cost_usd) grouped by run and
-by chapter. When the run declares a budget on ``DocumentRun.budget_json``,
-the response also reports remaining headroom so the UI can flag imminent
-cutoffs without re-implementing the math client-side.
-
-The endpoint refreshes the materialized views on every call — cheap enough
-at our event cardinality (a few thousand llm.call.completed rows per run),
-and guarantees freshness without needing a background scheduler.
+Aggregates the ``llm.call.completed`` events attributed to a run (tokens,
+cost, latency; per chapter as well) and, when the run declares a budget,
+reports the remaining headroom so the UI can flag imminent cutoffs without
+re-implementing the math client-side. The same aggregation feeds the run
+summary and the budget guardrails, so all three agree.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from book_agent.app.api.deps import get_session_factory
-
+from book_agent.app.api.deps import get_db_session
+from book_agent.infra.repositories.run_control import RunControlRepository
 
 router = APIRouter()
 
 
 @router.get("/{run_id}/cost")
 def get_run_cost(
-    request: Request,
     run_id: str,
-    refresh: bool = Query(default=True, description="Refresh rollup before reading."),
+    session: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
-    session_factory = get_session_factory(request)
-    engine: Engine = session_factory.kw["bind"]
-    if engine.dialect.name != "postgresql":
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Cost rollup requires PostgreSQL.",
-        )
-
-    with engine.begin() as conn:
-        if refresh:
-            conn.execute(text("SELECT refresh_cost_rollup()"))
-
-        run_row = conn.execute(
-            text(
-                """
-                SELECT run_id, call_count, token_in, token_out, total_tokens,
-                       cost_usd, first_call_at, last_call_at
-                FROM cost_rollup_by_run
-                WHERE run_id = :run_id
-                """
-            ),
-            {"run_id": run_id},
-        ).mappings().first()
-
-        chapter_rows = conn.execute(
-            text(
-                """
-                SELECT chapter_id, call_count, token_in, token_out, total_tokens, cost_usd
-                FROM cost_rollup_by_chapter
-                WHERE run_id = :run_id
-                ORDER BY cost_usd DESC, chapter_id ASC
-                """
-            ),
-            {"run_id": run_id},
-        ).mappings().all()
-
-        budget_row = conn.execute(
-            text(
-                """
-                SELECT max_total_cost_usd, max_total_token_in, max_total_token_out
-                FROM run_budgets
-                WHERE run_id::text = :run_id
-                """
-            ),
-            {"run_id": run_id},
-        ).mappings().first()
+    repository = RunControlRepository(session)
+    try:
+        repository.get_run(run_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="run not found")
+    usage = repository.usage_from_events(run_id)
+    budget = repository.get_budget_for_run(run_id)
 
     totals = {
-        "call_count": int(run_row["call_count"]) if run_row else 0,
-        "token_in": int(run_row["token_in"]) if run_row else 0,
-        "token_out": int(run_row["token_out"]) if run_row else 0,
-        "total_tokens": int(run_row["total_tokens"]) if run_row else 0,
-        "cost_usd": float(run_row["cost_usd"]) if run_row else 0.0,
-        "first_call_at": run_row["first_call_at"].isoformat() if run_row and run_row["first_call_at"] else None,
-        "last_call_at": run_row["last_call_at"].isoformat() if run_row and run_row["last_call_at"] else None,
+        "call_count": usage["call_count"],
+        "token_in": usage["token_in"],
+        "token_out": usage["token_out"],
+        "total_tokens": usage["total_tokens"],
+        "cost_usd": usage["cost_usd"],
+        "latency_ms": usage["latency_ms"],
+        "first_call_at": usage["first_call_at"].isoformat() if usage["first_call_at"] else None,
+        "last_call_at": usage["last_call_at"].isoformat() if usage["last_call_at"] else None,
     }
-
-    budget = _compute_budget_headroom(budget_row, totals)
-
+    budget_row = (
+        {
+            "max_total_cost_usd": budget.max_total_cost_usd,
+            "max_total_token_in": budget.max_total_token_in,
+            "max_total_token_out": budget.max_total_token_out,
+        }
+        if budget is not None
+        else None
+    )
     return {
         "run_id": run_id,
         "totals": totals,
-        "budget": budget,
-        "chapters": [
-            {
-                "chapter_id": row["chapter_id"],
-                "call_count": int(row["call_count"]),
-                "token_in": int(row["token_in"]),
-                "token_out": int(row["token_out"]),
-                "total_tokens": int(row["total_tokens"]),
-                "cost_usd": float(row["cost_usd"]),
-            }
-            for row in chapter_rows
-        ],
+        "budget": _compute_budget_headroom(budget_row, totals),
+        "chapters": repository.usage_by_chapter_from_events(run_id),
     }
 
 

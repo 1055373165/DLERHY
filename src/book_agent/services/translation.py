@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from book_agent.core.ids import stable_id
+from book_agent.core.run_context import current_run_id
 from book_agent.domain.enums import (
     ActorType,
     PacketStatus,
@@ -316,6 +317,8 @@ class TranslationService:
         rerun_hints: tuple[str, ...] = (),
         run_id: str | None = None,
     ) -> PreparedPacketTranslation:
+        if run_id is None:
+            run_id = current_run_id()
         bundle = self.repository.load_packet_bundle(packet_id)
         compiled_context_result = self.memory_service.load_compiled_context(
             packet=bundle.context_packet,

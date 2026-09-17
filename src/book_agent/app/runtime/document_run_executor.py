@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.ids import stable_id
+from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import (
     DocumentRunStatus,
     ExportType,
@@ -679,7 +680,9 @@ class DocumentRunExecutor:
                 run_id=run_id,
                 lease_token=claimed.lease_token,
             ),
-            on_success=self._complete_translate_success,
+            on_success=lambda payload, lease_token: self._complete_translate_success(
+                payload, lease_token, run_id=run_id
+            ),
             lease_seconds=self.lease_seconds,
         )
 
@@ -907,6 +910,30 @@ class DocumentRunExecutor:
             },
             daemon=True,
         )
+        with bind_run_context(run_id):
+            self._execute_claimed_work_item_in_context(
+                run_id=run_id,
+                claimed=claimed,
+                worker_fn=worker_fn,
+                on_success=on_success,
+                stage_key=stage_key,
+                lease_window_seconds=lease_window_seconds,
+                stop_event=stop_event,
+                heartbeat_thread=heartbeat_thread,
+            )
+
+    def _execute_claimed_work_item_in_context(
+        self,
+        *,
+        run_id: str,
+        claimed: ClaimedRunWorkItem,
+        worker_fn,
+        on_success,
+        stage_key: str | None,
+        lease_window_seconds: int,
+        stop_event: threading.Event,
+        heartbeat_thread: threading.Thread,
+    ) -> None:
         try:
             with session_scope(self.session_factory) as session:
                 execution = self._run_execution_service(session)
@@ -1018,7 +1045,9 @@ class DocumentRunExecutor:
                 "latency_ms": translation_run.latency_ms or 0,
             }
 
-    def _complete_translate_success(self, payload: dict[str, Any], lease_token: str) -> None:
+    def _complete_translate_success(
+        self, payload: dict[str, Any], lease_token: str, *, run_id: str | None = None
+    ) -> None:
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_translate_success(
@@ -1035,6 +1064,11 @@ class DocumentRunExecutor:
                 packet_id=str(payload["packet_id"]),
                 substate=PACKET_RUNTIME_SUBSTATE_TRANSLATED,
             )
+            if run_id is not None:
+                # Check spend as soon as it is known instead of waiting for
+                # the next run-loop tick, so an overrun stops at one packet
+                # rather than one packet per parallel worker.
+                execution.enforce_budget_guardrails(run_id=run_id)
 
     def _complete_failure(
         self,

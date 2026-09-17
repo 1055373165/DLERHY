@@ -52,6 +52,8 @@ from book_agent.domain.models.translation import (
     TranslationRun,
 )
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.export import ExportGateError
 from book_agent.services.run_control import RunBudgetSummary, RunControlService
@@ -1858,6 +1860,23 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             assert claimed is not None
 
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            # Run spend is read from llm.call.completed events; record the call
+            # the way the translation service does before completing the item.
+            emit_event(
+                session,
+                kind=LLM_CALL_COMPLETED,
+                run_id=resumed.run_id,
+                actor_kind="agent",
+                actor_id="test.worker",
+                payload={
+                    "call_kind": "translate",
+                    "token_in": 64,
+                    "token_out": 32,
+                    "total_tokens": 96,
+                    "cost_usd": 0.0012,
+                    "latency_ms": 220,
+                },
+            )
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,

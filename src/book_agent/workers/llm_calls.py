@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from book_agent.core.ids import stable_id
+from book_agent.core.run_context import current_run_id
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
 from book_agent.infra.repositories.events import emit_event
 from book_agent.workers.failures import classify_failure
@@ -84,6 +85,8 @@ def observed_llm_call(
     flushed into ``session``; committing stays with the caller.
     """
     started = time.perf_counter()
+    if run_id is None:
+        run_id = current_run_id()
     observation = LLMCallObservation(
         call_id=stable_id("llm-call", call_kind, model, f"{time.time():.6f}"),
         call_kind=call_kind,

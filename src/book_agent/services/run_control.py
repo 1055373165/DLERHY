@@ -203,6 +203,7 @@ class RunControlService:
         event_count = self.repository.list_run_events(run_id, limit=0).total_count
         status_detail_json = dict(run.status_detail_json or {})
         self._project_derived_stage_status(status_detail_json, run_id, run.document_id)
+        status_detail_json["usage_summary"] = self.usage_summary(run_id)
         return DocumentRunSummary(
             run_id=run.id,
             document_id=run.document_id,
@@ -252,6 +253,18 @@ class RunControlService:
                 latest_event_at=self._isoformat(latest_event_at),
             ),
         )
+
+    def usage_summary(self, run_id: str) -> dict[str, Any]:
+        """Spend attributed to the run, derived from ``llm.call.completed`` events."""
+        usage = self.repository.usage_from_events(run_id)
+        return {
+            "call_count": usage["call_count"],
+            "token_in": usage["token_in"],
+            "token_out": usage["token_out"],
+            "total_tokens": usage["total_tokens"],
+            "cost_usd": usage["cost_usd"],
+            "latency_ms": usage["latency_ms"],
+        }
 
     def get_run_lineage(self, run_id: str) -> RunLineageChain:
         # Walk the resume_from_run_id chain. Retry produces a new row

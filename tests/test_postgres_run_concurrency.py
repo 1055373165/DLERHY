@@ -22,6 +22,8 @@ from book_agent.core.config import get_settings
 from book_agent.domain.enums import DocumentRunType, DocumentStatus, SourceType
 from book_agent.domain.models import Document
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import RunExecutionService
@@ -104,6 +106,14 @@ class PostgresRunConcurrencyTests(unittest.TestCase):
                 with session_scope(self.session_factory) as session:
                     execution = RunExecutionService(RunControlRepository(session))
                     barrier.wait()
+                    emit_event(
+                        session,
+                        kind=LLM_CALL_COMPLETED,
+                        run_id=run_id,
+                        actor_kind="agent",
+                        actor_id="test.worker",
+                        payload={"call_kind": "translate", "token_in": 1, "token_out": 1, "total_tokens": 2, "cost_usd": 0.0, "latency_ms": 1},
+                    )
                     execution.complete_translate_success(
                         lease_token=lease_token,
                         packet_id=str(uuid4()),

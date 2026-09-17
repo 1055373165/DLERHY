@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import PacketStatus, WorkItemScopeType, WorkItemStage, WorkItemStatus, WorkerLeaseStatus
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Chapter, Document
+from book_agent.domain.models.ops import Event
 from book_agent.domain.models.ops import (
     DocumentRun,
     RunAuditEvent,
@@ -235,6 +238,69 @@ class RunControlRepository:
             created.append(work_item)
         self.session.flush()
         return created
+
+    def usage_from_events(self, run_id: str) -> dict[str, Any]:
+        """Tokens, cost and latency of every completed model call attributed to the run.
+
+        The ``llm.call.completed`` events are the only ledger of provider
+        spend; run summaries, budget guardrails and the cost endpoint all read
+        this so there is exactly one number for what a run has cost.
+        """
+        token_in = func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0)
+        token_out = func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0)
+        total_tokens = func.coalesce(func.sum(Event.payload["total_tokens"].as_integer()), 0)
+        cost_usd = func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)
+        latency_ms = func.coalesce(func.sum(Event.payload["latency_ms"].as_integer()), 0)
+        row = self.session.execute(
+            select(
+                func.count(Event.id),
+                token_in,
+                token_out,
+                total_tokens,
+                cost_usd,
+                latency_ms,
+                func.min(Event.occurred_at),
+                func.max(Event.occurred_at),
+            ).where(Event.kind == LLM_CALL_COMPLETED, Event.run_id == str(run_id))
+        ).one()
+        return {
+            "call_count": int(row[0] or 0),
+            "token_in": int(row[1] or 0),
+            "token_out": int(row[2] or 0),
+            "total_tokens": int(row[3] or 0),
+            "cost_usd": round(float(row[4] or 0.0), 8),
+            "latency_ms": int(row[5] or 0),
+            "first_call_at": row[6],
+            "last_call_at": row[7],
+        }
+
+    def usage_by_chapter_from_events(self, run_id: str) -> list[dict[str, Any]]:
+        token_in = func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0)
+        token_out = func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0)
+        total_tokens = func.coalesce(func.sum(Event.payload["total_tokens"].as_integer()), 0)
+        cost_usd = func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)
+        rows = self.session.execute(
+            select(Event.chapter_id, func.count(Event.id), token_in, token_out, total_tokens, cost_usd)
+            .where(
+                Event.kind == LLM_CALL_COMPLETED,
+                Event.run_id == str(run_id),
+                Event.chapter_id.is_not(None),
+            )
+            .group_by(Event.chapter_id)
+        ).all()
+        chapters = [
+            {
+                "chapter_id": row[0],
+                "call_count": int(row[1] or 0),
+                "token_in": int(row[2] or 0),
+                "token_out": int(row[3] or 0),
+                "total_tokens": int(row[4] or 0),
+                "cost_usd": round(float(row[5] or 0.0), 8),
+            }
+            for row in rows
+        ]
+        chapters.sort(key=lambda item: (-item["cost_usd"], item["chapter_id"]))
+        return chapters
 
     def count_claimable_work_items(self, run_id: str) -> int:
         stmt = select(WorkItem).where(

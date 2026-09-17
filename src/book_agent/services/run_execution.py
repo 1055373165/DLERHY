@@ -479,7 +479,7 @@ class RunExecutionService:
             )
 
         detail = dict(run.status_detail_json or {})
-        usage = dict(detail.get("usage_summary") or {})
+        usage = self.repository.usage_from_events(run_id)
         counters = dict(detail.get("control_counters") or {})
         now = _utcnow()
         baseline_started_at = _ensure_utc(run.started_at) or _ensure_utc(run.created_at) or now
@@ -734,13 +734,11 @@ class RunExecutionService:
         translation_run_id: str,
         completed_at: datetime,
     ) -> dict[str, Any]:
+        # Spend is not accumulated here: the llm.call.completed events are the
+        # ledger and RunControlService.usage_summary reads them. The figures
+        # still land in the audit payload for the work item.
         detail = dict(current)
-        usage = dict(detail.get("usage_summary") or {})
-        usage["token_in"] = int(usage.get("token_in", 0) or 0) + token_in
-        usage["token_out"] = int(usage.get("token_out", 0) or 0) + token_out
-        usage["cost_usd"] = round(float(usage.get("cost_usd", 0.0) or 0.0) + float(cost_usd or 0.0), 8)
-        usage["latency_ms"] = int(usage.get("latency_ms", 0) or 0) + latency_ms
-        detail["usage_summary"] = usage
+        detail.pop("usage_summary", None)
 
         counters = dict(detail.get("control_counters") or {})
         counters["completed_work_item_count"] = int(counters.get("completed_work_item_count", 0)) + 1
