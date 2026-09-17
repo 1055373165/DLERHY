@@ -15,6 +15,32 @@ export interface AgentTurnResponse {
   finished_at?: string | null;
 }
 
+export interface ApiKeyCreateRequest {
+  name: string;
+  role: string;
+}
+
+export interface ApiKeyCreatedResponse {
+  id: string;
+  name: string;
+  role: string;
+  key_prefix: string;
+  created_at?: string | null;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  key: string;
+}
+
+export interface ApiKeyResponse {
+  id: string;
+  name: string;
+  role: string;
+  key_prefix: string;
+  created_at?: string | null;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+}
+
 export interface ApprovalDecisionRequest {
   decided_by: string;
   note?: string | null;

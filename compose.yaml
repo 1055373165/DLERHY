@@ -44,6 +44,12 @@ services:
     restart: unless-stopped
     environment:
       BOOK_AGENT_APP_SCOPE: prod
+      # Prod refuses to start without API keys. Create the first admin key once:
+      #   docker compose run --rm app book-agent create-api-key --name ops --role admin
+      BOOK_AGENT_AUTH_MODE: api_key
+      # Server paths POST /v1/documents/bootstrap may read besides the upload root (comma-separated).
+      BOOK_AGENT_BOOTSTRAP_SOURCE_ROOTS: ${BOOK_AGENT_BOOTSTRAP_SOURCE_ROOTS:-}
+      BOOK_AGENT_PROVIDER_ALLOW_PRIVATE_HOSTS: ${BOOK_AGENT_PROVIDER_ALLOW_PRIVATE_HOSTS:-false}
       BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/book_agent
       BOOK_AGENT_SECRET_KEY: ${BOOK_AGENT_SECRET_KEY:?set BOOK_AGENT_SECRET_KEY in .env (see .env.example)}
       BOOK_AGENT_TRANSLATION_BACKEND: ${BOOK_AGENT_TRANSLATION_BACKEND:-openai_compatible}

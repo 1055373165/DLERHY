@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.services.url_guard import UnsafeUrlError, ensure_public_http_url
 from book_agent.core.config import AppScope, Settings, get_settings
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
 from book_agent.domain.models.provider_credential import ProviderCredential
@@ -69,6 +70,16 @@ def get_active_credential(session: Session) -> ProviderCredential | None:
     ).scalar_one_or_none()
 
 
+def check_provider_base_url(base_url: str, provider_kind: ProviderKind) -> None:
+    """With auth on or in prod, a provider may only point at a public http(s) host (SSRF guard, R1)."""
+    from book_agent.core.config import get_settings
+
+    settings = get_settings()
+    if provider_kind == ProviderKind.ECHO or not settings.hardened or settings.provider_allow_private_hosts:
+        return
+    ensure_public_http_url(base_url)
+
+
 def create_credential(
     session: Session,
     *,
@@ -84,6 +95,7 @@ def create_credential(
     retry_backoff_seconds: float,
     activate: bool,
 ) -> ProviderCredential:
+    check_provider_base_url(base_url, provider_kind)
     ciphertext = encrypt_secret(api_key) if api_key else None
     record = ProviderCredential(
         name=name,
@@ -128,6 +140,7 @@ def update_credential(
     if model_name is not None:
         record.model_name = model_name
     if base_url is not None:
+        check_provider_base_url(base_url, provider_kind or record.provider_kind)
         record.base_url = base_url
     if api_key is not None:
         record.api_key_ciphertext = encrypt_secret(api_key) if api_key else None
@@ -235,6 +248,10 @@ def test_credential_connection(record: ProviderCredential) -> TestOutcome:
             elapsed_ms=0,
             sample_output="Echo provider always succeeds.",
         )
+    try:
+        check_provider_base_url(record.base_url, record.provider_kind)
+    except UnsafeUrlError as exc:
+        return TestOutcome(status=ProviderTestStatus.FAILED, message=str(exc), elapsed_ms=0, sample_output=None)
     api_key = decrypt_secret(record.api_key_ciphertext) or ""
     if not api_key:
         return TestOutcome(

@@ -13,6 +13,7 @@ from book_agent.core.config import get_settings
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
+from book_agent.domain.models.auth import DEFAULT_ORG_ID
 from book_agent.domain.structure.recovery_skills import METADATA_KEY as RECOVERY_SKILLS_KEY
 from book_agent.domain.structure.table_cells import translatable_cells
 from book_agent.domain.context.builders import (
@@ -203,14 +204,18 @@ class IngestService:
     def __init__(self, pdf_profiler: PdfFileProfiler | None = None):
         self.pdf_profiler = pdf_profiler or PdfFileProfiler()
 
-    def ingest(self, file_path: str | Path) -> tuple[Document, JobRun]:
+    def ingest(self, file_path: str | Path, *, org_id: str | None = None) -> tuple[Document, JobRun]:
         path = Path(file_path)
         fingerprint = sha256(path.read_bytes()).hexdigest()
         source_type, pdf_profile = self._detect_source_type(path)
         now = _utcnow()
+        org_id = org_id or DEFAULT_ORG_ID
 
         document = Document(
-            id=stable_id("document", fingerprint),
+            # The default org keeps the original id formula, so existing ids do not move;
+            # other orgs get their own document for the same file.
+            id=stable_id("document", fingerprint) if org_id == DEFAULT_ORG_ID else stable_id("document", org_id, fingerprint),
+            org_id=org_id,
             source_type=source_type,
             file_fingerprint=fingerprint,
             source_path=str(path),
@@ -822,8 +827,13 @@ class BootstrapPipeline:
         )
         self.context_packet_builder = context_packet_builder or ContextPacketBuilder()
 
-    def run(self, file_path: str | Path) -> BootstrapArtifacts:
-        document, ingest_job = self.ingest_service.ingest(file_path)
+    def run(self, file_path: str | Path, *, org_id: str | None = None) -> BootstrapArtifacts:
+        # Custom ingest services predating tenancy take no org; only pass one when given.
+        document, ingest_job = (
+            self.ingest_service.ingest(file_path, org_id=org_id)
+            if org_id is not None
+            else self.ingest_service.ingest(file_path)
+        )
         parse_artifacts = self.parse_service.parse(document, file_path)
         segment_artifacts = self.segmentation_service.segment(
             parse_artifacts.document,

@@ -93,6 +93,14 @@ def build_parser() -> argparse.ArgumentParser:
     term_consistency.add_argument("--report", required=True, help="Markdown report path")
     term_consistency.add_argument("--dry-run", action="store_true", help="Measure and propose without editing or locking")
 
+    api_key = subparsers.add_parser(
+        "create-api-key",
+        help="Create an API key (and its organisation if missing); prints the key once",
+    )
+    api_key.add_argument("--name", required=True)
+    api_key.add_argument("--role", choices=["viewer", "editor", "admin"], default="admin")
+    api_key.add_argument("--org", default="default", help="Organisation name; created if missing")
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -109,6 +117,14 @@ def main(argv: list[str] | None = None) -> int:
     export_root = args.export_root or str(settings.export_root)
 
     with session_scope(session_factory) as session:
+        if args.command == "create-api-key":
+            from book_agent.services.api_keys import ApiKeyService
+
+            service = ApiKeyService(session)
+            org = service.ensure_org(args.org)
+            created = service.create(org_id=org.id, name=args.name, role=args.role)
+            _dump({"org": org.name, "org_id": org.id, "name": created.key.name, "role": created.key.role, "key": created.plaintext})
+            return 0
         service = DocumentWorkflowService(
             session,
             export_root=export_root,

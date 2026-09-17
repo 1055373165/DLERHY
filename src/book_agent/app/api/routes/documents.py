@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import current_principal
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import DocumentRunStatus, DocumentRunType, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
@@ -111,6 +112,20 @@ def document_contract() -> DocumentContractResponse:
     )
 
 
+def _require_allowed_source_path(request: Request, source_path: Path) -> None:
+    """With auth on or in prod, bootstrap may only read files under the upload root or configured roots (R1)."""
+    settings = get_settings()
+    if not settings.hardened:
+        return
+    roots = [_upload_root(request), *settings.bootstrap_source_roots]
+    resolved = source_path.expanduser().resolve()
+    for root in roots:
+        root = Path(root).expanduser().resolve()
+        if resolved == root or root in resolved.parents:
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="source_path is outside the allowed bootstrap roots")
+
+
 @router.post("/bootstrap", response_model=DocumentSummaryResponse, status_code=status.HTTP_201_CREATED)
 def bootstrap_document(
     payload: BootstrapDocumentRequest,
@@ -118,13 +133,16 @@ def bootstrap_document(
     session: Session = Depends(get_db_session),
 ) -> DocumentSummaryResponse:
     source_path = Path(payload.source_path)
+    _require_allowed_source_path(request, source_path)
     if not source_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source file not found: {source_path}",
         )
     try:
-        summary = _workflow_service(request, session).bootstrap_document(source_path)
+        summary = _workflow_service(request, session).bootstrap_document(
+            source_path, org_id=current_principal(request).org_id
+        )
         # Commit before returning so a follow-up read from the web UI can resolve
         # the newly created document immediately.
         session.commit()
@@ -148,7 +166,9 @@ def bootstrap_uploaded_document(
     try:
         with target_path.open("wb") as buffer:
             shutil.copyfileobj(source_file.file, buffer)
-        summary = _workflow_service(request, session).bootstrap_document(target_path)
+        summary = _workflow_service(request, session).bootstrap_document(
+            target_path, org_id=current_principal(request).org_id
+        )
         # Commit before returning so a follow-up read from the web UI can resolve
         # the newly created document immediately.
         session.commit()
@@ -183,6 +203,7 @@ def list_document_history(
         status=status,
         latest_run_status=latest_run_status,
         merged_export_ready=merged_export_ready,
+        org_id=current_principal(request).org_id if current_principal(request).auth_enabled else None,
     )
     return DocumentHistoryPageResponse.model_validate(page, from_attributes=True)
 

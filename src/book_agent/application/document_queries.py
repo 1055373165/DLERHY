@@ -166,8 +166,11 @@ class DocumentQueryService:
         status: DocumentStatus | None = None,
         latest_run_status: DocumentRunStatus | None = None,
         merged_export_ready: bool | None = None,
+        org_id: str | None = None,
     ) -> DocumentHistoryPage:
         statement = select(Document).order_by(Document.updated_at.desc(), Document.id.desc())
+        if org_id is not None:
+            statement = statement.where(Document.org_id == org_id)
         normalized_query = (query or "").strip()
         if source_type is not None:
             statement = statement.where(Document.source_type == source_type)

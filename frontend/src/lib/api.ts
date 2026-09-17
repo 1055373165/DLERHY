@@ -443,7 +443,10 @@ export const SERVICE_LINKS = {
 };
 
 export function runStreamUrl(runId: string): string {
-  return withApiBase(`/runs/${encodeURIComponent(runId)}/stream`);
+  // EventSource cannot send headers; the stream route accepts the key as a query parameter.
+  const apiKey = getStoredApiKey();
+  const query = apiKey ? `?access_token=${encodeURIComponent(apiKey)}` : "";
+  return withApiBase(`/runs/${encodeURIComponent(runId)}/stream${query}`);
 }
 
 function withApiBase(path: string): string {
@@ -479,8 +482,41 @@ async function parseError(response: Response): Promise<Error> {
   }
 }
 
+const API_KEY_STORAGE = "book-agent.api-key";
+
+/** The API key this browser sends (deployments with BOOK_AGENT_AUTH_MODE=api_key). */
+export function getStoredApiKey(): string {
+  try {
+    return window.localStorage.getItem(API_KEY_STORAGE) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setStoredApiKey(value: string): void {
+  try {
+    if (value.trim()) {
+      window.localStorage.setItem(API_KEY_STORAGE, value.trim());
+    } else {
+      window.localStorage.removeItem(API_KEY_STORAGE);
+    }
+  } catch {
+    /* storage unavailable: the key lasts for this page only */
+  }
+}
+
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    return fetch(withApiBase(path), init);
+  }
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${apiKey}`);
+  return fetch(withApiBase(path), { ...init, headers });
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(withApiBase(path), init);
+  const response = await apiFetch(path, init);
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -488,7 +524,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestBinary(path: string): Promise<Response> {
-  const response = await fetch(withApiBase(path));
+  const response = await apiFetch(path);
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -532,7 +568,7 @@ export async function getDocument(documentId: string): Promise<DocumentSummary> 
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
-  const response = await fetch(withApiBase(`/documents/${encodeURIComponent(documentId)}`), {
+  const response = await apiFetch(`/documents/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -804,7 +840,7 @@ export async function downloadDocumentExport(
   const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
     exportType
   )}`;
-  let response = await fetch(withApiBase(downloadPath));
+  let response = await apiFetch(downloadPath);
   if (response.status === 404) {
     const run = await requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/export`, {
       method: "POST",
@@ -815,7 +851,7 @@ export async function downloadDocumentExport(
     if (finished.status !== "succeeded" && finished.status !== "succeeded_with_warnings") {
       throw new Error(`导出未完成（${finished.stop_reason ?? finished.status}）。`);
     }
-    response = await fetch(withApiBase(downloadPath));
+    response = await apiFetch(downloadPath);
   }
   if (!response.ok) {
     throw await parseError(response);

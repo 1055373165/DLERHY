@@ -104,6 +104,8 @@ def update_provider(
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     if record.is_active:
         _invalidate_app_worker(request)
     return _to_read(record)

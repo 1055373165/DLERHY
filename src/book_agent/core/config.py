@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     # Canonical parse-IR sidecars (one directory per document / parser version).
     parse_ir_root: Path = Path("artifacts/parse-ir")
     upload_root: Path = Path("artifacts/uploads")
+    # "disabled" (development, tests) or "api_key": every API call except
+    # /health and /meta needs a key; documents are scoped to the key's org.
+    auth_mode: str = "disabled"
+    # Server paths POST /documents/bootstrap may read when auth is on or in prod.
+    # The upload root is always allowed.
+    bootstrap_source_roots: Annotated[list[Path], NoDecode] = Field(default_factory=list)
+    # Provider base URLs that resolve to private or loopback addresses are
+    # refused when auth is on or in prod (SSRF), unless this is set.
+    provider_allow_private_hosts: bool = False
     # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
     frontend_dist_dir: Path | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -163,6 +172,24 @@ class Settings(BaseSettings):
             file_secret_settings,
         )
 
+    @field_validator("bootstrap_source_roots", mode="before")
+    @classmethod
+    def _parse_bootstrap_source_roots(cls, value: Any) -> list[Path]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [Path(part.strip()) for part in value.split(",") if part.strip()]
+        return [Path(item) for item in value]
+
+    @property
+    def auth_enabled(self) -> bool:
+        return self.auth_mode.strip().lower() == "api_key"
+
+    @property
+    def hardened(self) -> bool:
+        """Deployment guards (path and SSRF checks) apply with auth on or in prod."""
+        return self.auth_enabled or self.app_scope == AppScope.PROD
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _parse_cors_allow_origins(cls, value: Any) -> list[str]:
@@ -209,6 +236,13 @@ def validate_app_scope(settings: Settings) -> None:
             f"app_scope={settings.app_scope.value} requires a PostgreSQL database_url "
             f"(got {url.split(':', 1)[0]!r}). SQLite is only supported by unit tests and "
             "the smoke/e2e scopes."
+        )
+    if settings.auth_mode.strip().lower() not in {"disabled", "api_key"}:
+        raise AppScopeViolation(f"auth_mode must be 'disabled' or 'api_key' (got {settings.auth_mode!r}).")
+    if settings.app_scope == AppScope.PROD and not settings.auth_enabled:
+        raise AppScopeViolation(
+            "app_scope=prod refuses auth_mode=disabled; set BOOK_AGENT_AUTH_MODE=api_key and create a key "
+            "with book-agent create-api-key."
         )
     if settings.app_scope == AppScope.PROD:
         backend = (settings.translation_backend or "").lower().strip()

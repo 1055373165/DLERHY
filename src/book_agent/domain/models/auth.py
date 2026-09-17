@@ -1,0 +1,50 @@
+"""Organisations and API keys: who may call the API and whose documents they see."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, Uuid, event
+from sqlalchemy.orm import Mapped, mapped_column
+
+from book_agent.infra.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+
+# Every document created before multi-tenancy (and every document of a
+# single-tenant deployment) belongs to this organisation.
+DEFAULT_ORG_ID = "00000000-0000-4000-8000-000000000001"
+DEFAULT_ORG_NAME = "default"
+
+API_KEY_ROLES = ("viewer", "editor", "admin")
+
+
+class Org(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "orgs"
+
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+
+
+class ApiKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """A hashed API key. The plaintext is shown once at creation and never stored."""
+
+    __tablename__ = "api_keys"
+    __table_args__ = (
+        CheckConstraint("role IN ('viewer', 'editor', 'admin')", name="ck_api_keys_role"),
+        Index("idx_api_keys_org_id", "org_id"),
+    )
+
+    org_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# Schemas built from the models (tests, create_all) get the default org like migrations do.
+# Inserted through the table so each dialect binds the UUID its own way (SQLite stores hex).
+def _insert_default_org(target, connection, **_kw) -> None:
+    connection.execute(target.insert().values(id=DEFAULT_ORG_ID, name=DEFAULT_ORG_NAME))
+
+
+event.listen(Org.__table__, "after_create", _insert_default_org)

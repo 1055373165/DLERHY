@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import require_document_in_org
 from book_agent.app.api.deps import get_db_session
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.infra.repositories.run_control import RunControlRepository
@@ -116,6 +117,7 @@ def create_run(
     payload: CreateDocumentRunRequest,
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
+    require_document_in_org(session, request, payload.document_id)
     service = _service(session)
     try:
         summary = service.create_run(

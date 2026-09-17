@@ -29,12 +29,20 @@ from book_agent.infra.db.base import (
 
 class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "documents"
+    # The same file may be imported once per organisation.
+    __table_args__ = (UniqueConstraint("org_id", "file_fingerprint", name="uq_documents_org_fingerprint"),)
 
+    org_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("orgs.id", ondelete="RESTRICT"),
+        nullable=False,
+        default="00000000-0000-4000-8000-000000000001",
+    )
     source_type: Mapped[SourceType] = mapped_column(
         enum_value_type(SourceType, name="source_type"),
         nullable=False,
     )
-    file_fingerprint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    file_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
     source_path: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
     title_src: Mapped[str | None] = mapped_column(Text)

@@ -1,0 +1,40 @@
+.toggle {
+  width: 100%;
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  padding: var(--sp-1) 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface, transparent);
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: var(--sp-1);
+}

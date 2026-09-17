@@ -1,5 +1,6 @@
 from book_agent.infra.db.base import Base, install_enum_check_constraints
 from book_agent.domain.models.agent import AgentItem, AgentTurn, Approval, Decision
+from book_agent.domain.models.auth import ApiKey, Org
 from book_agent.domain.models.document import (
     Block,
     BookProfile,
@@ -43,6 +44,8 @@ from book_agent.domain.models.translation import (
 )
 
 __all__ = [
+    "ApiKey",
+    "Org",
     "AgentItem",
     "AgentTurn",
     "Approval",

@@ -23,6 +23,7 @@ def _prod_settings(**overrides) -> Settings:
         database_url="postgresql+psycopg://postgres:postgres@db:5432/book_agent",
         translation_backend="openai_compatible",
         translation_openai_api_key="sk-test",
+        auth_mode="api_key",
     )
     params.update(overrides)
     return Settings(**params)

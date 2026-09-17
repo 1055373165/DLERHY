@@ -168,8 +168,8 @@ class DocumentWorkflowService:
             self.issue_actions,
         )
 
-    def bootstrap_document(self, source_path: str | Path) -> DocumentSummary:
-        artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path)
+    def bootstrap_document(self, source_path: str | Path, *, org_id: str | None = None) -> DocumentSummary:
+        artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path, org_id=org_id)
         self.bootstrap_repository.save(artifacts)
         return self.documents.get_document_summary(artifacts.document.id)
 
@@ -244,6 +244,7 @@ class DocumentWorkflowService:
         status: DocumentStatus | None = None,
         latest_run_status: DocumentRunStatus | None = None,
         merged_export_ready: bool | None = None,
+        org_id: str | None = None,
     ) -> DocumentHistoryPage:
         return self.documents.list_document_history(
             limit=limit,
@@ -253,6 +254,7 @@ class DocumentWorkflowService:
             status=status,
             latest_run_status=latest_run_status,
             merged_export_ready=merged_export_ready,
+            org_id=org_id,
         )
 
     def translate_document(self, document_id: str, packet_ids: list[str] | None = None) -> DocumentTranslationResult:
