@@ -217,7 +217,7 @@ class StructureEdit(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     __tablename__ = "structure_edits"
     __table_args__ = (
-        CheckConstraint("kind IN ('relabel_block', 'merge_blocks', 'link_caption')", name="ck_structure_edits_kind"),
+        CheckConstraint("kind IN ('relabel_block', 'split_block', 'merge_blocks', 'link_caption')", name="ck_structure_edits_kind"),
         CheckConstraint("status IN ('applied', 'reapplied', 'stale')", name="ck_structure_edits_status"),
         Index("idx_structure_edits_document", "document_id", "created_at"),
     )
