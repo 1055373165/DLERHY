@@ -1552,6 +1552,8 @@ class DocumentRunExecutor:
             "failure_reason": failure.reason,
             "traceback": traceback.format_exc(limit=8),
         }
+        if retryable and pause_reason is None:
+            error_detail["retry_backoff"] = True
         if isinstance(exc, ExportGateError):
             error_detail["export_gate"] = exc.to_http_detail()
         elif isinstance(exc, ExportUnavailableError):

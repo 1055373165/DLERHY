@@ -16,8 +16,10 @@ Transaction ownership stays with the caller — ``emit_event`` never commits.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Session
 
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
@@ -122,4 +124,47 @@ def emit_event(
     session.flush()
     if kind in (LLM_CALL_COMPLETED, LLM_CALL_FAILED):
         record_llm_event(kind, event.payload or {})
+        # Spend is real even when the caller's transaction later rolls back (an agent turn
+        # that fails after its model calls, a work item that loses its lease): keep a copy
+        # and write it on its own if that happens.
+        session.info.setdefault(_PENDING_LLM_EVENTS, []).append(
+            {
+                "kind": kind,
+                "run_id": run_id,
+                "chapter_id": chapter_id,
+                "packet_id": packet_id,
+                "actor_kind": actor_kind,
+                "actor_id": actor_id,
+                "org_id": org_id,
+                "correlation_id": correlation_id,
+                "payload": dict(event.payload or {}),
+            }
+        )
     return event
+
+
+logger = logging.getLogger(__name__)
+_PENDING_LLM_EVENTS = "book_agent.pending_llm_events"
+
+
+@sa_event.listens_for(Session, "after_commit")
+def _forget_committed_llm_events(session: Session) -> None:
+    session.info.pop(_PENDING_LLM_EVENTS, None)
+
+
+@sa_event.listens_for(Session, "after_rollback")
+def _rewrite_rolled_back_llm_events(session: Session) -> None:
+    pending = session.info.pop(_PENDING_LLM_EVENTS, None)
+    if not pending:
+        return
+    try:
+        bind = session.get_bind()
+    except Exception:  # an unbound session cannot have written anything
+        return
+    try:
+        with Session(bind=bind) as ledger:
+            for item in pending:
+                ledger.add(Event(**{**item, "payload": {**item["payload"], "recorded_after_rollback": True}}))
+            ledger.commit()
+    except Exception:
+        logger.warning("Could not keep %d model-call event(s) after a rollback", len(pending), exc_info=True)

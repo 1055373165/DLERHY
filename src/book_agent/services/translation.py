@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from book_agent.workers.llm_calls import usage_payload
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import current_run_id
 from book_agent.harness.context.book_md import book_prompt_guidance
@@ -456,6 +457,11 @@ class TranslationService:
                 "call_kind": "translate",
                 "backend": metadata.worker_name,
                 "model": metadata.model_name,
+                **(
+                    {key: value for key, value in usage_payload(exc.usage).items() if value is not None}
+                    if getattr(exc, "usage", None) is not None
+                    else {}
+                ),
                 "error_class": type(exc).__name__,
                 "error_code": error_code,
                 "error_message": str(exc)[:500],

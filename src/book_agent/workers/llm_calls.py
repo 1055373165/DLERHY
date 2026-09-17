@@ -122,6 +122,8 @@ def observed_llm_call(
             correlation_id=correlation_id,
             payload={
                 **base_payload,
+                # A billed but unusable answer (format error, truncation) still spent tokens.
+                **({key: value for key, value in usage_payload(exc.usage).items() if value is not None} if getattr(exc, "usage", None) is not None else {}),
                 "error_class": type(exc).__name__,
                 "error_code": classification.reason,
                 "error_message": str(exc)[:500],

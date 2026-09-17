@@ -25,6 +25,9 @@ from book_agent.orchestrator.stage_status import (
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
 
+# Attempts per work item when the run budget does not say.
+DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM = 6
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -388,6 +391,9 @@ class RunExecutionService:
         work_item_before = self.repository.get_work_item(lease.work_item_id)
         budget = self.repository.get_budget_for_run(lease.run_id)
         max_retry_count = budget.max_retry_count_per_work_item if budget is not None else None
+        if max_retry_count is None:
+            # Unbounded retries of a failure that repeats (a misconfigured provider) spend money forever.
+            max_retry_count = DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
         should_retry = pauses_run or (
             retryable and (max_retry_count is None or work_item_before.attempt < max_retry_count)
         )

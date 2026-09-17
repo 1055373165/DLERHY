@@ -136,7 +136,18 @@ class TerminologyAgent:
         if client is None or not texts or mode == MODE_SKIP:
             return []
         service = GlossaryExtractionService(self.session, client, model_name=model_name)
-        return service.extract_from_texts(document_id, texts)
+        try:
+            # Provider errors leave the session usable, and the failed call's event stays in it.
+            return service.extract_from_texts(document_id, texts)
+        except Exception as exc:
+            from book_agent.workers.failures import FailureDisposition, classify_failure
+
+            classification = classify_failure(exc)
+            if classification.disposition == FailureDisposition.PAUSE:
+                raise
+            # The agent can still search the book itself; record why the candidates are missing.
+            self.extraction_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+            return []
 
     def _user_brief(self, document: Document, texts: list[str], candidates: list[GlossarySuggestion], guide, *, mode: str) -> str:
         lines = [
@@ -159,7 +170,12 @@ class TerminologyAgent:
                     + (" | recommended lock" if item.recommended_lock else "")
                 )
         else:
-            lines.append("- (none extracted; use search_book to find terms yourself)")
+            reason = getattr(self, "extraction_error", None)
+            lines.append(
+                "- (none extracted"
+                + (f": extraction failed ({reason})" if reason else "")
+                + "; use search_book to find terms yourself)"
+            )
         lines += ["", "Excerpts:"]
         for chunk in chunk_texts(texts, max_chars=6000)[:6]:
             lines.append(chunk)

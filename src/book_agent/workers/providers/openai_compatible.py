@@ -64,7 +64,29 @@ class ProviderHTTPError(ProviderTransportError):
 
 
 class ProviderResponseFormatError(RuntimeError):
-    """The provider answered, but not with the structured payload we asked for."""
+    """The provider answered, but not with the structured payload we asked for.
+
+    ``usage`` is set when the answer carried token counts: the call was billed
+    even though it is unusable, and accounting must say so.
+    """
+
+    def __init__(self, message: str, *, usage: Any = None, finish_reason: str | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage
+        self.finish_reason = finish_reason
+
+
+class ProviderOutputTruncated(ProviderResponseFormatError):
+    """The answer stopped at the output token limit before the payload was complete.
+
+    ``reasoning_only`` means every output token went to reasoning: a
+    configuration problem (reasoning model with too small a limit) that no
+    retry fixes.
+    """
+
+    def __init__(self, message: str, *, usage: Any = None, finish_reason: str | None = None, reasoning_only: bool = False) -> None:
+        super().__init__(message, usage=usage, finish_reason=finish_reason)
+        self.reasoning_only = reasoning_only
 
 
 class ProviderNetworkError(ProviderTransportError):
@@ -358,12 +380,15 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             payload={**self._build_payload(request, api_mode=api_mode), **self.request_overrides},
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
-        output_payload = self._extract_output_payload(response, api_mode=api_mode)
-        output_payload = self._normalize_translation_payload(output_payload)
         try:
-            output = TranslationWorkerOutput.model_validate(output_payload)
-        except Exception as exc:
-            raise ProviderResponseFormatError("Provider response did not match TranslationWorkerOutput schema.") from exc
+            output_payload = self._extract_output_payload(response, api_mode=api_mode)
+            output_payload = self._normalize_translation_payload(output_payload)
+            try:
+                output = TranslationWorkerOutput.model_validate(output_payload)
+            except Exception as exc:
+                raise ProviderResponseFormatError("Provider response did not match TranslationWorkerOutput schema.") from exc
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         return TranslationWorkerResult(
             output=output,
             usage=self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms),
@@ -395,7 +420,10 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             },
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
-        payload = self._extract_generic_output_payload(response, api_mode=api_mode)
+        try:
+            payload = self._extract_generic_output_payload(response, api_mode=api_mode)
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
         return payload, usage
 
@@ -435,10 +463,15 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         response = self._request_with_retries(url=endpoint_url, payload={**payload, **self.request_overrides})
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
-        if api_mode == "chat_completions":
-            text, tool_calls, finish_reason = self._parse_chat_agent_step(response)
-        else:
-            text, tool_calls, finish_reason = self._parse_responses_agent_step(response)
+        try:
+            if api_mode == "chat_completions":
+                text, tool_calls, finish_reason = self._parse_chat_agent_step(response)
+            else:
+                text, tool_calls, finish_reason = self._parse_responses_agent_step(response)
+            if not tool_calls and not (text or "").strip() and finish_reason in {"length", "max_output_tokens"}:
+                raise ProviderResponseFormatError("Provider agent step ended at the output limit with no text or tool calls.")
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         return {"text": text, "tool_calls": tool_calls, "usage": usage, "finish_reason": finish_reason, "raw": response}
 
     def _parse_chat_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
@@ -835,6 +868,43 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         if payload is not None:
             return payload
         raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
+
+    def _format_failure(
+        self, exc: ProviderResponseFormatError, response: Any, *, api_mode: str, latency_ms: int
+    ) -> ProviderResponseFormatError:
+        """Attach usage and name truncation, so a billed but unusable answer is accounted and diagnosable."""
+        if not isinstance(response, dict):
+            return exc
+        usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
+        finish_reason: str | None = None
+        if api_mode == "chat_completions":
+            choices = response.get("choices")
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                finish_reason = self._coerce_str(choices[0].get("finish_reason"))
+        else:
+            details = response.get("incomplete_details")
+            if response.get("status") == "incomplete":
+                finish_reason = self._coerce_str(details.get("reason") if isinstance(details, dict) else None) or "incomplete"
+        raw = usage.raw_usage or {}
+        output_details = raw.get("completion_tokens_details") or raw.get("output_tokens_details") or {}
+        reasoning_tokens = self._coerce_int(output_details.get("reasoning_tokens")) if isinstance(output_details, dict) else 0
+        if finish_reason in {"length", "max_output_tokens", "incomplete"}:
+            reasoning_only = usage.token_out > 0 and reasoning_tokens >= usage.token_out
+            hint = (
+                "every output token went to reasoning; raise max_output_tokens or disable reasoning for this provider "
+                "(e.g. BOOK_AGENT_TRANSLATION_OPENAI_REQUEST_OVERRIDES)"
+                if reasoning_only
+                else "raise max_output_tokens or send less per call"
+            )
+            return ProviderOutputTruncated(
+                f"Provider output stopped at the token limit ({usage.token_out} output tokens, {reasoning_tokens} reasoning): {hint}.",
+                usage=usage,
+                finish_reason=finish_reason,
+                reasoning_only=reasoning_only,
+            )
+        exc.usage = usage
+        exc.finish_reason = finish_reason
+        return exc
 
     def _extract_usage(self, response: dict[str, Any], *, api_mode: str, latency_ms: int) -> TranslationUsage:
         usage_payload = response.get("usage")

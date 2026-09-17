@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import case, func, select, update
@@ -15,7 +15,7 @@ from book_agent.domain.enums import (
     WorkItemStatus,
     WorkerLeaseStatus,
 )
-from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
 from book_agent.domain.models import Chapter, Document
 from book_agent.domain.models.ops import Event
 from book_agent.domain.models.ops import (
@@ -34,6 +34,17 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+# Retry policy for RETRYABLE_FAILED work items; tests may set the base to 0.
+RETRY_BACKOFF_BASE_SECONDS = 2.0
+RETRY_BACKOFF_MAX_SECONDS = 300.0
+
+
+def retry_backoff_seconds(attempt: int) -> float:
+    if RETRY_BACKOFF_BASE_SECONDS <= 0:
+        return 0.0
+    return min(RETRY_BACKOFF_MAX_SECONDS, RETRY_BACKOFF_BASE_SECONDS * (2 ** max(0, attempt - 1)))
 
 
 @dataclass(slots=True)
@@ -268,10 +279,15 @@ class RunControlRepository:
                 latency_ms,
                 func.min(Event.occurred_at),
                 func.max(Event.occurred_at),
-            ).where(Event.kind == LLM_CALL_COMPLETED, Event.run_id == str(run_id))
+            ).where(Event.kind.in_([LLM_CALL_COMPLETED, LLM_CALL_FAILED]), Event.run_id == str(run_id))
         ).one()
+        failed_calls = self.session.scalar(
+            select(func.count(Event.id)).where(Event.kind == LLM_CALL_FAILED, Event.run_id == str(run_id))
+        ) or 0
         return {
+            # Failed calls are counted and their tokens (a billed but unusable answer) included.
             "call_count": int(row[0] or 0),
+            "failed_call_count": int(failed_calls),
             "token_in": int(row[1] or 0),
             "token_out": int(row[2] or 0),
             "total_tokens": int(row[3] or 0),
@@ -471,7 +487,20 @@ class RunControlRepository:
         return ClaimedWorkItemBundle(work_item=work_item, worker_lease=worker_lease)
 
     def _is_work_item_claimable(self, work_item: WorkItem, *, now: datetime) -> bool:
-        return work_item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}
+        if work_item.status == WorkItemStatus.PENDING:
+            return True
+        if work_item.status != WorkItemStatus.RETRYABLE_FAILED:
+            return False
+        # Exponential backoff after a failed attempt (marked by the executor), so a failure that
+        # repeats does not hammer the provider. Reclaimed leases and resumed pauses go at once.
+        if not (work_item.error_detail_json or {}).get("retry_backoff"):
+            return True
+        failed_at = work_item.updated_at
+        if failed_at is None:
+            return True
+        if failed_at.tzinfo is None:
+            failed_at = failed_at.replace(tzinfo=timezone.utc)
+        return now >= failed_at + timedelta(seconds=retry_backoff_seconds(int(work_item.attempt or 1)))
 
     def get_active_lease_by_token(self, lease_token: str) -> WorkerLease:
         lease = self.session.scalar(
