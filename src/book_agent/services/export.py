@@ -97,6 +97,25 @@ def _copy_asset_if_changed(source_path: Path, target_path: Path) -> None:
     shutil.copy2(source_path, target_path)
 
 
+def _persisted_block_id(bundle: ChapterExportBundle, render_block_id: str | None) -> str | None:
+    if not render_block_id:
+        return None
+    known = {block.id for block in bundle.blocks}
+    candidate = str(render_block_id).split("::", 1)[0]
+    return candidate if candidate in known else None
+
+
+class ExportUnavailableError(ValueError):
+    """The export cannot be produced for a reason that is not a quality gate:
+    the renderer is missing or crashed, the source file is gone, the export type
+    does not apply to this document. Unlike ExportGateError it carries no issues
+    or follow-up actions, and callers must not treat it as a review block."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class ExportGateError(ValueError):
     def __init__(
         self,
@@ -209,33 +228,37 @@ class ExportService:
         self.layout_validation_service = layout_validation_service or LayoutValidationService()
         self._render_block_cache: dict[int, tuple[ChapterExportBundle, list[MergedRenderBlock]]] | None = None
 
-    def export_review_package(self, chapter_id: str) -> ExportArtifacts:
-        return self.export_chapter(chapter_id, ExportType.REVIEW_PACKAGE)
+    # ``enforce_gate=False`` is for callers that just ran the gate for every chapter
+    # (DocumentExportUseCase); it used to run twice per export (06 B-22).
+    def export_review_package(self, chapter_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self.export_chapter(chapter_id, ExportType.REVIEW_PACKAGE, enforce_gate=enforce_gate)
 
-    def export_bilingual_html(self, chapter_id: str) -> ExportArtifacts:
-        return self.export_chapter(chapter_id, ExportType.BILINGUAL_HTML)
+    def export_bilingual_html(self, chapter_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self.export_chapter(chapter_id, ExportType.BILINGUAL_HTML, enforce_gate=enforce_gate)
 
-    def export_document_merged_html(self, document_id: str) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML])
+    def export_document_merged_html(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML], enforce_gate=enforce_gate)
 
-    def export_document_merged_markdown(self, document_id: str) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_MARKDOWN])
+    def export_document_merged_markdown(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_MARKDOWN], enforce_gate=enforce_gate)
 
-    def export_document_rebuilt_epub(self, document_id: str) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_EPUB])
+    def export_document_rebuilt_epub(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_EPUB], enforce_gate=enforce_gate)
 
-    def export_document_zh_epub(self, document_id: str) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB])
+    def export_document_zh_epub(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB], enforce_gate=enforce_gate)
 
-    def export_document_rebuilt_pdf(self, document_id: str) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF])
+    def export_document_rebuilt_pdf(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF], enforce_gate=enforce_gate)
 
     @_within_render_model_scope
-    def _export_document(self, document_id: str, renderer: DocumentRenderer) -> ExportArtifacts:
+    def _export_document(
+        self, document_id: str, renderer: DocumentRenderer, *, enforce_gate: bool = True
+    ) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
         if renderer.epub_source_only_error is not None and bundle.document.source_type != SourceType.EPUB:
-            raise ExportGateError(renderer.epub_source_only_error)
-        for chapter_bundle in bundle.chapters:
+            raise ExportUnavailableError(renderer.epub_source_only_error, reason="source_type_not_supported")
+        for chapter_bundle in bundle.chapters if enforce_gate else ():
             self._enforce_gate(chapter_bundle, renderer.export_type)
         upstream_exports: dict[ExportType, ExportArtifacts] = {}
         if renderer.uses_upstream_exports:
@@ -382,7 +405,9 @@ class ExportService:
             return self.export_document_merged_html(document_id)
         if export_type == ExportType.MERGED_MARKDOWN:
             return self.export_document_merged_markdown(document_id)
-        raise ExportGateError(f"Unsupported rebuilt upstream export type: {export_type.value}")
+        raise ExportUnavailableError(
+            f"Unsupported rebuilt upstream export type: {export_type.value}", reason="unsupported_upstream"
+        )
 
     def _ensure_rebuilt_upstream_exports(self, document_id: str) -> dict[ExportType, ExportArtifacts]:
         return {
@@ -396,9 +421,10 @@ class ExportService:
         self._enforce_gate(bundle, export_type)
 
     @_within_render_model_scope
-    def export_chapter(self, chapter_id: str, export_type: ExportType) -> ExportArtifacts:
+    def export_chapter(self, chapter_id: str, export_type: ExportType, *, enforce_gate: bool = True) -> ExportArtifacts:
         bundle = self.repository.load_chapter_bundle(chapter_id)
-        self._enforce_gate(bundle, export_type)
+        if enforce_gate:
+            self._enforce_gate(bundle, export_type)
         output_dir = self.output_root / bundle.chapter.document_id
         output_dir.mkdir(parents=True, exist_ok=True)
         with export_lock(output_dir, f"{export_type.value}-{bundle.chapter.id}"):
@@ -429,7 +455,9 @@ class ExportService:
                 json.dumps(self._build_bilingual_manifest(bundle, file_path), ensure_ascii=False, indent=2),
             )
             return file_path, manifest_path
-        raise ExportGateError(f"{export_type.value} is a whole-document export, not a per-chapter export.")
+        raise ExportUnavailableError(
+            f"{export_type.value} is a whole-document export, not a per-chapter export.", reason="wrong_export_scope"
+        )
 
     def _record(
         self,
@@ -659,7 +687,10 @@ class ExportService:
 
     def _enforce_gate(self, bundle: ChapterExportBundle, export_type: ExportType) -> None:
         evaluation = self.evaluate_chapter_gate(bundle, export_type)
-        self.sync_gate_issues(bundle, evaluation)
+        # A review package is how a human looks at a chapter that is not final yet;
+        # it must not open blocking issues that would then stop the final exports.
+        if export_type != ExportType.REVIEW_PACKAGE:
+            self.sync_gate_issues(bundle, evaluation)
         self._raise_for_gate(bundle, evaluation)
 
     def evaluate_chapter_gate(self, bundle: ChapterExportBundle, export_type: ExportType) -> ChapterGateEvaluation:
@@ -988,7 +1019,8 @@ class ExportService:
             ),
             document_id=bundle.chapter.document_id,
             chapter_id=bundle.chapter.id,
-            block_id=representative_issue.block_id,
+            # Render blocks may be synthetic ("<uuid>::leading-prose"); the FK needs a real block.
+            block_id=_persisted_block_id(bundle, representative_issue.block_id),
             sentence_id=None,
             packet_id=None,
             issue_type="LAYOUT_VALIDATION_FAILURE",
@@ -2430,7 +2462,7 @@ class ExportService:
     ) -> None:
         visible_chapters = self._visible_merged_chapters(bundle)
         if not visible_chapters:
-            raise ExportGateError("Rebuilt EPUB requires at least one visible chapter.")
+            raise ExportUnavailableError("Rebuilt EPUB requires at least one visible chapter.", reason="no_visible_chapters")
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         chapter_entries: list[tuple[str, str, str]] = []
@@ -2527,7 +2559,9 @@ class ExportService:
     ) -> None:
         source_path = Path(bundle.document.source_path or "")
         if not source_path.exists():
-            raise ExportGateError("Source-preserving EPUB export requires the original EPUB source file.")
+            raise ExportUnavailableError(
+                "Source-preserving EPUB export requires the original EPUB source file.", reason="source_file_missing"
+            )
 
         chapter_render_blocks: dict[str, list[MergedRenderBlock]] = {
             str((chapter_bundle.chapter.metadata_json or {}).get("href") or ""): self._render_blocks_for_chapter(
@@ -2630,7 +2664,9 @@ class ExportService:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:  # pragma: no cover - exercised by runtime environment
-            raise ExportGateError("Rebuilt PDF renderer is unavailable because Playwright is not installed.") from exc
+            raise ExportUnavailableError(
+                "Rebuilt PDF renderer is unavailable because Playwright is not installed.", reason="renderer_missing"
+            ) from exc
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch()
@@ -2642,11 +2678,12 @@ class ExportService:
                         page.pdf(path=str(temporary), print_background=True, format="A4")
                 finally:
                     browser.close()
-        except ExportGateError:
+        except ExportUnavailableError:
             raise
         except Exception as exc:  # pragma: no cover - depends on local browser runtime
-            raise ExportGateError(
-                "Rebuilt PDF renderer is unavailable or failed to render the merged HTML substrate."
+            raise ExportUnavailableError(
+                "Rebuilt PDF renderer is unavailable or failed to render the merged HTML substrate.",
+                reason="renderer_failed",
             ) from exc
 
     def _export_epub_assets_for_chapter_bundle(

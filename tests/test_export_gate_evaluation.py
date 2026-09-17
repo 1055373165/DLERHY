@@ -85,6 +85,36 @@ class ExportGateEvaluationTests(unittest.TestCase):
                 service._raise_for_gate(bundle, evaluation)
             self.assertEqual(raised.exception.issue_ids, [issue.id])
 
+    def test_review_package_does_not_open_blocking_issues(self) -> None:
+        with session_scope(self.session_factory) as session:
+            service = DocumentWorkflowService(session, export_root=self.export_root).export_service
+            service.export_review_package(self.chapter_id)
+            self.assertEqual(self._export_issue_count(session), 0)
+
+    def test_use_case_runs_the_gate_once_per_chapter(self) -> None:
+        from unittest.mock import patch
+
+        from book_agent.services.export import ExportService
+
+        with session_scope(self.session_factory) as session:
+            workflow = DocumentWorkflowService(session, export_root=self.export_root)
+            with patch.object(ExportService, "_enforce_gate", autospec=True, return_value=None) as gate:
+                workflow.export_document(self.document_id, ExportType.MERGED_HTML)
+            chapter_count = len(workflow.get_document_summary(self.document_id).chapters)
+            self.assertEqual(gate.call_count, chapter_count)
+
+    def test_layout_issue_never_references_a_synthetic_block_id(self) -> None:
+        from book_agent.services.export import _persisted_block_id
+
+        with session_scope(self.session_factory) as session:
+            service = DocumentWorkflowService(session, export_root=self.export_root).export_service
+            bundle = service.repository.load_chapter_bundle(self.chapter_id)
+            real = bundle.blocks[0].id
+            self.assertEqual(_persisted_block_id(bundle, real), real)
+            self.assertEqual(_persisted_block_id(bundle, f"{real}::leading-prose"), real)
+            self.assertIsNone(_persisted_block_id(bundle, "not-a-block::refresh-split::2"))
+            self.assertIsNone(_persisted_block_id(bundle, None))
+
 
 if __name__ == "__main__":
     unittest.main()

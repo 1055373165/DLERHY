@@ -62,7 +62,7 @@ from book_agent.orchestrator.state_machine import (
     build_packet_runtime_state,
     packet_runtime_state,
 )
-from book_agent.services.export import ExportGateError
+from book_agent.services.export import ExportGateError, ExportUnavailableError
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
@@ -1357,6 +1357,9 @@ class DocumentRunExecutor:
         }
         if isinstance(exc, ExportGateError):
             error_detail["export_gate"] = exc.to_http_detail()
+        elif isinstance(exc, ExportUnavailableError):
+            # Not a review block: the renderer, the source file or the export type is the problem.
+            error_detail["export_unavailable"] = {"reason": exc.reason}
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_work_item_failure(

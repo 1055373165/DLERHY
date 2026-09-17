@@ -100,7 +100,7 @@ from book_agent.services.chapter_concept_autolock import (
     build_default_concept_resolver,
 )
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.services.export import ExportGateError, ExportService
+from book_agent.services.export import ExportGateError, ExportService, ExportUnavailableError
 from book_agent.services.pdf_prose_artifact_repair import PdfProseArtifactRepairService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildService
@@ -2769,10 +2769,12 @@ class PersistenceAndReviewTests(unittest.TestCase):
         repository = SimpleNamespace(load_document_bundle=lambda _document_id: bundle)
         service = ExportService(repository, output_root="/tmp/book-agent-exports")
 
-        with self.assertRaises(ExportGateError) as exc_info:
+        with self.assertRaises(ExportUnavailableError) as exc_info:
             service.export_document_rebuilt_epub(document.id)
 
         self.assertIn("only available for EPUB source documents", str(exc_info.exception))
+        self.assertEqual(exc_info.exception.reason, "source_type_not_supported")
+        self.assertNotIsInstance(exc_info.exception, ExportGateError)
 
     def test_workflow_exports_rebuilt_pdf_from_merged_html_substrate(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(

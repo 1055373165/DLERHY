@@ -24,7 +24,7 @@ from book_agent.schemas.workflow import (
     TranslateDocumentRequest,
     TranslateDocumentResponse,
 )
-from book_agent.services.export import ExportGateError
+from book_agent.services.export import ExportGateError, ExportUnavailableError
 from book_agent.application.read_models import (
     DocumentExportResult,
     DocumentReviewResult,
@@ -85,6 +85,9 @@ def run_document_action(app, document_id: str, action: str, body: dict[str, Any]
                 max_auto_followup_attempts=export_request.max_auto_followup_attempts,
             )
             return SyncActionResponse(200, _export_payload(result))
+        except ExportUnavailableError as exc:
+            session.rollback()
+            return SyncActionResponse(422, {"detail": {"message": str(exc), "reason": exc.reason}})
         except ExportGateError as exc:
             # The gate's review issues and followup attempts are kept.
             session.commit()

@@ -117,12 +117,13 @@ class DocumentExportUseCase:
         manifest_path: str | None = None
         document_exporter = _DOCUMENT_LEVEL_EXPORTERS.get(export_type)
         if document_exporter is not None:
-            artifacts = getattr(self.export_service, document_exporter)(document_id)
+            # The gate just passed for every chapter in _pass_export_gate.
+            artifacts = getattr(self.export_service, document_exporter)(document_id, enforce_gate=False)
             file_path = str(artifacts.file_path)
             manifest_path = _optional_path(artifacts.manifest_path)
         else:
             for chapter_bundle in bundle.chapters:
-                artifacts = self.export_service.export_chapter(chapter_bundle.chapter.id, export_type)
+                artifacts = self.export_service.export_chapter(chapter_bundle.chapter.id, export_type, enforce_gate=False)
                 chapter_results.append(
                     ChapterExportResult(
                         chapter_id=chapter_bundle.chapter.id,
