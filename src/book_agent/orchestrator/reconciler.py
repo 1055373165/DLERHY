@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
+from book_agent.orchestrator.run_plan import translate_packet_scope
 from book_agent.orchestrator.stage_status import (
     PIPELINE_STAGES,
     StageStatus,
@@ -88,11 +89,15 @@ class Reconciler:
         run = repository.get_run(run_id)
 
         findings: list[DriftFinding] = []
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         for stage in PIPELINE_STAGES:
             cache_status = _cache_status(run, stage) or "unknown"
             try:
                 derived = self._calculator.stage_status(
-                    run_id, run.document_id, stage
+                    run_id,
+                    run.document_id,
+                    stage,
+                    packet_ids=packet_scope if stage == "translate" else None,
                 )
             except ValueError:
                 continue

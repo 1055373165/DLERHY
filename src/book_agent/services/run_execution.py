@@ -373,14 +373,24 @@ class RunExecutionService:
         error_class: str,
         error_detail_json: dict[str, Any],
         retryable: bool,
+        pauses_run: bool = False,
     ) -> ClaimedRunWorkItem:
+        """Record a failed attempt.
+
+        ``pauses_run`` marks failures that stop the whole run (no balance,
+        bad credentials): the item goes back to RETRYABLE_FAILED without
+        spending a retry, so the run really does continue where it stopped
+        once the operator resumes it.
+        """
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
         run = self.repository.get_run_for_update(lease.run_id)
         work_item_before = self.repository.get_work_item(lease.work_item_id)
         budget = self.repository.get_budget_for_run(lease.run_id)
         max_retry_count = budget.max_retry_count_per_work_item if budget is not None else None
-        should_retry = retryable and (max_retry_count is None or work_item_before.attempt < max_retry_count)
+        should_retry = pauses_run or (
+            retryable and (max_retry_count is None or work_item_before.attempt < max_retry_count)
+        )
         next_status = WorkItemStatus.RETRYABLE_FAILED if should_retry else WorkItemStatus.TERMINAL_FAILED
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
@@ -417,6 +427,10 @@ class RunExecutionService:
             ),
         )
         return self._to_claimed_run_work_item(ClaimedWorkItemBundle(work_item=work_item, worker_lease=lease))
+
+    def run_ids_with_expired_leases_outside_loops(self) -> list[str]:
+        """Inactive runs whose workers still hold expired leases (see supervisor sweep)."""
+        return self.repository.list_run_ids_with_expired_active_leases(expired_before=_utcnow())
 
     def reclaim_expired_leases(self, *, run_id: str) -> ReclaimExpiredLeaseResult:
         now = _utcnow()
@@ -481,9 +495,11 @@ class RunExecutionService:
         detail = dict(run.status_detail_json or {})
         usage = self.repository.usage_from_events(run_id)
         counters = dict(detail.get("control_counters") or {})
+        accounting = dict(detail.get("pause_accounting") or {})
         now = _utcnow()
         baseline_started_at = _ensure_utc(run.started_at) or _ensure_utc(run.created_at) or now
-        elapsed_seconds = int((now - baseline_started_at).total_seconds())
+        paused_seconds = int(accounting.get("paused_seconds_total", 0) or 0)
+        elapsed_seconds = max(0, int((now - baseline_started_at).total_seconds()) - paused_seconds)
 
         if budget.max_wall_clock_seconds is not None and elapsed_seconds >= budget.max_wall_clock_seconds:
             summary = self.control_service.pause_run_system(
@@ -500,6 +516,11 @@ class RunExecutionService:
             last_progress_at = self._last_progress_at(
                 detail=detail, run_started_at=baseline_started_at
             )
+            resumed_at = self._parse_iso_utc(accounting.get("resumed_at"))
+            if resumed_at is not None and resumed_at > last_progress_at:
+                # The clock restarts when the operator resumes; time spent
+                # paused is not "no progress".
+                last_progress_at = resumed_at
             no_progress_seconds = int((now - last_progress_at).total_seconds())
             if no_progress_seconds >= budget.max_no_progress_seconds:
                 # Stuck detection: the frontier hasn't produced a
@@ -694,6 +715,18 @@ class RunExecutionService:
         # in its current non-terminal status and let the main loop advance
         # the frontier.
         return self.control_service.get_run_summary(run_id)
+
+    @staticmethod
+    def _parse_iso_utc(raw: Any) -> datetime | None:
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _last_progress_at(
         self, *, detail: dict[str, Any], run_started_at: datetime

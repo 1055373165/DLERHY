@@ -7,6 +7,7 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.run_plan import translate_packet_scope
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
     write_cached_stages,
@@ -423,6 +424,13 @@ class RunControlService:
             )
             previous_run = self.repository.get_run(run_id)
 
+        inflight = self.repository.count_inflight_work_items(run_id)
+        if inflight > 0:
+            raise RunControlTransitionError(
+                f"Run {run_id} still has {inflight} in-flight work item(s) holding leases; "
+                "wait for them to finish or expire before retrying, or cancel the run."
+            )
+
         previous_budget = self.repository.get_budget_for_run(run_id)
         retry_summary = self.create_run(
             document_id=previous_run.document_id,
@@ -500,13 +508,20 @@ class RunControlService:
         if stages is None:
             return
         calculator = StageStatusCalculator(self.repository.session)
+        run = self.repository.get_run(run_id)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         projected_stages = dict(stages)
         for stage_name in PIPELINE_STAGES:
             stage_detail = projected_stages.get(stage_name)
             if not isinstance(stage_detail, dict):
                 continue
             try:
-                derived = calculator.stage_status(run_id, document_id, stage_name)
+                derived = calculator.stage_status(
+                    run_id,
+                    document_id,
+                    stage_name,
+                    packet_ids=packet_scope if stage_name == "translate" else None,
+                )
             except ValueError:
                 continue
             new_detail = dict(stage_detail)
@@ -524,9 +539,15 @@ class RunControlService:
         # the authoritative physical state every time.
         run = self.repository.get_run(run_id)
         calculator = StageStatusCalculator(self.repository.session)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         for stage in PIPELINE_STAGES:
             try:
-                status = calculator.stage_status(run_id, run.document_id, stage)
+                status = calculator.stage_status(
+                    run_id,
+                    run.document_id,
+                    stage,
+                    packet_ids=packet_scope if stage == "translate" else None,
+                )
             except ValueError:
                 continue
             if status == StageStatus.FAILED:
@@ -733,13 +754,16 @@ class RunControlService:
         elif next_status == DocumentRunStatus.RUNNING:
             run.stop_reason = None
 
-        run.status_detail_json = self._merge_status_detail(
+        merged_detail = self._merge_status_detail(
             self._with_default_status_detail(run.status_detail_json or {}),
             action=event_type,
             actor_id=actor_id,
             note=note,
             detail_json=detail_json or {},
             at=now,
+        )
+        run.status_detail_json = self._apply_pause_accounting(
+            merged_detail, previous_status=previous_status, next_status=next_status, at=now
         )
         audit_event = RunAuditEvent(
             run_id=run.id,
@@ -757,6 +781,39 @@ class RunControlService:
         )
         self.repository.save_run(run, audit_event=audit_event)
         return self.get_run_summary(run.id)
+
+    def _apply_pause_accounting(
+        self,
+        detail: dict[str, Any],
+        *,
+        previous_status: DocumentRunStatus,
+        next_status: DocumentRunStatus,
+        at: datetime,
+    ) -> dict[str, Any]:
+        """Track time spent paused so budgets measure work, not waiting.
+
+        ``pause_accounting.paused_seconds_total`` is subtracted from the wall
+        clock; ``resumed_at`` restarts the no-progress window; and a resume
+        clears ``consecutive_failures`` because the operator has addressed
+        whatever paused the run (balance, credentials, budget).
+        """
+        merged = dict(detail)
+        accounting = dict(merged.get("pause_accounting") or {})
+        if next_status == DocumentRunStatus.PAUSED:
+            accounting["paused_at"] = at.astimezone(timezone.utc).isoformat()
+        elif next_status == DocumentRunStatus.RUNNING and previous_status == DocumentRunStatus.PAUSED:
+            paused_at = self._parse_iso_datetime(accounting.get("paused_at"))
+            if paused_at is not None:
+                paused_for = max(0, int((at - paused_at).total_seconds()))
+                accounting["paused_seconds_total"] = int(accounting.get("paused_seconds_total", 0) or 0) + paused_for
+            accounting.pop("paused_at", None)
+            accounting["resumed_at"] = at.astimezone(timezone.utc).isoformat()
+            counters = dict(merged.get("control_counters") or {})
+            counters["consecutive_failures"] = 0
+            merged["control_counters"] = counters
+        if accounting:
+            merged["pause_accounting"] = accounting
+        return merged
 
     def _merge_status_detail(
         self,

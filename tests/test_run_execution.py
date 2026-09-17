@@ -707,7 +707,9 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.status, "paused")
         self.assertEqual(summary.stop_reason, "provider.insufficient_balance")
-        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 1)
+        # The packet is not lost: it waits for the operator to resume the run.
+        self.assertEqual(summary.work_items.status_counts["retryable_failed"], 1)
+        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 0)
 
     def test_run_control_isoformat_treats_naive_sqlite_datetimes_as_utc(self) -> None:
         with self.session_factory() as session:

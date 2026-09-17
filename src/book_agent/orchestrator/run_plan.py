@@ -76,6 +76,22 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
     raise ValueError(f"Run type {run_type.value} has no execution plan.")
 
 
+def translate_packet_scope(
+    run_type: DocumentRunType | str, status_detail_json: Mapping[str, Any] | None
+) -> frozenset[str] | None:
+    """The packet set a run's translate stage owns, or None for every packet.
+
+    Every reader of the derived translate status (run summary projection,
+    terminal reconcile, drift reconciler, snapshot finalisation) must use the
+    same scope, otherwise a targeted run looks unfinished as long as the
+    document has other packets left to translate.
+    """
+    try:
+        return plan_for_run(run_type, status_detail_json).packet_ids
+    except ValueError:
+        return None
+
+
 EXECUTABLE_RUN_TYPES: frozenset[DocumentRunType] = frozenset(
     {
         DocumentRunType.TRANSLATE_FULL,

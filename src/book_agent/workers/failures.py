@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from book_agent.workers.providers.openai_compatible import (
     ProviderHTTPError,
@@ -45,6 +46,9 @@ def classify_failure(exc: BaseException) -> FailureClassification:
         return FailureClassification(FailureDisposition.RETRY, "provider.transport")
     if isinstance(exc, OperationalError):
         return FailureClassification(FailureDisposition.RETRY, "database.operational")
+    if isinstance(exc, SQLAlchemyTimeoutError):
+        # Connection pool exhausted: a capacity problem, not a bad work item.
+        return FailureClassification(FailureDisposition.RETRY, "database.pool_timeout")
     if isinstance(exc, (TimeoutError, ConnectionError)):
         return FailureClassification(FailureDisposition.RETRY, "network")
     return FailureClassification(FailureDisposition.FAIL, "unclassified")

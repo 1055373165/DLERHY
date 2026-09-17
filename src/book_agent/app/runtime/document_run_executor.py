@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -35,7 +35,7 @@ from book_agent.orchestrator.pipeline_stage_cache import (
     write_cached_stages,
 )
 from book_agent.orchestrator.reconciler import Reconciler
-from book_agent.orchestrator.run_plan import EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run
+from book_agent.orchestrator.run_plan import translate_packet_scope, EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
     StageStatus,
@@ -239,6 +239,7 @@ class DocumentRunExecutor:
                 runnable_run_ids = self._list_runnable_run_ids()
                 for run_id in runnable_run_ids:
                     self._ensure_run_thread(run_id)
+                self._reclaim_inactive_run_leases()
             except Exception:
                 if self._stop_event.is_set():
                     return
@@ -394,6 +395,19 @@ class DocumentRunExecutor:
         self._sync_pipeline_status(run_id, result.run_summary.status)
         return True
 
+    def _reclaim_inactive_run_leases(self) -> list[str]:
+        """Sweep expired leases of runs that have no run loop (paused, cancelled, failed).
+
+        Their work threads may still be inside a provider call; once the lease
+        has expired the item is put back so a later resume or retry does not
+        race the old thread on the same packet.
+        """
+        with session_scope(self.session_factory) as session:
+            run_ids = self._run_execution_service(session).run_ids_with_expired_leases_outside_loops()
+        for run_id in run_ids:
+            self._reclaim_expired_leases(run_id)
+        return run_ids
+
     def _reclaim_expired_leases(self, run_id: str) -> bool:
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
@@ -424,6 +438,11 @@ class DocumentRunExecutor:
             packet_scope = plan.packet_ids
             next_stage = self._next_stage_label(plan, "translate")
             document_id = run.document_id
+            if self._downstream_stage_in_flight(session, run_id):
+                # A review or export thread owns the packets it re-opens for
+                # followup translation; seeding them here as well would translate
+                # the same packet twice.
+                return False
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             if self._reconcile_translate_work_items(
                 session=session,
@@ -1096,6 +1115,7 @@ class DocumentRunExecutor:
                 error_class=error_class,
                 error_detail_json=error_detail,
                 retryable=retryable,
+                pauses_run=pause_reason is not None,
             )
             if (
                 claimed.stage == WorkItemStage.TRANSLATE.value
@@ -1106,7 +1126,7 @@ class DocumentRunExecutor:
                     packet_id=claimed.scope_id,
                     substate=(
                         PACKET_RUNTIME_SUBSTATE_RETRYABLE_FAILED
-                        if retryable and pause_reason is None
+                        if retryable or pause_reason is not None
                         else PACKET_RUNTIME_SUBSTATE_TERMINAL_FAILED
                     ),
                     run_id=run_id,
@@ -1671,6 +1691,17 @@ class DocumentRunExecutor:
             ).all()
         )
 
+    def _downstream_stage_in_flight(self, session, run_id: str) -> bool:
+        return bool(
+            session.scalar(
+                select(func.count(WorkItem.id)).where(
+                    WorkItem.run_id == run_id,
+                    WorkItem.stage.in_([WorkItemStage.REVIEW, WorkItemStage.EXPORT]),
+                    WorkItem.status.in_([WorkItemStatus.LEASED, WorkItemStatus.RUNNING]),
+                )
+            )
+        )
+
     def _list_stage_items(self, session, run_id: str, stage: WorkItemStage) -> list[WorkItem]:
         return list(
             session.scalars(
@@ -1790,6 +1821,7 @@ class DocumentRunExecutor:
         if not stages:
             return
         calculator = StageStatusCalculator(session)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         now = _utcnow().isoformat()
         changed = False
         for stage_key, stage_detail in list(stages.items()):
@@ -1798,7 +1830,12 @@ class DocumentRunExecutor:
             if not isinstance(stage_detail, dict):
                 continue
             try:
-                derived = calculator.stage_status(run_id, run.document_id, stage_key)
+                derived = calculator.stage_status(
+                    run_id,
+                    run.document_id,
+                    stage_key,
+                    packet_ids=packet_scope if stage_key == "translate" else None,
+                )
             except ValueError:
                 continue
             derived_label = stage_status_to_cache_label(derived)

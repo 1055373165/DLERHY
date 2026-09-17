@@ -16,7 +16,7 @@
 
 - [x] **统一 LLM client**（`workers/providers`，2026-09-17 落地：httpx 连接池、抖动退避、Retry-After、每调用截止时间、缓存 token 修正；`workers/llm_calls.py` 让术语抽取 / 术语调查 / 概念解析 / provider 测试都产生带 `call_kind` 的 `llm.call.*` 事件）：httpx + 连接池 + 整体截止时间 + 指数退避（jitter、上限、遵守 Retry-After）；Responses/Chat 两种模式；修缓存 token 字段（R12）；每次调用必发 `llm.call.started/completed/failed`，含 `call_kind`（translate / concept / glossary / survey / review / repair / qa）、`run_id`、`agent_id`、`cost_usd`。概念解析、术语抽取、一致性 pass 全部改走它。
 - [x] **预算与成本单一口径**（2026-09-17）：`usage_summary`、预算护栏、`GET /runs/{id}/cost` 都从 `llm.call.completed` 事件聚合（`RunControlRepository.usage_from_events`）；工作线程用 `core/run_context.py` 绑定 run，review 期重译与概念解析的花费随之归入 run；翻译工作项完成时立即检查预算；物化视图与 `refresh_cost_rollup()` 由迁移 0034 删除（R15）。
-- [ ] **运行时正确性**：R3（PAUSE 不写 TERMINAL_FAILED，resume 重置 work item）、R4（租约回收覆盖 PAUSED/CANCELLED；retry 前先排空旧 run 在途租约）、R5（review 期重译作为 work item 入队，而不是线程内直调）、R10、R11、R13。
+- [x] **运行时正确性**（2026-09-17）：R3 暂停类失败把 work item 留在 RETRYABLE_FAILED 且不消耗重试次数，resume 清零 `consecutive_failures`；R4 supervisor 每 tick 回收非活跃 run 的过期租约，`retry_run` 在仍有在途 work item 时拒绝；R5 review/export 线程在途时 translate 阶段不播种（跟进重译仍在 review 线程内同步执行，改为独立 work item 留到 H2 的 Repair Agent）；R10 `pause_accounting` 记录暂停时长，墙钟扣除、无进展窗口从 resume 起算；R11 连接池超时归为可重试；R13 `translate_packet_scope` 让投影、终态、对账、快照都按 targeted run 的包范围判定。
 - [ ] **部署与密钥**：R2（compose 挂整个 artifacts；`BOOK_AGENT_SECRET_KEY` 必填、启动校验）、R6（容器读 key 的路径；默认 backend 不再是 echo；生产 scope 拒绝 Echo 凭据激活）。
 - [ ] **工程护栏**：R9（`.env.example` 入库；`[dependency-groups] dev`；CI：ruff + 前端 tsc/vitest + golden 4 件 + 单测分片；PG 测试用 service 容器）；conftest 统一 SQLite/临时目录/echo 夹具；测试产物不再写仓库（R21）。
 - [ ] **公开前历史清洗**：H0 收尾时在全新克隆上运行 `scripts/scrub_history.sh`，核对后强推所有分支，再把仓库设为公开。

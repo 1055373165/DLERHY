@@ -7,7 +7,14 @@ from typing import Any
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import PacketStatus, WorkItemScopeType, WorkItemStage, WorkItemStatus, WorkerLeaseStatus
+from book_agent.domain.enums import (
+    DocumentRunStatus,
+    PacketStatus,
+    WorkItemScopeType,
+    WorkItemStage,
+    WorkItemStatus,
+    WorkerLeaseStatus,
+)
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Chapter, Document
 from book_agent.domain.models.ops import Event
@@ -626,6 +633,34 @@ class RunControlRepository:
         if result.rowcount != 1:
             return None
         return self.session.get(WorkItem, lease.work_item_id)
+
+    def list_run_ids_with_expired_active_leases(
+        self,
+        *,
+        expired_before: datetime,
+        excluding_statuses: tuple[DocumentRunStatus, ...] = (
+            DocumentRunStatus.RUNNING,
+            DocumentRunStatus.DRAINING,
+        ),
+    ) -> list[str]:
+        """Runs that are not being driven by a run loop but still hold expired leases.
+
+        A paused, cancelled or failed run has no loop to reap its leases, so
+        the supervisor sweeps them; otherwise a retry of the run would race
+        the old worker threads on the same packets.
+        """
+        return list(
+            self.session.scalars(
+                select(WorkerLease.run_id)
+                .join(DocumentRun, DocumentRun.id == WorkerLease.run_id)
+                .where(
+                    WorkerLease.status == WorkerLeaseStatus.ACTIVE,
+                    WorkerLease.lease_expires_at < expired_before,
+                    DocumentRun.status.not_in(list(excluding_statuses)),
+                )
+                .distinct()
+            ).all()
+        )
 
     def list_expired_active_leases(self, run_id: str, *, expired_before: datetime) -> list[WorkerLease]:
         return self.session.scalars(

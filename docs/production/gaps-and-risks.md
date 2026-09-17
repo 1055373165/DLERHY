@@ -67,3 +67,11 @@
 5. **解析层止血**（R7、R18、R19）：可译性接线、FileDataError 上抛、空白折叠改为保留、解析移到后台 work item。
 6. **前端生产路径**（R20）与 SSE 接入。
 7. B 级按子系统随 agent 升级各阶段逐步消化（见 [agent-upgrade/03-roadmap.md](../agent-upgrade/03-roadmap.md)）。
+
+## F. 处理记录
+
+| 日期 | 编号 | 提交 | 说明 |
+|---|---|---|---|
+| 2026-09-17 | R12 | `d88fdfa`、`0fcca44` | 统一 provider client；所有模型调用都产生带 `call_kind` 的事件；run 花费从事件聚合；缓存 token 字段修正 |
+| 2026-09-17 | R15 | `0fcca44` | 物化视图与 `refresh_cost_rollup()` 删除（迁移 0034），成本端点直接聚合事件 |
+| 2026-09-17 | R3、R4、R5、R10、R11、R13 | 本次提交 | 见 `docs/agent-upgrade/03-roadmap.md` H0「运行时正确性」条目；R5 只堵住了双写入口，review 期重译改为独立 work item 留到 H2 |
