@@ -133,6 +133,30 @@ class AgentStageExecutionTests(unittest.TestCase):
         with self.session_factory() as session:
             self.assertTrue(StageGateKeeper(session).can_start(self.run_id, self.document_id, "translate", plan_stages=plan.stages))
 
+    def test_a_failing_advisory_agent_degrades_its_stage_instead_of_failing_the_run(self) -> None:
+        from book_agent.workers.providers.openai_compatible import ProviderHTTPError
+
+        class _BrokenModel:
+            def step(self, *, model_name, messages, tools):
+                raise ProviderHTTPError(400, "An assistant message with 'tool_calls' must be followed by tool messages")
+
+        plan = self._plan()
+        executor = self._executor(_BrokenModel())
+        self.assertTrue(executor._process_agent_stage(self.run_id, "terminology", plan))  # seeded
+        self.assertTrue(executor._process_agent_stage(self.run_id, "terminology", plan))  # claimed + thread
+        self._join_work_threads(executor)
+        self.assertEqual(self._stage("terminology"), StageStatus.SUCCEEDED)
+        with self.session_factory() as session:
+            (item,) = session.scalars(select(WorkItem).where(WorkItem.run_id == self.run_id, WorkItem.stage == WorkItemStage.AGENT)).all()
+            self.assertEqual(item.status, WorkItemStatus.SUCCEEDED)
+            run = RunControlRepository(session).get_run(self.run_id)
+            from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
+
+            stage = read_cached_stages(run.status_detail_json["pipeline"])["terminology"]
+            self.assertTrue(stage["degraded"])
+            self.assertIn("ProviderHTTPError", stage["degraded_reason"])
+            self.assertTrue(StageGateKeeper(session).can_start(self.run_id, self.document_id, "translate", plan_stages=plan.stages))
+
     def test_awaiting_approval_blocks_the_stage_until_a_decision_then_resumes(self) -> None:
         model = _ScriptedModel(
             [

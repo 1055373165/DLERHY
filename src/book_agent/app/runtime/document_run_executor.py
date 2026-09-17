@@ -115,6 +115,12 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     return executor
 
 
+# Agents whose failure degrades the run instead of failing it (the Repair Agent is not one).
+ADVISORY_AGENT_KINDS = frozenset(
+    {TerminologyAgent_KIND, ReviewerAgent_KIND, StructureAgent_KIND, ExportReviewAgent_KIND}
+)
+
+
 def _accepts_positional_argument(function: Callable[..., Any] | None) -> bool:
     if function is None:
         return False
@@ -866,12 +872,48 @@ class DocumentRunExecutor:
                 "usage": outcome.usage,
             }
 
+        def _run_agent_or_degrade() -> dict[str, Any]:
+            """Advisory agents improve a run but must not sink it: after their last attempt the
+            stage finishes as degraded (the reason is kept) and translation goes on."""
+            try:
+                return _run_agent()
+            except LeaseLostError:
+                raise
+            except Exception as exc:
+                if agent_kind not in ADVISORY_AGENT_KINDS:
+                    raise
+                failure = classify_failure(exc)
+                if failure.pause_reason is not None:
+                    raise
+                if failure.retryable and claimed.attempt < self._attempt_cap(run_id):
+                    raise
+                logger.warning("Advisory agent %s gave up after %s attempt(s): %s", agent_kind, claimed.attempt, exc)
+                with session_scope(self.session_factory) as session:
+                    turn = AgentLedgerRepository(session).latest_turn(
+                        document_id=str(input_bundle.get("document_id") or ""), agent_kind=agent_kind, run_id=run_id
+                    )
+                    turn_id = turn.id if turn is not None else None
+                return {
+                    "document_id": str(input_bundle.get("document_id") or ""),
+                    "agent_kind": agent_kind,
+                    "turn_id": turn_id,
+                    "turn_status": AgentTurnStatus.SUCCEEDED.value,
+                    "degraded": True,
+                    "degraded_reason": f"{type(exc).__name__}: {str(exc)[:500]}",
+                    "failure_reason": failure.reason,
+                    "attempts": claimed.attempt,
+                }
+
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:
             with session_scope(self.session_factory) as session:
                 execution = self._run_execution_service(session)
                 execution.complete_work_item_success(
                     lease_token=lease_token,
-                    output_artifact_refs_json={"turn_id": payload["turn_id"], "agent_kind": agent_kind},
+                    output_artifact_refs_json={
+                        "turn_id": payload["turn_id"],
+                        "agent_kind": agent_kind,
+                        **({"degraded": True} if payload.get("degraded") else {}),
+                    },
                     payload_json=payload,
                 )
                 succeeded = payload.get("turn_status") == AgentTurnStatus.SUCCEEDED.value
@@ -887,11 +929,19 @@ class DocumentRunExecutor:
         self._execute_claimed_work_item(
             run_id=run_id,
             claimed=claimed,
-            worker_fn=_run_agent,
+            worker_fn=_run_agent_or_degrade,
             on_success=_on_success,
             stage_key=stage_key,
             lease_seconds=self.review_lease_seconds,
         )
+
+    def _attempt_cap(self, run_id: str) -> int:
+        from book_agent.services.run_execution import DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
+
+        with session_scope(self.session_factory) as session:
+            budget = RunControlRepository(session).get_budget_for_run(run_id)
+        cap = budget.max_retry_count_per_work_item if budget is not None else None
+        return int(cap) if cap is not None else DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
 
     def _agent_tools(self, agent_kind: str, input_bundle: dict[str, Any] | None = None):
         if agent_kind == TerminologyAgent_KIND:

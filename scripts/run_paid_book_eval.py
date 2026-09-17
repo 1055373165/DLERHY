@@ -43,6 +43,7 @@ from book_agent.infra.db.base import Base  # noqa: E402
 from book_agent.infra.db.session import build_engine, build_session_factory  # noqa: E402
 from book_agent.infra.repositories.review import active_target_texts  # noqa: E402
 from book_agent.infra.repositories.run_control import RunControlRepository  # noqa: E402
+from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages  # noqa: E402
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY  # noqa: E402
 from book_agent.services.glossary_service import GlossaryService  # noqa: E402
 from book_agent.services.run_control import RunBudgetSummary, RunControlService  # noqa: E402
@@ -64,6 +65,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--model-review", default="sampled", choices=["sampled", "full", "skip"])
     parser.add_argument("--repair-agent", default="off", choices=["on", "off"])
     parser.add_argument("--poll-seconds", type=float, default=15.0)
+    parser.add_argument(
+        "--approve-pending",
+        action="store_true",
+        help="Approve agent approval requests as 'paid-eval:auto' (unattended runs); each approval is logged.",
+    )
     return parser.parse_args()
 
 
@@ -152,6 +158,8 @@ def main() -> int:
                 summary = RunControlService(repository).get_run_summary(run_id)
                 usage = repository.usage_from_events(run_id)
             status = summary.status
+            if args.approve_pending:
+                _approve_pending(session_factory, document_id, workdir)
             pipeline = (summary.status_detail_json or {}).get("pipeline") or {}
             _log(
                 workdir,
@@ -169,6 +177,18 @@ def main() -> int:
     _log(workdir, f"finished with status={status}; report at {workdir / 'report.md'}")
     engine.dispose()
     return 0 if status in {"succeeded", "succeeded_with_warnings"} else 1
+
+
+def _approve_pending(session_factory, document_id: str, workdir: Path) -> None:
+    from book_agent.domain.enums import ApprovalStatus
+    from book_agent.harness.approvals.service import ApprovalService
+    from book_agent.infra.repositories.agent import AgentLedgerRepository
+
+    with session_factory() as session:
+        for approval in AgentLedgerRepository(session).list_approvals(document_id, status=ApprovalStatus.PENDING):
+            ApprovalService(session).decide(approval.id, approved=True, decided_by="paid-eval:auto", note="unattended eval run")
+            _log(workdir, f"approved {approval.kind}: {json.dumps((approval.payload_json or {}).get('arguments'), ensure_ascii=False)[:200]}")
+        session.commit()
 
 
 def _report(session_factory, document_id: str, run_id: str, workdir: Path, *, elapsed: float, args) -> dict[str, Any]:
@@ -242,8 +262,8 @@ def _report(session_factory, document_id: str, run_id: str, workdir: Path, *, el
         ]
         pipeline = detail.get("pipeline") or {}
         stages = {
-            name: {key: value for key, value in (stage or {}).items() if key in {"status", "stop_reason", "turn_status"}}
-            for name, stage in (pipeline.get("stages") or {}).items()
+            name: {key: value for key, value in (stage or {}).items() if key in {"status", "stop_reason", "turn_status", "degraded", "degraded_reason"}}
+            for name, stage in (read_cached_stages(pipeline) or {}).items()
         }
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -306,7 +326,10 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "| Stage | Status |",
         "|---|---|",
-        *[f"| {name} | {stage.get('status')} |" for name, stage in run["stages"].items()],
+        *[
+            f"| {name} | {stage.get('status')}{' (degraded: ' + str(stage.get('degraded_reason')) + ')' if stage.get('degraded') else ''} |"
+            for name, stage in run["stages"].items()
+        ],
         "",
         "| Call kind | Calls | Failed | Tokens in | Tokens out |",
         "|---|---|---|---|---|",

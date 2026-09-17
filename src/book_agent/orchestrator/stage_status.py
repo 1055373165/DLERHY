@@ -226,9 +226,14 @@ class StageStatusCalculator:
                 .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
                 .limit(1)
             ).first()
+            degraded = any(
+                item.status == WorkItemStatus.SUCCEEDED and (item.output_artifact_refs_json or {}).get("degraded")
+                for item in items
+            )
             if turn is not None:
                 if turn.status == AgentTurnStatus.FAILED:
-                    status = StageStatus.FAILED
+                    # An advisory agent that gave up finishes its stage as degraded, not failed.
+                    status = StageStatus.SUCCEEDED if degraded else StageStatus.FAILED
                 elif turn.status != AgentTurnStatus.SUCCEEDED and status == StageStatus.SUCCEEDED:
                     status = StageStatus.RUNNING
         return StageEvidence(

@@ -374,6 +374,25 @@ class AgentTurnRunner:
                     call,
                     ToolOutcome(ok=False, error=f"rejected by {decision.get('decided_by') or 'reviewer'}: {decision.get('note') or 'no reason given'}"),
                 )
+        # The step that stopped for approval may have asked for more calls after the one that
+        # waited; they never started. Run them now, in order, so every call the model made gets a
+        # result (providers reject a conversation with unanswered tool calls).
+        last_assistant = next((item for item in reversed(items) if item.kind == AgentItemKind.ASSISTANT), None)
+        if last_assistant is not None:
+            started = {str(item.content_json.get("call_id")) for item in items if item.kind == AgentItemKind.TOOL_CALL}
+            for raw in (last_assistant.content_json or {}).get("tool_calls") or []:
+                call_id = str(raw.get("call_id"))
+                if call_id in started:
+                    continue
+                call = ToolCall(call_id=call_id, name=str(raw.get("name")), arguments=dict(raw.get("arguments") or {}))
+                tool_item = ledger.append_item(
+                    turn.id,
+                    kind=AgentItemKind.TOOL_CALL,
+                    content={"call_id": call.call_id, "name": call.name, "arguments": call.arguments},
+                )
+                halted = self._execute_call(session, ledger, turn, call, tool_item)
+                if halted is not None:
+                    return halted
         return None
 
     # --- budget / compaction / finish ----------------------------------------

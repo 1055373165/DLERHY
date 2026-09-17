@@ -213,6 +213,40 @@ class HarnessKernelTests(unittest.TestCase):
             self.assertEqual(decisions["term:agent"].value_json, {"target_term": "智能体"})
             self.assertEqual(decisions["term:agent"].turn_id, turn_id)
 
+    def test_calls_after_the_one_waiting_for_approval_run_once_it_is_decided(self) -> None:
+        model = _FakeModel(
+            [
+                AgentStep(
+                    text=None,
+                    tool_calls=[
+                        ToolCall("c1", "lookup_term", {"term": "agent"}),
+                        ToolCall("c2", "lock_term", {"source_term": "agent", "target_term": "智能体"}),
+                        ToolCall("c3", "lookup_term", {"term": "harness"}),
+                        ToolCall("c4", "lock_term", {"source_term": "harness", "target_term": "框架"}),
+                    ],
+                    usage=_usage(),
+                ),
+                AgentStep(text="Done.", usage=_usage()),
+            ]
+        )
+        turn_id = self._new_turn()
+        runner = self._runner(model)
+        self.assertEqual(runner.run(turn_id).status, AgentTurnStatus.AWAITING_APPROVAL)
+        self.assertEqual(self.lookups, ["agent"])
+        for expected_term in ("智能体", "框架"):
+            with self.session_factory() as session:
+                (pending,) = AgentLedgerRepository(session).list_approvals(self.document_id, status=ApprovalStatus.PENDING)
+                self.assertEqual(pending.payload_json["arguments"]["target_term"], expected_term)
+                ApprovalService(session).decide(pending.id, approved=True, decided_by="reviewer:alice")
+                session.commit()
+            outcome = runner.run(turn_id)
+        self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
+        self.assertEqual(self.lookups, ["agent", "harness"])
+        self.assertEqual(self.locks, [("agent", "智能体"), ("harness", "框架")])
+        second_messages = model.calls[1]["messages"]
+        answered = [message["tool_call_id"] for message in second_messages if message["role"] == "tool"]
+        self.assertEqual(answered, ["c1", "c2", "c3", "c4"])
+
     def test_rejected_approval_is_reported_to_the_model_as_a_failed_tool_result(self) -> None:
         model = _FakeModel(
             [
