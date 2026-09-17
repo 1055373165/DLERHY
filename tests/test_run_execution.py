@@ -527,7 +527,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             assert waiting_packet is not None
             self.assertEqual(waiting_packet.packet_json["runtime_state"]["substate"], "ready")
 
-    def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_review(self) -> None:
+    def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_model_review(self) -> None:
         document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
         packet_id = packet_ids_by_chapter[0][0]
         run_id = self._create_running_run_for_document(document_id)
@@ -572,7 +572,8 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertEqual(stale_item.status, WorkItemStatus.CANCELLED)
         self.assertEqual(stale_item.error_class, "stale_translate_packet_reference")
-        self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "review")
+        # The default translate_full plan runs the Reviewer Agent right after translation.
+        self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "model_review")
         pipeline = summary.status_detail_json["pipeline"]
         cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
         self.assertEqual(cached_stages["translate"]["status"], "succeeded")

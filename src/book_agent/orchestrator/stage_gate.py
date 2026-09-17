@@ -38,7 +38,10 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     # Only when the run plans a terminology stage (plan_stages filtering);
     # targeted translate runs have none and start immediately.
     "translate": ("terminology",),
-    "review": ("translate",),
+    # The Reviewer Agent reads finished translations; rule review and its
+    # repair loops then handle rule and model issues together.
+    "model_review": ("translate",),
+    "review": ("translate", "model_review"),
     "bilingual_html": ("translate", "review"),
     "merged_html": ("translate", "review", "bilingual_html"),
 }

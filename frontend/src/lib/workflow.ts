@@ -44,6 +44,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     description: "逐 packet 产出中文译文并写回进度。",
   },
   {
+    key: "model_review",
+    label: "模型审校",
+    description: "审校代理抽样阅读译文，把误译、漏译、术语与文风问题记入问题清单。",
+  },
+  {
     key: "review",
     label: "自动复核",
     description: "处理导出前必须解决的 blocker。",

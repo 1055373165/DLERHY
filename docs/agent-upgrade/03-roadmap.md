@@ -47,7 +47,7 @@
 - [x] `OutputValidator` 升级为拒绝式 guardrail（覆盖不全 / 空译 / 原文回显 / 长度比异常 → 同 turn 内让模型修正）。实现与计划的差异：修复预算 `BOOK_AGENT_TRANSLATION_MAX_OUTPUT_REPAIRS`（默认 1）用尽后不落 FAILED，而是照旧带 `error_code` 持久化，让审校把它变成 OMISSION/ALIGNMENT issue 交给修复循环；每次拒绝一条 `translation.output.rejected` 事件，重试用量计入同一 translation run。
 - [x] `review_issues` 版本化（修 R8：重开不重置、人工状态优先）与 issue API（列表/详情/triage/wontfix/resolve/reopen）。见 `production/gaps-and-risks.md` F 节。`IssueType` 枚举已定义（含 Reviewer Agent 用的 MISTRANSLATION_SEMANTIC/LOGIC/REFERENCE，规则引擎已有路由），列保持 TEXT；规则检测器改用枚举、`evidence` 的 pydantic schema 随 Reviewer Agent 一起落地（该 agent 是第一个需要结构化 evidence 的生产者）。
 - [ ] **解析版本分叉落地**：`document_parse_revisions` 成为一等版本；重解析产生新句子集，旧集 `retired`；句级指纹搬运译文；`revision_links` 映射 issue/审批/审计；`pdf/epub_structure_refresh` 改走该路径（替代「只标 stale 不重建」）。
-- [ ] **Reviewer/Editor Agent**（`Detector.MODEL`，设计见 `05-reviewer-and-repair-agents.md`）：按章抽样或全量（可配置）；输入源句 + 译文 + BOOK.md；输出结构化 issue（含置信度、建议改写）；与规则 issue 合并去重。
+- [x] **Reviewer Agent**（`Detector.MODEL`，设计见 `05-reviewer-and-repair-agents.md`）：`translate_full` 新增 `model_review` 阶段（translate 之后、review 之前；run 请求 `model_review=sampled|full|skip`，默认 sampled，每章 3 个最可疑 packet）。工具 `next_review_batch / report_issue / finish_packet` + H1 只读工具；发现写入同一 issue 账本并复用规则引擎的类型与动作；同句同族规则 issue 去重；高置信度严重问题才阻断；重译自动关闭模型 issue，复现两次升级为阻断；模型 evidence 变成重译提示。与计划的差异：文档级单 turn（队列工具推进），不是按章 turn；`edit_segment` 留给 Repair Agent。
 - [ ] **Repair Agent**：输入 issue 束 + 规则引擎给出的候选动作；工具 `retranslate_packet`（新 attempt）、`edit_segment`（新 attempt，最小改动）、`lock_term`（审批）、`mark_wontfix`（审批或阈值）；替换现有三个循环中的「自动跟进」决策，保留硬上限与人工保留阈值。
 - [ ] 术语 hook 统一（翻译期与审校期同一匹配器），pre-persist 拦截。
 - [ ] 前端：issue 工作台（evidence、源/译对照、一键动作）、SSE 接入替代轮询（R20 一部分）。

@@ -8,11 +8,10 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import ActionStatus, IssueEventKind, IssueStatus, TargetSegmentStatus
+from book_agent.domain.enums import ActionStatus, IssueEventKind, IssueStatus
 from book_agent.domain.models import Chapter, Sentence
 from book_agent.domain.models.review import IssueAction, ReviewIssue, ReviewIssueEvent
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
-from book_agent.infra.repositories.review import ReviewRepository
+from book_agent.infra.repositories.review import ReviewRepository, active_target_texts
 
 
 class IssueTransitionError(ValueError):
@@ -122,7 +121,7 @@ class IssueService:
             sentence = self.session.get(Sentence, issue.sentence_id)
             if sentence is not None:
                 source_text = sentence.source_text
-                target_text = self._active_target_text(sentence.id)
+                target_text = active_target_texts(self.session, [sentence.id]).get(sentence.id)
         chapter_title = None
         if issue.chapter_id:
             chapter = self.session.get(Chapter, issue.chapter_id)
@@ -136,19 +135,6 @@ class IssueService:
             target_text=target_text,
             chapter_title=chapter_title,
         )
-
-    def _active_target_text(self, sentence_id: str) -> str | None:
-        rows = self.session.execute(
-            select(TargetSegment.text_zh)
-            .join(AlignmentEdge, AlignmentEdge.target_segment_id == TargetSegment.id)
-            .where(
-                AlignmentEdge.sentence_id == sentence_id,
-                TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
-            )
-            .order_by(TargetSegment.ordinal.asc())
-        ).all()
-        texts = [str(row[0]) for row in rows if row[0]]
-        return " ".join(texts) if texts else None
 
     def transition(self, issue_id: str, *, to_status: IssueStatus, actor_id: str, note: str | None) -> ReviewIssue:
         issue = self.get_issue(issue_id)

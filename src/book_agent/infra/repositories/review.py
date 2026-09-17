@@ -17,7 +17,9 @@ from book_agent.domain.enums import (
     MemoryScopeType,
     MemoryStatus,
     RootCauseLayer,
+    RunStatus,
     SnapshotType,
+    TargetSegmentStatus,
     TermStatus,
 )
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
@@ -60,6 +62,41 @@ class IssueSyncResult:
     seen_while_closed: list[ReviewIssue] = field(default_factory=list)
     resolved: list[ReviewIssue] = field(default_factory=list)
     replanned_actions: list[IssueAction] = field(default_factory=list)
+
+
+def active_target_texts(session: Session, sentence_ids: Iterable[str]) -> dict[str, str]:
+    """Current Chinese text per sentence.
+
+    A retranslation does not always supersede the previous attempt's
+    segments (only issue actions invalidate them), so the current text is
+    the non-superseded segments of the latest successful run aligned to the
+    sentence, the same rule review uses for active alignments.
+    """
+    ids = [sentence_id for sentence_id in dict.fromkeys(sentence_ids) if sentence_id]
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(AlignmentEdge.sentence_id, TranslationRun.attempt, TargetSegment.ordinal, TargetSegment.text_zh)
+        .join(TargetSegment, AlignmentEdge.target_segment_id == TargetSegment.id)
+        .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
+        .where(
+            AlignmentEdge.sentence_id.in_(ids),
+            TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
+            TranslationRun.status == RunStatus.SUCCEEDED,
+        )
+    ).all()
+    latest_attempt: dict[str, int] = {}
+    for sentence_id, attempt, _, _ in rows:
+        key = str(sentence_id)
+        latest_attempt[key] = max(latest_attempt.get(key, 0), int(attempt))
+    parts: dict[str, list[tuple[int, str]]] = {}
+    for sentence_id, attempt, ordinal, text in sorted(rows, key=lambda row: (str(row[0]), int(row[2]))):
+        key = str(sentence_id)
+        if int(attempt) != latest_attempt[key] or not text:
+            continue
+        if all(existing != text for _, existing in parts.setdefault(key, [])):
+            parts[key].append((int(ordinal), str(text)))
+    return {key: " ".join(text for _, text in values) for key, values in parts.items() if values}
 
 
 _MATERIAL_FIELDS = ("severity", "blocking", "evidence_json", "packet_id", "sentence_id", "block_id", "confidence")

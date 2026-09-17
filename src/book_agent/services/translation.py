@@ -278,7 +278,7 @@ class TranslationService:
         self.post_translation_hooks: tuple[PostTranslationHook, ...] = (
             tuple(post_translation_hooks)
             if post_translation_hooks is not None
-            else (GlossaryViolationHook(), ChapterMemoryProposalHook())
+            else (GlossaryViolationHook(), ChapterMemoryProposalHook(), ModelIssueSupersedeHook())
         )
 
     def execute_packet(
@@ -991,3 +991,46 @@ class ChapterMemoryProposalHook:
                 chapter_id=context_packet.chapter_id,
                 translation_run_id=outcome.artifacts.translation_run.id,
             )
+
+
+class ModelIssueSupersedeHook:
+    """A new translation of a packet closes the Reviewer Agent's open findings on it.
+
+    The finding was about text that no longer exists. Human-decided issues
+    are left alone; if the new text still has the problem, the next model
+    review reports it again and the ledger reopens (and eventually escalates)
+    the same issue.
+    """
+
+    def after_packet_translated(self, service: TranslationService, outcome: PacketTranslationOutcome) -> None:
+        from sqlalchemy import select
+
+        from book_agent.domain.enums import Detector, IssueStatus
+        from book_agent.domain.models.review import ReviewIssue
+        from book_agent.infra.repositories.review import ReviewRepository
+
+        session = service.repository.session
+        sentence_ids = [sentence.id for sentence in outcome.bundle.current_sentences]
+        if not sentence_ids:
+            return
+        stale = list(
+            session.scalars(
+                select(ReviewIssue).where(
+                    ReviewIssue.sentence_id.in_(sentence_ids),
+                    ReviewIssue.detector == Detector.MODEL,
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                    ReviewIssue.decided_by.is_(None),
+                )
+            ).all()
+        )
+        if not stale:
+            return
+        attempt = outcome.artifacts.translation_run.attempt
+        ReviewRepository(session).sync_issues(
+            [],
+            [],
+            owned_existing=stale,
+            resolution_note=f"Translation updated (attempt {attempt}); awaiting the next model review.",
+            actor_id="services.translation",
+        )
+

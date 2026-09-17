@@ -1,6 +1,6 @@
 # 05 · 设计：Reviewer Agent 与 Repair Agent（H2）
 
-> 状态：H2 实施稿（2026-09-17）。前置已完成：输出 guardrail（同 turn 修复）、issue 账本（`review_issue_events`、人工决定优先、action 不再每轮重置）、issue API。本篇固定两个 agent 与现有规则审校、修复循环的接口，避免「模型 issue」与「规则 issue」各走一套。
+> 状态：H2 实施稿（2026-09-17）。Reviewer Agent 已实现（`harness/agents/reviewer.py`，测试 `tests/test_reviewer_agent.py`）；Repair Agent 未实现。前置已完成：输出 guardrail（同 turn 修复）、issue 账本（`review_issue_events`、人工决定优先、action 不再每轮重置）、issue API。本篇固定两个 agent 与现有规则审校、修复循环的接口，避免「模型 issue」与「规则 issue」各走一套。
 
 ## 1. 原则
 

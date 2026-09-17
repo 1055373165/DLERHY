@@ -20,9 +20,19 @@ RUN_REQUEST_KEY = "run_request"
 TERMINOLOGY_STAGE = "terminology"
 TERMINOLOGY_MODES: tuple[str, ...] = ("sampled", "thorough", "skip")
 DEFAULT_TERMINOLOGY_MODE = "sampled"
+MODEL_REVIEW_STAGE = "model_review"
+MODEL_REVIEW_MODES: tuple[str, ...] = ("sampled", "full", "skip")
+DEFAULT_MODEL_REVIEW_MODE = "sampled"
 # Agent stages: pipeline stage key -> agent kind executed as an AGENT work item.
-AGENT_STAGES: dict[str, str] = {TERMINOLOGY_STAGE: "terminology"}
-FULL_PIPELINE_STAGES: tuple[str, ...] = (TERMINOLOGY_STAGE, "translate", "review", "bilingual_html", "merged_html")
+AGENT_STAGES: dict[str, str] = {TERMINOLOGY_STAGE: "terminology", MODEL_REVIEW_STAGE: "reviewer"}
+FULL_PIPELINE_STAGES: tuple[str, ...] = (
+    TERMINOLOGY_STAGE,
+    "translate",
+    MODEL_REVIEW_STAGE,
+    "review",
+    "bilingual_html",
+    "merged_html",
+)
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
 
 
@@ -39,6 +49,8 @@ class RunPlan:
     max_auto_followup_attempts: int | None = None
     # How the terminology agent samples the book: sampled | thorough | skip.
     terminology_mode: str = DEFAULT_TERMINOLOGY_MODE
+    # How much of the translation the Reviewer Agent reads: sampled | full | skip.
+    model_review_mode: str = DEFAULT_MODEL_REVIEW_MODE
 
     def includes(self, stage: str) -> bool:
         return stage in self.stages
@@ -61,15 +73,22 @@ def run_request(status_detail_json: Mapping[str, Any] | None) -> dict[str, Any]:
     return dict(request) if isinstance(request, Mapping) else {}
 
 
+def _mode(value: Any, allowed: tuple[str, ...], default: str) -> str:
+    mode = str(value or default).strip().lower()
+    return mode if mode in allowed else default
+
+
 def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[str, Any] | None) -> RunPlan:
     run_type = DocumentRunType(run_type)
     request = run_request(status_detail_json)
     if run_type == DocumentRunType.TRANSLATE_FULL:
-        mode = str(request.get("terminology") or DEFAULT_TERMINOLOGY_MODE).strip().lower()
-        if mode not in TERMINOLOGY_MODES:
-            mode = DEFAULT_TERMINOLOGY_MODE
-        stages = FULL_PIPELINE_STAGES if mode != "skip" else tuple(s for s in FULL_PIPELINE_STAGES if s != TERMINOLOGY_STAGE)
-        return RunPlan(run_type=run_type, stages=stages, terminology_mode=mode)
+        mode = _mode(request.get("terminology"), TERMINOLOGY_MODES, DEFAULT_TERMINOLOGY_MODE)
+        review_mode = _mode(request.get("model_review"), MODEL_REVIEW_MODES, DEFAULT_MODEL_REVIEW_MODE)
+        skipped = {TERMINOLOGY_STAGE} if mode == "skip" else set()
+        if review_mode == "skip":
+            skipped.add(MODEL_REVIEW_STAGE)
+        stages = tuple(stage for stage in FULL_PIPELINE_STAGES if stage not in skipped)
+        return RunPlan(run_type=run_type, stages=stages, terminology_mode=mode, model_review_mode=review_mode)
     if run_type == DocumentRunType.TRANSLATE_TARGETED:
         packet_ids = [str(packet_id) for packet_id in request.get("packet_ids") or [] if str(packet_id)]
         return RunPlan(

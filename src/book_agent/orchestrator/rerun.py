@@ -47,7 +47,7 @@ def style_hints_for_issue(issue: ReviewIssue) -> tuple[str, ...]:
     prompt_guidance = str(evidence.get("prompt_guidance") or "").strip()
     matched_target_excerpt = str(evidence.get("matched_target_excerpt") or "").strip()
     if issue.issue_type != "STYLE_DRIFT":
-        return ()
+        return _model_review_hints(issue)
     hints: list[str] = []
     if preferred_hint:
         if style_rule:
@@ -64,6 +64,23 @@ def style_hints_for_issue(issue: ReviewIssue) -> tuple[str, ...]:
             hints.append(f"Rerun guidance [{style_rule}]: {prompt_guidance}")
         else:
             hints.append(f"Rerun guidance: {prompt_guidance}")
+    return tuple(hints)
+
+
+def _model_review_hints(issue: ReviewIssue) -> tuple[str, ...]:
+    """Reviewer Agent findings carry an explanation and often a corrected sentence."""
+    evidence = issue.evidence_json or {}
+    if evidence.get("reason") != "model_review":
+        return ()
+    explanation = str(evidence.get("explanation") or "").strip()
+    suggestion = str(evidence.get("suggested_target_text") or "").strip()
+    source_text = str(evidence.get("source_text") or "").strip()
+    hints: list[str] = []
+    if explanation:
+        subject = f" in \"{source_text[:160]}\"" if source_text else ""
+        hints.append(f"Reviewer found {issue.issue_type}{subject}: {explanation}")
+    if suggestion:
+        hints.append(f"Reviewer's suggested rendering (adapt, do not copy blindly): {suggestion}")
     return tuple(hints)
 
 

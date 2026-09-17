@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import AgentTurnStatus
+from book_agent.harness.agents.reviewer import AGENT_KIND as ReviewerAgent_KIND
+from book_agent.harness.agents.reviewer import ReviewerAgent
 from book_agent.harness.agents.terminology import AGENT_KIND as TerminologyAgent_KIND
 from book_agent.harness.agents.terminology import TerminologyAgent
 from book_agent.harness.kernel.openai_model import agent_model_for_worker
@@ -640,6 +642,7 @@ class DocumentRunExecutor:
                             "agent_kind": agent_kind,
                             "stage": stage_key,
                             "terminology_mode": plan.terminology_mode,
+                            "model_review_mode": plan.model_review_mode,
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
                     },
@@ -745,6 +748,8 @@ class DocumentRunExecutor:
     def _agent_tools(self, agent_kind: str):
         if agent_kind == TerminologyAgent_KIND:
             return TerminologyAgent.registry(), TerminologyAgent.policy()
+        if agent_kind == ReviewerAgent_KIND:
+            return ReviewerAgent.registry(), ReviewerAgent.policy()
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
 
     def _start_agent_turn(
@@ -767,6 +772,16 @@ class DocumentRunExecutor:
                 model_name=model_name,
                 extraction_client=extraction_client,
                 mode=str(input_bundle.get("terminology_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == ReviewerAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = ReviewerAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("model_review_mode") or "sampled"),
                 run_id=run_id,
                 work_item_id=work_item_id,
             )
