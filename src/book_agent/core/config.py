@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     # "disabled" (development, tests) or "api_key": every API call except
     # /health and /meta needs a key; documents are scoped to the key's org.
     auth_mode: str = "disabled"
+    # OIDC (with auth_mode=api_key): bearer JWTs from this issuer are accepted
+    # alongside API keys. The org claim names an existing organisation; the
+    # role claim is viewer/editor/admin (oidc_default_role when absent).
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_org_claim: str = "org"
+    oidc_role_claim: str = "book_agent_role"
+    oidc_default_role: str | None = None
     # Server paths POST /documents/bootstrap may read when auth is on or in prod.
     # The upload root is always allowed.
     bootstrap_source_roots: Annotated[list[Path], NoDecode] = Field(default_factory=list)
@@ -247,6 +256,10 @@ def validate_app_scope(settings: Settings) -> None:
         )
     if settings.auth_mode.strip().lower() not in {"disabled", "api_key"}:
         raise AppScopeViolation(f"auth_mode must be 'disabled' or 'api_key' (got {settings.auth_mode!r}).")
+    if settings.oidc_issuer and not settings.oidc_audience:
+        raise AppScopeViolation("oidc_issuer needs oidc_audience: tokens minted for other clients must not be accepted.")
+    if settings.oidc_default_role and settings.oidc_default_role not in {"viewer", "editor", "admin"}:
+        raise AppScopeViolation("oidc_default_role must be viewer, editor or admin.")
     if settings.app_scope == AppScope.PROD and not settings.auth_enabled:
         raise AppScopeViolation(
             "app_scope=prod refuses auth_mode=disabled; set BOOK_AGENT_AUTH_MODE=api_key and create a key "

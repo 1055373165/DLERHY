@@ -20,6 +20,7 @@ dependencies = [
   "pymupdf>=1.27.2",
   "httpx>=0.28.1",
   "cryptography>=42.0,<46.0",
+  "pyjwt[crypto]>=2.9,<3.0",
 ]
 
 # Development tools live in a dependency group so a plain `uv sync` (which

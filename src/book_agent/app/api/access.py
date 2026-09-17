@@ -3,6 +3,8 @@
 With ``auth_mode=api_key`` every API route except ``/health`` and ``/meta``
 depends on ``enforce_access``:
 
+- with ``oidc_issuer`` set, a bearer JWT from that issuer works too
+  (``services/oidc.py``: org and role come from token claims);
 - the key comes from ``Authorization: Bearer <key>`` or ``X-API-Key``; the
   run event stream also accepts ``?access_token=`` because EventSource
   cannot send headers;
@@ -44,6 +46,8 @@ class Principal:
     role: str
     key_id: str | None = None
     auth_enabled: bool = True
+    # OIDC subject when the caller presented a token instead of an API key.
+    subject: str | None = None
 
     def allows(self, role: str) -> bool:
         return _ROLE_RANK[self.role] >= _ROLE_RANK[role]
@@ -111,6 +115,22 @@ def _document_org(session: Session, request: Request) -> list[str | None]:
     return orgs
 
 
+def _authenticate(session: Session, settings, presented: str) -> Principal:
+    from book_agent.services.oidc import OidcError, looks_like_jwt, verifier_for
+
+    verifier = verifier_for(settings)
+    if verifier is not None and looks_like_jwt(presented):
+        try:
+            identity = verifier.verify(session, presented)
+        except OidcError as exc:
+            raise _unauthorized(str(exc)) from exc
+        return Principal(org_id=identity.org_id, role=identity.role, subject=identity.subject)
+    key = ApiKeyService(session).authenticate(presented)
+    if key is None:
+        raise _unauthorized("invalid or revoked API key")
+    return Principal(org_id=key.org_id, role=key.role, key_id=key.id)
+
+
 def enforce_access(request: Request, session: Session = Depends(get_db_session)) -> Principal:
     settings = get_settings()
     if not settings.auth_enabled:
@@ -120,10 +140,7 @@ def enforce_access(request: Request, session: Session = Depends(get_db_session))
     presented = _presented_key(request)
     if not presented:
         raise _unauthorized("API key required")
-    key = ApiKeyService(session).authenticate(presented)
-    if key is None:
-        raise _unauthorized("invalid or revoked API key")
-    principal = Principal(org_id=key.org_id, role=key.role, key_id=key.id)
+    principal = _authenticate(session, settings, presented)
     needed = required_role(request)
     if not principal.allows(needed):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"this action needs the {needed} role")
