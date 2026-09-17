@@ -1,6 +1,6 @@
 # 04 · 设计评审：解析版本分叉（parse-revision forking）
 
-> 状态：H1 设计评审稿（2026-09-17），供 H2 实施。对应 `03-roadmap.md` 已确认决策第 1 条。目标是让「重解析 / 结构修改」成为可重复、可回滚、不丢译文的操作，同时给 Structure Agent 一个可安全落笔的工作区。
+> 状态：H1 设计评审稿（2026-09-17），供 H2 实施。**H2 已实施句子级分叉**（见文末「§9 实施记录」）；块级与章级分叉留给 H3 Structure Agent。对应 `03-roadmap.md` 已确认决策第 1 条。目标是让「重解析 / 结构修改」成为可重复、可回滚、不丢译文的操作，同时给 Structure Agent 一个可安全落笔的工作区。
 
 ## 1. 现状与约束（来自 03/07 篇）
 
@@ -67,3 +67,20 @@ revision_links   (new): object_type, from_object_id, to_object_id  （issue / ap
 - 单测：句子对齐纯函数（same/split/merge/moved 各一组）；fork 事务失败回滚；搬运译文与 packet 状态。
 - 集成：RSI 测试书解析两次（第二次故意改一条启发式）→ fork → same ≥ 97%，导出内容不变。
 - 性能：600 页书 fork < 60s（对齐是 O(N) 哈希 + 局部相似度）。
+
+## 9. 实施记录（H2，2026-09-17）
+
+实现的是**句子级分叉**，覆盖了登记簿里的实际缺陷：结构刷新改了块文本却从不重建句子（`refresh_sentences_stale` 只打标记）。
+
+| 设计项 | 实现 | 与设计的差异 |
+|---|---|---|
+| 新 parse revision | `ParseRevisionForkService.resegment_blocks` 打开新版本，旧 ACTIVE 版本置 SUPERSEDED；元数据记录原因与统计 | 活动版本用 `status=ACTIVE` 表示，没有新增 `documents.active_parse_revision_id` 列 |
+| 句子退役 | `sentences.retired_by_revision_id`；唯一约束改为只约束未退役行（部分唯一索引，迁移 0037） | 退役标记是列而不是 `SentenceStatus.RETIRED`，避免与翻译状态混用 |
+| 句子对齐 | `domain/structure/sentence_alignment.py` 纯函数：same（归一化相等或相似度 ≥0.92 且长度差 ≤15%）/ split / merge / removed；写 `sentence_lineage` | 与设计一致 |
+| 译文搬运 | 受影响 packet 原地重建（`TargetedRebuildService.rebuild_packets`），最新译文复制为新 attempt，same 句子的对齐重映射；全部覆盖则 TRANSLATED，否则 BUILT 待重译 | 仅以 packet 为单位搬运；只作上下文引用该句的相邻 packet 也会被重建并得到一个复制 attempt |
+| issue 投影 | 退役句子上的非人工 issue 以「parse revision vN 退役」解决，review 在新句子上重新检测；人工决定的 issue 不动，列入 `human_decided_issue_ids` 待重新确认 | 没有 `revision_links` 表；lineage 足以追溯 |
+| 读侧 | 所有按文档/章节/块读取句子的查询都排除退役句子（bootstrap、review、export、术语、BOOK 工具、文档统计） | — |
+| 接入 | REPARSE_* 动作在 PDF 刷新后执行分叉并立即重译 BUILT 的 packet；`refresh_pdf_structure` / `refresh_epub_structure` 之后也执行分叉；审计行与 `document.reparsed` 事件 | 刷新服务本身的锚点匹配逻辑未改 |
+
+未做（有意留到 H3）：块级分叉（新增/拆分块获得新 id 与新 packet；目前新增块若不在任何 packet 的块范围内，会列入 `unpacketed_block_ids` 并由 review 报 OMISSION，run 失败而不是静默丢失）、章级分叉、Structure Agent 的结构编辑回放、dry-run 统计脚本。
+

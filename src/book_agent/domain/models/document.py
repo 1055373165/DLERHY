@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -113,8 +113,21 @@ class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A source sentence. Sentences are never rewritten when a block is re-segmented:
+    the parse-revision fork retires them (``retired_by_revision_id``) and inserts
+    a new set; ``sentence_lineage`` links the two. Readers use active sentences only."""
+
     __tablename__ = "sentences"
-    __table_args__ = (UniqueConstraint("block_id", "ordinal_in_block", name="uq_sentences_block_ordinal"),)
+    __table_args__ = (
+        Index(
+            "uq_sentences_block_ordinal_active",
+            "block_id",
+            "ordinal_in_block",
+            unique=True,
+            postgresql_where=text("retired_by_revision_id IS NULL"),
+            sqlite_where=text("retired_by_revision_id IS NULL"),
+        ),
+    )
 
     block_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
@@ -151,6 +164,39 @@ class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=SentenceStatus.PENDING,
     )
     active_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    retired_by_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="SET NULL"),
+    )
+
+
+class SentenceLineage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """How a retired sentence maps onto the sentences of the revision that replaced it."""
+
+    __tablename__ = "sentence_lineage"
+    __table_args__ = (
+        CheckConstraint("relation IN ('same', 'split', 'merge', 'removed')", name="ck_sentence_lineage_relation"),
+        Index("idx_sentence_lineage_from", "from_sentence_id"),
+        Index("idx_sentence_lineage_to", "to_sentence_id"),
+    )
+
+    parse_revision_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    from_sentence_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("sentences.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    to_sentence_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("sentences.id", ondelete="CASCADE"),
+    )
+    # same | split | merge | removed
+    relation: Mapped[str] = mapped_column(Text, nullable=False)
+    similarity: Mapped[float | None] = mapped_column(Numeric(4, 3))
 
 
 class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

@@ -17,6 +17,7 @@ from book_agent.orchestrator.rerun import (
     style_hints_for_issue,
 )
 from book_agent.services.context_compile import ChapterContextCompileOptions
+from book_agent.services.parse_revision_fork import ParseRevisionForkService
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshArtifacts, PdfStructureRefreshService
 from book_agent.services.realign import RealignService
 from book_agent.services.rebuild import TargetedRebuildArtifacts, TargetedRebuildService
@@ -45,12 +46,14 @@ class RerunService:
         realign_service: RealignService,
         pdf_structure_refresh_service: PdfStructureRefreshService | None = None,
         export_gate_revalidator: Callable[[str], None] | None = None,
+        parse_revision_fork: ParseRevisionForkService | None = None,
     ):
         self.ops_repository = ops_repository
         # Re-runs the export gate checks for a chapter (without raising). The
         # review pass does not own export-time issues, so a follow-up for one
         # of them is validated by the check that created it.
         self.export_gate_revalidator = export_gate_revalidator
+        self.parse_revision_fork = parse_revision_fork
         self.translation_service = translation_service
         self.review_service = review_service
         self.targeted_rebuild_service = targeted_rebuild_service
@@ -106,8 +109,21 @@ class RerunService:
                     else None
                 ),
             )
-            self.ops_repository.session.expire_all()
+            self.ops_repository.session.flush()
             packet_ids = []
+            if self.parse_revision_fork is not None:
+                # Blocks whose text changed get a new sentence set; their packets are
+                # rebuilt with carried translations and whatever is left is retranslated.
+                fork = self.parse_revision_fork.resegment_blocks(
+                    issue_document_id,
+                    reason=f"reparse action for issue {issue_id}",
+                )
+                structure_refresh_artifacts.parse_revision_fork = fork
+                packet_ids = list(fork.retranslate_packet_ids)
+                for packet_id in packet_ids:
+                    artifacts = self.translation_service.execute_packet(packet_id, auto_commit_memory=False)
+                    translation_run_ids.append(artifacts.translation_run.id)
+            self.ops_repository.session.expire_all()
         else:
             rebuild_artifacts = self.targeted_rebuild_service.apply(issue.id, effective_rerun_plan)
             packet_ids = (

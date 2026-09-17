@@ -122,7 +122,7 @@ class BootstrapRepository:
             )
         ).all()
         sentences = self.session.scalars(
-            select(Sentence).where(Sentence.document_id == document_id)
+            select(Sentence).where(Sentence.document_id == document_id, Sentence.retired_by_revision_id.is_(None))
         ).all()
         memory_snapshots = self.session.scalars(
             select(MemorySnapshot).where(MemorySnapshot.document_id == document_id)

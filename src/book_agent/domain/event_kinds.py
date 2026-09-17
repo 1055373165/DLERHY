@@ -33,6 +33,8 @@ PACKET_FAILED: Final = "packet.failed"
 TRANSLATION_OUTPUT_REJECTED: Final = "translation.output.rejected"
 # A sentence's translation was edited in place of a retranslation (new attempt).
 TRANSLATION_SEGMENT_EDITED: Final = "translation.segment.edited"
+# A parse-revision fork re-segmented blocks (new sentences, carried translations).
+DOCUMENT_REPARSED: Final = "document.reparsed"
 
 # --- LLM calls ---------------------------------------------------------------
 LLM_CALL_STARTED: Final = "llm.call.started"
@@ -81,6 +83,7 @@ EVENT_KINDS: frozenset[str] = frozenset(
         PACKET_TRANSLATED,
         TRANSLATION_OUTPUT_REJECTED,
         TRANSLATION_SEGMENT_EDITED,
+        DOCUMENT_REPARSED,
         PACKET_FAILED,
         LLM_CALL_STARTED,
         LLM_CALL_COMPLETED,

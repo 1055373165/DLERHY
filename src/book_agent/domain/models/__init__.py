@@ -1,6 +1,15 @@
 from book_agent.infra.db.base import Base, install_enum_check_constraints
 from book_agent.domain.models.agent import AgentItem, AgentTurn, Approval, Decision
-from book_agent.domain.models.document import Block, BookProfile, Chapter, Document, DocumentImage, MemorySnapshot, Sentence
+from book_agent.domain.models.document import (
+    Block,
+    BookProfile,
+    Chapter,
+    Document,
+    DocumentImage,
+    MemorySnapshot,
+    Sentence,
+    SentenceLineage,
+)
 from book_agent.domain.models.parse_revision import DocumentParseRevision, DocumentParseRevisionArtifact
 from book_agent.domain.models.ops import (
     ArtifactInvalidation,
@@ -57,6 +66,7 @@ __all__ = [
     "ReviewIssue",
     "ReviewIssueEvent",
     "Sentence",
+    "SentenceLineage",
     "TargetSegment",
     "TermEntry",
     "TranslationPacket",

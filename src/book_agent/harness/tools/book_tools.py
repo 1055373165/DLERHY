@@ -76,6 +76,7 @@ def count_term_occurrences(ctx: ToolContext, term: str) -> int:
     rows = ctx.session.execute(
         select(Sentence.source_text).where(
             Sentence.document_id == ctx.document_id,
+            Sentence.retired_by_revision_id.is_(None),
             Sentence.translatable.is_(True),
             func.lower(Sentence.source_text).like(f"%{term.lower()}%"),
         )
@@ -88,13 +89,13 @@ def search_book(ctx: ToolContext, args: SearchBookArgs) -> dict[str, Any]:
     rows = ctx.session.execute(
         select(Sentence.id, Sentence.block_id, Sentence.source_text, Chapter.ordinal, Chapter.title_src)
         .join(Chapter, Chapter.id == Sentence.chapter_id)
-        .where(Sentence.document_id == ctx.document_id, func.lower(Sentence.source_text).like(pattern))
+        .where(Sentence.document_id == ctx.document_id, Sentence.retired_by_revision_id.is_(None), func.lower(Sentence.source_text).like(pattern))
         .order_by(Chapter.ordinal, Sentence.created_at)
         .limit(args.limit)
     ).all()
     total = ctx.session.scalar(
         select(func.count(Sentence.id)).where(
-            Sentence.document_id == ctx.document_id, func.lower(Sentence.source_text).like(pattern)
+            Sentence.document_id == ctx.document_id, Sentence.retired_by_revision_id.is_(None), func.lower(Sentence.source_text).like(pattern)
         )
     ) or 0
     return {

@@ -498,7 +498,7 @@ class DocumentQueryService:
             return {}
         rows = self.session.execute(
             select(Sentence.document_id, func.count(Sentence.id))
-            .where(Sentence.document_id.in_(document_ids))
+            .where(Sentence.document_id.in_(document_ids), Sentence.retired_by_revision_id.is_(None))
             .group_by(Sentence.document_id)
         ).all()
         return {str(document_id): int(count) for document_id, count in rows}

@@ -131,7 +131,11 @@ class ReviewRepository:
             raise ValueError(f"Document not found: {chapter.document_id}")
 
         sentences = self.session.scalars(
-            select(Sentence).where(Sentence.chapter_id == chapter_id)
+            select(Sentence)
+            .join(Block, Block.id == Sentence.block_id)
+            .where(Sentence.chapter_id == chapter_id, Sentence.retired_by_revision_id.is_(None))
+            # Reading order; without it the row order depended on the query plan.
+            .order_by(Block.ordinal, Sentence.ordinal_in_block)
         ).all()
         blocks = self.session.scalars(
             select(Block)

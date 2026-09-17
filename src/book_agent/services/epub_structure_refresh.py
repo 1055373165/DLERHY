@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -55,6 +56,8 @@ class EpubStructureRefreshArtifacts:
     invalidated_block_count: int
     skipped_chapter_count: int
     skipped_block_count: int
+    # Set when the refresh was followed by a sentence-level parse-revision fork.
+    parse_revision_fork: Any = None
 
 
 class EpubStructureRefreshService:

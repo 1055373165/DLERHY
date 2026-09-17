@@ -76,6 +76,8 @@ class PdfStructureRefreshArtifacts:
     # packets, translations and alignment edges, so these blocks need a
     # packet rebuild and retranslation before their translations are trusted.
     stale_sentence_block_ids: list[str] = field(default_factory=list)
+    # Set when the refresh was followed by a sentence-level parse-revision fork.
+    parse_revision_fork: Any = None
 
 
 class PdfStructureRefreshService:

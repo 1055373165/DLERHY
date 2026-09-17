@@ -304,6 +304,7 @@ class TermConsistencyService:
             .join(Sentence, Sentence.id == AlignmentEdge.sentence_id)
             .where(
                 Sentence.document_id == document_id,
+                Sentence.retired_by_revision_id.is_(None),
                 TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
             )
             .order_by(TargetSegment.chapter_id, TargetSegment.ordinal, Sentence.ordinal_in_block)

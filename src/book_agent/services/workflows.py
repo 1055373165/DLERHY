@@ -53,6 +53,7 @@ from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
 from book_agent.services.actions import IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts
+from book_agent.services.parse_revision_fork import ParseRevisionForkService
 from book_agent.services.epub_structure_refresh import (
     EpubStructureRefreshArtifacts,
     EpubStructureRefreshService,
@@ -115,6 +116,11 @@ class DocumentWorkflowService:
             session,
             self.bootstrap_repository,
         )
+        self.parse_revision_fork = ParseRevisionForkService(
+            session,
+            bootstrap_repository=self.bootstrap_repository,
+            rebuild_service=self.targeted_rebuild_service,
+        )
         self.rerun_service = RerunService(
             self.ops_repository,
             self.translation_service,
@@ -123,6 +129,7 @@ class DocumentWorkflowService:
             RealignService(self.ops_repository),
             self.pdf_structure_refresh_service,
             export_gate_revalidator=self._revalidate_export_gate,
+            parse_revision_fork=self.parse_revision_fork,
         )
         self.memory_proposals = ChapterMemoryProposalService(session, self.memory_service)
         self.issue_queries = IssueQueries(session)
@@ -181,7 +188,11 @@ class DocumentWorkflowService:
         *,
         chapter_ids: list[str] | None = None,
     ) -> PdfStructureRefreshArtifacts:
-        return self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        artifacts = self.pdf_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
+            document_id, reason="pdf structure refresh"
+        )
+        return artifacts
 
     def refresh_epub_structure(
         self,
@@ -189,7 +200,13 @@ class DocumentWorkflowService:
         *,
         chapter_ids: list[str] | None = None,
     ) -> EpubStructureRefreshArtifacts:
-        return self.epub_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        artifacts = self.epub_structure_refresh_service.refresh_document(document_id, chapter_ids=chapter_ids)
+        artifacts.parse_revision_fork = self.parse_revision_fork.resegment_blocks(
+            document_id,
+            block_ids=[*artifacts.refreshed_block_ids, *artifacts.created_block_ids, *artifacts.invalidated_block_ids],
+            reason="epub structure refresh",
+        )
+        return artifacts
 
     def get_document_summary(self, document_id: str) -> DocumentSummary:
         return self.documents.get_document_summary(document_id)

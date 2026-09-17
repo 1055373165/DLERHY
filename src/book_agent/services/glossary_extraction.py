@@ -276,7 +276,11 @@ class GlossaryExtractionService:
             payload, _usage = self._extract_chunk(document_id, chunk, chapter_title=None, chapter_id=None, chunk_index=index)
             proposals.extend(self._proposals_from_payload(payload))
         source_texts = [text for (text,) in self.session.execute(
-            select(Sentence.source_text).where(Sentence.document_id == document_id, Sentence.translatable.is_(True))
+            select(Sentence.source_text).where(
+                Sentence.document_id == document_id,
+                Sentence.translatable.is_(True),
+                Sentence.retired_by_revision_id.is_(None),
+            )
         ) if _normalize_space(text)]
         suggestions, _dropped = merge_proposals(
             proposals, source_texts, aligned_targets=self._aligned_translations(document_id)
@@ -326,6 +330,7 @@ class GlossaryExtractionService:
                 Block.chapter_id == chapter_id,
                 Block.block_type.in_(_PROSE_BLOCK_TYPES),
                 Sentence.translatable.is_(True),
+                Sentence.retired_by_revision_id.is_(None),
             )
             .order_by(Block.ordinal, Sentence.ordinal_in_block)
         )
@@ -338,6 +343,7 @@ class GlossaryExtractionService:
             .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
             .where(
                 Sentence.document_id == document_id,
+                Sentence.retired_by_revision_id.is_(None),
                 TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
             )
         )
