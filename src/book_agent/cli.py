@@ -101,6 +101,11 @@ def build_parser() -> argparse.ArgumentParser:
     api_key.add_argument("--role", choices=["viewer", "editor", "admin"], default="admin")
     api_key.add_argument("--org", default="default", help="Organisation name; created if missing")
 
+    subparsers.add_parser(
+        "mcp",
+        help="Serve book-agent's read and reversible tools over MCP (stdio) for Claude Code, Codex and other clients",
+    )
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -115,6 +120,12 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     session_factory = build_session_factory(database_url=args.database_url or settings.database_url)
     export_root = args.export_root or str(settings.export_root)
+
+    if args.command == "mcp":
+        from book_agent.mcp.server import McpServer
+
+        McpServer(session_factory).serve()
+        return 0
 
     with session_scope(session_factory) as session:
         if args.command == "create-api-key":

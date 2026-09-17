@@ -74,7 +74,8 @@
 
 ## H4 · 平台化（持续）
 
-- [ ] MCP server：暴露 ToolRegistry 的只读与可逆工具，供 Claude Code / Codex 驱动运维与调参；Agent Client Protocol 视需要。
+- [x] MCP server：暴露 ToolRegistry 的只读与可逆工具，供 Claude Code / Codex 驱动运维与调参；Agent Client Protocol 视需要。
+  - 实现（2026-09-17）：`book-agent mcp`（`src/book_agent/mcp/server.py`，无新依赖的 stdio JSON-RPC 实现），13 个工具，见 `06-mcp-server.md`。不暴露不可逆与花钱的操作；直连数据库、不经 API 鉴权，只适合运维机器。Agent Client Protocol 未做。
 - [ ] 鉴权与多租户（R1）：API key / OIDC、org 表、按 org 的预算与凭据。
   - 进度（2026-09-17）：API key 与 org 已完成（迁移 0039：`orgs`、`api_keys`（只存 sha256）、`documents.org_id`，同一文件可在不同 org 各导入一次）。`BOOK_AGENT_AUTH_MODE=api_key` 时除 `/health`、`/meta` 外所有 API 需 key（`Authorization: Bearer` 或 `X-API-Key`，事件流另收 `access_token` 查询参数）；角色 viewer/editor/admin；路径中的 document/run/issue/approval/action/export 与请求体中的 document 都校验 org，跨 org 一律 404；prod scope 拒绝关闭鉴权。`POST /documents/bootstrap` 只读上传目录与 `BOOK_AGENT_BOOTSTRAP_SOURCE_ROOTS`；provider `base_url` 解析到私网/回环/链路本地地址时拒绝（可用 `BOOK_AGENT_PROVIDER_ALLOW_PRIVATE_HOSTS` 放开）。`/v1/api-keys` 管理接口与 ``book-agent create-api-key``；前端侧栏可填 key。未做：OIDC、按 org 的 provider 凭据与预算（凭据仍是实例级、仅 admin 可管理）、`last_used_at` 只在写请求时落库。
 - [ ] Evals harness：`evals/` 目录 + CLI，每次发布跑翻译/审校/结构/导出四类 eval，结果连同 harness 配置写入 manifest。

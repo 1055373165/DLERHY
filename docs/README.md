@@ -38,3 +38,4 @@
 |---|---|
 | [refactor/PLAN.md](refactor/PLAN.md) | 2026-09-14 起的 P0–P4 重构计划与完成状态 |
 | [refactor/baseline-tests.md](refactor/baseline-tests.md) | 测试基线（数字已过期，见 09 篇 §1.1） |
+- [agent-upgrade/06-mcp-server.md](agent-upgrade/06-mcp-server.md) — MCP server: connecting Claude Code / Codex, tool list, safety boundary
