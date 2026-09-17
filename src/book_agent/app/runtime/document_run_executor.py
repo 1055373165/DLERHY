@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from book_agent.core.ids import stable_id
 from book_agent.core.run_context import bind_run_context
 from book_agent.domain.enums import AgentTurnStatus
+from book_agent.harness.agents.repair import AGENT_KIND as RepairAgent_KIND
+from book_agent.harness.agents.repair import RepairAgent, remaining_blockers
 from book_agent.harness.agents.reviewer import AGENT_KIND as ReviewerAgent_KIND
 from book_agent.harness.agents.reviewer import ReviewerAgent
 from book_agent.harness.agents.terminology import AGENT_KIND as TerminologyAgent_KIND
@@ -699,6 +701,7 @@ class DocumentRunExecutor:
                 registry=registry,
                 policy=policy,
                 lease_check=_lease_check,
+                tool_extras={"workflow_factory": self._workflow_service},
             )
             try:
                 outcome = runner.run(turn_id)
@@ -709,6 +712,14 @@ class DocumentRunExecutor:
                 raise
             if outcome.status == AgentTurnStatus.FAILED:
                 raise RuntimeError(f"agent turn {turn_id} failed: {outcome.stop_reason}")
+            if outcome.status == AgentTurnStatus.SUCCEEDED and agent_kind == RepairAgent_KIND:
+                with session_scope(self.session_factory) as session:
+                    left = remaining_blockers(session, str(input_bundle.get("document_id") or ""))
+                if left:
+                    raise RuntimeError(
+                        f"Document still has unresolved blocking review issues after the repair agent: {left} remaining "
+                        f"(turn {turn_id})."
+                    )
             return {
                 "document_id": str(input_bundle.get("document_id") or ""),
                 "agent_kind": agent_kind,
@@ -750,6 +761,8 @@ class DocumentRunExecutor:
             return TerminologyAgent.registry(), TerminologyAgent.policy()
         if agent_kind == ReviewerAgent_KIND:
             return ReviewerAgent.registry(), ReviewerAgent.policy()
+        if agent_kind == RepairAgent_KIND:
+            return RepairAgent.registry(), RepairAgent.policy()
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
 
     def _start_agent_turn(
@@ -784,6 +797,12 @@ class DocumentRunExecutor:
                 mode=str(input_bundle.get("model_review_mode") or "sampled"),
                 run_id=run_id,
                 work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == RepairAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = RepairAgent(session).start_turn(
+                document_id=document_id, model_name=model_name, run_id=run_id, work_item_id=work_item_id
             )
             return seed.turn_id
         raise RuntimeError(f"unknown agent kind: {agent_kind}")
@@ -940,6 +959,8 @@ class DocumentRunExecutor:
     ) -> None:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
         repairs_blockers = plan.review_repairs_blockers if plan is not None else True
+        # With the Repair Agent planned, blockers rule repair leaves are its job.
+        hands_off_to_repair_agent = plan is not None and plan.includes("repair")
         next_stage = self._next_stage_label(plan, "review") if plan is not None else "bilingual_html"
 
         def _run_review() -> dict[str, Any]:
@@ -1006,9 +1027,10 @@ class DocumentRunExecutor:
                     "blocker_repair_round_limit": repair_result.round_limit,
                     "blocker_repair_execution_count": len(repair_result.executions),
                     "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                    "handed_to_repair_agent": bool(remaining_blocking_issue_count and hands_off_to_repair_agent),
                 }
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
-            if remaining_blocking_issue_count > 0:
+            if remaining_blocking_issue_count > 0 and not hands_off_to_repair_agent:
                 self._update_pipeline_stage(
                     run_id,
                     "review",
@@ -1923,7 +1945,8 @@ class DocumentRunExecutor:
             session.scalar(
                 select(func.count(WorkItem.id)).where(
                     WorkItem.run_id == run_id,
-                    WorkItem.stage.in_([WorkItemStage.REVIEW, WorkItemStage.EXPORT]),
+                    # Agent turns (the Repair Agent) re-open and retranslate packets too.
+                    WorkItem.stage.in_([WorkItemStage.REVIEW, WorkItemStage.EXPORT, WorkItemStage.AGENT]),
                     WorkItem.status.in_([WorkItemStatus.LEASED, WorkItemStatus.RUNNING]),
                 )
             )

@@ -252,7 +252,11 @@ class IssueLedgerTests(unittest.TestCase):
         self.assertEqual([event["kind"] for event in detail.json()["events"]], ["opened"])
         self.assertEqual(len(detail.json()["actions"]), 1)
 
+        action_id = detail.json()["actions"][0]["id"]
         wontfix = client.post(f"/v1/issues/{issue['id']}/wontfix", json={"actor_id": "editor", "note": "keep"})
+        refused = client.post(f"/v1/actions/{action_id}/execute")
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("wontfix", refused.json()["detail"])
         self.assertEqual(wontfix.status_code, 200)
         self.assertEqual((wontfix.json()["status"], wontfix.json()["decided_by"]), ("wontfix", "human:editor"))
         self.assertEqual(client.post(f"/v1/issues/{issue['id']}/triage", json={"actor_id": "editor"}).status_code, 409)

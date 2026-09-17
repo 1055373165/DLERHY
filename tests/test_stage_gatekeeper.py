@@ -124,12 +124,13 @@ class StageGateKeeperTests(unittest.TestCase):
         self.assertEqual(STAGE_DEPENDENCIES["terminology"], ())
         self.assertEqual(STAGE_DEPENDENCIES["model_review"], ("translate",))
         self.assertEqual(STAGE_DEPENDENCIES["review"], ("translate", "model_review"))
+        self.assertEqual(STAGE_DEPENDENCIES["repair"], ("review",))
         self.assertEqual(
-            STAGE_DEPENDENCIES["bilingual_html"], ("translate", "review"),
+            STAGE_DEPENDENCIES["bilingual_html"], ("translate", "review", "repair"),
         )
         self.assertEqual(
             STAGE_DEPENDENCIES["merged_html"],
-            ("translate", "review", "bilingual_html"),
+            ("translate", "review", "repair", "bilingual_html"),
         )
 
     # --- gate rejection scenarios --------------------------------------

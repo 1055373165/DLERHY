@@ -42,8 +42,10 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     # repair loops then handle rule and model issues together.
     "model_review": ("translate",),
     "review": ("translate", "model_review"),
-    "bilingual_html": ("translate", "review"),
-    "merged_html": ("translate", "review", "bilingual_html"),
+    # Opt-in: only runs that plan it wait for it.
+    "repair": ("review",),
+    "bilingual_html": ("translate", "review", "repair"),
+    "merged_html": ("translate", "review", "repair", "bilingual_html"),
 }
 # Other export types (standalone export runs) follow translation and review.
 _DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")

@@ -45,9 +45,9 @@ from book_agent.domain.models.ops import StageTransition, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 
 
-PIPELINE_STAGES = ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html")
+PIPELINE_STAGES = ("terminology", "translate", "model_review", "review", "repair", "bilingual_html", "merged_html")
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.
-AGENT_STAGE_KINDS: dict[str, str] = {"terminology": "terminology", "model_review": "reviewer"}
+AGENT_STAGE_KINDS: dict[str, str] = {"terminology": "terminology", "model_review": "reviewer", "repair": "repair"}
 
 # Stage classification (spec Phase 2). A *required* stage must reach
 # ``SUCCEEDED`` before the run can reach ``SUCCEEDED`` / ``SUCCEEDED_WITH_WARNINGS``;

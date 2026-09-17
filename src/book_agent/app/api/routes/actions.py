@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.app.api.deps import get_db_session
 from book_agent.schemas.workflow import ExecuteActionResponse
+from book_agent.services.actions import ActionNotExecutable
 from book_agent.services.workflows import DocumentWorkflowService
 
 router = APIRouter()
@@ -21,6 +22,8 @@ def execute_action(
             export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
             translation_worker=request.app.state.resolve_translation_worker(),
         ).execute_action(action_id, run_followup=run_followup)
+    except ActionNotExecutable as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     review_artifacts = result.rerun_execution.review_artifacts if result.rerun_execution else None

@@ -169,7 +169,12 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
 
 
     def test_translate_full_requires_every_pipeline_stage(self) -> None:
-        self.assertEqual(plan_for_run("translate_full", {}).required_stages, frozenset(PIPELINE_STAGES))
+        # The repair agent stage is opt-in; every other pipeline stage is required by default.
+        self.assertEqual(plan_for_run("translate_full", {}).required_stages, frozenset(PIPELINE_STAGES) - {"repair"})
+        self.assertEqual(
+            plan_for_run("translate_full", {"run_request": {"repair_agent": "on"}}).required_stages,
+            frozenset(PIPELINE_STAGES),
+        )
         self.assertEqual(plan_for_run("translate_targeted", {}).required_stages, REQUIRED_PIPELINE_STAGES)
 
     def test_failed_review_fails_run_when_review_is_required(self) -> None:

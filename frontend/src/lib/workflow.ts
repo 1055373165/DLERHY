@@ -54,6 +54,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     description: "处理导出前必须解决的 blocker。",
   },
   {
+    key: "repair",
+    label: "修复代理",
+    description: "（可选）规则修复后仍阻断的问题交给修复代理：重译、最小改写或申请人工判定不修复。",
+  },
+  {
     key: "bilingual_html",
     label: "双语导出",
     description: "生成逐章双语结果供精校使用。",

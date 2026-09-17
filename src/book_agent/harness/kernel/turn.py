@@ -183,6 +183,9 @@ class AgentTurnRunner:
     ) -> TurnOutcome | None:
         """Run one tool call; returns an outcome when the turn must stop (approval)."""
         ctx = self._tool_context(session, turn)
+        if approved_by is not None:
+            # Handlers that record a decision (e.g. mark_wontfix) attribute it to the approver.
+            ctx.extras["approved_by"] = approved_by
         tool = self.registry.get(call.name)
         if tool is None:
             self._record_result(session, ledger, turn, call, ToolOutcome(ok=False, error=f"unknown tool: {call.name}"))
