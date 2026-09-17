@@ -24,6 +24,8 @@
 
 验收：全部 golden 通过；新增 `test_llm_call_accounting`（任意路径的调用都有事件与成本）；kill -9 恢复测试；PG 并发测试进 CI。
 
+**H0 收口记录（2026-09-17）**：提交 `d88fdfa` → `fee6e47` 共 8 个。逐文件全套 112 个测试文件通过（本机 `scripts/run_tests_per_file.sh`），前端 tsc / vitest 通过，PostgreSQL 16 上迁移到 `20260917_0034` 并回退验证。覆盖验收项：golden 4 套通过；`test_llm_call_accounting` 与 `test_run_usage_accounting`；PG 并发/漂移/事件/SSE 测试进 CI（`BOOK_AGENT_RUN_PG_TESTS=1`）。未单独补的：模拟 kill -9 的端到端恢复测试（现有 `test_executor_reclaims_expired_leases_before_stage_progression` 与 `test_runtime_recovery` 覆盖租约过期回收与暂停恢复，进程级重启场景留到 H1 的 agent turn 恢复测试一起做）；`ruff format` 全库重排；公开前历史清洗待操作者决定时机。
+
 ## H1 · Harness kernel + 第一个 agent（约 4 周）
 
 目标：AgentTurn 成为 work item；ToolRegistry、权限、审批、trace 落地；Terminology Agent 上线并可度量。
