@@ -106,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Serve book-agent's read and reversible tools over MCP (stdio) for Claude Code, Codex and other clients",
     )
 
+    evaluate = subparsers.add_parser("eval", help="Run the release evals (evals/README.md) and write a report")
+    evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
+    evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -120,6 +124,25 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     session_factory = build_session_factory(database_url=args.database_url or settings.database_url)
     export_root = args.export_root or str(settings.export_root)
+
+    if args.command == "eval":
+        from datetime import datetime, timezone
+
+        from book_agent.evals.runner import REPO_ROOT, run_evals
+
+        output = Path(args.output) if args.output else REPO_ROOT / "evals" / "reports" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        try:
+            report = run_evals(args.suite, output_dir=output, settings=settings)
+        except ValueError as exc:
+            parser.error(str(exc))
+        _dump(
+            {
+                "output": str(output),
+                "passed": report["passed"],
+                "suites": {suite["suite"]: {"passed": suite["passed"], "metrics": suite["metrics"]} for suite in report["suites"]},
+            }
+        )
+        return 0 if report["passed"] else 1
 
     if args.command == "mcp":
         from book_agent.mcp.server import McpServer

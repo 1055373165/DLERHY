@@ -35,3 +35,6 @@ frontend/.omc/
 # Personal Claude Code state
 .claude/settings.local.json
 .claude/*.lock
+
+# eval reports (book-agent eval)
+evals/reports/

@@ -1,0 +1,55 @@
+{
+  "title": "Momentum Trading Field Guide",
+  "author": "Eval Fixture",
+  "locked_terms": [
+    {
+      "source_term": "relative strength index",
+      "target_term": "相对强弱指数",
+      "variants": [
+        "RSI指标"
+      ]
+    },
+    {
+      "source_term": "moving average",
+      "target_term": "移动平均线",
+      "variants": [
+        "均线"
+      ]
+    },
+    {
+      "source_term": "stop loss",
+      "target_term": "止损",
+      "variants": []
+    },
+    {
+      "source_term": "breakout",
+      "target_term": "突破",
+      "variants": []
+    },
+    {
+      "source_term": "position sizing",
+      "target_term": "仓位管理",
+      "variants": []
+    }
+  ],
+  "chapters": [
+    {
+      "title": "Reading Momentum",
+      "paragraphs": [
+        "The relative strength index measures how quickly prices have moved.",
+        "Traders compare the relative strength index with a simple moving average before acting.",
+        "A breakout above resistance is more convincing when volume expands.",
+        "Every breakout needs a stop loss placed below the prior swing low."
+      ]
+    },
+    {
+      "title": "Managing Risk",
+      "paragraphs": [
+        "Position sizing decides how much capital each trade may risk.",
+        "A trailing stop loss follows the moving average as the trend develops.",
+        "When the relative strength index diverges from price, reduce position sizing.",
+        "Failed breakouts are common in quiet markets, so keep every stop loss tight."
+      ]
+    }
+  ]
+}
