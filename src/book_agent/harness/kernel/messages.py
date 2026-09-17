@@ -79,11 +79,37 @@ def assemble_messages(items: list[AgentItem]) -> list[dict[str, Any]]:
         # tool_call / approval_request / approval_result items are bookkeeping;
         # the model only ever sees the resulting tool_result.
     flush_images()
+    conversation = _order_tool_messages(conversation)
     messages = list(system_messages)
     if compaction is not None:
         messages.append(compaction)
     messages.extend(conversation)
     return messages
+
+
+def _order_tool_messages(conversation: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tool messages after an assistant message in the order of its tool calls.
+
+    Calls that waited for approval finish after later calls of the same step,
+    so ledger order is not call order.
+    """
+    ordered: list[dict[str, Any]] = []
+    index = 0
+    while index < len(conversation):
+        message = conversation[index]
+        ordered.append(message)
+        index += 1
+        if message.get("role") != "assistant" or not message.get("tool_calls"):
+            continue
+        run_end = index
+        while run_end < len(conversation) and conversation[run_end].get("role") == "tool":
+            run_end += 1
+        position = {call["id"]: order for order, call in enumerate(message["tool_calls"])}
+        ordered.extend(
+            sorted(conversation[index:run_end], key=lambda tool: position.get(tool.get("tool_call_id"), len(position)))
+        )
+        index = run_end
+    return ordered
 
 
 def estimate_tokens(text: str) -> int:

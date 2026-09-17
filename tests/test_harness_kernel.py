@@ -213,7 +213,7 @@ class HarnessKernelTests(unittest.TestCase):
             self.assertEqual(decisions["term:agent"].value_json, {"target_term": "智能体"})
             self.assertEqual(decisions["term:agent"].turn_id, turn_id)
 
-    def test_calls_after_the_one_waiting_for_approval_run_once_it_is_decided(self) -> None:
+    def test_a_step_files_its_approvals_together_and_resumes_once_all_are_decided(self) -> None:
         model = _FakeModel(
             [
                 AgentStep(
@@ -232,14 +232,17 @@ class HarnessKernelTests(unittest.TestCase):
         turn_id = self._new_turn()
         runner = self._runner(model)
         self.assertEqual(runner.run(turn_id).status, AgentTurnStatus.AWAITING_APPROVAL)
-        self.assertEqual(self.lookups, ["agent"])
-        for expected_term in ("智能体", "框架"):
-            with self.session_factory() as session:
-                (pending,) = AgentLedgerRepository(session).list_approvals(self.document_id, status=ApprovalStatus.PENDING)
-                self.assertEqual(pending.payload_json["arguments"]["target_term"], expected_term)
-                ApprovalService(session).decide(pending.id, approved=True, decided_by="reviewer:alice")
-                session.commit()
-            outcome = runner.run(turn_id)
+        # Calls that need no approval ran; both approvals were filed together.
+        self.assertEqual(self.lookups, ["agent", "harness"])
+        with self.session_factory() as session:
+            pending = AgentLedgerRepository(session).list_approvals(self.document_id, status=ApprovalStatus.PENDING)
+            self.assertEqual({p.payload_json["arguments"]["target_term"] for p in pending}, {"框架", "智能体"})
+            ApprovalService(session).decide(pending[0].id, approved=True, decided_by="reviewer:alice")
+            session.commit()
+            self.assertEqual(AgentLedgerRepository(session).get_turn(turn_id).status, AgentTurnStatus.AWAITING_APPROVAL)
+            ApprovalService(session).decide(pending[1].id, approved=True, decided_by="reviewer:alice")
+            session.commit()
+        outcome = runner.run(turn_id)
         self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
         self.assertEqual(self.lookups, ["agent", "harness"])
         self.assertEqual(self.locks, [("agent", "智能体"), ("harness", "框架")])

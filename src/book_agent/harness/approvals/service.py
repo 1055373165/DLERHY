@@ -17,6 +17,17 @@ class ApprovalService:
         self.session = session
         self.ledger = AgentLedgerRepository(session)
 
+    def _pending_for_turn(self, turn_id: str) -> bool:
+        from sqlalchemy import func, select
+
+        from book_agent.domain.models.agent import Approval
+
+        return bool(
+            self.session.scalar(
+                select(func.count(Approval.id)).where(Approval.turn_id == turn_id, Approval.status == ApprovalStatus.PENDING)
+            )
+        )
+
     def decide(self, approval_id: str, *, approved: bool, decided_by: str, note: str | None = None) -> Approval:
         """Record the decision and put the owning turn back to RUNNING.
 
@@ -65,7 +76,8 @@ class ApprovalService:
                     turn.status = AgentTurnStatus.CANCELLED
                     turn.stop_reason = "budget_extension_rejected"
                     turn.finished_at = datetime.now(timezone.utc)
-            elif turn.status == AgentTurnStatus.AWAITING_APPROVAL:
+            elif turn.status == AgentTurnStatus.AWAITING_APPROVAL and not self._pending_for_turn(turn.id):
+                # A step files all its approval requests at once; the turn resumes when the last is decided.
                 turn.status = AgentTurnStatus.RUNNING
                 turn.stop_reason = None
             self.session.flush()

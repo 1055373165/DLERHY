@@ -175,16 +175,18 @@ class AgentTurnRunner:
             if not step.tool_calls:
                 self._finish(session, ledger, turn, status=AgentTurnStatus.SUCCEEDED, final_text=step.text)
                 return self._outcome(turn)
+            # Every call of the step is started: those needing approval file their requests
+            # together, so a person decides them as one batch and the turn resumes once.
+            halted: TurnOutcome | None = None
             for call in step.tool_calls:
                 tool_item = ledger.append_item(
                     turn.id,
                     kind=AgentItemKind.TOOL_CALL,
                     content={"call_id": call.call_id, "name": call.name, "arguments": call.arguments},
                 )
-                halted = self._execute_call(session, ledger, turn, call, tool_item)
-                if halted is not None:
-                    return halted
-            return None
+                outcome = self._execute_call(session, ledger, turn, call, tool_item)
+                halted = halted or outcome
+            return self._outcome(turn) if halted is not None else None
 
     # --- tool execution -----------------------------------------------------
 
@@ -378,6 +380,7 @@ class AgentTurnRunner:
         # waited; they never started. Run them now, in order, so every call the model made gets a
         # result (providers reject a conversation with unanswered tool calls).
         last_assistant = next((item for item in reversed(items) if item.kind == AgentItemKind.ASSISTANT), None)
+        halted: TurnOutcome | None = None
         if last_assistant is not None:
             started = {str(item.content_json.get("call_id")) for item in items if item.kind == AgentItemKind.TOOL_CALL}
             for raw in (last_assistant.content_json or {}).get("tool_calls") or []:
@@ -390,10 +393,8 @@ class AgentTurnRunner:
                     kind=AgentItemKind.TOOL_CALL,
                     content={"call_id": call.call_id, "name": call.name, "arguments": call.arguments},
                 )
-                halted = self._execute_call(session, ledger, turn, call, tool_item)
-                if halted is not None:
-                    return halted
-        return None
+                halted = halted or self._execute_call(session, ledger, turn, call, tool_item)
+        return self._outcome(turn) if halted is not None else None
 
     # --- budget / compaction / finish ----------------------------------------
 
