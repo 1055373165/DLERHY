@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for the M3 modality pipeline orchestrator (TATR-c)."""
 
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -23,7 +22,6 @@ from book_agent.services.modality_pipeline import (
     enhance_parsed_document,
 )
 from book_agent.services.tatr_extractor import (
-    PageTableExtractionRequest,
     TatrCell,
     TatrTable,
     TatrTableExtractor,

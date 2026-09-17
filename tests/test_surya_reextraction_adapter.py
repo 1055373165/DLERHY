@@ -7,7 +7,6 @@ deterministically. We use a tiny real PDF (the clean_book golden fixture)
 only so the subset-PDF construction step has real bytes to slice.
 """
 
-import os
 import sys
 import tempfile
 import unittest

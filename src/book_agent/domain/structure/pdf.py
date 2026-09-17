@@ -2550,7 +2550,7 @@ class PdfStructureRecoveryService:
 
         # Validate column count similarity via separators
         def _count_columns(text: str) -> int:
-            lines = [l for l in text.splitlines() if l.strip()]
+            lines = [line for line in text.splitlines() if line.strip()]
             if not lines:
                 return 0
             counts: list[int] = []

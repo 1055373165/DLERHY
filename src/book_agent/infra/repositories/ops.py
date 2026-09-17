@@ -6,7 +6,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ChapterStatus, IssueStatus, PacketSentenceRole, PacketStatus
-from book_agent.domain.models import ArtifactInvalidation, Chapter, Sentence
+from book_agent.domain.models import ArtifactInvalidation, Chapter
 from book_agent.domain.models.ops import AuditEvent
 from book_agent.domain.models.review import IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationPacket, TranslationRun

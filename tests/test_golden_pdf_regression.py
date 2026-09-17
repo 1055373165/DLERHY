@@ -15,7 +15,6 @@ structure layer (PyMuPDFTextExtractor → PdfStructureRecoveryService)
 which is the layer M1/M2 actually changed.
 """
 
-import os
 import sys
 import tempfile
 import unittest
@@ -27,7 +26,6 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.domain.structure.models import (
-    PROVENANCE_OCR,
     PROVENANCE_TEXT_LAYER,
     TRANSLATE_ALL,
     TRANSLATE_NONE,

@@ -6,7 +6,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
     ActorType,
-    ArtifactStatus,
     LockLevel,
     MemoryProposalStatus,
     MemoryScopeType,

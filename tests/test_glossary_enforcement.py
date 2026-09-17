@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for M2.7 glossary adherence post-validator."""
 
-import os
 import sys
 import unittest
 from dataclasses import dataclass

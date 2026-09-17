@@ -9,15 +9,15 @@ from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-logger = logging.getLogger(__name__)
-
+from book_agent.domain.document_titles import compose_document_title
 from book_agent.domain.structure.models import (
     ParsedBlock,
     ParsedChapter,
     ParsedDocument,
     derive_translatability,
 )
-from book_agent.domain.document_titles import compose_document_title
+
+logger = logging.getLogger(__name__)
 
 _CONTAINER_PATH = "META-INF/container.xml"
 _CONTAINER_NS = {"container": "urn:oasis:names:tc:opendocument:xmlns:container"}

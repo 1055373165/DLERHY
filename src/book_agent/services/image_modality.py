@@ -102,7 +102,6 @@ def enhance_document_image_modality(
     Returns the rewritten document and a summary suitable for emission
     to telemetry / review UI.
     """
-    summary = ImageEnhancementSummary()
     images_protected = 0
     captions_re_enabled = 0
     alt_filled = 0

@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for M2.5 document-level terminology mining."""
 
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -18,7 +17,7 @@ from book_agent.domain.structure.models import (
     ParsedChapter,
     ParsedDocument,
 )
-from book_agent.services.terminology_miner import TermCandidate, mine_terms
+from book_agent.services.terminology_miner import mine_terms
 
 
 def _mk_block(

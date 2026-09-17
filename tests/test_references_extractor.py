@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for M3.1 references modality."""
 
-import os
 import sys
 import unittest
 from pathlib import Path

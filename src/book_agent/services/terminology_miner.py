@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Final, Iterable
+from typing import Final
 
 from book_agent.domain.structure.models import (
     TRANSLATE_ALL,

@@ -16,7 +16,7 @@ if str(SRC) not in sys.path:
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import DocumentStatus, SourceType
-from book_agent.domain.models import Block, Chapter, Document, Sentence
+from book_agent.domain.models import Document
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory

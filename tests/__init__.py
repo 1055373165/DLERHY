@@ -40,5 +40,8 @@ os.environ["BOOK_AGENT_SECRET_KEY"] = "dGVzdC1vbmx5LWZlcm5ldC1rZXktMzItYnl0ZXMhI
 _PROJECT_TMP_ROOT = Path(tempfile.mkdtemp(prefix=f"pytest-{os.getpid()}-", dir=_ensure_dir(ROOT / ".test-tmp")))
 os.environ["TMPDIR"] = str(_PROJECT_TMP_ROOT)
 tempfile.tempdir = str(_PROJECT_TMP_ROOT)
+# Parse-IR sidecars default to the repo's artifacts/parse-ir; keep test output
+# inside the per-process directory so test runs never write into the checkout.
+os.environ.setdefault("BOOK_AGENT_PARSE_IR_ROOT", str(_PROJECT_TMP_ROOT / "parse-ir"))
 atexit.register(shutil.rmtree, _PROJECT_TMP_ROOT, ignore_errors=True)
 

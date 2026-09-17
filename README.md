@@ -246,8 +246,11 @@ uv run book-agent export    --document-id <DOCUMENT_ID> --export-type merged_mar
 ## 🧑‍💻 Development
 
 ```bash
-# Full test suite
-uv run pytest
+# Full test suite: one interpreter per test file (the supported way; also what CI runs)
+scripts/run_tests_per_file.sh
+
+# A few files while iterating
+uv run pytest tests/test_export_golden.py tests/test_cli.py
 
 # Lint
 uv run ruff check src/ tests/

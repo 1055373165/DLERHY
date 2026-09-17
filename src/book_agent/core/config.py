@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     )
     docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
+    # Canonical parse-IR sidecars (one directory per document / parser version).
+    parse_ir_root: Path = Path("artifacts/parse-ir")
     upload_root: Path = Path("artifacts/uploads")
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"

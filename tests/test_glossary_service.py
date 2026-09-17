@@ -5,7 +5,6 @@ import os
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,7 +23,6 @@ from book_agent.domain.enums import (
     LockLevel,
     SourceType,
     TermStatus,
-    TermType,
 )
 from book_agent.domain.models import Document
 from book_agent.infra.db.base import Base

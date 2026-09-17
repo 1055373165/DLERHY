@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "refactor/**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: book_agent
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d book_agent"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      BOOK_AGENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:55432/book_agent
+      BOOK_AGENT_RUN_PG_TESTS: "1"
+      BOOK_AGENT_TRANSLATION_BACKEND: echo
+      BOOK_AGENT_SECRET_KEY: dGVzdC1vbmx5LWZlcm5ldC1rZXktMzItYnl0ZXMhISE=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check src tests
+      - name: Migrate the CI database to head
+        run: uv run alembic upgrade head
+      - name: Golden snapshots
+        run: >-
+          PYTHON="uv run python" scripts/run_tests_per_file.sh
+          tests/test_workflow_golden.py tests/test_export_golden.py
+          tests/test_translation_prompt_golden.py tests/test_pdf_structure_golden.py
+      - name: Unit and integration tests (one process per file)
+        run: PYTHON="uv run python" PARALLEL=4 scripts/run_tests_per_file.sh
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: .test-tmp/reports
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build

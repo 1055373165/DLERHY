@@ -144,10 +144,15 @@ class UvSuryaOcrRunner:
         return command
 
     def _runtime_env(self) -> dict[str, str]:
+        # The OCR stack is fetched by `uv run --with ...`; its cache must
+        # outlive the process, so it lives under the user's cache directory
+        # (XDG_CACHE_HOME or ~/.cache) rather than the temp directory, which
+        # re-downloaded gigabytes per boot and piled up under the test tempdir.
         env = os.environ.copy()
         uv_cache_dir = env.get("UV_CACHE_DIR")
         if not uv_cache_dir:
-            uv_cache_dir = str((Path(tempfile.gettempdir()) / "book-agent-uv-cache").resolve())
+            cache_home = env.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+            uv_cache_dir = str((Path(cache_home) / "book-agent" / "uv").resolve())
             env["UV_CACHE_DIR"] = uv_cache_dir
         Path(uv_cache_dir).mkdir(parents=True, exist_ok=True)
         return env

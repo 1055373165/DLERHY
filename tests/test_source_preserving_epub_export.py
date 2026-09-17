@@ -26,7 +26,7 @@ from book_agent.domain.enums import (
     SentenceStatus,
     TargetSegmentStatus,
 )
-from book_agent.domain.models import Chapter, Document, Sentence
+from book_agent.domain.models import Chapter, Document
 from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory

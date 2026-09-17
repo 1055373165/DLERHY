@@ -28,8 +28,7 @@ because its inputs are page images + PDF coordinates, not text strings.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Final, Protocol
 
 from book_agent.services.table_extractor import (

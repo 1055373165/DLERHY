@@ -17,7 +17,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from book_agent.domain.enums import DocumentStatus, SourceType
-from book_agent.domain.models import Chapter, Document
+from book_agent.domain.models import Document
 from book_agent.domain.structure.models import (
     TRANSLATE_ALL,
     TRANSLATE_NONE,

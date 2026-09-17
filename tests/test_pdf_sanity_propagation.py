@@ -8,7 +8,6 @@ suite drives `PdfStructureRecoveryService._build_chapters` with fabricated
 resulting `ParsedBlock.provenance` reflects the verdict.
 """
 
-import os
 import sys
 import unittest
 from pathlib import Path

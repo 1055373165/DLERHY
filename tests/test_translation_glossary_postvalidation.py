@@ -17,7 +17,6 @@ import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,7 +39,6 @@ from book_agent.domain.models.ops import Event
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.translation import (
-    TranslationPacketBundle,
     TranslationRepository,
 )
 from book_agent.services.glossary_service import GlossaryService
