@@ -45,3 +45,19 @@
   color: var(--red, #d33);
   font-family: var(--font-cjk);
 }
+
+.statement {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-family: var(--font-cjk);
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.statement:hover {
+  color: var(--text-accent);
+}

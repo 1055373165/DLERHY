@@ -221,6 +221,43 @@ class ProviderRoutesTests(_Db):
         )
 
 
+    def test_usage_statement_lists_each_book_and_is_readable_only_by_the_org_and_instance_admins(self) -> None:
+        first = self._queued_run(self.other_org_id)
+        second = self._queued_run(self.other_org_id)
+        elsewhere = self._queued_run(DEFAULT_ORG_ID)
+        with self.session_factory() as session:
+            for run_id, usd, tokens in ((first, 1.5, 1000), (first, 0.5, 500), (second, 0.25, 100), (elsewhere, 9.0, 9)):
+                emit_event(
+                    session,
+                    kind=LLM_CALL_COMPLETED,
+                    run_id=run_id,
+                    payload={"call_kind": "translate", "cost_usd": usd, "token_in": tokens, "token_out": tokens // 10},
+                )
+            emit_event(session, kind=LLM_CALL_COMPLETED, run_id=second, payload={"call_kind": "translate", "token_in": 7})
+            session.commit()
+
+        statement = self.client.get("/v1/orgs/current/usage", headers=self._h("acme_editor"))
+        self.assertEqual(statement.status_code, 200, statement.text)
+        body = statement.json()
+        self.assertEqual((body["org_name"], body["cost_usd"], body["call_count"], body["unpriced_call_count"]), ("acme", 2.25, 4, 1))
+        self.assertEqual([line["cost_usd"] for line in body["documents"]], [2.0, 0.25])
+        self.assertEqual(body["documents"][0]["token_in"], 1500)
+        self.assertEqual(body["documents"][0]["title"], "Tenancy")
+        budget = self.client.get("/v1/orgs/current/budget", headers=self._h("acme_editor")).json()
+        self.assertEqual(budget["spent_usd"], body["cost_usd"])
+
+        csv_body = self.client.get("/v1/orgs/current/usage?format=csv", headers=self._h("acme_editor"))
+        self.assertEqual(csv_body.status_code, 200)
+        self.assertIn("TOTAL", csv_body.text)
+        self.assertEqual(len(csv_body.text.strip().splitlines()), 4)
+
+        other = f"/v1/orgs/{DEFAULT_ORG_ID}/usage"
+        self.assertEqual(self.client.get(other, headers=self._h("acme_admin")).status_code, 403)
+        self.assertEqual(self.client.get(f"/v1/orgs/{self.other_org_id}/usage", headers=self._h("admin")).json()["cost_usd"], 2.25)
+        self.assertEqual(self.client.get("/v1/orgs/current/usage?month=2020-01", headers=self._h("acme_editor")).json()["call_count"], 0)
+        self.assertEqual(self.client.get("/v1/orgs/current/usage?month=bad", headers=self._h("acme_editor")).status_code, 422)
+
+
 class BudgetEnforcementTests(_Db):
     def test_spend_counts_this_months_run_calls_of_the_organisation_only(self) -> None:
         mine = self._queued_run(self.other_org_id)

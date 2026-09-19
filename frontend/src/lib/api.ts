@@ -881,6 +881,13 @@ export async function downloadDocumentExport(
   return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
 }
 
+/** This month's model usage of the caller's organisation, per book, as CSV. */
+export async function downloadUsageStatement(month?: string): Promise<string> {
+  const query = month ? `&month=${encodeURIComponent(month)}` : "";
+  const response = await requestBinary(`/orgs/current/usage?format=csv${query}`);
+  return saveBinaryResponse(response, `usage-${month ?? "current"}.csv`);
+}
+
 export async function downloadChapterExport(
   documentId: string,
   chapterId: string
