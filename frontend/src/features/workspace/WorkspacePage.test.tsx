@@ -42,7 +42,7 @@ interface ChapterState {
   }>;
 }
 
-function installFetchMock() {
+function installFetchMock(options: { document?: Record<string, unknown> } = {}) {
   const chapterState: Record<string, ChapterState> = {
     "ch-1": {
       proposalStatus: "proposed",
@@ -449,6 +449,7 @@ function installFetchMock() {
         bilingual_export_ready: true,
       },
     ],
+    ...options.document,
   };
 
   const runPayload = {
@@ -853,6 +854,34 @@ describe("Workspace page", () => {
     expect(screen.getByText("上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "回到首页上传新书" })).not.toBeInTheDocument();
     expect(window.localStorage.getItem(STORAGE_KEY_DOCUMENT)).toBeNull();
+  });
+
+  it("offers reading the Chinese version once the book is exported", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    installFetchMock({ document: { merged_export_ready: true, status: "exported" } });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const link = await screen.findByRole("link", { name: "阅读中文版" });
+    expect(link).toHaveAttribute("href", "/library/doc-123/read");
+  });
+
+  it("does not offer reading before there is a Chinese version", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    installFetchMock();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", { name: "回到首页上传新书" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "阅读中文版" })).not.toBeInTheDocument();
   });
 
   it("loads a pasted web page link as a document", async () => {

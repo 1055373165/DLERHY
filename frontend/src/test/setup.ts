@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { configure } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { queryClient } from "../app/queryClient";
@@ -26,7 +26,11 @@ Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Unmount first, then drop queries still in flight: otherwise a mounted page refetches, or an
+  // answer still on its way lands in the next test's cache.
+  cleanup();
+  await queryClient.cancelQueries();
   queryClient.clear();
   window.localStorage.clear();
   vi.restoreAllMocks();

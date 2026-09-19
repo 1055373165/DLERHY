@@ -18,6 +18,7 @@ import {
   pipelineStageLabel,
   pipelineStepsFor,
   preferredTitle,
+  readerPath,
   stageStatus,
   statusLabel,
   translateProgress,
@@ -49,6 +50,7 @@ export function RunsPage() {
   const progress = translateProgress(currentDocument, currentRun);
   const pct = Math.round(progress.ratio * 100);
   const stopNote = stopReasonNote(currentRun?.status, currentRun?.stop_reason);
+  const readPath = readerPath(currentDocument);
 
   async function handleAction() {
     try {
@@ -117,6 +119,11 @@ export function RunsPage() {
 
             {/* Action bar */}
             <div className={s.actionBar}>
+              {readPath && (
+                <Link className="btn btn-primary" to={readPath}>
+                  阅读中文版
+                </Link>
+              )}
               <button
                 className="btn"
                 disabled={action.disabled || runActionPending}

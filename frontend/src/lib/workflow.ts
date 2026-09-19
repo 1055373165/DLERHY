@@ -363,6 +363,12 @@ export function nextMilestoneText(
   return "当前还没有可下载结果，系统会继续推进后续阶段。";
 }
 
+/** Where to read the Chinese version, once there is one to read. */
+export function readerPath(document: DocumentSummary | null | undefined): string | null {
+  if (!document?.merged_export_ready) return null;
+  return `/library/${encodeURIComponent(document.document_id)}/read`;
+}
+
 export function documentBadge(
   document: DocumentSummary | null | undefined,
   run: DocumentRunSummary | null | undefined

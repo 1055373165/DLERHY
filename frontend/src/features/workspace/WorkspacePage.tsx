@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
@@ -12,6 +13,7 @@ import {
   formatNumber,
   getPrimaryRunAction,
   preferredTitle,
+  readerPath,
   sourceLabel,
   statusLabel,
 } from "../../lib/workflow";
@@ -173,6 +175,7 @@ export function WorkspacePage() {
   }
 
   /* ── Derived ── */
+  const readPath = readerPath(doc);
   const detail = currentChapterReviewDetail;
   const proposals = detail?.memory_proposals?.pending_proposals ?? [];
   const timeline = detail?.timeline ?? [];
@@ -271,6 +274,11 @@ export function WorkspacePage() {
           <div className={s.docHeaderTop}>
             <h1 className={s.docTitle}>{preferredTitle(doc)}</h1>
             <div className={s.docHeaderAside}>
+              {readPath && (
+                <Link className="btn btn-primary btn-sm" to={readPath}>
+                  阅读中文版
+                </Link>
+              )}
               <StatusBadge label={badge.label} tone={badge.tone} />
               <button className={`btn btn-sm ${s.homeButton}`} onClick={handleReturnHome}>
                 回到首页上传新书
