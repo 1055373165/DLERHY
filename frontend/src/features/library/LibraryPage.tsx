@@ -1,6 +1,6 @@
 import { useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -22,6 +22,7 @@ const DOWNLOAD_OPTIONS = [
   { key: "zh-html", label: "中文版 · HTML", exportType: "merged_html", packaging: "single", enabled: true },
   { key: "zh-epub", label: "中文版 · EPUB", exportType: "merged_html", packaging: "epub", enabled: true },
   { key: "zh-md", label: "中文版 · Markdown", exportType: "merged_markdown", packaging: "single", enabled: true },
+  { key: "zh-pdf", label: "中文版 · PDF", exportType: "rebuilt_pdf", packaging: "single", enabled: true },
   { key: "bi-html", label: "中英文对照版 · HTML", exportType: "bilingual_html", packaging: "single", enabled: true },
 ] as const;
 
@@ -246,6 +247,11 @@ export function LibraryPage() {
                       <button className="btn btn-sm" onClick={() => void handleOpen(entry.document_id)}>
                         打开
                       </button>
+                      {entry.merged_export_ready ? (
+                        <Link className="btn btn-sm" to={`/library/${entry.document_id}/read`}>
+                          阅读
+                        </Link>
+                      ) : null}
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
                           className="btn btn-sm"

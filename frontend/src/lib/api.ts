@@ -817,7 +817,7 @@ async function saveBinaryResponse(response: Response, fallbackName: string): Pro
   return filename;
 }
 
-export type DocumentDownloadType = "merged_html" | "bilingual_html" | "merged_markdown" | "review_package";
+export type DocumentDownloadType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "review_package";
 
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"]);
 
@@ -838,21 +838,19 @@ async function waitForRunToFinish(
   }
 }
 
-/**
- * Download the latest export of a document. Downloads only serve existing
- * exports, so when none exists yet an export run is enqueued and awaited first.
- */
-export type DownloadPackage = "single" | "zip" | "epub";
+export type DownloadPackage = "single" | "zip" | "epub" | "preview";
 
-export async function downloadDocumentExport(
+type ExportFetchOptions = { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage };
+
+/**
+ * The latest export of a document. Downloads only serve existing (and current)
+ * exports, so when there is none an export run is enqueued and awaited first.
+ */
+async function fetchDocumentExport(
   documentId: string,
   exportType: DocumentDownloadType,
-  {
-    pollIntervalMs = 2000,
-    timeoutMs = 10 * 60 * 1000,
-    packaging = "single",
-  }: { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage } = {}
-): Promise<string> {
+  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000, packaging = "single" }: ExportFetchOptions = {}
+): Promise<Response> {
   const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
     exportType
   )}&package=${packaging}`;
@@ -872,14 +870,41 @@ export async function downloadDocumentExport(
   if (!response.ok) {
     throw await parseError(response);
   }
+  return response;
+}
+
+/** Download the latest export of a document (exporting it first when needed). */
+export async function downloadDocumentExport(
+  documentId: string,
+  exportType: DocumentDownloadType,
+  options: ExportFetchOptions = {}
+): Promise<string> {
+  const packaging = options.packaging ?? "single";
+  const response = await fetchDocumentExport(documentId, exportType, options);
   const fallbackExtension: Record<DocumentDownloadType, string> = {
     merged_markdown: ".md",
     merged_html: ".html",
     bilingual_html: ".html",
+    rebuilt_pdf: ".pdf",
     review_package: ".zip",
   };
   const extension = packaging === "epub" ? ".epub" : packaging === "zip" ? ".zip" : fallbackExtension[exportType];
   return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
+}
+
+export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf";
+
+/** An export for reading in the app: HTML or Markdown text, or the PDF bytes (exporting first when needed). */
+export async function previewDocumentExport(
+  documentId: string,
+  exportType: ReadableExportType,
+  options: Omit<ExportFetchOptions, "packaging"> = {}
+): Promise<{ kind: "html" | "markdown"; text: string } | { kind: "pdf"; blob: Blob }> {
+  const response = await fetchDocumentExport(documentId, exportType, { ...options, packaging: "preview" });
+  if (exportType === "rebuilt_pdf") {
+    return { kind: "pdf", blob: await response.blob() };
+  }
+  return { kind: exportType === "merged_markdown" ? "markdown" : "html", text: await response.text() };
 }
 
 /** This month's model usage of the caller's organisation, per book, as CSV. */
