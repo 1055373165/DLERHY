@@ -71,6 +71,12 @@ function englishWords(): string[] {
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     for (const word of node.textContent?.match(/[A-Za-z]{2,}/g) ?? []) words.add(word);
   }
+  // Screen readers read these aloud, and tooltips show them.
+  for (const element of document.body.querySelectorAll("[aria-label], [title], [placeholder]")) {
+    for (const name of ["aria-label", "title", "placeholder"]) {
+      for (const word of element.getAttribute(name)?.match(/[A-Za-z]{2,}/g) ?? []) words.add(word);
+    }
+  }
   return [...words].filter((word) => !ALLOWED.has(word));
 }
 

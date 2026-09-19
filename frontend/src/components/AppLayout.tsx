@@ -106,7 +106,7 @@ export function AppLayout() {
       <button
         className={s.backdrop}
         type="button"
-        aria-label="Close navigation"
+        aria-label="关闭导航"
         onClick={() => setNavOpen(false)}
       />
 
@@ -172,7 +172,7 @@ export function AppLayout() {
             className={s.mobileToggle}
             type="button"
             onClick={() => setNavOpen((o) => !o)}
-            aria-label="Toggle navigation"
+            aria-label="打开或关闭导航"
           >
             {navOpen ? "\u2715" : "\u2630"}
           </button>

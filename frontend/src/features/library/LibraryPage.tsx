@@ -170,7 +170,7 @@ export function LibraryPage() {
             <input
               className={s.searchInput}
               type="search"
-              placeholder="搜索书名、作者、路径或 ID…"
+              placeholder="搜索书名、作者或文件名…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -179,7 +179,7 @@ export function LibraryPage() {
                 type="button"
                 className={s.searchClear}
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
+                aria-label="清空搜索"
               >
                 ×
               </button>
@@ -302,7 +302,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page <= 1}
                   onClick={() => goTo(1)}
-                  aria-label="First page"
+                  aria-label="第一页"
                 >
                   «
                 </button>
@@ -345,7 +345,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page >= pageCount}
                   onClick={() => goTo(pageCount)}
-                  aria-label="Last page"
+                  aria-label="最后一页"
                 >
                   »
                 </button>

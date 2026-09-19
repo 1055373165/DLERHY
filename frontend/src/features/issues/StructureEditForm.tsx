@@ -141,7 +141,7 @@ function BlockInput({ id, value, options, onChange }: { id: string; value: strin
   const listId = `${id}-options`;
   return (
     <>
-      <input id={id} className={s.input} list={listId} value={value} onChange={(event) => onChange(event.target.value)} placeholder="block id" />
+      <input id={id} className={s.input} list={listId} value={value} onChange={(event) => onChange(event.target.value)} placeholder="块编号" />
       <datalist id={listId}>
         {options.map((option) => <option key={option} value={option} />)}
       </datalist>
