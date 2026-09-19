@@ -166,7 +166,7 @@ export function RunsPage() {
               <polygon points="26,20 26,44 46,32" />
             </svg>
             <span className={s.emptyTitle}>No active run</span>
-            <span className={s.emptySubtitle}>Bootstrap a document first to start a translation pipeline.</span>
+            <span className={s.emptySubtitle}>先在工作台上传一本书，再开始翻译。</span>
           </div>
         )}
       </Surface>

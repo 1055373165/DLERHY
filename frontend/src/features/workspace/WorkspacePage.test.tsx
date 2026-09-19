@@ -844,7 +844,7 @@ describe("Workspace page", () => {
     await user.click(screen.getByRole("button", { name: "回到首页上传新书" }));
 
     expect(await screen.findByRole("heading", { name: "载入书稿" })).toBeInTheDocument();
-    expect(screen.getByText("Upload a PDF or EPUB to begin translation")).toBeInTheDocument();
+    expect(screen.getByText("上传英文 PDF 或 EPUB，开始翻译")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "回到首页上传新书" })).not.toBeInTheDocument();
     expect(window.localStorage.getItem(STORAGE_KEY_DOCUMENT)).toBeNull();
   });

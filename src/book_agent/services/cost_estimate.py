@@ -9,7 +9,9 @@ RSI book, 625 packets, deepseek-v4-flash):
 - translation output = ~6.2 × source tokens (the answer carries target text
   plus sentence alignment);
 - model review (sampled) reads ~0.64 × the translation input, a full review
-  ~1.9 ×; terminology costs ~300k input tokens sampled, ~600k thorough;
+  ~1.9 ×; terminology costs ~300k input tokens sampled, ~600k thorough,
+  for a book of ~30k source tokens or more, and proportionally less for a
+  shorter one (it reads what there is);
 - ~5% on top for retries and output repairs.
 
 It is a range (±30%), not a quote: it ignores prompt-cache discounts (so it
@@ -36,6 +38,7 @@ PROMPT_SCAFFOLD_TOKENS_PER_PACKET = 2040
 OUTPUT_TOKENS_PER_SOURCE_TOKEN = 6.2
 REVIEW_INPUT_FACTOR = {"skip": 0.0, "sampled": 0.64, "full": 1.9}
 REVIEW_OUTPUT_TOKENS_PER_PACKET = {"skip": 0, "sampled": 25, "full": 70}
+TERMINOLOGY_FULL_COST_SOURCE_TOKENS = 30_000
 TERMINOLOGY_TOKENS = {"skip": (0, 0), "sampled": (300_000, 11_000), "thorough": (600_000, 22_000)}
 RETRY_OVERHEAD = 1.05
 SPREAD = 0.3
@@ -99,7 +102,10 @@ def estimate_document_cost(
             "token_in": int(REVIEW_INPUT_FACTOR[review_mode] * translate_in),
             "token_out": REVIEW_OUTPUT_TOKENS_PER_PACKET[review_mode] * len(packets),
         },
-        "terminology": dict(zip(("token_in", "token_out"), TERMINOLOGY_TOKENS[terminology_mode], strict=True)),
+        "terminology": {
+            key: int(tokens * min(1.0, source_tokens / TERMINOLOGY_FULL_COST_SOURCE_TOKENS))
+            for key, tokens in zip(("token_in", "token_out"), TERMINOLOGY_TOKENS[terminology_mode], strict=True)
+        },
     }
     token_in = int(RETRY_OVERHEAD * sum(part["token_in"] for part in breakdown.values()))
     token_out = int(RETRY_OVERHEAD * sum(part["token_out"] for part in breakdown.values()))

@@ -153,7 +153,7 @@ export function WorkspacePage() {
             </svg>
           </div>
           <h2 className={s.uploadTitle}>载入书稿</h2>
-          <p className={s.uploadSubtitle}>Upload a PDF or EPUB to begin translation</p>
+          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，开始翻译</p>
           <label className={s.fileLabel}>
             <input
               type="file"
@@ -165,7 +165,7 @@ export function WorkspacePage() {
               }}
             />
             <span className={s.fileText}>
-              {selectedFile ? selectedFile.name : "Click to select .pdf / .epub file"}
+              {selectedFile ? selectedFile.name : "点击选择 .pdf / .epub 文件"}
             </span>
           </label>
           <div className={s.uploadActions}>
@@ -174,7 +174,7 @@ export function WorkspacePage() {
               disabled={!selectedFile || uploadPending}
               onClick={handleUpload}
             >
-              {uploadPending ? "Uploading..." : "Bootstrap"}
+              {uploadPending ? "上传中…" : "上传并解析"}
             </button>
           </div>
           {feedback && (
@@ -198,7 +198,7 @@ export function WorkspacePage() {
                 }}
               />
               <span className={s.fileTextSmall}>
-                {selectedFile ? selectedFile.name : "Select new file..."}
+                {selectedFile ? selectedFile.name : "选择新文件…"}
               </span>
             </label>
             <button
@@ -206,7 +206,7 @@ export function WorkspacePage() {
               disabled={!selectedFile || uploadPending}
               onClick={handleUpload}
             >
-              {uploadPending ? "..." : "Bootstrap"}
+              {uploadPending ? "…" : "上传并解析"}
             </button>
           </div>
           {feedback && (

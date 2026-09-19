@@ -117,8 +117,10 @@ export function AppLayout() {
         </nav>
 
         <div className={s.sidebarFooter}>
-          <BudgetMeter />
-          <ApiKeySetting />
+          <div className={s.footerControls}>
+            <BudgetMeter />
+            <ApiKeySetting />
+          </div>
           <div className={s.systemLinks}>
             <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
               API

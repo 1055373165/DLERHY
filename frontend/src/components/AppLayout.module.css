@@ -156,6 +156,19 @@
   overflow: hidden;
 }
 
+.footerControls {
+  width: calc(var(--sidebar-width-open) - 2 * var(--sp-3));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 150ms ease;
+}
+
+.sidebar:hover .footerControls,
+.sidebar:focus-within .footerControls {
+  opacity: 1;
+  visibility: visible;
+}
+
 .systemLinks {
   display: flex;
   gap: var(--sp-4);
@@ -312,6 +325,11 @@
   .sidebar .systemLinks,
   .sidebar .healthLabel {
     opacity: 1;
+  }
+
+  .sidebar .footerControls {
+    opacity: 1;
+    visibility: visible;
   }
 
   .main {

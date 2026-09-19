@@ -102,6 +102,9 @@ class CostEstimateTests(unittest.TestCase):
         thorough = self._estimate(terminology="thorough", model_review="full")
         self.assertLess(lean["token_in"], default["token_in"])
         self.assertGreater(thorough["token_in"], default["token_in"])
+        # A short book pays for terminology in proportion to its length, not the full-book cost.
+        self.assertLess(default["breakdown"]["terminology"]["token_in"], 300_000)
+        self.assertGreater(default["breakdown"]["terminology"]["token_in"], 0)
         self.assertEqual(self.client.get("/v1/documents/00000000-0000-0000-0000-000000000000/cost-estimate").status_code, 404)
 
 

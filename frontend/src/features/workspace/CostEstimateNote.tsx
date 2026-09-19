@@ -3,8 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { getCostEstimate } from "../../lib/api";
 import s from "./WorkspacePage.module.css";
 
-function millions(tokens: number): string {
-  return tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : `${Math.round(tokens / 1000)}K`;
+function tokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`;
+  return String(Math.round(tokens));
+}
+
+function dollars(amount: number): string {
+  return amount > 0 && amount < 0.01 ? "<$0.01" : `$${amount.toFixed(2)}`;
 }
 
 /** Shown before a translation starts: what the run will take, from the book's size and the provider's prices. */
@@ -25,8 +31,8 @@ export function CostEstimateNote({ documentId }: { documentId: string }) {
   const range = pair(estimate.cost_usd_range);
   return (
     <div className={s.costEstimate} role="note" aria-label="费用预估" title={(estimate.notes ?? []).join(" ")}>
-      预计 token：输入 {millions(inLow)}–{millions(inHigh)}，输出 {millions(outLow)}–{millions(outHigh)}
-      {range ? `，约 $${range[0].toFixed(2)}–$${range[1].toFixed(2)}` : "（服务商未设单价，无法估算金额）"}
+      预计 token：输入 {tokenCount(inLow)}–{tokenCount(inHigh)}，输出 {tokenCount(outLow)}–{tokenCount(outHigh)}
+      {range ? `，约 ${dollars(range[0])}–${dollars(range[1])}` : "（服务商未设单价，无法估算金额）"}
     </div>
   );
 }
