@@ -72,6 +72,7 @@ class CostEstimateTests(unittest.TestCase):
         self.assertGreater(high, estimate["token_in"])
         self.assertIsNone(estimate["cost_usd"])
         self.assertTrue(any("单价" in note for note in estimate["notes"]))
+        self.assertTrue(any("思考" in note for note in estimate["notes"]))
 
         with self.session_factory() as session:
             record = provider_credentials.create_credential(
@@ -95,6 +96,8 @@ class CostEstimateTests(unittest.TestCase):
         expected = priced["token_in"] / 1e6 * 1.0 + priced["token_out"] / 1e6 * 4.0
         self.assertAlmostEqual(priced["cost_usd"], expected, places=3)
         self.assertEqual(priced["price_source"], f"provider:{name}")
+        # An echo provider does not think, so there is no thinking warning.
+        self.assertFalse(any("思考" in note for note in priced["notes"]))
 
     def test_run_modes_change_the_estimate(self) -> None:
         default = self._estimate()
@@ -102,9 +105,13 @@ class CostEstimateTests(unittest.TestCase):
         thorough = self._estimate(terminology="thorough", model_review="full")
         self.assertLess(lean["token_in"], default["token_in"])
         self.assertGreater(thorough["token_in"], default["token_in"])
-        # A short book pays for terminology in proportion to its length, not the full-book cost.
+        # A short book pays for terminology in proportion to its length, not the full-book cost,
+        # but the agents' own prompts set a floor (measured on a real 5-packet run).
         self.assertLess(default["breakdown"]["terminology"]["token_in"], 300_000)
-        self.assertGreater(default["breakdown"]["terminology"]["token_in"], 0)
+        self.assertGreaterEqual(default["breakdown"]["terminology"]["token_in"], 10_000)
+        self.assertGreaterEqual(default["breakdown"]["model_review"]["token_in"], 50_000)
+        self.assertEqual(lean["breakdown"]["terminology"]["token_in"], 0)
+        self.assertEqual(lean["breakdown"]["model_review"]["token_in"], 0)
         self.assertEqual(self.client.get("/v1/documents/00000000-0000-0000-0000-000000000000/cost-estimate").status_code, 404)
 
 

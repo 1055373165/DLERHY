@@ -12,6 +12,10 @@ RSI book, 625 packets, deepseek-v4-flash):
   ~1.9 ×; terminology costs ~300k input tokens sampled, ~600k thorough,
   for a book of ~30k source tokens or more, and proportionally less for a
   shorter one (it reads what there is);
+- the agents also have a floor that does not shrink with the book: a
+  reviewer turn reads ~50k tokens of its own prompts and tool results and
+  terminology ~10k (measured on a 5-packet book, where they were 85% of
+  the input);
 - ~5% on top for retries and output repairs.
 
 It is a range (±30%), not a quote: it ignores prompt-cache discounts (so it
@@ -40,6 +44,8 @@ REVIEW_INPUT_FACTOR = {"skip": 0.0, "sampled": 0.64, "full": 1.9}
 REVIEW_OUTPUT_TOKENS_PER_PACKET = {"skip": 0, "sampled": 25, "full": 70}
 TERMINOLOGY_FULL_COST_SOURCE_TOKENS = 30_000
 TERMINOLOGY_TOKENS = {"skip": (0, 0), "sampled": (300_000, 11_000), "thorough": (600_000, 22_000)}
+TERMINOLOGY_FLOOR_TOKENS = (10_000, 2_500)
+REVIEW_FIXED_TOKENS = (50_000, 5_000)
 RETRY_OVERHEAD = 1.05
 SPREAD = 0.3
 
@@ -99,18 +105,26 @@ def estimate_document_cost(
     breakdown = {
         "translate": {"token_in": translate_in, "token_out": translate_out},
         "model_review": {
-            "token_in": int(REVIEW_INPUT_FACTOR[review_mode] * translate_in),
-            "token_out": REVIEW_OUTPUT_TOKENS_PER_PACKET[review_mode] * len(packets),
+            "token_in": int(REVIEW_INPUT_FACTOR[review_mode] * translate_in)
+            + (REVIEW_FIXED_TOKENS[0] if review_mode != "skip" and packets else 0),
+            "token_out": REVIEW_OUTPUT_TOKENS_PER_PACKET[review_mode] * len(packets)
+            + (REVIEW_FIXED_TOKENS[1] if review_mode != "skip" and packets else 0),
         },
         "terminology": {
-            key: int(tokens * min(1.0, source_tokens / TERMINOLOGY_FULL_COST_SOURCE_TOKENS))
-            for key, tokens in zip(("token_in", "token_out"), TERMINOLOGY_TOKENS[terminology_mode], strict=True)
+            key: max(floor, int(tokens * min(1.0, source_tokens / TERMINOLOGY_FULL_COST_SOURCE_TOKENS)))
+            if terminology_mode != "skip" and packets
+            else 0
+            for key, tokens, floor in zip(
+                ("token_in", "token_out"), TERMINOLOGY_TOKENS[terminology_mode], TERMINOLOGY_FLOOR_TOKENS, strict=True
+            )
         },
     }
     token_in = int(RETRY_OVERHEAD * sum(part["token_in"] for part in breakdown.values()))
     token_out = int(RETRY_OVERHEAD * sum(part["token_out"] for part in breakdown.values()))
-    input_price, output_price, price_source = _prices(session, document, settings)
+    input_price, output_price, price_source, thinking_off = _provider(session, document, settings)
     notes = ["估算依据真实整书运行测得的比例，误差约 ±30%；未计提示缓存折扣，输入部分偏高。"]
+    if not thinking_off:
+        notes.append("估算按关闭思考模式计。若所用模型开启了思考，输出 token 会明显更多（实测小书约为估算的 2–3 倍）；可在「服务商」页关闭。")
     cost = cost_range = None
     if input_price is not None and output_price is not None:
         cost = round(token_in / 1e6 * input_price + token_out / 1e6 * output_price, 4)
@@ -137,13 +151,25 @@ def estimate_document_cost(
     )
 
 
-def _prices(session: Session, document: Document, settings: Settings) -> tuple[float | None, float | None, str | None]:
+def _provider(
+    session: Session, document: Document, settings: Settings
+) -> tuple[float | None, float | None, str | None, bool]:
+    """(input price, output price, where the prices came from, whether thinking is known to be off)."""
+    from book_agent.domain.enums import ProviderKind
     from book_agent.services.provider_credentials import credential_scope, get_active_credential
 
     scope = credential_scope(document.org_id)
     record = (get_active_credential(session, scope) if scope is not None else None) or get_active_credential(session, None)
+    # Like the worker factory: the credential's overrides, else the settings'.
+    overrides = (record.request_overrides_json if record is not None else None) or settings.translation_openai_request_overrides
+    thinking = overrides.get("thinking") if isinstance(overrides, dict) else None
+    thinking_off = (record is not None and record.provider_kind == ProviderKind.ECHO) or (
+        isinstance(thinking, dict) and thinking.get("type") == "disabled"
+    )
     if record is not None and record.input_cost_per_1m_tokens is not None and record.output_cost_per_1m_tokens is not None:
-        return float(record.input_cost_per_1m_tokens), float(record.output_cost_per_1m_tokens), f"provider:{record.name}"
+        prices = float(record.input_cost_per_1m_tokens), float(record.output_cost_per_1m_tokens), f"provider:{record.name}"
+        return (*prices, thinking_off)
     if settings.translation_input_cost_per_1m_tokens is not None and settings.translation_output_cost_per_1m_tokens is not None:
-        return settings.translation_input_cost_per_1m_tokens, settings.translation_output_cost_per_1m_tokens, "settings"
-    return None, None, None
+        prices = settings.translation_input_cost_per_1m_tokens, settings.translation_output_cost_per_1m_tokens, "settings"
+        return (*prices, thinking_off)
+    return None, None, None, thinking_off
