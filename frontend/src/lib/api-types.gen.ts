@@ -272,6 +272,7 @@ export interface CostEstimateResponse {
   price_source?: string | null;
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
+  thinking_may_inflate_output?: boolean;
   notes?: string[];
 }
 

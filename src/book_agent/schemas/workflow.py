@@ -766,6 +766,8 @@ class CostEstimateResponse(BaseSchema):
     price_source: str | None = None
     input_cost_per_1m_tokens: float | None = None
     output_cost_per_1m_tokens: float | None = None
+    # The ratios assume thinking is off; with it on, output runs well above the estimate.
+    thinking_may_inflate_output: bool = False
     notes: list[str] = Field(default_factory=list)
 
 

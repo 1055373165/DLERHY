@@ -65,6 +65,7 @@ class CostEstimate:
     price_source: str | None
     input_cost_per_1m_tokens: float | None
     output_cost_per_1m_tokens: float | None
+    thinking_may_inflate_output: bool
     notes: list[str]
 
     def to_json(self) -> dict:
@@ -147,6 +148,7 @@ def estimate_document_cost(
         price_source=price_source,
         input_cost_per_1m_tokens=input_price,
         output_cost_per_1m_tokens=output_price,
+        thinking_may_inflate_output=not thinking_off,
         notes=notes,
     )
 

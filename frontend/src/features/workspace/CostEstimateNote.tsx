@@ -33,6 +33,11 @@ export function CostEstimateNote({ documentId }: { documentId: string }) {
     <div className={s.costEstimate} role="note" aria-label="费用预估" title={(estimate.notes ?? []).join(" ")}>
       预计 token：输入 {tokenCount(inLow)}–{tokenCount(inHigh)}，输出 {tokenCount(outLow)}–{tokenCount(outHigh)}
       {range ? `，约 ${dollars(range[0])}–${dollars(range[1])}` : "（服务商未设单价，无法估算金额）"}
+      {estimate.thinking_may_inflate_output && (
+        <div className={s.costEstimateWarning}>
+          按关闭思考模式估算；当前服务商未关闭思考，实际输出可能是估算的 2–3 倍。可在「服务商」页关闭思考模式。
+        </div>
+      )}
     </div>
   );
 }

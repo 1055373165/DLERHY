@@ -658,3 +658,8 @@
   color: var(--text-muted);
   font-family: var(--font-cjk);
 }
+
+.costEstimateWarning {
+  margin-top: var(--sp-1);
+  color: var(--text-amber);
+}
