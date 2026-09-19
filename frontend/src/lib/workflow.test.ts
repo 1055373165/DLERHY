@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DocumentRunSummary, RunPipelineDetail } from "./api";
-import { awaitingApprovalStage, pipelineStageLabel, stageStatus } from "./workflow";
+import { awaitingApprovalStage, pipelineMeta, pipelineStageLabel, stageStatus } from "./workflow";
 
 function runWith(pipeline: RunPipelineDetail): DocumentRunSummary {
   return {
@@ -46,5 +46,13 @@ describe("pipeline stage status", () => {
   it("finds no approval stage while agents are simply running", () => {
     const run = runWith({ current_stage: "terminology", _cached_pipeline_stages: { terminology: { status: "running" } } });
     expect(awaitingApprovalStage(null, run)).toBeNull();
+  });
+
+  it("marks stages a finished run never reached as not part of it, not as pending", () => {
+    const run = { ...runWith({ current_stage: "completed", _cached_pipeline_stages: { translate: { status: "succeeded" } } }), status: "succeeded" } as DocumentRunSummary;
+    expect(stageStatus(null, run, "model_review")).toBe("skipped");
+    expect(pipelineMeta(null, run, "model_review")).toBe("这次转换没有这一步");
+    expect(stageStatus(null, run, "review")).toBe("succeeded");
+    expect(pipelineMeta(null, run, "review")).toBe("已完成");
   });
 });

@@ -213,7 +213,7 @@ export function RunsPage() {
                   />
                   <span className={s.chTitle}>{ch.title_src || "未命名"}</span>
                   <span className={s.chMeta}>
-                    {formatNumber(ch.open_issue_count)} 个问题 &middot; {formatNumber(ch.packet_count)} 包
+                    {formatNumber(ch.open_issue_count)} 个问题 &middot; {formatNumber(ch.packet_count)} 段
                   </span>
                   <button
                     className="btn btn-sm"

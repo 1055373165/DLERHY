@@ -117,6 +117,7 @@ export const DELIVERY_ASSETS = [
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "待执行",
+  skipped: "未启用",
   queued: "已排队",
   running: "进行中",
   draining: "收尾中",
@@ -255,6 +256,10 @@ export function stageStatus(
   }
   if (run.status === "succeeded" && ["translate", "review", "bilingual_html", "merged_html"].includes(stepKey)) {
     return "succeeded";
+  }
+  // A finished run never reached this stage: it was not part of this run (optional, or skipped).
+  if (["succeeded", "succeeded_with_warnings"].includes(run.status)) {
+    return "skipped";
   }
   return "pending";
 }
@@ -464,6 +469,9 @@ export function pipelineMeta(
   }
   const detail = stageDetail(run, stepKey);
   if (!detail) {
+    const status = stageStatus(document, run, stepKey);
+    if (status === "succeeded") return "已完成";
+    if (status === "skipped") return "这次转换没有这一步";
     return "等待进入该阶段";
   }
   if (stepKey === "translate") {
@@ -483,7 +491,9 @@ export function pipelineMeta(
   if (stepKey === "bilingual_html" || stepKey === "merged_html" || stepKey === "web_html") {
     return detail.chapter_export_count
       ? `导出记录 ${formatNumber(detail.chapter_export_count)} 个章节结果`
-      : "等待生成导出资产";
+      : detail.status === "succeeded"
+        ? "已生成"
+        : "等待生成";
   }
   return detail.updated_at ? `最近更新 ${formatDate(detail.updated_at)}` : "等待进入该阶段";
 }
