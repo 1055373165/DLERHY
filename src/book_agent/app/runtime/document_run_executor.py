@@ -1321,6 +1321,9 @@ class DocumentRunExecutor:
 
         def _run_export() -> dict[str, Any]:
             with session_scope(self.session_factory) as session:
+                # PDF books have no Chinese title of their own; translate it once, before rendering.
+                self._workflow_service(session).ensure_translated_title(document_id)
+            with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
                 max_attempts = (
                     plan.max_auto_followup_attempts

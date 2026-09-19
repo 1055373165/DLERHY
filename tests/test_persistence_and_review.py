@@ -3191,9 +3191,9 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertEqual(
             [title for _ordinal, _chapter_bundle, _render_blocks, title in visible],
             [
-                "致谢",
+                "献词",
                 "前言",
-                "介绍",
+                "引言",
                 "Chapter 1_ Prompt Chaining",
                 "Chapter 2_ Routing",
                 "Chapter 10_ Model Context Protocol (MCP)",
@@ -3409,10 +3409,10 @@ class PersistenceAndReviewTests(unittest.TestCase):
                 )
 
         self.assertEqual(len(visible), 1)
-        self.assertEqual(visible[0][3], "介绍")
+        self.assertEqual(visible[0][3], "引言")
         # Post-UX-cleanup: "Chapter N" kicker is gone; the chapter <h2>
         # still carries the fallen-back title verbatim.
-        self.assertIn(">介绍</h2>", merged_html)
+        self.assertIn(">引言</h2>", merged_html)
         self.assertNotIn("<div class='chapter-kicker'>", merged_html)
         self.assertNotIn("Chapter 1</div><h2>什么是智能体系统？</h2>", merged_html)
 

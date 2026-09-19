@@ -314,12 +314,17 @@ _FRONTMATTER_TITLES = {
 _FRONTMATTER_TITLE_TRANSLATIONS = {
     "acknowledgment": "致谢",
     "acknowledgements": "致谢",
-    "dedication": "致谢",
+    "acknowledgments": "致谢",
+    "dedication": "献词",
     "foreword": "前言",
     "preface": "前言",
     "prologue": "序章",
-    "introduction": "介绍",
+    "introduction": "引言",
+    # Parser-made chapter for the pages before the first real chapter (cover, copyright, contents).
+    "front matter": "卷首",
 }
+# A translated heading that kept the English chapter label ("CHAPTER 11：额外技巧").
+_LEADING_ENGLISH_CHAPTER_LABEL = re.compile(r"^\s*chapter\s+(\d+)\s*[:：.\-–—]?\s*", re.IGNORECASE)
 _PURE_CHAPTER_LABEL_PATTERN = re.compile(r"^\s*chapter\s+\d+[.)]?\s*$", re.IGNORECASE)
 _CHAPTER_LOWERCASE_TAIL_PATTERN = re.compile(r"^\s*chapter\s+\d+[.):]?\s+[a-z]", re.IGNORECASE)
 _CJK_MAIN_CHAPTER_TITLE_PATTERN = re.compile(

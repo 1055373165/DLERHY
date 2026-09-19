@@ -11,6 +11,7 @@ from book_agent.domain.enums import (
 from book_agent.export import render_repair
 from book_agent.export.common import (
     _APPENDIX_TITLE_PATTERN,
+    _LEADING_ENGLISH_CHAPTER_LABEL,
     _FRONTMATTER_TITLE_TRANSLATIONS,
     _FRONTMATTER_TITLES,
     _MAIN_CHAPTER_TITLE_PATTERN,
@@ -54,7 +55,7 @@ def resolved_chapter_title_text(
         None,
     )
     if _is_pdf_document(chapter_bundle.document):
-        fallback_title = localized_structural_title_fallback(fallback_title)
+        fallback_title = localize_chapter_label(localized_structural_title_fallback(fallback_title))
     first_content_block = next(
         (
             block
@@ -68,7 +69,7 @@ def resolved_chapter_title_text(
     if first_content_block.block_type != BlockType.HEADING.value:
         return fallback_title
 
-    heading_target = str(first_content_block.target_text or "").strip()
+    heading_target = localize_chapter_label(str(first_content_block.target_text or "").strip()) or ""
     if not heading_target:
         return fallback_title
     if render_repair.looks_like_prose_title_text(
@@ -78,6 +79,19 @@ def resolved_chapter_title_text(
     ):
         return fallback_title
     return heading_target
+
+
+def localize_chapter_label(title_text: str | None) -> str | None:
+    """"CHAPTER 11：额外技巧" → "第11章：额外技巧"; titles without a Chinese part keep their English label."""
+    if not title_text:
+        return title_text
+    match = _LEADING_ENGLISH_CHAPTER_LABEL.match(title_text)
+    if not match:
+        return title_text
+    rest = title_text[match.end():].strip()
+    if rest and not re.search(r"[\u4e00-\u9fff]", rest):
+        return title_text
+    return f"第{int(match.group(1))}章：{rest}" if rest else f"第{int(match.group(1))}章"
 
 
 def localized_structural_title_fallback(title_text: str | None) -> str | None:

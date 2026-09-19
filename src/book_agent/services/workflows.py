@@ -386,6 +386,18 @@ class DocumentWorkflowService:
             max_actions_per_round=max_actions_per_round,
         )
 
+    def ensure_translated_title(self, document_id: str) -> str | None:
+        """Translate the book title with the configured provider if the source gave none (PDF books)."""
+        from book_agent.services.title_translation import TitleTranslationService
+
+        worker = self.translation_service.worker
+        client = getattr(worker, "client", None)
+        if client is None or not hasattr(client, "generate_structured_object"):
+            return None
+        return TitleTranslationService(self.session, client, model_name=worker.metadata().model_name).ensure_document_title(
+            document_id
+        )
+
     def export_document(
         self,
         document_id: str,
