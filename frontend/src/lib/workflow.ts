@@ -34,14 +34,34 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     description: "导入源文件并完成章节切分。",
   },
   {
+    key: "structure_review",
+    label: "结构审查",
+    description: "（可选）结构代理查看版面可疑的 PDF 页面图像，把块类型、标题、合并拆分等问题记为建议。",
+  },
+  {
+    key: "terminology",
+    label: "术语与 BOOK.md",
+    description: "术语代理确定全书术语表与翻译决策，例外项等待审批。",
+  },
+  {
     key: "translate",
     label: "全文翻译",
     description: "逐 packet 产出中文译文并写回进度。",
   },
   {
+    key: "model_review",
+    label: "模型审校",
+    description: "审校代理抽样阅读译文，把误译、漏译、术语与文风问题记入问题清单。",
+  },
+  {
     key: "review",
     label: "自动复核",
     description: "处理导出前必须解决的 blocker。",
+  },
+  {
+    key: "repair",
+    label: "修复代理",
+    description: "（可选）规则修复后仍阻断的问题交给修复代理：重译、最小改写或申请人工判定不修复。",
   },
   {
     key: "bilingual_html",
@@ -52,6 +72,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     key: "merged_html",
     label: "中文阅读稿",
     description: "输出最终整书阅读包。",
+  },
+  {
+    key: "export_review",
+    label: "导出审读",
+    description: "（可选）导出审读代理查看渲染后的页面截图，把缺图、表格错乱、漏译、乱码等问题记为建议。",
   },
 ];
 
@@ -82,6 +107,8 @@ const STATUS_LABELS: Record<string, string> = {
   running: "进行中",
   draining: "收尾中",
   succeeded: "已完成",
+  succeeded_with_warnings: "已完成（有警告）",
+  awaiting_approval: "等待审批",
   partial: "部分完成",
   failed: "失败",
   retryable_failed: "待重试",

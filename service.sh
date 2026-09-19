@@ -8,10 +8,12 @@
 #    ./service.sh stop           # Stop all services
 #    ./service.sh restart        # Restart all services
 #    ./service.sh status         # Show service status
-#    ./service.sh start postgres # Start with PostgreSQL via Docker Compose
 #    ./service.sh start --reload # Start backend with uvicorn auto-reload
 #
 #  Notes:
+#    - PostgreSQL is required. Unless BOOK_AGENT_DATABASE_URL points at an
+#      existing PostgreSQL server, the compose "postgres" service is started.
+#      Alembic migrations run before the backend starts.
 #    - The backend now serves APIs and a minimal service entry only.
 #    - If ./frontend/package.json exists, this script will also start the
 #      standalone React/Vite frontend by default.
@@ -26,7 +28,7 @@ BACKEND_PID_FILE="$ROOT_DIR/.server.pid"
 FRONTEND_PID_FILE="$ROOT_DIR/.frontend.pid"
 BACKEND_LOG_FILE="${BOOK_AGENT_BACKEND_LOG:-$ROOT_DIR/artifacts/server.log}"
 FRONTEND_LOG_FILE="${BOOK_AGENT_FRONTEND_LOG:-$ROOT_DIR/artifacts/frontend.log}"
-DEFAULT_SQLITE_DATABASE_URL="sqlite+pysqlite:///$ROOT_DIR/artifacts/book-agent.db"
+COMPOSE_DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:55432/book_agent"
 
 HOST="${BOOK_AGENT_HOST:-127.0.0.1}"
 PORT="${BOOK_AGENT_PORT:-8999}"
@@ -55,7 +57,7 @@ error() { echo -e "${RED}[book-agent]${NC} $*" >&2; }
 
 usage() {
     cat <<'EOF'
-Usage: ./service.sh [start|stop|restart|status] [postgres] [--reload] [--keep-db]
+Usage: ./service.sh [start|stop|restart|status] [--reload] [--keep-db]
 
 Actions:
   (no action)    Toggle all services: start if stopped, stop if running
@@ -65,12 +67,12 @@ Actions:
   status         Show current service status
 
 Options:
-  postgres, pg   Start PostgreSQL via Docker Compose before backend startup
   --reload, -r   Enable uvicorn auto-reload (development only)
   --keep-db      When stopping, keep PostgreSQL container running
   -h, --help     Show this help
 
 Environment overrides:
+  BOOK_AGENT_DATABASE_URL  PostgreSQL URL; unset uses the compose postgres service
   BOOK_AGENT_HOST          default 127.0.0.1
   BOOK_AGENT_PORT          default 8999
   BOOK_AGENT_FRONTEND_PORT default 4173
@@ -81,14 +83,12 @@ Environment overrides:
 
 Examples:
   ./service.sh
-  ./service.sh start postgres
   ./service.sh restart --reload
   ./service.sh stop --keep-db
 EOF
 }
 
 ACTION="toggle"
-MODE="sqlite"
 RELOAD=""
 KEEP_DB=false
 
@@ -98,7 +98,7 @@ while [[ $# -gt 0 ]]; do
             ACTION="$1"
             ;;
         postgres|pg)
-            MODE="postgres"
+            # PostgreSQL is always used; accepted for older invocations.
             ;;
         --reload|-r)
             RELOAD="--reload"
@@ -259,38 +259,37 @@ kill_orphan_backend() {
 }
 
 start_postgres_if_needed() {
-    if [[ "$MODE" != "postgres" ]]; then
-        if [[ -n "${BOOK_AGENT_DATABASE_URL:-}" ]] && [[ "${BOOK_AGENT_DATABASE_URL}" != sqlite* ]]; then
-            warn "Ignoring existing non-SQLite BOOK_AGENT_DATABASE_URL because default mode is SQLite."
-        fi
-        if [[ -z "${BOOK_AGENT_DATABASE_URL:-}" ]] || [[ "${BOOK_AGENT_DATABASE_URL}" != sqlite* ]]; then
-            export BOOK_AGENT_DATABASE_URL="${BOOK_AGENT_SQLITE_DATABASE_URL:-$DEFAULT_SQLITE_DATABASE_URL}"
-        fi
-        info "Using SQLite database (pass ${BOLD}postgres${NC} to use PostgreSQL)."
-        return
-    fi
-
-    if ! command -v docker >/dev/null 2>&1; then
-        error "Docker is required for PostgreSQL mode but was not found."
+    local database_url="${BOOK_AGENT_DATABASE_URL:-}"
+    if [[ -n "$database_url" ]] && [[ "$database_url" != postgresql* ]]; then
+        error "BOOK_AGENT_DATABASE_URL must be a PostgreSQL URL (got: ${database_url%%:*}://...)."
         exit 1
     fi
 
-    info "Starting PostgreSQL via Docker Compose..."
-    docker compose up -d postgres
-
-    info "Waiting for PostgreSQL to be ready..."
-    local retries=0
-    local max_retries=30
-    until docker compose exec -T postgres pg_isready -U postgres -d book_agent >/dev/null 2>&1; do
-        retries=$((retries + 1))
-        if [[ $retries -ge $max_retries ]]; then
-            error "PostgreSQL failed to become ready after ${max_retries}s."
+    if [[ -z "$database_url" ]] || [[ "$database_url" == "$COMPOSE_DATABASE_URL" ]]; then
+        if ! command -v docker >/dev/null 2>&1; then
+            error "Docker is required to start PostgreSQL (or set BOOK_AGENT_DATABASE_URL to an existing server)."
             exit 1
         fi
-        sleep 1
-    done
 
-    export BOOK_AGENT_DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:55432/book_agent"
+        info "Starting PostgreSQL via Docker Compose..."
+        docker compose up -d postgres
+
+        info "Waiting for PostgreSQL to be ready..."
+        local retries=0
+        local max_retries=30
+        until docker compose exec -T postgres pg_isready -U postgres -d book_agent >/dev/null 2>&1; do
+            retries=$((retries + 1))
+            if [[ $retries -ge $max_retries ]]; then
+                error "PostgreSQL failed to become ready after ${max_retries}s."
+                exit 1
+            fi
+            sleep 1
+        done
+        export BOOK_AGENT_DATABASE_URL="$COMPOSE_DATABASE_URL"
+    else
+        info "Using PostgreSQL from BOOK_AGENT_DATABASE_URL."
+    fi
+
     info "Running Alembic migrations..."
     PYTHONPATH="$ROOT_DIR/src" "${ALEMBIC_CMD[@]}" upgrade head
     info "PostgreSQL is ready."
@@ -416,7 +415,7 @@ print_status() {
     if command -v docker >/dev/null 2>&1 && docker compose ps --status running 2>/dev/null | grep -q postgres; then
         info "Database: PostgreSQL container is running"
     else
-        info "Database: SQLite mode or PostgreSQL container stopped"
+        info "Database: compose PostgreSQL container stopped (or an external server is used)"
     fi
 }
 
@@ -435,7 +434,7 @@ start_all() {
         info "  Frontend: ${CYAN}${FRONTEND_URL}${NC}"
         info "            $FRONTEND_LOG_FILE"
     fi
-    info "  Status:   ${BOLD}./service.sh status${NC}"
+    info "  Status:   ${BOLD}book-agent status${NC}  (or ./service.sh status)"
 }
 
 stop_all() {

@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for the M3 modality pipeline orchestrator (TATR-c)."""
 
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -23,7 +22,6 @@ from book_agent.services.modality_pipeline import (
     enhance_parsed_document,
 )
 from book_agent.services.tatr_extractor import (
-    PageTableExtractionRequest,
     TatrCell,
     TatrTable,
     TatrTableExtractor,
@@ -300,6 +298,46 @@ class TatrPostPassTests(unittest.TestCase):
         self.assertIn("30", table_block.metadata["table_markdown"])
         self.assertEqual(table_block.metadata.get("table_recovered_via"), "tatr")
         self.assertEqual(summary.tatr_tables_recovered, 1)
+
+    def test_tatr_uses_the_explicit_source_path(self) -> None:
+        # Recovered PDF documents do not carry source_path in their metadata,
+        # so the parse service passes it explicitly.
+        doc = _doc(
+            [
+                (
+                    "Chapter 1",
+                    [
+                        _block(
+                            block_type="table",
+                            text="data",
+                            ordinal=1,
+                            anchor="t1",
+                            metadata={
+                                "source_page_start": 1,
+                                "source_bbox_json": {"regions": [{"page_number": 1, "bbox": [50, 50, 500, 200]}]},
+                            },
+                        ),
+                    ],
+                )
+            ],
+        )
+        adapter = FakeTatrAdapter(
+            scripted=[
+                TatrTable(
+                    bbox=(50, 50, 500, 200),
+                    cells=(TatrCell(row=0, column=0, bbox=(60, 90, 240, 110), text="Alice"),),
+                    confidence=0.9,
+                )
+            ]
+        )
+        opts = ModalityPipelineOptions(enable_tables=True, page_image_table_extractor=adapter)
+
+        _without_path, skipped = enhance_parsed_document(doc, options=opts)
+        rewritten, summary = enhance_parsed_document(doc, options=opts, source_path="book.pdf")
+
+        self.assertEqual(skipped.tatr_tables_recovered, 0)
+        self.assertEqual(summary.tatr_tables_recovered, 1)
+        self.assertEqual(rewritten.chapters[0].blocks[0].metadata.get("table_recovered_via"), "tatr")
 
     def test_tatr_does_not_override_heuristic_when_present(self) -> None:
         # The heuristic recovers markdown first; TATR must NOT overwrite it.

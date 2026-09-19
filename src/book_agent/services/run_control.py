@@ -7,6 +7,7 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.run_plan import translate_packet_scope
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
     write_cached_stages,
@@ -17,7 +18,6 @@ from book_agent.orchestrator.stage_status import (
     StageStatusCalculator,
     stage_status_to_cache_label,
 )
-from book_agent.services.runtime_repair_blockage import summarize_runtime_repair_blockage
 
 
 def _utcnow() -> datetime:
@@ -203,57 +203,8 @@ class RunControlService:
         latest_event_at = self.repository.latest_run_event_at(run_id)
         event_count = self.repository.list_run_events(run_id, limit=0).total_count
         status_detail_json = dict(run.status_detail_json or {})
-        status_detail_json.setdefault("runtime_v2", {})
-        runtime_v2 = dict(status_detail_json["runtime_v2"] or {})
-        active_runtime_bundle_revision_id = (
-            runtime_v2.get("active_runtime_bundle_revision_id") or run.runtime_bundle_revision_id
-        )
-        recovery = dict(runtime_v2.get("last_export_route_recovery") or {})
-        if recovery:
-            recovery.setdefault("active_bundle_revision_id", active_runtime_bundle_revision_id)
-            recovery.setdefault(
-                "rollback_performed",
-                bool(
-                    active_runtime_bundle_revision_id
-                    and recovery.get("bundle_revision_id")
-                    and recovery.get("bundle_revision_id") != active_runtime_bundle_revision_id
-                ),
-            )
-            runtime_v2["last_export_route_recovery"] = recovery
-        runtime_v2["recovered_lineage"] = [
-            dict(entry)
-            for entry in (runtime_v2.get("recovered_lineage") or [])
-            if isinstance(entry, dict)
-        ]
-        status_detail_json["runtime_v2"].update(
-            {
-                "runtime_bundle_revision_id": run.runtime_bundle_revision_id,
-                "active_runtime_bundle_revision_id": active_runtime_bundle_revision_id,
-                "chapter_run_count": self.repository.count_chapter_runs_for_run(run_id),
-                "packet_task_count": self.repository.count_packet_tasks_for_run(run_id),
-                "review_session_count": self.repository.count_review_sessions_for_run(run_id),
-                "runtime_checkpoint_count": self.repository.count_runtime_checkpoints_for_run(run_id),
-                "max_auto_patch_attempts": (
-                    budget.max_auto_followup_attempts if budget is not None else None
-                ),
-                "allowed_patch_surfaces": list(
-                    status_detail_json["runtime_v2"].get("allowed_patch_surfaces") or []
-                ),
-                "auto_patch_attempt_count": int(
-                    status_detail_json["runtime_v2"].get("auto_patch_attempt_count") or 0
-                ),
-                "recovered_lineage": runtime_v2["recovered_lineage"],
-                **(
-                    {"last_export_route_recovery": runtime_v2["last_export_route_recovery"]}
-                    if "last_export_route_recovery" in runtime_v2
-                    else {}
-                ),
-            }
-        )
-        blockage_summary = summarize_runtime_repair_blockage(status_detail_json["runtime_v2"])
-        if blockage_summary is not None:
-            status_detail_json["runtime_v2"].update(blockage_summary)
         self._project_derived_stage_status(status_detail_json, run_id, run.document_id)
+        status_detail_json["usage_summary"] = self.usage_summary(run_id)
         return DocumentRunSummary(
             run_id=run.id,
             document_id=run.document_id,
@@ -287,7 +238,7 @@ class RunControlService:
                 ),
                 stage_counts=self._with_default_keys(
                     work_item_stage_counts,
-                    ["bootstrap", "translate", "review", "repair", "export"],
+                    ["bootstrap", "translate", "review", "export", "agent"],
                 ),
             ),
             worker_leases=RunLeaseSummary(
@@ -303,6 +254,18 @@ class RunControlService:
                 latest_event_at=self._isoformat(latest_event_at),
             ),
         )
+
+    def usage_summary(self, run_id: str) -> dict[str, Any]:
+        """Spend attributed to the run, derived from ``llm.call.completed`` events."""
+        usage = self.repository.usage_from_events(run_id)
+        return {
+            "call_count": usage["call_count"],
+            "token_in": usage["token_in"],
+            "token_out": usage["token_out"],
+            "total_tokens": usage["total_tokens"],
+            "cost_usd": usage["cost_usd"],
+            "latency_ms": usage["latency_ms"],
+        }
 
     def get_run_lineage(self, run_id: str) -> RunLineageChain:
         # Walk the resume_from_run_id chain. Retry produces a new row
@@ -422,7 +385,21 @@ class RunControlService:
         note: str | None = None,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        current_status = self.repository.get_run(run_id).status
+        run = self.repository.get_run(run_id)
+        current_status = run.status
+        if current_status in {DocumentRunStatus.QUEUED, DocumentRunStatus.PAUSED}:
+            from book_agent.core.config import get_settings
+            from book_agent.services.org_budget import OrgBudgetExhausted, ensure_budget_available, org_id_for_run
+            from book_agent.services.prepaid_credit import OrgCreditExhausted, ensure_credit_available
+
+            org_id = org_id_for_run(self.repository.session, run.id)
+            try:
+                ensure_budget_available(self.repository.session, org_id)
+                ensure_credit_available(
+                    self.repository.session, org_id, price_multiplier=get_settings().billing_price_multiplier
+                )
+            except (OrgBudgetExhausted, OrgCreditExhausted) as exc:
+                raise RunControlTransitionError(str(exc)) from exc
         return self._transition_run(
             run_id=run_id,
             allowed_from={DocumentRunStatus.QUEUED, DocumentRunStatus.PAUSED},
@@ -460,6 +437,13 @@ class RunControlService:
                 },
             )
             previous_run = self.repository.get_run(run_id)
+
+        inflight = self.repository.count_inflight_work_items(run_id)
+        if inflight > 0:
+            raise RunControlTransitionError(
+                f"Run {run_id} still has {inflight} in-flight work item(s) holding leases; "
+                "wait for them to finish or expire before retrying, or cancel the run."
+            )
 
         previous_budget = self.repository.get_budget_for_run(run_id)
         retry_summary = self.create_run(
@@ -538,13 +522,20 @@ class RunControlService:
         if stages is None:
             return
         calculator = StageStatusCalculator(self.repository.session)
+        run = self.repository.get_run(run_id)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         projected_stages = dict(stages)
         for stage_name in PIPELINE_STAGES:
             stage_detail = projected_stages.get(stage_name)
             if not isinstance(stage_detail, dict):
                 continue
             try:
-                derived = calculator.stage_status(run_id, document_id, stage_name)
+                derived = calculator.stage_status(
+                    run_id,
+                    document_id,
+                    stage_name,
+                    packet_ids=packet_scope if stage_name == "translate" else None,
+                )
             except ValueError:
                 continue
             new_detail = dict(stage_detail)
@@ -562,9 +553,15 @@ class RunControlService:
         # the authoritative physical state every time.
         run = self.repository.get_run(run_id)
         calculator = StageStatusCalculator(self.repository.session)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         for stage in PIPELINE_STAGES:
             try:
-                status = calculator.stage_status(run_id, run.document_id, stage)
+                status = calculator.stage_status(
+                    run_id,
+                    run.document_id,
+                    stage,
+                    packet_ids=packet_scope if stage == "translate" else None,
+                )
             except ValueError:
                 continue
             if status == StageStatus.FAILED:
@@ -611,7 +608,7 @@ class RunControlService:
         stop_reason: str,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
             return self.get_run_summary(run_id)
         return self._transition_run(
@@ -631,7 +628,7 @@ class RunControlService:
         *,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.SUCCEEDED:
             return self.get_run_summary(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
@@ -660,7 +657,7 @@ class RunControlService:
         # The allowed_from set matches :meth:`succeed_run_system`; only a
         # live / draining run can soft-succeed, not one that was paused
         # by the operator or otherwise held.
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.SUCCEEDED_WITH_WARNINGS:
             return self.get_run_summary(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING}:
@@ -683,7 +680,7 @@ class RunControlService:
         stop_reason: str,
         detail_json: dict[str, Any] | None = None,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status == DocumentRunStatus.FAILED:
             return self.get_run_summary(run_id)
         if run.status not in {
@@ -744,7 +741,7 @@ class RunControlService:
         detail_json: dict[str, Any] | None,
         actor_type: ActorType = ActorType.HUMAN,
     ) -> DocumentRunSummary:
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         if run.status not in allowed_from:
             allowed_values = ", ".join(sorted(status.value for status in allowed_from))
             raise RunControlTransitionError(
@@ -771,13 +768,16 @@ class RunControlService:
         elif next_status == DocumentRunStatus.RUNNING:
             run.stop_reason = None
 
-        run.status_detail_json = self._merge_status_detail(
+        merged_detail = self._merge_status_detail(
             self._with_default_status_detail(run.status_detail_json or {}),
             action=event_type,
             actor_id=actor_id,
             note=note,
             detail_json=detail_json or {},
             at=now,
+        )
+        run.status_detail_json = self._apply_pause_accounting(
+            merged_detail, previous_status=previous_status, next_status=next_status, at=now
         )
         audit_event = RunAuditEvent(
             run_id=run.id,
@@ -795,6 +795,39 @@ class RunControlService:
         )
         self.repository.save_run(run, audit_event=audit_event)
         return self.get_run_summary(run.id)
+
+    def _apply_pause_accounting(
+        self,
+        detail: dict[str, Any],
+        *,
+        previous_status: DocumentRunStatus,
+        next_status: DocumentRunStatus,
+        at: datetime,
+    ) -> dict[str, Any]:
+        """Track time spent paused so budgets measure work, not waiting.
+
+        ``pause_accounting.paused_seconds_total`` is subtracted from the wall
+        clock; ``resumed_at`` restarts the no-progress window; and a resume
+        clears ``consecutive_failures`` because the operator has addressed
+        whatever paused the run (balance, credentials, budget).
+        """
+        merged = dict(detail)
+        accounting = dict(merged.get("pause_accounting") or {})
+        if next_status == DocumentRunStatus.PAUSED:
+            accounting["paused_at"] = at.astimezone(timezone.utc).isoformat()
+        elif next_status == DocumentRunStatus.RUNNING and previous_status == DocumentRunStatus.PAUSED:
+            paused_at = self._parse_iso_datetime(accounting.get("paused_at"))
+            if paused_at is not None:
+                paused_for = max(0, int((at - paused_at).total_seconds()))
+                accounting["paused_seconds_total"] = int(accounting.get("paused_seconds_total", 0) or 0) + paused_for
+            accounting.pop("paused_at", None)
+            accounting["resumed_at"] = at.astimezone(timezone.utc).isoformat()
+            counters = dict(merged.get("control_counters") or {})
+            counters["consecutive_failures"] = 0
+            merged["control_counters"] = counters
+        if accounting:
+            merged["pause_accounting"] = accounting
+        return merged
 
     def _merge_status_detail(
         self,

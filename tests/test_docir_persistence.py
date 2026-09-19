@@ -12,13 +12,10 @@ that exercises every field — we don't need a real PDF for this.
 
 import os
 import sys
-import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import event, select
-from sqlalchemy.pool import StaticPool
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -27,7 +24,7 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.enums import BlockType, DocumentStatus, SourceType
+from book_agent.domain.enums import DocumentStatus, SourceType
 from book_agent.domain.models import Chapter, Document
 from book_agent.domain.structure.models import (
     PROVENANCE_OCR,

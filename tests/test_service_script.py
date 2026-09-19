@@ -27,6 +27,10 @@ fi
 
 if [[ "$cmd" == "run" ]]; then
     tool="${2:-}"
+    if [[ "$tool" == "alembic" ]]; then
+        printf '%s' "${*:3}" > "${FAKE_ALEMBIC_CAPTURE:?}"
+        exit 0
+    fi
     if [[ "$tool" == "uvicorn" ]]; then
         printf '%s' "${BOOK_AGENT_DATABASE_URL:-}" > "${FAKE_UV_CAPTURE:?}"
         sleep 3
@@ -62,7 +66,7 @@ exit 0
         destination.write_text(SERVICE_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
         destination.chmod(destination.stat().st_mode | stat.S_IXUSR)
 
-    def test_default_sqlite_mode_overrides_non_sqlite_database_url(self) -> None:
+    def test_refuses_sqlite_database_url(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tempdir = Path(tmpdir)
             capture_path = tempdir / "captured-database-url.txt"
@@ -74,33 +78,21 @@ exit 0
                 fake_bin,
                 "start",
                 env_overrides={
-                    "BOOK_AGENT_DATABASE_URL": "postgresql+psycopg://postgres:postgres@localhost:9/book_agent",
+                    "BOOK_AGENT_DATABASE_URL": f"sqlite+pysqlite:///{tempdir}/custom.sqlite",
                     "FAKE_UV_CAPTURE": str(capture_path),
                 },
             )
 
-            self.assertEqual(result.returncode, 0, msg=result.stderr + result.stdout)
-            self.assertTrue(capture_path.exists())
-            resolved_tempdir = tempdir.resolve()
-            self.assertEqual(
-                capture_path.read_text(encoding="utf-8"),
-                f"sqlite+pysqlite:///{resolved_tempdir}/artifacts/book-agent.db",
-            )
-            self.assertIn("Ignoring existing non-SQLite BOOK_AGENT_DATABASE_URL", result.stdout)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("must be a PostgreSQL URL", result.stderr)
+            self.assertFalse(capture_path.exists())
 
-            time.sleep(3.1)
-            self._run_service(
-                tempdir,
-                fake_bin,
-                "stop",
-                env_overrides={"FAKE_UV_CAPTURE": str(capture_path)},
-            )
-
-    def test_default_sqlite_mode_preserves_explicit_sqlite_database_url(self) -> None:
+    def test_external_postgres_url_is_migrated_and_passed_to_backend(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tempdir = Path(tmpdir)
             capture_path = tempdir / "captured-database-url.txt"
-            explicit_sqlite_url = f"sqlite+pysqlite:///{tempdir}/custom.sqlite"
+            alembic_capture = tempdir / "alembic-args.txt"
+            external_url = "postgresql+psycopg://postgres:postgres@db.internal:5432/book_agent"
             self._copy_service_script(tempdir)
             fake_bin = self._write_fake_uv(tempdir, capture_path)
 
@@ -109,19 +101,22 @@ exit 0
                 fake_bin,
                 "start",
                 env_overrides={
-                    "BOOK_AGENT_DATABASE_URL": explicit_sqlite_url,
+                    "BOOK_AGENT_DATABASE_URL": external_url,
                     "FAKE_UV_CAPTURE": str(capture_path),
+                    "FAKE_ALEMBIC_CAPTURE": str(alembic_capture),
                 },
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr + result.stdout)
-            self.assertTrue(capture_path.exists())
-            self.assertEqual(capture_path.read_text(encoding="utf-8"), explicit_sqlite_url)
+            self.assertEqual(alembic_capture.read_text(encoding="utf-8"), "upgrade head")
+            self.assertEqual(capture_path.read_text(encoding="utf-8"), external_url)
+            self.assertNotIn("Docker Compose", result.stdout)
 
             time.sleep(3.1)
             self._run_service(
                 tempdir,
                 fake_bin,
                 "stop",
+                "--keep-db",
                 env_overrides={"FAKE_UV_CAPTURE": str(capture_path)},
             )

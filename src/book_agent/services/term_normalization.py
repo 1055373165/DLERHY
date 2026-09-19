@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from book_agent.workers.contracts import ConceptCandidate, RelevantTerm
+from book_agent.domain.terminology.enforcement import LockedTerm
+from book_agent.translation.contracts import ConceptCandidate, RelevantTerm
+from book_agent.translation.heuristics import DEFAULT_HEURISTICS
 
 _WHITESPACE_RE = re.compile(r"\s+")
-_AGENTIC_AI_BAD_TARGET_RE = re.compile(r"^智能体式(?:AI|人工智能)$", re.IGNORECASE)
-_AGENTIC_AI_PREFERRED_TARGET = "智能体AI"
 
 
 def _normalize_text(value: str | None) -> str:
@@ -20,8 +20,10 @@ def normalize_term_rendering(source_term: str | None, target_term: str | None) -
     if not normalized_target:
         return normalized_target
     compact_target = normalized_target.replace(" ", "")
-    if normalized_source.casefold() == "agentic ai" and _AGENTIC_AI_BAD_TARGET_RE.fullmatch(compact_target):
-        return _AGENTIC_AI_PREFERRED_TARGET
+    source_key = normalized_source.casefold()
+    for override in DEFAULT_HEURISTICS.term_rendering_overrides:
+        if source_key == override.source_term and override.bad_target_pattern.fullmatch(compact_target):
+            return override.preferred_target
     return normalized_target
 
 
@@ -46,3 +48,11 @@ def normalize_concept_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if canonical_zh:
         normalized["canonical_zh"] = normalize_term_rendering(source_term, canonical_zh)
     return normalized
+
+
+def locked_term_from_entry(entry: Any) -> LockedTerm:
+    """A glossary entry as the shared enforcement matcher sees it: expected rendering first, then variants."""
+    expected = normalize_term_rendering(entry.source_term, entry.target_term)
+    variants = [str(variant) for variant in (getattr(entry, "target_variants_json", None) or []) if str(variant).strip()]
+    return LockedTerm(source_term=str(entry.source_term or ""), renderings=tuple([expected, *variants]))
+

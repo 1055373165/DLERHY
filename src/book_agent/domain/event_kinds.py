@@ -29,6 +29,12 @@ PACKET_BUILT: Final = "packet.built"
 PACKET_LEASED: Final = "packet.leased"
 PACKET_TRANSLATED: Final = "packet.translated"
 PACKET_FAILED: Final = "packet.failed"
+# The output guardrail rejected a worker answer and asked for a repair.
+TRANSLATION_OUTPUT_REJECTED: Final = "translation.output.rejected"
+# A sentence's translation was edited in place of a retranslation (new attempt).
+TRANSLATION_SEGMENT_EDITED: Final = "translation.segment.edited"
+# A parse-revision fork re-segmented blocks (new sentences, carried translations).
+DOCUMENT_REPARSED: Final = "document.reparsed"
 
 # --- LLM calls ---------------------------------------------------------------
 LLM_CALL_STARTED: Final = "llm.call.started"
@@ -47,15 +53,6 @@ REVIEW_ISSUE_OPENED: Final = "review.issue.opened"
 REVIEW_ISSUE_CLOSED: Final = "review.issue.closed"
 ACTION_DISPATCHED: Final = "action.dispatched"
 
-# --- Patch proposal lifecycle ------------------------------------------------
-PATCH_PROPOSED: Final = "patch.proposed"
-PATCH_STAGED: Final = "patch.staged"
-PATCH_APPROVED: Final = "patch.approved"
-PATCH_REJECTED: Final = "patch.rejected"
-PATCH_APPLIED: Final = "patch.applied"
-PATCH_REVERTED: Final = "patch.reverted"
-PATCH_VERIFIED: Final = "patch.verified"
-
 # --- Cost / budget -----------------------------------------------------------
 COST_BUDGET_WARNING: Final = "cost.budget.warning"
 COST_BUDGET_EXCEEDED: Final = "cost.budget.exceeded"
@@ -64,6 +61,12 @@ COST_BUDGET_EXCEEDED: Final = "cost.budget.exceeded"
 AGENT_TRACE_STARTED: Final = "agent.trace.started"
 AGENT_TRACE_COMPLETED: Final = "agent.trace.completed"
 AGENT_HELP_REQUESTED: Final = "agent.help.requested"
+AGENT_TURN_STARTED: Final = "agent.turn.started"
+AGENT_TURN_FINISHED: Final = "agent.turn.finished"
+AGENT_TOOL_CALLED: Final = "agent.tool.called"
+AGENT_TOOL_RETURNED: Final = "agent.tool.returned"
+AGENT_APPROVAL_REQUESTED: Final = "agent.approval.requested"
+AGENT_APPROVAL_DECIDED: Final = "agent.approval.decided"
 
 
 EVENT_KINDS: frozenset[str] = frozenset(
@@ -78,6 +81,9 @@ EVENT_KINDS: frozenset[str] = frozenset(
         PACKET_BUILT,
         PACKET_LEASED,
         PACKET_TRANSLATED,
+        TRANSLATION_OUTPUT_REJECTED,
+        TRANSLATION_SEGMENT_EDITED,
+        DOCUMENT_REPARSED,
         PACKET_FAILED,
         LLM_CALL_STARTED,
         LLM_CALL_COMPLETED,
@@ -90,18 +96,17 @@ EVENT_KINDS: frozenset[str] = frozenset(
         REVIEW_ISSUE_OPENED,
         REVIEW_ISSUE_CLOSED,
         ACTION_DISPATCHED,
-        PATCH_PROPOSED,
-        PATCH_STAGED,
-        PATCH_APPROVED,
-        PATCH_REJECTED,
-        PATCH_APPLIED,
-        PATCH_REVERTED,
-        PATCH_VERIFIED,
         COST_BUDGET_WARNING,
         COST_BUDGET_EXCEEDED,
         AGENT_TRACE_STARTED,
         AGENT_TRACE_COMPLETED,
         AGENT_HELP_REQUESTED,
+        AGENT_TURN_STARTED,
+        AGENT_TURN_FINISHED,
+        AGENT_TOOL_CALLED,
+        AGENT_TOOL_RETURNED,
+        AGENT_APPROVAL_REQUESTED,
+        AGENT_APPROVAL_DECIDED,
     }
 )
 

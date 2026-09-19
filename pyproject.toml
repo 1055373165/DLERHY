@@ -18,20 +18,28 @@ dependencies = [
   "sqlalchemy>=2.0,<3.0",
   "uvicorn[standard]>=0.35,<1.0",
   "pymupdf>=1.27.2",
-  "httpx>=0.28.1",
+  "httpx[socks]>=0.28.1",
   "cryptography>=42.0,<46.0",
+  "pyjwt[crypto]>=2.9,<3.0",
 ]
 
-[project.optional-dependencies]
+# Development tools live in a dependency group so a plain `uv sync` (which
+# dev.sh and service.sh run) installs them; `uv sync --no-dev` for images.
+[dependency-groups]
 dev = [
-  "httpx>=0.28,<1.0",
+  "opentelemetry-sdk>=1.30,<2.0",
   "pytest>=8.3,<9.0",
-  "pytest-asyncio>=0.26,<1.0",
   "ruff>=0.11,<1.0",
 ]
 
 [project.scripts]
 book-agent = "book_agent.cli:main"
+
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2.0",
+    "opentelemetry-sdk>=1.30,<2.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/book_agent"]
@@ -39,6 +47,11 @@ packages = ["src/book_agent"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+# Test modules and scripts put sys.path / os.environ setup before imports.
+"tests/**" = ["E402"]
+"scripts/**" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,150 @@
+/* ApprovalsPage :: approvals inbox, agent turns, BOOK.md */
+
+.layout {
+  display: grid;
+  gap: var(--sp-6);
+}
+
+.reviewerRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.fieldLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface, transparent);
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.approvalList,
+.turnList {
+  display: flex;
+  flex-direction: column;
+}
+
+.approvalRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.approvalRow:last-child {
+  border-bottom: none;
+}
+
+.approvalMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.approvalTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  overflow-wrap: anywhere;
+}
+
+.approvalDetail {
+  font-size: var(--text-xs);
+  color: var(--text-secondary, var(--text-muted));
+  font-family: var(--font-cjk);
+}
+
+.approvalMeta,
+.turnMeta,
+.turnDate {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.approvalActions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.turnRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.turnRow:last-child {
+  border-bottom: none;
+}
+
+.turnKind {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  min-width: 96px;
+}
+
+.turnMeta {
+  flex: 1;
+}
+
+.markdown {
+  margin: 0;
+  padding: var(--sp-3);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-cjk);
+  max-height: 480px;
+  overflow: auto;
+}
+
+.feedback {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-xs);
+  border-left: 2px solid var(--blue);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+}
+
+.feedback[data-tone="error"] {
+  border-left-color: var(--red, #d33);
+}
+
+.emptyState {
+  padding: var(--sp-4) var(--sp-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+}
+
+@media (max-width: 860px) {
+  .reviewerRow {
+    grid-template-columns: 1fr;
+  }
+  .approvalRow {
+    flex-direction: column;
+  }
+}

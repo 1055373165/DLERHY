@@ -7,11 +7,15 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import re
-from typing import Final, Iterable
+from typing import Any, Final, Iterable
 
+from book_agent.core.config import get_settings
 from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
+from book_agent.domain.models.auth import DEFAULT_ORG_ID
+from book_agent.domain.structure.recovery_skills import METADATA_KEY as RECOVERY_SKILLS_KEY
+from book_agent.domain.structure.table_cells import translatable_cells
 from book_agent.domain.context.builders import (
     BookProfileBuilder,
     ChapterBriefBuilder,
@@ -19,6 +23,7 @@ from book_agent.domain.context.builders import (
     ContextPacketBuilder,
 )
 from book_agent.domain.enums import (
+    SentenceStatus,
     ArtifactStatus,
     BlockType,
     ChapterStatus,
@@ -44,9 +49,11 @@ from book_agent.domain.models import (
 from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
 from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
 from book_agent.domain.structure.epub import EPUBParser
-from book_agent.domain.structure.ocr import OcrPdfParser
-from book_agent.domain.structure.pdf import PDFParser, PdfFileProfiler, PdfFileProfile
-from book_agent.domain.structure.models import ParsedBlock, ParsedChapter
+from book_agent.ingestion.pdf.ocr import OcrPdfParser, build_ocr_pdf_parser
+from book_agent.domain.structure.pdf import PDFParser
+from book_agent.ingestion.pdf.extract import PdfFileProfiler
+from book_agent.ingestion.pdf.models import PdfFileProfile
+from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
 from book_agent.services.modality_pipeline import (
     ModalityPipelineOptions,
     enhance_parsed_document,
@@ -197,14 +204,18 @@ class IngestService:
     def __init__(self, pdf_profiler: PdfFileProfiler | None = None):
         self.pdf_profiler = pdf_profiler or PdfFileProfiler()
 
-    def ingest(self, file_path: str | Path) -> tuple[Document, JobRun]:
+    def ingest(self, file_path: str | Path, *, org_id: str | None = None) -> tuple[Document, JobRun]:
         path = Path(file_path)
         fingerprint = sha256(path.read_bytes()).hexdigest()
         source_type, pdf_profile = self._detect_source_type(path)
         now = _utcnow()
+        org_id = org_id or DEFAULT_ORG_ID
 
         document = Document(
-            id=stable_id("document", fingerprint),
+            # The default org keeps the original id formula, so existing ids do not move;
+            # other orgs get their own document for the same file.
+            id=stable_id("document", fingerprint) if org_id == DEFAULT_ORG_ID else stable_id("document", org_id, fingerprint),
+            org_id=org_id,
             source_type=source_type,
             file_fingerprint=fingerprint,
             source_path=str(path),
@@ -242,6 +253,12 @@ class IngestService:
         raise ValueError(f"Unsupported source file type: {path.suffix}")
 
 
+def _recovery_skill_kwargs(document: Document) -> dict[str, Any]:
+    """Pass recovery skills only when the document has settings, so parsers without the option still work."""
+    overrides = (document.metadata_json or {}).get(RECOVERY_SKILLS_KEY)
+    return {"recovery_skills": overrides} if isinstance(overrides, dict) and overrides else {}
+
+
 class ParseService:
     def __init__(
         self,
@@ -255,7 +272,7 @@ class ParseService:
     ):
         self.epub_parser = epub_parser or EPUBParser()
         self.pdf_parser = pdf_parser or PDFParser(image_output_dir=image_output_dir)
-        self.ocr_pdf_parser = ocr_pdf_parser or OcrPdfParser()
+        self.ocr_pdf_parser = ocr_pdf_parser or build_ocr_pdf_parser(get_settings())
         self.parse_ir_service = parse_ir_service or ParseIrService()
         # Explicit override > env. None means "consult env at parse time".
         self._modality_options_override = modality_options
@@ -265,13 +282,25 @@ class ParseService:
             parsed = self.epub_parser.parse(file_path)
         elif document.source_type == SourceType.PDF_TEXT:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         elif document.source_type == SourceType.PDF_MIXED:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.ocr_pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         elif document.source_type == SourceType.PDF_SCAN:
             pdf_profile = document.metadata_json.get("pdf_profile")
-            parsed = self.ocr_pdf_parser.parse(file_path, profile=pdf_profile if isinstance(pdf_profile, dict) else None)
+            parsed = self.ocr_pdf_parser.parse(
+                file_path,
+                profile=pdf_profile if isinstance(pdf_profile, dict) else None,
+                **_recovery_skill_kwargs(document),
+            )
         else:
             raise ValueError(f"Unsupported source type: {document.source_type}")
 
@@ -310,6 +339,12 @@ class ParseService:
         document.status = DocumentStatus.PARSED
         document.updated_at = now
 
+        # PDF v2 M3 wire-up: optionally enhance modalities (references /
+        # equations / tables / images) before the canonical IR is built and
+        # blocks are constructed, so the persisted IR and blocks both reflect
+        # the modality contracts.
+        parsed = self._apply_modality_pipeline(parsed, document)
+
         parse_ir_result = self.parse_ir_service.build(document, parsed)
         parsed = parse_ir_result.parsed_document
         document.metadata_json = {
@@ -325,11 +360,6 @@ class ParseService:
                 },
             },
         }
-
-        # PDF v2 M3 wire-up: optionally enhance modalities (references /
-        # equations / tables / images) before downstream block construction
-        # so the persisted DocIR signals reflect the modality contracts.
-        parsed = self._apply_modality_pipeline(parsed, document)
 
         chapters: list[Chapter] = []
         blocks: list[Block] = []
@@ -479,7 +509,7 @@ class ParseService:
             return parsed
         try:
             new_parsed, summary = enhance_parsed_document(
-                parsed, options=modality_options
+                parsed, options=modality_options, source_path=document.source_path
             )
         except Exception:  # pragma: no cover - defensive
             return parsed
@@ -722,6 +752,12 @@ class SegmentationService:
         # inflate sentence counts or participate in downstream sentence-based workflows.
         if not translatable and str((block.source_span_json or {}).get("image_src") or "").strip():
             return []
+        # A protected table with prose in its cells: one translatable sentence per distinct
+        # cell text; the table layout itself is never translated (06 B-20).
+        cells = translatable_cells(block.block_type, block.source_text, block.source_span_json)
+        if cells:
+            segmented = cells
+            translatable, nontranslatable_reason, initial_status = True, None, SentenceStatus.PENDING
         parse_revision_id = block.parse_revision_id or (block.source_span_json or {}).get("parse_revision_id")
         block_canonical_node_id = block.canonical_node_id or (block.source_span_json or {}).get("canonical_node_id")
         output: list[Sentence] = []
@@ -758,6 +794,7 @@ class SegmentationService:
                         "ordinal_in_block": ordinal,
                         "parse_revision_id": parse_revision_id,
                         "canonical_node_id": sentence_canonical_node_id,
+                        **({"table_cell": True} if cells else {}),
                     },
                     upstream_confidence=block.parse_confidence,
                     sentence_status=initial_status,
@@ -790,8 +827,13 @@ class BootstrapPipeline:
         )
         self.context_packet_builder = context_packet_builder or ContextPacketBuilder()
 
-    def run(self, file_path: str | Path) -> BootstrapArtifacts:
-        document, ingest_job = self.ingest_service.ingest(file_path)
+    def run(self, file_path: str | Path, *, org_id: str | None = None) -> BootstrapArtifacts:
+        # Custom ingest services predating tenancy take no org; only pass one when given.
+        document, ingest_job = (
+            self.ingest_service.ingest(file_path, org_id=org_id)
+            if org_id is not None
+            else self.ingest_service.ingest(file_path)
+        )
         parse_artifacts = self.parse_service.parse(document, file_path)
         segment_artifacts = self.segmentation_service.segment(
             parse_artifacts.document,

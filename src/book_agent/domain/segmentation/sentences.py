@@ -29,6 +29,20 @@ _ABBREVIATIONS = [
     "a.m.",
     "p.m.",
 ]
+# Labels that abbreviate before a number ("Rs. 20", "pp. 12", "Vol. 3"); only
+# protected when a number follows, so "... paid in Rs. Then ..." still splits.
+_NUMBER_LABEL_ABBREVIATION = re.compile(r"\b(Rs|Re|Nos|pp|Vol|vol|Ch|ch|Sec|sec|approx|Approx|Ref|ref)\.(?=\s*\d)")
+# A capital initial inside a name: followed by another initial or by a two-word name
+# ("J. R. R. Tolkien", "J. Welles Wilder"), or the last initial of a run; "plan B. The
+# first ..." still splits.
+_NAME_INITIAL = re.compile(
+    r"(?<![A-Za-z.])([A-Z])\.(?=\s+[A-Z]\.|\s+[A-Z][a-z]+\s+[A-Z][a-z])"
+    r"|(?<=[A-Z]\.\s)([A-Z])\.(?=\s+[A-Z][a-z])"
+)
+# First name, initial, surname: "Walter J. Baeyens".
+_FIRST_NAME_INITIAL = re.compile(r"\b([A-Z][a-z]{1,11}\s[A-Z])\.(?=\s+[A-Z][a-z])")
+# "1. Tops and Bottoms" at the start of a line is an enumerator, not a sentence end.
+_LINE_START_ENUMERATOR = re.compile(r"(?m)^(\s*\d{1,3})\.(?=\s+\S)")
 _SENTINEL = "<DOT>"
 
 
@@ -48,13 +62,16 @@ class EnglishSentenceSegmenter:
     """Lightweight English sentence segmenter for P0."""
 
     def segment_text(self, text: str) -> list[str]:
-        normalized = re.sub(r"\s+", " ", text).strip()
+        normalized = re.sub(r"\s+", " ", _LINE_START_ENUMERATOR.sub(rf"\1{_SENTINEL}", text)).strip()
         if not normalized:
             return []
 
         protected = normalized
         for abbr in _ABBREVIATIONS:
             protected = protected.replace(abbr, abbr.replace(".", _SENTINEL))
+        protected = _NUMBER_LABEL_ABBREVIATION.sub(rf"\1{_SENTINEL}", protected)
+        protected = _NAME_INITIAL.sub(lambda match: f"{match.group(1) or match.group(2)}{_SENTINEL}", protected)
+        protected = _FIRST_NAME_INITIAL.sub(rf"\1{_SENTINEL}", protected)
         protected = re.sub(r"(\d)\.(\d)", rf"\1{_SENTINEL}\2", protected)
 
         raw_parts = re.split(r'(?<=[.!?])\s+(?=(?:"|\'|“|‘|\()?[A-Z0-9])', protected)

@@ -1,38 +1,39 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from typing import Any
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
-    ActionActorType,
-    ActionStatus,
-    ActionType,
     BlockType,
     ChapterStatus,
     Detector,
     IssueStatus,
-    JobScopeType,
     LockLevel,
     RootCauseLayer,
     RunStatus,
-    SourceType,
-    TargetSegmentStatus,
     SentenceStatus,
     Severity,
+    SourceType,
+    TargetSegmentStatus,
 )
-from book_agent.domain.models.review import ChapterQualitySummary as ChapterQualitySummaryRecord, IssueAction, ReviewIssue
-from book_agent.domain.structure.artifact_grouping import normalize_artifact_role, resolve_artifact_group_context_ids
+from book_agent.domain.models.review import ChapterQualitySummary as ChapterQualitySummaryRecord
+from book_agent.domain.models.review import IssueAction, ReviewIssue
+from book_agent.domain.structure.artifact_grouping import (
+    normalize_artifact_role,
+    resolve_artifact_group_context_ids,
+)
+from book_agent.domain.terminology.enforcement import find_term_violations
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
-from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
+from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository, review_pass_owns
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
-from book_agent.orchestrator.rule_engine import IssueRoutingContext, resolve_action
+from book_agent.orchestrator.rule_engine import build_issue_action
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.memory_service import MemoryService
-from book_agent.services.style_drift import STYLE_DRIFT_RULES
-from book_agent.services.term_normalization import normalize_term_rendering
+from book_agent.services.term_normalization import locked_term_from_entry
+from book_agent.translation.heuristics import heuristics_pack_for_document
 
 
 def _utcnow() -> datetime:
@@ -125,11 +126,19 @@ class ReviewService:
     def review_chapter(self, chapter_id: str) -> ReviewArtifacts:
         bundle = self.repository.load_chapter_bundle(chapter_id)
         artifacts = self._build_review_artifacts(bundle)
-        resolved = self.repository.resolve_missing_issues(
-            chapter_id,
-            {issue.id for issue in artifacts.issues},
+        sync = self.repository.sync_issues(
+            artifacts.issues,
+            artifacts.actions,
+            owned_existing=[issue for issue in bundle.existing_issues if review_pass_owns(issue)],
             resolution_note="Resolved by latest QA pass.",
+            actor_id="services.review",
         )
+        # From here on the persisted rows are the truth: a human WONTFIX stays
+        # closed and must not block the chapter or reject its memory.
+        artifacts.issues = [issue for issue in sync.issues if issue.status in (IssueStatus.OPEN, IssueStatus.TRIAGED)]
+        artifacts.actions = [action for action in sync.actions if action.issue_id in {issue.id for issue in artifacts.issues}]
+        artifacts.summary = self._recount_summary(artifacts.summary, artifacts.issues)
+        resolved = sync.resolved
         structure_severity = self._max_issue_severity(artifacts.issues, RootCauseLayer.STRUCTURE)
         if structure_severity is not None and _severity_rank(structure_severity) > _severity_rank(bundle.chapter.risk_level):
             bundle.chapter.risk_level = structure_severity
@@ -149,6 +158,19 @@ class ReviewService:
         )
         self.repository.session.flush()
         return artifacts
+
+    def _recount_summary(self, summary: ChapterQualitySummary, issues: list[ReviewIssue]) -> ChapterQualitySummary:
+        """Recompute the flags after the ledger sync dropped human-closed issues."""
+        return ChapterQualitySummary(
+            coverage_ok=not any(issue.issue_type == "OMISSION" for issue in issues),
+            alignment_ok=not any(issue.root_cause_layer == RootCauseLayer.ALIGNMENT for issue in issues),
+            term_ok=not any(issue.issue_type == "TERM_CONFLICT" for issue in issues),
+            format_ok=not any(issue.issue_type == "FORMAT_POLLUTION" for issue in issues),
+            blocking_issue_count=sum(1 for issue in issues if issue.blocking),
+            low_confidence_count=sum(1 for issue in issues if issue.issue_type == "LOW_CONFIDENCE"),
+            format_pollution_count=sum(1 for issue in issues if issue.issue_type == "FORMAT_POLLUTION"),
+            naturalness_summary=summary.naturalness_summary,
+        )
 
     def _commit_review_approved_memory(self, bundle: ChapterReviewBundle) -> None:
         latest_run_ids_by_packet: dict[str, str] = {}
@@ -345,18 +367,38 @@ class ReviewService:
         active_locked_terms = [
             term for term in bundle.term_entries if term.lock_level == LockLevel.LOCKED and term.status.value == "active"
         ]
-        for term in active_locked_terms:
-            expected_target_term = normalize_term_rendering(term.source_term, term.target_term)
+        # The same matcher the translation output guardrail uses (domain.terminology.enforcement):
+        # whole-token, variant-tolerant source matching with longest-term ownership ("bull" does not
+        # match "bullish"; "Inverted Head & Shoulders" sentences belong to that term only), and
+        # whitespace/punctuation/case-insensitive rendering lookup ("RSI背离" honours "RSI 背离").
+        locked_terms = [locked_term_from_entry(term) for term in active_locked_terms]
+        aligned_text_by_sentence = {
+            sentence.id: self._aligned_text_for_sentence(
+                sentence.id,
+                alignment_state.active_alignments_by_sentence,
+                alignment_state.active_target_map,
+            )
+            for sentence in bundle.sentences
+            if sentence.translatable
+        }
+        violations = {
+            (violation.term_index, violation.unit_id): violation
+            for violation in find_term_violations(
+                (
+                    (sentence.id, sentence.normalized_text or sentence.source_text, aligned_text_by_sentence[sentence.id])
+                    for sentence in bundle.sentences
+                    if sentence.translatable
+                ),
+                locked_terms,
+            )
+        }
+        for term_position, term in enumerate(active_locked_terms):
+            expected_target_term = locked_terms[term_position].expected_target_term
             for sentence in bundle.sentences:
-                if not sentence.translatable:
+                violation = violations.get((term_position, sentence.id))
+                if violation is None:
                     continue
-                if term.source_term.lower() not in (sentence.normalized_text or sentence.source_text).lower():
-                    continue
-                aligned_text = self._aligned_text_for_sentence(
-                    sentence.id,
-                    alignment_state.active_alignments_by_sentence,
-                    alignment_state.active_target_map,
-                )
+                aligned_text = violation.target_text
                 if self._should_skip_locked_term_conflict(
                     bundle=bundle,
                     sentence=sentence,
@@ -365,34 +407,33 @@ class ReviewService:
                     aligned_text=aligned_text,
                 ):
                     continue
-                if expected_target_term not in aligned_text:
-                    issues.append(
-                        self._make_issue(
-                            now=now,
-                            chapter_id=bundle.chapter.id,
-                            document_id=bundle.chapter.document_id,
-                            sentence_id=sentence.id,
-                            packet_id=self._find_packet_for_sentence(bundle, sentence.id),
-                            issue_type="TERM_CONFLICT",
-                            root_cause_layer=RootCauseLayer.MEMORY,
-                            severity=Severity.HIGH,
-                            blocking=True,
-                            evidence={
-                                "source_term": term.source_term,
-                                "source_terms": [term.source_term],
-                                "expected_target_term": expected_target_term,
-                                "actual_target_text": aligned_text,
-                            },
-                            unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
-                        )
+                issues.append(
+                    self._make_issue(
+                        now=now,
+                        chapter_id=bundle.chapter.id,
+                        document_id=bundle.chapter.document_id,
+                        sentence_id=sentence.id,
+                        packet_id=self._find_packet_for_sentence(bundle, sentence.id),
+                        issue_type="TERM_CONFLICT",
+                        root_cause_layer=RootCauseLayer.MEMORY,
+                        severity=Severity.HIGH,
+                        blocking=True,
+                        evidence={
+                            "source_term": term.source_term,
+                            "source_terms": [term.source_term],
+                            "expected_target_term": expected_target_term,
+                            "actual_target_text": aligned_text,
+                        },
+                        unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
                     )
+                )
 
         issues = self._dedupe_issues(issues)
 
         actions: list[IssueAction] = []
         rerun_plans: list[RerunPlan] = []
         for issue in issues:
-            action = self._build_action(issue)
+            action = build_issue_action(issue)
             actions.append(action)
             rerun_plans.append(build_rerun_plan(issue, action))
 
@@ -542,6 +583,7 @@ class ReviewService:
         chapter_memory_snapshot_version = (
             bundle.chapter_translation_memory.version if bundle.chapter_translation_memory is not None else None
         )
+        style_drift_rules = heuristics_pack_for_document(bundle.document).style_drift_rules
         for sentence in bundle.sentences:
             if not sentence.translatable or sentence.sentence_status == SentenceStatus.BLOCKED:
                 continue
@@ -552,7 +594,7 @@ class ReviewService:
             )
             if not aligned_text.strip():
                 continue
-            for rule in STYLE_DRIFT_RULES:
+            for rule in style_drift_rules:
                 if not rule.source_pattern.search(sentence.source_text or ""):
                     continue
                 target_match = rule.target_pattern.search(aligned_text)
@@ -1924,59 +1966,3 @@ class ReviewService:
             updated_at=now,
         )
 
-    def _build_action(self, issue: ReviewIssue) -> IssueAction:
-        action_type = resolve_action(
-            IssueRoutingContext(
-                issue_type=issue.issue_type,
-                root_cause_layer=issue.root_cause_layer,
-                involves_locked_term=issue.issue_type == "TERM_CONFLICT",
-                translation_content_ok=issue.issue_type != "OMISSION",
-                requires_packet_rerun=bool((issue.evidence_json or {}).get("requires_packet_rerun")),
-            )
-        )
-        scope_type, scope_id = self._scope_for_action(issue, action_type)
-        return IssueAction(
-            id=stable_id("issue-action", issue.id, action_type.value),
-            issue_id=issue.id,
-            action_type=action_type,
-            scope_type=scope_type,
-            scope_id=scope_id,
-            status=ActionStatus.PLANNED,
-            reason_json={"issue_type": issue.issue_type, "packet_id": issue.packet_id},
-            created_by=ActionActorType.SYSTEM,
-            created_at=issue.created_at,
-            updated_at=issue.updated_at,
-        )
-
-    def _scope_for_action(self, issue: ReviewIssue, action_type: ActionType) -> tuple[JobScopeType, str | None]:
-        if action_type in {ActionType.RERUN_PACKET, ActionType.REBUILD_PACKET_THEN_RERUN, ActionType.REALIGN_ONLY} and issue.packet_id:
-            return JobScopeType.PACKET, issue.packet_id
-        if (
-            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
-            and issue.issue_type == "TERM_CONFLICT"
-            and issue.packet_id
-        ):
-            return JobScopeType.PACKET, issue.packet_id
-        if (
-            action_type == ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED
-            and issue.issue_type == "UNLOCKED_KEY_CONCEPT"
-            and issue.packet_id
-        ):
-            packet_ids_seen = [
-                str(packet_id).strip()
-                for packet_id in list((issue.evidence_json or {}).get("packet_ids_seen") or [])
-                if str(packet_id).strip()
-            ]
-            if len(packet_ids_seen) == 1:
-                return JobScopeType.PACKET, issue.packet_id
-        if action_type in {
-            ActionType.RESEGMENT_CHAPTER,
-            ActionType.REPARSE_CHAPTER,
-            ActionType.UPDATE_TERMBASE_THEN_RERUN_TARGETED,
-            ActionType.UPDATE_ENTITY_REGISTRY_THEN_RERUN_TARGETED,
-            ActionType.REBUILD_CHAPTER_BRIEF,
-        }:
-            return JobScopeType.CHAPTER, issue.chapter_id
-        if action_type == ActionType.REPARSE_DOCUMENT:
-            return JobScopeType.DOCUMENT, issue.document_id
-        return JobScopeType.SENTENCE, issue.sentence_id

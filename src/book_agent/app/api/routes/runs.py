@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import current_principal, require_document_in_org
 from book_agent.app.api.deps import get_db_session
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+from book_agent.domain.enums import DocumentRunType
+from book_agent.domain.models.ops import DocumentRun
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.schemas.run_control import (
     CreateDocumentRunRequest,
@@ -30,6 +33,39 @@ def _wake_executor(request: Request, run_id: str) -> None:
 def _wake_executor_for_active_summary(request: Request, summary: DocumentRunSummary) -> None:
     if summary.status in {"running", "draining"}:
         _wake_executor(request, summary.run_id)
+
+
+# Run types whose work calls the model; exports and bootstrap do not.
+_MODEL_RUN_TYPES = {
+    DocumentRunType.TRANSLATE_FULL,
+    DocumentRunType.TRANSLATE_TARGETED,
+    DocumentRunType.REVIEW_FULL,
+    DocumentRunType.REPAIR_TARGETED,
+}
+
+
+def _require_provider(request: Request, session: Session, run_type: str | None) -> None:
+    """Refuse to start model work while no provider is configured, instead of pausing on the first call."""
+    if run_type not in _MODEL_RUN_TYPES:
+        return
+    from book_agent.workers.factory import UnconfiguredTranslationWorker
+    from book_agent.workers.translator import EchoTranslationWorker
+
+    worker = request.app.state.resolve_translation_worker(current_principal(request).org_id)
+    if isinstance(worker, UnconfiguredTranslationWorker):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=worker.reason)
+    if isinstance(worker, EchoTranslationWorker):
+        return
+    from book_agent.core.config import get_settings
+    from book_agent.services.cost_estimate import active_provider_pricing
+    from book_agent.services.prepaid_credit import UnpricedProviderForPrepaid, ensure_priced_for_prepaid
+
+    org_id = current_principal(request).org_id
+    input_price, output_price, _, _ = active_provider_pricing(session, org_id, get_settings())
+    try:
+        ensure_priced_for_prepaid(session, org_id, prices_known=input_price is not None and output_price is not None)
+    except UnpricedProviderForPrepaid as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 def _service(session: Session) -> RunControlService:
@@ -116,6 +152,8 @@ def create_run(
     payload: CreateDocumentRunRequest,
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
+    require_document_in_org(session, request, payload.document_id)
+    _require_provider(request, session, payload.run_type)
     service = _service(session)
     try:
         summary = service.create_run(
@@ -233,6 +271,8 @@ def resume_run(
     payload: RunControlRequest,
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
+    run = session.get(DocumentRun, run_id)
+    _require_provider(request, session, run.run_type if run is not None else None)
     try:
         summary = _service(session).resume_run(
             run_id,

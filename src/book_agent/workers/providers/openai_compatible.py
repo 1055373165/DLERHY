@@ -1,16 +1,54 @@
+"""OpenAI-compatible provider client.
+
+One client serves every model call in the system (packet translation and the
+structured-object calls made by terminology, concept resolution and provider
+smoke tests). It owns transport, retries and usage accounting so those
+concerns are implemented once:
+
+* ``HttpxJSONTransport`` keeps a pooled ``httpx.Client`` (keep-alive across
+  the 8 parallel translation threads) and maps every failure to one of the
+  ``Provider*Error`` types below.
+* ``_request_with_retries`` retries only the HTTP codes in
+  :data:`RETRYABLE_HTTP_CODES` (shared with ``workers.failures`` so the
+  in-client and work-item retry policies agree), backs off exponentially with
+  full jitter under a cap, honours ``Retry-After`` and never runs past the
+  per-call deadline.
+* ``_extract_usage`` normalises provider usage payloads, including prompt
+  cache accounting, into :class:`TranslationUsage`.
+"""
+
 from __future__ import annotations
 
 import json
+import random
 import re
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from http.client import IncompleteRead, RemoteDisconnected
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from typing import Any, Protocol
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
-from book_agent.workers.contracts import TranslationUsage, TranslationWorkerOutput, TranslationWorkerResult
+import httpx
+
+from book_agent.translation.contracts import (
+    TranslationUsage,
+    TranslationWorkerOutput,
+    TranslationWorkerResult,
+)
 from book_agent.workers.translator import TranslationModelClient, TranslationPromptRequest
+
+# HTTP statuses worth another attempt: request timeout, conflict, too early,
+# rate limit and every server-side error. Both the client retry loop and the
+# work-item failure classifier use this set.
+RETRYABLE_HTTP_CODES: frozenset[int] = frozenset({408, 409, 425, 429})
+
+DEFAULT_MAX_RETRY_BACKOFF_SECONDS = 30.0
+
+
+def is_retryable_http_status(code: int) -> bool:
+    return code in RETRYABLE_HTTP_CODES or 500 <= code <= 599
 
 
 class ProviderTransportError(RuntimeError):
@@ -18,16 +56,60 @@ class ProviderTransportError(RuntimeError):
 
 
 class ProviderHTTPError(ProviderTransportError):
-    def __init__(self, code: int, detail: str) -> None:
+    def __init__(self, code: int, detail: str, *, retry_after_seconds: float | None = None) -> None:
         self.code = code
         self.detail = detail
+        self.retry_after_seconds = retry_after_seconds
         super().__init__(f"Provider returned HTTP {code}: {detail}")
+
+
+class ProviderResponseFormatError(RuntimeError):
+    """The provider answered, but not with the structured payload we asked for.
+
+    ``usage`` is set when the answer carried token counts: the call was billed
+    even though it is unusable, and accounting must say so.
+    """
+
+    def __init__(self, message: str, *, usage: Any = None, finish_reason: str | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage
+        self.finish_reason = finish_reason
+
+
+class ProviderOutputTruncated(ProviderResponseFormatError):
+    """The answer stopped at the output token limit before the payload was complete.
+
+    ``reasoning_only`` means every output token went to reasoning: a
+    configuration problem (reasoning model with too small a limit) that no
+    retry fixes.
+    """
+
+    def __init__(self, message: str, *, usage: Any = None, finish_reason: str | None = None, reasoning_only: bool = False) -> None:
+        super().__init__(message, usage=usage, finish_reason=finish_reason)
+        self.reasoning_only = reasoning_only
 
 
 class ProviderNetworkError(ProviderTransportError):
     def __init__(self, reason: str) -> None:
         self.reason = reason
         super().__init__(f"Provider request failed: {reason}")
+
+
+class ProviderDeadlineExceeded(ProviderTransportError):
+    """The per-call deadline ran out before a retry could be attempted."""
+
+
+PROVIDER_NOT_CONFIGURED_MESSAGE = (
+    "还没有可用的模型服务商：请在「服务商」页添加并启用一个服务商（填入 API key），"
+    "或由管理员在 .env 中设置 OPENAI_API_KEY。"
+)
+
+
+class ProviderNotConfigured(ValueError):
+    """No usable model provider: nothing active on the providers page and no key in settings."""
+
+    def __init__(self, message: str = PROVIDER_NOT_CONFIGURED_MESSAGE):
+        super().__init__(message)
 
 
 class JSONTransport(Protocol):
@@ -52,7 +134,73 @@ class JSONTransport(Protocol):
         ...
 
 
-class UrllibJSONTransport:
+def parse_retry_after(value: str | None, *, now: datetime | None = None) -> float | None:
+    """Seconds to wait from a ``Retry-After`` header (delay-seconds or HTTP-date)."""
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(text)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        current = now or datetime.now(timezone.utc)
+        seconds = (when - current).total_seconds()
+    return max(0.0, seconds)
+
+
+class HttpxJSONTransport:
+    """Pooled HTTP transport shared by every client in the process.
+
+    ``httpx.Client`` is thread-safe for concurrent requests, so one instance
+    carries all translation threads; ``timeout_seconds`` bounds connect, read,
+    write and pool acquisition for each request.
+    """
+
+    _CONNECT_TIMEOUT_SECONDS = 10.0
+
+    def __init__(
+        self,
+        *,
+        client: httpx.Client | None = None,
+        max_connections: int = 32,
+        max_keepalive_connections: int = 16,
+    ) -> None:
+        self._client = client
+        self._lock = threading.Lock()
+        self._limits = httpx.Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections,
+        )
+
+    def _http(self) -> httpx.Client:
+        if self._client is None:
+            with self._lock:
+                if self._client is None:
+                    self._client = httpx.Client(limits=self._limits, follow_redirects=False)
+        return self._client
+
+    def close(self) -> None:
+        with self._lock:
+            if self._client is not None:
+                self._client.close()
+                self._client = None
+
+    def _timeout(self, timeout_seconds: int) -> httpx.Timeout:
+        total = max(1.0, float(timeout_seconds))
+        return httpx.Timeout(
+            connect=min(self._CONNECT_TIMEOUT_SECONDS, total),
+            read=total,
+            write=total,
+            pool=total,
+        )
+
     def post_json(
         self,
         *,
@@ -61,38 +209,28 @@ class UrllibJSONTransport:
         payload: dict[str, Any],
         timeout_seconds: int,
     ) -> dict[str, Any]:
-        body = json.dumps(payload).encode("utf-8")
-        request = Request(
-            url=url,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                **headers,
-            },
-            method="POST",
-        )
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
-                try:
-                    raw_bytes = response.read()
-                except IncompleteRead as exc:
-                    if exc.partial:
-                        raw_bytes = exc.partial
-                    else:
-                        raise ProviderTransportError("Provider response stream ended unexpectedly.") from exc
-                except (TimeoutError, ConnectionResetError, OSError) as exc:
-                    raise ProviderNetworkError(str(exc)) from exc
-                raw = raw_bytes.decode("utf-8")
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise ProviderHTTPError(exc.code, detail or str(exc.reason)) from exc
-        except URLError as exc:
-            raise ProviderNetworkError(str(exc.reason)) from exc
-        except (TimeoutError, ConnectionResetError, OSError) as exc:
-            raise ProviderNetworkError(str(exc)) from exc
-        except RemoteDisconnected as exc:
-            raise ProviderTransportError("Provider disconnected before sending a complete response.") from exc
-
+            response = self._http().post(
+                url,
+                content=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", **headers},
+                timeout=self._timeout(timeout_seconds),
+            )
+            raw = response.text
+        except httpx.RemoteProtocolError as exc:
+            raise ProviderTransportError(
+                "Provider disconnected before sending a complete response."
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise ProviderNetworkError(f"timed out: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise ProviderNetworkError(str(exc) or type(exc).__name__) from exc
+        if response.status_code >= 400:
+            raise ProviderHTTPError(
+                response.status_code,
+                raw or response.reason_phrase,
+                retry_after_seconds=parse_retry_after(response.headers.get("retry-after")),
+            )
         try:
             return json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -112,17 +250,6 @@ class UrllibJSONTransport:
         # response so the rest of the client can consume it normally.
         streaming_payload = dict(payload)
         streaming_payload["stream"] = True
-        body = json.dumps(streaming_payload).encode("utf-8")
-        request = Request(
-            url=url,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-                **headers,
-            },
-            method="POST",
-        )
         accumulated_content: list[str] = []
         accumulated_reasoning: list[str] = []
         finish_reason: str | None = None
@@ -130,9 +257,21 @@ class UrllibJSONTransport:
         last_id: str | None = None
         last_model: str | None = None
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
-                for raw_line in response:
-                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            with self._http().stream(
+                "POST",
+                url,
+                content=json.dumps(streaming_payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream", **headers},
+                timeout=self._timeout(timeout_seconds),
+            ) as response:
+                if response.status_code >= 400:
+                    detail = response.read().decode("utf-8", errors="replace")
+                    raise ProviderHTTPError(
+                        response.status_code,
+                        detail or response.reason_phrase,
+                        retry_after_seconds=parse_retry_after(response.headers.get("retry-after")),
+                    )
+                for line in response.iter_lines():
                     if not line.startswith("data:"):
                         continue
                     data_chunk = line[len("data:") :].strip()
@@ -167,15 +306,14 @@ class UrllibJSONTransport:
                     chunk_usage = chunk.get("usage")
                     if isinstance(chunk_usage, dict):
                         usage_payload = chunk_usage
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise ProviderHTTPError(exc.code, detail or str(exc.reason)) from exc
-        except URLError as exc:
-            raise ProviderNetworkError(str(exc.reason)) from exc
-        except (TimeoutError, ConnectionResetError, OSError) as exc:
-            raise ProviderNetworkError(str(exc)) from exc
-        except RemoteDisconnected as exc:
-            raise ProviderTransportError("Provider disconnected before sending a complete response.") from exc
+        except httpx.RemoteProtocolError as exc:
+            raise ProviderTransportError(
+                "Provider disconnected before sending a complete response."
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise ProviderNetworkError(f"timed out: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise ProviderNetworkError(str(exc) or type(exc).__name__) from exc
 
         full_content = "".join(accumulated_content)
         if not full_content and not usage_payload:
@@ -204,6 +342,14 @@ class UrllibJSONTransport:
         return synthetic_response
 
 
+_SHARED_TRANSPORT = HttpxJSONTransport()
+
+
+def shared_transport() -> HttpxJSONTransport:
+    """The process-wide pooled transport used by every client by default."""
+    return _SHARED_TRANSPORT
+
+
 @dataclass(slots=True)
 class OpenAICompatibleTranslationClient(TranslationModelClient):
     api_key: str
@@ -211,11 +357,15 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     timeout_seconds: int = 60
     max_retries: int = 0
     retry_backoff_seconds: float = 1.0
+    max_retry_backoff_seconds: float = DEFAULT_MAX_RETRY_BACKOFF_SECONDS
+    # Wall-clock budget for one logical call including retries and backoff.
+    # ``None`` derives it from timeout_seconds, max_retries and the backoff cap.
+    deadline_seconds: float | None = None
     max_output_tokens: int | None = 8192
     input_cache_hit_cost_per_1m_tokens: float | None = None
     input_cost_per_1m_tokens: float | None = None
     output_cost_per_1m_tokens: float | None = None
-    transport: JSONTransport = field(default_factory=UrllibJSONTransport)
+    transport: JSONTransport = field(default_factory=shared_transport)
     extra_headers: dict[str, str] = field(default_factory=dict)
     # Some OpenAI-compatible endpoints (notably NVIDIA NIM serving
     # deepseek-v3.1-terminus) only respond reliably to streaming requests;
@@ -223,21 +373,35 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     # stream=true via SSE and reassemble client-side. The flag is opt-in
     # because OpenAI's own /v1/responses endpoint is fine without it.
     streaming: bool = False
+    # Provider-specific top-level request fields merged into every payload,
+    # e.g. {"thinking": {"type": "disabled"}} to turn off DeepSeek reasoning.
+    request_overrides: dict[str, Any] = field(default_factory=dict)
+    # chat/completions structured output: "json_object" (schema described in
+    # the static system message; works everywhere) or "json_schema"
+    # (schema-constrained decoding where the provider supports it).
+    structured_output_mode: str = "json_object"
+    # Injection points for tests; production uses the real clock.
+    sleep: Callable[[float], None] = field(default=time.sleep)
+    monotonic: Callable[[], float] = field(default=time.monotonic)
+    random_fraction: Callable[[], float] = field(default=random.random)
 
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult:
         endpoint_url, api_mode = self._resolve_endpoint()
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
             url=endpoint_url,
-            payload=self._build_payload(request, api_mode=api_mode),
+            payload={**self._build_payload(request, api_mode=api_mode), **self.request_overrides},
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
-        output_payload = self._extract_output_payload(response, api_mode=api_mode)
-        output_payload = self._normalize_translation_payload(output_payload)
         try:
-            output = TranslationWorkerOutput.model_validate(output_payload)
-        except Exception as exc:
-            raise RuntimeError("Provider response did not match TranslationWorkerOutput schema.") from exc
+            output_payload = self._extract_output_payload(response, api_mode=api_mode)
+            output_payload = self._normalize_translation_payload(output_payload)
+            try:
+                output = TranslationWorkerOutput.model_validate(output_payload)
+            except Exception as exc:
+                raise ProviderResponseFormatError("Provider response did not match TranslationWorkerOutput schema.") from exc
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         return TranslationWorkerResult(
             output=output,
             usage=self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms),
@@ -256,19 +420,169 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
             url=endpoint_url,
-            payload=self._build_structured_payload(
-                model_name=model_name,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                response_schema=response_schema,
-                schema_name=schema_name,
-                api_mode=api_mode,
-            ),
+            payload={
+                **self._build_structured_payload(
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    response_schema=response_schema,
+                    schema_name=schema_name,
+                    api_mode=api_mode,
+                ),
+                **self.request_overrides,
+            },
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
-        payload = self._extract_generic_output_payload(response, api_mode=api_mode)
+        try:
+            payload = self._extract_generic_output_payload(response, api_mode=api_mode)
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
         return payload, usage
+
+    def generate_agent_step(
+        self,
+        *,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """One agent step: OpenAI-style chat messages plus function tools.
+
+        Returns ``{"text", "tool_calls": [{"call_id", "name", "arguments"}],
+        "usage": TranslationUsage, "finish_reason", "raw"}``.
+        """
+        endpoint_url, api_mode = self._resolve_endpoint()
+        request_started_at = time.perf_counter()
+        if api_mode == "chat_completions":
+            payload: dict[str, Any] = {"model": model_name, "messages": messages}
+            if tools:
+                payload["tools"] = tools
+                payload["tool_choice"] = "auto"
+            if self.max_output_tokens is not None:
+                payload["max_tokens"] = self.max_output_tokens
+        else:
+            payload = {"model": model_name, "input": self._responses_input_from_messages(messages)}
+            if tools:
+                payload["tools"] = [
+                    {
+                        "type": "function",
+                        "name": tool["function"]["name"],
+                        "description": tool["function"].get("description", ""),
+                        "parameters": tool["function"].get("parameters", {}),
+                    }
+                    for tool in tools
+                ]
+        response = self._request_with_retries(url=endpoint_url, payload={**payload, **self.request_overrides})
+        latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
+        usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
+        try:
+            if api_mode == "chat_completions":
+                text, tool_calls, finish_reason = self._parse_chat_agent_step(response)
+            else:
+                text, tool_calls, finish_reason = self._parse_responses_agent_step(response)
+            if not tool_calls and not (text or "").strip() and finish_reason in {"length", "max_output_tokens"}:
+                raise ProviderResponseFormatError("Provider agent step ended at the output limit with no text or tool calls.")
+        except ProviderResponseFormatError as exc:
+            raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
+        return {"text": text, "tool_calls": tool_calls, "usage": usage, "finish_reason": finish_reason, "raw": response}
+
+    def _parse_chat_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        choices = response.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
+        choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        text = message.get("content") if isinstance(message.get("content"), str) else None
+        tool_calls: list[dict[str, Any]] = []
+        for index, raw_call in enumerate(message.get("tool_calls") or []):
+            if not isinstance(raw_call, dict):
+                continue
+            function = raw_call.get("function") if isinstance(raw_call.get("function"), dict) else {}
+            name = str(function.get("name") or "").strip()
+            if not name:
+                continue
+            tool_calls.append(
+                {
+                    "call_id": str(raw_call.get("id") or f"call_{index}"),
+                    "name": name,
+                    "arguments": self._parse_tool_arguments(function.get("arguments")),
+                }
+            )
+        finish_reason = choice.get("finish_reason") if isinstance(choice.get("finish_reason"), str) else None
+        return text, tool_calls, finish_reason
+
+    def _parse_responses_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        texts: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
+        for index, block in enumerate(response.get("output") or []):
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "function_call":
+                name = str(block.get("name") or "").strip()
+                if name:
+                    tool_calls.append(
+                        {
+                            "call_id": str(block.get("call_id") or block.get("id") or f"call_{index}"),
+                            "name": name,
+                            "arguments": self._parse_tool_arguments(block.get("arguments")),
+                        }
+                    )
+            elif block_type == "message":
+                for content in block.get("content") or []:
+                    if isinstance(content, dict) and isinstance(content.get("text"), str):
+                        texts.append(content["text"])
+        text = "\n".join(texts) if texts else None
+        return text, tool_calls, self._coerce_str(response.get("status"))
+
+    def _parse_tool_arguments(self, raw: Any) -> dict[str, Any]:
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, str) and raw.strip():
+            parsed = self._parse_json_dict_candidate(raw)
+            if parsed is not None:
+                return parsed
+            salvaged = self._extract_balanced_json_dict(raw)
+            if salvaged is not None:
+                return salvaged
+        return {}
+
+    def _responses_input_from_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for message in messages:
+            role = str(message.get("role") or "user")
+            if role == "tool":
+                items.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": str(message.get("tool_call_id") or ""),
+                        "output": str(message.get("content") or ""),
+                    }
+                )
+                continue
+            content = message.get("content")
+            if isinstance(content, str) and content:
+                items.append({"role": role, "content": [{"type": "input_text" if role != "assistant" else "output_text", "text": content}]})
+            elif isinstance(content, list) and content:
+                parts: list[dict[str, Any]] = []
+                for part in content:
+                    if part.get("type") == "text":
+                        parts.append({"type": "input_text", "text": str(part.get("text") or "")})
+                    elif part.get("type") == "image_url":
+                        parts.append({"type": "input_image", "image_url": str((part.get("image_url") or {}).get("url") or "")})
+                items.append({"role": role, "content": parts})
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") if isinstance(call, dict) else {}
+                items.append(
+                    {
+                        "type": "function_call",
+                        "call_id": str(call.get("id") or ""),
+                        "name": str((function or {}).get("name") or ""),
+                        "arguments": str((function or {}).get("arguments") or "{}"),
+                    }
+                )
+        return items
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -286,13 +600,65 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             return f"{normalized}/chat/completions", "chat_completions"
         return f"{normalized}/chat/completions", "chat_completions"
 
+    # --- retry policy -------------------------------------------------------
+
+    def effective_deadline_seconds(self) -> float:
+        if self.deadline_seconds is not None:
+            return float(self.deadline_seconds)
+        attempts = max(0, int(self.max_retries)) + 1
+        backoff_budget = sum(self.backoff_seconds(attempt, jitter=False) for attempt in range(1, attempts))
+        return float(self.timeout_seconds) * attempts + backoff_budget
+
+    def backoff_seconds(self, attempt: int, *, jitter: bool = True) -> float:
+        """Delay before retry number ``attempt`` (1-based): capped exponential, full jitter."""
+        base = float(self.retry_backoff_seconds) * (2 ** (attempt - 1))
+        capped = min(base, float(self.max_retry_backoff_seconds))
+        if capped <= 0:
+            return 0.0
+        if not jitter:
+            return capped
+        return capped * self.random_fraction()
+
     def _request_with_retries(
         self,
         *,
         url: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        from urllib.parse import urlsplit
+
+        from book_agent.infra import tracing
+
+        with tracing.span(
+            "llm.request",
+            **{
+                "gen_ai.request.model": payload.get("model"),
+                "server.address": urlsplit(url).hostname,
+                "url.path": urlsplit(url).path,
+                "book_agent.streaming": bool(self.streaming),
+            },
+        ) as current:
+            response = self._request_with_retries_untraced(url=url, payload=payload)
+            if current is not None:
+                usage = response.get("usage") if isinstance(response, dict) else None
+                if isinstance(usage, dict):
+                    tracing.set_attributes(
+                        current,
+                        **{
+                            "gen_ai.usage.input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
+                            "gen_ai.usage.output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
+                        },
+                    )
+            return response
+
+    def _request_with_retries_untraced(
+        self,
+        *,
+        url: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         request_payload = self._prepare_request_payload(payload)
+        deadline_at = self.monotonic() + self.effective_deadline_seconds()
         attempt = 0
         while True:
             try:
@@ -314,8 +680,22 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     raise
                 if attempt >= self.max_retries:
                     raise
-            attempt += 1
-            time.sleep(self.retry_backoff_seconds * (2 ** (attempt - 1)))
+                attempt += 1
+                from book_agent.infra import tracing
+
+                tracing.annotate_current(**{"book_agent.retries": attempt, "book_agent.last_retry_error": type(exc).__name__})
+                delay = self.backoff_seconds(attempt)
+                retry_after = getattr(exc, "retry_after_seconds", None)
+                if retry_after is not None:
+                    delay = max(delay, min(float(retry_after), float(self.max_retry_backoff_seconds)))
+                remaining = deadline_at - self.monotonic()
+                if delay > remaining:
+                    raise ProviderDeadlineExceeded(
+                        f"Provider call deadline exceeded after {attempt} attempt(s); "
+                        f"next retry would need {delay:.1f}s but only {max(0.0, remaining):.1f}s remain."
+                    ) from exc
+            if delay > 0:
+                self.sleep(delay)
 
     def _is_chat_completions_url(self, url: str) -> bool:
         return url.rstrip("/").endswith("/chat/completions")
@@ -334,17 +714,38 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         return scrubbed
 
     def _should_retry_http(self, code: int) -> bool:
-        return code in {408, 409, 429} or 500 <= code <= 599
+        return is_retryable_http_status(code)
 
     def _build_payload(self, request: TranslationPromptRequest, *, api_mode: str) -> dict[str, Any]:
+        """Lay the prompt out so providers can cache the shared prefix.
+
+        Messages arrive ordered static -> chapter -> packet. In chat mode the
+        JSON schema (constant per profile) is appended to the first, static
+        system message rather than to the packet, and only the packet-specific
+        ``packet_id`` requirement goes with the user message.
+        """
+        messages = list(request.effective_messages())
         if api_mode == "chat_completions":
+            chat_messages = [{"role": message.role, "content": message.content} for message in messages]
+            if self.structured_output_mode == "json_schema":
+                response_format: dict[str, Any] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": "translation_worker_output", "schema": request.response_schema},
+                }
+            else:
+                response_format = {"type": "json_object"}
+                chat_messages[0] = {
+                    "role": chat_messages[0]["role"],
+                    "content": chat_messages[0]["content"] + "\n" + self._chat_completions_schema_contract(request),
+                }
+            chat_messages[-1] = {
+                "role": chat_messages[-1]["role"],
+                "content": chat_messages[-1]["content"] + f"\npacket_id must equal: {request.packet_id}",
+            }
             payload = {
                 "model": request.model_name,
-                "messages": [
-                    {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": self._chat_completions_user_prompt(request)},
-                ],
-                "response_format": {"type": "json_object"},
+                "messages": chat_messages,
+                "response_format": response_format,
             }
             if self.max_output_tokens is not None:
                 payload["max_tokens"] = self.max_output_tokens
@@ -353,13 +754,10 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             "model": request.model_name,
             "input": [
                 {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": request.system_prompt}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": request.user_prompt}],
-                },
+                    "role": message.role,
+                    "content": [{"type": "input_text", "text": message.content}],
+                }
+                for message in messages
             ],
             "text": {
                 "format": {
@@ -413,19 +811,19 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             },
         }
 
-    def _chat_completions_user_prompt(self, request: TranslationPromptRequest) -> str:
+    def _chat_completions_schema_contract(self, request: TranslationPromptRequest) -> str:
+        """Packet-independent output contract for providers without schema-constrained decoding."""
         schema_json = json.dumps(request.response_schema, ensure_ascii=False, separators=(",", ":"))
-        output_contract = (
+        return (
             "Return exactly one JSON object with these top-level keys only: "
             "packet_id, target_segments, alignment_suggestions, low_confidence_flags, notes.\n"
-            f"packet_id must equal: {request.packet_id}\n"
+            "packet_id must equal the value given at the end of the user message.\n"
             "Do not use top-level keys like translation or translations.\n"
             "Every current source sentence must be covered through target_segments and alignment_suggestions.\n"
             "When confidence is normal, low_confidence_flags should be []. notes may be [].\n"
             "Required JSON schema:\n"
             f"{schema_json}"
         )
-        return f"{request.user_prompt}\n{output_contract}"
 
     def _extract_output_payload(self, response: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
         if api_mode == "chat_completions":
@@ -443,20 +841,20 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     if payload is not None:
                         return payload
 
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
 
     def _extract_generic_output_payload(self, response: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
         if api_mode == "chat_completions":
             choices = response.get("choices")
             if not isinstance(choices, list) or not choices:
-                raise RuntimeError("Provider response did not include chat completion choices.")
+                raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
             message = choices[0].get("message")
             if not isinstance(message, dict):
-                raise RuntimeError("Provider response did not include a chat completion message.")
+                raise ProviderResponseFormatError("Provider response did not include a chat completion message.")
             payload = self._extract_json_object_from_content(message.get("content"))
             if payload is not None:
                 return payload
-            raise RuntimeError("Provider response did not include a structured JSON output payload.")
+            raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
         if isinstance(response.get("output_parsed"), dict):
             return response["output_parsed"]
 
@@ -469,20 +867,57 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                 if payload is not None:
                     return payload
 
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
 
     def _extract_chat_completions_payload(self, response: dict[str, Any]) -> dict[str, Any]:
         choices = response.get("choices")
         if not isinstance(choices, list) or not choices:
-            raise RuntimeError("Provider response did not include chat completion choices.")
+            raise ProviderResponseFormatError("Provider response did not include chat completion choices.")
         message = choices[0].get("message")
         if not isinstance(message, dict):
-            raise RuntimeError("Provider response did not include a chat completion message.")
+            raise ProviderResponseFormatError("Provider response did not include a chat completion message.")
         content = message.get("content")
         payload = self._extract_payload_from_content(content)
         if payload is not None:
             return payload
-        raise RuntimeError("Provider response did not include a structured JSON output payload.")
+        raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
+
+    def _format_failure(
+        self, exc: ProviderResponseFormatError, response: Any, *, api_mode: str, latency_ms: int
+    ) -> ProviderResponseFormatError:
+        """Attach usage and name truncation, so a billed but unusable answer is accounted and diagnosable."""
+        if not isinstance(response, dict):
+            return exc
+        usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
+        finish_reason: str | None = None
+        if api_mode == "chat_completions":
+            choices = response.get("choices")
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                finish_reason = self._coerce_str(choices[0].get("finish_reason"))
+        else:
+            details = response.get("incomplete_details")
+            if response.get("status") == "incomplete":
+                finish_reason = self._coerce_str(details.get("reason") if isinstance(details, dict) else None) or "incomplete"
+        raw = usage.raw_usage or {}
+        output_details = raw.get("completion_tokens_details") or raw.get("output_tokens_details") or {}
+        reasoning_tokens = self._coerce_int(output_details.get("reasoning_tokens")) if isinstance(output_details, dict) else 0
+        if finish_reason in {"length", "max_output_tokens", "incomplete"}:
+            reasoning_only = usage.token_out > 0 and reasoning_tokens >= usage.token_out
+            hint = (
+                "every output token went to reasoning; raise max_output_tokens or disable reasoning for this provider "
+                "(e.g. BOOK_AGENT_TRANSLATION_OPENAI_REQUEST_OVERRIDES)"
+                if reasoning_only
+                else "raise max_output_tokens or send less per call"
+            )
+            return ProviderOutputTruncated(
+                f"Provider output stopped at the token limit ({usage.token_out} output tokens, {reasoning_tokens} reasoning): {hint}.",
+                usage=usage,
+                finish_reason=finish_reason,
+                reasoning_only=reasoning_only,
+            )
+        exc.usage = usage
+        exc.finish_reason = finish_reason
+        return exc
 
     def _extract_usage(self, response: dict[str, Any], *, api_mode: str, latency_ms: int) -> TranslationUsage:
         usage_payload = response.get("usage")
@@ -496,16 +931,9 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             token_out = self._coerce_int(raw_usage.get("output_tokens"))
             total_tokens = self._coerce_int(raw_usage.get("total_tokens")) or (token_in + token_out)
 
-        prompt_cache_hit_tokens = self._coerce_int(
-            raw_usage.get("prompt_cache_hit_tokens")
-            or raw_usage.get("cache_creation_input_tokens")
+        prompt_cache_hit_tokens, prompt_cache_miss_tokens = self._prompt_cache_tokens(
+            raw_usage, token_in=token_in
         )
-        prompt_cache_miss_tokens = self._coerce_int(
-            raw_usage.get("prompt_cache_miss_tokens")
-            or raw_usage.get("cache_read_input_tokens")
-        )
-        if prompt_cache_hit_tokens == 0 and prompt_cache_miss_tokens == 0:
-            prompt_cache_miss_tokens = token_in
 
         return TranslationUsage(
             token_in=token_in,
@@ -542,10 +970,37 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             cache_hit_price = miss_price
         input_cost = (prompt_cache_hit_tokens / 1_000_000) * cache_hit_price
         input_cost += (prompt_cache_miss_tokens / 1_000_000) * miss_price
-        if prompt_cache_hit_tokens == 0 and prompt_cache_miss_tokens == 0 and self.input_cost_per_1m_tokens is not None:
-            input_cost = (token_in / 1_000_000) * self.input_cost_per_1m_tokens
         output_cost = (token_out / 1_000_000) * self.output_cost_per_1m_tokens
         return round(input_cost + output_cost, 8)
+
+    def _prompt_cache_tokens(self, raw_usage: dict[str, Any], *, token_in: int) -> tuple[int, int]:
+        """Split prompt tokens into (cache hits, cache misses).
+
+        Providers report caching differently: DeepSeek gives explicit
+        ``prompt_cache_hit_tokens`` / ``prompt_cache_miss_tokens``; OpenAI nests
+        ``prompt_tokens_details.cached_tokens`` (chat) or
+        ``input_tokens_details.cached_tokens`` (responses); Anthropic-style
+        gateways expose ``cache_read_input_tokens`` (hits) and
+        ``cache_creation_input_tokens`` (written, billed as misses). Whatever
+        is missing is derived from the prompt total.
+        """
+        hit = self._coerce_int(raw_usage.get("prompt_cache_hit_tokens"))
+        miss = self._coerce_int(raw_usage.get("prompt_cache_miss_tokens"))
+        if hit == 0:
+            hit = self._coerce_int(raw_usage.get("cache_read_input_tokens"))
+        if hit == 0:
+            for details_key in ("prompt_tokens_details", "input_tokens_details"):
+                details = raw_usage.get(details_key)
+                if isinstance(details, dict):
+                    hit = self._coerce_int(details.get("cached_tokens"))
+                    if hit:
+                        break
+        if miss == 0:
+            miss = self._coerce_int(raw_usage.get("cache_creation_input_tokens"))
+        hit = max(0, min(hit, token_in)) if token_in else max(0, hit)
+        if miss == 0:
+            miss = max(0, token_in - hit)
+        return hit, miss
 
     def _coerce_int(self, value: Any) -> int:
         if value is None:

@@ -56,7 +56,6 @@ class StageGatePhase0Tests(unittest.TestCase):
             session_factory=self.session_factory,
             export_root=self.export_root,
             translation_worker=None,
-            enable_controller_runner=False,
         )
 
     def _seed_document_with_packets(

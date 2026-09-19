@@ -39,13 +39,18 @@ import logging
 import os
 import shutil
 from datetime import datetime, timezone
+from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import update
 from sqlalchemy.orm import Session
+
+from book_agent.domain.models.review import Export
 
 
 _SHA256_CHUNK = 1 << 20
+UNRECOVERABLE_SCHEME = "unrecoverable://"
 _logger = logging.getLogger(__name__)
 
 
@@ -124,22 +129,54 @@ def stamp_and_materialize(
                 "blob materialize failed; stamping sha256 anyway so verifier can pick it up",
                 extra={"export_id": export_id, "target": str(target), "error": str(exc)},
             )
+    # ORM-level UPDATE so the id is bound through the column type (SQLite stores
+    # UUIDs without dashes) and already-loaded Export objects stay in sync.
     session.execute(
-        text(
-            "UPDATE exports SET "
-            "  content_sha256 = :sha, "
-            "  byte_count = :bytes, "
-            "  last_verified_at = :now "
-            "WHERE id = :id"
-        ),
-        {
-            "sha": sha256,
-            "bytes": byte_count,
-            "now": datetime.now(timezone.utc),
-            "id": export_id,
-        },
+        update(Export)
+        .where(Export.id == export_id)
+        .values(
+            content_sha256=sha256,
+            byte_count=byte_count,
+            last_verified_at=datetime.now(timezone.utc),
+        )
     )
     return sha256
 
 
-__all__ = ["blob_target", "stamp_and_materialize"]
+def blob_root_for_export_root(export_root: str | Path) -> Path:
+    """The CAS tree lives under the artifact root, i.e. the parent of ``export_root``."""
+    resolved = Path(export_root).resolve()
+    return resolved.parent.resolve() / "blobs"
+
+
+def stamp_export_records(
+    session: Session,
+    records: Iterable[Any],
+    *,
+    blob_root: Path,
+    resolve_path: Callable[[Any], Path | None] | None = None,
+) -> None:
+    """Stamp and materialize every export record whose file is on disk.
+
+    ``resolve_path`` lets callers heal legacy ``file_path`` values that are no
+    longer absolute or reachable. Best-effort like ``stamp_and_materialize``.
+    """
+    for record in records:
+        candidate = str(getattr(record, "file_path", "") or "")
+        if not candidate or candidate.startswith(UNRECOVERABLE_SCHEME):
+            continue
+        path = Path(candidate)
+        if (not path.is_absolute() or not path.exists()) and resolve_path is not None:
+            path = resolve_path(record)
+        if path is None:
+            continue
+        stamp_and_materialize(session, export_id=str(record.id), file_path=path, blob_root=blob_root)
+
+
+__all__ = [
+    "UNRECOVERABLE_SCHEME",
+    "blob_root_for_export_root",
+    "blob_target",
+    "stamp_and_materialize",
+    "stamp_export_records",
+]

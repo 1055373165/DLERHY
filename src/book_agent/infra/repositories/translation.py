@@ -14,7 +14,7 @@ from book_agent.domain.models.translation import (
     TranslationPacket,
     TranslationRun,
 )
-from book_agent.workers.contracts import ContextPacket, TranslatedContextBlock
+from book_agent.translation.contracts import ContextPacket, TranslatedContextBlock
 
 
 @dataclass(slots=True)

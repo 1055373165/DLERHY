@@ -1,42 +1,42 @@
-from dataclasses import dataclass
-import mimetypes
-import os
-import re
 import shutil
-import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from starlette.background import BackgroundTask
 
+from book_agent.app.api.access import current_principal
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
-from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
-from book_agent.domain.enums import DocumentRunStatus, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
-from book_agent.infra.concurrency.rebuild_lock import try_acquire_rebuild_lock
-from book_agent.infra.storage.blobs import stamp_and_materialize
+from book_agent.domain.enums import DocumentRunStatus, DocumentRunType, DocumentStatus, ExportStatus, ExportType, MemoryProposalStatus, SourceType
+from book_agent.app.api.routes.runs import _to_run_summary_response
+from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.app.api.export_downloads import chapter_export_response, cleanup_path, document_export_response
 
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
     BootstrapDocumentRequest,
+    RecoverySkillResponse,
+    RecoverySkillsResponse,
+    RecoverySkillsUpdateRequest,
+    CostEstimateResponse,
+    StructureEditListResponse,
+    StructureEditRequest,
+    StructureEditResponse,
+    StructureRefreshResponse,
+    ExportVersionHistoryResponse,
+    ExportVersionResponse,
     ChapterMemoryProposalResponse,
-    ChapterMemoryProposalDecisionAuditResponse,
     ChapterMemoryProposalDecisionRequest,
     ChapterMemoryProposalDecisionResponse,
     ChapterMemoryProposalListResponse,
-    ChapterMemoryProposalSurfaceResponse,
     ChapterWorklistAssignmentClearRequest,
     ChapterWorklistAssignmentClearResponse,
     ChapterWorklistAssignmentRequest,
     ChapterWorklistAssignmentResponse,
-    ChapterWorklistTimelineEntryResponse,
     DocumentChapterWorklistResponse,
     DocumentChapterWorklistDetailResponse,
     DocumentHistoryBackfillResponse,
@@ -45,39 +45,17 @@ from book_agent.schemas.workflow import (
     ExportDetailResponse,
     DocumentSummaryResponse,
     ExportDocumentRequest,
-    ExportDocumentResponse,
-    ReviewDocumentResponse,
     TranslateDocumentRequest,
-    TranslateDocumentResponse,
 )
-from book_agent.services.export import ExportGateError
-from book_agent.services.workflows import (
-    DocumentChapterWorklist,
-    DocumentChapterWorklistDetail,
-    DocumentExportDashboard,
-    DocumentHistoryPage,
-    ExportDetail,
-    ChapterMemoryProposalDecisionResult,
-    ChapterMemoryProposalDecisionAuditSummary,
-    ChapterMemoryProposalSummary,
-    ChapterWorklistTimelineEntry,
-    DocumentBusyError,
-    DocumentExportResult,
-    DocumentReviewResult,
-    DocumentSummary,
-    DocumentTranslationResult,
-    DocumentWorkflowService,
-)
-from book_agent.workers.factory import build_translation_worker
+from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
+from book_agent.schemas.run_control import DocumentRunSummaryResponse
+from book_agent.ingestion.pdf.ocr import OcrUnavailable
+from book_agent.services.document_files import remove_document_files
+from book_agent.services.run_control import RunControlService, RunControlTransitionError
+from book_agent.services.workflows import DocumentBusyError, DocumentWorkflowService
 
 router = APIRouter()
 _ALLOWED_UPLOAD_SUFFIXES = {".epub", ".pdf"}
-
-
-@dataclass(frozen=True, slots=True)
-class ArchiveInput:
-    path: Path
-    archive_name: str | None = None
 
 
 def _upload_root(request: Request) -> Path:
@@ -110,864 +88,11 @@ def _safe_upload_filename(filename: str | None) -> str:
     return candidate
 
 
-def _cleanup_path(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    finally:
-        parent = path.parent
-        try:
-            parent.rmdir()
-        except OSError:
-            pass
-
-
-def _artifact_fallback_candidates(path: Path) -> list[Path]:
-    if path.exists():
-        return [path]
-    candidates: list[Path] = []
-    if path.suffix.lower() == ".html" and path.stem == "merged-document":
-        candidates.extend(
-            sorted(
-                path.parent.glob("merged-document*.html"),
-                key=lambda candidate: (len(candidate.name), candidate.name),
-            )
-        )
-    return [candidate.resolve() for candidate in candidates if candidate.exists()]
-
-
-def _is_within_any_root(path: Path, roots: tuple[Path, ...]) -> bool:
-    for root in roots:
-        try:
-            path.relative_to(root)
-        except ValueError:
-            continue
-        return True
-    return False
-
-
-def _by_basename_under_document(
-    basename: str,
-    document_id: str,
-    roots: tuple[Path, ...],
-) -> Path | None:
-    # Phase-2 self-heal: a stored file_path can point at a path that is
-    # no longer reachable (e.g. a tempdir produced by a smoke run that
-    # leaked into prod DB). The physical artifact is often still present
-    # under the canonical layout <root>/[exports/]<document_id>/<basename>.
-    # Try both layouts for each configured root.
-    for root in roots:
-        for candidate in (
-            root / document_id / basename,
-            root / "exports" / document_id / basename,
-        ):
-            resolved = candidate.resolve()
-            if _is_within_any_root(resolved, roots) and resolved.exists():
-                return resolved
-    return None
-
-
-_UNRECOVERABLE_SCHEME = "unrecoverable://"
-
-
-def _assert_record_serviceable(record: Any) -> None:
-    # Short-circuit deterministic 410 Gone when the row is known-stale.
-    # This is set either by the M1 legacy backfill migration (for old
-    # tempdir-rooted rows) or by future verifier/reaper jobs. Doing this
-    # check BEFORE filesystem resolution means we never accidentally
-    # serve a half-healed artifact when the metadata says the row is
-    # poisoned.
-    stale = getattr(record, "stale_reason", None)
-    file_path = getattr(record, "file_path", "") or ""
-    if stale or file_path.startswith(_UNRECOVERABLE_SCHEME):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail=(
-                f"Export artifact is permanently unavailable "
-                f"(reason: {stale or 'unrecoverable_sentinel'}). "
-                "Re-export the document to generate a fresh artifact."
-            ),
-        )
-
-
-def _blob_path(content_sha256: str, roots: tuple[Path, ...]) -> Path | None:
-    # M2.2b: the CAS layout populated by scripts/materialize_blob_store.py
-    # lives at ``<artifact_root>/blobs/<aa>/<bb>/<sha>``. We probe every
-    # configured root because tests and prod use different parents, and
-    # only accept a hit that lies under one of them so the existing
-    # _is_within_any_root safety net keeps working.
-    if not content_sha256 or len(content_sha256) < 4:
-        return None
-    relative = Path("blobs") / content_sha256[:2] / content_sha256[2:4] / content_sha256
-    for root in roots:
-        candidate = (root / relative).resolve()
-        if _is_within_any_root(candidate, roots) and candidate.exists():
-            return candidate
-    return None
-
-
-def _blob_root(roots: tuple[Path, ...]) -> Path:
-    # Writer-side counterpart to ``_blob_path``: the CAS tree is rooted
-    # at the *outer* artifact dir (parent of export_root), which
-    # ``_artifact_roots`` always puts last. In single-root deployments
-    # the export_root IS the artifact_root, so the same index applies.
-    return roots[-1] / "blobs"
-
-
-def _emit_export_blobs(
-    session: Session,
-    records,
-    *,
-    artifact_roots: tuple[Path, ...],
-) -> None:
-    # M2.2c: after a writer has produced an export at its canonical
-    # ``file_path``, hash the bytes, stamp the row, and hardlink into
-    # the CAS tree. Idempotent + best-effort: a failure here never
-    # fails the enclosing export/download — verifier (M2.1) will stamp
-    # anything we miss.
-    blob_root = _blob_root(artifact_roots)
-    for record in records:
-        candidate = getattr(record, "file_path", None) or ""
-        if not candidate or candidate.startswith(_UNRECOVERABLE_SCHEME):
-            continue
-        resolved = Path(candidate)
-        if not resolved.is_absolute() or not resolved.exists():
-            # Defensive: rebuilds sometimes hand us a tempdir-rooted
-            # path. Fall back to the canonical-layout probe so the
-            # blob emission still fires for legacy file_paths.
-            try:
-                resolved = _resolve_artifact_path(
-                    candidate,
-                    roots=artifact_roots,
-                    document_id=getattr(record, "document_id", None),
-                )
-            except HTTPException:
-                continue
-        stamp_and_materialize(
-            session,
-            export_id=str(record.id),
-            file_path=resolved,
-            blob_root=blob_root,
-        )
-
-
-def _canonical_artifact_path(
-    candidate: str | Path,
-    *,
-    roots: tuple[Path, ...],
-    document_id: str | None = None,
-) -> Path | None:
-    # Non-raising variant of ``_resolve_artifact_path`` that intentionally
-    # does NOT consult the CAS blob tree. We use it whenever we need the
-    # writer-layout directory (for sidecar asset discovery) or the
-    # original filename (which the blob tree has replaced with a sha).
-    try:
-        return _resolve_artifact_path(
-            candidate,
-            roots=roots,
-            document_id=document_id,
-            content_sha256=None,
-        )
-    except HTTPException:
-        return None
-
-
-_ASCII_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._\-]+")
-
-
-def _ascii_fallback_name(filename: str) -> str:
-    # RFC 6266 §4.3 asks for an ASCII ``filename=`` token alongside the
-    # ``filename*=`` UTF-8 form. Browsers that parse the extended form
-    # happily use the Chinese title; browsers that do not (some Safari
-    # releases on macOS notoriously drop the extension when consuming
-    # only ``filename*=``) need a clean ASCII fallback so the saved
-    # file keeps its ``.html`` / ``.md`` / ``.pdf`` suffix.
-    stem = Path(filename).stem
-    ext = Path(filename).suffix
-    ascii_stem = re.sub(r"-+", "-", _ASCII_FILENAME_UNSAFE.sub("-", stem)).strip("-")
-    ascii_stem = ascii_stem or "export"
-    return f"{ascii_stem}{ext}" if ext else ascii_stem
-
-
-def _content_disposition(filename: str) -> str:
-    # Produce a dual-form Content-Disposition header per RFC 6266.
-    # Starlette only emits one form; when the payload name is non-ASCII
-    # it drops the ``filename=`` alternative entirely, which loses the
-    # extension on at least macOS Safari downloads.
-    ascii_name = _ascii_fallback_name(filename)
-    encoded = quote(filename, safe="")
-    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
-
-
-def _canonical_basename(file_path: str | Path) -> str:
-    # The record's stored ``file_path`` is authoritative for naming even
-    # when we serve bytes from the CAS tree — the blob on disk is named
-    # by its sha256, so ``resolved.suffix`` would be empty and user
-    # downloads would land without an extension.
-    return Path(file_path).name
-
-
-def _resolve_artifact_path(
-    candidate: str | Path,
-    *,
-    roots: tuple[Path, ...],
-    document_id: str | None = None,
-    content_sha256: str | None = None,
-) -> Path:
-    # Belt-and-suspenders: even if a caller forgot to run
-    # _assert_record_serviceable, an `unrecoverable://…` path must never
-    # be interpreted as a filesystem path.
-    candidate_str = str(candidate)
-    if candidate_str.startswith(_UNRECOVERABLE_SCHEME):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Export artifact is permanently unavailable (unrecoverable sentinel).",
-        )
-    # M2.2b: prefer the content-addressable blob when we have its sha.
-    # The blob tree is the authoritative location — its path IS the
-    # hash, so there is no way for it to drift. If the blob is missing
-    # (not yet materialized), we fall through to the canonical path
-    # logic below and everything behaves as before.
-    if content_sha256:
-        blob = _blob_path(content_sha256, roots)
-        if blob is not None:
-            return blob
-    resolved = Path(candidate).resolve()
-    fallback_candidates = [resolved, *_artifact_fallback_candidates(resolved)]
-    for fallback_path in fallback_candidates:
-        if _is_within_any_root(fallback_path, roots) and fallback_path.exists():
-            return fallback_path
-    # Phase 2: canonical-layout fallback keyed by (document_id, basename).
-    if document_id:
-        healed = _by_basename_under_document(resolved.name, document_id, roots)
-        if healed is not None:
-            return healed
-    allowed_root_label = ", ".join(str(root) for root in roots)
-    if any(_is_within_any_root(fallback_path, roots) for fallback_path in fallback_candidates):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Export artifact not found under allowed roots: {allowed_root_label}",
-        )
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Export artifact is no longer available.",
-    )
-
-
-def _artifact_media_type(path: Path) -> str:
-    return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-
-
-
-def _export_sidecar_paths(file_path: Path) -> list[Path]:
-    if file_path.suffix.lower() not in {".html", ".md"}:
-        return []
-    assets_dir = file_path.parent / "assets"
-    if not assets_dir.is_dir():
-        return []
-    return sorted(path for path in assets_dir.rglob("*") if path.is_file())
-
-
-def _sidecar_archive_name(sidecar_path: Path, canonical_path: Path) -> str | None:
-    try:
-        return sidecar_path.relative_to(canonical_path.parent).as_posix()
-    except ValueError:
-        return None
-
-
-def _build_export_archive(
-    document_id: str,
-    export_type: ExportType,
-    files: list[ArchiveInput],
-    *,
-    folder_name: str | None = None,
-) -> Path:
-    temp_file = tempfile.NamedTemporaryFile(
-        prefix=f"book-agent-{document_id}-{export_type.value}-",
-        suffix=".zip",
-        delete=False,
-    )
-    archive_path = Path(temp_file.name)
-    temp_file.close()
-    if not folder_name:
-        folder_name = f"{document_id}-{export_type.value}"
-    common_root = Path(os.path.commonpath([str(file.path) for file in files]))
-    with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-        seen_names: set[str] = set()
-        for index, file in enumerate(files, start=1):
-            file_path = file.path
-            if file.archive_name:
-                archive_name = file.archive_name
-            else:
-                try:
-                    archive_name = file_path.relative_to(common_root).as_posix()
-                except ValueError:
-                    archive_name = file_path.name
-            if archive_name in seen_names:
-                archive_name = f"{file_path.stem}-{index}{file_path.suffix}"
-            seen_names.add(archive_name)
-            archive.write(file_path, arcname=f"{folder_name}/{archive_name}")
-    return archive_path
-
-
-def _preferred_archive_name(original_path: str | Path, resolved_path: Path) -> str | None:
-    original_name = Path(original_path).name
-    if not original_name or original_name == resolved_path.name:
-        return None
-    return original_name
-
-
-
-def _chapter_export_download_filename(
-    document,
-    chapter,
-    export_type: ExportType,
-    *,
-    file_suffix: str,
-    archive: bool = False,
-) -> str:
-    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
-    chapter_ordinal = getattr(chapter, "ordinal", None)
-    chapter_title = safe_title_for_filename(
-        getattr(chapter, "title_tgt", None) or getattr(chapter, "title_src", None),
-        fallback="未命名章节",
-    )
-    chapter_prefix = f"第{chapter_ordinal}章" if isinstance(chapter_ordinal, int) and chapter_ordinal > 0 else "章节导出"
-    label_map = {
-        ExportType.BILINGUAL_HTML: "双语章节包",
-        ExportType.REVIEW_PACKAGE: "审校包",
-    }
-    label = label_map.get(export_type, export_type.value)
-    suffix = ".zip" if archive else file_suffix
-    return f"{book_title}-{chapter_prefix}-{chapter_title}-{label}{suffix}"
-
-
-def _append_archive_input(
-    archive_inputs: list[ArchiveInput],
-    seen_paths: set[str],
-    file_path: Path,
-    *,
-    preferred_archive_name: str | None = None,
-) -> None:
-    for index, candidate in enumerate([file_path, *_export_sidecar_paths(file_path)]):
-        resolved = str(candidate.resolve())
-        if resolved in seen_paths:
-            continue
-        seen_paths.add(resolved)
-        archive_inputs.append(
-            ArchiveInput(
-                path=candidate,
-                archive_name=(preferred_archive_name if index == 0 else None),
-            )
-        )
-
-
-def _serialize_translation_usage_summary(summary) -> dict | None:
-    if summary is None:
-        return None
-    return {
-        "run_count": summary.run_count,
-        "succeeded_run_count": summary.succeeded_run_count,
-        "total_token_in": summary.total_token_in,
-        "total_token_out": summary.total_token_out,
-        "total_cost_usd": summary.total_cost_usd,
-        "total_latency_ms": summary.total_latency_ms,
-        "avg_latency_ms": summary.avg_latency_ms,
-        "latest_run_at": summary.latest_run_at,
-    }
-
-
-def _serialize_translation_usage_breakdown(entries) -> list[dict]:
-    return [
-        {
-            "model_name": entry.model_name,
-            "worker_name": entry.worker_name,
-            "provider": entry.provider,
-            "run_count": entry.run_count,
-            "succeeded_run_count": entry.succeeded_run_count,
-            "total_token_in": entry.total_token_in,
-            "total_token_out": entry.total_token_out,
-            "total_cost_usd": entry.total_cost_usd,
-            "total_latency_ms": entry.total_latency_ms,
-            "avg_latency_ms": entry.avg_latency_ms,
-            "latest_run_at": entry.latest_run_at,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_translation_usage_breakdown_entry(entry) -> dict | None:
-    if entry is None:
-        return None
-    return {
-        "model_name": entry.model_name,
-        "worker_name": entry.worker_name,
-        "provider": entry.provider,
-        "run_count": entry.run_count,
-        "succeeded_run_count": entry.succeeded_run_count,
-        "total_token_in": entry.total_token_in,
-        "total_token_out": entry.total_token_out,
-        "total_cost_usd": entry.total_cost_usd,
-        "total_latency_ms": entry.total_latency_ms,
-        "avg_latency_ms": entry.avg_latency_ms,
-        "latest_run_at": entry.latest_run_at,
-    }
-
-
-def _serialize_translation_usage_timeline(entries) -> list[dict]:
-    return [
-        {
-            "bucket_start": entry.bucket_start,
-            "bucket_granularity": entry.bucket_granularity,
-            "run_count": entry.run_count,
-            "succeeded_run_count": entry.succeeded_run_count,
-            "total_token_in": entry.total_token_in,
-            "total_token_out": entry.total_token_out,
-            "total_cost_usd": entry.total_cost_usd,
-            "total_latency_ms": entry.total_latency_ms,
-            "avg_latency_ms": entry.avg_latency_ms,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_hotspots(entries) -> list[dict]:
-    return [
-        {
-            "issue_type": entry.issue_type,
-            "root_cause_layer": entry.root_cause_layer,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "triaged_issue_count": entry.triaged_issue_count,
-            "resolved_issue_count": entry.resolved_issue_count,
-            "wontfix_issue_count": entry.wontfix_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "chapter_count": entry.chapter_count,
-            "latest_seen_at": entry.latest_seen_at,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_chapter_pressure(entries) -> list[dict]:
-    return [
-        {
-            "chapter_id": entry.chapter_id,
-            "ordinal": entry.ordinal,
-            "title_src": entry.title_src,
-            "chapter_status": entry.chapter_status,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "triaged_issue_count": entry.triaged_issue_count,
-            "resolved_issue_count": entry.resolved_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "latest_issue_at": entry.latest_issue_at,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_chapter_pressure_entry(entry) -> dict | None:
-    if entry is None:
-        return None
-    return {
-        "chapter_id": entry.chapter_id,
-        "ordinal": entry.ordinal,
-        "title_src": entry.title_src,
-        "chapter_status": entry.chapter_status,
-        "issue_count": entry.issue_count,
-        "open_issue_count": entry.open_issue_count,
-        "triaged_issue_count": entry.triaged_issue_count,
-        "resolved_issue_count": entry.resolved_issue_count,
-        "blocking_issue_count": entry.blocking_issue_count,
-        "latest_issue_at": entry.latest_issue_at,
-    }
-
-
-def _serialize_issue_chapter_breakdown(entries) -> list[dict]:
-    return [
-        {
-            "chapter_id": entry.chapter_id,
-            "ordinal": entry.ordinal,
-            "title_src": entry.title_src,
-            "chapter_status": entry.chapter_status,
-            "issue_type": entry.issue_type,
-            "root_cause_layer": entry.root_cause_layer,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "triaged_issue_count": entry.triaged_issue_count,
-            "resolved_issue_count": entry.resolved_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "active_blocking_issue_count": entry.active_blocking_issue_count,
-            "latest_seen_at": entry.latest_seen_at,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_chapter_heatmap(entries) -> list[dict]:
-    return [
-        {
-            "chapter_id": entry.chapter_id,
-            "ordinal": entry.ordinal,
-            "title_src": entry.title_src,
-            "chapter_status": entry.chapter_status,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "triaged_issue_count": entry.triaged_issue_count,
-            "resolved_issue_count": entry.resolved_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "active_blocking_issue_count": entry.active_blocking_issue_count,
-            "issue_family_count": entry.issue_family_count,
-            "dominant_issue_type": entry.dominant_issue_type,
-            "dominant_root_cause_layer": entry.dominant_root_cause_layer,
-            "dominant_issue_count": entry.dominant_issue_count,
-            "latest_issue_at": entry.latest_issue_at,
-            "heat_score": entry.heat_score,
-            "heat_level": entry.heat_level,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_chapter_queue(entries) -> list[dict]:
-    return [
-        {
-            "chapter_id": entry.chapter_id,
-            "ordinal": entry.ordinal,
-            "title_src": entry.title_src,
-            "chapter_status": entry.chapter_status,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "triaged_issue_count": entry.triaged_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "active_blocking_issue_count": entry.active_blocking_issue_count,
-            "issue_family_count": entry.issue_family_count,
-            "dominant_issue_type": entry.dominant_issue_type,
-            "dominant_root_cause_layer": entry.dominant_root_cause_layer,
-            "dominant_issue_count": entry.dominant_issue_count,
-            "latest_issue_at": entry.latest_issue_at,
-            "heat_score": entry.heat_score,
-            "heat_level": entry.heat_level,
-            "queue_rank": entry.queue_rank,
-            "queue_priority": entry.queue_priority,
-            "queue_driver": entry.queue_driver,
-            "needs_immediate_attention": entry.needs_immediate_attention,
-            "oldest_active_issue_at": entry.oldest_active_issue_at,
-            "age_hours": entry.age_hours,
-            "age_bucket": entry.age_bucket,
-            "sla_target_hours": entry.sla_target_hours,
-            "sla_status": entry.sla_status,
-            "owner_ready": entry.owner_ready,
-            "owner_ready_reason": entry.owner_ready_reason,
-            "is_assigned": entry.is_assigned,
-            "assigned_owner_name": entry.assigned_owner_name,
-            "assigned_at": entry.assigned_at,
-            "latest_activity_bucket_start": entry.latest_activity_bucket_start,
-            "latest_created_issue_count": entry.latest_created_issue_count,
-            "latest_resolved_issue_count": entry.latest_resolved_issue_count,
-            "latest_net_issue_delta": entry.latest_net_issue_delta,
-            "regression_hint": entry.regression_hint,
-            "flapping_hint": entry.flapping_hint,
-            "memory_proposals": {
-                "proposal_count": entry.memory_proposals.proposal_count,
-                "pending_proposal_count": entry.memory_proposals.pending_proposal_count,
-                "counts_by_status": entry.memory_proposals.counts_by_status,
-                "latest_proposal_updated_at": entry.memory_proposals.latest_proposal_updated_at,
-                "active_snapshot_version": entry.memory_proposals.active_snapshot_version,
-            },
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_chapter_queue_entry(entry) -> dict | None:
-    if entry is None:
-        return None
-    return _serialize_issue_chapter_queue([entry])[0]
-
-
-def _serialize_owner_workload_summary(entries) -> list[dict]:
-    return [
-        {
-            "owner_name": entry.owner_name,
-            "assigned_chapter_count": entry.assigned_chapter_count,
-            "immediate_count": entry.immediate_count,
-            "high_count": entry.high_count,
-            "medium_count": entry.medium_count,
-            "breached_count": entry.breached_count,
-            "due_soon_count": entry.due_soon_count,
-            "on_track_count": entry.on_track_count,
-            "owner_ready_count": entry.owner_ready_count,
-            "total_open_issue_count": entry.total_open_issue_count,
-            "total_active_blocking_issue_count": entry.total_active_blocking_issue_count,
-            "oldest_active_issue_at": entry.oldest_active_issue_at,
-            "latest_issue_at": entry.latest_issue_at,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_owner_workload_entry(entry) -> dict | None:
-    if entry is None:
-        return None
-    return _serialize_owner_workload_summary([entry])[0]
-
-
-def _serialize_issue_activity_timeline(entries) -> list[dict]:
-    return [
-        {
-            "bucket_start": entry.bucket_start,
-            "bucket_granularity": entry.bucket_granularity,
-            "created_issue_count": entry.created_issue_count,
-            "resolved_issue_count": entry.resolved_issue_count,
-            "wontfix_issue_count": entry.wontfix_issue_count,
-            "blocking_created_issue_count": entry.blocking_created_issue_count,
-            "net_issue_delta": entry.net_issue_delta,
-            "estimated_open_issue_count": entry.estimated_open_issue_count,
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_activity_breakdown(entries) -> list[dict]:
-    return [
-        {
-            "issue_type": entry.issue_type,
-            "root_cause_layer": entry.root_cause_layer,
-            "issue_count": entry.issue_count,
-            "open_issue_count": entry.open_issue_count,
-            "blocking_issue_count": entry.blocking_issue_count,
-            "latest_seen_at": entry.latest_seen_at,
-            "timeline": _serialize_issue_activity_timeline(entry.timeline),
-        }
-        for entry in entries
-    ]
-
-
-def _serialize_issue_activity_breakdown_entry(entry) -> dict | None:
-    if entry is None:
-        return None
-    return {
-        "issue_type": entry.issue_type,
-        "root_cause_layer": entry.root_cause_layer,
-        "issue_count": entry.issue_count,
-        "open_issue_count": entry.open_issue_count,
-        "blocking_issue_count": entry.blocking_issue_count,
-        "latest_seen_at": entry.latest_seen_at,
-        "timeline": _serialize_issue_activity_timeline(entry.timeline),
-    }
-
-
 def _workflow_service(request: Request, session: Session) -> DocumentWorkflowService:
-    export_root = getattr(request.app.state, "export_root", "artifacts/exports")
-    resolver = getattr(request.app.state, "resolve_translation_worker", None)
-    if callable(resolver):
-        translation_worker = resolver()
-    else:
-        translation_worker = getattr(request.app.state, "translation_worker", None)
-        if translation_worker is None:
-            settings = get_settings()
-            translation_worker = build_translation_worker(settings)
     return DocumentWorkflowService(
         session,
-        export_root=export_root,
-        translation_worker=translation_worker,
-    )
-
-
-def _to_document_summary_response(summary: DocumentSummary) -> DocumentSummaryResponse:
-    return DocumentSummaryResponse(
-        document_id=summary.document_id,
-        source_type=summary.source_type,
-        status=summary.status,
-        title=summary.title,
-        title_src=summary.title_src,
-        title_tgt=summary.title_tgt,
-        author=summary.author,
-        pdf_profile=summary.pdf_profile,
-        pdf_page_evidence=summary.pdf_page_evidence,
-        pdf_image_summary=summary.pdf_image_summary,
-        chapter_count=summary.chapter_count,
-        block_count=summary.block_count,
-        sentence_count=summary.sentence_count,
-        packet_count=summary.packet_count,
-        open_issue_count=summary.open_issue_count,
-        merged_export_ready=summary.merged_export_ready,
-        latest_merged_export_at=summary.latest_merged_export_at,
-        chapter_bilingual_export_count=summary.chapter_bilingual_export_count,
-        latest_run_id=summary.latest_run_id,
-        latest_run_status=summary.latest_run_status,
-        latest_run_current_stage=summary.latest_run_current_stage,
-        latest_run_updated_at=summary.latest_run_updated_at,
-        runtime_v2_context=summary.runtime_v2_context,
-        chapters=[
-            {
-                "chapter_id": chapter.chapter_id,
-                "ordinal": chapter.ordinal,
-                "title_src": chapter.title_src,
-                "status": chapter.status,
-                "risk_level": chapter.risk_level,
-                "parse_confidence": chapter.parse_confidence,
-                "structure_flags": chapter.structure_flags,
-                "sentence_count": chapter.sentence_count,
-                "packet_count": chapter.packet_count,
-                "open_issue_count": chapter.open_issue_count,
-                "bilingual_export_ready": chapter.bilingual_export_ready,
-                "latest_bilingual_export_at": chapter.latest_bilingual_export_at,
-                "pdf_image_summary": chapter.pdf_image_summary,
-                "quality_summary": (
-                    {
-                        "issue_count": chapter.quality_summary.issue_count,
-                        "action_count": chapter.quality_summary.action_count,
-                        "resolved_issue_count": chapter.quality_summary.resolved_issue_count,
-                        "coverage_ok": chapter.quality_summary.coverage_ok,
-                        "alignment_ok": chapter.quality_summary.alignment_ok,
-                        "term_ok": chapter.quality_summary.term_ok,
-                        "format_ok": chapter.quality_summary.format_ok,
-                        "blocking_issue_count": chapter.quality_summary.blocking_issue_count,
-                        "low_confidence_count": chapter.quality_summary.low_confidence_count,
-                        "format_pollution_count": chapter.quality_summary.format_pollution_count,
-                    }
-                    if chapter.quality_summary is not None
-                    else None
-                ),
-            }
-            for chapter in summary.chapters
-        ],
-    )
-
-
-def _to_document_history_page_response(page: DocumentHistoryPage) -> DocumentHistoryPageResponse:
-    return DocumentHistoryPageResponse(
-        total_count=page.total_count,
-        record_count=page.record_count,
-        offset=page.offset,
-        limit=page.limit,
-        has_more=page.has_more,
-        entries=[
-            {
-                "document_id": entry.document_id,
-                "source_type": entry.source_type,
-                "status": entry.status,
-                "title": entry.title,
-                "title_src": entry.title_src,
-                "title_tgt": entry.title_tgt,
-                "author": entry.author,
-                "source_path": entry.source_path,
-                "created_at": entry.created_at,
-                "updated_at": entry.updated_at,
-                "chapter_count": entry.chapter_count,
-                "sentence_count": entry.sentence_count,
-                "packet_count": entry.packet_count,
-                "merged_export_ready": entry.merged_export_ready,
-                "latest_merged_export_at": entry.latest_merged_export_at,
-                "chapter_bilingual_export_count": entry.chapter_bilingual_export_count,
-                "latest_run_id": entry.latest_run_id,
-                "latest_run_status": entry.latest_run_status,
-                "latest_run_current_stage": entry.latest_run_current_stage,
-                "latest_run_completed_work_item_count": entry.latest_run_completed_work_item_count,
-                "latest_run_total_work_item_count": entry.latest_run_total_work_item_count,
-                "latest_run_runtime_v2_context": entry.latest_run_runtime_v2_context,
-            }
-            for entry in page.entries
-        ],
-    )
-
-
-def _to_translate_response(result: DocumentTranslationResult) -> TranslateDocumentResponse:
-    return TranslateDocumentResponse(
-        document_id=result.document_id,
-        translated_packet_count=result.translated_packet_count,
-        skipped_packet_ids=result.skipped_packet_ids,
-        translation_run_ids=result.translation_run_ids,
-        review_required_sentence_ids=result.review_required_sentence_ids,
-        memory_commit_mode=result.memory_commit_mode,
-        recorded_memory_proposal_count=result.recorded_memory_proposal_count,
-    )
-
-
-def _to_chapter_memory_proposal_response(
-    proposal: ChapterMemoryProposalSummary,
-) -> ChapterMemoryProposalResponse:
-    return ChapterMemoryProposalResponse(
-        proposal_id=proposal.proposal_id,
-        packet_id=proposal.packet_id,
-        translation_run_id=proposal.translation_run_id,
-        status=proposal.status,
-        base_snapshot_version=proposal.base_snapshot_version,
-        committed_snapshot_id=proposal.committed_snapshot_id,
-        created_at=proposal.created_at,
-        updated_at=proposal.updated_at,
-        last_decision=(
-            _to_chapter_memory_proposal_decision_audit_response(proposal.last_decision)
-            if proposal.last_decision is not None
-            else None
-        ),
-    )
-
-
-def _to_chapter_memory_proposal_decision_audit_response(
-    audit: ChapterMemoryProposalDecisionAuditSummary,
-) -> ChapterMemoryProposalDecisionAuditResponse:
-    return ChapterMemoryProposalDecisionAuditResponse(
-        proposal_id=audit.proposal_id,
-        decision=audit.decision,  # type: ignore[arg-type]
-        actor_type=audit.actor_type,
-        actor_id=audit.actor_id,
-        note=audit.note,
-        created_at=audit.created_at,
-    )
-
-
-def _to_chapter_worklist_timeline_entry_response(
-    entry: ChapterWorklistTimelineEntry,
-) -> ChapterWorklistTimelineEntryResponse:
-    return ChapterWorklistTimelineEntryResponse(
-        event_id=entry.event_id,
-        source_kind=entry.source_kind,
-        event_kind=entry.event_kind,
-        created_at=entry.created_at,
-        actor_name=entry.actor_name,
-        note=entry.note,
-        issue_id=entry.issue_id,
-        issue_type=entry.issue_type,
-        action_id=entry.action_id,
-        action_type=entry.action_type,
-        scope_type=entry.scope_type,
-        scope_id=entry.scope_id,
-        status=entry.status,
-        proposal_id=entry.proposal_id,
-        decision=entry.decision,
-        owner_name=entry.owner_name,
-    )
-
-
-def _to_chapter_memory_proposal_list_response(
-    *,
-    document_id: str,
-    chapter_id: str,
-    status_filter: str | None,
-    proposals: list[ChapterMemoryProposalSummary],
-) -> ChapterMemoryProposalListResponse:
-    return ChapterMemoryProposalListResponse(
-        document_id=document_id,
-        chapter_id=chapter_id,
-        status_filter=status_filter,  # type: ignore[arg-type]
-        proposal_count=len(proposals),
-        proposals=[_to_chapter_memory_proposal_response(proposal) for proposal in proposals],
-    )
-
-
-def _to_chapter_memory_proposal_decision_response(
-    result: ChapterMemoryProposalDecisionResult,
-) -> ChapterMemoryProposalDecisionResponse:
-    return ChapterMemoryProposalDecisionResponse(
-        document_id=result.document_id,
-        chapter_id=result.chapter_id,
-        decision=result.decision,  # type: ignore[arg-type]
-        proposal=_to_chapter_memory_proposal_response(result.proposal),
-        committed_snapshot_id=result.committed_snapshot_id,
-        committed_snapshot_version=result.committed_snapshot_version,
+        export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
+        translation_worker=request.app.state.resolve_translation_worker(current_principal(request).org_id),
     )
 
 
@@ -977,469 +102,6 @@ def _proposal_http_exception(exc: ValueError) -> HTTPException:
     if "not found" in lowered or "does not belong" in lowered:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
-
-
-def _to_review_response(result: DocumentReviewResult) -> ReviewDocumentResponse:
-    return ReviewDocumentResponse(
-        document_id=result.document_id,
-        total_issue_count=result.total_issue_count,
-        total_action_count=result.total_action_count,
-        chapter_results=[
-            {
-                "chapter_id": chapter.chapter_id,
-                "status": chapter.status,
-                "issue_count": chapter.issue_count,
-                "action_count": chapter.action_count,
-                "blocking_issue_count": chapter.blocking_issue_count,
-                "coverage_ok": chapter.coverage_ok,
-                "alignment_ok": chapter.alignment_ok,
-                "term_ok": chapter.term_ok,
-                "format_ok": chapter.format_ok,
-                "low_confidence_count": chapter.low_confidence_count,
-                "format_pollution_count": chapter.format_pollution_count,
-                "resolved_issue_count": chapter.resolved_issue_count,
-                "naturalness_summary": (
-                    {
-                        "advisory_only": chapter.naturalness_summary.advisory_only,
-                        "style_drift_issue_count": chapter.naturalness_summary.style_drift_issue_count,
-                        "affected_packet_count": chapter.naturalness_summary.affected_packet_count,
-                        "dominant_style_rules": list(chapter.naturalness_summary.dominant_style_rules),
-                        "preferred_hints": list(chapter.naturalness_summary.preferred_hints),
-                    }
-                    if chapter.naturalness_summary is not None
-                    else None
-                ),
-            }
-            for chapter in result.chapter_results
-        ],
-    )
-
-
-def _to_export_response(result: DocumentExportResult) -> ExportDocumentResponse:
-    return ExportDocumentResponse(
-        document_id=result.document_id,
-        export_type=result.export_type,
-        document_status=result.document_status,
-        file_path=result.file_path,
-        manifest_path=result.manifest_path,
-        chapter_results=[
-            {
-                "chapter_id": chapter.chapter_id,
-                "export_id": chapter.export_id,
-                "export_type": chapter.export_type,
-                "status": chapter.status,
-                "file_path": chapter.file_path,
-                "manifest_path": chapter.manifest_path,
-            }
-            for chapter in result.chapter_results
-        ],
-        auto_followup_requested=result.auto_followup_requested,
-        auto_followup_applied=result.auto_followup_applied,
-        auto_followup_attempt_count=result.auto_followup_attempt_count,
-        auto_followup_attempt_limit=result.auto_followup_attempt_limit,
-        auto_followup_executions=[
-            {
-                "action_id": execution.action_id,
-                "issue_id": execution.issue_id,
-                "action_type": execution.action_type,
-                "rerun_scope_type": execution.rerun_scope_type,
-                "rerun_scope_ids": execution.rerun_scope_ids,
-                "followup_executed": execution.followup_executed,
-                "rerun_packet_ids": execution.rerun_packet_ids,
-                "rerun_translation_run_ids": execution.rerun_translation_run_ids,
-                "issue_resolved": execution.issue_resolved,
-            }
-            for execution in (result.auto_followup_executions or [])
-        ],
-        runtime_v2_context=result.runtime_v2_context,
-    )
-
-
-def _to_export_dashboard_response(result: DocumentExportDashboard) -> DocumentExportDashboardResponse:
-    return DocumentExportDashboardResponse(
-        document_id=result.document_id,
-        export_count=result.export_count,
-        successful_export_count=result.successful_export_count,
-        filtered_export_count=result.filtered_export_count,
-        record_count=result.record_count,
-        offset=result.offset,
-        limit=result.limit,
-        has_more=result.has_more,
-        applied_export_type_filter=result.applied_export_type_filter,
-        applied_status_filter=result.applied_status_filter,
-        latest_export_at=result.latest_export_at,
-        export_counts_by_type=result.export_counts_by_type,
-        latest_export_ids_by_type=result.latest_export_ids_by_type,
-        total_auto_followup_executed_count=result.total_auto_followup_executed_count,
-        translation_usage_summary=_serialize_translation_usage_summary(result.translation_usage_summary),
-        translation_usage_breakdown=_serialize_translation_usage_breakdown(result.translation_usage_breakdown),
-        translation_usage_timeline=_serialize_translation_usage_timeline(result.translation_usage_timeline),
-        translation_usage_highlights={
-            "top_cost_entry": _serialize_translation_usage_breakdown_entry(
-                result.translation_usage_highlights.top_cost_entry
-            ),
-            "top_latency_entry": _serialize_translation_usage_breakdown_entry(
-                result.translation_usage_highlights.top_latency_entry
-            ),
-            "top_volume_entry": _serialize_translation_usage_breakdown_entry(
-                result.translation_usage_highlights.top_volume_entry
-            ),
-        },
-        issue_hotspots=_serialize_issue_hotspots(result.issue_hotspots),
-        issue_chapter_pressure=_serialize_issue_chapter_pressure(result.issue_chapter_pressure),
-        issue_chapter_highlights={
-            "top_open_chapter": _serialize_issue_chapter_pressure_entry(
-                result.issue_chapter_highlights.top_open_chapter
-            ),
-            "top_blocking_chapter": _serialize_issue_chapter_pressure_entry(
-                result.issue_chapter_highlights.top_blocking_chapter
-            ),
-            "top_resolved_chapter": _serialize_issue_chapter_pressure_entry(
-                result.issue_chapter_highlights.top_resolved_chapter
-            ),
-        },
-        issue_chapter_breakdown=_serialize_issue_chapter_breakdown(result.issue_chapter_breakdown),
-        issue_chapter_heatmap=_serialize_issue_chapter_heatmap(result.issue_chapter_heatmap),
-        issue_chapter_queue=_serialize_issue_chapter_queue(result.issue_chapter_queue),
-        issue_activity_timeline=_serialize_issue_activity_timeline(result.issue_activity_timeline),
-        issue_activity_breakdown=_serialize_issue_activity_breakdown(result.issue_activity_breakdown),
-        issue_activity_highlights={
-            "top_regressing_entry": _serialize_issue_activity_breakdown_entry(
-                result.issue_activity_highlights.top_regressing_entry
-            ),
-            "top_resolving_entry": _serialize_issue_activity_breakdown_entry(
-                result.issue_activity_highlights.top_resolving_entry
-            ),
-            "top_blocking_entry": _serialize_issue_activity_breakdown_entry(
-                result.issue_activity_highlights.top_blocking_entry
-            ),
-        },
-        records=[
-            {
-                "export_id": record.export_id,
-                "export_type": record.export_type,
-                "status": record.status,
-                "file_path": record.file_path,
-                "manifest_path": record.manifest_path,
-                "chapter_id": record.chapter_id,
-                "chapter_summary_version": record.chapter_summary_version,
-                "created_at": record.created_at,
-                "updated_at": record.updated_at,
-                "translation_usage_summary": _serialize_translation_usage_summary(
-                    record.translation_usage_summary
-                ),
-                "translation_usage_breakdown": _serialize_translation_usage_breakdown(
-                    record.translation_usage_breakdown or []
-                ),
-                "translation_usage_timeline": _serialize_translation_usage_timeline(
-                    record.translation_usage_timeline or []
-                ),
-                "translation_usage_highlights": (
-                    {
-                        "top_cost_entry": _serialize_translation_usage_breakdown_entry(
-                            record.translation_usage_highlights.top_cost_entry
-                        ),
-                        "top_latency_entry": _serialize_translation_usage_breakdown_entry(
-                            record.translation_usage_highlights.top_latency_entry
-                        ),
-                        "top_volume_entry": _serialize_translation_usage_breakdown_entry(
-                            record.translation_usage_highlights.top_volume_entry
-                        ),
-                    }
-                    if record.translation_usage_highlights is not None
-                    else None
-                ),
-                "export_auto_followup_summary": (
-                    {
-                        "event_count": record.export_auto_followup_summary.event_count,
-                        "executed_event_count": record.export_auto_followup_summary.executed_event_count,
-                        "stop_event_count": record.export_auto_followup_summary.stop_event_count,
-                        "latest_event_at": record.export_auto_followup_summary.latest_event_at,
-                        "last_stop_reason": record.export_auto_followup_summary.last_stop_reason,
-                    }
-                    if record.export_auto_followup_summary is not None
-                    else None
-                ),
-                "export_time_misalignment_counts": (
-                    {
-                        "missing_target_sentence_count": (
-                            record.export_time_misalignment_counts.missing_target_sentence_count
-                        ),
-                        "inactive_only_sentence_count": (
-                            record.export_time_misalignment_counts.inactive_only_sentence_count
-                        ),
-                        "orphan_target_segment_count": (
-                            record.export_time_misalignment_counts.orphan_target_segment_count
-                        ),
-                        "inactive_target_segment_with_edges_count": (
-                            record.export_time_misalignment_counts.inactive_target_segment_with_edges_count
-                        ),
-                    }
-                    if record.export_time_misalignment_counts is not None
-                    else None
-                ),
-                "runtime_v2_context": record.runtime_v2_context,
-            }
-            for record in result.records
-        ],
-    )
-
-
-def _to_chapter_worklist_response(result: DocumentChapterWorklist) -> DocumentChapterWorklistResponse:
-    return DocumentChapterWorklistResponse(
-        document_id=result.document_id,
-        worklist_count=result.worklist_count,
-        filtered_worklist_count=result.filtered_worklist_count,
-        entry_count=result.entry_count,
-        offset=result.offset,
-        limit=result.limit,
-        has_more=result.has_more,
-        applied_queue_priority_filter=result.applied_queue_priority_filter,
-        applied_sla_status_filter=result.applied_sla_status_filter,
-        applied_owner_ready_filter=result.applied_owner_ready_filter,
-        applied_needs_immediate_attention_filter=result.applied_needs_immediate_attention_filter,
-        applied_assigned_filter=result.applied_assigned_filter,
-        applied_assigned_owner_filter=result.applied_assigned_owner_filter,
-        queue_priority_counts=result.queue_priority_counts,
-        sla_status_counts=result.sla_status_counts,
-        immediate_attention_count=result.immediate_attention_count,
-        owner_ready_count=result.owner_ready_count,
-        assigned_count=result.assigned_count,
-        owner_workload_summary=_serialize_owner_workload_summary(result.owner_workload_summary),
-        owner_workload_highlights={
-            "top_loaded_owner": _serialize_owner_workload_entry(
-                result.owner_workload_highlights.get("top_loaded_owner")
-            ),
-            "top_breached_owner": _serialize_owner_workload_entry(
-                result.owner_workload_highlights.get("top_breached_owner")
-            ),
-            "top_blocking_owner": _serialize_owner_workload_entry(
-                result.owner_workload_highlights.get("top_blocking_owner")
-            ),
-            "top_immediate_owner": _serialize_owner_workload_entry(
-                result.owner_workload_highlights.get("top_immediate_owner")
-            ),
-        },
-        highlights={
-            "top_breached_entry": _serialize_issue_chapter_queue_entry(
-                result.highlights.get("top_breached_entry")
-            ),
-            "top_due_soon_entry": _serialize_issue_chapter_queue_entry(
-                result.highlights.get("top_due_soon_entry")
-            ),
-            "top_oldest_entry": _serialize_issue_chapter_queue_entry(
-                result.highlights.get("top_oldest_entry")
-            ),
-            "top_immediate_entry": _serialize_issue_chapter_queue_entry(
-                result.highlights.get("top_immediate_entry")
-            ),
-        },
-        entries=_serialize_issue_chapter_queue(result.entries),
-    )
-
-
-def _to_chapter_worklist_detail_response(
-    result: DocumentChapterWorklistDetail,
-) -> DocumentChapterWorklistDetailResponse:
-    return DocumentChapterWorklistDetailResponse(
-        document_id=result.document_id,
-        chapter_id=result.chapter_id,
-        ordinal=result.ordinal,
-        title_src=result.title_src,
-        chapter_status=result.chapter_status,
-        packet_count=result.packet_count,
-        translated_packet_count=result.translated_packet_count,
-        current_issue_count=result.current_issue_count,
-        current_open_issue_count=result.current_open_issue_count,
-        current_triaged_issue_count=result.current_triaged_issue_count,
-        current_active_blocking_issue_count=result.current_active_blocking_issue_count,
-        assignment=(
-            {
-                "assignment_id": result.assignment.assignment_id,
-                "document_id": result.assignment.document_id,
-                "chapter_id": result.assignment.chapter_id,
-                "owner_name": result.assignment.owner_name,
-                "assigned_by": result.assignment.assigned_by,
-                "note": result.assignment.note,
-                "assigned_at": result.assignment.assigned_at,
-                "created_at": result.assignment.created_at,
-                "updated_at": result.assignment.updated_at,
-            }
-            if result.assignment is not None
-            else None
-        ),
-        queue_entry=_serialize_issue_chapter_queue_entry(result.queue_entry),
-        quality_summary=(
-            {
-                "issue_count": result.quality_summary.issue_count,
-                "action_count": result.quality_summary.action_count,
-                "resolved_issue_count": result.quality_summary.resolved_issue_count,
-                "coverage_ok": result.quality_summary.coverage_ok,
-                "alignment_ok": result.quality_summary.alignment_ok,
-                "term_ok": result.quality_summary.term_ok,
-                "format_ok": result.quality_summary.format_ok,
-                "blocking_issue_count": result.quality_summary.blocking_issue_count,
-                "low_confidence_count": result.quality_summary.low_confidence_count,
-                "format_pollution_count": result.quality_summary.format_pollution_count,
-            }
-            if result.quality_summary is not None
-            else None
-        ),
-        issue_family_breakdown=_serialize_issue_chapter_breakdown(result.issue_family_breakdown),
-        recent_issues=[
-            {
-                "issue_id": issue.issue_id,
-                "issue_type": issue.issue_type,
-                "root_cause_layer": issue.root_cause_layer,
-                "severity": issue.severity,
-                "status": issue.status,
-                "blocking": issue.blocking,
-                "detector": issue.detector,
-                "suggested_action": issue.suggested_action,
-                "created_at": issue.created_at,
-                "updated_at": issue.updated_at,
-            }
-            for issue in result.recent_issues
-        ],
-        recent_actions=[
-            {
-                "action_id": action.action_id,
-                "issue_id": action.issue_id,
-                "issue_type": action.issue_type,
-                "action_type": action.action_type,
-                "scope_type": action.scope_type,
-                "scope_id": action.scope_id,
-                "status": action.status,
-                "created_by": action.created_by,
-                "created_at": action.created_at,
-                "updated_at": action.updated_at,
-            }
-            for action in result.recent_actions
-        ],
-        assignment_history=[
-            {
-                "event_id": event.event_id,
-                "event_type": event.event_type,
-                "owner_name": event.owner_name,
-                "performed_by": event.performed_by,
-                "note": event.note,
-                "created_at": event.created_at,
-            }
-            for event in result.assignment_history
-        ],
-        memory_proposals=ChapterMemoryProposalSurfaceResponse(
-            proposal_count=result.memory_proposals.proposal_count,
-            pending_proposal_count=result.memory_proposals.pending_proposal_count,
-            counts_by_status=result.memory_proposals.counts_by_status,
-            latest_proposal_updated_at=result.memory_proposals.latest_proposal_updated_at,
-            active_snapshot_version=result.memory_proposals.active_snapshot_version,
-            pending_proposals=[
-                _to_chapter_memory_proposal_response(proposal)
-                for proposal in result.memory_proposals.pending_proposals
-            ],
-            recent_decisions=[
-                _to_chapter_memory_proposal_decision_audit_response(audit)
-                for audit in result.memory_proposals.recent_decisions
-            ],
-        ),
-        timeline=[
-            _to_chapter_worklist_timeline_entry_response(entry)
-            for entry in result.timeline
-        ],
-    )
-
-
-def _to_export_detail_response(result: ExportDetail) -> ExportDetailResponse:
-    return ExportDetailResponse(
-        document_id=result.document_id,
-        export_id=result.export_id,
-        export_type=result.export_type,
-        status=result.status,
-        file_path=result.file_path,
-        manifest_path=result.manifest_path,
-        chapter_id=result.chapter_id,
-        sentence_count=result.sentence_count,
-        target_segment_count=result.target_segment_count,
-        created_at=result.created_at,
-        updated_at=result.updated_at,
-        translation_usage_summary=_serialize_translation_usage_summary(result.translation_usage_summary),
-        translation_usage_breakdown=_serialize_translation_usage_breakdown(
-            result.translation_usage_breakdown or []
-        ),
-        translation_usage_timeline=_serialize_translation_usage_timeline(
-            result.translation_usage_timeline or []
-        ),
-        translation_usage_highlights=(
-            {
-                "top_cost_entry": _serialize_translation_usage_breakdown_entry(
-                    result.translation_usage_highlights.top_cost_entry
-                ),
-                "top_latency_entry": _serialize_translation_usage_breakdown_entry(
-                    result.translation_usage_highlights.top_latency_entry
-                ),
-                "top_volume_entry": _serialize_translation_usage_breakdown_entry(
-                    result.translation_usage_highlights.top_volume_entry
-                ),
-            }
-            if result.translation_usage_highlights is not None
-            else None
-        ),
-        issue_status_summary=(
-            {
-                "issue_count": result.issue_status_summary.issue_count,
-                "open_issue_count": result.issue_status_summary.open_issue_count,
-                "resolved_issue_count": result.issue_status_summary.resolved_issue_count,
-                "blocking_issue_count": result.issue_status_summary.blocking_issue_count,
-            }
-            if result.issue_status_summary is not None
-            else None
-        ),
-        export_auto_followup_summary=(
-            {
-                "event_count": result.export_auto_followup_summary.event_count,
-                "executed_event_count": result.export_auto_followup_summary.executed_event_count,
-                "stop_event_count": result.export_auto_followup_summary.stop_event_count,
-                "latest_event_at": result.export_auto_followup_summary.latest_event_at,
-                "last_stop_reason": result.export_auto_followup_summary.last_stop_reason,
-            }
-            if result.export_auto_followup_summary is not None
-            else None
-        ),
-        export_time_misalignment_counts=(
-            {
-                "missing_target_sentence_count": result.export_time_misalignment_counts.missing_target_sentence_count,
-                "inactive_only_sentence_count": result.export_time_misalignment_counts.inactive_only_sentence_count,
-                "orphan_target_segment_count": result.export_time_misalignment_counts.orphan_target_segment_count,
-                "inactive_target_segment_with_edges_count": (
-                    result.export_time_misalignment_counts.inactive_target_segment_with_edges_count
-                ),
-            }
-            if result.export_time_misalignment_counts is not None
-            else None
-        ),
-        version_evidence_summary={
-            "document_parser_version": result.version_evidence_summary.document_parser_version,
-            "document_segmentation_version": result.version_evidence_summary.document_segmentation_version,
-            "book_profile_version": result.version_evidence_summary.book_profile_version,
-            "chapter_summary_version": result.version_evidence_summary.chapter_summary_version,
-            "active_snapshot_versions": result.version_evidence_summary.active_snapshot_versions,
-        },
-        runtime_v2_context=result.runtime_v2_context,
-    )
-
-
-def _to_assignment_response(result) -> ChapterWorklistAssignmentResponse:
-    return ChapterWorklistAssignmentResponse(
-        assignment_id=result.assignment_id,
-        document_id=result.document_id,
-        chapter_id=result.chapter_id,
-        owner_name=result.owner_name,
-        assigned_by=result.assigned_by,
-        note=result.note,
-        assigned_at=result.assigned_at,
-        created_at=result.created_at,
-        updated_at=result.updated_at,
-    )
 
 
 @router.get("/contract", response_model=DocumentContractResponse)
@@ -1455,6 +117,20 @@ def document_contract() -> DocumentContractResponse:
     )
 
 
+def _require_allowed_source_path(request: Request, source_path: Path) -> None:
+    """With auth on or in prod, bootstrap may only read files under the upload root or configured roots (R1)."""
+    settings = get_settings()
+    if not settings.hardened:
+        return
+    roots = [_upload_root(request), *settings.bootstrap_source_roots]
+    resolved = source_path.expanduser().resolve()
+    for root in roots:
+        root = Path(root).expanduser().resolve()
+        if resolved == root or root in resolved.parents:
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="source_path is outside the allowed bootstrap roots")
+
+
 @router.post("/bootstrap", response_model=DocumentSummaryResponse, status_code=status.HTTP_201_CREATED)
 def bootstrap_document(
     payload: BootstrapDocumentRequest,
@@ -1462,19 +138,22 @@ def bootstrap_document(
     session: Session = Depends(get_db_session),
 ) -> DocumentSummaryResponse:
     source_path = Path(payload.source_path)
+    _require_allowed_source_path(request, source_path)
     if not source_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source file not found: {source_path}",
         )
     try:
-        summary = _workflow_service(request, session).bootstrap_document(source_path)
+        summary = _workflow_service(request, session).bootstrap_document(
+            source_path, org_id=current_principal(request).org_id
+        )
         # Commit before returning so a follow-up read from the web UI can resolve
         # the newly created document immediately.
         session.commit()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _to_document_summary_response(summary)
+    return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
 
 
 @router.post("/bootstrap-upload", response_model=DocumentSummaryResponse, status_code=status.HTTP_201_CREATED)
@@ -1492,19 +171,28 @@ def bootstrap_uploaded_document(
     try:
         with target_path.open("wb") as buffer:
             shutil.copyfileobj(source_file.file, buffer)
-        summary = _workflow_service(request, session).bootstrap_document(target_path)
+        summary = _workflow_service(request, session).bootstrap_document(
+            target_path, org_id=current_principal(request).org_id
+        )
         # Commit before returning so a follow-up read from the web UI can resolve
         # the newly created document immediately.
         session.commit()
     except ValueError as exc:
-        _cleanup_path(target_path)
+        cleanup_path(target_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except OcrUnavailable as exc:
+        cleanup_path(target_path)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="这是扫描版 PDF，需要 OCR 才能识别文字，但当前部署没有安装 OCR 组件。"
+            "请上传文字版 PDF 或 EPUB，或请管理员安装 OCR（见部署文档）。",
+        ) from exc
     except Exception:
-        _cleanup_path(target_path)
+        cleanup_path(target_path)
         raise
     finally:
         source_file.file.close()
-    return _to_document_summary_response(summary)
+    return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
 
 
 @router.get("/history", response_model=DocumentHistoryPageResponse)
@@ -1527,8 +215,9 @@ def list_document_history(
         status=status,
         latest_run_status=latest_run_status,
         merged_export_ready=merged_export_ready,
+        org_id=current_principal(request).org_id if current_principal(request).auth_enabled else None,
     )
-    return _to_document_history_page_response(page)
+    return DocumentHistoryPageResponse.model_validate(page, from_attributes=True)
 
 
 @router.post("/history/backfill", response_model=DocumentHistoryBackfillResponse)
@@ -1551,7 +240,7 @@ def get_document(
         summary = _workflow_service(request, session).get_document_summary(document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_document_summary_response(summary)
+    return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1561,11 +250,14 @@ def delete_document(
     session: Session = Depends(get_db_session),
 ) -> Response:
     try:
-        _workflow_service(request, session).delete_document(document_id)
+        files = _workflow_service(request, session).delete_document(document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentBusyError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    # Files go only once the rows are gone for good.
+    session.commit()
+    remove_document_files(session, files, upload_root=_upload_root(request))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -1589,7 +281,7 @@ def get_document_exports(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_export_dashboard_response(dashboard)
+    return DocumentExportDashboardResponse.model_validate(dashboard, from_attributes=True)
 
 
 @router.get("/{document_id}/chapters")
@@ -1649,7 +341,7 @@ def get_document_chapter_worklist(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_chapter_worklist_response(worklist)
+    return DocumentChapterWorklistResponse.model_validate(worklist, from_attributes=True)
 
 
 @router.get(
@@ -1669,7 +361,7 @@ def get_document_chapter_worklist_detail(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_chapter_worklist_detail_response(detail)
+    return DocumentChapterWorklistDetailResponse.model_validate(detail, from_attributes=True)
 
 
 @router.put(
@@ -1693,7 +385,7 @@ def assign_document_chapter_worklist(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_assignment_response(assignment)
+    return ChapterWorklistAssignmentResponse.model_validate(assignment, from_attributes=True)
 
 
 @router.post(
@@ -1732,83 +424,18 @@ def download_document_chapter_export(
     chapter_id: str,
     request: Request,
     export_type: ExportType = Query(default=ExportType.BILINGUAL_HTML),
+    package: Literal["single", "zip"] = Query(
+        default="single", description="single: one HTML with images embedded; zip: the stored files with their assets."
+    ),
     session: Session = Depends(get_db_session),
-) -> FileResponse:
-    workflow = _workflow_service(request, session)
-    chapter_bundle = workflow.export_repository.load_chapter_bundle(chapter_id)
-    try:
-        records = workflow.export_repository.list_document_exports_filtered(
-            document_id,
-            export_type=export_type,
-            status=ExportStatus.SUCCEEDED,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    chapter_record = next(
-        (
-            record
-            for record in records
-            if str((record.input_version_bundle_json or {}).get("chapter_id") or "") == chapter_id
-        ),
-        None,
-    )
-    if chapter_record is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No successful {export_type.value} export is available for chapter {chapter_id}.",
-        )
-
-    _assert_record_serviceable(chapter_record)
-    artifact_roots = _artifact_roots(request)
-    file_path = _resolve_artifact_path(
-        chapter_record.file_path,
-        roots=artifact_roots,
-        document_id=document_id,
-        content_sha256=chapter_record.content_sha256,
-    )
-    canonical_basename = _canonical_basename(chapter_record.file_path)
-    canonical_suffix = Path(canonical_basename).suffix or ""
-    canonical_path = _canonical_artifact_path(
-        chapter_record.file_path, roots=artifact_roots, document_id=document_id
-    ) or file_path
-    archive_inputs = [
-        ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
-        *[
-            ArchiveInput(
-                path=sidecar_path,
-                archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
-            )
-            for sidecar_path in _export_sidecar_paths(canonical_path)
-        ],
-    ]
-    if len(archive_inputs) == 1:
-        dl_name = _chapter_export_download_filename(
-            chapter_bundle.document,
-            chapter_bundle.chapter,
-            export_type,
-            file_suffix=canonical_suffix,
-        )
-        return FileResponse(
-            path=file_path,
-            media_type=mimetypes.guess_type(canonical_basename)[0]
-            or "application/octet-stream",
-            headers={"content-disposition": _content_disposition(dl_name)},
-        )
-
-    archive_path = _build_export_archive(document_id, export_type, archive_inputs)
-    dl_name = _chapter_export_download_filename(
-        chapter_bundle.document,
-        chapter_bundle.chapter,
+) -> Response:
+    return chapter_export_response(
+        _workflow_service(request, session).export_repository,
+        document_id,
+        chapter_id,
         export_type,
-        file_suffix=".zip",
-        archive=True,
-    )
-    return FileResponse(
-        path=archive_path,
-        media_type="application/zip",
-        headers={"content-disposition": _content_disposition(dl_name)},
-        background=BackgroundTask(_cleanup_path, archive_path),
+        artifact_roots=_artifact_roots(request),
+        package=package,
     )
 
 
@@ -1817,189 +444,244 @@ def download_document_export(
     document_id: str,
     request: Request,
     export_type: ExportType = Query(...),
+    package: Literal["single", "zip", "epub", "preview"] = Query(
+        default="single",
+        description=(
+            "single: one HTML file (images embedded; bilingual assembled into one book); zip: the stored files; "
+            "epub: an e-book of the merged Chinese book (export_type=merged_html); "
+            "preview: for reading in the app (HTML as one file, Markdown with images inlined, PDF inline)."
+        ),
+    ),
     session: Session = Depends(get_db_session),
-) -> FileResponse:
-    workflow = _workflow_service(request, session)
-    document = workflow.export_repository.get_document(document_id)
-
-    # Bilingual document downloads reuse merged exports (which already contain both languages)
-    _BILINGUAL_TO_MERGED = {
-        ExportType.BILINGUAL_HTML: ExportType.MERGED_HTML,
-        ExportType.BILINGUAL_MARKDOWN: ExportType.MERGED_MARKDOWN,
-    }
-    lookup_type = _BILINGUAL_TO_MERGED.get(export_type, export_type)
-
-    try:
-        primary_records = workflow.export_repository.list_document_exports_filtered(
-            document_id,
-            export_type=lookup_type,
-            status=ExportStatus.SUCCEEDED,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    if not primary_records:
-        # No pre-built export — generate on demand
-        try:
-            workflow.export_document(document_id, lookup_type)
-            session.flush()
-            primary_records = workflow.export_repository.list_document_exports_filtered(
-                document_id,
-                export_type=lookup_type,
-                status=ExportStatus.SUCCEEDED,
-            )
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Export generation failed: {exc}",
-            ) from exc
-        if not primary_records:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No successful {export_type.value} exports are available for download.",
-            )
-        try:
-            _emit_export_blobs(
-                session, primary_records, artifact_roots=_artifact_roots(request)
-            )
-        except Exception:
-            pass
-
-    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
-    label_map = {
-        ExportType.MERGED_HTML: "中文阅读稿",
-        ExportType.MERGED_MARKDOWN: "中文阅读稿-Markdown",
-        ExportType.BILINGUAL_HTML: "中英文对照",
-        ExportType.BILINGUAL_MARKDOWN: "中英文对照-Markdown",
-        ExportType.REBUILT_EPUB: "重建EPUB",
-        ExportType.REBUILT_PDF: "重建PDF",
-        ExportType.REVIEW_PACKAGE: "审校包",
-    }
-    label = label_map.get(export_type, export_type.value)
-
-    # If every matching record is marked stale, fail fast with a
-    # consistent 410 rather than letting _resolve_artifact_path bubble
-    # a 404 and confuse operators.
-    for record in primary_records:
-        _assert_record_serviceable(record)
-    artifact_roots = _artifact_roots(request)
-    try:
-        files = [
-            _resolve_artifact_path(
-                record.file_path,
-                roots=artifact_roots,
-                document_id=document_id,
-                content_sha256=record.content_sha256,
-            )
-            for record in primary_records
-        ]
-    except HTTPException as exc:
-        # Records exist but file is missing on disk. This is the M1.3
-        # self-heal path: attempt one idempotent rebuild under a
-        # two-layer try-lock (process + pg advisory). The lock makes
-        # concurrent downloads of the same (doc, type) NOT thundering-
-        # herd ``export_document`` and race to overwrite the output.
-        if exc.status_code != status.HTTP_404_NOT_FOUND:
-            raise
-        with try_acquire_rebuild_lock(
-            session, document_id, lookup_type.value
-        ) as acquired:
-            if not acquired:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Export rebuild in progress for this document; retry shortly.",
-                    headers={"Retry-After": "5"},
-                ) from exc
-            try:
-                workflow.export_document(document_id, lookup_type)
-                session.flush()
-            except HTTPException:
-                raise
-            except Exception as rebuild_exc:
-                # Export gates (chapter not reviewed, review package stale,
-                # etc.) surface here. The artifact is genuinely gone and
-                # cannot be regenerated under current state — a 422 points
-                # the operator at the gate they need to clear, rather than
-                # the useless 404 they'd get without this branch.
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Export rebuild failed: {rebuild_exc}",
-                ) from rebuild_exc
-            primary_records = workflow.export_repository.list_document_exports_filtered(
-                document_id,
-                export_type=lookup_type,
-                status=ExportStatus.SUCCEEDED,
-            )
-            try:
-                _emit_export_blobs(
-                    session, primary_records, artifact_roots=artifact_roots
-                )
-            except Exception:
-                pass
-        for record in primary_records:
-            _assert_record_serviceable(record)
-        files = [
-            _resolve_artifact_path(
-                record.file_path,
-                roots=artifact_roots,
-                document_id=document_id,
-                content_sha256=record.content_sha256,
-            )
-            for record in primary_records
-        ]
-
-    # Use the latest (last) primary record only — deliver a single merged file
-    file_path = files[-1]
-    primary_record = primary_records[-1]
-    canonical_basename = _canonical_basename(primary_record.file_path)
-    ext = Path(canonical_basename).suffix or ""
-    main_filename = f"{book_title}-{label}{ext}"
-    # Sidecar assets (images, CSS) live beside the canonical writer
-    # output, not the blob. Probe the canonical layout; fall back to
-    # the served path (still correct for rows with no blob preference).
-    canonical_path = _canonical_artifact_path(
-        primary_record.file_path, roots=artifact_roots, document_id=document_id
-    ) or file_path
-
-    archive_inputs: list[ArchiveInput] = []
-    seen_paths: set[str] = set()
-    _append_archive_input(
-        archive_inputs,
-        seen_paths,
-        file_path,
-        preferred_archive_name=main_filename,
-    )
-    for sidecar_path in _export_sidecar_paths(canonical_path):
-        _append_archive_input(
-            archive_inputs,
-            seen_paths,
-            sidecar_path,
-            preferred_archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
-        )
-
-    # Single file with no sidecar assets → return directly
-    if len(archive_inputs) == 1:
-        return FileResponse(
-            path=file_path,
-            media_type=mimetypes.guess_type(canonical_basename)[0]
-            or "application/octet-stream",
-            headers={"content-disposition": _content_disposition(main_filename)},
-        )
-
-    # Multiple files (main + assets/) → zip with book-title folder
-    archive_folder = f"{book_title}-{label}"
-    archive_path = _build_export_archive(
+) -> Response:
+    return document_export_response(
+        _workflow_service(request, session).export_repository,
         document_id,
         export_type,
-        archive_inputs,
-        folder_name=archive_folder,
+        artifact_roots=_artifact_roots(request),
+        package=package,
     )
-    zip_name = f"{archive_folder}.zip"
-    return FileResponse(
-        path=archive_path,
-        media_type="application/zip",
-        headers={"content-disposition": _content_disposition(zip_name)},
-        background=BackgroundTask(_cleanup_path, archive_path),
+
+
+def _pdf_renderer_installed() -> bool:
+    """PDF export prints the merged HTML with Playwright's Chromium."""
+    import importlib.util
+
+    return importlib.util.find_spec("playwright") is not None
+
+
+def _recovery_skills_response(document) -> RecoverySkillsResponse:
+    from book_agent.domain.structure import recovery_skills as registry
+
+    enabled = registry.resolve((document.metadata_json or {}).get(registry.METADATA_KEY))
+    return RecoverySkillsResponse(
+        document_id=document.id,
+        applies_to="pdf",
+        skills=[
+            RecoverySkillResponse(
+                name=skill.name,
+                title=skill.title,
+                description=skill.description,
+                passes=list(skill.passes),
+                default_enabled=skill.default_enabled,
+                enabled=enabled[skill.name],
+            )
+            for skill in registry.RECOVERY_SKILLS
+        ],
+    )
+
+
+def _load_document_or_404(session: Session, document_id: str):
+    from book_agent.domain.models import Document
+
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    return document
+
+
+@router.get("/{document_id}/recovery-skills", response_model=RecoverySkillsResponse)
+def get_recovery_skills(document_id: str, session: Session = Depends(get_db_session)) -> RecoverySkillsResponse:
+    """PDF recovery skills (publisher- or genre-specific passes) and whether this document uses them."""
+    return _recovery_skills_response(_load_document_or_404(session, document_id))
+
+
+@router.put("/{document_id}/recovery-skills", response_model=RecoverySkillsResponse)
+def update_recovery_skills(
+    document_id: str,
+    payload: RecoverySkillsUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> RecoverySkillsResponse:
+    """Switch skills on or off for this document; takes effect at the next structure refresh."""
+    from book_agent.domain.structure import recovery_skills as registry
+
+    document = _load_document_or_404(session, document_id)
+    try:
+        overrides = registry.validate_overrides(payload.skills)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    metadata = dict(document.metadata_json or {})
+    metadata[registry.METADATA_KEY] = {**dict(metadata.get(registry.METADATA_KEY) or {}), **overrides}
+    document.metadata_json = metadata
+    session.flush()
+    return _recovery_skills_response(document)
+
+
+@router.post("/{document_id}/structure-refresh", response_model=StructureRefreshResponse)
+def refresh_document_structure(
+    document_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> StructureRefreshResponse:
+    """Reparse the source file with the document's current recovery skills and fork changed sentences."""
+    document = _load_document_or_404(session, document_id)
+    workflow = _workflow_service(request, session)
+    try:
+        if document.source_type == SourceType.EPUB:
+            artifacts = workflow.refresh_epub_structure(document_id)
+        else:
+            artifacts = workflow.refresh_pdf_structure(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    fork = artifacts.parse_revision_fork
+    return StructureRefreshResponse(
+        document_id=document_id,
+        source_type=document.source_type.value,
+        refreshed_chapter_count=len(artifacts.refreshed_chapter_ids),
+        refreshed_block_count=len(artifacts.refreshed_block_ids),
+        parse_revision_version=fork.parse_revision_version if fork is not None else None,
+        retired_sentence_count=fork.retired_sentence_count if fork is not None else 0,
+        created_sentence_count=fork.created_sentence_count if fork is not None else 0,
+        carried_ratio=round(fork.carried_ratio, 3) if fork is not None and fork.forked else None,
+        retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
+    )
+
+
+@router.get("/{document_id}/cost-estimate", response_model=CostEstimateResponse)
+def get_cost_estimate(
+    document_id: str,
+    terminology: Literal["skip", "sampled", "thorough"] = Query(default="sampled"),
+    model_review: Literal["skip", "sampled", "full"] = Query(default="sampled"),
+    session: Session = Depends(get_db_session),
+) -> CostEstimateResponse:
+    """Tokens (and cost, when the provider has prices) a full translation run of this book will take, as a range."""
+    from book_agent.core.config import get_settings
+    from book_agent.services.cost_estimate import estimate_document_cost
+
+    try:
+        estimate = estimate_document_cost(
+            session, document_id, get_settings(), terminology=terminology, model_review=model_review
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return CostEstimateResponse(**estimate.to_json())
+
+
+def _structure_edit_response(edit, *, block_ids: list[str] | None = None, fork=None) -> StructureEditResponse:
+    return StructureEditResponse(
+        edit_id=edit.id,
+        kind=edit.kind,
+        status=edit.status,
+        block_ids=block_ids if block_ids is not None else [item.get("block_id") for item in edit.blocks_json or []],
+        args=dict(edit.args_json or {}),
+        actor_id=edit.actor_id,
+        reason=edit.reason,
+        turn_id=edit.turn_id,
+        replay_of_edit_id=edit.replay_of_edit_id,
+        parse_revision_version=fork.parse_revision_version if fork is not None else None,
+        retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
+        created_at=edit.created_at.isoformat() if edit.created_at else None,
+    )
+
+
+@router.get("/{document_id}/structure-edits", response_model=StructureEditListResponse)
+def list_structure_edits(document_id: str, session: Session = Depends(get_db_session)) -> StructureEditListResponse:
+    """Structure edits of the document, as applied and as replayed or found stale after reparses."""
+    from sqlalchemy import select
+
+    from book_agent.domain.models import StructureEdit
+
+    _load_document_or_404(session, document_id)
+    edits = session.scalars(
+        select(StructureEdit).where(StructureEdit.document_id == document_id).order_by(StructureEdit.created_at, StructureEdit.id)
+    ).all()
+    return StructureEditListResponse(document_id=document_id, edits=[_structure_edit_response(edit) for edit in edits])
+
+
+@router.post("/{document_id}/structure-edits", response_model=StructureEditResponse, status_code=status.HTTP_201_CREATED)
+def create_structure_edit(
+    document_id: str,
+    payload: StructureEditRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> StructureEditResponse:
+    """Relabel or split a block, merge a block into the one before it, or link a caption; sentences fork and packets rebuild."""
+    from book_agent.domain.models import StructureEdit
+    from book_agent.services.structure_edits import StructureEditRejected, StructureEditService
+
+    _load_document_or_404(session, document_id)
+    principal = current_principal(request)
+    actor_id = f"api:{principal.subject or principal.key_id or 'local'}"
+    service = StructureEditService(session)
+
+    def required(*names: str) -> list[str]:
+        values = [getattr(payload, name) for name in names]
+        missing = [name for name, value in zip(names, values, strict=True) if not value]
+        if missing:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{payload.kind} needs {', '.join(missing)}")
+        return values
+
+    try:
+        if payload.kind == "relabel_block":
+            block_id, block_type = required("block_id", "block_type")
+            outcome = service.relabel_block(
+                document_id, block_id, block_type, heading_level=payload.heading_level, actor_id=actor_id, reason=payload.reason
+            )
+        elif payload.kind == "split_block":
+            block_id, marker = required("block_id", "second_part_starts_with")
+            outcome = service.split_block(document_id, block_id, marker, actor_id=actor_id, reason=payload.reason)
+        elif payload.kind == "merge_blocks":
+            first, second = required("first_block_id", "second_block_id")
+            outcome = service.merge_blocks(document_id, first, second, actor_id=actor_id, reason=payload.reason)
+        else:
+            caption, artifact = required("caption_block_id", "artifact_block_id")
+            outcome = service.link_caption(document_id, caption, artifact, actor_id=actor_id, reason=payload.reason)
+    except StructureEditRejected as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    edit = session.get(StructureEdit, outcome.edit_id)
+    return _structure_edit_response(edit, block_ids=outcome.block_ids, fork=outcome.fork)
+
+
+@router.get("/{document_id}/exports/{export_id}/versions", response_model=ExportVersionHistoryResponse)
+def get_document_export_versions(
+    document_id: str,
+    export_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> ExportVersionHistoryResponse:
+    """What each re-export of this artifact produced, newest first (bytes kept in the blob store)."""
+    from book_agent.domain.models.review import Export
+
+    export = session.get(Export, export_id)
+    if export is None or export.document_id != document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="export not found")
+    versions = _workflow_service(request, session).export_repository.list_export_versions(export_id)
+    return ExportVersionHistoryResponse(
+        document_id=document_id,
+        export_id=export_id,
+        export_type=export.export_type.value,
+        current_version=int(export.version or 1),
+        versions=[
+            ExportVersionResponse(
+                version=row.version,
+                file_path=row.file_path,
+                manifest_path=row.manifest_path,
+                content_sha256=row.content_sha256,
+                byte_count=row.byte_count,
+                created_at=row.created_at.isoformat() if row.created_at else None,
+            )
+            for row in versions
+        ],
     )
 
 
@@ -2014,7 +696,7 @@ def get_document_export_detail(
         detail = _workflow_service(request, session).get_document_export_detail(document_id, export_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_export_detail_response(detail)
+    return ExportDetailResponse.model_validate(detail, from_attributes=True)
 
 
 @router.get(
@@ -2036,11 +718,12 @@ def list_chapter_memory_proposals(
         )
     except ValueError as exc:
         raise _proposal_http_exception(exc) from exc
-    return _to_chapter_memory_proposal_list_response(
+    return ChapterMemoryProposalListResponse(
         document_id=document_id,
         chapter_id=chapter_id,
         status_filter=proposal_status.value if proposal_status is not None else None,
-        proposals=proposals,
+        proposal_count=len(proposals),
+        proposals=[ChapterMemoryProposalResponse.model_validate(proposal, from_attributes=True) for proposal in proposals],
     )
 
 
@@ -2066,7 +749,7 @@ def approve_chapter_memory_proposal(
         )
     except ValueError as exc:
         raise _proposal_http_exception(exc) from exc
-    return _to_chapter_memory_proposal_decision_response(result)
+    return ChapterMemoryProposalDecisionResponse.model_validate(result, from_attributes=True)
 
 
 @router.post(
@@ -2091,68 +774,103 @@ def reject_chapter_memory_proposal(
         )
     except ValueError as exc:
         raise _proposal_http_exception(exc) from exc
-    return _to_chapter_memory_proposal_decision_response(result)
+    return ChapterMemoryProposalDecisionResponse.model_validate(result, from_attributes=True)
 
 
-@router.post("/{document_id}/translate", response_model=TranslateDocumentResponse)
+def _enqueue_document_run(
+    request: Request,
+    session: Session,
+    *,
+    document_id: str,
+    run_type: DocumentRunType,
+    run_request: dict[str, Any],
+) -> DocumentRunSummaryResponse:
+    control = RunControlService(RunControlRepository(session))
+    try:
+        created = control.create_run(
+            document_id=document_id,
+            run_type=run_type,
+            requested_by="api.documents",
+            status_detail_json={"source": "api.documents", RUN_REQUEST_KEY: run_request},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        summary = control.resume_run(created.run_id, actor_id="api.documents", note="enqueued")
+    except RunControlTransitionError as exc:
+        # E.g. the organisation's monthly budget is used up; the queued run is rolled back.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    # The executor reads the run from its own session; commit before waking it.
+    session.commit()
+    ensure_document_run_executor(request.app).wake(summary.run_id)
+    return _to_run_summary_response(summary)
+
+
+@router.post(
+    "/{document_id}/translate",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def translate_document(
     document_id: str,
     payload: TranslateDocumentRequest,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> TranslateDocumentResponse:
-    try:
-        result = _workflow_service(request, session).translate_document(document_id, payload.packet_ids)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_translate_response(result)
+) -> DocumentRunSummaryResponse:
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.TRANSLATE_TARGETED,
+        run_request={"packet_ids": list(payload.packet_ids)},
+    )
 
 
-@router.post("/{document_id}/review", response_model=ReviewDocumentResponse)
+@router.post(
+    "/{document_id}/review",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def review_document(
     document_id: str,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> ReviewDocumentResponse:
-    try:
-        result = _workflow_service(request, session).review_document(document_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _to_review_response(result)
+) -> DocumentRunSummaryResponse:
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.REVIEW_FULL,
+        run_request={},
+    )
 
 
-@router.post("/{document_id}/export", response_model=ExportDocumentResponse)
+@router.post(
+    "/{document_id}/export",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def export_document(
     document_id: str,
     payload: ExportDocumentRequest,
     request: Request,
     session: Session = Depends(get_db_session),
-) -> ExportDocumentResponse:
-    try:
-        workflow = _workflow_service(request, session)
-        export_type_enum = ExportType(payload.export_type)
-        result = workflow.export_document(
-            document_id,
-            export_type_enum,
-            auto_execute_followup_on_gate=payload.auto_execute_followup_on_gate,
-            max_auto_followup_attempts=payload.max_auto_followup_attempts,
+) -> DocumentRunSummaryResponse:
+    if payload.export_type == "rebuilt_pdf" and not _pdf_renderer_installed():
+        # Refuse up front instead of enqueueing a run that can only fail.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="当前部署没有安装 PDF 渲染组件（Playwright 与 Chromium），暂时不能生成 PDF；"
+            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试。",
         )
-    except ExportGateError as exc:
-        session.commit()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.to_http_detail()) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    # M2.2c: stamp + materialize the freshly-written export(s) into the
-    # CAS tree. session auto-commits on POST exit via get_db_session.
-    try:
-        session.flush()
-        fresh_records = workflow.export_repository.list_document_exports_filtered(
-            document_id,
-            export_type=export_type_enum,
-            status=ExportStatus.SUCCEEDED,
-        )
-        _emit_export_blobs(session, fresh_records, artifact_roots=_artifact_roots(request))
-    except Exception:
-        # Advisory path. Never fail the caller because CAS emission hiccuped.
-        pass
-    return _to_export_response(result)
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.EXPORT_FULL,
+        run_request={
+            "export_type": payload.export_type,
+            "auto_execute_followup_on_gate": payload.auto_execute_followup_on_gate,
+            "max_auto_followup_attempts": payload.max_auto_followup_attempts,
+        },
+    )

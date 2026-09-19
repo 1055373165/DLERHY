@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.enums import ActionType, BlockType, ExportType, RuntimeIncidentKind, SnapshotType
+from book_agent.domain.enums import ActionType, BlockType, ExportType, SnapshotType, WorkItemStage
 from book_agent.domain.models import Block, IssueAction
 
 
@@ -44,12 +44,24 @@ class EnumPersistenceTests(unittest.TestCase):
         for snapshot_type in SnapshotType:
             self.assertIn(f"'{snapshot_type.value}'", migration_text)
 
-    def test_latest_runtime_incident_constraint_migration_covers_all_runtime_incident_kinds(self) -> None:
-        migration_path = ROOT / "alembic" / "versions" / "20260410_0019_expand_runtime_incident_kind_check.py"
+    def test_latest_work_item_stage_constraint_migration_matches_work_item_stages(self) -> None:
+        migration_path = ROOT / "alembic" / "versions" / "20260917_0035_agent_harness_ledger.py"
         migration_text = migration_path.read_text(encoding="utf-8")
 
-        for incident_kind in RuntimeIncidentKind:
-            self.assertIn(f"'{incident_kind.value}'", migration_text)
+        for stage in WorkItemStage:
+            self.assertIn(f"'{stage.value}'", migration_text)
+        self.assertNotIn("'repair',", migration_text)
+
+    def test_review_issue_event_constraints_match_enums(self) -> None:
+        from book_agent.domain.enums import IssueEventKind, IssueStatus
+
+        migration_path = ROOT / "alembic" / "versions" / "20260917_0036_review_issue_versioning.py"
+        migration_text = migration_path.read_text(encoding="utf-8")
+
+        for kind in IssueEventKind:
+            self.assertIn(f"'{kind.value}'", migration_text)
+        for status in IssueStatus:
+            self.assertIn(f"'{status.value}'", migration_text)
 
 
 if __name__ == "__main__":

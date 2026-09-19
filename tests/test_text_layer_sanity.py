@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for the PDF text-layer sanity gate (PDF v2 M1.2)."""
 
-import os
 import sys
 import unittest
 from pathlib import Path

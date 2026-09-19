@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import current_principal
 from book_agent.app.api.deps import get_db_session
-from book_agent.core.config import get_settings
 from book_agent.schemas.workflow import ExecuteActionResponse
+from book_agent.services.actions import ActionNotExecutable
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.factory import build_translation_worker, resolve_translation_worker
 
 router = APIRouter()
 
@@ -18,18 +18,13 @@ def execute_action(
     session: Session = Depends(get_db_session),
 ) -> ExecuteActionResponse:
     try:
-        resolver = getattr(request.app.state, "resolve_translation_worker", None)
-        if callable(resolver):
-            translation_worker = resolver()
-        else:
-            translation_worker = getattr(request.app.state, "translation_worker", None)
-            if translation_worker is None:
-                translation_worker = resolve_translation_worker(session, get_settings())
         result = DocumentWorkflowService(
             session,
             export_root=getattr(request.app.state, "export_root", "artifacts/exports"),
-            translation_worker=translation_worker,
+            translation_worker=request.app.state.resolve_translation_worker(current_principal(request).org_id),
         ).execute_action(action_id, run_followup=run_followup)
+    except ActionNotExecutable as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     review_artifacts = result.rerun_execution.review_artifacts if result.rerun_execution else None

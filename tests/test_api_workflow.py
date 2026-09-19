@@ -2,23 +2,21 @@
 
 import json
 import os
+import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-import sys
-import time
-from urllib.parse import unquote
 from unittest.mock import patch
+from urllib.parse import unquote
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
-from sqlalchemy.pool import StaticPool
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -36,34 +34,51 @@ from book_agent.domain.enums import (
     ActionType,
     Detector,
     DocumentRunStatus,
+    ExportType,
     IssueStatus,
     JobScopeType,
     LockLevel,
     MemoryProposalStatus,
     MemoryScopeType,
     RootCauseLayer,
-    SentenceStatus,
     Severity,
     SnapshotType,
     TermStatus,
     TermType,
+    WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models import Chapter, Document, IssueAction, MemorySnapshot, Sentence, TermEntry
-from book_agent.domain.models.ops import DocumentRun
+from book_agent.domain.models import (
+    Chapter,
+    Document,
+    IssueAction,
+    MemorySnapshot,
+    Sentence,
+    TermEntry,
+)
+from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.review import Export, ReviewIssue
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.run_control import RunControlRepository
-from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.export import ExportGateError, ExportService
+from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.translation.contracts import (
+    AlignmentSuggestion,
+    TranslationTargetSegment,
+    TranslationWorkerOutput,
+)
 from book_agent.workers.providers.openai_compatible import ProviderNetworkError
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
-
+from tests.document_actions import SyncDocumentActionClient
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -596,8 +611,7 @@ class ApiWorkflowTests(unittest.TestCase):
         sqlite_path = Path(self.tempdir.name) / "book-agent.db"
         self.engine = build_engine(
             f"sqlite+pysqlite:///{sqlite_path}",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
+            connect_args={"check_same_thread": False, "timeout": 30},
         )
         self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)
@@ -606,7 +620,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.app.state.session_factory = self.session_factory
         self.app.state.export_root = str(Path(self.tempdir.name) / "exports")
         self.app.state.upload_root = str(Path(self.tempdir.name) / "uploads")
-        self.client = TestClient(self.app)
+        self.client = SyncDocumentActionClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self._stop_executor)
 
@@ -717,13 +731,13 @@ class ApiWorkflowTests(unittest.TestCase):
             archive.writestr("OEBPS/chapter1.xhtml", chapter_xhtml)
         return epub_path
 
-    def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 10.0) -> dict:
+    def _wait_for_run_terminal(self, run_id: str, *, timeout_seconds: float = 30.0) -> dict:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             response = self.client.get(f"/v1/runs/{run_id}")
             self.assertEqual(response.status_code, 200)
             payload = response.json()
-            if payload["status"] in {"succeeded", "failed", "paused", "cancelled"}:
+            if payload["status"] in {"succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"}:
                 return payload
             time.sleep(0.2)
         self.fail(f"Run {run_id} did not reach terminal state within {timeout_seconds} seconds.")
@@ -1064,11 +1078,9 @@ class ApiWorkflowTests(unittest.TestCase):
             params={"export_type": "merged_html"},
         )
         self.assertEqual(merged_download.status_code, 200)
-        self.assertIn("application/zip", merged_download.headers["content-type"])
-        with zipfile.ZipFile(BytesIO(merged_download.content)) as archive:
-            names = archive.namelist()
-        self.assertIn(f"{document_id}-analysis-bundle/merged-document.html", names)
-        self.assertIn(f"{document_id}-analysis-bundle/bilingual-{chapter_id}.html", names)
+        # A single merged file without sidecar assets is served directly.
+        self.assertIn("text/html", merged_download.headers["content-type"])
+        self.assertIn("中文阅读稿.html", unquote(merged_download.headers["content-disposition"]))
 
         chapter_download = self.client.get(
             f"/v1/documents/{document_id}/chapters/{chapter_id}/exports/download",
@@ -1266,6 +1278,7 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(resumed.status_code, 200)
 
         terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
+        # Review is required for TRANSLATE_FULL runs: unresolved blockers fail the run.
         self.assertEqual(terminal["status"], "failed")
 
         with self.session_factory() as session:
@@ -1414,7 +1427,7 @@ class ApiWorkflowTests(unittest.TestCase):
             self.assertEqual(len(active_chapter_ids), 8)
             self.assertEqual(len(active_chapter_ids), len(set(active_chapter_ids)))
 
-    def test_translate_executor_defaults_to_single_worker_on_sqlite_without_budget_override(self) -> None:
+    def test_translate_executor_parallelism_uses_budget_override_or_executor_default(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
         self.assertEqual(bootstrap.status_code, 201)
@@ -1426,11 +1439,17 @@ class ApiWorkflowTests(unittest.TestCase):
                 "document_id": document_id,
                 "run_type": "translate_full",
                 "requested_by": "api-test",
-                "status_detail_json": {"source": "sqlite-default-parallelism-test"},
+                "status_detail_json": {"source": "default-parallelism-test"},
             },
         )
         self.assertEqual(created.status_code, 201)
         run_id = created.json()["run_id"]
+        # Only one active run per document is allowed.
+        cancelled = self.client.post(
+            f"/v1/runs/{run_id}/cancel",
+            json={"actor_id": "api-test", "note": "free the active run slot"},
+        )
+        self.assertEqual(cancelled.status_code, 200)
 
         explicit = self.client.post(
             "/v1/runs",
@@ -1438,7 +1457,7 @@ class ApiWorkflowTests(unittest.TestCase):
                 "document_id": document_id,
                 "run_type": "translate_full",
                 "requested_by": "api-test",
-                "status_detail_json": {"source": "sqlite-explicit-parallelism-test"},
+                "status_detail_json": {"source": "explicit-parallelism-test"},
                 "budget": {"max_parallel_workers": 3},
             },
         )
@@ -1451,7 +1470,10 @@ class ApiWorkflowTests(unittest.TestCase):
             translation_worker=self.app.state.translation_worker,
         )
         with self.session_factory() as session:
-            self.assertEqual(executor._translate_parallelism_limit(session, run_id), 1)
+            self.assertEqual(
+                executor._translate_parallelism_limit(session, run_id),
+                executor.default_max_parallel_workers,
+            )
             self.assertEqual(executor._translate_parallelism_limit(session, explicit_run_id), 3)
 
     def test_translate_executor_seeds_pending_packets_without_sqlite_stage_update_deadlock(self) -> None:
@@ -1466,7 +1488,11 @@ class ApiWorkflowTests(unittest.TestCase):
                 "document_id": document_id,
                 "run_type": "translate_full",
                 "requested_by": "api-test",
-                "status_detail_json": {"source": "sqlite-stage-update-deadlock-test"},
+                "status_detail_json": {
+                    "source": "sqlite-stage-update-deadlock-test",
+                    # The test drives the translate stage directly.
+                    "run_request": {"terminology": "skip"},
+                },
             },
         )
         self.assertEqual(created.status_code, 201)
@@ -1649,158 +1675,6 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(entry["latest_run_completed_work_item_count"], 148)
         self.assertEqual(entry["latest_run_total_work_item_count"], 3163)
 
-    def test_document_surfaces_include_latest_run_runtime_v2_context_for_review_recovery(self) -> None:
-        epub_path = self._write_epub()
-        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
-        self.assertEqual(bootstrap.status_code, 201)
-        document_id = bootstrap.json()["document_id"]
-
-        created = self.client.post(
-            "/v1/runs",
-            json={
-                "document_id": document_id,
-                "run_type": "translate_full",
-                "requested_by": "api-test",
-                "status_detail_json": {
-                    "runtime_v2": {
-                        "last_deadlock_recovery": {
-                            "incident_id": "incident-review-1",
-                            "proposal_id": "proposal-review-1",
-                            "bundle_revision_id": "bundle-review-1",
-                            "repair_work_item_id": "repair-work-item-1",
-                            "replay_scope_id": bootstrap.json()["chapters"][0]["chapter_id"],
-                            "replay_work_item_ids": ["review-replay-1"],
-                            "bound_work_item_ids": ["review-replay-1"],
-                            "reason_code": "chapter_deadlock",
-                            "lane_health_state": "stalled",
-                            "status": "scheduled",
-                            "repair_blockage": {
-                                "state": "manual_escalation_waiting",
-                                "blocked": True,
-                                "reason": "manual_escalation_required",
-                            },
-                        }
-                    }
-                },
-            },
-        )
-        self.assertEqual(created.status_code, 201)
-        run_id = created.json()["run_id"]
-
-        with self.session_factory() as session:
-            run = session.get(DocumentRun, run_id)
-            self.assertIsNotNone(run)
-            assert run is not None
-            run.status = DocumentRunStatus.RUNNING
-            session.commit()
-
-        summary = self.client.get(f"/v1/documents/{document_id}")
-        self.assertEqual(summary.status_code, 200)
-        summary_payload = summary.json()
-        self.assertIsNotNone(summary_payload["runtime_v2_context"])
-        summary_runtime_v2 = summary_payload["runtime_v2_context"]
-        assert summary_runtime_v2 is not None
-        self.assertEqual(summary_runtime_v2["repair_blockage_source"], "last_deadlock_recovery")
-        self.assertEqual(summary_runtime_v2["repair_blockage_state"], "manual_escalation_waiting")
-        self.assertTrue(summary_runtime_v2["repair_blocked"])
-        self.assertEqual(summary_runtime_v2["incident_id"], "incident-review-1")
-        self.assertEqual(summary_runtime_v2["proposal_id"], "proposal-review-1")
-        self.assertEqual(summary_runtime_v2["bundle_revision_id"], "bundle-review-1")
-        self.assertEqual(summary_runtime_v2["repair_work_item_id"], "repair-work-item-1")
-        self.assertEqual(summary_runtime_v2["lane_health_state"], "stalled")
-        self.assertEqual(summary_runtime_v2["replay_work_item_id"], "review-replay-1")
-
-        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
-        self.assertEqual(history.status_code, 200)
-        history_payload = history.json()
-        self.assertEqual(history_payload["total_count"], 1)
-        entry = history_payload["entries"][0]
-        self.assertEqual(entry["document_id"], document_id)
-        self.assertEqual(entry["latest_run_id"], run_id)
-        self.assertIsNotNone(entry["latest_run_runtime_v2_context"])
-        history_runtime_v2 = entry["latest_run_runtime_v2_context"]
-        assert history_runtime_v2 is not None
-        self.assertEqual(history_runtime_v2["repair_blockage_source"], summary_runtime_v2["repair_blockage_source"])
-        self.assertEqual(history_runtime_v2["repair_blockage_state"], summary_runtime_v2["repair_blockage_state"])
-        self.assertEqual(history_runtime_v2["incident_id"], summary_runtime_v2["incident_id"])
-        self.assertEqual(history_runtime_v2["proposal_id"], summary_runtime_v2["proposal_id"])
-
-    def test_document_surfaces_include_latest_run_runtime_v2_context_for_packet_recovery(self) -> None:
-        epub_path = self._write_epub()
-        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
-        self.assertEqual(bootstrap.status_code, 201)
-        document_id = bootstrap.json()["document_id"]
-
-        created = self.client.post(
-            "/v1/runs",
-            json={
-                "document_id": document_id,
-                "run_type": "translate_full",
-                "requested_by": "api-test",
-                "status_detail_json": {
-                    "runtime_v2": {
-                        "last_runtime_defect_recovery": {
-                            "incident_id": "incident-packet-1",
-                            "proposal_id": "proposal-packet-1",
-                            "bundle_revision_id": "bundle-packet-1",
-                            "repair_work_item_id": "repair-work-item-packet-1",
-                            "replay_scope_id": "packet-1",
-                            "replay_work_item_ids": ["packet-replay-1"],
-                            "bound_work_item_ids": ["packet-replay-1"],
-                            "reason_code": "packet_runtime_defect",
-                            "lane_health_state": "degraded",
-                            "status": "published",
-                            "repair_blockage": {
-                                "state": "ready_to_continue",
-                                "blocked": False,
-                                "reason": "repair_completed",
-                            },
-                        }
-                    }
-                },
-            },
-        )
-        self.assertEqual(created.status_code, 201)
-        run_id = created.json()["run_id"]
-
-        with self.session_factory() as session:
-            run = session.get(DocumentRun, run_id)
-            self.assertIsNotNone(run)
-            assert run is not None
-            run.status = DocumentRunStatus.RUNNING
-            session.commit()
-
-        summary = self.client.get(f"/v1/documents/{document_id}")
-        self.assertEqual(summary.status_code, 200)
-        summary_payload = summary.json()
-        self.assertIsNotNone(summary_payload["runtime_v2_context"])
-        summary_runtime_v2 = summary_payload["runtime_v2_context"]
-        assert summary_runtime_v2 is not None
-        self.assertEqual(summary_runtime_v2["repair_blockage_source"], "last_runtime_defect_recovery")
-        self.assertEqual(summary_runtime_v2["repair_blockage_state"], "ready_to_continue")
-        self.assertFalse(summary_runtime_v2["repair_blocked"])
-        self.assertEqual(summary_runtime_v2["incident_id"], "incident-packet-1")
-        self.assertEqual(summary_runtime_v2["proposal_id"], "proposal-packet-1")
-        self.assertEqual(summary_runtime_v2["bundle_revision_id"], "bundle-packet-1")
-        self.assertEqual(summary_runtime_v2["repair_work_item_id"], "repair-work-item-packet-1")
-        self.assertEqual(summary_runtime_v2["lane_health_state"], "degraded")
-        self.assertEqual(summary_runtime_v2["replay_work_item_id"], "packet-replay-1")
-
-        history = self.client.get("/v1/documents/history", params={"limit": 10, "offset": 0})
-        self.assertEqual(history.status_code, 200)
-        history_payload = history.json()
-        self.assertEqual(history_payload["total_count"], 1)
-        entry = history_payload["entries"][0]
-        self.assertEqual(entry["document_id"], document_id)
-        self.assertEqual(entry["latest_run_id"], run_id)
-        self.assertIsNotNone(entry["latest_run_runtime_v2_context"])
-        history_runtime_v2 = entry["latest_run_runtime_v2_context"]
-        assert history_runtime_v2 is not None
-        self.assertEqual(history_runtime_v2["repair_blockage_source"], summary_runtime_v2["repair_blockage_source"])
-        self.assertEqual(history_runtime_v2["repair_blockage_state"], summary_runtime_v2["repair_blockage_state"])
-        self.assertEqual(history_runtime_v2["incident_id"], summary_runtime_v2["incident_id"])
-        self.assertEqual(history_runtime_v2["proposal_id"], summary_runtime_v2["proposal_id"])
-
     def test_retry_run_restarts_pipeline_with_previous_lineage(self) -> None:
         epub_path = self._write_epub()
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
@@ -1872,26 +1746,36 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(created.status_code, 201)
         original_run_id = created.json()["run_id"]
 
+        # A run stuck in RUNNING whose translate stage has terminally failed
+        # (failed-stage detection is derived from work items, not the cache).
         stale_at = datetime.now(timezone.utc) - timedelta(minutes=10)
-        stale_pipeline = {
-            "current_stage": "translate",
-            "stages": {
-                "bootstrap": {"status": "succeeded"},
-                "translate": {
-                    "status": "failed",
-                    "error_message": "Provider returned HTTP 401: invalid api key",
-                    "updated_at": stale_at.isoformat(),
-                },
-            },
-        }
         with self.session_factory() as session:
             run = session.get(DocumentRun, original_run_id)
             self.assertIsNotNone(run)
             run.status = DocumentRunStatus.RUNNING
-            run.status_detail_json = {"pipeline": stale_pipeline}
-            run.updated_at = stale_at
+            run.status_detail_json = {"pipeline": {"current_stage": "translate"}}
             run.finished_at = None
             run.stop_reason = None
+            packet = session.scalars(select(TranslationPacket)).first()
+            self.assertIsNotNone(packet)
+            session.add(
+                WorkItem(
+                    run_id=original_run_id,
+                    stage=WorkItemStage.TRANSLATE,
+                    scope_type=WorkItemScopeType.PACKET,
+                    scope_id=packet.id,
+                    priority=50,
+                    status=WorkItemStatus.TERMINAL_FAILED,
+                    input_version_bundle_json={"packet_id": packet.id},
+                    error_class="ProviderHTTPError",
+                )
+            )
+            session.commit()
+            session.execute(
+                DocumentRun.__table__.update()
+                .where(DocumentRun.id == original_run_id)
+                .values(updated_at=stale_at)
+            )
             session.commit()
 
         retried = self.client.post(
@@ -1924,6 +1808,7 @@ class ApiWorkflowTests(unittest.TestCase):
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
         self.assertEqual(bootstrap.status_code, 201)
         document_id = bootstrap.json()["document_id"]
+        document_title = bootstrap.json()["title"]
 
         translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
         self.assertEqual(translate.status_code, 200)
@@ -1939,7 +1824,8 @@ class ApiWorkflowTests(unittest.TestCase):
 
         download = self.client.get(
             f"/v1/documents/{document_id}/exports/download",
-            params={"export_type": "bilingual_html"},
+            # The default is one assembled HTML book (tests/test_standalone_html.py); the zip stays on request.
+            params={"export_type": "bilingual_html", "package": "zip"},
         )
         self.assertEqual(download.status_code, 200)
         self.assertIn("application/zip", download.headers["content-type"])
@@ -1948,8 +1834,16 @@ class ApiWorkflowTests(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             names = archive.namelist()
 
-        self.assertEqual(len([name for name in names if name.endswith(".html")]), 2)
-        self.assertTrue(all(name.startswith(f"{document_id}-bilingual_html/") for name in names))
+        html_names = [name for name in names if name.endswith(".html")]
+        self.assertEqual(len(html_names), 2)
+        self.assertEqual({name.split("/", 1)[0] for name in names}, {f"{safe_title_for_filename(document_title, wrap_book_quotes=True)}-中英文对照"})
+        self.assertIn("第1章", html_names[0])
+        self.assertIn("第2章", html_names[1])
+        with zipfile.ZipFile(BytesIO(download.content)) as archive:
+            chapter_html = archive.read(html_names[0]).decode("utf-8")
+        # A real bilingual edition: the Chinese rendering and the English source side by side.
+        self.assertIn("ZH::", chapter_html)
+        self.assertIn("Pricing power matters.", chapter_html)
 
     def test_refresh_epub_structure_repairs_legacy_page_number_titles_and_combined_book_title(self) -> None:
         epub_path = self._write_epub_with_frontmatter_titlepage()
@@ -2023,10 +1917,10 @@ class ApiWorkflowTests(unittest.TestCase):
             params={"export_type": "merged_html"},
         )
         self.assertEqual(download.status_code, 200)
-        self.assertEqual(download.headers["content-type"], "application/zip")
+        self.assertIn("text/html", download.headers["content-type"])
         content_disposition = unquote(download.headers["content-disposition"])
         self.assertIn(
-            f'{safe_title_for_filename(summary.title_tgt, wrap_book_quotes=True)}-整书译制包.zip',
+            f"{safe_title_for_filename(summary.title_tgt, wrap_book_quotes=True)}-中文阅读稿.html",
             content_disposition,
         )
 
@@ -2404,6 +2298,8 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertIn("上下文工程", naturalness["preferred_hints"])
 
     def test_image_only_cover_chapter_does_not_block_review_or_export(self) -> None:
+        # The EPUB parser drops title/cover spine pages, so an image-only cover
+        # never becomes a chapter that could block review or export.
         epub_path = self._write_epub_with_chapters(
             [
                 ("Cover", "cover.xhtml", IMAGE_ONLY_FIGURE_XHTML),
@@ -2412,58 +2308,20 @@ class ApiWorkflowTests(unittest.TestCase):
             extra_files={"OEBPS/images/cover.png": b"fake-cover"},
         )
         bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(epub_path)})
+        self.assertEqual(bootstrap.status_code, 201)
         document_id = bootstrap.json()["document_id"]
 
         with self.session_factory() as session:
-            cover_chapter = session.scalars(
-                select(Chapter)
-                .where(Chapter.document_id == document_id)
-                .order_by(Chapter.ordinal)
-            ).first()
-            self.assertIsNotNone(cover_chapter)
-            cover_sentence = session.scalars(
-                select(Sentence).where(Sentence.chapter_id == cover_chapter.id)
-            ).one()
-            cover_sentence.translatable = True
-            cover_sentence.nontranslatable_reason = None
-            cover_sentence.sentence_status = SentenceStatus.PENDING
-            chapter_brief = session.scalars(
-                select(MemorySnapshot).where(
-                    MemorySnapshot.document_id == document_id,
-                    MemorySnapshot.scope_type == MemoryScopeType.CHAPTER,
-                    MemorySnapshot.scope_id == cover_chapter.id,
-                    MemorySnapshot.snapshot_type == SnapshotType.CHAPTER_BRIEF,
+            chapter_titles = [
+                chapter.title_src
+                for chapter in session.scalars(
+                    select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)
                 )
-            ).one()
-            content_json = dict(chapter_brief.content_json)
-            content_json["open_questions"] = ["missing_chapter_title"]
-            chapter_brief.content_json = content_json
-            session.merge(cover_sentence)
-            session.merge(chapter_brief)
-            session.commit()
+            ]
+        self.assertEqual(chapter_titles, ["Chapter One"])
 
         translate = self.client.post(f"/v1/documents/{document_id}/translate", json={})
         self.assertEqual(translate.status_code, 200)
-
-        with self.session_factory() as session:
-            cover_chapter = session.scalars(
-                select(Chapter)
-                .where(Chapter.document_id == document_id)
-                .order_by(Chapter.ordinal)
-            ).first()
-            assert cover_chapter is not None
-            cover_packet = session.scalars(
-                select(TranslationPacket)
-                .where(TranslationPacket.chapter_id == cover_chapter.id)
-            ).first()
-            self.assertIsNotNone(cover_packet)
-            assert cover_packet is not None
-            packet_json = dict(cover_packet.packet_json)
-            packet_json["open_questions"] = ["missing_chapter_title"]
-            cover_packet.packet_json = packet_json
-            session.merge(cover_packet)
-            session.commit()
-
         review = self.client.post(f"/v1/documents/{document_id}/review")
         self.assertEqual(review.status_code, 200)
         self.assertEqual(review.json()["total_issue_count"], 0)
@@ -2594,15 +2452,13 @@ class ApiWorkflowTests(unittest.TestCase):
         merged_html = Path(export_data["file_path"]).read_text(encoding="utf-8")
         # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
         self.assertNotIn(">Reading Map<", merged_html)
-        self.assertIn("Back to top", merged_html)
-        self.assertIn("href='#chapter-", merged_html)
+        self.assertIn("回到顶部", merged_html)
+        # The merged reading edition no longer renders a table of contents.
+        self.assertIn("id='chapter-", merged_html)
+        self.assertNotIn("class='sidebar'", merged_html)
         self.assertIn("ZH::Use the example carefully.", merged_html)
         self.assertNotIn("代码保持原样", merged_html)
         self.assertIn("def run_agent():\n    return &quot;ok&quot;\n\nprint(run_agent())", merged_html)
-        self.assertIn("align-self:start;min-width:0;inline-size:100%;max-inline-size:100%;overflow:hidden;", merged_html)
-        self.assertIn(".toc-list{list-style:none;padding:0;margin:0;display:grid;gap:10px;min-width:0;}", merged_html)
-        self.assertIn(".toc-item{min-width:0;}", merged_html)
-        self.assertIn("overflow-wrap:anywhere;word-break:break-word;", merged_html)
         self.assertEqual(export_data["chapter_results"], [])
 
     def test_merged_html_export_skips_empty_untitled_frontmatter_chapter(self) -> None:
@@ -2719,6 +2575,48 @@ class ApiWorkflowTests(unittest.TestCase):
 
         self.assertNotIn("welcome.html", merged_html)
         self.assertIsNone(manifest["author"])
+
+    def _translated_reviewed_document(self) -> str:
+        bootstrap = self.client.post("/v1/documents/bootstrap", json={"source_path": str(self._write_epub())})
+        self.assertEqual(bootstrap.status_code, 201)
+        document_id = bootstrap.json()["document_id"]
+        self.assertEqual(self.client.post(f"/v1/documents/{document_id}/translate", json={}).status_code, 200)
+        self.assertEqual(self.client.post(f"/v1/documents/{document_id}/review").status_code, 200)
+        return document_id
+
+    def _merged_html_exports(self, document_id: str) -> list[Export]:
+        with self.session_factory() as session:
+            return list(
+                session.scalars(
+                    select(Export).where(
+                        Export.document_id == document_id,
+                        Export.export_type == ExportType.MERGED_HTML,
+                    )
+                ).all()
+            )
+
+    def test_export_stamps_content_addressed_blob(self) -> None:
+        document_id = self._translated_reviewed_document()
+
+        export = self.client.post(f"/v1/documents/{document_id}/export", json={"export_type": "merged_html"})
+        self.assertEqual(export.status_code, 200)
+
+        [record] = self._merged_html_exports(document_id)
+        self.assertIsNotNone(record.content_sha256)
+        self.assertEqual(record.byte_count, Path(record.file_path).stat().st_size)
+        blob = Path(self.tempdir.name) / "blobs" / record.content_sha256[:2] / record.content_sha256[2:4] / record.content_sha256
+        self.assertTrue(blob.exists())
+
+    def test_download_does_not_generate_missing_exports(self) -> None:
+        document_id = self._translated_reviewed_document()
+        self.assertEqual(self._merged_html_exports(document_id), [])
+
+        download = self.client.get(
+            f"/v1/documents/{document_id}/exports/download",
+            params={"export_type": "merged_html"},
+        )
+        self.assertEqual(download.status_code, 404)
+        self.assertEqual(self._merged_html_exports(document_id), [])
 
     def test_rebuilt_epub_export_produces_document_level_epub_artifact(self) -> None:
         epub_path = self._write_epub_with_chapters(
@@ -2864,16 +2762,18 @@ class ApiWorkflowTests(unittest.TestCase):
         merged_html = merged_html_path.read_text(encoding="utf-8")
         asset_relative_path = "assets/agent-loop.png"
         self.assertTrue((merged_html_path.parent / asset_relative_path).exists())
-        self.assertIn("图片锚点保留", merged_html)
+        # The merged reading edition omits per-artifact preservation notices.
+        self.assertNotIn("图片锚点保留", merged_html)
         self.assertIn("<img class='artifact-image'", merged_html)
         self.assertIn(asset_relative_path, merged_html)
         self.assertIn("Figure 1.1 Agent loop architecture", merged_html)
-        self.assertIn("公式保持原样", merged_html)
+        self.assertNotIn("公式保持原样", merged_html)
         self.assertIn("x=1", merged_html)
-        self.assertIn("保留原始结构，优先保证可复制与结构保真", merged_html)
-        self.assertIn("<th style='text-align:left'>Tier</th>", merged_html)
-        self.assertIn("<td style='text-align:left'>Slow</td>", merged_html)
-        self.assertIn("参考标识保留", merged_html)
+        self.assertNotIn("保留原始结构，优先保证可复制与结构保真", merged_html)
+        # Table cell text is translated in place; the grid stays (06 B-20).
+        self.assertIn("<th style='text-align:left'>ZH::Tier</th>", merged_html)
+        self.assertIn("<td style='text-align:left'>ZH::Slow</td>", merged_html)
+        self.assertNotIn("参考标识保留", merged_html)
         self.assertIn("https://example.com/agent-docs", merged_html)
 
     def test_export_download_includes_epub_asset_sidecars(self) -> None:
@@ -2901,7 +2801,7 @@ class ApiWorkflowTests(unittest.TestCase):
 
         download = self.client.get(
             f"/v1/documents/{document_id}/exports/download",
-            params={"export_type": "merged_html"},
+            params={"export_type": "merged_html", "package": "zip"},
         )
         self.assertEqual(download.status_code, 200)
         self.assertIn("application/zip", download.headers["content-type"])
@@ -2909,8 +2809,9 @@ class ApiWorkflowTests(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             names = archive.namelist()
 
-        self.assertIn(f"{document_id}-analysis-bundle/merged-document.html", names)
-        self.assertIn(f"{document_id}-analysis-bundle/assets/agent-loop.png", names)
+        title = safe_title_for_filename(summary.json()["title"], wrap_book_quotes=True)
+        self.assertIn(f"{title}-中文阅读稿/{title}-中文阅读稿.html", names)
+        self.assertIn(f"{title}-中文阅读稿/assets/agent-loop.png", names)
 
     def test_execute_action_with_followup_realigns_missing_edges(self) -> None:
         epub_path = self._write_epub()

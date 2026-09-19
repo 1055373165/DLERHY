@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-from typing import Iterable
+from dataclasses import dataclass, replace
+from typing import Any, Iterable
 
 from book_agent.domain.enums import MemoryProposalStatus
 from book_agent.domain.models import ChapterMemoryProposal, MemorySnapshot
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.workers.contracts import CompiledTranslationContext, ContextPacket
+from book_agent.services.glossary_service import GlossaryService
+from book_agent.translation.chapter_memory import ChapterMemory
+from book_agent.translation.contracts import CompiledTranslationContext, ContextPacket, RelevantTerm
 
 
 @dataclass(slots=True)
@@ -50,6 +51,7 @@ class MemoryService:
             packet,
             chapter_memory_snapshot=chapter_memory_snapshot,
             options=options,
+            document_terms=self._document_prompt_terms(packet.document_id),
         )
         merged_open_questions = list(compiled_packet.open_questions)
         for hint in rerun_hints:
@@ -71,6 +73,15 @@ class MemoryService:
             context=compiled_context,
             chapter_memory_snapshot=chapter_memory_snapshot,
         )
+
+    def _document_prompt_terms(self, document_id: str) -> list[RelevantTerm]:
+        # PDF v2 M2.7b: the document glossary feeds the compiled terms and goes
+        # through the same relevance filter. A lookup failure must not block
+        # translation.
+        try:
+            return GlossaryService(self.chapter_memory_repository.session).prompt_terms(document_id)
+        except Exception:  # pragma: no cover - defensive
+            return []
 
     def record_translation_proposals(
         self,
@@ -249,101 +260,9 @@ class MemoryService:
         base_content_json: dict[str, Any],
         proposal: ChapterMemoryProposal,
     ) -> dict[str, Any]:
-        proposal_content = dict(proposal.proposed_content_json or {})
-        base_content = dict(base_content_json or {})
-
-        base_recent = base_content.get("recent_accepted_translations", [])
-        if not isinstance(base_recent, list):
-            base_recent = []
-        proposal_recent = proposal_content.get("recent_accepted_translations", [])
-        if not isinstance(proposal_recent, list):
-            proposal_recent = []
-
-        proposal_entry = next(
-            (
-                dict(item)
-                for item in proposal_recent
-                if isinstance(item, dict) and item.get("packet_id") == proposal.packet_id
-            ),
-            None,
+        merged = ChapterMemory.from_content(base_content_json).merge_approved_proposal(
+            ChapterMemory.from_content(proposal.proposed_content_json),
+            packet_id=proposal.packet_id,
+            translation_run_id=proposal.translation_run_id,
         )
-        merged_recent = [
-            dict(item)
-            for item in base_recent
-            if isinstance(item, dict) and item.get("packet_id") != proposal.packet_id
-        ]
-        if proposal_entry is not None:
-            merged_recent.append(proposal_entry)
-        merged_recent = merged_recent[-4:]
-
-        base_concepts = base_content.get("active_concepts", [])
-        if not isinstance(base_concepts, list):
-            base_concepts = []
-        proposal_concepts = proposal_content.get("active_concepts", [])
-        if not isinstance(proposal_concepts, list):
-            proposal_concepts = []
-        merged_concepts = self._merge_active_concept_payloads(
-            existing_concepts=base_concepts,
-            proposal_concepts=proposal_concepts,
-        )
-
-        merged_brief_version = _coerce_nonnegative_int(base_content.get("chapter_brief_version"))
-        proposal_brief_version = _coerce_nonnegative_int(proposal_content.get("chapter_brief_version"))
-        chapter_brief = base_content.get("chapter_brief")
-        heading_path = base_content.get("heading_path")
-        if proposal_content.get("chapter_brief") and proposal_brief_version >= merged_brief_version:
-            chapter_brief = proposal_content.get("chapter_brief")
-            heading_path = proposal_content.get("heading_path")
-            merged_brief_version = proposal_brief_version
-
-        return {
-            "schema_version": 1,
-            "chapter_id": proposal.chapter_id,
-            "chapter_title": base_content.get("chapter_title") or proposal_content.get("chapter_title"),
-            "heading_path": heading_path,
-            "chapter_brief": chapter_brief,
-            "chapter_brief_version": merged_brief_version or None,
-            "active_concepts": merged_concepts,
-            "recent_accepted_translations": merged_recent,
-            "last_packet_id": proposal.packet_id,
-            "last_translation_run_id": proposal.translation_run_id,
-        }
-
-    def _merge_active_concept_payloads(
-        self,
-        *,
-        existing_concepts: list[dict[str, Any]],
-        proposal_concepts: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        merged: dict[str, dict[str, Any]] = {}
-        order: list[str] = []
-
-        def _upsert(raw_item: Any) -> None:
-            if not isinstance(raw_item, dict):
-                return
-            source_term = str(raw_item.get("source_term") or "").strip()
-            if not source_term:
-                return
-            key = source_term.lower()
-            normalized_item = dict(raw_item)
-            if key not in merged:
-                merged[key] = normalized_item
-                order.append(key)
-                return
-            current = merged[key]
-            for field, value in normalized_item.items():
-                if field == "times_seen":
-                    current[field] = max(
-                        _coerce_nonnegative_int(current.get(field)),
-                        _coerce_nonnegative_int(value),
-                    )
-                    continue
-                if value not in (None, "", [], {}):
-                    current[field] = value
-            current.setdefault("source_term", source_term)
-
-        for item in existing_concepts:
-            _upsert(item)
-        for item in proposal_concepts:
-            _upsert(item)
-        return [merged[key] for key in order]
+        return replace(merged, chapter_id=proposal.chapter_id).to_content()

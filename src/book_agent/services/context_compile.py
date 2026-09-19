@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from book_agent.domain.models import MemorySnapshot
-from book_agent.services.style_drift import STYLE_DRIFT_RULES, source_aware_literalism_guardrail_lines
+from book_agent.services.style_drift import (
+    STYLE_DRIFT_RULES,
+    source_aware_literalism_guardrail_lines,
+)
 from book_agent.services.term_normalization import (
     normalize_concept_candidate,
     normalize_relevant_term,
 )
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     CompiledTranslationContext,
     ConceptCandidate,
     ContextPacket,
@@ -565,8 +569,14 @@ def _merge_concepts(
 def _merge_relevant_terms(
     base: list[RelevantTerm],
     concepts: list[ConceptCandidate],
+    document_terms: Sequence[RelevantTerm] = (),
 ) -> list[RelevantTerm]:
+    """Merge term sources; later sources win: document glossary < packet termbase < chapter concepts."""
     merged: dict[str, RelevantTerm] = {}
+    for term in document_terms:
+        if not term.source_term or not str(term.target_term or "").strip():
+            continue
+        merged[term.source_term.casefold()] = normalize_relevant_term(term)
     for term in base:
         if not term.source_term:
             continue
@@ -859,6 +869,7 @@ class ChapterContextCompiler:
         *,
         chapter_memory_snapshot: MemorySnapshot | None,
         options: ChapterContextCompileOptions | None = None,
+        document_terms: Sequence[RelevantTerm] = (),
     ) -> CompiledTranslationContext:
         compile_options = options or ChapterContextCompileOptions()
         memory_blocks = _memory_blocks(chapter_memory_snapshot) if compile_options.include_memory_blocks else []
@@ -869,7 +880,7 @@ class ChapterContextCompiler:
         )
         merged_terms = _filter_relevant_terms(
             packet,
-            _merge_relevant_terms(packet.relevant_terms, merged_concepts),
+            _merge_relevant_terms(packet.relevant_terms, merged_concepts, document_terms),
         )
         merged_previous = _dedupe_translated_blocks([*memory_blocks, *packet.prev_translated_blocks])
         sanitized_previous = _sanitize_previous_translated_blocks(merged_previous, merged_terms)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from typing import Iterable
 
 from book_agent.core.ids import stable_id
@@ -31,7 +30,8 @@ from book_agent.domain.models import (
     Sentence,
     TranslationPacket,
 )
-from book_agent.workers.contracts import ContextPacket, PacketBlock
+from book_agent.translation.chapter_memory import ChapterMemory
+from book_agent.translation.contracts import ContextPacket, PacketBlock
 
 
 def _utcnow() -> datetime:
@@ -359,16 +359,11 @@ class ChapterTranslationMemoryBuilder:
             scope_id=chapter.id,
             snapshot_type=SnapshotType.CHAPTER_TRANSLATION_MEMORY,
             version=version,
-            content_json={
-                "schema_version": 1,
-                "chapter_id": chapter.id,
-                "chapter_title": chapter.title_src,
-                "heading_path": brief_content.get("heading_path", [chapter.title_src] if chapter.title_src else []),
-                "chapter_brief": brief_content.get("summary"),
-                "recent_accepted_translations": [],
-                "last_packet_id": None,
-                "last_translation_run_id": None,
-            },
+            content_json=ChapterMemory.seed(
+                chapter_id=chapter.id,
+                chapter_title=chapter.title_src,
+                brief_content=brief_content,
+            ).to_content(),
             status=MemoryStatus.ACTIVE,
             created_at=now,
         )

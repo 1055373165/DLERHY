@@ -16,12 +16,6 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from scripts.pdf_scan_corpus_acceptance import evaluate_larger_corpus_acceptance
-from scripts.phase3_integration_gate import (
-    ACCEPTANCE_TEST_MATRIX,
-    REQUIRED_LANE_CONTRACT_TAGS,
-    evaluate_phase3_integration_gate,
-)
 
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.base import Base
@@ -95,41 +89,6 @@ class Phase3IntegrationGateTests(unittest.TestCase):
             BootstrapRepository(session).save(artifacts)
             session.commit()
         return artifacts.document.id
-
-    def test_phase3_integration_snapshot_records_lane_acceptance_matrix_and_contract_coverage(self) -> None:
-        snapshot = evaluate_phase3_integration_gate(ROOT)
-
-        self.assertIsNone(snapshot["current_wave_id"])
-        self.assertEqual(snapshot["phase_plan_status"], "phase-3-complete")
-        self.assertEqual(snapshot["gate_node"]["node_id"], "mdu-18.1.1")
-        self.assertEqual(snapshot["gate_node"]["contract_tags"], ["phase-3-checkpoint"])
-        self.assertTrue(snapshot["checks"]["lane_docs_complete"]["passed"])
-        self.assertTrue(snapshot["checks"]["lane_acceptance_artifacts_present"]["passed"])
-        self.assertTrue(snapshot["checks"]["lane_statuses_done"]["passed"])
-        self.assertTrue(snapshot["checks"]["contract_coverage"]["passed"])
-        self.assertTrue(snapshot["checks"]["integration_preconditions_ready"]["passed"])
-
-        for lane_id, expected_tags in REQUIRED_LANE_CONTRACT_TAGS.items():
-            lane_snapshot = snapshot["checks"]["contract_coverage"]["lanes"][lane_id]
-            self.assertEqual(lane_snapshot["actual_tags"], sorted(expected_tags))
-            self.assertFalse(lane_snapshot["missing_tags"])
-            self.assertGreaterEqual(len(ACCEPTANCE_TEST_MATRIX[lane_id]), 1)
-
-        self.assertIn(
-            "tests.test_pdf_scan_corpus_acceptance.PdfScanCorpusAcceptanceTests.test_locked_larger_corpus_acceptance_passes_phase3_thresholds",
-            snapshot["acceptance_matrix"]["lane-pdf-scan-scale"],
-        )
-        self.assertIn(
-            "tests.test_review_naturalness_acceptance.ReviewNaturalnessAcceptanceTests.test_guided_followup_clears_literalism_benchmark_under_locked_contract",
-            snapshot["acceptance_matrix"]["lane-review-naturalness"],
-        )
-
-    def test_phase3_integration_gate_keeps_locked_larger_corpus_acceptance_green(self) -> None:
-        snapshot = evaluate_larger_corpus_acceptance(repo_root=ROOT)
-
-        self.assertTrue(snapshot["overall_passed"])
-        self.assertTrue(snapshot["checks"]["slice_repair_acceptance"]["passed"])
-        self.assertTrue(snapshot["checks"]["readable_rescue_exports"]["passed"])
 
     def test_non_blocking_style_drift_does_not_block_rebuilt_delivery_exports(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(

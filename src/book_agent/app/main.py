@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,12 +9,18 @@ from sqlalchemy.exc import OperationalError
 from book_agent.app.api.router import api_router
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
 from book_agent.app.ui.router import router as ui_router
+from book_agent.app.metrics_route import install_metrics
+from book_agent.app.ui.spa import frontend_available, mount_frontend
+from book_agent.services.secrets import require_configured_secret_key
 from book_agent.core.config import get_settings, validate_app_scope
 from book_agent.core.logging import configure_logging
 from book_agent.infra.db.session import build_session_factory
 from book_agent.infra.db.session import build_engine
 from book_agent.workers.providers import ProviderHTTPError, ProviderNetworkError, ProviderTransportError
-from book_agent.workers.factory import build_translation_worker, resolve_translation_worker
+from book_agent.workers.factory import TranslationWorkerProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 def _database_error_detail(*, exc: OperationalError) -> str:
@@ -46,7 +53,11 @@ def _ensure_database_state(app: FastAPI, *, settings) -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     validate_app_scope(settings)
+    require_configured_secret_key()
     configure_logging(settings.log_level)
+    from book_agent.infra.tracing import configure_tracing
+
+    configure_tracing(settings.otel_traces_enabled)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -56,13 +67,18 @@ def create_app() -> FastAPI:
             yield
         finally:
             executor = getattr(app.state, "document_run_executor", None)
+            executor_stopped = True
             if executor is not None:
-                executor.stop()
+                executor_stopped = executor.stop()
                 app.state.document_run_executor = None
             engine = getattr(app.state, "engine", None)
-            if engine is not None:
+            if engine is not None and executor_stopped:
                 engine.dispose()
                 app.state.engine = None
+            elif engine is not None:
+                # Work threads still hold leases and will record their results;
+                # leave the pool to be released at process exit.
+                logger.warning("Leaving the database engine open: run executor work threads are still running")
 
     app = FastAPI(
         title=settings.app_name,
@@ -84,34 +100,27 @@ def create_app() -> FastAPI:
     app.state.session_factory = None
     app.state.ensure_database_state = lambda: _ensure_database_state(app, settings=settings)
     app.state.export_root = str(settings.export_root)
-    app.state.runtime_bundle_root = str(settings.runtime_bundle_root)
     app.state.upload_root = str(settings.upload_root)
-    # Lazily build the translation worker so user-driven provider swaps
-    # (POST /v1/providers/.../activate) take effect on the next request
-    # without restarting the server.
-    app.state.translation_worker = None
-    app.state.translation_worker_revision = -1
     app.state.document_run_executor = None
 
-    def _resolve_translation_worker_state():
-        from book_agent.services.provider_credentials import current_revision
-
-        revision = current_revision()
-        if (
-            app.state.translation_worker is not None
-            and getattr(app.state, "translation_worker_revision", -1) == revision
-        ):
-            return app.state.translation_worker
+    def _session_factory():
         if app.state.session_factory is None:
             _ensure_database_state(app, settings=settings)
-        with app.state.session_factory() as session:
-            worker = resolve_translation_worker(session, settings)
-            session.commit()
-        app.state.translation_worker = worker
-        app.state.translation_worker_revision = revision
-        return worker
+        return app.state.session_factory
 
-    app.state.resolve_translation_worker = _resolve_translation_worker_state
+    # `translation_worker` is an explicit override (embedders/tests); otherwise
+    # the provider resolves the active credential's worker.
+    app.state.translation_worker = None
+    app.state.translation_worker_provider = TranslationWorkerProvider(
+        settings=settings,
+        session_factory=_session_factory,
+    )
+
+    def _resolve_translation_worker(org_id: str | None = None):
+        override = app.state.translation_worker
+        return override if override is not None else app.state.translation_worker_provider.get(org_id)
+
+    app.state.resolve_translation_worker = _resolve_translation_worker
 
     @app.exception_handler(OperationalError)
     async def handle_operational_error(_request, _exc) -> JSONResponse:
@@ -129,8 +138,14 @@ def create_app() -> FastAPI:
             content={"detail": str(_exc)},
         )
 
-    app.include_router(ui_router)
-    app.include_router(api_router, prefix=settings.api_prefix)
+    install_metrics(app)
+    if frontend_available(settings.frontend_dist_dir):
+        # API routes first: the SPA fallback is a catch-all.
+        app.include_router(api_router, prefix=settings.api_prefix)
+        mount_frontend(app, settings.frontend_dist_dir, api_prefix=settings.api_prefix)
+    else:
+        app.include_router(ui_router)
+        app.include_router(api_router, prefix=settings.api_prefix)
     return app
 
 

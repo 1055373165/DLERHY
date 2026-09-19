@@ -15,6 +15,7 @@ import {
   sourceLabel,
   statusLabel,
 } from "../../lib/workflow";
+import { CostEstimateNote } from "./CostEstimateNote";
 import s from "./WorkspacePage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
@@ -69,7 +70,7 @@ export function WorkspacePage() {
     if (!selectedFile) return;
     try {
       const result = await uploadFile(selectedFile);
-      setFeedback({ tone: "success", text: `Loaded: ${result.title ?? selectedFile.name}` });
+      setFeedback({ tone: "success", text: `已载入：${result.title ?? selectedFile.name}` });
       setSelectedFile(null);
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
@@ -115,9 +116,9 @@ export function WorkspacePage() {
   async function handleChapterDownload(chapterId: string) {
     try {
       const filename = await downloadChapterAsset(chapterId);
-      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
+      setFeedback({ tone: "success", text: `已下载：${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -152,7 +153,7 @@ export function WorkspacePage() {
             </svg>
           </div>
           <h2 className={s.uploadTitle}>载入书稿</h2>
-          <p className={s.uploadSubtitle}>Upload a PDF or EPUB to begin translation</p>
+          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，开始翻译</p>
           <label className={s.fileLabel}>
             <input
               type="file"
@@ -164,7 +165,7 @@ export function WorkspacePage() {
               }}
             />
             <span className={s.fileText}>
-              {selectedFile ? selectedFile.name : "Click to select .pdf / .epub file"}
+              {selectedFile ? selectedFile.name : "点击选择 .pdf / .epub 文件"}
             </span>
           </label>
           <div className={s.uploadActions}>
@@ -173,9 +174,12 @@ export function WorkspacePage() {
               disabled={!selectedFile || uploadPending}
               onClick={handleUpload}
             >
-              {uploadPending ? "Uploading..." : "Bootstrap"}
+              {uploadPending ? "上传中…" : "上传并解析"}
             </button>
           </div>
+          <p className={s.rightsNote}>
+            请只上传你有权翻译的书稿（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
+          </p>
           {feedback && (
             <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
           )}
@@ -197,7 +201,7 @@ export function WorkspacePage() {
                 }}
               />
               <span className={s.fileTextSmall}>
-                {selectedFile ? selectedFile.name : "Select new file..."}
+                {selectedFile ? selectedFile.name : "选择新文件…"}
               </span>
             </label>
             <button
@@ -205,7 +209,7 @@ export function WorkspacePage() {
               disabled={!selectedFile || uploadPending}
               onClick={handleUpload}
             >
-              {uploadPending ? "..." : "Bootstrap"}
+              {uploadPending ? "…" : "上传并解析"}
             </button>
           </div>
           {feedback && (
@@ -242,6 +246,7 @@ export function WorkspacePage() {
               </button>
             )}
           </div>
+          {action.mode === "create" ? <CostEstimateNote documentId={doc.document_id} /> : null}
         </div>
       )}
 
@@ -348,7 +353,7 @@ export function WorkspacePage() {
                       className="btn btn-sm"
                       onClick={() => handleChapterDownload(selectedReviewChapterId)}
                     >
-                      Download bilingual
+                      下载本章对照版
                     </button>
                   </div>
                   <div className={s.chapterStats}>

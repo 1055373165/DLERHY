@@ -120,14 +120,18 @@ class StageGateKeeperTests(unittest.TestCase):
     # --- DAG declaration ------------------------------------------------
 
     def test_stage_dependencies_chain_is_linear(self) -> None:
-        self.assertEqual(STAGE_DEPENDENCIES["translate"], ())
-        self.assertEqual(STAGE_DEPENDENCIES["review"], ("translate",))
+        self.assertEqual(STAGE_DEPENDENCIES["translate"], ("terminology",))
+        self.assertEqual(STAGE_DEPENDENCIES["structure_review"], ())
+        self.assertEqual(STAGE_DEPENDENCIES["terminology"], ("structure_review",))
+        self.assertEqual(STAGE_DEPENDENCIES["model_review"], ("translate",))
+        self.assertEqual(STAGE_DEPENDENCIES["review"], ("translate", "model_review"))
+        self.assertEqual(STAGE_DEPENDENCIES["repair"], ("review",))
         self.assertEqual(
-            STAGE_DEPENDENCIES["bilingual_html"], ("translate", "review"),
+            STAGE_DEPENDENCIES["bilingual_html"], ("translate", "review", "repair"),
         )
         self.assertEqual(
             STAGE_DEPENDENCIES["merged_html"],
-            ("translate", "review", "bilingual_html"),
+            ("translate", "review", "repair", "bilingual_html"),
         )
 
     # --- gate rejection scenarios --------------------------------------

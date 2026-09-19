@@ -39,10 +39,13 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.core.ids import stable_id
 from book_agent.domain.enums import LockLevel, MemoryScopeType, TermStatus, TermType
 from book_agent.domain.models.translation import TermEntry
+from book_agent.domain.terminology.enforcement import LockedTerm
+from book_agent.domain.terminology.matching import source_term_key
 from book_agent.services.terminology_miner import TermCandidate
-from book_agent.core.ids import stable_id
+from book_agent.translation.contracts import RelevantTerm
 
 
 @dataclass(slots=True, frozen=True)
@@ -57,6 +60,37 @@ class GlossaryService:
         self.session = session
 
     # --- Queries ---
+
+    def locked_terms_for_chapter(self, document_id: str, chapter_id: str | None) -> list[LockedTerm]:
+        """Active LOCKED entries that apply to a chapter: document-wide ones plus that chapter's own.
+
+        Review (TERM_CONFLICT) and the translation output guardrail both
+        enforce exactly this set through ``domain.terminology.enforcement``.
+        """
+        from uuid import UUID
+
+        from sqlalchemy import or_
+
+        from book_agent.services.term_normalization import locked_term_from_entry
+
+        scope = TermEntry.scope_type == MemoryScopeType.GLOBAL
+        try:
+            if chapter_id:
+                UUID(str(chapter_id))
+                scope = or_(scope, (TermEntry.scope_type == MemoryScopeType.CHAPTER) & (TermEntry.scope_id == chapter_id))
+        except ValueError:
+            pass
+        rows = self.session.scalars(
+            select(TermEntry)
+            .where(
+                TermEntry.document_id == document_id,
+                TermEntry.lock_level == LockLevel.LOCKED,
+                TermEntry.status == TermStatus.ACTIVE,
+                scope,
+            )
+            .order_by(TermEntry.source_term, TermEntry.id)
+        ).all()
+        return [locked_term_from_entry(row) for row in rows]
 
     def get_locked_terms(self, document_id: str) -> dict[str, str]:
         """Return `{source_term: target_term}` for every ACTIVE LOCKED
@@ -90,6 +124,18 @@ class GlossaryService:
             stmt = stmt.where(TermEntry.status == TermStatus.ACTIVE)
         return list(self.session.scalars(stmt).all())
 
+    def prompt_terms(self, document_id: str) -> list[RelevantTerm]:
+        """Active document glossary entries that carry a target rendering, as prompt terms."""
+        return [
+            RelevantTerm(
+                source_term=entry.source_term,
+                target_term=entry.target_term,
+                lock_level=entry.lock_level.value,
+            )
+            for entry in self.list_document_entries(document_id)
+            if entry.target_term and entry.target_term.strip()
+        ]
+
     # --- Mutations ---
 
     def upsert_candidates(
@@ -107,7 +153,7 @@ class GlossaryService:
         total = 0
         for cand in candidates:
             total += 1
-            key = cand.term.casefold()
+            key = source_term_key(cand.term)
             if key in existing and existing[key].lock_level in {
                 LockLevel.PREFERRED,
                 LockLevel.LOCKED,
@@ -152,14 +198,26 @@ class GlossaryService:
         target_term: str,
         *,
         term_type: TermType = TermType.CONCEPT,
+        target_variants: Iterable[str] = (),
+        lock_level: LockLevel = LockLevel.LOCKED,
     ) -> TermEntry:
-        """Promote or create a LOCKED entry. Existing ACTIVE entries for
-        the same source are SUPERSEDED and version-incremented.
+        """Promote or create an entry at ``lock_level`` (LOCKED by default).
+        Existing ACTIVE entries for the same source are SUPERSEDED and
+        version-incremented.
+
+        ``target_variants`` are other renderings that count as the term.
+        PREFERRED entries guide translation prompts without making review
+        block on sentences that use another rendering.
         """
         if not source_term.strip() or not target_term.strip():
             raise ValueError("source_term and target_term must be non-empty")
         source_clean = source_term.strip()
         target_clean = target_term.strip()
+        variants = [
+            variant
+            for variant in dict.fromkeys(str(item).strip() for item in target_variants)
+            if variant and variant != target_clean
+        ]
 
         existing = self._matching_active_entries(document_id, source_clean)
         latest_version = max((e.version for e in existing), default=0)
@@ -167,8 +225,9 @@ class GlossaryService:
         if existing:
             latest = max(existing, key=lambda e: e.version)
             if (
-                latest.lock_level == LockLevel.LOCKED
+                latest.lock_level == lock_level
                 and latest.target_term == target_clean
+                and list(latest.target_variants_json or []) == variants
             ):
                 return latest  # idempotent
             for entry in existing:
@@ -189,8 +248,9 @@ class GlossaryService:
             scope_id=None,
             source_term=source_clean,
             target_term=target_clean,
+            target_variants_json=variants,
             term_type=term_type,
-            lock_level=LockLevel.LOCKED,
+            lock_level=lock_level,
             status=TermStatus.ACTIVE,
             version=next_version,
         )
@@ -245,7 +305,7 @@ class GlossaryService:
         rows = self.list_document_entries(document_id, include_superseded=False)
         out: dict[str, TermEntry] = {}
         for row in rows:
-            key = row.source_term.casefold()
+            key = source_term_key(row.source_term)
             prior = out.get(key)
             if prior is None or row.version > prior.version:
                 out[key] = row
@@ -256,6 +316,6 @@ class GlossaryService:
         document_id: str,
         source_term: str,
     ) -> list[TermEntry]:
-        key = source_term.casefold()
+        key = source_term_key(source_term)
         rows = self.list_document_entries(document_id, include_superseded=False)
-        return [r for r in rows if r.source_term.casefold() == key]
+        return [r for r in rows if source_term_key(r.source_term) == key]

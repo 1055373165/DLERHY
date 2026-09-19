@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
 
 from book_agent.domain.enums import (
     ActorType,
@@ -14,19 +13,20 @@ from book_agent.domain.enums import (
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models.ops import RunAuditEvent, WorkItem
+from book_agent.domain.models.ops import RunAuditEvent
 from book_agent.infra.repositories.run_control import ClaimedWorkItemBundle, RunControlRepository
+from book_agent.orchestrator.run_plan import plan_for_run
 from book_agent.orchestrator.stage_status import (
-    OPTIONAL_PIPELINE_STAGES,
     PIPELINE_STAGES,
-    REQUIRED_PIPELINE_STAGES,
     RunOutcome,
     StageStatus,
     StageStatusCalculator,
     classify_run_outcome,
 )
 from book_agent.services.run_control import DocumentRunSummary, RunControlService
-from book_agent.services.runtime_repair_contract import build_runtime_repair_request_input_bundle
+
+# Attempts per work item when the run budget does not say.
+DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM = 6
 
 
 def _utcnow() -> datetime:
@@ -88,6 +88,7 @@ class RunExecutionService:
         priority: int = 100,
         input_version_bundle_by_scope_id: dict[str, dict[str, Any]] | None = None,
     ) -> list[str]:
+        run = self.repository.get_run_for_update(run_id)
         created = self.repository.seed_work_items(
             run_id=run_id,
             stage=stage,
@@ -97,11 +98,6 @@ class RunExecutionService:
             input_version_bundle_by_scope_id=input_version_bundle_by_scope_id,
         )
         if created:
-            run = self.repository.get_run(run_id)
-            if run.runtime_bundle_revision_id is not None:
-                for work_item in created:
-                    work_item.runtime_bundle_revision_id = run.runtime_bundle_revision_id
-                self.repository.session.flush()
             detail = dict(run.status_detail_json or {})
             counters = dict(detail.get("control_counters") or {})
             counters["seeded_work_item_count"] = int(counters.get("seeded_work_item_count", 0)) + len(created)
@@ -147,189 +143,6 @@ class RunExecutionService:
                 }
             ),
         )
-
-    def ensure_repair_dispatch_work_item(
-        self,
-        *,
-        run_id: str,
-        proposal_id: str,
-        incident_id: str,
-        repair_dispatch_json: dict[str, Any],
-        repair_plan_json: dict[str, Any] | None = None,
-        priority: int = 40,
-    ) -> str:
-        input_bundle = build_runtime_repair_request_input_bundle(
-            proposal_id=proposal_id,
-            incident_id=incident_id,
-            repair_dispatch_json=repair_dispatch_json,
-            repair_plan_json=repair_plan_json,
-        )
-        work_item_ids = self.ensure_scope_replay_work_items(
-            run_id=run_id,
-            stage=WorkItemStage.REPAIR,
-            scope_type=WorkItemScopeType.ISSUE_ACTION,
-            scope_ids=[proposal_id],
-            priority=priority,
-            input_version_bundle_by_scope_id={proposal_id: input_bundle},
-        )
-        return work_item_ids[0]
-
-    def claim_repair_dispatch_work_item(
-        self,
-        *,
-        work_item_id: str,
-        worker_name: str,
-        worker_instance_id: str,
-        lease_seconds: int,
-        ) -> ClaimedRunWorkItem | None:
-        return self.claim_work_item_by_id(
-            work_item_id=work_item_id,
-            worker_name=worker_name,
-            worker_instance_id=worker_instance_id,
-            lease_seconds=lease_seconds,
-        )
-
-    def resume_repair_dispatch_work_item(
-        self,
-        *,
-        work_item_id: str,
-        actor_id: str,
-        note: str | None = None,
-    ) -> WorkItem:
-        now = _utcnow()
-        work_item = self.repository.resume_repair_work_item(
-            work_item_id=work_item_id,
-            resumed_at=now,
-        )
-        if work_item is None:
-            raise ValueError(f"Repair work item is not resumable: {work_item_id}")
-        run = self.repository.get_run(work_item.run_id)
-        self.repository.save_run(
-            run,
-            audit_event=RunAuditEvent(
-                run_id=run.id,
-                work_item_id=work_item.id,
-                event_type="work_item.resumed",
-                actor_type=ActorType.HUMAN,
-                actor_id=actor_id,
-                created_at=now,
-                payload_json={
-                    "stage": work_item.stage.value,
-                    "scope_type": work_item.scope_type.value,
-                    "scope_id": work_item.scope_id,
-                    "note": note or "",
-                    "attempt": work_item.attempt,
-                },
-            ),
-        )
-        return work_item
-
-    def ensure_scope_replay_work_items(
-        self,
-        *,
-        run_id: str,
-        stage: WorkItemStage,
-        scope_type: WorkItemScopeType,
-        scope_ids: list[str],
-        priority: int = 100,
-        input_version_bundle_by_scope_id: dict[str, dict[str, Any]] | None = None,
-    ) -> list[str]:
-        normalized_scope_ids = [scope_id for scope_id in scope_ids if scope_id]
-        if not normalized_scope_ids:
-            return []
-
-        statuses = [
-            WorkItemStatus.PENDING,
-            WorkItemStatus.RETRYABLE_FAILED,
-            WorkItemStatus.LEASED,
-            WorkItemStatus.RUNNING,
-        ]
-        if stage == WorkItemStage.REPAIR:
-            statuses.append(WorkItemStatus.TERMINAL_FAILED)
-        existing_items_raw = self.repository.session.scalars(
-            select(WorkItem)
-            .where(
-                WorkItem.run_id == run_id,
-                WorkItem.stage == stage,
-                WorkItem.scope_type == scope_type,
-                WorkItem.scope_id.in_(normalized_scope_ids),
-                WorkItem.status.in_(statuses),
-            )
-            .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
-        ).all()
-        existing_items = [
-            item
-            for item in existing_items_raw
-            if item.status
-            in {
-                WorkItemStatus.PENDING,
-                WorkItemStatus.RETRYABLE_FAILED,
-                WorkItemStatus.LEASED,
-                WorkItemStatus.RUNNING,
-            }
-            or (stage == WorkItemStage.REPAIR and self._terminal_repair_item_blocks_reseed(item))
-        ]
-        existing_scope_ids = {item.scope_id for item in existing_items}
-        missing_scope_ids = [scope_id for scope_id in normalized_scope_ids if scope_id not in existing_scope_ids]
-
-        run = self.repository.get_run(run_id)
-        created_items: list[WorkItem] = []
-        version_map = input_version_bundle_by_scope_id or {}
-        now = _utcnow()
-        for scope_id in missing_scope_ids:
-            work_item = WorkItem(
-                run_id=run_id,
-                stage=stage,
-                scope_type=scope_type,
-                scope_id=scope_id,
-                priority=priority,
-                status=WorkItemStatus.PENDING,
-                runtime_bundle_revision_id=run.runtime_bundle_revision_id,
-                input_version_bundle_json=version_map.get(scope_id, {}),
-                output_artifact_refs_json={},
-                error_detail_json={},
-                created_at=now,
-                updated_at=now,
-            )
-            self.repository.session.add(work_item)
-            created_items.append(work_item)
-        self.repository.session.flush()
-
-        replay_item_ids = [item.id for item in existing_items] + [item.id for item in created_items]
-        self.repository.save_run(
-            run,
-            audit_event=RunAuditEvent(
-                run_id=run_id,
-                work_item_id=None,
-                event_type="run.scope_replay_ensured",
-                actor_type=ActorType.SYSTEM,
-                actor_id="run-executor",
-                created_at=now,
-                payload_json={
-                    "stage": stage.value,
-                    "scope_type": scope_type.value,
-                    "scope_ids": normalized_scope_ids,
-                    "existing_work_item_ids": [item.id for item in existing_items],
-                    "created_work_item_ids": [item.id for item in created_items],
-                },
-            ),
-        )
-        return replay_item_ids
-
-    @staticmethod
-    def _terminal_repair_item_blocks_reseed(work_item: WorkItem) -> bool:
-        if work_item.status != WorkItemStatus.TERMINAL_FAILED:
-            return False
-        error_detail = dict(work_item.error_detail_json or {})
-        repair_result_json = error_detail.get("repair_result_json")
-        if not isinstance(repair_result_json, dict):
-            repair_result_json = {}
-        decision = str(
-            error_detail.get("repair_agent_decision")
-            or repair_result_json.get("repair_agent_decision")
-            or ""
-        ).strip()
-        return decision == "manual_escalation_required"
 
     def claim_next_work_item(
         self,
@@ -448,6 +261,10 @@ class RunExecutionService:
         )
         return self._to_claimed_run_work_item(ClaimedWorkItemBundle(work_item=work_item, worker_lease=lease))
 
+    def assert_lease_held(self, *, lease_token: str) -> None:
+        """Raise LeaseLostError unless the lease is still active; locks it for this transaction."""
+        self.repository.lock_active_lease(lease_token)
+
     def heartbeat_work_item(
         self,
         *,
@@ -475,6 +292,7 @@ class RunExecutionService:
     ) -> ClaimedRunWorkItem:
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
             status=WorkItemStatus.SUCCEEDED,
@@ -484,7 +302,6 @@ class RunExecutionService:
                 "translation_run_id": translation_run_id,
             },
         )
-        run = self.repository.get_run(work_item.run_id)
         detail = self._bump_success_progress(
             run.status_detail_json or {},
             token_in=token_in,
@@ -526,13 +343,13 @@ class RunExecutionService:
     ) -> ClaimedRunWorkItem:
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
             status=WorkItemStatus.SUCCEEDED,
             released_at=now,
             output_artifact_refs_json=output_artifact_refs_json,
         )
-        run = self.repository.get_run(work_item.run_id)
         self.repository.save_run(
             run,
             audit_event=RunAuditEvent(
@@ -559,13 +376,27 @@ class RunExecutionService:
         error_class: str,
         error_detail_json: dict[str, Any],
         retryable: bool,
+        pauses_run: bool = False,
     ) -> ClaimedRunWorkItem:
+        """Record a failed attempt.
+
+        ``pauses_run`` marks failures that stop the whole run (no balance,
+        bad credentials): the item goes back to RETRYABLE_FAILED without
+        spending a retry, so the run really does continue where it stopped
+        once the operator resumes it.
+        """
         now = _utcnow()
         lease = self.repository.get_active_lease_by_token(lease_token)
+        run = self.repository.get_run_for_update(lease.run_id)
         work_item_before = self.repository.get_work_item(lease.work_item_id)
         budget = self.repository.get_budget_for_run(lease.run_id)
         max_retry_count = budget.max_retry_count_per_work_item if budget is not None else None
-        should_retry = retryable and (max_retry_count is None or work_item_before.attempt < max_retry_count)
+        if max_retry_count is None:
+            # Unbounded retries of a failure that repeats (a misconfigured provider) spend money forever.
+            max_retry_count = DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
+        should_retry = pauses_run or (
+            retryable and (max_retry_count is None or work_item_before.attempt < max_retry_count)
+        )
         next_status = WorkItemStatus.RETRYABLE_FAILED if should_retry else WorkItemStatus.TERMINAL_FAILED
         work_item = self.repository.release_work_item(
             lease_token=lease_token,
@@ -574,7 +405,6 @@ class RunExecutionService:
             error_class=error_class,
             error_detail_json=error_detail_json,
         )
-        run = self.repository.get_run(work_item.run_id)
         detail = self._bump_failure_progress(
             run.status_detail_json or {},
             error_class=error_class,
@@ -604,13 +434,17 @@ class RunExecutionService:
         )
         return self._to_claimed_run_work_item(ClaimedWorkItemBundle(work_item=work_item, worker_lease=lease))
 
+    def run_ids_with_expired_leases_outside_loops(self) -> list[str]:
+        """Inactive runs whose workers still hold expired leases (see supervisor sweep)."""
+        return self.repository.list_run_ids_with_expired_active_leases(expired_before=_utcnow())
+
     def reclaim_expired_leases(self, *, run_id: str) -> ReclaimExpiredLeaseResult:
         now = _utcnow()
         expired_leases = self.repository.list_expired_active_leases(run_id, expired_before=now)
         reclaimed_ids: list[str] = []
         if not expired_leases:
             return ReclaimExpiredLeaseResult(expired_lease_count=0, reclaimed_work_item_ids=[])
-        run = self.repository.get_run(run_id)
+        run = self.repository.get_run_for_update(run_id)
         for lease in expired_leases:
             work_item = self.repository.expire_lease(
                 lease_id=lease.id,
@@ -656,6 +490,30 @@ class RunExecutionService:
 
     def enforce_budget_guardrails(self, *, run_id: str) -> RunBudgetGuardrailResult:
         run = self.repository.get_run(run_id)
+        from book_agent.services import org_budget
+
+        org_id = org_budget.org_id_for_run(self.repository.session, run_id)
+        exhausted = org_budget.cached_exhausted_status(self.repository.session, org_id) if org_id else None
+        if exhausted is not None:
+            summary = self.control_service.pause_run_system(
+                run_id, stop_reason=org_budget.STOP_REASON, detail_json=exhausted.to_json()
+            )
+            return RunBudgetGuardrailResult(summary, True, org_budget.STOP_REASON)
+        from book_agent.core.config import get_settings
+        from book_agent.services import prepaid_credit
+
+        out_of_credit = (
+            prepaid_credit.cached_exhausted_status(
+                self.repository.session, org_id, price_multiplier=get_settings().billing_price_multiplier
+            )
+            if org_id
+            else None
+        )
+        if out_of_credit is not None:
+            summary = self.control_service.pause_run_system(
+                run_id, stop_reason=prepaid_credit.STOP_REASON, detail_json=out_of_credit.to_json()
+            )
+            return RunBudgetGuardrailResult(summary, True, prepaid_credit.STOP_REASON)
         budget = self.repository.get_budget_for_run(run_id)
         if budget is None:
             return RunBudgetGuardrailResult(
@@ -665,11 +523,13 @@ class RunExecutionService:
             )
 
         detail = dict(run.status_detail_json or {})
-        usage = dict(detail.get("usage_summary") or {})
+        usage = self.repository.usage_from_events(run_id)
         counters = dict(detail.get("control_counters") or {})
+        accounting = dict(detail.get("pause_accounting") or {})
         now = _utcnow()
         baseline_started_at = _ensure_utc(run.started_at) or _ensure_utc(run.created_at) or now
-        elapsed_seconds = int((now - baseline_started_at).total_seconds())
+        paused_seconds = int(accounting.get("paused_seconds_total", 0) or 0)
+        elapsed_seconds = max(0, int((now - baseline_started_at).total_seconds()) - paused_seconds)
 
         if budget.max_wall_clock_seconds is not None and elapsed_seconds >= budget.max_wall_clock_seconds:
             summary = self.control_service.pause_run_system(
@@ -686,6 +546,11 @@ class RunExecutionService:
             last_progress_at = self._last_progress_at(
                 detail=detail, run_started_at=baseline_started_at
             )
+            resumed_at = self._parse_iso_utc(accounting.get("resumed_at"))
+            if resumed_at is not None and resumed_at > last_progress_at:
+                # The clock restarts when the operator resumes; time spent
+                # paused is not "no progress".
+                last_progress_at = resumed_at
             no_progress_seconds = int((now - last_progress_at).total_seconds())
             if no_progress_seconds >= budget.max_no_progress_seconds:
                 # Stuck detection: the frontier hasn't produced a
@@ -801,25 +666,39 @@ class RunExecutionService:
                 detail_json={"remaining_claimable_work_items": claimable_count},
             )
 
+        plan = plan_for_run(run.run_type, run.status_detail_json)
+        # Planned stages are required. Other pipeline stages are optional and
+        # only matter if this run produced work for them; document-wide
+        # translation progress is not a standalone review/export run's concern.
+        evaluated_stages = list(plan.stages) + [
+            stage for stage in PIPELINE_STAGES if stage not in plan.stages and stage != "translate"
+        ]
         calculator = StageStatusCalculator(self.repository.session)
         stage_status_by_name: dict[str, StageStatus] = {
-            stage: calculator.stage_status(run_id, run.document_id, stage)
-            for stage in PIPELINE_STAGES
+            stage: calculator.stage_status(
+                run_id,
+                run.document_id,
+                stage,
+                packet_ids=plan.packet_ids if stage == "translate" else None,
+            )
+            for stage in evaluated_stages
         }
         stage_status_snapshot = {name: status.value for name, status in stage_status_by_name.items()}
 
-        outcome = classify_run_outcome(stage_status_by_name)
+        required_stages = plan.required_stages
+        optional_stages = frozenset(stage_status_by_name) - required_stages
+        outcome = classify_run_outcome(stage_status_by_name, required_stages)
 
         if outcome == RunOutcome.FAILED:
             failed_required_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in REQUIRED_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in required_stages
             ]
             failed_optional_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in optional_stages
             ]
             return self.control_service.fail_run_system(
                 run_id,
@@ -849,7 +728,7 @@ class RunExecutionService:
             failed_optional_stages = [
                 name
                 for name, status in stage_status_by_name.items()
-                if status == StageStatus.FAILED and name in OPTIONAL_PIPELINE_STAGES
+                if status == StageStatus.FAILED and name in optional_stages
             ]
             return self.control_service.succeed_run_with_warnings_system(
                 run_id,
@@ -866,6 +745,18 @@ class RunExecutionService:
         # in its current non-terminal status and let the main loop advance
         # the frontier.
         return self.control_service.get_run_summary(run_id)
+
+    @staticmethod
+    def _parse_iso_utc(raw: Any) -> datetime | None:
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _last_progress_at(
         self, *, detail: dict[str, Any], run_started_at: datetime
@@ -906,13 +797,11 @@ class RunExecutionService:
         translation_run_id: str,
         completed_at: datetime,
     ) -> dict[str, Any]:
+        # Spend is not accumulated here: the llm.call.completed events are the
+        # ledger and RunControlService.usage_summary reads them. The figures
+        # still land in the audit payload for the work item.
         detail = dict(current)
-        usage = dict(detail.get("usage_summary") or {})
-        usage["token_in"] = int(usage.get("token_in", 0) or 0) + token_in
-        usage["token_out"] = int(usage.get("token_out", 0) or 0) + token_out
-        usage["cost_usd"] = round(float(usage.get("cost_usd", 0.0) or 0.0) + float(cost_usd or 0.0), 8)
-        usage["latency_ms"] = int(usage.get("latency_ms", 0) or 0) + latency_ms
-        detail["usage_summary"] = usage
+        detail.pop("usage_summary", None)
 
         counters = dict(detail.get("control_counters") or {})
         counters["completed_work_item_count"] = int(counters.get("completed_work_item_count", 0)) + 1

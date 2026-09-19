@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
-from sqlalchemy import Select, func, inspect, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import (
@@ -25,8 +27,25 @@ from book_agent.domain.models import (
     MemorySnapshot,
     Sentence,
 )
-from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
+from book_agent.domain.models.review import ChapterQualitySummary, Export, ExportVersion, IssueAction, ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
+
+
+# Version rows kept per export artifact (the blob reaper frees older bytes).
+EXPORT_VERSION_RETENTION = 10
+
+
+def _file_digest(path: Path) -> tuple[str | None, int | None]:
+    try:
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+                size += len(chunk)
+        return digest.hexdigest(), size
+    except OSError:
+        return None, None
 
 
 @dataclass(slots=True)
@@ -57,10 +76,6 @@ class DocumentExportBundle:
 class ExportRepository:
     def __init__(self, session: Session):
         self.session = session
-
-    def _document_images_table_available(self) -> bool:
-        connection = self.session.connection()
-        return bool(inspect(connection).has_table(DocumentImage.__tablename__))
 
     def get_document(self, document_id: str) -> Document:
         document = self.session.get(Document, document_id)
@@ -179,11 +194,17 @@ class ExportRepository:
                 .where(DocumentImage.block_id.in_(block_ids))
                 .order_by(DocumentImage.page_number, DocumentImage.id)
             ).all()
-            if block_ids and self._document_images_table_available()
+            if block_ids
             else []
         )
 
-        sentences = self.session.scalars(select(Sentence).where(Sentence.chapter_id == chapter_id)).all()
+        sentences = self.session.scalars(
+            select(Sentence)
+            .join(Block, Block.id == Sentence.block_id)
+            .where(Sentence.chapter_id == chapter_id, Sentence.retired_by_revision_id.is_(None))
+            # Reading order; without it the row order depended on the query plan.
+            .order_by(Block.ordinal, Sentence.ordinal_in_block)
+        ).all()
         packets = self.session.scalars(
             select(TranslationPacket).where(TranslationPacket.chapter_id == chapter_id).order_by(TranslationPacket.id)
         ).all()
@@ -264,12 +285,16 @@ class ExportRepository:
             chapters=[self.load_chapter_bundle(chapter.id) for chapter in chapters],
         )
 
+    # Active = OPEN or TRIAGED, the same notion the blocker-repair loop uses;
+    # a triaged blocker is awaiting rerun validation and must still block.
+    _ACTIVE_STATUSES = (IssueStatus.OPEN, IssueStatus.TRIAGED)
+
     def has_open_blocking_issues(self, chapter_id: str) -> bool:
         issue = self.session.scalars(
             select(ReviewIssue.id).where(
                 ReviewIssue.chapter_id == chapter_id,
                 ReviewIssue.blocking.is_(True),
-                ReviewIssue.status == IssueStatus.OPEN,
+                ReviewIssue.status.in_(self._ACTIVE_STATUSES),
             )
         ).first()
         return issue is not None
@@ -279,7 +304,7 @@ class ExportRepository:
             select(ReviewIssue).where(
                 ReviewIssue.chapter_id == chapter_id,
                 ReviewIssue.blocking.is_(True),
-                ReviewIssue.status == IssueStatus.OPEN,
+                ReviewIssue.status.in_(self._ACTIVE_STATUSES),
             )
         ).all()
 
@@ -293,5 +318,56 @@ class ExportRepository:
             )
         ).all()
 
-    def save_export(self, export: Export) -> None:
-        self.session.merge(export)
+    def save_export(self, export: Export, *, manifest_path: Path | None = None) -> Export:
+        """Upsert the current export row and append a version row for what was just written.
+
+        A re-export keeps the row's first ``created_at`` (it used to be reset on
+        every export) and bumps ``version``; the file digest recorded on the
+        version row lets the blob store keep earlier bytes.
+        """
+        existing = self.session.get(Export, export.id)
+        if existing is not None:
+            export.created_at = existing.created_at
+            export.version = int(existing.version or 1) + 1
+        else:
+            export.version = 1
+        persisted = self.session.merge(export)
+        self.session.flush()
+        sha256, byte_count = _file_digest(Path(persisted.file_path))
+        # The row must describe the bytes just written. A merge leaves attributes the new
+        # object never set, so a re-export used to keep the previous digest, and downloads,
+        # which prefer the content-addressed blob of that digest, served the old file.
+        persisted.content_sha256 = sha256
+        persisted.byte_count = byte_count
+        persisted.stale_reason = None
+        self.session.add(
+            ExportVersion(
+                export_id=persisted.id,
+                document_id=persisted.document_id,
+                export_type=persisted.export_type,
+                version=persisted.version,
+                file_path=persisted.file_path,
+                manifest_path=str(manifest_path) if manifest_path is not None else None,
+                content_sha256=sha256,
+                byte_count=byte_count,
+                input_version_bundle_json=dict(persisted.input_version_bundle_json or {}),
+                created_at=persisted.updated_at,
+            )
+        )
+        self.session.flush()
+        stale = self.session.scalars(
+            select(ExportVersion)
+            .where(ExportVersion.export_id == persisted.id)
+            .order_by(ExportVersion.version.desc())
+            .offset(EXPORT_VERSION_RETENTION)
+        ).all()
+        for row in stale:
+            self.session.delete(row)
+        return persisted
+
+    def list_export_versions(self, export_id: str) -> list[ExportVersion]:
+        return list(
+            self.session.scalars(
+                select(ExportVersion).where(ExportVersion.export_id == export_id).order_by(ExportVersion.version.desc())
+            ).all()
+        )

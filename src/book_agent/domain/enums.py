@@ -210,6 +210,45 @@ class IssueStatus(StrEnum):
     WONTFIX = "wontfix"
 
 
+class IssueType(StrEnum):
+    """Known review issue types. The column stays TEXT so model-detected
+    types can be added without a migration; producers should use this enum."""
+
+    OMISSION = "OMISSION"
+    LOW_CONFIDENCE = "LOW_CONFIDENCE"
+    FORMAT_POLLUTION = "FORMAT_POLLUTION"
+    TERM_CONFLICT = "TERM_CONFLICT"
+    UNLOCKED_KEY_CONCEPT = "UNLOCKED_KEY_CONCEPT"
+    STALE_CHAPTER_BRIEF = "STALE_CHAPTER_BRIEF"
+    STYLE_DRIFT = "STYLE_DRIFT"
+    DUPLICATION = "DUPLICATION"
+    MISORDERING = "MISORDERING"
+    ALIGNMENT_FAILURE = "ALIGNMENT_FAILURE"
+    CONTEXT_FAILURE = "CONTEXT_FAILURE"
+    STRUCTURE_POLLUTION = "STRUCTURE_POLLUTION"
+    FOOTNOTE_RECOVERY_REQUIRED = "FOOTNOTE_RECOVERY_REQUIRED"
+    IMAGE_CAPTION_RECOVERY_REQUIRED = "IMAGE_CAPTION_RECOVERY_REQUIRED"
+    ARTIFACT_GROUP_RECOVERY_REQUIRED = "ARTIFACT_GROUP_RECOVERY_REQUIRED"
+    LAYOUT_VALIDATION_FAILURE = "LAYOUT_VALIDATION_FAILURE"
+    # Model-detected (Reviewer Agent) types; routed by rule_engine.resolve_action.
+    MISTRANSLATION_SEMANTIC = "MISTRANSLATION_SEMANTIC"
+    MISTRANSLATION_LOGIC = "MISTRANSLATION_LOGIC"
+    MISTRANSLATION_REFERENCE = "MISTRANSLATION_REFERENCE"
+
+
+class IssueEventKind(StrEnum):
+    """Append-only history of a review issue; one row per state change."""
+
+    OPENED = "opened"
+    UPDATED = "updated"
+    REOPENED = "reopened"
+    SEEN_WHILE_CLOSED = "seen_while_closed"
+    RESOLVED = "resolved"
+    TRIAGED = "triaged"
+    WONTFIX = "wontfix"
+    ACTION_REPLANNED = "action_replanned"
+
+
 class ActionType(StrEnum):
     EDIT_TARGET_ONLY = "EDIT_TARGET_ONLY"
     REALIGN_ONLY = "REALIGN_ONLY"
@@ -235,15 +274,12 @@ class ActionStatus(StrEnum):
 
 class ExportType(StrEnum):
     BILINGUAL_HTML = "bilingual_html"
-    BILINGUAL_MARKDOWN = "bilingual_markdown"
     MERGED_HTML = "merged_html"
     MERGED_MARKDOWN = "merged_markdown"
     REBUILT_EPUB = "rebuilt_epub"
     REBUILT_PDF = "rebuilt_pdf"
     ZH_EPUB = "zh_epub"
-    ZH_PDF = "zh_pdf"
     REVIEW_PACKAGE = "review_package"
-    JSONL = "jsonl"
 
 
 class ExportStatus(StrEnum):
@@ -309,8 +345,10 @@ class WorkItemStage(StrEnum):
     BOOTSTRAP = "bootstrap"
     TRANSLATE = "translate"
     REVIEW = "review"
-    REPAIR = "repair"
     EXPORT = "export"
+    # An agent turn (harness kernel) executed as a work item; the concrete
+    # agent is named in the item's input bundle (``agent_kind``).
+    AGENT = "agent"
 
 
 class WorkItemScopeType(StrEnum):
@@ -367,82 +405,6 @@ class InvalidatedObjectType(StrEnum):
     EXPORT = "export"
 
 
-class ChapterRunPhase(StrEnum):
-    PACKETIZE = "packetize"
-    TRANSLATE = "translate"
-    REVIEW = "review"
-    EXPORT = "export"
-    COMPLETE = "complete"
-
-
-class ChapterRunStatus(StrEnum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class PacketTaskAction(StrEnum):
-    TRANSLATE = "translate"
-    RETRANSLATE = "retranslate"
-
-
-class PacketTaskStatus(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ReviewSessionStatus(StrEnum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ReviewTerminalityState(StrEnum):
-    OPEN = "open"
-    APPROVED = "approved"
-    BLOCKED = "blocked"
-
-
-class RuntimeIncidentKind(StrEnum):
-    EXPORT_MISROUTING = "export_misrouting"
-    RUNTIME_DEFECT = "runtime_defect"
-    REVIEW_DEADLOCK = "review_deadlock"
-    PACKET_RUNTIME_DEFECT = "packet_runtime_defect"
-
-
-class RuntimeIncidentStatus(StrEnum):
-    OPEN = "open"
-    DIAGNOSING = "diagnosing"
-    PATCH_PROPOSED = "patch_proposed"
-    VALIDATING = "validating"
-    PUBLISHED = "published"
-    RESOLVED = "resolved"
-    FAILED = "failed"
-    FROZEN = "frozen"
-
-
-class RuntimePatchProposalStatus(StrEnum):
-    PROPOSED = "proposed"
-    VALIDATING = "validating"
-    VALIDATED = "validated"
-    PUBLISHED = "published"
-    REJECTED = "rejected"
-    ROLLED_BACK = "rolled_back"
-
-
-class RuntimeBundleRevisionStatus(StrEnum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ROLLED_BACK = "rolled_back"
-
-
 class ProviderKind(StrEnum):
     """Translation provider backends selectable at runtime."""
 
@@ -454,3 +416,40 @@ class ProviderTestStatus(StrEnum):
     UNKNOWN = "unknown"
     OK = "ok"
     FAILED = "failed"
+
+
+# --- Agent harness ----------------------------------------------------------
+
+
+class AgentTurnStatus(StrEnum):
+    RUNNING = "running"
+    AWAITING_APPROVAL = "awaiting_approval"
+    PAUSED = "paused"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentItemKind(StrEnum):
+    SYSTEM = "system"
+    DEVELOPER = "developer"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    COMPACTION = "compaction"
+    APPROVAL_REQUEST = "approval_request"
+    APPROVAL_RESULT = "approval_result"
+
+
+class ApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    AUTO_APPROVED = "auto_approved"
+    EXPIRED = "expired"
+
+
+class DecisionScope(StrEnum):
+    BOOK = "book"
+    CHAPTER = "chapter"

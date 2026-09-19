@@ -56,6 +56,7 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         built_packet_count: int,
         translate_work_item_statuses: list[WorkItemStatus],
         run_status: DocumentRunStatus = DocumentRunStatus.RUNNING,
+        run_type: DocumentRunType = DocumentRunType.TRANSLATE_FULL,
     ) -> tuple[str, str]:
         with self.session_factory() as session:
             document = Document(
@@ -99,7 +100,7 @@ class ReconcileTerminalStateTests(unittest.TestCase):
                 )
             run = DocumentRun(
                 document_id=document.id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
+                run_type=run_type,
                 status=run_status,
                 requested_by="test",
                 priority=100,
@@ -153,11 +154,13 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         # them to NOT_STARTED which is interpreted as "not requested". With
         # translate terminal-green and nothing requested beyond it, the
         # reconciler must allow the run to reach SUCCEEDED. This pins the
-        # classifier routing added in P0.2a.
+        # classifier routing added in P0.2a. (TRANSLATE_FULL runs always
+        # request review and exports; see the test below.)
         _, run_id = self._seed(
             translated_packet_count=1,
             built_packet_count=0,
             translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
         )
 
         summary = self._reconcile(run_id)
@@ -171,6 +174,34 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         # as failed — only required-stage failures and optional-stage
         # failures are surfaced in the control-detail payload.
         self.assertNotIn("has_warnings", last_control_detail)
+
+    def test_translate_full_run_stays_running_until_review_and_exports_run(self) -> None:
+        # The executor seeds review/exports only on its next tick after
+        # translate turns green. Reconciling in between must not treat the
+        # not-yet-seeded stages as "not requested" and end the run.
+        _, run_id = self._seed(
+            translated_packet_count=1,
+            built_packet_count=0,
+            translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+        )
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "running")
+
+    def test_run_succeeds_when_document_was_already_fully_translated(self) -> None:
+        # A run over a document whose packets are all translated seeds no
+        # translate work items; translate must still derive to SUCCEEDED.
+        _, run_id = self._seed(
+            translated_packet_count=2,
+            built_packet_count=0,
+            translate_work_item_statuses=[],
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
+        )
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "succeeded")
 
     def test_run_stays_running_when_no_physical_evidence_has_landed(self) -> None:
         # Liveness guard: a run with zero packets and zero work_items is
@@ -233,10 +264,12 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         # SUCCEEDED + has_warnings=true flag (the P0.2a interim). The
         # failed optional stage is still recorded in the last-control
         # payload so the UI can surface a degraded-completion badge.
+        # Review is optional only for run types other than TRANSLATE_FULL.
         _, run_id = self._seed(
             translated_packet_count=1,
             built_packet_count=0,
             translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
         )
         with self.session_factory() as session:
             session.add(
@@ -260,6 +293,35 @@ class ReconcileTerminalStateTests(unittest.TestCase):
         detail = last_control.get("detail_json") or {}
         self.assertEqual(detail.get("run_outcome"), "succeeded_with_warnings")
         self.assertEqual(detail.get("failed_optional_stages"), ["review"])
+
+    def test_translate_full_run_fails_when_review_failed(self) -> None:
+        # A TRANSLATE_FULL run's deliverable is the export; a failed review
+        # means nothing was delivered, so the run fails instead of
+        # soft-succeeding.
+        _, run_id = self._seed(
+            translated_packet_count=1,
+            built_packet_count=0,
+            translate_work_item_statuses=[WorkItemStatus.SUCCEEDED],
+        )
+        with self.session_factory() as session:
+            session.add(
+                WorkItem(
+                    run_id=run_id,
+                    stage=WorkItemStage.REVIEW,
+                    scope_type=WorkItemScopeType.DOCUMENT,
+                    scope_id=str(uuid4()),
+                    status=WorkItemStatus.TERMINAL_FAILED,
+                    attempt=1,
+                    priority=100,
+                )
+            )
+            session.commit()
+
+        summary = self._reconcile(run_id)
+
+        self.assertEqual(summary.status, "failed")
+        detail = (summary.status_detail_json.get("last_control") or {}).get("detail_json") or {}
+        self.assertEqual(detail.get("failed_required_stages"), ["review"])
 
     def test_run_fails_when_translate_work_item_terminal_failed(self) -> None:
         # Evidence-driven failure: TERMINAL_FAILED work_item makes

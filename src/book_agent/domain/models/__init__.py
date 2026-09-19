@@ -1,4 +1,17 @@
-from book_agent.domain.models.document import Block, BookProfile, Chapter, Document, DocumentImage, MemorySnapshot, Sentence
+from book_agent.infra.db.base import Base, install_enum_check_constraints
+from book_agent.domain.models.agent import AgentItem, AgentTurn, Approval, Decision
+from book_agent.domain.models.auth import ApiKey, CreditEntry, Org
+from book_agent.domain.models.document import (
+    Block,
+    BookProfile,
+    Chapter,
+    Document,
+    DocumentImage,
+    MemorySnapshot,
+    Sentence,
+    SentenceLineage,
+    StructureEdit,
+)
 from book_agent.domain.models.parse_revision import DocumentParseRevision, DocumentParseRevisionArtifact
 from book_agent.domain.models.ops import (
     ArtifactInvalidation,
@@ -9,14 +22,18 @@ from book_agent.domain.models.ops import (
     JobRun,
     RunAuditEvent,
     RunBudget,
-    RuntimeBundleRevision,
-    RuntimeIncident,
-    RuntimePatchProposal,
     WorkItem,
     WorkerLease,
 )
 from book_agent.domain.models.provider_credential import ProviderCredential
-from book_agent.domain.models.review import ChapterQualitySummary, Export, IssueAction, ReviewIssue
+from book_agent.domain.models.review import (
+    ChapterQualitySummary,
+    Export,
+    ExportVersion,
+    IssueAction,
+    ReviewIssue,
+    ReviewIssueEvent,
+)
 from book_agent.domain.models.translation import (
     AlignmentEdge,
     ChapterMemoryProposal,
@@ -28,6 +45,13 @@ from book_agent.domain.models.translation import (
 )
 
 __all__ = [
+    "ApiKey",
+    "CreditEntry",
+    "Org",
+    "AgentItem",
+    "AgentTurn",
+    "Approval",
+    "Decision",
     "AlignmentEdge",
     "ArtifactInvalidation",
     "AuditEvent",
@@ -44,6 +68,7 @@ __all__ = [
     "DocumentRun",
     "Event",
     "Export",
+    "ExportVersion",
     "IssueAction",
     "JobRun",
     "MemorySnapshot",
@@ -51,11 +76,11 @@ __all__ = [
     "ProviderCredential",
     "RunAuditEvent",
     "RunBudget",
-    "RuntimeBundleRevision",
-    "RuntimeIncident",
-    "RuntimePatchProposal",
     "ReviewIssue",
+    "ReviewIssueEvent",
     "Sentence",
+    "SentenceLineage",
+    "StructureEdit",
     "TargetSegment",
     "TermEntry",
     "TranslationPacket",
@@ -63,3 +88,5 @@ __all__ = [
     "WorkItem",
     "WorkerLease",
 ]
+
+install_enum_check_constraints(Base.metadata)

@@ -8,7 +8,6 @@ suite drives `PdfStructureRecoveryService._build_chapters` with fabricated
 resulting `ParsedBlock.provenance` reflects the verdict.
 """
 
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -23,12 +22,8 @@ from book_agent.domain.structure.models import (
     PROVENANCE_OCR,
     PROVENANCE_TEXT_LAYER,
 )
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PdfPage,
-    PdfStructureRecoveryService,
-    _RecoveredBlock,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import PdfFileProfile, PdfPage, _RecoveredBlock
 
 
 def _mk_recovered_block(ordinal: int, page_number: int, text: str) -> _RecoveredBlock:

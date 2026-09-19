@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
 from book_agent.domain.enums import BlockType, Severity
+from book_agent.export.markup import parse_structured_table_rows
 from book_agent.infra.repositories.export import ChapterExportBundle
 
 _HEADING_TAG_PATTERN = re.compile(r"^h([1-6])$", re.IGNORECASE)
@@ -263,47 +264,9 @@ class LayoutValidationService:
         lowered = normalized.casefold()
         if "<table" in lowered and "</table>" in lowered:
             return True
-
-        lines = [line.strip() for line in normalized.splitlines() if line.strip()]
-        if len(lines) < 2:
-            return False
-
-        rows = [self._split_table_candidate_line(line) for line in lines]
-        if any(row is None for row in rows):
-            return False
-
-        normalized_rows = [row for row in rows if row]
-        if len(normalized_rows) < 2:
-            return False
-
-        if len(normalized_rows) >= 3 and self._is_table_separator_row(normalized_rows[1]):
-            normalized_rows.pop(1)
-        if len(normalized_rows) < 2:
-            return False
-
-        column_count = len(normalized_rows[0])
-        if column_count < 2 or column_count > 8:
-            return False
-        return all(len(row) == column_count for row in normalized_rows)
-
-    def _split_table_candidate_line(self, line: str) -> list[str] | None:
-        stripped = line.strip().strip("|").strip()
-        if not stripped:
-            return None
-        if "|" in stripped:
-            pipe_cells = [cell.strip() for cell in stripped.split("|")]
-            pipe_cells = [cell for cell in pipe_cells if cell]
-            if len(pipe_cells) >= 2:
-                return pipe_cells
-        spaced_cells = [cell.strip() for cell in re.split(r"\t+|\s{2,}", stripped) if cell.strip()]
-        if len(spaced_cells) >= 2:
-            return spaced_cells
-        return None
-
-    def _is_table_separator_row(self, row: list[str]) -> bool:
-        if not row:
-            return False
-        return all(bool(re.fullmatch(r":?-{2,}:?", cell.strip())) for cell in row)
+        # Same parser the exporters render tables with, so the gate never
+        # rejects a table the export would draw (or accepts one it cannot).
+        return parse_structured_table_rows(normalized) is not None
 
     def _normalize_text(self, text: str | None) -> str:
         return re.sub(r"\s+", " ", (text or "")).strip()

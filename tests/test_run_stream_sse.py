@@ -124,3 +124,37 @@ class TestRunStream:
         assert received[0]["payload"]["phase"] == "backfill"
         assert received[1]["payload"]["phase"] == "live"
         assert received[1]["packet_id"] == "p-live"
+
+    def test_listener_connection_is_released_after_client_disconnects(self, pg_app) -> None:
+        _, base_url, factory = pg_app
+        engine = factory.kw["bind"]
+        run_id = f"sse-disconnect-{int(time.time() * 1000)}"
+
+        def listener_count() -> int:
+            from sqlalchemy import text as _t
+
+            with engine.connect() as conn:
+                return int(
+                    conn.execute(
+                        _t(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND query = 'LISTEN events_channel'"
+                        )
+                    ).scalar()
+                )
+
+        baseline = listener_count()
+        with httpx.Client(timeout=10.0, trust_env=False) as client:
+            with client.stream("GET", f"{base_url}/v1/runs/{run_id}/stream") as resp:
+                assert resp.status_code == 200
+                for chunk in resp.iter_text():
+                    if ": ready" in chunk:
+                        break
+                assert listener_count() == baseline + 1
+
+        # A previous test's listener may still be closing, so the count can
+        # drop below the baseline; ours must be gone either way.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and listener_count() > baseline:
+            time.sleep(0.2)
+        assert listener_count() <= baseline

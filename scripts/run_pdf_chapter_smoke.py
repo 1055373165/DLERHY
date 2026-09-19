@@ -16,7 +16,7 @@ from book_agent.core.ids import stable_id
 from book_agent.domain.enums import ExportType, PacketStatus, TargetSegmentStatus
 from book_agent.domain.models import Chapter, Document, Sentence
 from book_agent.domain.models.review import ReviewIssue
-from book_agent.domain.structure.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
+from book_agent.ingestion.pdf.ocr import OcrPdfParser, OcrPdfTextExtractor, UvSuryaOcrRunner
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory, session_scope

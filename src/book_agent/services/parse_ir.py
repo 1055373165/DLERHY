@@ -88,7 +88,11 @@ def _pdf_page_plans(parsed_document: ParsedDocument) -> list[PageExtractionPlan]
 
 
 class ParseIrService:
-    def __init__(self, output_root: str | Path = "artifacts/parse-ir"):
+    def __init__(self, output_root: str | Path | None = None):
+        if output_root is None:
+            from book_agent.core.config import get_settings
+
+            output_root = get_settings().parse_ir_root
         self.output_root = Path(output_root)
 
     def build(self, document: Document, parsed_document: ParsedDocument) -> ParseIrBuildResult:

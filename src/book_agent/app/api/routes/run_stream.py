@@ -5,21 +5,23 @@ Postgres ``LISTEN events_channel``. Backfill ensures clients never miss
 events during reconnect: ``Last-Event-ID`` (or ``last_event_id`` query)
 says "I've seen up to N, send me everything after."
 
-Each subscriber holds a dedicated raw psycopg connection. Sync generator
-runs in FastAPI's threadpool; the connection is closed when the client
-disconnects or when the keepalive loop detects it.
+Each subscriber holds a dedicated raw psycopg connection. The stream is an
+async generator that checks for client disconnect between notify polls; the
+blocking psycopg calls run in the threadpool. The connection is closed when
+the client disconnects or the response is cancelled.
 """
 
 from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -94,17 +96,18 @@ def stream_run_events(
     kind_filter = _parse_kinds(kinds)
     start_cursor = last_event_id or 0
 
-    def generator() -> Iterator[bytes]:
-        raw = engine.raw_connection()
+    async def generator() -> AsyncIterator[bytes]:
+        raw = await run_in_threadpool(_open_listener, engine)
         try:
-            raw.set_autocommit(True)
             driver_conn = raw.driver_connection
-            with raw.cursor() as cur:
-                cur.execute("LISTEN events_channel")
-
             cursor = start_cursor
-            backfill_rows = _fetch_events(
-                engine, run_id=run_id, after_id=cursor, kind_filter=kind_filter, limit=BACKFILL_LIMIT
+            backfill_rows = await run_in_threadpool(
+                _fetch_events,
+                engine,
+                run_id=run_id,
+                after_id=cursor,
+                kind_filter=kind_filter,
+                limit=BACKFILL_LIMIT,
             )
             for row in backfill_rows:
                 yield _row_to_sse(row).encode("utf-8")
@@ -113,20 +116,12 @@ def stream_run_events(
             yield b": ready\n\n"
 
             last_heartbeat = time.monotonic()
-            while True:
-                if _client_gone(request):
-                    return
-
-                new_ids: list[int] = []
-                for note in driver_conn.notifies(timeout=NOTIFY_POLL_SECONDS):
-                    try:
-                        new_ids.append(int(note.payload))
-                    except (TypeError, ValueError):
-                        continue
-
+            while not await request.is_disconnected():
+                new_ids = await run_in_threadpool(_poll_notify_ids, driver_conn, NOTIFY_POLL_SECONDS)
                 if new_ids:
                     next_cursor = max(max(new_ids), cursor)
-                    rows = _fetch_events(
+                    rows = await run_in_threadpool(
+                        _fetch_events,
                         engine,
                         run_id=run_id,
                         after_id=cursor,
@@ -143,8 +138,12 @@ def stream_run_events(
                     yield b": heartbeat\n\n"
                     last_heartbeat = now
         finally:
+            # Synchronous on purpose: this also runs while the task is being
+            # cancelled, where awaiting the threadpool would be cancelled too.
+            # Invalidate instead of close: close() would return the connection
+            # to the pool with LISTEN still registered on its backend.
             try:
-                raw.close()
+                raw.invalidate()
             except Exception:
                 pass
 
@@ -191,12 +190,23 @@ def _fetch_events(
         return [dict(row) for row in conn.execute(stmt, params).mappings()]
 
 
-def _client_gone(request: Request) -> bool:
-    """Best-effort disconnect check usable from a sync generator."""
-    state = getattr(request, "_is_disconnected", None)
-    if callable(state):
+def _open_listener(engine: Engine):
+    raw = engine.raw_connection()
+    try:
+        raw.set_autocommit(True)
+        with raw.cursor() as cur:
+            cur.execute("LISTEN events_channel")
+    except Exception:
+        raw.invalidate()
+        raise
+    return raw
+
+
+def _poll_notify_ids(driver_conn, timeout: float) -> list[int]:
+    ids: list[int] = []
+    for note in driver_conn.notifies(timeout=timeout):
         try:
-            return bool(state())
-        except Exception:
-            return False
-    return False
+            ids.append(int(note.payload))
+        except (TypeError, ValueError):
+            continue
+    return ids

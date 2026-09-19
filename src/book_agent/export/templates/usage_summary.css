@@ -1,0 +1,11 @@
+.usage-summary{margin:0 0 22px;padding:18px 22px;border:1px solid rgba(184,197,218,.75);
+border-radius:18px;background:linear-gradient(180deg,#fbfdff 0%,#f3f7fc 100%);
+box-shadow:0 6px 18px rgba(60,74,97,.05);}
+.usage-summary .usage-kicker{font-family:var(--font-ui);font-size:11px;letter-spacing:.14em;
+text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:10px;}
+.usage-summary .usage-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;}
+.usage-summary .usage-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--font-ui);
+font-size:14px;color:#314152;}
+.usage-summary .usage-label{color:var(--muted);}
+.usage-summary .usage-value{font-variant-numeric:tabular-nums;color:#17313a;font-weight:600;}
+@media (max-width:600px){.usage-summary .usage-row{flex-direction:column;gap:2px;}}

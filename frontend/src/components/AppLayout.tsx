@@ -1,3 +1,5 @@
+import { ApiKeySetting } from "./ApiKeySetting";
+import { BudgetMeter } from "./BudgetMeter";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -35,13 +37,35 @@ const Icons = {
       <rect x="4" y="11.5" width="8" height="3" rx="1" />
     </svg>
   ),
+  issues: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 1.5l6.5 12h-13z" />
+      <path d="M8 6v3.5" />
+      <path d="M8 11.5v.01" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.5" />
+      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
+    </svg>
+  ),
+  approve: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M5 8.5l2 2 4-4.5" />
+    </svg>
+  ),
 } as const;
 
 const NAV_ITEMS = [
   { to: "/", label: "WORK", zh: "工作台", icon: Icons.work },
   { to: "/runs", label: "RUNS", zh: "运行", icon: Icons.runs },
   { to: "/deliverables", label: "SHIP", zh: "交付", icon: Icons.ship },
+  { to: "/issues", label: "ISSUES", zh: "问题", icon: Icons.issues },
+  { to: "/approvals", label: "APPROVE", zh: "审批", icon: Icons.approve },
   { to: "/library", label: "LIB", zh: "书库", icon: Icons.lib },
+  { to: "/providers", label: "MODELS", zh: "服务商", icon: Icons.settings },
 ] as const;
 
 export function AppLayout() {
@@ -93,6 +117,10 @@ export function AppLayout() {
         </nav>
 
         <div className={s.sidebarFooter}>
+          <div className={s.footerControls}>
+            <BudgetMeter />
+            <ApiKeySetting />
+          </div>
           <div className={s.systemLinks}>
             <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
               API

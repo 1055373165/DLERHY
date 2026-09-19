@@ -1,6 +1,8 @@
 # ruff: noqa: E402
 
 import json
+from dataclasses import replace
+from unittest.mock import patch
 import sys
 import tempfile
 import unittest
@@ -14,13 +16,14 @@ if str(SRC) not in sys.path:
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import DocumentStatus, SourceType
-from book_agent.domain.models import Block, Chapter, Document, Sentence
+from book_agent.domain.models import Document
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.parse_ir import ParseIrRepository
 from book_agent.services.bootstrap import BootstrapArtifacts, ParseService, SegmentationService
+from book_agent.services.modality_pipeline import ModalityPipelineOptions, ModalityPipelineSummary
 from book_agent.services.parse_ir import ParseIrService
 
 
@@ -138,6 +141,41 @@ class ParseIrServiceTests(unittest.TestCase):
                 result.parsed_document.chapters[0].blocks[0].metadata["canonical_node_id"],
                 payload["canonical_ir"]["nodes"][2]["node_id"],
             )
+
+
+class ParseServiceIrOrderingTests(unittest.TestCase):
+    def test_canonical_ir_is_built_from_the_modality_enhanced_document(self) -> None:
+        def _enhance(parsed, *, options, source_path):
+            chapter = parsed.chapters[0]
+            marked = replace(chapter.blocks[1], metadata={**chapter.blocks[1].metadata, "modality_marker": "applied"})
+            enhanced = replace(parsed, chapters=[replace(chapter, blocks=[chapter.blocks[0], marked])])
+            return enhanced, ModalityPipelineSummary()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            parse_service = ParseService(
+                epub_parser=_FakeParsedDocumentParser(),
+                parse_ir_service=ParseIrService(output_root=Path(tempdir) / "parse-ir"),
+                modality_options=ModalityPipelineOptions(enable_images=True),
+            )
+            document = Document(
+                id=stable_id("document", "parse-ir-modality-order"),
+                source_type=SourceType.EPUB,
+                file_fingerprint="fingerprint-parse-ir-modality-order",
+                source_path=str(Path(tempdir) / "sample.epub"),
+                src_lang="en",
+                tgt_lang="zh",
+                status=DocumentStatus.INGESTED,
+                parser_version=1,
+                segmentation_version=1,
+                metadata_json={},
+            )
+            with patch("book_agent.services.bootstrap.enhance_parsed_document", side_effect=_enhance):
+                artifacts = parse_service.parse(document, document.source_path)
+            sidecar = json.loads(Path(artifacts.document.metadata_json["parse_ir"]["canonical_ir_path"]).read_text())
+
+        block_nodes = [node for node in sidecar["canonical_ir"]["nodes"] if node["node_type"] == "block"]
+        self.assertEqual(block_nodes[1]["metadata"].get("modality_marker"), "applied")
+        self.assertEqual(artifacts.blocks[1].source_span_json.get("modality_marker"), "applied")
 
 
 class ParseIrRepositoryTests(unittest.TestCase):

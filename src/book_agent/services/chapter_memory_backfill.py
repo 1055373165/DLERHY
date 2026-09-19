@@ -4,13 +4,21 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
-from book_agent.domain.enums import MemoryScopeType, MemoryStatus, PacketStatus, RunStatus, SnapshotType, TargetSegmentStatus
+from book_agent.domain.enums import (
+    MemoryScopeType,
+    MemoryStatus,
+    PacketStatus,
+    RunStatus,
+    SnapshotType,
+    TargetSegmentStatus,
+)
 from book_agent.domain.models import Block, Chapter, MemorySnapshot
 from book_agent.domain.models.translation import TargetSegment, TranslationPacket, TranslationRun
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompiler
 from book_agent.services.translation import TranslationExecutionArtifacts, TranslationService
+from book_agent.translation.chapter_memory import ChapterMemory
 
 
 @dataclass(slots=True)
@@ -141,18 +149,12 @@ class ChapterMemoryBackfillService:
             current_snapshot=current_snapshot,
             document_id=chapter.document_id,
             chapter_id=chapter.id,
-            content_json={
-                "schema_version": 1,
-                "chapter_id": chapter.id,
-                "chapter_title": chapter.title_src,
-                "heading_path": brief_content.get("heading_path", [chapter.title_src] if chapter.title_src else []),
-                "chapter_brief": brief_content.get("summary"),
-                "chapter_brief_version": chapter_brief.version if chapter_brief is not None else None,
-                "active_concepts": [],
-                "recent_accepted_translations": [],
-                "last_packet_id": None,
-                "last_translation_run_id": None,
-            },
+            content_json=ChapterMemory.seed(
+                chapter_id=chapter.id,
+                chapter_title=chapter.title_src,
+                brief_content=brief_content,
+                brief_version=chapter_brief.version if chapter_brief is not None else None,
+            ).to_content(),
         )
         self.repository.session.flush()
         return seeded_snapshot

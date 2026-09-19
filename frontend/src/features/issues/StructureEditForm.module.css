@@ -1,0 +1,45 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface, transparent);
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.feedback {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-xs);
+  border-left: 2px solid var(--blue);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+}
+
+.feedback[data-tone="error"] {
+  border-left-color: var(--red, #d33);
+}

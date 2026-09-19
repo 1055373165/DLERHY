@@ -23,6 +23,41 @@ class SentenceSegmenterTests(unittest.TestCase):
             ["Dr. Smith paid 3.14 dollars.", "He left at 5 p.m.", "It was late."],
         )
 
+    def test_number_label_abbreviations_do_not_end_sentences(self) -> None:
+        self.assertEqual(
+            self.segmenter.segment_text("The gains of Rs. 20 lifted RSI, see pp. 12-14. It slowed down."),
+            ["The gains of Rs. 20 lifted RSI, see pp. 12-14.", "It slowed down."],
+        )
+        self.assertEqual(
+            self.segmenter.segment_text("Prices are quoted in Rs. Then we compare."),
+            ["Prices are quoted in Rs.", "Then we compare."],
+        )
+
+    def test_name_initials_do_not_end_sentences(self) -> None:
+        self.assertEqual(
+            self.segmenter.segment_text("RSI was invented by J. Welles Wilder in 1978. The book by J. R. R. Tolkien is long."),
+            ["RSI was invented by J. Welles Wilder in 1978.", "The book by J. R. R. Tolkien is long."],
+        )
+        self.assertEqual(
+            self.segmenter.segment_text("In my opinion, Walter J. Baeyens misses the point. Trends change slowly."),
+            ["In my opinion, Walter J. Baeyens misses the point.", "Trends change slowly."],
+        )
+        self.assertEqual(
+            self.segmenter.segment_text("Use plan B. The first plan failed."),
+            ["Use plan B.", "The first plan failed."],
+        )
+
+    def test_line_start_enumerators_do_not_end_sentences(self) -> None:
+        self.assertEqual(self.segmenter.segment_text("1. The Hidden Challenges of RSI Trading"), ["1. The Hidden Challenges of RSI Trading"])
+        self.assertEqual(
+            self.segmenter.segment_text("1. Tops and Bottoms\n2. Failure Swings"),
+            ["1. Tops and Bottoms 2. Failure Swings"],
+        )
+        self.assertEqual(
+            self.segmenter.segment_text("RSI crosses above 70. Then it slides down."),
+            ["RSI crosses above 70.", "Then it slides down."],
+        )
+
     def test_heading_is_single_sentence(self) -> None:
         block = ParsedBlock(
             block_type="heading",

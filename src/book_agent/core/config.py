@@ -1,4 +1,5 @@
 import json
+import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -26,10 +27,9 @@ class AppScope(str, Enum):
       land in a shared DB.
     * ``E2E`` — same restriction as SMOKE by default; e2e fixtures are
       tempdir-rooted too.
-    * ``DEV`` — permissive; dev compose uses Postgres on :55432.
-    * ``PROD`` — permissive in the positive direction (any URL allowed),
-      but WARN-logged if sqlite is detected since prod on sqlite is
-      almost certainly a misconfiguration.
+    * ``DEV`` / ``PROD`` — REQUIRE a PostgreSQL URL. The app relies on
+      PostgreSQL row locks, JSONB and LISTEN/NOTIFY; SQLite is only for
+      unit tests, which inject their own session factory.
     """
 
     PROD = "prod"
@@ -39,14 +39,26 @@ class AppScope(str, Enum):
 
 
 class _SanitizedEnvSettingsSource:
+    """Process-environment source that ignores the generic ``OPENAI_API_KEY``.
+
+    A developer's shell often carries a global ``OPENAI_API_KEY`` meant for
+    other tools; picking it up silently would bill the wrong account. The
+    key is therefore accepted from the project ``.env`` file, or from the
+    namespaced ``BOOK_AGENT_TRANSLATION_OPENAI_API_KEY`` variable, which is
+    explicit enough to be intentional and is what containers set.
+    """
+
     def __init__(self, delegate: Any):
         self._delegate = delegate
 
     def __call__(self) -> dict[str, Any]:
         payload = dict(self._delegate())
+        namespaced = os.environ.get("BOOK_AGENT_TRANSLATION_OPENAI_API_KEY", "").strip()
         payload.pop("translation_openai_api_key", None)
         payload.pop("BOOK_AGENT_TRANSLATION_OPENAI_API_KEY", None)
         payload.pop("OPENAI_API_KEY", None)
+        if namespaced:
+            payload["translation_openai_api_key"] = namespaced
         return payload
 
 
@@ -62,12 +74,37 @@ class Settings(BaseSettings):
     )
     docs_dir: Path = ROOT_DIR / "docs"
     export_root: Path = Path("artifacts/exports")
-    runtime_bundle_root: Path = Path("artifacts/runtime-bundles")
+    # Canonical parse-IR sidecars (one directory per document / parser version).
+    parse_ir_root: Path = Path("artifacts/parse-ir")
     upload_root: Path = Path("artifacts/uploads")
-    runtime_repair_transport_command: str | None = None
-    runtime_repair_transport_http_url: str | None = None
-    runtime_repair_transport_http_timeout_seconds: int = 60
-    runtime_repair_transport_http_bearer_token: str | None = None
+    # "disabled" (development, tests) or "api_key": every API call except
+    # /health and /meta needs a key; documents are scoped to the key's org.
+    auth_mode: str = "disabled"
+    # OIDC (with auth_mode=api_key): bearer JWTs from this issuer are accepted
+    # alongside API keys. The org claim names an existing organisation; the
+    # role claim is viewer/editor/admin (oidc_default_role when absent).
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_org_claim: str = "org"
+    oidc_role_claim: str = "book_agent_role"
+    oidc_default_role: str | None = None
+    # Server paths POST /documents/bootstrap may read when auth is on or in prod.
+    # The upload root is always allowed.
+    bootstrap_source_roots: Annotated[list[Path], NoDecode] = Field(default_factory=list)
+    # Provider base URLs that resolve to private or loopback addresses are
+    # refused when auth is on or in prod (SSRF), unless this is set.
+    provider_allow_private_hosts: bool = False
+    # Bearer token for GET /metrics (Prometheus). Unset: admin API key when auth is on, open otherwise.
+    metrics_token: str | None = None
+    # Multi-instance: API-only replicas set this to false; replicas that run the
+    # executor share runs through per-run ownership leases (document_runs.executor_owner).
+    # OpenTelemetry traces (needs the otel extra); exporter settings use the standard OTEL_* variables.
+    otel_traces_enabled: bool = False
+    run_executor_enabled: bool = True
+    run_ownership_ttl_seconds: int = 30
+    # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
+    frontend_dist_dir: Path | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"
@@ -77,9 +114,17 @@ class Settings(BaseSettings):
     translation_max_retries: int = 1
     translation_retry_backoff_seconds: float = 1.5
     translation_max_output_tokens: int = 8192
+    # Output guardrail: how many times a rejected worker answer (coverage gap,
+    # echoed source, empty or implausibly sized translation) is sent back to
+    # the model for correction within the same packet turn. 0 disables repair;
+    # the last answer is then persisted with its error_code as before.
+    translation_max_output_repairs: int = 1
     translation_input_cache_hit_cost_per_1m_tokens: float | None = None
     translation_input_cost_per_1m_tokens: float | None = None
     translation_output_cost_per_1m_tokens: float | None = None
+    # Prepaid organisations are charged the provider cost of their calls times this
+    # (1.0 passes the cost through; 1.5 adds a 50% margin).
+    billing_price_multiplier: float = Field(default=1.0, gt=0)
     translation_openai_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
@@ -98,6 +143,11 @@ class Settings(BaseSettings):
     # only respond reliably with stream=true. Enabling this flag makes the
     # client send SSE and reassemble locally.
     translation_openai_streaming: bool = False
+    # "json_object" (default, schema in prompt) or "json_schema" (constrained decoding).
+    translation_openai_structured_output_mode: str = "json_object"
+    # Extra top-level request fields for the OpenAI-compatible client, as JSON in
+    # BOOK_AGENT_TRANSLATION_OPENAI_REQUEST_OVERRIDES, e.g. '{"thinking": {"type": "disabled"}}'.
+    translation_openai_request_overrides: dict[str, Any] = Field(default_factory=dict)
 
     # Figure clustering pass — see book_agent.domain.structure.figure_clustering
     # for the algorithm and full docstring on each tunable. All distances
@@ -110,6 +160,13 @@ class Settings(BaseSettings):
     figure_cluster_max_prose_neighbors_in_zone: int = 1
     figure_cluster_inline_absorb_requires_inside_anchor: bool = True
     figure_cluster_min_anchor_area_pt2: float = 1800.0
+    # PDF OCR. Re-extract pages that fail the text-layer sanity gate through
+    # Surya OCR, and runtime knobs for the Surya subprocess.
+    pdf_sanity_ocr_reextraction: bool = False
+    ocr_status_path: str | None = None
+    ocr_heartbeat_seconds: float = 5.0
+    ocr_max_runtime_seconds: float | None = None
+    ocr_chunk_page_count: int = 32
 
     model_config = SettingsConfigDict(
         env_prefix="BOOK_AGENT_",
@@ -134,6 +191,24 @@ class Settings(BaseSettings):
             dotenv_settings,
             file_secret_settings,
         )
+
+    @field_validator("bootstrap_source_roots", mode="before")
+    @classmethod
+    def _parse_bootstrap_source_roots(cls, value: Any) -> list[Path]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [Path(part.strip()) for part in value.split(",") if part.strip()]
+        return [Path(item) for item in value]
+
+    @property
+    def auth_enabled(self) -> bool:
+        return self.auth_mode.strip().lower() == "api_key"
+
+    @property
+    def hardened(self) -> bool:
+        """Deployment guards (path and SSRF checks) apply with auth on or in prod."""
+        return self.auth_enabled or self.app_scope == AppScope.PROD
 
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
@@ -176,3 +251,30 @@ def validate_app_scope(settings: Settings) -> None:
             f"(got {url!r}). Non-sqlite URLs are refused to prevent "
             "tempdir-rooted ExportRecords from polluting shared databases."
         )
+    if settings.app_scope in {AppScope.DEV, AppScope.PROD} and not url.startswith("postgresql"):
+        raise AppScopeViolation(
+            f"app_scope={settings.app_scope.value} requires a PostgreSQL database_url "
+            f"(got {url.split(':', 1)[0]!r}). SQLite is only supported by unit tests and "
+            "the smoke/e2e scopes."
+        )
+    if settings.auth_mode.strip().lower() not in {"disabled", "api_key"}:
+        raise AppScopeViolation(f"auth_mode must be 'disabled' or 'api_key' (got {settings.auth_mode!r}).")
+    if settings.oidc_issuer and not settings.oidc_audience:
+        raise AppScopeViolation("oidc_issuer needs oidc_audience: tokens minted for other clients must not be accepted.")
+    if settings.oidc_default_role and settings.oidc_default_role not in {"viewer", "editor", "admin"}:
+        raise AppScopeViolation("oidc_default_role must be viewer, editor or admin.")
+    if settings.app_scope == AppScope.PROD and not settings.auth_enabled:
+        raise AppScopeViolation(
+            "app_scope=prod refuses auth_mode=disabled; set BOOK_AGENT_AUTH_MODE=api_key and create a key "
+            "with book-agent create-api-key."
+        )
+    if settings.app_scope == AppScope.PROD:
+        backend = (settings.translation_backend or "").lower().strip()
+        if backend == "echo":
+            # Echo copies the source text as the "translation". Fine for
+            # pipelines under test; in production it would silently produce
+            # an untranslated book.
+            raise AppScopeViolation(
+                "app_scope=prod refuses translation_backend=echo; configure an "
+                "OpenAI-compatible provider (BOOK_AGENT_TRANSLATION_BACKEND=openai_compatible)."
+            )

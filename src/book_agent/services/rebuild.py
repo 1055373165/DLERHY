@@ -198,7 +198,7 @@ class TargetedRebuildService:
             ],
             now=now,
         ):
-            self.session.merge(audit)
+            self.session.add(audit)
 
         self.session.flush()
         return TargetedRebuildArtifacts(
@@ -209,6 +209,50 @@ class TargetedRebuildService:
             termbase_version=termbase_snapshot.version,
             entity_snapshot_version=entity_snapshot.version,
         )
+
+    def rebuild_packets(self, document_id: str, chapter_id: str, packet_ids: list[str]) -> list[TranslationPacket]:
+        """Rebuild packets in place from the chapter's current blocks and active sentences.
+
+        Used by the parse-revision fork after re-segmentation: packet ids stay,
+        their JSON and sentence maps follow the new sentence set.
+        """
+        if not packet_ids:
+            return []
+        bundle = self.bootstrap_repository.load_document_bundle(document_id)
+        chapter_bundle = self._find_chapter_bundle(bundle.chapters, chapter_id)
+        if chapter_bundle is None or bundle.book_profile is None:
+            raise ValueError(f"cannot rebuild packets: chapter {chapter_id} or book profile missing")
+        snapshots = {
+            name: self._latest_snapshot(
+                bundle.memory_snapshots,
+                snapshot_type=snapshot_type,
+                scope_type=scope_type,
+                scope_id=scope_id,
+            )
+            for name, snapshot_type, scope_type, scope_id in (
+                ("brief", SnapshotType.CHAPTER_BRIEF, MemoryScopeType.CHAPTER, chapter_id),
+                ("termbase", SnapshotType.TERMBASE, MemoryScopeType.GLOBAL, None),
+                ("entity", SnapshotType.ENTITY_REGISTRY, MemoryScopeType.GLOBAL, None),
+            )
+        }
+        if any(snapshot is None for snapshot in snapshots.values()):
+            raise ValueError("Rebuild prerequisites are missing for chapter context.")
+        rebuilt_packets, rebuilt_maps = self._rebuild_packets(
+            document=bundle.document,
+            chapter=chapter_bundle.chapter,
+            chapter_blocks=[block for block in chapter_bundle.blocks if block.status == ArtifactStatus.ACTIVE],
+            chapter_sentences=chapter_bundle.sentences,
+            book_profile=bundle.book_profile,
+            chapter_brief=snapshots["brief"],
+            termbase_snapshot=snapshots["termbase"],
+            entity_snapshot=snapshots["entity"],
+            packet_ids=packet_ids,
+        )
+        self._replace_packet_maps([packet.id for packet in rebuilt_packets], rebuilt_maps)
+        # Return the session's instances so callers' changes (e.g. status) persist.
+        merged = [self.session.merge(packet) for packet in rebuilt_packets]
+        self.session.flush()
+        return merged
 
     def _rebuild_chapter_brief(
         self,
@@ -482,7 +526,6 @@ class TargetedRebuildService:
         for snapshot in rebuilt_snapshots:
             audits.append(
                 AuditEvent(
-                    id=stable_id("audit", "memory_snapshot", snapshot.id, "snapshot.rebuilt", issue_id),
                     object_type="memory_snapshot",
                     object_id=snapshot.id,
                     action="snapshot.rebuilt",
@@ -501,7 +544,6 @@ class TargetedRebuildService:
         for packet in rebuilt_packets:
             audits.append(
                 AuditEvent(
-                    id=stable_id("audit", "packet", packet.id, "packet.rebuilt", issue_id),
                     object_type="packet",
                     object_id=packet.id,
                     action="packet.rebuilt",

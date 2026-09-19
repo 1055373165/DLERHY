@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for M3.4 image / figure modality."""
 
-import os
 import sys
 import unittest
 from pathlib import Path

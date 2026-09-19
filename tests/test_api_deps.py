@@ -69,13 +69,7 @@ class ApiDepsTests(unittest.TestCase):
         self.assertIs(captured["factory"], session_factory)
         self.assertTrue(captured["commit_on_exit"])
 
-    def test_sqlite_database_locked_error_message_is_specific(self) -> None:
-        exc = OperationalError("SELECT 1", {}, Exception("database is locked"))
-        detail = _database_error_detail(dialect_name="sqlite", exc=exc)
-        self.assertIn("SQLite is busy", detail)
-        self.assertNotIn("BOOK_AGENT_DATABASE_URL", detail)
-
-    def test_non_sqlite_database_error_message_keeps_pg_guidance(self) -> None:
+    def test_database_error_message_keeps_pg_guidance(self) -> None:
         exc = OperationalError("SELECT 1", {}, Exception("connection refused"))
-        detail = _database_error_detail(dialect_name="postgresql", exc=exc)
+        detail = _database_error_detail(exc=exc)
         self.assertIn("BOOK_AGENT_DATABASE_URL", detail)

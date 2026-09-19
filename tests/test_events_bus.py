@@ -63,7 +63,10 @@ class TestEventsBus:
             assert reread.kind == "run.created"
             assert reread.payload == {"hello": "world"}
             assert reread.actor_kind == "system"
-            assert reread.org_id == "default"
+            # An event about nothing owned belongs to the default organisation (by id; older rows say "default").
+            from book_agent.domain.models.auth import DEFAULT_ORG_ID
+
+            assert reread.org_id == DEFAULT_ORG_ID
 
     def test_unknown_kind_is_rejected_before_insert(self, pg_engine) -> None:
         with Session(pg_engine) as session:

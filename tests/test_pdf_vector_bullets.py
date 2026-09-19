@@ -1,0 +1,105 @@
+"""Lists that reach the text layer as a single text block.
+
+Some converters draw list bullets as small filled circles; the text layer then
+holds only the item text, so a whole list arrived as a single paragraph with
+items run together. Items are now split at lines preceded by such a mark. A
+block whose every line is the next number of an enumeration ("1. ...", "2. ...")
+is split into items too, including numbers set in their own column, which the
+text layer returns as separate "1." lines.
+"""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+import fitz
+
+from book_agent.domain.enums import BlockType
+from book_agent.domain.structure.pdf import PDFParser
+
+
+def _write_vector_bullet_pdf(path: Path) -> None:
+    document = fitz.open()
+    document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+    page = document.new_page()
+    page.insert_text((72, 100), "The indicator panel has three zones that every trader should learn to read quickly.")
+    items = [
+        ["The shaded area from 30 to 70 shows the normal range, where the reading is neither", "overbought nor oversold."],
+        ["Readings below 30 are considered oversold."],
+        ["The centre line sits at 50, the exact middle of the scale."],
+    ]
+    y = 124.0
+    for item in items:
+        page.draw_circle((78.5, y - 3.5), 1.5, color=None, fill=(0, 0, 0))
+        for line in item:
+            page.insert_text((90, y), line)
+            y += 12
+    page.insert_text((72, y + 14), "Now we will watch how the line moves between these zones on a daily chart.")
+    document.save(path)
+
+
+class VectorBulletListTest(unittest.TestCase):
+    def test_vector_bullets_split_block_into_list_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "bullets.pdf"
+            _write_vector_bullet_pdf(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        blocks = [(block.block_type, block.text) for chapter in parsed.chapters for block in chapter.blocks]
+        self.assertIn(
+            (BlockType.PARAGRAPH.value, "The indicator panel has three zones that every trader should learn to read quickly."),
+            blocks,
+        )
+        self.assertEqual(
+            [text for block_type, text in blocks if block_type == BlockType.LIST_ITEM.value],
+            [
+                "• The shaded area from 30 to 70 shows the normal range, where the reading is neither\n"
+                "overbought nor oversold.",
+                "• Readings below 30 are considered oversold.",
+                "• The centre line sits at 50, the exact middle of the scale.",
+            ],
+        )
+        self.assertIn(
+            (BlockType.PARAGRAPH.value, "Now we will watch how the line moves between these zones on a daily chart."),
+            blocks,
+        )
+
+    def test_block_of_consecutively_numbered_lines_splits_into_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "numbered.pdf"
+            document = fitz.open()
+            document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+            page = document.new_page()
+            page.insert_text((72, 100), "In this chapter, we will discuss the signals that can be used for trading purposes:")
+            titles = ["Tops and Bottoms", "Failure Swings", "Support and Resistance", "Centreline Crossover", "Range Shift",
+                      "Channels", "Chart Patterns", "Average Crossover", "Divergences", "Reversals"]
+            for index, title in enumerate(titles, start=1):
+                page.insert_text((72, 120 + 12 * index), f"{index}. {title}")
+            document.save(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        items = [block.text for chapter in parsed.chapters for block in chapter.blocks if block.block_type == BlockType.LIST_ITEM.value]
+        self.assertEqual(items, [f"{index}. {title}" for index, title in enumerate(titles, start=1)])
+
+    def test_numbers_in_their_own_column_join_their_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "columns.pdf"
+            document = fitz.open()
+            document.new_page().insert_text((72, 200), "Momentum Trading Notes", fontname="hebo", fontsize=24)
+            page = document.new_page()
+            page.insert_text((72, 100), "Popular strategies that combine the indicator with other tools:", fontsize=10)
+            titles = ["RSI + Support/Resistance Level", "Vanilla RSI", "2-period RSI", "Centreline Crossover"]
+            for index, title in enumerate(titles, start=1):
+                page.insert_text((90, 120 + 12 * index), f"{index}.", fontsize=10)
+                page.insert_text((130, 120 + 12 * index), title, fontsize=10)
+            document.save(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        items = [block.text for chapter in parsed.chapters for block in chapter.blocks if block.block_type == BlockType.LIST_ITEM.value]
+        self.assertEqual(items, [f"{index}. {title}" for index, title in enumerate(titles, start=1)])
+
+
+if __name__ == "__main__":
+    unittest.main()

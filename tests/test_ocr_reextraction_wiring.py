@@ -12,9 +12,7 @@ Three paths are exercised end-to-end through the synthetic PUA fixture:
      PROVENANCE_OCR, and reextracted_via tag is stamped.
 """
 
-import os
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -26,21 +24,14 @@ if str(SRC) not in sys.path:
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.models import (
     PROVENANCE_OCR,
-    PROVENANCE_TEXT_LAYER,
-    ParsedBlock,
     ParsedChapter,
 )
-from book_agent.domain.structure.ocr_reextraction import (
+from book_agent.ingestion.pdf.ocr_reextraction import (
     NoOpOcrReextractionAdapter,
-    OcrReextractionAdapter,
     OcrReextractionRequest,
 )
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PdfPage,
-    PdfStructureRecoveryService,
-    _RecoveredBlock,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import PdfFileProfile, PdfPage, _RecoveredBlock
 
 
 def _mk_recovered_block(ordinal: int, page_number: int, text: str) -> _RecoveredBlock:

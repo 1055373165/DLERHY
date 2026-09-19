@@ -11,7 +11,6 @@ The suite exercises `derive_translatability` directly (the single source
 of truth bridging DocIR with the existing `block_rules` decision layer).
 """
 
-import os
 import sys
 import unittest
 from pathlib import Path

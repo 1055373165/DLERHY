@@ -7,7 +7,6 @@ deterministically. We use a tiny real PDF (the clean_book golden fixture)
 only so the subset-PDF construction step has real bytes to slice.
 """
 
-import os
 import sys
 import tempfile
 import unittest
@@ -18,15 +17,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.structure.ocr_reextraction import (
+from book_agent.ingestion.pdf.ocr_reextraction import (
     OcrReextractionRequest,
 )
-from book_agent.domain.structure.pdf import (
-    PdfExtraction,
-    PdfPage,
-    PdfTextBlock,
-)
-from book_agent.domain.structure.surya_reextraction import (
+from book_agent.ingestion.pdf.models import PdfExtraction, PdfPage, PdfTextBlock
+from book_agent.ingestion.pdf.surya_reextraction import (
     SuryaOcrReextractionAdapter,
     _normalize_bbox,
     _overlap_fraction,

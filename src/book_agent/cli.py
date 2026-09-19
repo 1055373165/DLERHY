@@ -9,10 +9,18 @@ from typing import Any
 from book_agent.core.config import get_settings
 from book_agent.domain.enums import ExportType
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.services.glossary_extraction import (
+    GlossaryExtractionService,
+    read_glossary_csv,
+    write_glossary_csv,
+)
+from book_agent.services.glossary_service import GlossaryService
+from book_agent.services.term_consistency import (
+    TermConsistencyService,
+    render_consistency_report_markdown,
+)
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.tools.forge_migrate import migrate_autopilot_round_to_forge
-from book_agent.tools.forge_supervisor import run_supervisor_loop, run_supervisor_once
-from book_agent.workers.factory import build_translation_worker
+from book_agent.workers.factory import resolve_translation_worker
 
 
 def _json_default(value: Any) -> Any:
@@ -62,57 +70,62 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_pdf_structure.add_argument("--document-id", required=True)
     refresh_pdf_structure.add_argument("--chapter-id", action="append", default=[])
 
+    glossary_extract = subparsers.add_parser(
+        "glossary-extract",
+        help="Propose a book-wide glossary with the translation provider and write it as a CSV for review",
+    )
+    glossary_extract.add_argument("--document-id", required=True)
+    glossary_extract.add_argument("--output", required=True, help="CSV path to write")
+    glossary_extract.add_argument("--max-chunk-chars", type=int, default=12000)
+
+    glossary_lock = subparsers.add_parser(
+        "glossary-lock",
+        help="Lock the glossary rows marked in a reviewed CSV (review then flags and reruns conflicts)",
+    )
+    glossary_lock.add_argument("--document-id", required=True)
+    glossary_lock.add_argument("--input", required=True, help="Reviewed CSV from glossary-extract")
+
+    term_consistency = subparsers.add_parser(
+        "term-consistency",
+        help="Unify terminology across a translated document (extract, decide, minimally edit, lock, report)",
+    )
+    term_consistency.add_argument("--document-id", required=True)
+    term_consistency.add_argument("--report", required=True, help="Markdown report path")
+    term_consistency.add_argument("--dry-run", action="store_true", help="Measure and propose without editing or locking")
+
+    api_key = subparsers.add_parser(
+        "create-api-key",
+        help="Create an API key (and its organisation if missing); prints the key once",
+    )
+    api_key.add_argument("--name", required=True)
+    api_key.add_argument("--role", choices=["viewer", "editor", "admin"], default="admin")
+    api_key.add_argument("--org", default="default", help="Organisation name; created if missing")
+
+    subparsers.add_parser(
+        "mcp",
+        help="Serve book-agent's read and reversible tools over MCP (stdio) for Claude Code, Codex and other clients",
+    )
+
+    org_budget = subparsers.add_parser("set-org-budget", help="Set or clear an organisation's monthly model budget (USD)")
+    org_budget.add_argument("--org", required=True, help="Organisation name")
+    org_budget.add_argument("--monthly-usd", required=True, help="Amount in USD, or 'none' to remove the cap")
+
+    org_credit = subparsers.add_parser(
+        "add-org-credit", help="Credit an organisation's prepaid balance (USD), e.g. after a bank transfer"
+    )
+    org_credit.add_argument("--org", required=True, help="Organisation name")
+    org_credit.add_argument("--usd", required=True, type=float, help="Amount; negative only with --kind refund/adjustment")
+    org_credit.add_argument("--kind", default="top_up", choices=["top_up", "refund", "adjustment"])
+    org_credit.add_argument("--reference", default=None, help="Payment id; the same reference twice credits once")
+    org_credit.add_argument("--note", default=None)
+
+    evaluate = subparsers.add_parser("eval", help="Run the release evals (evals/README.md) and write a report")
+    evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
+    evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
-
-    forge_supervisor = subparsers.add_parser(
-        "forge-supervisor",
-        help="Run the real Forge supervisor against a .forge workspace",
-    )
-    forge_supervisor.add_argument(
-        "--workspace",
-        default=".",
-        help="Workspace root containing .forge/",
-    )
-    forge_supervisor.add_argument(
-        "--codex-command",
-        action="append",
-        default=[],
-        help="Override the codex launcher command, one token per flag occurrence",
-    )
-    forge_supervisor.add_argument(
-        "--codex-reasoning-effort",
-        default="high",
-        help="Reasoning effort override applied to spawned `codex exec` child runs",
-    )
-    forge_supervisor.add_argument(
-        "--cooldown-seconds",
-        type=float,
-        default=15.0,
-        help="Cooldown before spawning the same supervisor reason again",
-    )
-    forge_supervisor_sub = forge_supervisor.add_subparsers(dest="forge_supervisor_command", required=True)
-
-    forge_supervisor_once = forge_supervisor_sub.add_parser("once", help="Run one supervisor harvest/dispatch tick")
-
-    forge_supervisor_loop = forge_supervisor_sub.add_parser("loop", help="Run the supervisor loop continuously")
-    forge_supervisor_loop.add_argument(
-        "--poll-interval-seconds",
-        type=float,
-        default=5.0,
-        help="Polling interval for the continuous supervisor loop",
-    )
-
-    forge_migrate = subparsers.add_parser(
-        "forge-migrate-autopilot",
-        help="Import an in-flight .autopilot round into .forge and sync the Forge framework docs",
-    )
-    forge_migrate.add_argument(
-        "--workspace",
-        default=".",
-        help="Workspace root containing the source .autopilot directory",
-    )
 
     return parser
 
@@ -121,41 +134,84 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "forge-supervisor":
-        codex_command = args.codex_command or None
-        if args.forge_supervisor_command == "once":
-            _dump(
-                run_supervisor_once(
-                    args.workspace,
-                    codex_command=codex_command,
-                    codex_reasoning_effort=args.codex_reasoning_effort,
-                    cooldown_seconds=args.cooldown_seconds,
-                )
-            )
-            return 0
-        if args.forge_supervisor_command == "loop":
-            run_supervisor_loop(
-                args.workspace,
-                codex_command=codex_command,
-                codex_reasoning_effort=args.codex_reasoning_effort,
-                cooldown_seconds=args.cooldown_seconds,
-                poll_interval_seconds=args.poll_interval_seconds,
-            )
-            return 0
-    if args.command == "forge-migrate-autopilot":
-        _dump(migrate_autopilot_round_to_forge(args.workspace))
-        return 0
-
     settings = get_settings()
     session_factory = build_session_factory(database_url=args.database_url or settings.database_url)
     export_root = args.export_root or str(settings.export_root)
-    translation_worker = build_translation_worker(settings)
+
+    if args.command == "eval":
+        from datetime import datetime, timezone
+
+        from book_agent.evals.runner import REPO_ROOT, run_evals
+
+        output = Path(args.output) if args.output else REPO_ROOT / "evals" / "reports" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        try:
+            report = run_evals(args.suite, output_dir=output, settings=settings)
+        except ValueError as exc:
+            parser.error(str(exc))
+        _dump(
+            {
+                "output": str(output),
+                "passed": report["passed"],
+                "suites": {suite["suite"]: {"passed": suite["passed"], "metrics": suite["metrics"]} for suite in report["suites"]},
+            }
+        )
+        return 0 if report["passed"] else 1
+
+    if args.command == "mcp":
+        from book_agent.mcp.server import McpServer
+
+        McpServer(session_factory).serve()
+        return 0
 
     with session_scope(session_factory) as session:
+        if args.command == "create-api-key":
+            from book_agent.services.api_keys import ApiKeyService
+
+            service = ApiKeyService(session)
+            org = service.ensure_org(args.org)
+            created = service.create(org_id=org.id, name=args.name, role=args.role)
+            _dump({"org": org.name, "org_id": org.id, "name": created.key.name, "role": created.key.role, "key": created.plaintext})
+            return 0
+        if args.command == "set-org-budget":
+            from sqlalchemy import select
+
+            from book_agent.domain.models.auth import Org
+            from book_agent.services.org_budget import budget_status, set_monthly_budget
+
+            org = session.scalar(select(Org).where(Org.name == args.org))
+            if org is None:
+                parser.error(f"unknown organisation: {args.org}")
+            amount = None if str(args.monthly_usd).strip().lower() == "none" else float(args.monthly_usd)
+            set_monthly_budget(session, org.id, amount)
+            _dump(budget_status(session, org.id).to_json())
+            return 0
+        if args.command == "add-org-credit":
+            from sqlalchemy import select
+
+            from book_agent.domain.models.auth import Org
+            from book_agent.services.prepaid_credit import add_credit, credit_status
+
+            org = session.scalar(select(Org).where(Org.name == args.org))
+            if org is None:
+                parser.error(f"unknown organisation: {args.org}")
+            try:
+                _, created = add_credit(
+                    session, org.id, args.usd, kind=args.kind, reference=args.reference, note=args.note, created_by="cli"
+                )
+            except ValueError as exc:
+                parser.error(str(exc))
+            _dump(
+                {
+                    "created": created,
+                    **credit_status(session, org.id, price_multiplier=settings.billing_price_multiplier).to_json(),
+                }
+            )
+            return 0
         service = DocumentWorkflowService(
             session,
             export_root=export_root,
-            translation_worker=translation_worker,
+            # Same resolution as the API: the active stored credential, else settings.
+            translation_worker=resolve_translation_worker(session, settings),
         )
 
         if args.command == "bootstrap":
@@ -190,6 +246,57 @@ def main(argv: list[str] | None = None) -> int:
                         chapter_ids=(args.chapter_id or None),
                     )
                 )
+            )
+            return 0
+        if args.command == "glossary-extract":
+            worker = service.translation_service.worker
+            client = getattr(worker, "client", None)
+            if client is None or not hasattr(client, "generate_structured_object"):
+                parser.error("glossary-extract needs an LLM translation provider; the echo worker cannot propose terms.")
+            result = GlossaryExtractionService(
+                session, client, model_name=worker.metadata().model_name
+            ).extract(args.document_id, max_chunk_chars=args.max_chunk_chars)
+            write_glossary_csv(args.output, result.suggestions)
+            _dump(
+                {
+                    "output": args.output,
+                    "term_count": len(result.suggestions),
+                    "chunk_count": result.chunk_count,
+                    "proposed_term_count": result.proposed_term_count,
+                    "dropped_absent_terms": result.dropped_absent_terms,
+                    "token_in": result.token_in,
+                    "token_out": result.token_out,
+                }
+            )
+            return 0
+        if args.command == "glossary-lock":
+            glossary = GlossaryService(session)
+            rows = read_glossary_csv(args.input)
+            for row in rows:
+                glossary.lock_term(args.document_id, row.source_term, row.target_term, term_type=row.term_type)
+            _dump({"locked_term_count": len(rows)})
+            return 0
+        if args.command == "term-consistency":
+            worker = service.translation_service.worker
+            client = getattr(worker, "client", None)
+            if client is None or not hasattr(client, "generate_structured_object"):
+                parser.error("term-consistency needs an LLM translation provider; the echo worker cannot edit terms.")
+            report = TermConsistencyService(session, client, model_name=worker.metadata().model_name).run(
+                args.document_id, apply=not args.dry_run
+            )
+            Path(args.report).write_text(render_consistency_report_markdown(report), encoding="utf-8")
+            _dump(
+                {
+                    "report": args.report,
+                    "consistency_before": report.consistency(after=False),
+                    "consistency_after": report.consistency(after=True),
+                    "edited_segments": report.edited_segments,
+                    "harmonized_terms": len(report.harmonized_decisions),
+                    "skipped_terms": len(report.decisions) - len(report.harmonized_decisions),
+                    "locked_terms": report.locked_term_count,
+                    "token_in": report.token_in,
+                    "token_out": report.token_out,
+                }
             )
             return 0
         if args.command == "execute-action":

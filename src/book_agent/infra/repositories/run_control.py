@@ -2,20 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
-from book_agent.domain.enums import PacketStatus, WorkItemScopeType, WorkItemStage, WorkItemStatus, WorkerLeaseStatus
+from book_agent.domain.enums import (
+    DocumentRunStatus,
+    PacketStatus,
+    WorkItemScopeType,
+    WorkItemStage,
+    WorkItemStatus,
+    WorkerLeaseStatus,
+)
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
 from book_agent.domain.models import Chapter, Document
+from book_agent.domain.models.ops import Event
 from book_agent.domain.models.ops import (
-    ChapterRun,
     DocumentRun,
-    PacketTask,
-    ReviewSession,
     RunAuditEvent,
     RunBudget,
-    RuntimeCheckpoint,
     WorkItem,
     WorkerLease,
 )
@@ -30,6 +36,17 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
+# Retry policy for RETRYABLE_FAILED work items; tests may set the base to 0.
+RETRY_BACKOFF_BASE_SECONDS = 2.0
+RETRY_BACKOFF_MAX_SECONDS = 300.0
+
+
+def retry_backoff_seconds(attempt: int) -> float:
+    if RETRY_BACKOFF_BASE_SECONDS <= 0:
+        return 0.0
+    return min(RETRY_BACKOFF_MAX_SECONDS, RETRY_BACKOFF_BASE_SECONDS * (2 ** max(0, attempt - 1)))
+
+
 @dataclass(slots=True)
 class RunEventPageBundle:
     total_count: int
@@ -40,6 +57,10 @@ class RunEventPageBundle:
 class ClaimedWorkItemBundle:
     work_item: WorkItem
     worker_lease: WorkerLease
+
+
+class LeaseLostError(ValueError):
+    """The worker no longer holds the lease for its work item (expired or reclaimed)."""
 
 
 class RunControlRepository:
@@ -54,6 +75,36 @@ class RunControlRepository:
 
     def get_run(self, run_id: str) -> DocumentRun:
         run = self.session.get(DocumentRun, run_id)
+        if run is None:
+            raise ValueError(f"Document run not found: {run_id}")
+        return run
+
+    def get_run_for_update(self, run_id: str) -> DocumentRun:
+        """Load the run with a row lock held until the transaction ends.
+
+        Every writer of a run's status or status_detail_json reads it through
+        here, so concurrent read-modify-write cycles (usage counters, pipeline
+        cache, status transitions) serialize instead of overwriting each
+        other. Lock the run before touching its work items to keep one lock
+        order.
+        """
+        # Flush first so refreshing the locked row cannot discard pending changes.
+        self.session.flush()
+        # A no-op UPDATE takes the write lock up front: a row lock on PostgreSQL,
+        # and on SQLite (which ignores FOR UPDATE) the database write lock, so
+        # the read below cannot be overtaken by another writer's commit.
+        self.session.execute(
+            update(DocumentRun)
+            .where(DocumentRun.id == run_id)
+            .values(updated_at=DocumentRun.updated_at)
+            .execution_options(synchronize_session=False)
+        )
+        run = self.session.scalar(
+            select(DocumentRun)
+            .where(DocumentRun.id == run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if run is None:
             raise ValueError(f"Document run not found: {run_id}")
         return run
@@ -206,6 +257,74 @@ class RunControlRepository:
         self.session.flush()
         return created
 
+    def usage_from_events(self, run_id: str) -> dict[str, Any]:
+        """Tokens, cost and latency of every completed model call attributed to the run.
+
+        The ``llm.call.completed`` events are the only ledger of provider
+        spend; run summaries, budget guardrails and the cost endpoint all read
+        this so there is exactly one number for what a run has cost.
+        """
+        token_in = func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0)
+        token_out = func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0)
+        total_tokens = func.coalesce(func.sum(Event.payload["total_tokens"].as_integer()), 0)
+        cost_usd = func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)
+        latency_ms = func.coalesce(func.sum(Event.payload["latency_ms"].as_integer()), 0)
+        row = self.session.execute(
+            select(
+                func.count(Event.id),
+                token_in,
+                token_out,
+                total_tokens,
+                cost_usd,
+                latency_ms,
+                func.min(Event.occurred_at),
+                func.max(Event.occurred_at),
+            ).where(Event.kind.in_([LLM_CALL_COMPLETED, LLM_CALL_FAILED]), Event.run_id == str(run_id))
+        ).one()
+        failed_calls = self.session.scalar(
+            select(func.count(Event.id)).where(Event.kind == LLM_CALL_FAILED, Event.run_id == str(run_id))
+        ) or 0
+        return {
+            # Failed calls are counted and their tokens (a billed but unusable answer) included.
+            "call_count": int(row[0] or 0),
+            "failed_call_count": int(failed_calls),
+            "token_in": int(row[1] or 0),
+            "token_out": int(row[2] or 0),
+            "total_tokens": int(row[3] or 0),
+            "cost_usd": round(float(row[4] or 0.0), 8),
+            "latency_ms": int(row[5] or 0),
+            "first_call_at": row[6],
+            "last_call_at": row[7],
+        }
+
+    def usage_by_chapter_from_events(self, run_id: str) -> list[dict[str, Any]]:
+        token_in = func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0)
+        token_out = func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0)
+        total_tokens = func.coalesce(func.sum(Event.payload["total_tokens"].as_integer()), 0)
+        cost_usd = func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)
+        rows = self.session.execute(
+            select(Event.chapter_id, func.count(Event.id), token_in, token_out, total_tokens, cost_usd)
+            .where(
+                Event.kind == LLM_CALL_COMPLETED,
+                Event.run_id == str(run_id),
+                Event.chapter_id.is_not(None),
+            )
+            .group_by(Event.chapter_id)
+        ).all()
+        chapters = [
+            {
+                "chapter_id": row[0],
+                "call_count": int(row[1] or 0),
+                "token_in": int(row[2] or 0),
+                "token_out": int(row[3] or 0),
+                "total_tokens": int(row[4] or 0),
+                "cost_usd": round(float(row[5] or 0.0), 8),
+            }
+            for row in rows
+        ]
+        chapters.sort(key=lambda item: (-item["cost_usd"], item["chapter_id"]))
+        return chapters
+
     def count_claimable_work_items(self, run_id: str) -> int:
         stmt = select(WorkItem).where(
             WorkItem.run_id == run_id,
@@ -256,44 +375,7 @@ class RunControlRepository:
             )
         ) or 0
 
-    def count_chapter_runs_for_run(self, run_id: str) -> int:
-        return self.session.scalar(select(func.count(ChapterRun.id)).where(ChapterRun.run_id == run_id)) or 0
-
-    def count_packet_tasks_for_run(self, run_id: str) -> int:
-        return (
-            self.session.scalar(
-                select(func.count(PacketTask.id))
-                .join(ChapterRun, ChapterRun.id == PacketTask.chapter_run_id)
-                .where(ChapterRun.run_id == run_id)
-            )
-            or 0
-        )
-
-    def count_review_sessions_for_run(self, run_id: str) -> int:
-        return (
-            self.session.scalar(
-                select(func.count(ReviewSession.id))
-                .join(ChapterRun, ChapterRun.id == ReviewSession.chapter_run_id)
-                .where(ChapterRun.run_id == run_id)
-            )
-            or 0
-        )
-
-    def count_runtime_checkpoints_for_run(self, run_id: str) -> int:
-        return (
-            self.session.scalar(
-                select(func.count(RuntimeCheckpoint.id)).where(RuntimeCheckpoint.run_id == run_id)
-            )
-            or 0
-        )
-    def list_claimable_work_item_ids(
-        self,
-        run_id: str,
-        *,
-        stage: WorkItemStage | None = None,
-        limit: int = 32,
-    ) -> list[str]:
-        scan_limit = max(limit * 8, limit)
+    def claimable_work_items_statement(self, run_id: str, *, stage: WorkItemStage | None, scan_limit: int):
         stmt = (
             select(WorkItem)
             .where(
@@ -302,9 +384,23 @@ class RunControlRepository:
             )
             .order_by(WorkItem.priority.asc(), WorkItem.created_at.asc(), WorkItem.id.asc())
             .limit(scan_limit)
+            # PostgreSQL: rows another transaction is claiming are skipped instead of
+            # contended for; the claim CAS stays the correctness guard. SQLite renders
+            # no FOR clause (it serialises writers anyway).
+            .with_for_update(skip_locked=True)
         )
         if stage is not None:
             stmt = stmt.where(WorkItem.stage == stage)
+        return stmt
+
+    def list_claimable_work_item_ids(
+        self,
+        run_id: str,
+        *,
+        stage: WorkItemStage | None = None,
+        limit: int = 32,
+    ) -> list[str]:
+        stmt = self.claimable_work_items_statement(run_id, stage=stage, scan_limit=max(limit * 8, limit))
         now = _utcnow()
         claimable_ids: list[str] = []
         for work_item in self.session.scalars(stmt).all():
@@ -395,63 +491,16 @@ class RunControlRepository:
             return True
         if work_item.status != WorkItemStatus.RETRYABLE_FAILED:
             return False
-        retry_after_seconds = self._retry_after_seconds_for_work_item(work_item)
-        released_at = _ensure_utc(work_item.finished_at)
-        if retry_after_seconds <= 0 or released_at is None:
+        # Exponential backoff after a failed attempt (marked by the executor), so a failure that
+        # repeats does not hammer the provider. Reclaimed leases and resumed pauses go at once.
+        if not (work_item.error_detail_json or {}).get("retry_backoff"):
             return True
-        return (released_at + timedelta(seconds=retry_after_seconds)) <= now
-
-    @staticmethod
-    def _repair_decision_for_work_item(work_item: WorkItem) -> str:
-        error_detail = dict(work_item.error_detail_json or {})
-        repair_result_json = error_detail.get("repair_result_json")
-        if not isinstance(repair_result_json, dict):
-            repair_result_json = {}
-        return str(
-            error_detail.get("repair_agent_decision")
-            or repair_result_json.get("repair_agent_decision")
-            or ""
-        ).strip()
-
-    @staticmethod
-    def _retry_after_seconds_for_work_item(work_item: WorkItem) -> int:
-        error_detail = dict(work_item.error_detail_json or {})
-        repair_result_json = error_detail.get("repair_result_json")
-        if not isinstance(repair_result_json, dict):
-            return 0
-        decision = RunControlRepository._repair_decision_for_work_item(work_item)
-        if decision != "retry_later":
-            return 0
-        return max(0, int(repair_result_json.get("repair_agent_retry_after_seconds") or 0))
-
-    def resume_repair_work_item(
-        self,
-        *,
-        work_item_id: str,
-        resumed_at: datetime,
-    ) -> WorkItem | None:
-        work_item = self.session.get(WorkItem, work_item_id)
-        if work_item is None:
-            raise ValueError(f"Work item not found: {work_item_id}")
-        if work_item.stage != WorkItemStage.REPAIR:
-            return None
-        if work_item.status not in {WorkItemStatus.TERMINAL_FAILED, WorkItemStatus.RETRYABLE_FAILED}:
-            return None
-        decision = self._repair_decision_for_work_item(work_item)
-        if decision not in {"manual_escalation_required", "retry_later"}:
-            return None
-        work_item.status = WorkItemStatus.PENDING
-        work_item.attempt = int(work_item.attempt or 0) + 1
-        work_item.started_at = None
-        work_item.finished_at = None
-        work_item.last_heartbeat_at = resumed_at
-        work_item.lease_owner = None
-        work_item.lease_expires_at = None
-        work_item.error_class = None
-        work_item.error_detail_json = {}
-        work_item.output_artifact_refs_json = {}
-        self.session.flush()
-        return work_item
+        failed_at = work_item.updated_at
+        if failed_at is None:
+            return True
+        if failed_at.tzinfo is None:
+            failed_at = failed_at.replace(tzinfo=timezone.utc)
+        return now >= failed_at + timedelta(seconds=retry_backoff_seconds(int(work_item.attempt or 1)))
 
     def get_active_lease_by_token(self, lease_token: str) -> WorkerLease:
         lease = self.session.scalar(
@@ -461,7 +510,26 @@ class RunControlRepository:
             )
         )
         if lease is None:
-            raise ValueError(f"Active worker lease not found: {lease_token}")
+            raise LeaseLostError(f"Active worker lease not found: {lease_token}")
+        return lease
+
+    def lock_active_lease(self, lease_token: str) -> WorkerLease:
+        """Lock the active lease row until the current transaction ends.
+
+        Committing a worker's results while holding this lock means a
+        concurrent lease reclaim waits for the commit instead of handing the
+        work item to another worker mid-write.
+        """
+        lease = self.session.scalar(
+            select(WorkerLease)
+            .where(
+                WorkerLease.lease_token == lease_token,
+                WorkerLease.status == WorkerLeaseStatus.ACTIVE,
+            )
+            .with_for_update()
+        )
+        if lease is None:
+            raise LeaseLostError(f"Active worker lease not found: {lease_token}")
         return lease
 
     def mark_work_item_running(
@@ -601,6 +669,34 @@ class RunControlRepository:
         if result.rowcount != 1:
             return None
         return self.session.get(WorkItem, lease.work_item_id)
+
+    def list_run_ids_with_expired_active_leases(
+        self,
+        *,
+        expired_before: datetime,
+        excluding_statuses: tuple[DocumentRunStatus, ...] = (
+            DocumentRunStatus.RUNNING,
+            DocumentRunStatus.DRAINING,
+        ),
+    ) -> list[str]:
+        """Runs that are not being driven by a run loop but still hold expired leases.
+
+        A paused, cancelled or failed run has no loop to reap its leases, so
+        the supervisor sweeps them; otherwise a retry of the run would race
+        the old worker threads on the same packets.
+        """
+        return list(
+            self.session.scalars(
+                select(WorkerLease.run_id)
+                .join(DocumentRun, DocumentRun.id == WorkerLease.run_id)
+                .where(
+                    WorkerLease.status == WorkerLeaseStatus.ACTIVE,
+                    WorkerLease.lease_expires_at < expired_before,
+                    DocumentRun.status.not_in(list(excluding_statuses)),
+                )
+                .distinct()
+            ).all()
+        )
 
     def list_expired_active_leases(self, run_id: str, *, expired_before: datetime) -> list[WorkerLease]:
         return self.session.scalars(

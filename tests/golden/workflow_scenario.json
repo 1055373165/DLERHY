@@ -1,0 +1,2947 @@
+{
+  "action": {
+    "action_execution": {
+      "audits": [
+        {
+          "action": "packet.marked_for_realign",
+          "actor_id": "issue-action-executor",
+          "actor_type": "system",
+          "created_at": "<ts>",
+          "id": "<id24>",
+          "object_id": "<id10>",
+          "object_type": "packet",
+          "payload_json": {
+            "issue_id": "<id20>"
+          }
+        }
+      ],
+      "invalidations": [],
+      "rerun_plan": {
+        "action_type": "REALIGN_ONLY",
+        "concept_overrides": [],
+        "issue_id": "<id20>",
+        "scope_ids": [
+          "<id10>"
+        ],
+        "scope_type": "packet",
+        "style_hints": []
+      }
+    },
+    "rerun_execution": {
+      "issue_resolved": true,
+      "rebuild_artifacts": null,
+      "rerun_plan": {
+        "action_type": "REALIGN_ONLY",
+        "concept_overrides": [],
+        "issue_id": "<id20>",
+        "scope_ids": [
+          "<id10>"
+        ],
+        "scope_type": "packet",
+        "style_hints": []
+      },
+      "review_artifacts": {
+        "actions": [],
+        "issues": [],
+        "rerun_plans": [],
+        "resolved_issue_ids": [
+          "<id20>"
+        ],
+        "summary": {
+          "alignment_ok": true,
+          "blocking_issue_count": 0,
+          "coverage_ok": true,
+          "format_ok": true,
+          "format_pollution_count": 0,
+          "low_confidence_count": 0,
+          "naturalness_summary": null,
+          "term_ok": true
+        }
+      },
+      "structure_refresh_artifacts": null,
+      "translated_packet_ids": [
+        "<id10>"
+      ],
+      "translation_run_ids": []
+    }
+  },
+  "assignment": {
+    "assigned_at": "<ts>",
+    "assigned_by": "golden-lead",
+    "assignment_id": "<id22>",
+    "chapter_id": "<id13>",
+    "created_at": "<ts>",
+    "document_id": "<id1>",
+    "note": "take this",
+    "owner_name": "golden-owner",
+    "updated_at": "<ts>"
+  },
+  "assignment_cleared": {
+    "assigned_at": "<ts>",
+    "assigned_by": "golden-lead",
+    "assignment_id": "<id22>",
+    "chapter_id": "<id13>",
+    "created_at": "<ts>",
+    "document_id": "<id1>",
+    "note": "take this",
+    "owner_name": "golden-owner",
+    "updated_at": "<ts>"
+  },
+  "bilingual_export": {
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": 3,
+    "auto_followup_executions": [],
+    "auto_followup_requested": true,
+    "chapter_results": [
+      {
+        "chapter_id": "<id13>",
+        "export_id": "<id25>",
+        "export_type": "bilingual_html",
+        "file_path": "<root>/exports/<id1>/bilingual-<id13>.html",
+        "manifest_path": "<root>/exports/<id1>/bilingual-<id13>.manifest.json",
+        "status": "succeeded"
+      },
+      {
+        "chapter_id": "<id15>",
+        "export_id": "<id26>",
+        "export_type": "bilingual_html",
+        "file_path": "<root>/exports/<id1>/bilingual-<id15>.html",
+        "manifest_path": "<root>/exports/<id1>/bilingual-<id15>.manifest.json",
+        "status": "succeeded"
+      }
+    ],
+    "document_id": "<id1>",
+    "document_status": "exported",
+    "export_type": "bilingual_html",
+    "file_path": null,
+    "manifest_path": null
+  },
+  "blocked_export": {
+    "action_ids": [
+      "<id21>"
+    ],
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": [],
+    "auto_followup_requested": false,
+    "auto_followup_stop_reason": null,
+    "chapter_id": "<id13>",
+    "followup_actions": [
+      {
+        "action_id": "<id21>",
+        "action_type": "REALIGN_ONLY",
+        "issue_id": "<id20>",
+        "scope_id": "<id10>",
+        "scope_type": "packet",
+        "suggested_run_followup": true
+      }
+    ],
+    "issue_ids": [
+      "<id20>"
+    ],
+    "message": "Chapter <id13> has export-time misalignment anomalies and cannot be exported. Review issues created: <id20>."
+  },
+  "document_title": "Business Strategy Handbook",
+  "export_dashboard": {
+    "applied_export_type_filter": null,
+    "applied_status_filter": null,
+    "document_id": "<id1>",
+    "export_count": 5,
+    "export_counts_by_type": {
+      "bilingual_html": 2,
+      "merged_html": 1,
+      "review_package": 2
+    },
+    "filtered_export_count": 5,
+    "has_more": false,
+    "issue_activity_breakdown": [
+      {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      }
+    ],
+    "issue_activity_highlights": {
+      "top_blocking_entry": {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      },
+      "top_regressing_entry": null,
+      "top_resolving_entry": {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      }
+    },
+    "issue_activity_timeline": [
+      {
+        "blocking_created_issue_count": 0,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 0,
+        "estimated_open_issue_count": 0,
+        "net_issue_delta": -1,
+        "resolved_issue_count": 1,
+        "wontfix_issue_count": 0
+      },
+      {
+        "blocking_created_issue_count": 1,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 1,
+        "estimated_open_issue_count": 1,
+        "net_issue_delta": 1,
+        "resolved_issue_count": 0,
+        "wontfix_issue_count": 0
+      }
+    ],
+    "issue_chapter_breakdown": [
+      {
+        "active_blocking_issue_count": 0,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "root_cause_layer": "export",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_heatmap": [
+      {
+        "active_blocking_issue_count": 0,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "heat_level": "none",
+        "heat_score": 0,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_highlights": {
+      "top_blocking_chapter": {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_open_chapter": null,
+      "top_resolved_chapter": {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    },
+    "issue_chapter_pressure": [
+      {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_queue": [],
+    "issue_hotspots": [
+      {
+        "blocking_issue_count": 1,
+        "chapter_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "resolved_issue_count": 1,
+        "root_cause_layer": "export",
+        "triaged_issue_count": 0,
+        "wontfix_issue_count": 0
+      }
+    ],
+    "latest_export_at": "<ts>",
+    "latest_export_ids_by_type": {
+      "bilingual_html": "<id26>",
+      "merged_html": "<id27>",
+      "review_package": "<id19>"
+    },
+    "limit": null,
+    "offset": 0,
+    "record_count": 5,
+    "records": [
+      {
+        "chapter_id": null,
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": null,
+        "export_id": "<id27>",
+        "export_time_misalignment_counts": null,
+        "export_type": "merged_html",
+        "file_path": "<root>/exports/<id1>/merged-document.html",
+        "manifest_path": "<root>/exports/<id1>/merged-document.manifest.json",
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 5,
+            "succeeded_run_count": 5,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 5,
+            "succeeded_run_count": 5,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 5,
+            "succeeded_run_count": 5,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 5,
+            "succeeded_run_count": 5,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 5,
+          "succeeded_run_count": 5,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 5,
+            "succeeded_run_count": 5,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      },
+      {
+        "chapter_id": "<id15>",
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": {
+          "event_count": 0,
+          "executed_event_count": 0,
+          "last_stop_reason": null,
+          "latest_event_at": null,
+          "stop_event_count": 0
+        },
+        "export_id": "<id26>",
+        "export_time_misalignment_counts": {
+          "inactive_only_sentence_count": 0,
+          "inactive_target_segment_with_edges_count": 0,
+          "missing_target_sentence_count": 0,
+          "orphan_target_segment_count": 0
+        },
+        "export_type": "bilingual_html",
+        "file_path": "<root>/exports/<id1>/bilingual-<id15>.html",
+        "manifest_path": "<root>/exports/<id1>/bilingual-<id15>.manifest.json",
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 2,
+          "succeeded_run_count": 2,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      },
+      {
+        "chapter_id": "<id13>",
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": {
+          "event_count": 0,
+          "executed_event_count": 0,
+          "last_stop_reason": null,
+          "latest_event_at": null,
+          "stop_event_count": 0
+        },
+        "export_id": "<id25>",
+        "export_time_misalignment_counts": {
+          "inactive_only_sentence_count": 0,
+          "inactive_target_segment_with_edges_count": 0,
+          "missing_target_sentence_count": 0,
+          "orphan_target_segment_count": 0
+        },
+        "export_type": "bilingual_html",
+        "file_path": "<root>/exports/<id1>/bilingual-<id13>.html",
+        "manifest_path": "<root>/exports/<id1>/bilingual-<id13>.manifest.json",
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 3,
+          "succeeded_run_count": 3,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      },
+      {
+        "chapter_id": "<id15>",
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": {
+          "event_count": 0,
+          "executed_event_count": 0,
+          "last_stop_reason": null,
+          "latest_event_at": null,
+          "stop_event_count": 0
+        },
+        "export_id": "<id19>",
+        "export_time_misalignment_counts": {
+          "inactive_only_sentence_count": 0,
+          "inactive_target_segment_with_edges_count": 0,
+          "missing_target_sentence_count": 0,
+          "orphan_target_segment_count": 0
+        },
+        "export_type": "review_package",
+        "file_path": "<root>/exports/<id1>/review-package-<id15>.json",
+        "manifest_path": null,
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 2,
+          "succeeded_run_count": 2,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      },
+      {
+        "chapter_id": "<id13>",
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": {
+          "event_count": 0,
+          "executed_event_count": 0,
+          "last_stop_reason": null,
+          "latest_event_at": null,
+          "stop_event_count": 0
+        },
+        "export_id": "<id18>",
+        "export_time_misalignment_counts": {
+          "inactive_only_sentence_count": 0,
+          "inactive_target_segment_with_edges_count": 0,
+          "missing_target_sentence_count": 0,
+          "orphan_target_segment_count": 0
+        },
+        "export_type": "review_package",
+        "file_path": "<root>/exports/<id1>/review-package-<id13>.json",
+        "manifest_path": null,
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 3,
+          "succeeded_run_count": 3,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 3,
+            "succeeded_run_count": 3,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      }
+    ],
+    "successful_export_count": 5,
+    "total_auto_followup_executed_count": 0,
+    "translation_usage_breakdown": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    ],
+    "translation_usage_highlights": {
+      "top_cost_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_latency_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_volume_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    },
+    "translation_usage_summary": {
+      "avg_latency_ms": "<volatile>",
+      "latest_run_at": "<ts>",
+      "run_count": 5,
+      "succeeded_run_count": 5,
+      "total_cost_usd": 0.0,
+      "total_latency_ms": "<volatile>",
+      "total_token_in": 0,
+      "total_token_out": 0
+    },
+    "translation_usage_timeline": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0
+      }
+    ]
+  },
+  "export_dashboard_filtered": {
+    "applied_export_type_filter": "bilingual_html",
+    "applied_status_filter": null,
+    "document_id": "<id1>",
+    "export_count": 5,
+    "export_counts_by_type": {
+      "bilingual_html": 2,
+      "merged_html": 1,
+      "review_package": 2
+    },
+    "filtered_export_count": 2,
+    "has_more": true,
+    "issue_activity_breakdown": [
+      {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      }
+    ],
+    "issue_activity_highlights": {
+      "top_blocking_entry": {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      },
+      "top_regressing_entry": null,
+      "top_resolving_entry": {
+        "blocking_issue_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "root_cause_layer": "export",
+        "timeline": [
+          {
+            "blocking_created_issue_count": 0,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 0,
+            "estimated_open_issue_count": 0,
+            "net_issue_delta": -1,
+            "resolved_issue_count": 1,
+            "wontfix_issue_count": 0
+          },
+          {
+            "blocking_created_issue_count": 1,
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "created_issue_count": 1,
+            "estimated_open_issue_count": 1,
+            "net_issue_delta": 1,
+            "resolved_issue_count": 0,
+            "wontfix_issue_count": 0
+          }
+        ]
+      }
+    },
+    "issue_activity_timeline": [
+      {
+        "blocking_created_issue_count": 0,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 0,
+        "estimated_open_issue_count": 0,
+        "net_issue_delta": -1,
+        "resolved_issue_count": 1,
+        "wontfix_issue_count": 0
+      },
+      {
+        "blocking_created_issue_count": 1,
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "created_issue_count": 1,
+        "estimated_open_issue_count": 1,
+        "net_issue_delta": 1,
+        "resolved_issue_count": 0,
+        "wontfix_issue_count": 0
+      }
+    ],
+    "issue_chapter_breakdown": [
+      {
+        "active_blocking_issue_count": 0,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "root_cause_layer": "export",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_heatmap": [
+      {
+        "active_blocking_issue_count": 0,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "heat_level": "none",
+        "heat_score": 0,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_highlights": {
+      "top_blocking_chapter": {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_open_chapter": null,
+      "top_resolved_chapter": {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    },
+    "issue_chapter_pressure": [
+      {
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "exported",
+        "issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "resolved_issue_count": 1,
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "issue_chapter_queue": [],
+    "issue_hotspots": [
+      {
+        "blocking_issue_count": 1,
+        "chapter_count": 1,
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 0,
+        "resolved_issue_count": 1,
+        "root_cause_layer": "export",
+        "triaged_issue_count": 0,
+        "wontfix_issue_count": 0
+      }
+    ],
+    "latest_export_at": "<ts>",
+    "latest_export_ids_by_type": {
+      "bilingual_html": "<id26>",
+      "merged_html": "<id27>",
+      "review_package": "<id19>"
+    },
+    "limit": 1,
+    "offset": 0,
+    "record_count": 1,
+    "records": [
+      {
+        "chapter_id": "<id15>",
+        "chapter_summary_version": null,
+        "created_at": "<ts>",
+        "export_auto_followup_summary": {
+          "event_count": 0,
+          "executed_event_count": 0,
+          "last_stop_reason": null,
+          "latest_event_at": null,
+          "stop_event_count": 0
+        },
+        "export_id": "<id26>",
+        "export_time_misalignment_counts": {
+          "inactive_only_sentence_count": 0,
+          "inactive_target_segment_with_edges_count": 0,
+          "missing_target_sentence_count": 0,
+          "orphan_target_segment_count": 0
+        },
+        "export_type": "bilingual_html",
+        "file_path": "<root>/exports/<id1>/bilingual-<id15>.html",
+        "manifest_path": "<root>/exports/<id1>/bilingual-<id15>.manifest.json",
+        "status": "succeeded",
+        "translation_usage_breakdown": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        ],
+        "translation_usage_highlights": {
+          "top_cost_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_latency_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          },
+          "top_volume_entry": {
+            "avg_latency_ms": "<volatile>",
+            "latest_run_at": "<ts>",
+            "model_name": "echo-worker",
+            "provider": null,
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0,
+            "worker_name": "EchoTranslationWorker"
+          }
+        },
+        "translation_usage_summary": {
+          "avg_latency_ms": "<volatile>",
+          "latest_run_at": "<ts>",
+          "run_count": 2,
+          "succeeded_run_count": 2,
+          "total_cost_usd": 0.0,
+          "total_latency_ms": "<volatile>",
+          "total_token_in": 0,
+          "total_token_out": 0
+        },
+        "translation_usage_timeline": [
+          {
+            "avg_latency_ms": "<volatile>",
+            "bucket_granularity": "day",
+            "bucket_start": "<date>",
+            "run_count": 2,
+            "succeeded_run_count": 2,
+            "total_cost_usd": 0.0,
+            "total_latency_ms": "<volatile>",
+            "total_token_in": 0,
+            "total_token_out": 0
+          }
+        ],
+        "updated_at": "<ts>"
+      }
+    ],
+    "successful_export_count": 5,
+    "total_auto_followup_executed_count": 0,
+    "translation_usage_breakdown": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    ],
+    "translation_usage_highlights": {
+      "top_cost_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_latency_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_volume_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    },
+    "translation_usage_summary": {
+      "avg_latency_ms": "<volatile>",
+      "latest_run_at": "<ts>",
+      "run_count": 5,
+      "succeeded_run_count": 5,
+      "total_cost_usd": 0.0,
+      "total_latency_ms": "<volatile>",
+      "total_token_in": 0,
+      "total_token_out": 0
+    },
+    "translation_usage_timeline": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0
+      }
+    ]
+  },
+  "export_detail": {
+    "chapter_id": null,
+    "created_at": "<ts>",
+    "document_id": "<id1>",
+    "export_auto_followup_summary": null,
+    "export_id": "<id27>",
+    "export_time_misalignment_counts": null,
+    "export_type": "merged_html",
+    "file_path": "<root>/exports/<id1>/merged-document.html",
+    "issue_status_summary": {
+      "blocking_issue_count": 1,
+      "issue_count": 1,
+      "open_issue_count": 0,
+      "resolved_issue_count": 1
+    },
+    "manifest_path": "<root>/exports/<id1>/merged-document.manifest.json",
+    "sentence_count": 0,
+    "status": "succeeded",
+    "target_segment_count": 0,
+    "translation_usage_breakdown": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    ],
+    "translation_usage_highlights": {
+      "top_cost_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_latency_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      },
+      "top_volume_entry": {
+        "avg_latency_ms": "<volatile>",
+        "latest_run_at": "<ts>",
+        "model_name": "echo-worker",
+        "provider": null,
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0,
+        "worker_name": "EchoTranslationWorker"
+      }
+    },
+    "translation_usage_summary": {
+      "avg_latency_ms": "<volatile>",
+      "latest_run_at": "<ts>",
+      "run_count": 5,
+      "succeeded_run_count": 5,
+      "total_cost_usd": 0.0,
+      "total_latency_ms": "<volatile>",
+      "total_token_in": 0,
+      "total_token_out": 0
+    },
+    "translation_usage_timeline": [
+      {
+        "avg_latency_ms": "<volatile>",
+        "bucket_granularity": "day",
+        "bucket_start": "<date>",
+        "run_count": 5,
+        "succeeded_run_count": 5,
+        "total_cost_usd": 0.0,
+        "total_latency_ms": "<volatile>",
+        "total_token_in": 0,
+        "total_token_out": 0
+      }
+    ],
+    "updated_at": "<ts>",
+    "version_evidence_summary": {
+      "active_snapshot_versions": {},
+      "book_profile_version": 1,
+      "chapter_summary_version": null,
+      "document_parser_version": 1,
+      "document_segmentation_version": 1
+    }
+  },
+  "history": {
+    "entries": [
+      {
+        "author": "Test Author",
+        "chapter_bilingual_export_count": 2,
+        "chapter_count": 2,
+        "created_at": "<ts>",
+        "document_id": "<id1>",
+        "latest_merged_export_at": "<ts>",
+        "latest_run_completed_work_item_count": null,
+        "latest_run_current_stage": null,
+        "latest_run_id": null,
+        "latest_run_status": null,
+        "latest_run_total_work_item_count": null,
+        "merged_export_ready": true,
+        "packet_count": 5,
+        "sentence_count": 9,
+        "source_path": "<root>/golden.epub",
+        "source_type": "epub",
+        "status": "exported",
+        "title": "Business Strategy Handbook",
+        "title_src": "Business Strategy Handbook",
+        "title_tgt": null,
+        "updated_at": "<ts>"
+      }
+    ],
+    "has_more": false,
+    "limit": 10,
+    "offset": 0,
+    "record_count": 1,
+    "total_count": 1
+  },
+  "history_filtered": {
+    "entries": [
+      {
+        "author": "Test Author",
+        "chapter_bilingual_export_count": 2,
+        "chapter_count": 2,
+        "created_at": "<ts>",
+        "document_id": "<id1>",
+        "latest_merged_export_at": "<ts>",
+        "latest_run_completed_work_item_count": null,
+        "latest_run_current_stage": null,
+        "latest_run_id": null,
+        "latest_run_status": null,
+        "latest_run_total_work_item_count": null,
+        "merged_export_ready": true,
+        "packet_count": 5,
+        "sentence_count": 9,
+        "source_path": "<root>/golden.epub",
+        "source_type": "epub",
+        "status": "exported",
+        "title": "Business Strategy Handbook",
+        "title_src": "Business Strategy Handbook",
+        "title_tgt": null,
+        "updated_at": "<ts>"
+      }
+    ],
+    "has_more": false,
+    "limit": null,
+    "offset": 0,
+    "record_count": 1,
+    "total_count": 1
+  },
+  "merged_export": {
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": [],
+    "auto_followup_requested": false,
+    "chapter_results": [],
+    "document_id": "<id1>",
+    "document_status": "exported",
+    "export_type": "merged_html",
+    "file_path": "<root>/exports/<id1>/merged-document.html",
+    "manifest_path": "<root>/exports/<id1>/merged-document.manifest.json"
+  },
+  "proposal_approval": {
+    "chapter_id": "<id13>",
+    "committed_snapshot_id": "<id14>",
+    "committed_snapshot_version": 2,
+    "decision": "approved",
+    "document_id": "<id1>",
+    "proposal": {
+      "base_snapshot_version": 1,
+      "committed_snapshot_id": "<id14>",
+      "created_at": "<ts>",
+      "last_decision": {
+        "actor_id": "golden-reviewer",
+        "actor_type": "human",
+        "created_at": "<ts>",
+        "decision": "approved",
+        "note": "looks right",
+        "proposal_id": "<id7>"
+      },
+      "packet_id": "<id8>",
+      "proposal_id": "<id7>",
+      "status": "committed",
+      "translation_run_id": "<id2>",
+      "updated_at": "<ts>"
+    }
+  },
+  "proposal_rejection": {
+    "chapter_id": "<id15>",
+    "committed_snapshot_id": null,
+    "committed_snapshot_version": null,
+    "decision": "rejected",
+    "document_id": "<id1>",
+    "proposal": {
+      "base_snapshot_version": 1,
+      "committed_snapshot_id": null,
+      "created_at": "<ts>",
+      "last_decision": {
+        "actor_id": "golden-reviewer",
+        "actor_type": "human",
+        "created_at": "<ts>",
+        "decision": "rejected",
+        "note": null,
+        "proposal_id": "<id16>"
+      },
+      "packet_id": "<id17>",
+      "proposal_id": "<id16>",
+      "status": "rejected",
+      "translation_run_id": "<id5>",
+      "updated_at": "<ts>"
+    }
+  },
+  "proposals_before_decision": [
+    {
+      "base_snapshot_version": 1,
+      "committed_snapshot_id": null,
+      "created_at": "<ts>",
+      "last_decision": null,
+      "packet_id": "<id8>",
+      "proposal_id": "<id7>",
+      "status": "proposed",
+      "translation_run_id": "<id2>",
+      "updated_at": "<ts>"
+    },
+    {
+      "base_snapshot_version": 1,
+      "committed_snapshot_id": null,
+      "created_at": "<ts>",
+      "last_decision": null,
+      "packet_id": "<id10>",
+      "proposal_id": "<id9>",
+      "status": "proposed",
+      "translation_run_id": "<id3>",
+      "updated_at": "<ts>"
+    },
+    {
+      "base_snapshot_version": 1,
+      "committed_snapshot_id": null,
+      "created_at": "<ts>",
+      "last_decision": null,
+      "packet_id": "<id12>",
+      "proposal_id": "<id11>",
+      "status": "proposed",
+      "translation_run_id": "<id4>",
+      "updated_at": "<ts>"
+    }
+  ],
+  "proposals_final": [
+    [
+      {
+        "base_snapshot_version": 1,
+        "committed_snapshot_id": "<id14>",
+        "created_at": "<ts>",
+        "last_decision": {
+          "actor_id": "golden-reviewer",
+          "actor_type": "human",
+          "created_at": "<ts>",
+          "decision": "approved",
+          "note": "looks right",
+          "proposal_id": "<id7>"
+        },
+        "packet_id": "<id8>",
+        "proposal_id": "<id7>",
+        "status": "committed",
+        "translation_run_id": "<id2>",
+        "updated_at": "<ts>"
+      },
+      {
+        "base_snapshot_version": 1,
+        "committed_snapshot_id": "<id29>",
+        "created_at": "<ts>",
+        "last_decision": null,
+        "packet_id": "<id10>",
+        "proposal_id": "<id9>",
+        "status": "committed",
+        "translation_run_id": "<id3>",
+        "updated_at": "<ts>"
+      },
+      {
+        "base_snapshot_version": 1,
+        "committed_snapshot_id": "<id30>",
+        "created_at": "<ts>",
+        "last_decision": null,
+        "packet_id": "<id12>",
+        "proposal_id": "<id11>",
+        "status": "committed",
+        "translation_run_id": "<id4>",
+        "updated_at": "<ts>"
+      }
+    ],
+    [
+      {
+        "base_snapshot_version": 1,
+        "committed_snapshot_id": null,
+        "created_at": "<ts>",
+        "last_decision": {
+          "actor_id": "golden-reviewer",
+          "actor_type": "human",
+          "created_at": "<ts>",
+          "decision": "rejected",
+          "note": null,
+          "proposal_id": "<id16>"
+        },
+        "packet_id": "<id17>",
+        "proposal_id": "<id16>",
+        "status": "rejected",
+        "translation_run_id": "<id5>",
+        "updated_at": "<ts>"
+      },
+      {
+        "base_snapshot_version": 1,
+        "committed_snapshot_id": "<id33>",
+        "created_at": "<ts>",
+        "last_decision": null,
+        "packet_id": "<id32>",
+        "proposal_id": "<id31>",
+        "status": "committed",
+        "translation_run_id": "<id6>",
+        "updated_at": "<ts>"
+      }
+    ]
+  ],
+  "review": {
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": [],
+    "auto_followup_requested": false,
+    "chapter_results": [
+      {
+        "action_count": 0,
+        "alignment_ok": true,
+        "blocking_issue_count": 0,
+        "chapter_id": "<id13>",
+        "coverage_ok": true,
+        "format_ok": true,
+        "format_pollution_count": 0,
+        "issue_count": 0,
+        "low_confidence_count": 0,
+        "naturalness_summary": null,
+        "resolved_issue_count": 0,
+        "status": "qa_checked",
+        "term_ok": true
+      },
+      {
+        "action_count": 0,
+        "alignment_ok": true,
+        "blocking_issue_count": 0,
+        "chapter_id": "<id15>",
+        "coverage_ok": true,
+        "format_ok": true,
+        "format_pollution_count": 0,
+        "issue_count": 0,
+        "low_confidence_count": 0,
+        "naturalness_summary": null,
+        "resolved_issue_count": 0,
+        "status": "qa_checked",
+        "term_ok": true
+      }
+    ],
+    "document_id": "<id1>",
+    "skipped_chapters": [],
+    "total_action_count": 0,
+    "total_chapter_count": 2,
+    "total_issue_count": 0
+  },
+  "review_package_export": {
+    "auto_followup_applied": false,
+    "auto_followup_attempt_count": 0,
+    "auto_followup_attempt_limit": null,
+    "auto_followup_executions": [],
+    "auto_followup_requested": false,
+    "chapter_results": [
+      {
+        "chapter_id": "<id13>",
+        "export_id": "<id18>",
+        "export_type": "review_package",
+        "file_path": "<root>/exports/<id1>/review-package-<id13>.json",
+        "manifest_path": null,
+        "status": "succeeded"
+      },
+      {
+        "chapter_id": "<id15>",
+        "export_id": "<id19>",
+        "export_type": "review_package",
+        "file_path": "<root>/exports/<id1>/review-package-<id15>.json",
+        "manifest_path": null,
+        "status": "succeeded"
+      }
+    ],
+    "document_id": "<id1>",
+    "document_status": "active",
+    "export_type": "review_package",
+    "file_path": null,
+    "manifest_path": null
+  },
+  "summary": {
+    "author": "Test Author",
+    "block_count": 6,
+    "chapter_bilingual_export_count": 2,
+    "chapter_count": 2,
+    "chapters": [
+      {
+        "bilingual_export_ready": true,
+        "chapter_id": "<id13>",
+        "latest_bilingual_export_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 1,
+        "packet_count": 3,
+        "parse_confidence": null,
+        "pdf_image_summary": null,
+        "quality_summary": {
+          "action_count": 0,
+          "alignment_ok": true,
+          "blocking_issue_count": 0,
+          "coverage_ok": true,
+          "format_ok": true,
+          "format_pollution_count": 0,
+          "issue_count": 0,
+          "low_confidence_count": 0,
+          "resolved_issue_count": 1,
+          "term_ok": true
+        },
+        "risk_level": null,
+        "sentence_count": 4,
+        "status": "exported",
+        "structure_flags": [],
+        "title_src": "Chapter One"
+      },
+      {
+        "bilingual_export_ready": true,
+        "chapter_id": "<id15>",
+        "latest_bilingual_export_at": "<ts>",
+        "open_issue_count": 0,
+        "ordinal": 2,
+        "packet_count": 2,
+        "parse_confidence": null,
+        "pdf_image_summary": null,
+        "quality_summary": {
+          "action_count": 0,
+          "alignment_ok": true,
+          "blocking_issue_count": 0,
+          "coverage_ok": true,
+          "format_ok": true,
+          "format_pollution_count": 0,
+          "issue_count": 0,
+          "low_confidence_count": 0,
+          "resolved_issue_count": 0,
+          "term_ok": true
+        },
+        "risk_level": null,
+        "sentence_count": 5,
+        "status": "exported",
+        "structure_flags": [],
+        "title_src": "Chapter Two"
+      }
+    ],
+    "document_id": "<id1>",
+    "latest_merged_export_at": "<ts>",
+    "latest_run_current_stage": null,
+    "latest_run_id": null,
+    "latest_run_status": null,
+    "latest_run_updated_at": null,
+    "merged_export_ready": true,
+    "open_issue_count": 0,
+    "packet_count": 5,
+    "pdf_image_summary": null,
+    "pdf_page_evidence": null,
+    "pdf_profile": null,
+    "sentence_count": 9,
+    "source_type": "epub",
+    "status": "exported",
+    "title": "Business Strategy Handbook",
+    "title_src": "Business Strategy Handbook",
+    "title_tgt": null
+  },
+  "translate": {
+    "document_id": "<id1>",
+    "memory_commit_mode": "proposal_first",
+    "recorded_memory_proposal_count": 5,
+    "review_required_sentence_ids": [],
+    "skipped_packet_ids": [],
+    "translated_packet_count": 5,
+    "translation_run_ids": [
+      "<id2>",
+      "<id3>",
+      "<id4>",
+      "<id5>",
+      "<id6>"
+    ]
+  },
+  "worklist_before_assignment": {
+    "applied_assigned_filter": null,
+    "applied_assigned_owner_filter": null,
+    "applied_needs_immediate_attention_filter": null,
+    "applied_owner_ready_filter": null,
+    "applied_queue_priority_filter": null,
+    "applied_sla_status_filter": null,
+    "assigned_count": 0,
+    "document_id": "<id1>",
+    "entries": [
+      {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": null,
+        "assigned_owner_name": null,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": false,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "entry_count": 1,
+    "filtered_worklist_count": 1,
+    "has_more": false,
+    "highlights": {
+      "top_breached_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": null,
+        "assigned_owner_name": null,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": false,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_due_soon_entry": null,
+      "top_immediate_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": null,
+        "assigned_owner_name": null,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": false,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_oldest_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": null,
+        "assigned_owner_name": null,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": false,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    },
+    "immediate_attention_count": 1,
+    "limit": null,
+    "offset": 0,
+    "owner_ready_count": 1,
+    "owner_workload_highlights": {
+      "top_blocking_owner": null,
+      "top_breached_owner": null,
+      "top_immediate_owner": null,
+      "top_loaded_owner": null
+    },
+    "owner_workload_summary": [],
+    "queue_priority_counts": {
+      "immediate": 1
+    },
+    "sla_status_counts": {
+      "breached": 1
+    },
+    "worklist_count": 1
+  },
+  "worklist_detail_blocked": {
+    "assignment": {
+      "assigned_at": "<ts>",
+      "assigned_by": "golden-lead",
+      "assignment_id": "<id22>",
+      "chapter_id": "<id13>",
+      "created_at": "<ts>",
+      "document_id": "<id1>",
+      "note": "take this",
+      "owner_name": "golden-owner",
+      "updated_at": "<ts>"
+    },
+    "assignment_history": [
+      {
+        "created_at": "<ts>",
+        "event_id": "<id23>",
+        "event_type": "set",
+        "note": "take this",
+        "owner_name": "golden-owner",
+        "performed_by": "golden-lead"
+      }
+    ],
+    "chapter_id": "<id13>",
+    "chapter_status": "qa_checked",
+    "current_active_blocking_issue_count": 1,
+    "current_issue_count": 1,
+    "current_open_issue_count": 1,
+    "current_triaged_issue_count": 0,
+    "document_id": "<id1>",
+    "issue_family_breakdown": [
+      {
+        "active_blocking_issue_count": 1,
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "issue_count": 1,
+        "issue_type": "ALIGNMENT_FAILURE",
+        "latest_seen_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "resolved_issue_count": 0,
+        "root_cause_layer": "export",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "memory_proposals": {
+      "active_snapshot_version": 4,
+      "counts_by_status": {
+        "committed": 3,
+        "proposed": 0,
+        "rejected": 0
+      },
+      "latest_proposal_updated_at": "<ts>",
+      "pending_proposal_count": 0,
+      "pending_proposals": [],
+      "proposal_count": 3,
+      "recent_decisions": [
+        {
+          "actor_id": "golden-reviewer",
+          "actor_type": "human",
+          "created_at": "<ts>",
+          "decision": "approved",
+          "note": "looks right",
+          "proposal_id": "<id7>"
+        }
+      ]
+    },
+    "ordinal": 1,
+    "packet_count": 3,
+    "quality_summary": {
+      "action_count": 0,
+      "alignment_ok": true,
+      "blocking_issue_count": 0,
+      "coverage_ok": true,
+      "format_ok": true,
+      "format_pollution_count": 0,
+      "issue_count": 0,
+      "low_confidence_count": 0,
+      "resolved_issue_count": 0,
+      "term_ok": true
+    },
+    "queue_entry": {
+      "active_blocking_issue_count": 1,
+      "age_bucket": "overdue",
+      "age_hours": "<volatile>",
+      "assigned_at": "<ts>",
+      "assigned_owner_name": "golden-owner",
+      "blocking_issue_count": 1,
+      "chapter_id": "<id13>",
+      "chapter_status": "qa_checked",
+      "dominant_issue_count": 1,
+      "dominant_issue_type": "ALIGNMENT_FAILURE",
+      "dominant_root_cause_layer": "export",
+      "flapping_hint": false,
+      "heat_level": "high",
+      "heat_score": 7,
+      "is_assigned": true,
+      "issue_count": 1,
+      "issue_family_count": 1,
+      "latest_activity_bucket_start": "<date>",
+      "latest_created_issue_count": 1,
+      "latest_issue_at": "<ts>",
+      "latest_net_issue_delta": 1,
+      "latest_resolved_issue_count": 0,
+      "memory_proposals": {
+        "active_snapshot_version": 4,
+        "counts_by_status": {
+          "committed": 3,
+          "proposed": 0,
+          "rejected": 0
+        },
+        "latest_proposal_updated_at": "<ts>",
+        "pending_proposal_count": 0,
+        "proposal_count": 3
+      },
+      "needs_immediate_attention": true,
+      "oldest_active_issue_at": "<ts>",
+      "open_issue_count": 1,
+      "ordinal": 1,
+      "owner_ready": true,
+      "owner_ready_reason": "clear_dominant_issue_family",
+      "queue_driver": "active_blocking",
+      "queue_priority": "immediate",
+      "queue_rank": 1,
+      "regression_hint": "regressing",
+      "sla_status": "breached",
+      "sla_target_hours": "<volatile>",
+      "title_src": "Chapter One",
+      "triaged_issue_count": 0
+    },
+    "recent_actions": [
+      {
+        "action_id": "<id21>",
+        "action_type": "REALIGN_ONLY",
+        "created_at": "<ts>",
+        "created_by": "system",
+        "issue_id": "<id20>",
+        "issue_type": "ALIGNMENT_FAILURE",
+        "scope_id": "<id10>",
+        "scope_type": "packet",
+        "status": "planned",
+        "updated_at": "<ts>"
+      }
+    ],
+    "recent_issues": [
+      {
+        "blocking": true,
+        "created_at": "<ts>",
+        "detector": "rule",
+        "issue_id": "<id20>",
+        "issue_type": "ALIGNMENT_FAILURE",
+        "root_cause_layer": "export",
+        "severity": "high",
+        "status": "open",
+        "suggested_action": "REALIGN_ONLY",
+        "updated_at": "<ts>"
+      }
+    ],
+    "timeline": [
+      {
+        "action_id": null,
+        "action_type": null,
+        "actor_name": "golden-lead",
+        "created_at": "<ts>",
+        "decision": null,
+        "event_id": "<id23>",
+        "event_kind": "set",
+        "issue_id": null,
+        "issue_type": null,
+        "note": "take this",
+        "owner_name": "golden-owner",
+        "proposal_id": null,
+        "scope_id": null,
+        "scope_type": null,
+        "source_kind": "assignment",
+        "status": null
+      },
+      {
+        "action_id": "<id21>",
+        "action_type": "REALIGN_ONLY",
+        "actor_name": "system",
+        "created_at": "<ts>",
+        "decision": null,
+        "event_id": "<id21>",
+        "event_kind": "issue_action",
+        "issue_id": "<id20>",
+        "issue_type": "ALIGNMENT_FAILURE",
+        "note": null,
+        "owner_name": null,
+        "proposal_id": null,
+        "scope_id": "<id10>",
+        "scope_type": "packet",
+        "source_kind": "action",
+        "status": "planned"
+      },
+      {
+        "action_id": null,
+        "action_type": null,
+        "actor_name": "golden-reviewer",
+        "created_at": "<ts>",
+        "decision": "approved",
+        "event_id": "<id7>",
+        "event_kind": "approved",
+        "issue_id": null,
+        "issue_type": null,
+        "note": "looks right",
+        "owner_name": null,
+        "proposal_id": "<id7>",
+        "scope_id": null,
+        "scope_type": null,
+        "source_kind": "memory_proposal",
+        "status": null
+      }
+    ],
+    "title_src": "Chapter One",
+    "translated_packet_count": 3
+  },
+  "worklist_details_final": [
+    {
+      "assignment": null,
+      "assignment_history": [
+        {
+          "created_at": "<ts>",
+          "event_id": "<id28>",
+          "event_type": "cleared",
+          "note": null,
+          "owner_name": "golden-owner",
+          "performed_by": "golden-lead"
+        },
+        {
+          "created_at": "<ts>",
+          "event_id": "<id23>",
+          "event_type": "set",
+          "note": "take this",
+          "owner_name": "golden-owner",
+          "performed_by": "golden-lead"
+        }
+      ],
+      "chapter_id": "<id13>",
+      "chapter_status": "exported",
+      "current_active_blocking_issue_count": 0,
+      "current_issue_count": 1,
+      "current_open_issue_count": 0,
+      "current_triaged_issue_count": 0,
+      "document_id": "<id1>",
+      "issue_family_breakdown": [
+        {
+          "active_blocking_issue_count": 0,
+          "blocking_issue_count": 1,
+          "chapter_id": "<id13>",
+          "chapter_status": "exported",
+          "issue_count": 1,
+          "issue_type": "ALIGNMENT_FAILURE",
+          "latest_seen_at": "<ts>",
+          "open_issue_count": 0,
+          "ordinal": 1,
+          "resolved_issue_count": 1,
+          "root_cause_layer": "export",
+          "title_src": "Chapter One",
+          "triaged_issue_count": 0
+        }
+      ],
+      "memory_proposals": {
+        "active_snapshot_version": 4,
+        "counts_by_status": {
+          "committed": 3,
+          "proposed": 0,
+          "rejected": 0
+        },
+        "latest_proposal_updated_at": "<ts>",
+        "pending_proposal_count": 0,
+        "pending_proposals": [],
+        "proposal_count": 3,
+        "recent_decisions": [
+          {
+            "actor_id": "golden-reviewer",
+            "actor_type": "human",
+            "created_at": "<ts>",
+            "decision": "approved",
+            "note": "looks right",
+            "proposal_id": "<id7>"
+          }
+        ]
+      },
+      "ordinal": 1,
+      "packet_count": 3,
+      "quality_summary": {
+        "action_count": 0,
+        "alignment_ok": true,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "format_ok": true,
+        "format_pollution_count": 0,
+        "issue_count": 0,
+        "low_confidence_count": 0,
+        "resolved_issue_count": 1,
+        "term_ok": true
+      },
+      "queue_entry": null,
+      "recent_actions": [
+        {
+          "action_id": "<id21>",
+          "action_type": "REALIGN_ONLY",
+          "created_at": "<ts>",
+          "created_by": "system",
+          "issue_id": "<id20>",
+          "issue_type": "ALIGNMENT_FAILURE",
+          "scope_id": "<id10>",
+          "scope_type": "packet",
+          "status": "completed",
+          "updated_at": "<ts>"
+        }
+      ],
+      "recent_issues": [
+        {
+          "blocking": true,
+          "created_at": "<ts>",
+          "detector": "rule",
+          "issue_id": "<id20>",
+          "issue_type": "ALIGNMENT_FAILURE",
+          "root_cause_layer": "export",
+          "severity": "high",
+          "status": "resolved",
+          "suggested_action": "REALIGN_ONLY",
+          "updated_at": "<ts>"
+        }
+      ],
+      "timeline": [
+        {
+          "action_id": null,
+          "action_type": null,
+          "actor_name": "golden-lead",
+          "created_at": "<ts>",
+          "decision": null,
+          "event_id": "<id28>",
+          "event_kind": "cleared",
+          "issue_id": null,
+          "issue_type": null,
+          "note": null,
+          "owner_name": "golden-owner",
+          "proposal_id": null,
+          "scope_id": null,
+          "scope_type": null,
+          "source_kind": "assignment",
+          "status": null
+        },
+        {
+          "action_id": "<id21>",
+          "action_type": "REALIGN_ONLY",
+          "actor_name": "system",
+          "created_at": "<ts>",
+          "decision": null,
+          "event_id": "<id21>",
+          "event_kind": "issue_action",
+          "issue_id": "<id20>",
+          "issue_type": "ALIGNMENT_FAILURE",
+          "note": null,
+          "owner_name": null,
+          "proposal_id": null,
+          "scope_id": "<id10>",
+          "scope_type": "packet",
+          "source_kind": "action",
+          "status": "completed"
+        },
+        {
+          "action_id": null,
+          "action_type": null,
+          "actor_name": "golden-lead",
+          "created_at": "<ts>",
+          "decision": null,
+          "event_id": "<id23>",
+          "event_kind": "set",
+          "issue_id": null,
+          "issue_type": null,
+          "note": "take this",
+          "owner_name": "golden-owner",
+          "proposal_id": null,
+          "scope_id": null,
+          "scope_type": null,
+          "source_kind": "assignment",
+          "status": null
+        },
+        {
+          "action_id": null,
+          "action_type": null,
+          "actor_name": "golden-reviewer",
+          "created_at": "<ts>",
+          "decision": "approved",
+          "event_id": "<id7>",
+          "event_kind": "approved",
+          "issue_id": null,
+          "issue_type": null,
+          "note": "looks right",
+          "owner_name": null,
+          "proposal_id": "<id7>",
+          "scope_id": null,
+          "scope_type": null,
+          "source_kind": "memory_proposal",
+          "status": null
+        }
+      ],
+      "title_src": "Chapter One",
+      "translated_packet_count": 3
+    },
+    {
+      "assignment": null,
+      "assignment_history": [],
+      "chapter_id": "<id15>",
+      "chapter_status": "exported",
+      "current_active_blocking_issue_count": 0,
+      "current_issue_count": 0,
+      "current_open_issue_count": 0,
+      "current_triaged_issue_count": 0,
+      "document_id": "<id1>",
+      "issue_family_breakdown": [],
+      "memory_proposals": {
+        "active_snapshot_version": 2,
+        "counts_by_status": {
+          "committed": 1,
+          "proposed": 0,
+          "rejected": 1
+        },
+        "latest_proposal_updated_at": "<ts>",
+        "pending_proposal_count": 0,
+        "pending_proposals": [],
+        "proposal_count": 2,
+        "recent_decisions": [
+          {
+            "actor_id": "golden-reviewer",
+            "actor_type": "human",
+            "created_at": "<ts>",
+            "decision": "rejected",
+            "note": null,
+            "proposal_id": "<id16>"
+          }
+        ]
+      },
+      "ordinal": 2,
+      "packet_count": 2,
+      "quality_summary": {
+        "action_count": 0,
+        "alignment_ok": true,
+        "blocking_issue_count": 0,
+        "coverage_ok": true,
+        "format_ok": true,
+        "format_pollution_count": 0,
+        "issue_count": 0,
+        "low_confidence_count": 0,
+        "resolved_issue_count": 0,
+        "term_ok": true
+      },
+      "queue_entry": null,
+      "recent_actions": [],
+      "recent_issues": [],
+      "timeline": [
+        {
+          "action_id": null,
+          "action_type": null,
+          "actor_name": "golden-reviewer",
+          "created_at": "<ts>",
+          "decision": "rejected",
+          "event_id": "<id16>",
+          "event_kind": "rejected",
+          "issue_id": null,
+          "issue_type": null,
+          "note": null,
+          "owner_name": null,
+          "proposal_id": "<id16>",
+          "scope_id": null,
+          "scope_type": null,
+          "source_kind": "memory_proposal",
+          "status": null
+        }
+      ],
+      "title_src": "Chapter Two",
+      "translated_packet_count": 2
+    }
+  ],
+  "worklist_filtered": {
+    "applied_assigned_filter": true,
+    "applied_assigned_owner_filter": null,
+    "applied_needs_immediate_attention_filter": null,
+    "applied_owner_ready_filter": null,
+    "applied_queue_priority_filter": "immediate",
+    "applied_sla_status_filter": "breached",
+    "assigned_count": 1,
+    "document_id": "<id1>",
+    "entries": [
+      {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": "<ts>",
+        "assigned_owner_name": "golden-owner",
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": true,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    ],
+    "entry_count": 1,
+    "filtered_worklist_count": 1,
+    "has_more": false,
+    "highlights": {
+      "top_breached_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": "<ts>",
+        "assigned_owner_name": "golden-owner",
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": true,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_due_soon_entry": null,
+      "top_immediate_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": "<ts>",
+        "assigned_owner_name": "golden-owner",
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": true,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      },
+      "top_oldest_entry": {
+        "active_blocking_issue_count": 1,
+        "age_bucket": "overdue",
+        "age_hours": "<volatile>",
+        "assigned_at": "<ts>",
+        "assigned_owner_name": "golden-owner",
+        "blocking_issue_count": 1,
+        "chapter_id": "<id13>",
+        "chapter_status": "qa_checked",
+        "dominant_issue_count": 1,
+        "dominant_issue_type": "ALIGNMENT_FAILURE",
+        "dominant_root_cause_layer": "export",
+        "flapping_hint": false,
+        "heat_level": "high",
+        "heat_score": 7,
+        "is_assigned": true,
+        "issue_count": 1,
+        "issue_family_count": 1,
+        "latest_activity_bucket_start": "<date>",
+        "latest_created_issue_count": 1,
+        "latest_issue_at": "<ts>",
+        "latest_net_issue_delta": 1,
+        "latest_resolved_issue_count": 0,
+        "memory_proposals": {
+          "active_snapshot_version": 4,
+          "counts_by_status": {
+            "committed": 3,
+            "proposed": 0,
+            "rejected": 0
+          },
+          "latest_proposal_updated_at": "<ts>",
+          "pending_proposal_count": 0,
+          "proposal_count": 3
+        },
+        "needs_immediate_attention": true,
+        "oldest_active_issue_at": "<ts>",
+        "open_issue_count": 1,
+        "ordinal": 1,
+        "owner_ready": true,
+        "owner_ready_reason": "clear_dominant_issue_family",
+        "queue_driver": "active_blocking",
+        "queue_priority": "immediate",
+        "queue_rank": 1,
+        "regression_hint": "regressing",
+        "sla_status": "breached",
+        "sla_target_hours": "<volatile>",
+        "title_src": "Chapter One",
+        "triaged_issue_count": 0
+      }
+    },
+    "immediate_attention_count": 1,
+    "limit": 1,
+    "offset": 0,
+    "owner_ready_count": 1,
+    "owner_workload_highlights": {
+      "top_blocking_owner": {
+        "assigned_chapter_count": 1,
+        "breached_count": 1,
+        "due_soon_count": 0,
+        "high_count": 0,
+        "immediate_count": 1,
+        "latest_issue_at": "<ts>",
+        "medium_count": 0,
+        "oldest_active_issue_at": "<ts>",
+        "on_track_count": 0,
+        "owner_name": "golden-owner",
+        "owner_ready_count": 1,
+        "total_active_blocking_issue_count": 1,
+        "total_open_issue_count": 1
+      },
+      "top_breached_owner": {
+        "assigned_chapter_count": 1,
+        "breached_count": 1,
+        "due_soon_count": 0,
+        "high_count": 0,
+        "immediate_count": 1,
+        "latest_issue_at": "<ts>",
+        "medium_count": 0,
+        "oldest_active_issue_at": "<ts>",
+        "on_track_count": 0,
+        "owner_name": "golden-owner",
+        "owner_ready_count": 1,
+        "total_active_blocking_issue_count": 1,
+        "total_open_issue_count": 1
+      },
+      "top_immediate_owner": {
+        "assigned_chapter_count": 1,
+        "breached_count": 1,
+        "due_soon_count": 0,
+        "high_count": 0,
+        "immediate_count": 1,
+        "latest_issue_at": "<ts>",
+        "medium_count": 0,
+        "oldest_active_issue_at": "<ts>",
+        "on_track_count": 0,
+        "owner_name": "golden-owner",
+        "owner_ready_count": 1,
+        "total_active_blocking_issue_count": 1,
+        "total_open_issue_count": 1
+      },
+      "top_loaded_owner": {
+        "assigned_chapter_count": 1,
+        "breached_count": 1,
+        "due_soon_count": 0,
+        "high_count": 0,
+        "immediate_count": 1,
+        "latest_issue_at": "<ts>",
+        "medium_count": 0,
+        "oldest_active_issue_at": "<ts>",
+        "on_track_count": 0,
+        "owner_name": "golden-owner",
+        "owner_ready_count": 1,
+        "total_active_blocking_issue_count": 1,
+        "total_open_issue_count": 1
+      }
+    },
+    "owner_workload_summary": [
+      {
+        "assigned_chapter_count": 1,
+        "breached_count": 1,
+        "due_soon_count": 0,
+        "high_count": 0,
+        "immediate_count": 1,
+        "latest_issue_at": "<ts>",
+        "medium_count": 0,
+        "oldest_active_issue_at": "<ts>",
+        "on_track_count": 0,
+        "owner_name": "golden-owner",
+        "owner_ready_count": 1,
+        "total_active_blocking_issue_count": 1,
+        "total_open_issue_count": 1
+      }
+    ],
+    "queue_priority_counts": {
+      "immediate": 1
+    },
+    "sla_status_counts": {
+      "breached": 1
+    },
+    "worklist_count": 1
+  },
+  "worklist_final": {
+    "applied_assigned_filter": null,
+    "applied_assigned_owner_filter": null,
+    "applied_needs_immediate_attention_filter": null,
+    "applied_owner_ready_filter": null,
+    "applied_queue_priority_filter": null,
+    "applied_sla_status_filter": null,
+    "assigned_count": 0,
+    "document_id": "<id1>",
+    "entries": [],
+    "entry_count": 0,
+    "filtered_worklist_count": 0,
+    "has_more": false,
+    "highlights": {
+      "top_breached_entry": null,
+      "top_due_soon_entry": null,
+      "top_immediate_entry": null,
+      "top_oldest_entry": null
+    },
+    "immediate_attention_count": 0,
+    "limit": null,
+    "offset": 0,
+    "owner_ready_count": 0,
+    "owner_workload_highlights": {
+      "top_blocking_owner": null,
+      "top_breached_owner": null,
+      "top_immediate_owner": null,
+      "top_loaded_owner": null
+    },
+    "owner_workload_summary": [],
+    "queue_priority_counts": {},
+    "sla_status_counts": {},
+    "worklist_count": 0
+  }
+}

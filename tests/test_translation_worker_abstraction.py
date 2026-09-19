@@ -1,14 +1,14 @@
 # ruff: noqa: E402
 
-from http.client import IncompleteRead
+import sys
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timezone
-from unittest.mock import patch
 from pathlib import Path
-import sys
+from unittest.mock import patch
 
+import httpx
 from sqlalchemy import select
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,27 +16,23 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.core.config import Settings
 from book_agent.domain.enums import (
     ArtifactStatus,
     BlockType,
     ChapterStatus,
-    Detector,
     DocumentStatus,
-    IssueStatus,
-    MemoryStatus,
     MemoryScopeType,
+    MemoryStatus,
     PacketSentenceRole,
     PacketStatus,
     PacketType,
     ProtectedPolicy,
-    RootCauseLayer,
-    Severity,
-    SnapshotType,
     SentenceStatus,
+    SnapshotType,
     SourceType,
 )
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
-from book_agent.domain.models.review import ReviewIssue
 from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -44,29 +40,15 @@ from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
-from book_agent.core.config import Settings
-from book_agent.services.packet_experiment import PacketExperimentOptions, PacketExperimentService
-from book_agent.services.packet_experiment_diff import compare_experiment_payloads
-from book_agent.services.packet_experiment_scan import PacketExperimentScanService
-from book_agent.services.translation_prompt_ab import (
-    TranslationPromptABOptions,
-    TranslationPromptCandidate,
-    TranslationPromptABService,
-)
-from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.chapter_concept_lock import ChapterConceptLockService
-from book_agent.services.translation_chapter_smoke import (
-    TranslationChapterSmokeOptions,
-    TranslationChapterSmokeService,
-)
+from book_agent.services.chapter_memory_backfill import ChapterMemoryBackfillService
 from book_agent.services.context_compile import (
     ChapterContextCompileOptions,
     ChapterContextCompiler,
     _compress_chapter_brief,
 )
 from book_agent.services.translation import TranslationService as _TranslationService
-from book_agent.workers.factory import build_translation_worker
-from book_agent.workers.contracts import (
+from book_agent.translation.contracts import (
     AlignmentSuggestion,
     ConceptCandidate,
     ContextPacket,
@@ -78,10 +60,11 @@ from book_agent.workers.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.workers.factory import build_translation_worker
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderNetworkError,
-    UrllibJSONTransport,
+    HttpxJSONTransport,
 )
 from book_agent.workers.translator import (
     LLMTranslationWorker,
@@ -93,6 +76,9 @@ from book_agent.workers.translator import (
 
 def TranslationService(*args, **kwargs):
     kwargs.setdefault("default_auto_commit_memory", True)
+    # These tests script partial worker outputs on purpose and count calls;
+    # the output guardrail repair loop is covered by test_translation_output_guardrail.
+    kwargs.setdefault("max_output_repairs", 0)
     return _TranslationService(*args, **kwargs)
 
 
@@ -338,7 +324,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(fake_client.requests[0].sentence_alias_map["S1"], first_sentence_id)
         self.assertIn("Current Paragraph:", fake_client.requests[0].user_prompt)
         self.assertIn("Sentence Ledger:", fake_client.requests[0].user_prompt)
-        self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].user_prompt)
+        self.assertIn("Return JSON that matches the provided response schema.", fake_client.requests[0].system_prompt)
         self.assertIn("专业的 AI 与计算机技术文本中英翻译专家", fake_client.requests[0].system_prompt)
 
     def test_load_packet_bundle_restores_current_sentence_order_by_block_ordinal(self) -> None:
@@ -717,12 +703,12 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             prompt_profile="role-style-v2",
         )
 
-        self.assertIn("Chinese Style Priorities:", full_prompt.user_prompt)
-        self.assertNotIn("Chinese Style Priorities:", compact_prompt.user_prompt)
+        self.assertIn("Chinese Style Priorities:", full_prompt.system_prompt)
+        self.assertNotIn("Chinese Style Priorities:", compact_prompt.system_prompt)
         self.assertIn("Current Paragraph:", compact_prompt.user_prompt)
         self.assertIn("Sentence Ledger:", compact_prompt.user_prompt)
         self.assertIn("professional English-to-Chinese technical translator", compact_prompt.system_prompt)
-        self.assertLess(len(compact_prompt.user_prompt), len(full_prompt.user_prompt))
+        self.assertLessEqual(len(compact_prompt.user_prompt), len(full_prompt.user_prompt))
         self.assertLess(len(compact_prompt.system_prompt), len(full_prompt.system_prompt))
 
     def test_build_translation_prompt_request_includes_open_questions_and_rerun_hints(self) -> None:
@@ -888,32 +874,32 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertIn("senior technical translator and localizer", role_prompt.system_prompt)
         self.assertIn("High fidelity comes first", faithful_prompt.system_prompt)
         self.assertIn("never promotional, chatty, or over-interpreted", faithful_prompt.system_prompt)
-        self.assertIn("Chinese Style Priorities:", faithful_prompt.user_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt.system_prompt)
         self.assertIn("Paragraph Intent Signal:", faithful_prompt.user_prompt)
         self.assertIn("Keep concrete imagery concrete", faithful_prompt_v5.system_prompt)
         self.assertIn("abstract noun-heavy phrasing", faithful_prompt_v5.system_prompt)
-        self.assertIn("Chinese Style Priorities:", faithful_prompt_v5.user_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt_v5.system_prompt)
         self.assertIn("Paragraph Intent Signal:", faithful_prompt_v5.user_prompt)
         self.assertIn("service, marketing, or management language", faithful_prompt_v6.system_prompt)
         self.assertIn("simple ending into a slogan about consistency, care, or service", faithful_prompt_v6.system_prompt)
-        self.assertIn("Chinese Style Priorities:", faithful_prompt_v6.user_prompt)
+        self.assertIn("Chinese Style Priorities:", faithful_prompt_v6.system_prompt)
         self.assertIn("Paragraph Intent Signal:", faithful_prompt_v6.user_prompt)
         self.assertIn("follow them over generic smoothing", faithful_prompt_v6.user_prompt)
         self.assertEqual(tech_column_prompt.system_prompt_static, tech_column_prompt.system_prompt)
         self.assertEqual(tech_column_prompt.system_prompt_dynamic, "")
         self.assertIn("专业的 AI 与计算机技术文本中英翻译专家", tech_column_prompt.system_prompt)
         self.assertIn("完成初稿后进行元迭代润色", tech_column_prompt.system_prompt)
-        self.assertIn("Chinese Style Priorities:", role_prompt.user_prompt)
+        self.assertIn("Chinese Style Priorities:", role_prompt.system_prompt)
         self.assertIn("Paragraph Intent Signal:", role_prompt.user_prompt)
         self.assertIn("Intent: definition", role_prompt.user_prompt)
         self.assertIn("Source-Aware Literalism Guardrails:", role_prompt.user_prompt)
         self.assertIn("大量证据表明", role_prompt.user_prompt)
-        self.assertIn("Memory and Ambiguity Handling:", memory_prompt.user_prompt)
+        self.assertIn("Memory and Ambiguity Handling:", memory_prompt.system_prompt)
         self.assertIn("locked terms and chapter concept memory", memory_prompt.system_prompt)
         self.assertIn("publication-grade English-to-Chinese translator and localizer", brief_prompt.system_prompt)
-        self.assertIn("Paragraph Intent Priorities:", brief_prompt.user_prompt)
-        self.assertIn("Literalism Guardrails:", brief_prompt.user_prompt)
-        self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.user_prompt)
+        self.assertIn("Paragraph Intent Priorities:", brief_prompt.system_prompt)
+        self.assertIn("Literalism Guardrails:", brief_prompt.system_prompt)
+        self.assertIn("Chapter Brief as the purpose summary of this section", brief_prompt.system_prompt)
 
     def test_build_translation_prompt_request_exposes_static_and_dynamic_system_prompt_parts_for_native_profiles(self) -> None:
         context_packet = ContextPacket(
@@ -1132,11 +1118,11 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         )
 
         self.assertIn("translator of English computer-science and software-engineering books", book_prompt.system_prompt)
-        self.assertIn("Material-Specific Style Target:", book_prompt.user_prompt)
-        self.assertIn("native Chinese computer-science book author", book_prompt.user_prompt)
+        self.assertIn("Material-Specific Style Target:", book_prompt.system_prompt)
+        self.assertIn("native Chinese computer-science book author", book_prompt.system_prompt)
         self.assertIn("Translation Material: technical_book", book_prompt.user_prompt)
         self.assertIn("translator for computer science and machine-learning papers", paper_prompt.system_prompt)
-        self.assertIn("formal Chinese academic prose", paper_prompt.user_prompt)
+        self.assertIn("formal Chinese academic prose", paper_prompt.system_prompt)
         self.assertIn("Translation Material: academic_paper", paper_prompt.user_prompt)
         self.assertIn("native, fluent Chinese technical prose", minimal_prompt.system_prompt)
         self.assertNotIn("Sentence Ledger:", minimal_prompt.user_prompt)
@@ -2077,232 +2063,6 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             ["context engineering", "agentic systems"],
         )
 
-    def test_packet_experiment_service_dry_run_exports_prompt_without_worker_output(self) -> None:
-        _, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[1]
-
-        with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    include_memory_blocks=False,
-                    include_chapter_concepts=False,
-                    prefer_memory_chapter_brief=False,
-                    include_paragraph_intent=False,
-                    include_literalism_guardrails=False,
-                    prompt_layout="sentence-led",
-                    execute=False,
-                ),
-            )
-
-        self.assertEqual(artifacts.payload["packet_id"], packet_id)
-        self.assertIn("generated_at", artifacts.payload)
-        self.assertEqual(
-            artifacts.payload["database_url"],
-            "sqlite+pysqlite:///./artifacts/book-agent.db",
-        )
-        self.assertFalse(artifacts.payload["options"]["include_paragraph_intent"])
-        self.assertFalse(artifacts.payload["options"]["include_literalism_guardrails"])
-        self.assertTrue(artifacts.payload["options"]["prefer_previous_translations_over_source_context"])
-        self.assertEqual(artifacts.payload["options"]["prompt_layout"], "sentence-led")
-        self.assertEqual(artifacts.payload["options"]["prompt_profile"], "tech-column-meta-v1")
-        self.assertFalse(artifacts.payload["options"]["execute"])
-        self.assertIsNone(artifacts.payload["worker_output"])
-        self.assertEqual(artifacts.payload["worker_metadata"]["worker_name"], "planned::echo")
-        self.assertIn("context_sources", artifacts.payload)
-        self.assertIn("prompt_stats", artifacts.payload)
-        self.assertIn("chapter_memory_snapshot_id", artifacts.payload)
-        self.assertIn("chapter_memory_snapshot_version", artifacts.payload)
-        self.assertIn("compiled_prev_block_count", artifacts.payload["context_sources"])
-        self.assertIn("compiled_next_block_count", artifacts.payload["context_sources"])
-        self.assertIn("prompt_chapter_brief_present", artifacts.payload["context_sources"])
-        self.assertEqual(artifacts.payload["context_sources"]["chapter_brief_source"], "packet")
-        self.assertIn("Current Sentences:", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertIn("system_prompt_static", artifacts.payload["prompt_request"])
-        self.assertIn("system_prompt_dynamic", artifacts.payload["prompt_request"])
-
-    def test_packet_experiment_service_execute_runs_single_packet_worker(self) -> None:
-        _, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[1]
-        fake_client = FakeTranslationClient()
-        fake_client.source_sentence_ids = ["S1"]
-        worker = LLMTranslationWorker(
-            fake_client,
-            model_name="mock-llm",
-            prompt_version="experiment.v1",
-            runtime_config={"provider": "fake"},
-        )
-
-        with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-                worker=worker,
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    prompt_layout="paragraph-led",
-                    execute=True,
-                ),
-            )
-
-        self.assertIsNotNone(artifacts.payload["worker_output"])
-        self.assertEqual(artifacts.payload["worker_metadata"]["model_name"], "mock-llm")
-        self.assertIn("generated_at", artifacts.payload)
-        self.assertEqual(len(fake_client.requests), 1)
-        self.assertIn("Current Paragraph:", artifacts.payload["prompt_request"]["user_prompt"])
-
-    def test_packet_experiment_service_concept_override_applies_without_writing_memory(self) -> None:
-        _, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[2]
-
-        with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    prompt_layout="paragraph-led",
-                    concept_overrides=(
-                        ConceptCandidate(
-                            source_term="context engineering",
-                            canonical_zh="上下文工程",
-                            status="locked",
-                            confidence=1.0,
-                        ),
-                    ),
-                ),
-            )
-
-        self.assertIn("context engineering => 上下文工程 (locked", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertEqual(len(artifacts.payload["options"]["concept_overrides"]), 1)
-        self.assertEqual(
-            artifacts.payload["options"]["concept_overrides"][0]["canonical_zh"],
-            "上下文工程",
-        )
-
-    def test_packet_experiment_service_supports_material_profile_override(self) -> None:
-        _, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[1]
-
-        with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    prompt_profile="material-aware-minimal-v1",
-                    material_profile_override="academic_paper",
-                ),
-            )
-
-        self.assertEqual(artifacts.payload["options"]["material_profile_override"], "academic_paper")
-        self.assertEqual(artifacts.payload["context_sources"]["translation_material"], "academic_paper")
-        self.assertNotIn("Translation Material:", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertGreater(artifacts.payload["prompt_stats"]["total_prompt_chars"], 0)
-
-    def test_packet_experiment_service_rerun_hints_appear_in_prompt(self) -> None:
-        _, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[2]
-
-        with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    prompt_layout="paragraph-led",
-                    rerun_hints=(
-                        "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
-                    ),
-                ),
-            )
-
-        self.assertIn("Open Questions and Rerun Hints:", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertIn("prefer '上下文工程' over literal phrasing", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertEqual(
-            artifacts.payload["options"]["rerun_hints"][0],
-            "Rerun focus [context_engineering_literal]: prefer '上下文工程' over literal phrasing in this packet.",
-        )
-
-    def test_packet_experiment_service_can_resolve_review_issue_ids_into_rerun_context(self) -> None:
-        document_id, packet_ids = self._bootstrap_to_db()
-        packet_id = packet_ids[2]
-
-        with self.session_factory() as session:
-            repository = TranslationRepository(session)
-            bundle = repository.load_packet_bundle(packet_id)
-            now = datetime.now(timezone.utc)
-            issue = ReviewIssue(
-                id="issue-style-1",
-                document_id=document_id,
-                chapter_id=bundle.packet.chapter_id,
-                block_id=None,
-                sentence_id=bundle.current_sentences[0].id,
-                packet_id=packet_id,
-                issue_type="STYLE_DRIFT",
-                root_cause_layer=RootCauseLayer.PACKET,
-                severity=Severity.MEDIUM,
-                blocking=False,
-                detector=Detector.RULE,
-                confidence=1.0,
-                evidence_json={
-                    "style_rule": "contextually_accurate_outputs_literal",
-                    "preferred_hint": "更符合上下文的输出",
-                    "prompt_guidance": (
-                        "Prefer '更符合上下文的输出' or an equally natural Chinese expression, "
-                        "not literal forms like '上下文更准确的输出'."
-                    ),
-                },
-                status=IssueStatus.OPEN,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(issue)
-            session.commit()
-
-            service = PacketExperimentService(
-                repository,
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
-            )
-            artifacts = service.run(
-                packet_id,
-                PacketExperimentOptions(
-                    prompt_layout="paragraph-led",
-                    review_issue_ids=(issue.id,),
-                ),
-            )
-
-        self.assertIn("Open Questions and Rerun Hints:", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertIn(
-            "Rerun focus [contextually_accurate_outputs_literal]: prefer '更符合上下文的输出' over literal phrasing in this packet.",
-            artifacts.payload["prompt_request"]["user_prompt"],
-        )
-        self.assertIn(
-            "Rerun guidance [contextually_accurate_outputs_literal]: Prefer '更符合上下文的输出' or an equally natural Chinese expression, not literal forms like '上下文更准确的输出'.",
-            artifacts.payload["prompt_request"]["user_prompt"],
-        )
-        self.assertEqual(artifacts.payload["options"]["review_issue_ids"], [issue.id])
-        self.assertEqual(artifacts.payload["rerun_context"]["review_issue_count"], 1)
-        self.assertEqual(
-            artifacts.payload["rerun_context"]["resolved_rerun_hints"],
-            [
-                "Rerun focus [contextually_accurate_outputs_literal]: prefer '更符合上下文的输出' over literal phrasing in this packet.",
-                "Rerun guidance [contextually_accurate_outputs_literal]: Prefer '更符合上下文的输出' or an equally natural Chinese expression, not literal forms like '上下文更准确的输出'.",
-            ],
-        )
-
     def test_translation_service_execute_packet_accepts_rerun_overrides_and_hints(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
         packet_id = packet_ids[2]
@@ -2360,683 +2120,21 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
             session.commit()
 
         with self.session_factory() as session:
-            service = PacketExperimentService(
-                TranslationRepository(session),
-                settings=Settings(translation_backend="echo", translation_model="echo-worker"),
+            repository = TranslationRepository(session)
+            bundle = repository.load_packet_bundle(target_packet_id)
+            loaded = TranslationService(repository).memory_service.load_compiled_context(
+                packet=bundle.context_packet,
             )
-            artifacts = service.run(
-                target_packet_id,
-                PacketExperimentOptions(
-                    prompt_layout="paragraph-led",
-                    execute=False,
-                ),
+            prompt_request = build_translation_prompt_request(
+                TranslationTask(context_packet=loaded.context, current_sentences=bundle.current_sentences),
+                model_name="echo-worker",
+                prompt_version="concept-lock-test",
+                prompt_layout="paragraph-led",
             )
 
         self.assertGreaterEqual(lock_result.snapshot_version, 2)
-        self.assertIn("context engineering => 上下文工程 (locked", artifacts.payload["prompt_request"]["user_prompt"])
-        self.assertEqual(artifacts.payload["chapter_memory_snapshot_version"], lock_result.snapshot_version)
-
-    def test_packet_experiment_diff_reports_context_and_prompt_changes(self) -> None:
-        baseline = {
-            "packet_id": "pkt-1",
-            "options": {
-                "prompt_layout": "paragraph-led",
-            },
-            "context_compile_version": "v1",
-            "context_sources": {
-                "raw_prev_translated_count": 0,
-                "compiled_prev_translated_count": 0,
-                "chapter_memory_translation_count": 0,
-                "raw_chapter_concept_count": 0,
-                "compiled_chapter_concept_count": 0,
-                "chapter_memory_concept_count": 0,
-                "chapter_brief_source": "packet",
-            },
-            "context_packet": {
-                "chapter_brief": "Old brief",
-                "prev_translated_blocks": [],
-                "chapter_concepts": [],
-            },
-            "prompt_request": {
-                "system_prompt": "system one",
-                "user_prompt": "Section Context:\nCurrent Paragraph:\n- P1 [paragraph] Alpha",
-            },
-            "worker_output": None,
-        }
-        candidate = {
-            "packet_id": "pkt-1",
-            "options": {
-                "prompt_layout": "sentence-led",
-            },
-            "context_compile_version": "v1",
-            "context_sources": {
-                "raw_prev_translated_count": 0,
-                "compiled_prev_translated_count": 1,
-                "chapter_memory_translation_count": 1,
-                "raw_chapter_concept_count": 0,
-                "compiled_chapter_concept_count": 1,
-                "chapter_memory_concept_count": 1,
-                "chapter_brief_source": "memory",
-            },
-            "context_packet": {
-                "chapter_brief": "New brief",
-                "prev_translated_blocks": [{"block_id": "b1"}],
-                "chapter_concepts": [{"source_term": "context engineering"}],
-            },
-            "prompt_request": {
-                "system_prompt": "system two",
-                "user_prompt": "Section Context:\nCurrent Sentences:\n1. [S1] Alpha\nCurrent Paragraph:\n- P1 [paragraph] Alpha",
-            },
-            "worker_output": {
-                "target_segments": [
-                    {
-                        "text_zh": "译文 Alpha",
-                    }
-                ]
-            },
-        }
-
-        diff = compare_experiment_payloads(
-            baseline,
-            candidate,
-            baseline_label="base",
-            candidate_label="cand",
-        )
-
-        self.assertTrue(diff.payload["summary"]["prompt_layout_changed"])
-        self.assertFalse(diff.payload["summary"]["prompt_profile_changed"])
-        self.assertTrue(diff.payload["summary"]["chapter_brief_changed"])
-        self.assertTrue(diff.payload["summary"]["chapter_brief_source_changed"])
-        self.assertTrue(diff.payload["summary"]["previous_translation_count_changed"])
-        self.assertTrue(diff.payload["summary"]["chapter_concept_count_changed"])
-        self.assertTrue(diff.payload["summary"]["user_prompt_changed"])
-        self.assertTrue(diff.payload["summary"]["worker_output_presence_changed"])
-        self.assertTrue(diff.payload["summary"]["prompt_size_changed"])
-        self.assertIn("Current Sentences", "\n".join(diff.payload["prompt_delta"]["user_prompt_unified_diff"]))
-        self.assertEqual(diff.payload["context_delta"]["previous_translation_count"]["delta"], 1)
-        self.assertEqual(
-            diff.payload["context_delta"]["context_sources"]["chapter_brief_source"]["cand"],
-            "memory",
-        )
-        self.assertIn("prompt_stats", diff.payload["prompt_delta"])
-
-    def test_translation_prompt_ab_service_collects_candidates_and_pairwise_diffs(self) -> None:
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                profile = str(options.prompt_profile)
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "packet_id": packet_id,
-                            "options": {
-                                "prompt_layout": options.prompt_layout,
-                                "prompt_profile": options.prompt_profile,
-                            },
-                            "prompt_request": {
-                                "system_prompt": f"Static Translation Contract:\nprofile={profile}",
-                                "system_prompt_static": f"profile={profile}",
-                                "system_prompt_dynamic": "material=technical_book",
-                                "user_prompt": f"Current Paragraph:\n- P1 {profile}",
-                            },
-                            "worker_output": {
-                                "target_segments": [
-                                    {
-                                        "text_zh": f"译文::{profile}",
-                                    }
-                                ]
-                            },
-                        }
-                    },
-                )()
-
-        service = TranslationPromptABService(experiment_service=StubExperimentService())
-        artifacts = service.run_packet(
-            "pkt-ab",
-            options=TranslationPromptABOptions(
-                execute=True,
-                candidates=(
-                    TranslationPromptCandidate(
-                        label="base",
-                        prompt_profile="role-style-faithful-v6",
-                        prompt_layout="paragraph-led",
-                        notes="baseline",
-                    ),
-                    TranslationPromptCandidate(
-                        label="cand",
-                        prompt_profile="cn-native-faithful-v2",
-                        prompt_layout="paragraph-led",
-                        notes="candidate",
-                    ),
-                ),
-            ),
-        )
-
-        self.assertEqual(artifacts.payload["review_summary"]["candidate_count"], 2)
-        self.assertEqual(artifacts.payload["review_summary"]["executed_candidate_count"], 2)
-        self.assertEqual(artifacts.payload["review_summary"]["labels"], ["base", "cand"])
-        self.assertEqual(len(artifacts.payload["candidates"]), 2)
-        self.assertEqual(artifacts.payload["candidates"][0]["translation_text"], "译文::role-style-faithful-v6")
-        self.assertEqual(artifacts.payload["candidates"][1]["translation_text"], "译文::cn-native-faithful-v2")
-        self.assertEqual(len(artifacts.payload["pairwise_diffs"]), 1)
-        self.assertTrue(artifacts.payload["pairwise_diffs"][0]["summary"]["prompt_profile_changed"])
-        self.assertTrue(artifacts.payload["pairwise_diffs"][0]["summary"]["worker_output_changed"])
-
-    def test_packet_experiment_scan_ranks_memory_rich_packets_first(self) -> None:
-        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
-        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
-
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                payloads = {
-                    packet_a_id: {
-                        "context_packet": {
-                            "current_blocks": [{"block_type": "paragraph", "sentence_ids": ["s1", "s2"]}],
-                        },
-                        "context_sources": {
-                            "raw_prev_translated_count": 0,
-                            "compiled_prev_translated_count": 3,
-                            "chapter_memory_translation_count": 3,
-                            "raw_chapter_concept_count": 0,
-                            "compiled_chapter_concept_count": 1,
-                            "chapter_memory_concept_count": 1,
-                            "chapter_brief_source": "memory",
-                        },
-                    },
-                    packet_b_id: {
-                        "context_packet": {
-                            "current_blocks": [{"block_type": "paragraph", "sentence_ids": ["s1"]}],
-                        },
-                        "context_sources": {
-                            "raw_prev_translated_count": 0,
-                            "compiled_prev_translated_count": 0,
-                            "chapter_memory_translation_count": 0,
-                            "raw_chapter_concept_count": 0,
-                            "compiled_chapter_concept_count": 0,
-                            "chapter_memory_concept_count": 0,
-                            "chapter_brief_source": "packet",
-                        },
-                    },
-                }
-                return type("Artifacts", (), {"payload": payloads[packet_id]})()
-
-        with self.session_factory() as session:
-            chapter_id = "22222222-2222-2222-2222-222222222222"
-            document_id = "11111111-1111-1111-1111-111111111111"
-            session.add(
-                Document(
-                    id=document_id,
-                    source_type=SourceType.EPUB,
-                    file_fingerprint="fingerprint-1",
-                    source_path="/tmp/sample.epub",
-                    title="Packet Scan Test",
-                    author="Tester",
-                    src_lang="en",
-                    tgt_lang="zh",
-                    status=DocumentStatus.ACTIVE,
-                    parser_version=1,
-                    segmentation_version=1,
-                    active_book_profile_version=1,
-                    metadata_json={},
-                )
-            )
-            session.commit()
-            session.add(
-                Chapter(
-                    id=chapter_id,
-                    document_id=document_id,
-                    ordinal=1,
-                    title_src="Chapter One",
-                    title_tgt=None,
-                    anchor_start=None,
-                    anchor_end=None,
-                    status=ChapterStatus.PACKET_BUILT,
-                    summary_version=1,
-                    risk_level=None,
-                    metadata_json={},
-                )
-            )
-            session.commit()
-            session.add_all(
-                [
-                    TranslationPacket(
-                        id=packet_a_id,
-                        chapter_id=chapter_id,
-                        block_start_id=None,
-                        block_end_id=None,
-                        packet_type=PacketType.TRANSLATE,
-                        book_profile_version=1,
-                        chapter_brief_version=1,
-                        termbase_version=1,
-                        entity_snapshot_version=1,
-                        style_snapshot_version=1,
-                        packet_json={},
-                        risk_score=0.1,
-                        status=PacketStatus.BUILT,
-                    ),
-                    TranslationPacket(
-                        id=packet_b_id,
-                        chapter_id=chapter_id,
-                        block_start_id=None,
-                        block_end_id=None,
-                        packet_type=PacketType.TRANSLATE,
-                        book_profile_version=1,
-                        chapter_brief_version=1,
-                        termbase_version=1,
-                        entity_snapshot_version=1,
-                        style_snapshot_version=1,
-                        packet_json={},
-                        risk_score=0.1,
-                        status=PacketStatus.BUILT,
-                    ),
-                ]
-            )
-            session.commit()
-            now = datetime.now(timezone.utc)
-            session.add_all(
-                [
-                    ReviewIssue(
-                        id="issue-style-a",
-                        document_id=document_id,
-                        chapter_id=chapter_id,
-                        block_id=None,
-                        sentence_id=None,
-                        packet_id=packet_a_id,
-                        issue_type="STYLE_DRIFT",
-                        root_cause_layer=RootCauseLayer.PACKET,
-                        severity=Severity.MEDIUM,
-                        blocking=False,
-                        detector=Detector.RULE,
-                        confidence=1.0,
-                        evidence_json={},
-                        status=IssueStatus.OPEN,
-                        created_at=now,
-                        updated_at=now,
-                    ),
-                    ReviewIssue(
-                        id="issue-term-b",
-                        document_id=document_id,
-                        chapter_id=chapter_id,
-                        block_id=None,
-                        sentence_id=None,
-                        packet_id=packet_b_id,
-                        issue_type="TERM_CONFLICT",
-                        root_cause_layer=RootCauseLayer.PACKET,
-                        severity=Severity.MEDIUM,
-                        blocking=False,
-                        detector=Detector.RULE,
-                        confidence=1.0,
-                        evidence_json={},
-                        status=IssueStatus.OPEN,
-                        created_at=now,
-                        updated_at=now,
-                    ),
-                    ReviewIssue(
-                        id="issue-style-b",
-                        document_id=document_id,
-                        chapter_id=chapter_id,
-                        block_id=None,
-                        sentence_id=None,
-                        packet_id=packet_b_id,
-                        issue_type="STYLE_DRIFT",
-                        root_cause_layer=RootCauseLayer.PACKET,
-                        severity=Severity.MEDIUM,
-                        blocking=False,
-                        detector=Detector.RULE,
-                        confidence=1.0,
-                        evidence_json={},
-                        status=IssueStatus.OPEN,
-                        created_at=now,
-                        updated_at=now,
-                    ),
-                ]
-            )
-            session.commit()
-
-            scan_service = PacketExperimentScanService(
-                TranslationRepository(session),
-                experiment_service=StubExperimentService(),
-            )
-            artifacts = scan_service.scan_chapter(chapter_id)
-
-        self.assertEqual(artifacts.payload["packet_count"], 2)
-        self.assertEqual(artifacts.payload["unresolved_packet_issue_count"], 3)
-        self.assertEqual(artifacts.payload["top_candidate"]["packet_id"], packet_a_id)
-        self.assertGreater(artifacts.payload["entries"][0]["memory_signal_score"], artifacts.payload["entries"][1]["memory_signal_score"])
-        entry_by_packet = {entry["packet_id"]: entry for entry in artifacts.payload["entries"]}
-        self.assertEqual(entry_by_packet[packet_a_id]["unresolved_issue_count"], 1)
-        self.assertEqual(entry_by_packet[packet_a_id]["issue_priority_tier"], 1)
-        self.assertFalse(entry_by_packet[packet_a_id]["has_non_style_issue"])
-        self.assertEqual(entry_by_packet[packet_b_id]["unresolved_issue_count"], 2)
-        self.assertEqual(entry_by_packet[packet_b_id]["issue_priority_tier"], 0)
-        self.assertTrue(entry_by_packet[packet_b_id]["has_non_style_issue"])
-        self.assertTrue(entry_by_packet[packet_b_id]["mixed_issue_types"])
-        self.assertEqual(
-            entry_by_packet[packet_b_id]["unresolved_issue_types"],
-            ["STYLE_DRIFT", "TERM_CONFLICT"],
-        )
-
-    def test_translation_chapter_smoke_selects_top_packets_and_summarizes_style_drift(self) -> None:
-        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
-        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
-
-        class StubScanService:
-            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "chapter_id": chapter_id,
-                            "packet_count": 2,
-                            "entries": [
-                                {
-                                    "packet_id": packet_a_id,
-                                    "memory_signal_score": 250,
-                                    "current_sentence_count": 2,
-                                },
-                                {
-                                    "packet_id": packet_b_id,
-                                    "memory_signal_score": 100,
-                                    "current_sentence_count": 1,
-                                },
-                            ],
-                        }
-                    },
-                )()
-
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                payloads = {
-                    packet_a_id: {
-                        "context_packet": {
-                            "current_blocks": [
-                                {
-                                    "block_id": "block-a",
-                                    "block_type": "paragraph",
-                                    "sentence_ids": ["s1"],
-                                    "text": "This broader challenge is what some are beginning to call context engineering.",
-                                }
-                            ]
-                        },
-                        "context_sources": {"compiled_prev_translated_count": 2},
-                        "worker_output": {
-                            "target_segments": [
-                                {
-                                    "text_zh": "这一挑战正被称为情境工程。",
-                                    "source_sentence_ids": ["s1"],
-                                }
-                            ],
-                            "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
-                            "low_confidence_flags": [],
-                        },
-                        "usage": {"cost_usd": 0.1},
-                        "prompt_request": {"user_prompt": "prompt-a"},
-                    },
-                    packet_b_id: {
-                        "context_packet": {
-                            "current_blocks": [
-                                {
-                                    "block_id": "block-b",
-                                    "block_type": "paragraph",
-                                    "sentence_ids": ["s1"],
-                                    "text": "This paragraph discusses distributed SQL foundations.",
-                                }
-                            ]
-                        },
-                        "context_sources": {"compiled_prev_translated_count": 1},
-                        "worker_output": {
-                            "target_segments": [
-                                {
-                                    "text_zh": "这一挑战正被称为上下文工程。",
-                                    "source_sentence_ids": ["s1"],
-                                }
-                            ],
-                            "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
-                            "low_confidence_flags": [],
-                        },
-                        "usage": {"cost_usd": 0.2},
-                        "prompt_request": {"user_prompt": "prompt-b"},
-                    },
-                }
-                return type("Artifacts", (), {"payload": payloads[packet_id]})()
-
-        smoke_service = TranslationChapterSmokeService(
-            experiment_service=StubExperimentService(),
-            scan_service=StubScanService(),
-        )
-        artifacts = smoke_service.run_chapter(
-            "chapter-1",
-            options=TranslationChapterSmokeOptions(selected_packet_limit=1, execute_selected=True),
-        )
-
-        self.assertEqual(artifacts.payload["selected_packet_ids"], [packet_a_id])
-        self.assertEqual(artifacts.payload["aggregate_summary"]["selected_packet_count"], 1)
-        self.assertEqual(artifacts.payload["aggregate_summary"]["total_style_drift_hits"], 1)
-        self.assertEqual(artifacts.payload["packet_results"][0]["style_drift_hits"], ["context_engineering_literal"])
-        self.assertEqual(artifacts.payload["aggregate_summary"]["total_cost_usd"], 0.1)
-
-    def test_translation_chapter_smoke_prioritizes_issue_driven_packets_by_default(self) -> None:
-        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
-        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
-
-        class StubScanService:
-            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "chapter_id": chapter_id,
-                            "packet_count": 2,
-                            "entries": [
-                                {
-                                    "packet_id": packet_a_id,
-                                    "memory_signal_score": 300,
-                                    "current_sentence_count": 2,
-                                    "unresolved_issue_count": 2,
-                                    "style_drift_issue_count": 2,
-                                    "non_style_issue_count": 0,
-                                    "has_non_style_issue": False,
-                                    "mixed_issue_types": False,
-                                    "issue_priority_tier": 1,
-                                    "issue_priority_reason": "style_only",
-                                },
-                                {
-                                    "packet_id": packet_b_id,
-                                    "memory_signal_score": 120,
-                                    "current_sentence_count": 1,
-                                    "unresolved_issue_count": 2,
-                                    "style_drift_issue_count": 1,
-                                    "non_style_issue_count": 1,
-                                    "has_non_style_issue": True,
-                                    "mixed_issue_types": True,
-                                    "issue_priority_tier": 0,
-                                    "issue_priority_reason": "mixed_or_non_style",
-                                },
-                            ],
-                        }
-                    },
-                )()
-
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "context_packet": {"current_blocks": []},
-                            "context_sources": {},
-                            "worker_output": {
-                                "target_segments": [],
-                                "alignment_suggestions": [],
-                                "low_confidence_flags": [],
-                            },
-                            "usage": {"cost_usd": 0.0},
-                            "prompt_request": {"user_prompt": "prompt"},
-                        }
-                    },
-                )()
-
-        smoke_service = TranslationChapterSmokeService(
-            experiment_service=StubExperimentService(),
-            scan_service=StubScanService(),
-        )
-        artifacts = smoke_service.run_chapter(
-            "chapter-1",
-            options=TranslationChapterSmokeOptions(selected_packet_limit=1, execute_selected=True),
-        )
-
-        self.assertEqual(artifacts.payload["selected_packet_ids"], [packet_b_id])
-        self.assertEqual(artifacts.payload["aggregate_summary"]["selected_mixed_issue_packet_count"], 1)
-        self.assertEqual(artifacts.payload["aggregate_summary"]["selected_non_style_issue_packet_count"], 1)
-        self.assertEqual(artifacts.payload["packet_results"][0]["issue_priority_tier"], 0)
-
-    def test_translation_chapter_smoke_can_disable_issue_priority_and_keep_scan_order(self) -> None:
-        packet_a_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
-        packet_b_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"
-
-        class StubScanService:
-            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "chapter_id": chapter_id,
-                            "packet_count": 2,
-                            "entries": [
-                                {
-                                    "packet_id": packet_a_id,
-                                    "memory_signal_score": 300,
-                                    "current_sentence_count": 2,
-                                    "unresolved_issue_count": 2,
-                                    "style_drift_issue_count": 2,
-                                    "non_style_issue_count": 0,
-                                    "has_non_style_issue": False,
-                                    "mixed_issue_types": False,
-                                    "issue_priority_tier": 1,
-                                },
-                                {
-                                    "packet_id": packet_b_id,
-                                    "memory_signal_score": 120,
-                                    "current_sentence_count": 1,
-                                    "unresolved_issue_count": 2,
-                                    "style_drift_issue_count": 1,
-                                    "non_style_issue_count": 1,
-                                    "has_non_style_issue": True,
-                                    "mixed_issue_types": True,
-                                    "issue_priority_tier": 0,
-                                },
-                            ],
-                        }
-                    },
-                )()
-
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "context_packet": {"current_blocks": []},
-                            "context_sources": {},
-                            "worker_output": {
-                                "target_segments": [],
-                                "alignment_suggestions": [],
-                                "low_confidence_flags": [],
-                            },
-                            "usage": {"cost_usd": 0.0},
-                            "prompt_request": {"user_prompt": "prompt"},
-                        }
-                    },
-                )()
-
-        smoke_service = TranslationChapterSmokeService(
-            experiment_service=StubExperimentService(),
-            scan_service=StubScanService(),
-        )
-        artifacts = smoke_service.run_chapter(
-            "chapter-1",
-            options=TranslationChapterSmokeOptions(
-                selected_packet_limit=1,
-                execute_selected=True,
-                prefer_issue_driven_packets=False,
-            ),
-        )
-
-        self.assertEqual(artifacts.payload["selected_packet_ids"], [packet_a_id])
-
-    def test_translation_chapter_smoke_requires_source_pattern_match_for_style_drift(self) -> None:
-        packet_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
-
-        class StubScanService:
-            def scan_chapter(self, chapter_id: str, *, options: PacketExperimentOptions | None = None):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "chapter_id": chapter_id,
-                            "packet_count": 1,
-                            "entries": [
-                                {
-                                    "packet_id": packet_id,
-                                    "memory_signal_score": 100,
-                                    "current_sentence_count": 1,
-                                }
-                            ],
-                        }
-                    },
-                )()
-
-        class StubExperimentService:
-            def run(self, packet_id: str, options: PacketExperimentOptions):
-                return type(
-                    "Artifacts",
-                    (),
-                    {
-                        "payload": {
-                            "context_packet": {
-                                "current_blocks": [
-                                    {
-                                        "block_id": "block-1",
-                                        "block_type": "paragraph",
-                                        "sentence_ids": ["s1"],
-                                        "text": "This paragraph discusses distributed SQL foundations.",
-                                    }
-                                ]
-                            },
-                            "worker_output": {
-                                "target_segments": [
-                                    {
-                                        "text_zh": "这一挑战正被一些人称为情境工程。",
-                                        "source_sentence_ids": ["s1"],
-                                    }
-                                ],
-                                "alignment_suggestions": [{"source_sentence_ids": ["s1"]}],
-                                "low_confidence_flags": [],
-                            },
-                            "usage": {"cost_usd": 0.1},
-                            "prompt_request": {"user_prompt": "prompt-a"},
-                        }
-                    },
-                )()
-
-        smoke_service = TranslationChapterSmokeService(
-            experiment_service=StubExperimentService(),
-            scan_service=StubScanService(),
-        )
-        artifacts = smoke_service.run_chapter(
-            "chapter-1",
-            options=TranslationChapterSmokeOptions(selected_packet_limit=1, execute_selected=True),
-        )
-
-        self.assertEqual(artifacts.payload["aggregate_summary"]["total_style_drift_hits"], 0)
-        self.assertEqual(artifacts.payload["packet_results"][0]["style_drift_hits"], [])
+        self.assertIn("context engineering => 上下文工程 (locked", prompt_request.user_prompt)
+        self.assertEqual(loaded.chapter_memory_snapshot.version, lock_result.snapshot_version)
 
     def test_translation_service_reuses_chapter_memory_across_nonadjacent_packets(self) -> None:
         chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -3453,118 +2551,69 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertEqual(call["payload"]["model"], "deepseek-chat")
         self.assertEqual(call["payload"]["messages"][0]["role"], "system")
         self.assertEqual(call["payload"]["messages"][1]["role"], "user")
-        self.assertIn("Do not use top-level keys like translation or translations.", call["payload"]["messages"][1]["content"])
-        self.assertIn('"packet_id"', call["payload"]["messages"][1]["content"])
+        self.assertIn("Do not use top-level keys like translation or translations.", call["payload"]["messages"][0]["content"])
+        self.assertIn('"packet_id"', call["payload"]["messages"][0]["content"])
+        self.assertIn("packet_id must equal: pkt_1", call["payload"]["messages"][1]["content"])
         self.assertEqual(call["payload"]["response_format"]["type"], "json_object")
         self.assertEqual(call["payload"]["max_tokens"], 8192)
 
-    def test_openai_compatible_client_retries_after_incomplete_read_in_live_transport(self) -> None:
-        class StubHTTPResponse:
-            def __init__(self, *, payload: bytes | None = None, read_exc: Exception | None = None) -> None:
-                self.payload = payload
-                self.read_exc = read_exc
-
-            def __enter__(self) -> "StubHTTPResponse":
-                return self
-
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-            def read(self) -> bytes:
-                if self.read_exc is not None:
-                    raise self.read_exc
-                return self.payload or b""
-
-        client = OpenAICompatibleTranslationClient(
+    def _retrying_chat_client(self, handler) -> OpenAICompatibleTranslationClient:
+        transport = HttpxJSONTransport(client=httpx.Client(transport=httpx.MockTransport(handler)))
+        return OpenAICompatibleTranslationClient(
             api_key="test-key",
             base_url="https://api.deepseek.com",
             timeout_seconds=45,
             max_retries=1,
             retry_backoff_seconds=0,
-            transport=UrllibJSONTransport(),
+            transport=transport,
+            sleep=lambda _seconds: None,
         )
 
-        with patch(
-            "book_agent.workers.providers.openai_compatible.urlopen",
-            side_effect=[
-                StubHTTPResponse(read_exc=IncompleteRead(b"")),
-                StubHTTPResponse(
-                    payload=(
-                        '{"id":"chatcmpl_retry_123",'
-                        '"usage":{"prompt_tokens":88,"completion_tokens":22,"total_tokens":110},'
-                        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
-                    ).encode("utf-8")
-                ),
-            ],
-        ) as mocked_urlopen:
-            output = client.generate_translation(
-                TranslationPromptRequest(
-                    packet_id="pkt_1",
-                    model_name="deepseek-chat",
-                    prompt_version="p0.llm.v1",
-                    system_prompt="system",
-                    user_prompt="user",
-                    response_schema=TranslationWorkerOutput.model_json_schema(),
-                )
-            )
+    _RETRY_OK_BODY = (
+        '{"id":"chatcmpl_retry_123",'
+        '"usage":{"prompt_tokens":88,"completion_tokens":22,"total_tokens":110},'
+        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
+    )
+
+    def _retry_request(self) -> TranslationPromptRequest:
+        return TranslationPromptRequest(
+            packet_id="pkt_1",
+            model_name="deepseek-chat",
+            prompt_version="p0.llm.v1",
+            system_prompt="system",
+            user_prompt="user",
+            response_schema=TranslationWorkerOutput.model_json_schema(),
+        )
+
+    def test_openai_compatible_client_retries_after_truncated_response(self) -> None:
+        calls: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+            return httpx.Response(200, content=self._RETRY_OK_BODY.encode("utf-8"))
+
+        output = self._retrying_chat_client(handler).generate_translation(self._retry_request())
 
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
-        self.assertEqual(mocked_urlopen.call_count, 2)
+        self.assertEqual(len(calls), 2)
 
-    def test_openai_compatible_client_retries_after_timeout_during_response_read(self) -> None:
-        class StubHTTPResponse:
-            def __init__(self, *, payload: bytes | None = None, read_exc: Exception | None = None) -> None:
-                self.payload = payload
-                self.read_exc = read_exc
+    def test_openai_compatible_client_retries_after_read_timeout(self) -> None:
+        calls: list[int] = []
 
-            def __enter__(self) -> "StubHTTPResponse":
-                return self
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.ReadTimeout("The read operation timed out")
+            return httpx.Response(200, content=self._RETRY_OK_BODY.encode("utf-8"))
 
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-            def read(self) -> bytes:
-                if self.read_exc is not None:
-                    raise self.read_exc
-                return self.payload or b""
-
-        client = OpenAICompatibleTranslationClient(
-            api_key="test-key",
-            base_url="https://api.deepseek.com",
-            timeout_seconds=45,
-            max_retries=1,
-            retry_backoff_seconds=0,
-            transport=UrllibJSONTransport(),
-        )
-
-        with patch(
-            "book_agent.workers.providers.openai_compatible.urlopen",
-            side_effect=[
-                StubHTTPResponse(read_exc=TimeoutError("The read operation timed out")),
-                StubHTTPResponse(
-                    payload=(
-                        '{"id":"chatcmpl_retry_timeout_123",'
-                        '"usage":{"prompt_tokens":77,"completion_tokens":19,"total_tokens":96},'
-                        '"choices":[{"message":{"content":"{\\"packet_id\\":\\"pkt_1\\",\\"target_segments\\":[{\\"temp_id\\":\\"t1\\",\\"text_zh\\":\\"译文\\",\\"segment_type\\":\\"sentence\\",\\"source_sentence_ids\\":[\\"s1\\"],\\"confidence\\":0.91}],\\"alignment_suggestions\\":[{\\"source_sentence_ids\\":[\\"s1\\"],\\"target_temp_ids\\":[\\"t1\\"],\\"relation_type\\":\\"1:1\\",\\"confidence\\":0.93}],\\"low_confidence_flags\\":[],\\"notes\\":[]}"}}]}'
-                    ).encode("utf-8")
-                ),
-            ],
-        ) as mocked_urlopen:
-            output = client.generate_translation(
-                TranslationPromptRequest(
-                    packet_id="pkt_1",
-                    model_name="deepseek-chat",
-                    prompt_version="p0.llm.v1",
-                    system_prompt="system",
-                    user_prompt="user",
-                    response_schema=TranslationWorkerOutput.model_json_schema(),
-                )
-            )
+        output = self._retrying_chat_client(handler).generate_translation(self._retry_request())
 
         self.assertEqual(output.packet_id, "pkt_1")
         self.assertEqual(output.target_segments[0].text_zh, "译文")
-        self.assertEqual(mocked_urlopen.call_count, 2)
+        self.assertEqual(len(calls), 2)
 
     def test_openai_compatible_client_preserves_provider_network_error_type(self) -> None:
         client = OpenAICompatibleTranslationClient(

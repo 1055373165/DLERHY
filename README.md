@@ -3,12 +3,12 @@
 # 📚 Book Agent
 
 ### Whole-book English → Chinese translation agent
-**EPUB / PDF in, bilingual HTML · Markdown · EPUB · PDF out — with packet-level retries, Kubernetes-style reconciliation, and a self-healing runtime.**
+**EPUB / PDF in, HTML · Markdown · EPUB · PDF out — with packet-level retries, resumable runs, and deterministic review-driven repair.**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React 18](https://img.shields.io/badge/frontend-React%20%2B%20TS-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![React 19](https://img.shields.io/badge/frontend-React%20%2B%20TS-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](#-license)
 
@@ -24,7 +24,9 @@
 > Kill the process mid-run — restart it — translation resumes from the exact packet it left off.
 > Change the LLM provider by editing **one** environment variable.
 
-One required variable: `OPENAI_API_KEY`. Everything else has sane defaults.
+One required variable: `OPENAI_API_KEY`. Everything else has sane defaults. Providers can also be added, priced and switched in the UI (「服务商」page) without a restart.
+
+中文使用指南（配服务商、上传、费用预估、暂停原因、下载格式）：[docs/user-guide.md](docs/user-guide.md)
 
 ---
 
@@ -41,7 +43,7 @@ cp .env.example .env              # edit: OPENAI_API_KEY=sk-...
 docker compose up -d              # → http://localhost:58000
 ```
 
-Docker Compose brings up PostgreSQL 16 and the app container in one shot.
+Docker Compose brings up PostgreSQL 16, runs the Alembic migrations in a one-shot `migrate` container, then starts the app.
 Uploads persist in the `app_exports` volume; database state in `postgres_data`.
 
 ### Option 2 · Local dev (macOS / Linux)
@@ -54,6 +56,16 @@ cp .env.example .env              # edit: OPENAI_API_KEY=sk-...
 ```
 
 `dev.sh` installs Python deps via [`uv`](https://docs.astral.sh/uv/), starts PostgreSQL in Docker, runs Alembic migrations, and boots backend + frontend with hot reload.
+
+To run the services in the background and control them from any directory:
+
+```bash
+./book-agent install              # once: links ~/.local/bin/book-agent to this repo
+book-agent start                  # PostgreSQL + migrations + backend (:8999) + frontend (:4173)
+book-agent status | logs | restart
+book-agent stop                   # --keep-db leaves PostgreSQL running
+book-agent add-org-credit ...     # any other command goes to the Python CLI of this project
+```
 
 ### Your first translation — 3 clicks
 
@@ -72,12 +84,12 @@ Long-document translation isn't just "call an LLM in a loop." The hard problems 
 | Problem with naive pipelines | How Book Agent solves it |
 |---|---|
 | One HTTP 429 kills a 10-hour run | **Packet-level atomicity** — the unit is 3–8 sentences. A failure re-runs one packet; the other 99 % is untouched. |
-| In-memory state lost on crash / deploy | **Kubernetes-style reconciliation** — stateless controllers diff DB state against the desired state every tick. Kill anything; it resumes. |
+| In-memory state lost on crash / deploy | **Database-backed runs** — work items and leases live in PostgreSQL. After a crash, expired leases are reclaimed and the run continues from the packets that remain. |
 | "LLM fixes itself" ends in loops | **Deterministic fix routing** — review issues map to 12 named actions (`RERUN_PACKET`, `UPDATE_TERMBASE_THEN_RERUN_TARGETED`, `REPARSE_CHAPTER`, …). No black-box self-correction. |
 | Terminology drifts between chapters | **Translation memory per chapter** — termbases, entity registries, style deltas, and discourse bridges are compiled into every packet's context. |
 | Runs block on one slow chapter | **8-way parallelism with lane isolation** — PostgreSQL guarantees concurrency safety; per-chapter lanes keep context consistent. |
 | Vendor lock-in to one LLM | **Any OpenAI-compatible backend** — DeepSeek, OpenAI, Moonshot, vLLM, Ollama. Swap `OPENAI_BASE_URL` + `BOOK_AGENT_TRANSLATION_MODEL`. |
-| Silent failures you only notice at export | **Self-healing runtime** — exceptions classified into `retry` / `pause` / `incident`. Stalled leases auto-reclaim. Anomalies emit `PatchProposal`s that auto-apply within a budget. |
+| Silent failures you only notice at export | **Failure classification and budgets** — errors are classified into retry / pause / fail, stalled leases are reclaimed, and run budgets (cost, tokens, wall clock, no progress) pause or fail a run. |
 | Opaque pipelines you can't inspect | **Full audit trail** — every state transition, every LLM call, every fix action is a row in `audit_events`. The UI is a live view of Postgres, not a cached snapshot. |
 
 ### At a glance
@@ -85,7 +97,7 @@ Long-document translation isn't just "call an LLM in a loop." The hard problems 
 - ✅ **One required env var** — `OPENAI_API_KEY`.
 - ✅ **Sole data store is PostgreSQL** — no Redis, no Kafka, no task queue.
 - ✅ **Pause · Resume · Retry · Cancel** are first-class REST verbs.
-- ✅ **Nine export formats** — bilingual MD/HTML, interleaved, Chinese-only EPUB/PDF, review JSON, sentence-aligned JSONL.
+- ✅ **Seven export formats** — bilingual chapter HTML, Chinese reading edition HTML/Markdown, rebuilt and Chinese EPUB, rebuilt PDF, review package JSON.
 - ✅ **Runs on a laptop** — 8 GB RAM is enough for the full stack.
 
 ---
@@ -111,17 +123,17 @@ Long-document translation isn't just "call an LLM in a loop." The hard problems 
 | **Repair** | Rerun the smallest unit that can fix the issue (packet > chapter > document) | New packet / chapter versions |
 | **Export** | Assemble bilingual or Chinese-only deliverables from final sentences | Files under `artifacts/exports/` |
 
-The loop is **driven by reconciliation**, not a pipeline orchestrator. Controllers wake on a tick, read Postgres, and do whatever moves the system closer to the desired terminal state. That's what makes it resumable.
+A background run executor ticks over each active run: it derives stage status from rows in PostgreSQL, seeds and leases work items for the next stage, and settles the run once every stage has evidence. Because the ledger lives in the database, a restarted process picks up where the last one stopped.
 
 ---
 
 ## 🏛 Architecture
 
-The system is organised in four horizontal tiers — **Client**, **API / Control Plane**, **Reconcilers & Services**, and **State** — plus one external dependency (**LLM provider**). Every reconciler is stateless; the only source of truth is PostgreSQL.
+The system is organised in four horizontal tiers — **Client**, **API / Run control**, **Run executor & Services**, and **State** — plus one external dependency (**LLM provider**). The only source of truth is PostgreSQL.
 
 ![d2 (2)](https://github.com/user-attachments/assets/ea145a8b-7e3b-45bf-b505-e3434b32d11f)
 
-> **The key insight:** nothing in the data plane holds state. Kill any worker, any controller, any backend process — the next reconcile tick reads PostgreSQL, sees what's missing, and resumes. **No orchestration bus, no task queue, no in-memory state to lose.**
+> **The key insight:** run progress is a ledger in PostgreSQL, not in memory. Kill the backend process and the next executor tick reads what is missing and resumes. **No orchestration bus, no external task queue.**
 
 ---
 
@@ -190,9 +202,14 @@ POST /v1/runs/{id}/pause           # graceful pause at next safe point
 POST /v1/runs/{id}/resume          # resume from checkpoint
 POST /v1/runs/{id}/retry           # reset retryable_failed items
 POST /v1/runs/{id}/cancel          # hard stop
-POST /v1/documents/{id}/review     # run QA review
-POST /v1/documents/{id}/export     # emit a deliverable
+POST /v1/documents/{id}/translate  # enqueue a translate_targeted run (202)
+POST /v1/documents/{id}/review     # enqueue a review_full run (202)
+POST /v1/documents/{id}/export     # enqueue an export_full run (202)
+GET  /v1/documents/{id}/exports/download?export_type=…  # serve an existing export
 ```
+
+The document actions return the created run immediately; poll `/v1/runs/{id}` for the result.
+Downloads never generate exports — enqueue an export run first.
 
 The frontend polls `/v1/runs/{id}` every 2.5 s — the UI is a live view of PostgreSQL, not a cached snapshot.
 
@@ -202,7 +219,7 @@ The frontend polls `/v1/runs/{id}` every 2.5 s — the UI is a live view of Post
 uv run book-agent bootstrap --source-path ./books/my-book.epub
 uv run book-agent translate --document-id <DOCUMENT_ID>
 uv run book-agent review    --document-id <DOCUMENT_ID>
-uv run book-agent export    --document-id <DOCUMENT_ID> --export-type bilingual_markdown
+uv run book-agent export    --document-id <DOCUMENT_ID> --export-type merged_markdown
 ```
 
 ---
@@ -211,15 +228,15 @@ uv run book-agent export    --document-id <DOCUMENT_ID> --export-type bilingual_
 
 | Format | Description |
 |---|---|
-| `bilingual_markdown` | Side-by-side EN / ZH Markdown — the primary high-fidelity format |
-| `bilingual_html` | Side-by-side EN / ZH HTML |
-| `merged_markdown` | Interleaved paragraph-level bilingual Markdown |
-| `merged_html` | Interleaved paragraph-level bilingual HTML |
-| `zh_epub` | Chinese-only EPUB |
-| `zh_pdf` | Chinese-only PDF |
-| `rebuilt_epub` | Rebuilt bilingual EPUB preserving original structure |
+| `bilingual_html` | Per-chapter side-by-side EN / ZH HTML |
+| `merged_html` | Whole-book Chinese reading edition (HTML) |
+| `merged_markdown` | Whole-book Chinese reading edition (Markdown) |
+| `rebuilt_epub` | EPUB rebuilt from the translated document (EPUB sources) |
+| `zh_epub` | Source EPUB with text replaced by the translation (EPUB sources) |
+| `rebuilt_pdf` | PDF printed from the merged HTML (requires Playwright) |
 | `review_package` | Per-chapter review JSON with quality metrics |
-| `jsonl` | Sentence-aligned JSONL — great for fine-tuning datasets |
+
+`bilingual_markdown`, `zh_pdf` and `jsonl` exist in the enum but are not implemented yet.
 
 > Book Agent produces **faithful Markdown/HTML/EPUB** that mirrors the source structure (headings, code, figures, lists). It does **not** overwrite source PDFs in place — a deliberate choice to avoid CJK overflow and font-fitting artefacts.
 
@@ -230,7 +247,7 @@ uv run book-agent export    --document-id <DOCUMENT_ID> --export-type bilingual_
 | Layer | Stack |
 |---|---|
 | **Backend** | Python 3.12 · FastAPI · SQLAlchemy 2.0 · Pydantic v2 · Alembic |
-| **Frontend** | React 18 · TypeScript · Vite · React Query · React Router |
+| **Frontend** | React 19 · TypeScript · Vite · React Query · React Router |
 | **Database** | PostgreSQL 16 (sole storage — no Redis, no MQ) |
 | **PDF** | PyMuPDF |
 | **LLM** | `httpx` → any OpenAI-compatible endpoint, structured output |
@@ -241,8 +258,11 @@ uv run book-agent export    --document-id <DOCUMENT_ID> --export-type bilingual_
 ## 🧑‍💻 Development
 
 ```bash
-# Full test suite
-uv run pytest
+# Full test suite: one interpreter per test file (the supported way; also what CI runs)
+scripts/run_tests_per_file.sh
+
+# A few files while iterating
+uv run pytest tests/test_export_golden.py tests/test_cli.py
 
 # Lint
 uv run ruff check src/ tests/
@@ -264,7 +284,7 @@ book-agent/
 │   ├── core/             # config · logging · IDs
 │   ├── domain/           # ORM models · enums · parsers · segmentation
 │   ├── infra/            # DB session · repositories
-│   ├── orchestrator/     # bootstrap · state machine · rule engine
+│   ├── orchestrator/     # stage status · stage gates · rule engine
 │   ├── services/         # translation · review · export · repair
 │   ├── workers/          # LLM provider abstraction
 │   └── cli.py
@@ -282,7 +302,7 @@ book-agent/
 <details>
 <summary><b>What happens if I kill the process mid-translation?</b></summary>
 
-Nothing is lost. On restart, controllers read PostgreSQL, reclaim expired leases, and resume at the exact packet where they stopped. Packets that were in flight go back to `ready`; completed packets stay completed.
+Nothing is lost. On restart, the run executor reads PostgreSQL, reclaims expired leases, and resumes with the packets that are not translated yet. Packets that were in flight are retried; completed packets stay completed.
 </details>
 
 <details>
@@ -315,8 +335,7 @@ Text-based PDFs are stable. Scanned PDFs go through an experimental OCR pipeline
 
 - [x] Streaming SSE for live progress (replacing 2.5 s poll) — `GET /v1/runs/{id}/stream` over Postgres `LISTEN`
 - [ ] RAG-assisted term resolution from a user glossary
-- [x] Cost dashboard with per-chapter attribution — `GET /v1/runs/{id}/cost` over `cost_rollup_*` matviews
-- [x] Self-hosted `PatchProposal` review workflow — `GET/POST /v1/patches` with `requires_human_review` gate on `publish_validated_patch`
+- [x] Cost dashboard with per-chapter attribution — `GET /v1/runs/{id}/cost` aggregated from `llm.call.completed` events
 
 ---
 
@@ -332,7 +351,7 @@ PRs welcome. Please:
 
 ## 📝 License
 
-[MIT](./LICENSE) — do whatever you want, just don't blame us.
+MIT — do whatever you want, just don't blame us.
 
 <div align="center">
 

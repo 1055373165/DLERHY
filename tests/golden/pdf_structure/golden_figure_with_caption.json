@@ -1,0 +1,275 @@
+{
+ "author": null,
+ "chapters": [
+  {
+   "blocks": [
+    {
+     "anchor": "p1-b1",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 1,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          72.0,
+          510.383,
+          103.362
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "The introductory paragraph sets the stage for the figure below, which depicts the data flow\nthrough the pipeline.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-img2",
+     "block_type": "image",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "artifact_group_context_source_anchors": [
+       "pdf://page/1#p1-b4"
+      ],
+      "image_alt": "Figure 1.1: Data flow from ingestion through translation.",
+      "image_ext": null,
+      "image_height_px": null,
+      "image_type": "vector_drawing",
+      "image_width_px": null,
+      "linked_caption_page": 1,
+      "linked_caption_source_anchor": "pdf://page/1#p1-b3",
+      "linked_caption_text": "Figure 1.1: Data flow from ingestion through translation.",
+      "nontranslatable_reason": null,
+      "pdf_block_role": "image",
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 2,
+      "recovery_flags": [
+       "caption_linked",
+       "artifact_group_context_linked"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          102.0,
+          180.0,
+          510.0,
+          500.0
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.97,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "[Image]",
+     "translatability": "translate_none"
+    },
+    {
+     "anchor": "p1-b3",
+     "block_type": "caption",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "caption_for_page": 1,
+      "caption_for_role": "image",
+      "caption_for_source_anchor": "pdf://page/1#p1-img2",
+      "nontranslatable_reason": null,
+      "pdf_block_role": "caption",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 3,
+      "recovery_flags": [
+       "image_caption_linked"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          470.0,
+          318.22,
+          483.74
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Figure 1.1: Data flow from ingestion through translation.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b4",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "artifact_group_role": "image",
+      "artifact_group_source_anchor": "pdf://page/1#p1-img2",
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 4,
+      "recovery_flags": [
+       "image_group_context_linked"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          530.0,
+          527.488,
+          561.362
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 4,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "The discussion continues after the figure, referring back to it as Figure 1.1 to anchor the cross\nreference.",
+     "translatability": "translate_all"
+    }
+   ],
+   "chapter_id": "pdf-chapter-001",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Chapter 1"
+  }
+ ],
+ "language": "en",
+ "metadata": {
+  "document_title_resolution_source": "source_filename",
+  "format": "PDF 1.7",
+  "outline_entry_count": 0,
+  "pdf_extractor": "pymupdf",
+  "pdf_page_evidence": {
+   "extractor_kind": "pymupdf",
+   "page_count": 1,
+   "pdf_outline_entries": [],
+   "pdf_pages": [
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": false,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 1,
+     "raw_block_count": 3,
+     "raw_image_block_count": 1,
+     "recovered_block_count": 4,
+     "recovery_flags": [
+      "artifact_group_context_linked",
+      "caption_linked",
+      "image_caption_linked",
+      "image_group_context_linked"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 2,
+      "caption": 1,
+      "image": 1
+     },
+     "toc_entries": []
+    }
+   ],
+   "schema_version": 1
+  },
+  "pdf_profile": {
+   "academic_paper_candidate": false,
+   "average_span_count": 1.667,
+   "average_text_density": 278.0,
+   "extractor_kind": "pymupdf",
+   "fragment_page_count": 0,
+   "has_extractable_text": true,
+   "layout_risk": "low",
+   "multi_column_page_count": 0,
+   "ocr_required": false,
+   "outline_present": false,
+   "page_count": 1,
+   "pdf_kind": "text_pdf",
+   "recovery_lane": null,
+   "suspicious_page_numbers": [],
+   "trailing_reference_page_count": 0
+  }
+ },
+ "title": "fixture"
+}

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, Text, UniqueConstraint, Uuid
+from sqlalchemy import ForeignKey, Integer, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import ArtifactStatus, ParseRevisionStatus, SourceType
-from book_agent.infra.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
+from book_agent.infra.db.base import Base, JsonDocument, TimestampMixin, UUIDPrimaryKeyMixin, enum_value_type
 
 
 class DocumentParseRevision(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -34,8 +34,8 @@ class DocumentParseRevision(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     canonical_ir_path: Mapped[str | None] = mapped_column(Text)
     canonical_ir_checksum: Mapped[str | None] = mapped_column(Text)
-    projection_hints_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    projection_hints_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class DocumentParseRevisionArtifact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -62,4 +62,4 @@ class DocumentParseRevisionArtifact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=ArtifactStatus.ACTIVE,
     )
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)

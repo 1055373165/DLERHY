@@ -23,7 +23,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from book_agent.domain.enums import ExportType
 from book_agent.orchestrator.stage_status import (
+    AGENT_STAGE_KINDS,
     PIPELINE_STAGES,
     StageEvidence,
     StageStatus,
@@ -32,11 +34,32 @@ from book_agent.orchestrator.stage_status import (
 
 
 STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
-    "translate": (),
-    "review": ("translate",),
-    "bilingual_html": ("translate", "review"),
-    "merged_html": ("translate", "review", "bilingual_html"),
+    "structure_review": (),
+    # Opt-in stages are only waited for by runs that plan them.
+    "terminology": ("structure_review",),
+    # Only when the run plans a terminology stage (plan_stages filtering);
+    # targeted translate runs have none and start immediately.
+    "translate": ("terminology",),
+    # The Reviewer Agent reads finished translations; rule review and its
+    # repair loops then handle rule and model issues together.
+    "model_review": ("translate",),
+    "review": ("translate", "model_review"),
+    # Opt-in: only runs that plan it wait for it.
+    "repair": ("review",),
+    "bilingual_html": ("translate", "review", "repair"),
+    "merged_html": ("translate", "review", "repair", "bilingual_html"),
+    "export_review": ("bilingual_html", "merged_html"),
 }
+# Other export types (standalone export runs) follow translation and review.
+_DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")
+
+
+def _dependencies_for(stage: str) -> tuple[str, ...]:
+    if stage in STAGE_DEPENDENCIES:
+        return STAGE_DEPENDENCIES[stage]
+    if stage in {export_type.value for export_type in ExportType}:
+        return _DEFAULT_EXPORT_DEPENDENCIES
+    raise ValueError(f"unknown pipeline stage: {stage!r}")
 
 
 @dataclass(frozen=True)
@@ -79,19 +102,36 @@ class StageGateKeeper:
         self._session = session
         self._calculator = StageStatusCalculator(session)
 
-    def can_start(self, run_id: str, document_id: str, stage: str) -> bool:
-        return self.evaluate(run_id, document_id, stage).can_start
+    def can_start(
+        self,
+        run_id: str,
+        document_id: str,
+        stage: str,
+        *,
+        plan_stages: tuple[str, ...] | None = None,
+    ) -> bool:
+        return self.evaluate(run_id, document_id, stage, plan_stages=plan_stages).can_start
 
     def evaluate(
         self,
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        plan_stages: tuple[str, ...] | None = None,
     ) -> GateDecision:
-        if stage not in STAGE_DEPENDENCIES:
-            raise ValueError(f"unknown pipeline stage: {stage!r}")
+        """``plan_stages`` limits gating to upstream stages the run itself owns.
 
-        upstream_stages = STAGE_DEPENDENCIES[stage]
+        A standalone review or export run does not wait for stages another
+        run performed; the review and export services apply their own checks.
+        """
+        upstream_stages = _dependencies_for(stage)
+        if plan_stages is not None:
+            upstream_stages = tuple(upstream for upstream in upstream_stages if upstream in plan_stages)
+        else:
+            # Agent stages exist only when a run plans them; without a plan
+            # they cannot be required upstream.
+            upstream_stages = tuple(upstream for upstream in upstream_stages if upstream not in AGENT_STAGE_KINDS)
         upstream_statuses: dict[str, StageStatus] = {
             upstream: self._calculator.stage_status(run_id, document_id, upstream)
             for upstream in upstream_stages

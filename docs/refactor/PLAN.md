@@ -1,0 +1,142 @@
+# Book Agent 重构计划 (P0 → P4)
+
+起点：`main@2890024`（2026-09-14）。测试基线见 [`baseline-tests.md`](baseline-tests.md)。
+
+## 已确认的决策
+
+| 议题 | 决策 |
+|---|---|
+| 范围 | P0→P4 分阶段全做，每个阶段独立可交付 |
+| 运行时自愈层（incident / patch proposal / bundle / repair transport / forge 工具） | **删除**；运行时收敛为 retry / pause / fail + 事件 |
+| 交付脚本导出链路（`scripts/export_chapter_zh_html.py` 等） | 把更优启发式并入 `services/export`，对照脚本产出验证后**删除** |
+| 被追踪的交付物 / 书籍译文 / EPUB | `git rm --cached` + `.gitignore`，**保留历史** |
+| PDF 锚点 / Block ID 方案 | 不在本次结构重构里改；单独立项（需数据迁移） |
+
+## 工作原则
+
+- 每一步行为保持，以测试为门：不得引入 `baseline-tests.md` 之外的新失败。
+- 结构拆分前先补 characterization / golden 测试。
+- 迁移期保留转发 shim（re-export / 委托门面），调用方迁完后再删除。
+- 迭代时跑相关测试文件；阶段结束时逐文件全量回归（`test_pdf_support.py` 单文件约 27 分钟）。
+- 提交信息由人工撰写、描述真实意图；生成物不进提交。
+
+---
+
+## P0 止血
+
+### P0.1 翻译 worker 接线（高危）
+- [x] `DocumentRunExecutor` 按工作项通过 `app.state.resolve_translation_worker` 解析 worker，不再在启动时捕获 `None`（现状：`main.py:92` → `document_run_executor.py:148` → `translation.py:277` 回退 Echo）。
+- [x] 测试：lifespan 启动后的执行器使用配置的非 Echo worker。
+
+### P0.2 执行器生命周期与可观测性
+- [x] 修复 `_controller_runner` 重复赋值（`document_run_executor.py:178/197`）。
+- [x] 被吞掉的 reconciler / supervisor / heartbeat 异常记日志（controller 已随 P1.1 删除）。
+- [x] 解决 `test_api_workflow.py` 段错误（根因：测试用 StaticPool 让多个执行器线程共享同一个 sqlite3 连接；改为文件 SQLite 默认连接池）。
+- [x] 执行器 `stop()` 返回是否所有线程都已退出；仍有 work 线程（LLM 调用无法中断）时 lifespan 不 dispose engine，线程在租约保护下落库结果。
+- [x] run loop 遇到 `IntegrityError` / `OperationalError` 记日志并在下个 tick 重试，不再把整个 run 判失败。
+
+### P0.3 预算护栏
+- [x] `_run_loop` 每 tick 调用 `RunExecutionService.enforce_budget_guardrails`。
+
+### P0.4 API 正确性
+- [x] GET 路径的必要写入显式提交（导出下载按需生成/重建、providers 首次 bootstrap）；是否应由 GET 触发生成留待 P2 事务策略。
+- [x] SSE 改为 async generator，按 `request.is_disconnected()` 检测断连并释放 LISTEN 连接（Postgres 测试覆盖）。
+- [x] CAS/sha256 stamp 移到 `DocumentWorkflowService.export_document` 出口（API / 执行器 / CLI 共用）；修复原裸 SQL UPDATE 在 SQLite 上匹配不到 UUID 的问题。
+- [x] `ExportDocumentRequest.export_type` 增加 `zh_epub`（`bilingual_markdown` 等未实现类型留待 P4 决定）。
+
+### P0.5 可信测试基线
+- [x] 测试临时目录按进程隔离并在退出时清理；测试强制 echo 后端，不再读取 `.env` 发起真实 provider 调用。
+- [ ] 共享 SQLite session / app 夹具（`conftest.py`）并入 P3 的测试拆分。
+- [x] 修复或删除无法收集 / 依赖未入库数据的测试。
+- [x] 分拣旧失败：修复 13 个产品缺陷、更新过时测试、4 个 xfail 附原因；基线 994 passed / 0 failed（见 `baseline-tests.md`）。
+- [x] Postgres：`tests/test_postgres_schema_drift.py` 在临时库上 `alembic upgrade head` 并与 `Base.metadata` 比对表/列/可空性/索引（`BOOK_AGENT_RUN_PG_TESTS=1` 开启）。
+
+---
+
+## P1 瘦身
+
+### P1.1 删除自愈层
+- [x] `services/runtime_repair_*`、`runtime_bundle`、`bundle_guard`、`patch_review`、`runtime_patch_validation`、`incident_triage`、`recovery_matrix`、`runtime_lane_health`、`export_routing`。
+- [x] `app/runtime/controllers/*` 与 `controller_runner`；`infra/repositories/runtime_resources.py`（ChapterRun / PacketTask / ReviewSession / RuntimeCheckpoint 投影无人读取，一并删除）。
+- [x] `tools/runtime_repair_*`、`tools/forge_*`、`forge_v2_stop_guard.py`，CLI 中 forge 子命令，`runtime_repair_transport_*` / `runtime_bundle_root` 配置。
+- [x] 路由 `patches.py`；执行器中的 controller 调和、REPAIR 阶段、导出误路由恢复、`_finalize_*` 死副本；`run_control` 摘要里的 `runtime_v2` 投影；导出/文档 API 的 `runtime_v2_context` 与 `route_evidence_json`。
+- [x] 对应测试（34 个文件及 `test_run_execution` / `test_api_workflow` / `test_run_control_api` 中的相关用例）。
+- [x] Alembic `20260914_0030`：删除 7 张表、REPAIR 阶段与 `runtime_bundle_revision_id` 列（在临时 Postgres 16 上验证：种子数据迁移、CHECK 拒绝 repair、ORM 与库表一致）。
+
+### P1.2 删除非产品代码
+- [x] 仅被脚本/测试使用的模块：`pdf_inplace`、`packet_experiment*`、`translation_chapter_smoke`、`translation_prompt_ab`、`translate_rollout_supervisor`、`translate_benchmark_draft_generator`、`extraction_router`。保留 `chapter_memory_backfill`（运维回填）与 `tools/pdf_smoke`（解析诊断），二者有测试。
+- [x] 过时脚本 32 个：章节一次性脚本、autopilot 时代脚本、packet 实验脚本。交付导出脚本链路留待 P4；运维脚本暂不搬目录。
+- [x] `orchestrator/state_machine.py` 无调用方的转移表；`workers/contracts.py` 未用的 Reviewer DTO。
+
+### P1.3 仓库卫生
+- [x] `git rm --cached`：`deliverable/`、`LLM-Book*/`、`books/`、`.scratch/`、`book-agent.db`、`frontend/.omc/`、`.claude/settings.local.json`、`.claude/*.lock`；提交 `artifacts/` 的删除。
+- [x] 补全 `.gitignore`。
+- [x] 删除过期交接文档 `snapshot.md`、`progress.txt`、`docs/mainline-progress.md`、`tasks/todo.md`；README 与实际能力对齐（运行时、自愈、导出格式）。
+- [x] 删除 `WorkspacePage.test.tsx` 中针对已移除界面的 15 个测试，修正 LibraryPage 测试；前端 vitest 4/4 通过（遗留夹具在 P4 前端整理时清理）。
+
+---
+
+## P2 统一基础设施
+
+已确认：`translate_full` 的审校与导出为必需阶段（已完成）；P2 完整执行，含 POST translate/review/export 改为入队。
+
+- [x] **P2.1 Worker provider**：`workers.factory.TranslationWorkerProvider`（按凭据 revision 缓存、线程安全）；API / 执行器 / CLI / 概念解析器共用；凭据 worker 与 settings worker 同一构造（prompt profile、单价来自 settings）。
+- [x] **P2.2 类型化 provider 异常**：`workers.failures.classify_failure` 按异常类型给出 retry / pause / fail（402 → 暂停「余额不足」，401/403 → 暂停「认证失败」）；新增 `ProviderResponseFormatError`；删除消息子串匹配。
+- [x] **P2.3 租约丢失**：worker 在提交结果的事务内锁定并校验租约（`assert_lease_held`），租约已被回收则回滚并丢弃结果，不再写失败记录或崩溃。领取本身已是按状态的 CAS UPDATE（并发下只有一个赢家），`SKIP LOCKED` 只是性能优化，暂不做。
+- [x] **P2.4 Run 状态**：所有修改 run 行的路径（状态转换、用量计数、流水线缓存、租约回收、播种）经 `get_run_for_update` 加行锁，读改写串行化，统一「先锁 run 再动 work item」的顺序；状态转换因此等价于 CAS。Postgres 并发测试：12 个并发完成，改前只保留 3 个计数，改后 12 个。
+- [x] **P2.5 事务与线程**：翻译拆为 prepare / call_worker / persist 三个事务阶段，LLM 调用期间不占连接，失败事件真正落库；审校与导出改在工作线程执行，阶段缓存与工作项结果同事务写入；`stop()` 按层 join 并阻止停止后再起线程；心跳未启动时不再 join 抛错；`get_run_for_update` 先做空 UPDATE 取写锁（SQLite 也能串行化）。
+- [x] **P2.6 API 入队**：`POST /documents/{id}/translate|review|export` 创建并启动对应 run（`translate_targeted` / `review_full` / `export_full`），返回 202 与 run 摘要。新增 `orchestrator/run_plan.py`：run 类型 + `status_detail_json.run_request` 决定 run 拥有的阶段、包范围、审校是否修复阻断、导出门禁是否自动跟进；执行器、阶段门、终态对账都按计划判定必需阶段。导出门禁失败会保留门禁记录并把门禁详情写进阶段缓存。GET 下载只提供已有导出（按需生成与自愈重建连同 `rebuild_lock` 一并删除）。同步语义的 API 测试改用 `tests/document_actions.py` 的进程内适配器。
+- [x] **P2.7 数据层**：dev/prod 作用域的应用拒绝非 PostgreSQL URL（SQLite 仅用于单测与 smoke/e2e）；`service.sh` 去掉 SQLite 模式，总是用 PostgreSQL 并先跑迁移；compose 新增一次性 `migrate` 服务，app 等它成功后启动。ORM 的 JSON 列用 `JsonDocument`（PostgreSQL 上为 JSONB）；每个枚举列按 Python 枚举生成 `<表>_<列>_check`，迁移 0031 补上 provider_credentials 缺的 CHECK，漂移测试对比 CHECK 名称、枚举取值与 JSONB 类型。仓储不再在查询时 `has_table` 探测。审计改为插入：去掉确定性 id（重复执行同一动作会覆盖旧审计），ORM 拒绝更新审计/事件行。
+
+---
+
+## P3 拆分巨石
+
+顺序：`workflows.py` → `export.py` → `pdf.py` → 翻译核心。每项先补 golden 测试。
+
+### P3.1 `services/workflows.py`（4.9k）
+- [x] 绞杀者模式拆为 `book_agent/application/`：`read_models`（结果 dataclass）、`analytics`（纯函数）、`memory_proposals`、`issue_queries`、`worklist`、`document_queries`、`issue_actions`、`review_repair`、`export_use_case`；`services/workflows.py` 4.7k → ~480 行门面，公共方法保留委托。先补 golden（`tests/test_workflow_golden.py`）。
+- [x] `routes/documents.py` 手写序列化（~880 行）改为 `model_validate(..., from_attributes=True)`；下载/制品解析移到 `app/api/export_downloads.py`（路由 1955 → ~590 行）。
+- [x] `export_document` 五段重复分支参数化（整书导出查表，gate 停止原因共用一个 helper）。
+
+### P3.2 `services/export.py`（8.7k）
+- [x] golden：`tests/test_export_golden.py`，EPUB 与 PDF 夹具各一，覆盖双语章节、审校包、merged HTML/Markdown、rebuilt / 中文 EPUB（逐条目展开）。
+- [x] 223 个无状态方法抽到 `book_agent/export/`（`code_text`、`render_repair`、`markup`、`pdf_crop`、`evidence`、`alignment`、`titles`、`epub_assets`、`common`、`models`），测试与其它服务仍在用的私有方法保留委托；`services/export.py` 8.6k → ~3.2k 行。
+- [x] 统一为 `rule_engine.build_issue_action`（两套规则取并集，REEXPORT_ONLY 按章节作用域）。
+- [x] 单次导出调用内每章 render blocks 只构建一次（按 bundle 缓存）；gate 拆为 `evaluate_chapter_gate`（只读）/ `sync_gate_issues` / `_raise_for_gate`。未做：用例层 gate 与服务内 gate 仍各跑一遍。
+- [x] 整书导出统一为 `_export_document` + 每种类型一个 `DocumentRenderer`；CSS 外置到 `export/templates/*.css`。章节级（双语、审校包）仍走 `export_chapter`。
+- [x] 资产写入函数返回 `DocumentImageMaterialization`，由调用方 `apply_document_image_materializations` 显式落到行上。
+
+### P3.3 `domain/structure/pdf.py`（9.5k）
+- [x] characterization：`tests/test_pdf_structure_golden.py`，56 个夹具 PDF（test_pdf_support 的 41 个 writer + golden_pdfs 的 15 个）的 `ParsedDocument` 快照。
+- [x] 按依赖分层拆出 `ingestion/text` → `ingestion/pdf/models` → `ingestion/pdf/classify` → `ingestion/pdf/extract`；导入方改为直接依赖新模块。
+- [x] `_BLOCK_RECOVERY_PASSES` 有序表 + 冻结的 `RecoveryContext`；学术 lane 显式传参，去掉 `_current_recovery_lane`。
+- [x] 章节构建 / TOC 偏移移到 `ingestion/pdf/chapters.py`（19 个函数）。`pdf.py` 9.6k → ~4.3k 行。
+- [x] 去重（行为不变的部分）：bbox 几何合并到 `domain/structure/geometry.py`（原三份）；export 与 ingestion 相同的续行词表 / 章节号正则 / 句末标点共用一份；`display_author_value` 合并到 `domain/document_titles.py`。未合并：caption 正则、可翻译性判定、metadata 文件名判定——几份实现规则确有差异，合并会改变输出。
+- [x] OCR / 文件 IO 移出 domain（`ingestion/pdf/ocr*.py`、`surya_reextraction.py`）；OCR 与 sanity 重抽取配置进 `Settings`，构造器不再读 env。
+- [x] 修复：TATR 显式拿到 `source_path`；modality 先于 IR 构建；OCR parser 走默认恢复服务工厂。
+- [ ] refresh 不重建句子：目前只检测并上报（`stale_sentence_block_ids` + `refresh_sentences_stale`）。真正重建需要先定句子退役模型（句子被 packet、译文、对齐边引用，没有失效状态），再串联 packet 重建与重译。
+
+### P3.4 翻译核心
+- [x] DTO 从 `workers/contracts.py` 移至 `translation/contracts`（修复 domain→workers、infra→workers 依赖）。先补 golden：`tests/test_translation_prompt_golden.py`（EPUB + 学术 PDF 每个真实任务的上下文包 + 13 个 profile × 2 种布局的 prompt）。
+- [x] 类型化 `translation/chapter_memory.ChapterMemory`：五处手写 payload（bootstrap、backfill、概念锁定、翻译、提案批准）共用一个模型与提交策略。
+- [x] 后置 hooks（`GlossaryViolationHook`、`ChapterMemoryProposalHook`）；`OutputValidator` 检查句子覆盖率，不完整时 run 记 `error_code`；worker 失败写 FAILED run（`error_code` 为失败分类原因）。执行主干仍在 `TranslationService`（prepare / call_worker / persist）。
+- [x] 术语统一：文档术语表在 `load_compiled_context` 中解析，与 termbase / 章节概念一起过相关性过滤（夹具无术语表，golden 未变）。
+- [x] Prompt profile 注册表 `translation/prompt_profiles.py`，13 个 profile 的 prompt 快照逐字节不变。
+- [x] 书籍特定启发式数据化为 `translation/heuristics/*.json` 包（默认 `tech-book-default`）；review 的 style drift 按 `document.metadata_json.translation_heuristics_pack` 选包。上下文编译与术语规范化仍用默认包。
+
+---
+
+## P4 统一导出
+
+- [ ] 将 `export_chapter_zh_html.py` 独有的改进（caption 链接、图 bbox 扩展、stub 过滤、列表拆分等）移植到 `export/assembly/normalize`。**阻塞**：脚本依赖的源 PDF（`artifacts/uploads/.../llm-book.pdf`）已不在磁盘或 git 中，无法以 `verify_chapter.py` 对照验证，脚本暂不删除。
+- [ ] 明确“译文选择”规则（脚本：首个 edge；服务：最新 run），有意统一。
+- [ ] 以 `verify_chapter.py` 作为 oracle，对 ch1–ch9 新旧产出对照。
+  - 2026-09-15 以新测试书（RSI 交易书，calibre 生成的 70 页 PDF，仅本地、不入库）用 echo worker 跑完整链路并对照脚本：脚本 `repair_stats` 在该书上全部为 0（其启发式针对 llm-book 的 "Figure N.M" 版式，本书无从验证），而产品导出在表格（脚本跳过）和列表上已优于脚本。`verify_chapter.py` 的规则依赖脚本 HTML 结构（`h2`/`p`），对产品双语章节 HTML 检查为空，不能直接当 oracle。结论：脚本删除仍需一本具备 llm-book 版式的书来验证其独有改进。
+  - 该书暴露并已修复的产品问题（均有合成 PDF 回归测试，golden 未变）：无字体依据的词形标题切分（"As John" | "Murphy …"）→ 改按粗体/字号切分；跨块多行章标题；带副标题的 Introduction 被并入 Front Matter；带线表格被拆成逐格文本导致整书导出被 layout gate 拦截（`find_tables` 恢复为管道行、跨页合并、空单元格保留）；矢量圆点列表合并为段落；"use …"/"Note: …"/"If …:" 等散文被判为代码；以数字编号的粗体小节标题被当列表项；"[Figure]" 占位符被渲染为图注；"Rs. 20" 处断句。
+  - 第二轮（2026-09-15）继续修复：独立的粗体编号标题（"9. Divergences …"）与短粗体标题行；目录页 "Index" 与首条目拆开；逐行编号列表块、编号独占一列的列表拆为列表项；HTML 中项目符号改为悬挂标记；图聚类不再跨正文句子合并两张图、不再吞掉句子；断句保留 "J. Welles Wilder" 等人名首字母与行首编号。另修两处与日期/时刻相关的 golden 抖动（导出用量时间线日期、工作流 issue 时间线按 UTC 日分桶）。
+  - 仍未处理（需产品决定）：表格块整体标记为 `protect` 不翻译，文字型对比表（如第 39/48/49 页）在中文版中仍是英文；要支持需按单元格翻译并保持表格结构。
+- [ ] 删除脚本导出链路及依赖 `.test-tmp/` 的构建脚本（先确认所需输入已迁出）。
+- [x] 双语整书下载改为打包各章最新双语导出；移除未实现的 `BILINGUAL_MARKDOWN` / `ZH_PDF` / `JSONL`（迁移 0032）。前端下载在 404 时先入队导出 run、等待完成再下载。
+- [x] 前端：`scripts/generate_frontend_api_types.py` 由 OpenAPI 生成 `api-types.gen.ts`（测试保证与后端同步），`api.ts` 中与生成类型兼容的 16 个类型改为别名。
+- [ ] 其余 19 个手写类型（状态字面量更窄、可选性不同）尚未改为生成类型；`WorkspaceContext` 拆分未做。

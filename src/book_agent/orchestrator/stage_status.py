@@ -45,7 +45,25 @@ from book_agent.domain.models.ops import StageTransition, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 
 
-PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
+PIPELINE_STAGES = (
+    "structure_review",
+    "terminology",
+    "translate",
+    "model_review",
+    "review",
+    "repair",
+    "bilingual_html",
+    "merged_html",
+    "export_review",
+)
+# Agent stages map a pipeline key to the agent kind carried in the work item bundle.
+AGENT_STAGE_KINDS: dict[str, str] = {
+    "structure_review": "structure",
+    "terminology": "terminology",
+    "model_review": "reviewer",
+    "repair": "repair",
+    "export_review": "export_review",
+}
 
 # Stage classification (spec Phase 2). A *required* stage must reach
 # ``SUCCEEDED`` before the run can reach ``SUCCEEDED`` / ``SUCCEEDED_WITH_WARNINGS``;
@@ -55,12 +73,11 @@ PIPELINE_STAGES = ("translate", "review", "bilingual_html", "merged_html")
 # ``FAILED`` downgrades the run to ``SUCCEEDED_WITH_WARNINGS`` instead of
 # failing the whole pipeline.
 #
-# Today ``translate`` is the only strictly required stage — without a
-# translated ledger there is no artifact to hand off. Review and the two
-# export stages are treated as optional because the operator may not have
-# requested them (single-lang output, HTML-only, etc.). P0.2b/P0.2c will
-# widen this to per-run configuration once the UI can surface the choice;
-# until then, "missing work_items ⇒ not requested" is the single rule.
+# Required stages come from the run's plan (``orchestrator.run_plan``): every
+# planned stage is required, so a TRANSLATE_FULL run fails when its review or
+# exports fail. Pipeline stages outside the plan are optional: never started
+# means "not requested", and a failure there downgrades to
+# SUCCEEDED_WITH_WARNINGS. The constants below describe a translate-only plan.
 REQUIRED_PIPELINE_STAGES: frozenset[str] = frozenset({"translate"})
 OPTIONAL_PIPELINE_STAGES: frozenset[str] = frozenset(
     {"review", "bilingual_html", "merged_html"}
@@ -159,49 +176,97 @@ class StageStatusCalculator:
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
     ) -> StageStatus:
-        return self.stage_evidence(run_id, document_id, stage).status
+        return self.stage_evidence(run_id, document_id, stage, packet_ids=packet_ids).status
 
     def stage_evidence(
         self,
         run_id: str,
         document_id: str,
         stage: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
     ) -> StageEvidence:
+        """``packet_ids`` scopes the translate stage to a targeted run's packets."""
         if stage == "translate":
-            return self._translate_evidence(run_id, document_id)
+            return self._translate_evidence(run_id, document_id, packet_ids=packet_ids)
         if stage == "review":
             return self._work_item_stage_evidence(run_id, WorkItemStage.REVIEW, "review")
-        if stage == "bilingual_html":
-            return self._export_stage_evidence(run_id, ExportType.BILINGUAL_HTML, "bilingual_html")
-        if stage == "merged_html":
-            return self._export_stage_evidence(run_id, ExportType.MERGED_HTML, "merged_html")
+        if stage in AGENT_STAGE_KINDS:
+            return self._agent_stage_evidence(run_id, AGENT_STAGE_KINDS[stage], stage)
+        if stage in {export_type.value for export_type in ExportType}:
+            return self._export_stage_evidence(run_id, ExportType(stage), stage)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
+
+    def _agent_stage_evidence(self, run_id: str, agent_kind: str, stage_key: str) -> StageEvidence:
+        """Work items of stage AGENT for this kind, judged by the agent turn they drive.
+
+        A turn waiting for an approval or paused on budget keeps the stage
+        RUNNING even though the work item that ran it succeeded; the stage
+        only succeeds once the latest turn itself succeeded.
+        """
+        from book_agent.domain.enums import AgentTurnStatus
+        from book_agent.domain.models.agent import AgentTurn
+
+        items = [
+            item
+            for item in self._session.scalars(
+                select(WorkItem).where(WorkItem.run_id == run_id, WorkItem.stage == WorkItemStage.AGENT)
+            ).all()
+            if (item.input_version_bundle_json or {}).get("agent_kind") == agent_kind
+        ]
+        counts = _WorkItemCounts.from_items(items)
+        status = self._wi_status_from_counts(counts)
+        if counts.total:
+            turn = self._session.scalars(
+                select(AgentTurn)
+                .where(AgentTurn.run_id == run_id, AgentTurn.agent_kind == agent_kind)
+                .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
+                .limit(1)
+            ).first()
+            degraded = any(
+                item.status == WorkItemStatus.SUCCEEDED and (item.output_artifact_refs_json or {}).get("degraded")
+                for item in items
+            )
+            if turn is not None:
+                if turn.status == AgentTurnStatus.FAILED:
+                    # An advisory agent that gave up finishes its stage as degraded, not failed.
+                    status = StageStatus.SUCCEEDED if degraded else StageStatus.FAILED
+                elif turn.status != AgentTurnStatus.SUCCEEDED and status == StageStatus.SUCCEEDED:
+                    status = StageStatus.RUNNING
+        return StageEvidence(
+            stage=stage_key,
+            status=status,
+            total_work_items=counts.total,
+            succeeded_work_items=counts.succeeded,
+            failed_work_items=counts.failed,
+            running_work_items=counts.running,
+        )
 
     # --- internals -----------------------------------------------------
 
-    def _translate_evidence(self, run_id: str, document_id: str) -> StageEvidence:
-        total_packets = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(Chapter.document_id == document_id)
-        ) or 0
-        translated = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(
-                Chapter.document_id == document_id,
-                TranslationPacket.status == PacketStatus.TRANSLATED,
+    def _translate_evidence(
+        self,
+        run_id: str,
+        document_id: str,
+        *,
+        packet_ids: frozenset[str] | None = None,
+    ) -> StageEvidence:
+        def _packet_count(*conditions) -> int:
+            stmt = (
+                select(func.count(TranslationPacket.id))
+                .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
+                .where(Chapter.document_id == document_id, *conditions)
             )
-        ) or 0
-        failed_packets = self._session.scalar(
-            select(func.count(TranslationPacket.id))
-            .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-            .where(
-                Chapter.document_id == document_id,
-                TranslationPacket.status == PacketStatus.FAILED,
-            )
-        ) or 0
+            if packet_ids is not None:
+                stmt = stmt.where(TranslationPacket.id.in_(packet_ids))
+            return self._session.scalar(stmt) or 0
+
+        total_packets = _packet_count()
+        translated = _packet_count(TranslationPacket.status == PacketStatus.TRANSLATED)
+        failed_packets = _packet_count(TranslationPacket.status == PacketStatus.FAILED)
 
         wi_counts = self._work_item_counts(run_id, WorkItemStage.TRANSLATE)
 
@@ -215,7 +280,8 @@ class StageStatusCalculator:
         elif (
             total_packets > 0
             and translated == total_packets
-            and wi_counts.total > 0
+            # Zero active work items is fine: a document that is already fully
+            # translated needs no translate work in this run.
             and wi_counts.succeeded == wi_counts.total
         ):
             status = StageStatus.SUCCEEDED
@@ -413,6 +479,7 @@ class RunOutcome(str, Enum):
 
 def classify_run_outcome(
     stage_status_by_name: Mapping[str, StageStatus],
+    required_stages: frozenset[str] = REQUIRED_PIPELINE_STAGES,
 ) -> RunOutcome:
     """Pure-function reduction of per-stage status → run terminal intent.
 
@@ -432,12 +499,14 @@ def classify_run_outcome(
     Phase 3 introduces it before the classifier gets taught about it.
     """
 
+    optional_stages = frozenset(stage_status_by_name) - required_stages
+
     def status_of(stage: str) -> StageStatus | None:
         return stage_status_by_name.get(stage)
 
     required_failed = [
         stage
-        for stage in REQUIRED_PIPELINE_STAGES
+        for stage in required_stages
         if status_of(stage) == StageStatus.FAILED
     ]
     if required_failed:
@@ -445,7 +514,7 @@ def classify_run_outcome(
 
     required_not_succeeded = [
         stage
-        for stage in REQUIRED_PIPELINE_STAGES
+        for stage in required_stages
         if status_of(stage) != StageStatus.SUCCEEDED
     ]
     if required_not_succeeded:
@@ -453,7 +522,7 @@ def classify_run_outcome(
 
     optional_running = [
         stage
-        for stage in OPTIONAL_PIPELINE_STAGES
+        for stage in optional_stages
         if status_of(stage) == StageStatus.RUNNING
     ]
     if optional_running:
@@ -461,7 +530,7 @@ def classify_run_outcome(
 
     optional_failed = [
         stage
-        for stage in OPTIONAL_PIPELINE_STAGES
+        for stage in optional_stages
         if status_of(stage) == StageStatus.FAILED
     ]
     if optional_failed:
@@ -484,6 +553,7 @@ def _caller_site() -> str:
 
 
 __all__ = [
+    "AGENT_STAGE_KINDS",
     "OPTIONAL_PIPELINE_STAGES",
     "PIPELINE_STAGES",
     "REQUIRED_PIPELINE_STAGES",

@@ -1,12 +1,11 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
     ActorType,
-    ArtifactStatus,
     LockLevel,
     MemoryProposalStatus,
     MemoryScopeType,
@@ -23,6 +22,7 @@ from book_agent.domain.enums import (
 from book_agent.infra.db.base import (
     Base,
     CreatedAtMixin,
+    JsonDocument,
     TimestampMixin,
     UUIDPrimaryKeyMixin,
     enum_value_type,
@@ -54,7 +54,7 @@ class TranslationPacket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     termbase_version: Mapped[int | None] = mapped_column(Integer)
     entity_snapshot_version: Mapped[int | None] = mapped_column(Integer)
     style_snapshot_version: Mapped[int | None] = mapped_column(Integer)
-    packet_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    packet_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     risk_score: Mapped[float | None] = mapped_column(Numeric(4, 3))
     status: Mapped[PacketStatus] = mapped_column(
         enum_value_type(PacketStatus, name="packet_status"),
@@ -92,14 +92,14 @@ class TranslationRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
-    model_config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    model_config_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[RunStatus] = mapped_column(
         enum_value_type(RunStatus, name="translation_run_status"),
         nullable=False,
     )
-    output_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    output_json: Mapped[dict[str, Any] | None] = mapped_column(JsonDocument)
     token_in: Mapped[int | None] = mapped_column(Integer)
     token_out: Mapped[int | None] = mapped_column(Integer)
     cost_usd: Mapped[float | None] = mapped_column(Numeric(12, 6))
@@ -136,7 +136,7 @@ class ChapterMemoryProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("memory_snapshots.id", ondelete="SET NULL"),
     )
     base_snapshot_version: Mapped[int | None] = mapped_column(Integer)
-    proposed_content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    proposed_content_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     status: Mapped[MemoryProposalStatus] = mapped_column(
         enum_value_type(MemoryProposalStatus, name="memory_proposal_status"),
         nullable=False,
@@ -233,4 +233,6 @@ class TermEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=False),
         ForeignKey("sentences.id", ondelete="SET NULL"),
     )
+    # Other renderings that count as this term ("头肩形" for "头肩形态").
+    target_variants_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +18,15 @@ class ProviderCredentialBase(BaseModel):
     timeout_seconds: int = Field(120, ge=1, le=3600)
     max_retries: int = Field(2, ge=0, le=10)
     retry_backoff_seconds: float = Field(2.0, ge=0.0, le=60.0)
+    input_cost_per_1m_tokens: float | None = Field(default=None, ge=0, description="Price per million input tokens.")
+    input_cache_hit_cost_per_1m_tokens: float | None = Field(
+        default=None, ge=0, description="Price per million cached input tokens (prompt cache hits)."
+    )
+    output_cost_per_1m_tokens: float | None = Field(default=None, ge=0, description="Price per million output tokens.")
+    request_overrides: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Extra request fields for every call, e.g. {"thinking": {"type": "disabled"}}.',
+    )
 
 
 class ProviderCredentialCreate(ProviderCredentialBase):
@@ -37,6 +47,11 @@ class ProviderCredentialUpdate(BaseModel):
     timeout_seconds: int | None = Field(default=None, ge=1, le=3600)
     max_retries: int | None = Field(default=None, ge=0, le=10)
     retry_backoff_seconds: float | None = Field(default=None, ge=0.0, le=60.0)
+    # Prices: omitted leaves the stored value, null clears it.
+    input_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
+    input_cache_hit_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
+    output_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
+    request_overrides: dict[str, Any] | None = None
 
 
 class ProviderCredentialRead(ProviderCredentialBase):
@@ -49,6 +64,10 @@ class ProviderCredentialRead(ProviderCredentialBase):
     api_key_preview: str | None = Field(
         default=None,
         description="Masked summary of the stored API key, e.g. 'sk-****-1234'. None when no key is stored.",
+    )
+    shared: bool = Field(
+        default=True,
+        description="True for a credential shared by every organisation without its own active provider.",
     )
     last_test_status: ProviderTestStatus
     last_test_at: datetime | None = None

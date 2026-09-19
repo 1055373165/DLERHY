@@ -33,11 +33,8 @@ from book_agent.domain.models import Chapter, Document
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
-from book_agent.services.workflows import (
-    ChapterReviewSkip,
-    DocumentReviewResult,
-    DocumentWorkflowService,
-)
+from book_agent.application.read_models import ChapterReviewSkip, DocumentReviewResult
+from book_agent.services.workflows import DocumentWorkflowService
 
 
 class ReviewSkipVisibilityTests(unittest.TestCase):

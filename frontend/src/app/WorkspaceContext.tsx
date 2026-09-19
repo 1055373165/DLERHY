@@ -47,6 +47,7 @@ import {
   type HealthResponse,
   type RunAuditEvent,
 } from "../lib/api";
+import { runPollInterval, useRunEventStream } from "../lib/runEvents";
 import { getPrimaryRunAction, isRunActive } from "../lib/workflow";
 
 interface WorkspaceContextValue {
@@ -165,35 +166,47 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     staleTime: 30_000,
   });
 
+  const runStreamLiveRef = useRef(false);
   const currentDocumentQuery = useQuery({
     queryKey: ["document", selectedDocumentId],
     enabled: Boolean(selectedDocumentId),
     queryFn: () => getDocument(selectedDocumentId as string),
+    // The run stream is opened from this query's data; once it is live the document poll slows down too.
     refetchInterval: (query) =>
-      isRunActive((query.state.data as DocumentSummary | undefined)?.latest_run_status) ? 2500 : false,
+      isRunActive((query.state.data as DocumentSummary | undefined)?.latest_run_status)
+        ? runStreamLiveRef.current
+          ? 15_000
+          : 2500
+        : false,
     retry: false,
   });
 
   const currentRunId = currentDocumentQuery.data?.latest_run_id ?? null;
+  // Push updates while a run is active; polling below slows down while the stream is live.
+  const runStream = useRunEventStream(currentRunId, isRunActive(currentDocumentQuery.data?.latest_run_status));
+  runStreamLiveRef.current = runStream === "live";
   const currentRunQuery = useQuery({
     queryKey: ["run", currentRunId],
     enabled: Boolean(currentRunId),
     queryFn: () => getRun(currentRunId as string),
-    refetchInterval: isRunActive(currentDocumentQuery.data?.latest_run_status) ? 2500 : false,
+    refetchInterval: runPollInterval(isRunActive(currentDocumentQuery.data?.latest_run_status), runStream),
   });
 
   const currentRunEventsQuery = useQuery({
     queryKey: ["run-events", currentRunId],
     enabled: Boolean(currentRunId),
     queryFn: () => getRunEvents(currentRunId as string),
-    refetchInterval: isRunActive(currentRunQuery.data?.status) ? 2500 : false,
+    refetchInterval: runPollInterval(isRunActive(currentRunQuery.data?.status), runStream),
   });
 
   const currentExportsQuery = useQuery({
     queryKey: ["document-exports", selectedDocumentId],
     enabled: Boolean(selectedDocumentId),
     queryFn: () => getDocumentExports(selectedDocumentId as string),
-    refetchInterval: isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status) ? 2500 : false,
+    refetchInterval: runPollInterval(
+      isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status),
+      runStream,
+    ),
   });
 
   const chapterWorklistApiFilters: DocumentChapterWorklistFilters = {
@@ -220,11 +233,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     ],
     enabled: Boolean(selectedDocumentId),
     queryFn: () => getDocumentChapterWorklist(selectedDocumentId as string, chapterWorklistApiFilters),
-    refetchInterval: isRunActive(
-      currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status
-    )
-      ? 2500
-      : false,
+    refetchInterval: runPollInterval(
+      isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status),
+      runStream,
+    ),
     retry: false,
   });
 
@@ -236,7 +248,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         selectedDocumentId as string,
         selectedReviewChapterId as string
       ),
-    refetchInterval: isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status) ? 2500 : false,
+    refetchInterval: runPollInterval(
+      isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status),
+      runStream,
+    ),
     retry: false,
   });
 

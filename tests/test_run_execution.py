@@ -1,35 +1,25 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
-from unittest.mock import patch
 from uuid import uuid4
 
-from book_agent.app.runtime.document_run_executor import (
-    DocumentRunExecutor,
-    _is_retryable_exception,
-    _pause_reason_for_exception,
-)
+from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+from book_agent.workers.providers import ProviderHTTPError
 from book_agent.domain.enums import (
     ArtifactStatus,
     BlockType,
     ChapterStatus,
     DocumentStatus,
     DocumentRunType,
-    JobScopeType,
     PacketStatus,
     PacketType,
     ProtectedPolicy,
-    RuntimeBundleRevisionStatus,
-    RuntimeIncidentKind,
-    RuntimeIncidentStatus,
-    RuntimePatchProposalStatus,
     SourceType,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
 from book_agent.domain.models import Block, Chapter, Document
-from book_agent.domain.models.ops import RuntimeBundleRevision, RuntimeIncident, RuntimePatchProposal, WorkItem
+from book_agent.domain.models.ops import WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.base import Base
 from book_agent.infra.db.session import build_engine, build_session_factory
@@ -37,6 +27,28 @@ from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.run_control import RunBudgetSummary, RunControlService
 from book_agent.services.run_execution import RunExecutionService
 
+
+
+def _emit_completed_call(session, *, run_id: str, token_in: int, token_out: int, cost_usd: float, latency_ms: int) -> None:
+    """Record the provider call the way the translation service does; run spend is read from these events."""
+    from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+    from book_agent.infra.repositories.events import emit_event
+
+    emit_event(
+        session,
+        kind=LLM_CALL_COMPLETED,
+        run_id=run_id,
+        actor_kind="agent",
+        actor_id="test.worker",
+        payload={
+            "call_kind": "translate",
+            "token_in": token_in,
+            "token_out": token_out,
+            "total_tokens": token_in + token_out,
+            "cost_usd": cost_usd,
+            "latency_ms": latency_ms,
+        },
+    )
 
 class RunExecutionServiceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -71,15 +83,18 @@ class RunExecutionServiceTests(unittest.TestCase):
         document_id: str,
         *,
         budget: RunBudgetSummary | None = None,
+        run_type: DocumentRunType = DocumentRunType.TRANSLATE_FULL,
     ) -> str:
         with self.session_factory() as session:
             repository = RunControlRepository(session)
             control = RunControlService(repository)
             run = control.create_run(
                 document_id=document_id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
+                run_type=run_type,
                 requested_by="test-runner",
                 budget=budget,
+                # These tests drive the translate stage directly.
+                status_detail_json={"run_request": {"terminology": "skip"}},
             )
             resumed = control.resume_run(run.run_id, actor_id="test-runner", note="start")
             session.commit()
@@ -156,8 +171,15 @@ class RunExecutionServiceTests(unittest.TestCase):
         return document_id, packet_ids_by_chapter
 
     def test_run_execution_success_lifecycle_updates_usage_and_terminal_state(self) -> None:
-        run_id = self._create_running_run()
-        packet_id = str(uuid4())
+        # Terminal success is derived from real packet state, so seed an actual packet.
+        # A targeted translate run requests no review/export stages, so a green
+        # translate ledger is terminal.
+        document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
+        packet_id = packet_ids_by_chapter[0][0]
+        run_id = self._create_running_run_for_document(
+            document_id,
+            run_type=DocumentRunType.TRANSLATE_TARGETED,
+        )
 
         with self.session_factory() as session:
             execution = RunExecutionService(RunControlRepository(session))
@@ -172,6 +194,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             assert claimed is not None
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
             self.assertTrue(execution.heartbeat_work_item(lease_token=claimed.lease_token, lease_seconds=60))
+            _emit_completed_call(session, run_id=run_id, token_in=120, token_out=45, cost_usd=0.0035, latency_ms=750)
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,
@@ -181,6 +204,10 @@ class RunExecutionServiceTests(unittest.TestCase):
                 cost_usd=0.0035,
                 latency_ms=750,
             )
+            # The translation service marks the packet translated; this test drives
+            # the run ledger directly, so apply that effect by hand.
+            session.get(TranslationPacket, packet_id).status = PacketStatus.TRANSLATED
+            session.commit()
             summary = execution.reconcile_run_terminal_state(run_id=run_id)
 
         self.assertEqual(summary.status, "succeeded")
@@ -242,625 +269,6 @@ class RunExecutionServiceTests(unittest.TestCase):
         assert reclaimed_claim is not None
         self.assertEqual(reclaimed_claim.attempt, 2)
 
-    def test_ensure_scope_replay_work_items_seeds_missing_chapter_review_once(self) -> None:
-        document_id = self._create_document()
-        run_id = self._create_running_run_for_document(document_id)
-        chapter_scope_id = str(uuid4())
-
-        with self.session_factory() as session:
-            repository = RunControlRepository(session)
-            execution = RunExecutionService(repository)
-
-            first_ids = execution.ensure_scope_replay_work_items(
-                run_id=run_id,
-                stage=WorkItemStage.REVIEW,
-                scope_type=WorkItemScopeType.CHAPTER,
-                scope_ids=[chapter_scope_id],
-                input_version_bundle_by_scope_id={
-                    chapter_scope_id: {
-                        "document_id": document_id,
-                        "chapter_id": chapter_scope_id,
-                    }
-                },
-            )
-            second_ids = execution.ensure_scope_replay_work_items(
-                run_id=run_id,
-                stage=WorkItemStage.REVIEW,
-                scope_type=WorkItemScopeType.CHAPTER,
-                scope_ids=[chapter_scope_id],
-                input_version_bundle_by_scope_id={
-                    chapter_scope_id: {
-                        "document_id": document_id,
-                        "chapter_id": chapter_scope_id,
-                    }
-                },
-            )
-
-            persisted_items = session.query(WorkItem).filter(
-                WorkItem.run_id == run_id,
-                WorkItem.stage == WorkItemStage.REVIEW,
-                WorkItem.scope_type == WorkItemScopeType.CHAPTER,
-                WorkItem.scope_id == chapter_scope_id,
-            ).all()
-
-        self.assertEqual(len(first_ids), 1)
-        self.assertEqual(first_ids, second_ids)
-        self.assertEqual(len(persisted_items), 1)
-        self.assertEqual(persisted_items[0].status, WorkItemStatus.PENDING)
-        self.assertEqual(persisted_items[0].input_version_bundle_json["document_id"], document_id)
-
-    def test_ensure_repair_dispatch_work_item_seeds_claimable_repair_lane_once(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-
-        with self.session_factory() as session:
-            repository = RunControlRepository(session)
-            execution = RunExecutionService(repository)
-            first_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=str(uuid4()),
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "python_subprocess_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-1",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-1",
-                        "boundary": "review_session",
-                    },
-                },
-                repair_plan_json={
-                    "goal": "Repair repeated review deadlock and replay the minimal chapter review scope.",
-                    "owned_files": ["src/book_agent/app/runtime/controllers/review_controller.py"],
-                    "validation": {
-                        "command": "uv run pytest tests/test_incident_controller.py",
-                        "scope": "review_deadlock",
-                    },
-                    "bundle": {
-                        "revision_name": "bundle-repair-1",
-                        "manifest_json": {"code": {"surface": "review_deadlock"}},
-                        "rollout_scope_json": {"mode": "dev"},
-                    },
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-1",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            second_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=str(uuid4()),
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "python_subprocess_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-1",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-1",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            work_item = repository.get_work_item(first_id)
-
-        self.assertEqual(first_id, second_id)
-        self.assertEqual(work_item.stage, WorkItemStage.REPAIR)
-        self.assertEqual(work_item.scope_type, WorkItemScopeType.ISSUE_ACTION)
-        self.assertEqual(work_item.scope_id, proposal_id)
-        self.assertEqual(work_item.status, WorkItemStatus.PENDING)
-        self.assertEqual(work_item.input_version_bundle_json["proposal_id"], proposal_id)
-        self.assertEqual(work_item.input_version_bundle_json["target_scope_type"], "chapter")
-        self.assertEqual(work_item.input_version_bundle_json["claim_mode"], "runtime_owned")
-        self.assertEqual(work_item.input_version_bundle_json["claim_target"], "runtime_patch_proposal")
-        self.assertEqual(work_item.input_version_bundle_json["dispatch_lane"], "runtime.repair")
-        self.assertEqual(work_item.input_version_bundle_json["worker_hint"], "review_deadlock_repair_agent")
-        self.assertEqual(work_item.input_version_bundle_json["worker_contract_version"], 1)
-        self.assertEqual(work_item.input_version_bundle_json["execution_mode"], "transport_backed")
-        self.assertEqual(work_item.input_version_bundle_json["executor_hint"], "python_transport_repair_executor")
-        self.assertEqual(work_item.input_version_bundle_json["executor_contract_version"], 1)
-        self.assertEqual(work_item.input_version_bundle_json["transport_hint"], "python_subprocess_repair_transport")
-        self.assertEqual(work_item.input_version_bundle_json["transport_contract_version"], 1)
-        self.assertEqual(work_item.input_version_bundle_json["repair_request_contract_version"], 1)
-        self.assertEqual(
-            work_item.input_version_bundle_json["repair_goal"],
-            "Repair repeated review deadlock and replay the minimal chapter review scope.",
-        )
-        self.assertEqual(
-            work_item.input_version_bundle_json["owned_files"],
-            ["src/book_agent/app/runtime/controllers/review_controller.py"],
-        )
-        self.assertEqual(
-            work_item.input_version_bundle_json["validation_json"]["scope"],
-            "review_deadlock",
-        )
-        self.assertEqual(
-            work_item.input_version_bundle_json["bundle_json"]["manifest_json"]["code"]["surface"],
-            "review_deadlock",
-        )
-        self.assertEqual(
-            work_item.input_version_bundle_json["repair_plan_json"]["replay"]["scope_id"],
-            "chapter-1",
-        )
-
-    def test_executor_fails_repair_work_item_for_unknown_worker_hint(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "unknown_runtime_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "in_process",
-                    "executor_hint": "python_repair_executor",
-                    "executor_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-unknown",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-unknown",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            session.commit()
-
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root="/tmp",
-            translation_worker=None,
-        )
-        executor._execute_repair_work_item(run_id, claimed)
-
-        with self.session_factory() as session:
-            work_item = session.get(WorkItem, work_item_id)
-            self.assertIsNotNone(work_item)
-            assert work_item is not None
-            self.assertEqual(work_item.status, WorkItemStatus.TERMINAL_FAILED)
-            self.assertEqual(work_item.error_class, "UnsupportedRuntimeRepairWorkerError")
-            self.assertIn(
-                "unknown_runtime_repair_agent",
-                str((work_item.error_detail_json or {}).get("message") or ""),
-            )
-
-    def test_executor_fails_repair_work_item_for_unknown_executor_hint(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "in_process",
-                    "executor_hint": "unknown_repair_executor",
-                    "executor_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-unknown-executor",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-unknown-executor",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            session.commit()
-
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root="/tmp",
-            translation_worker=None,
-        )
-        executor._execute_repair_work_item(run_id, claimed)
-
-        with self.session_factory() as session:
-            work_item = session.get(WorkItem, work_item_id)
-            self.assertIsNotNone(work_item)
-            assert work_item is not None
-            self.assertEqual(work_item.status, WorkItemStatus.TERMINAL_FAILED)
-            self.assertEqual(work_item.error_class, "UnsupportedRuntimeRepairExecutorError")
-            self.assertIn(
-                "unknown_repair_executor",
-                str((work_item.error_detail_json or {}).get("message") or ""),
-            )
-
-    def test_executor_fails_repair_work_item_for_unknown_transport_hint(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "unknown_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-unknown-transport",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-unknown-transport",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            session.commit()
-
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root="/tmp",
-            translation_worker=None,
-        )
-        executor._execute_repair_work_item(run_id, claimed)
-
-        with self.session_factory() as session:
-            work_item = session.get(WorkItem, work_item_id)
-            self.assertIsNotNone(work_item)
-            assert work_item is not None
-            self.assertEqual(work_item.status, WorkItemStatus.TERMINAL_FAILED)
-            self.assertEqual(work_item.error_class, "UnsupportedRuntimeRepairTransportError")
-            self.assertIn(
-                "unknown_repair_transport",
-                str((work_item.error_detail_json or {}).get("message") or ""),
-            )
-
-    def test_retry_later_repair_work_item_respects_retry_after_before_reclaim(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_contract_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "http_contract_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-retry-later",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-retry-later",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
-            execution.complete_work_item_failure(
-                lease_token=claimed.lease_token,
-                error_class="RuntimeRepairRetryLater",
-                error_detail_json={
-                    "repair_agent_decision": "retry_later",
-                    "repair_result_json": {
-                        "repair_agent_decision": "retry_later",
-                        "repair_agent_retry_after_seconds": 300,
-                    },
-                },
-                retryable=True,
-            )
-            session.commit()
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            self.assertEqual(
-                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
-                [],
-            )
-            self.assertIsNone(
-                execution.claim_next_work_item(
-                    run_id=run_id,
-                    stage=WorkItemStage.REPAIR,
-                    worker_name="app.run.repair",
-                    worker_instance_id="app.repair:test-2",
-                    lease_seconds=60,
-                )
-            )
-            work_item = session.get(WorkItem, work_item_id)
-            self.assertIsNotNone(work_item)
-            assert work_item is not None
-            work_item.finished_at = datetime.now(timezone.utc) - timedelta(seconds=301)
-            session.add(work_item)
-            session.commit()
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            self.assertEqual(
-                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
-                [work_item_id],
-            )
-            reclaimed = execution.claim_next_work_item(
-                run_id=run_id,
-                stage=WorkItemStage.REPAIR,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test-3",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(reclaimed)
-            assert reclaimed is not None
-            self.assertEqual(reclaimed.work_item_id, work_item_id)
-
-    def test_manual_escalation_repair_work_item_requires_explicit_resume_before_reclaim(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "export_routing_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_contract_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "http_contract_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_export_controller.py",
-                    "bundle_revision_name": "bundle-repair-manual-escalation",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "packet",
-                        "scope_id": "packet-manual-escalation",
-                        "boundary": "packet_task",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
-            execution.complete_work_item_failure(
-                lease_token=claimed.lease_token,
-                error_class="RuntimeRepairManualEscalationRequired",
-                error_detail_json={
-                    "repair_agent_decision": "manual_escalation_required",
-                    "repair_agent_decision_reason": "requires_operator_review",
-                    "repair_result_json": {
-                        "repair_agent_decision": "manual_escalation_required",
-                        "repair_agent_decision_reason": "requires_operator_review",
-                    },
-                },
-                retryable=False,
-            )
-            session.commit()
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            self.assertEqual(
-                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
-                [],
-            )
-            self.assertIsNone(
-                execution.claim_next_work_item(
-                    run_id=run_id,
-                    stage=WorkItemStage.REPAIR,
-                    worker_name="app.run.repair",
-                    worker_instance_id="app.repair:block",
-                    lease_seconds=60,
-                )
-            )
-            resumed = execution.resume_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                actor_id="ops-user",
-                note="manual approval granted",
-            )
-            self.assertEqual(resumed.status, WorkItemStatus.PENDING)
-            self.assertEqual(resumed.attempt, 2)
-            session.commit()
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            self.assertEqual(
-                execution.repository.list_claimable_work_item_ids(run_id, stage=WorkItemStage.REPAIR),
-                [work_item_id],
-            )
-            reclaimed = execution.claim_next_work_item(
-                run_id=run_id,
-                stage=WorkItemStage.REPAIR,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:resumed",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(reclaimed)
-            assert reclaimed is not None
-            self.assertEqual(reclaimed.work_item_id, work_item_id)
-            self.assertEqual(reclaimed.attempt, 2)
-
-    def test_manual_escalation_repair_item_blocks_reseed_until_resumed(self) -> None:
-        run_id = self._create_running_run()
-        proposal_id = str(uuid4())
-        incident_id = str(uuid4())
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            work_item_id = execution.ensure_repair_dispatch_work_item(
-                run_id=run_id,
-                proposal_id=proposal_id,
-                incident_id=incident_id,
-                repair_dispatch_json={
-                    "dispatch_id": str(uuid4()),
-                    "patch_surface": "runtime_bundle",
-                    "claim_mode": "runtime_owned",
-                    "claim_target": "runtime_patch_proposal",
-                    "lane": "runtime.repair",
-                    "worker_hint": "review_deadlock_repair_agent",
-                    "worker_contract_version": 1,
-                    "execution_mode": "transport_backed",
-                    "executor_hint": "python_contract_transport_repair_executor",
-                    "executor_contract_version": 1,
-                    "transport_hint": "http_contract_repair_transport",
-                    "transport_contract_version": 1,
-                    "validation_command": "uv run pytest tests/test_incident_controller.py",
-                    "bundle_revision_name": "bundle-repair-manual-reseed",
-                    "rollout_scope_json": {"mode": "dev"},
-                    "replay": {
-                        "scope_type": "chapter",
-                        "scope_id": "chapter-manual-escalation",
-                        "boundary": "review_session",
-                    },
-                },
-            )
-            claimed = execution.claim_repair_dispatch_work_item(
-                work_item_id=work_item_id,
-                worker_name="app.run.repair",
-                worker_instance_id="app.repair:test",
-                lease_seconds=60,
-            )
-            self.assertIsNotNone(claimed)
-            assert claimed is not None
-            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
-            execution.complete_work_item_failure(
-                lease_token=claimed.lease_token,
-                error_class="RuntimeRepairManualEscalationRequired",
-                error_detail_json={
-                    "repair_agent_decision": "manual_escalation_required",
-                    "repair_result_json": {
-                        "repair_agent_decision": "manual_escalation_required",
-                    },
-                },
-                retryable=False,
-            )
-            session.commit()
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            ensured_ids = execution.ensure_scope_replay_work_items(
-                run_id=run_id,
-                stage=WorkItemStage.REPAIR,
-                scope_type=WorkItemScopeType.ISSUE_ACTION,
-                scope_ids=[proposal_id],
-                input_version_bundle_by_scope_id={
-                    proposal_id: {
-                        "proposal_id": proposal_id,
-                        "incident_id": incident_id,
-                    }
-                },
-            )
-            self.assertEqual(ensured_ids, [work_item_id])
-            work_items = session.query(WorkItem).filter(WorkItem.run_id == run_id).all()
-            self.assertEqual(len(work_items), 1)
-
     def test_executor_reclaims_expired_leases_before_stage_progression(self) -> None:
         run_id = self._create_running_run(
             budget=RunBudgetSummary(
@@ -919,31 +327,6 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertIsNotNone(reclaimed_claim)
         assert reclaimed_claim is not None
         self.assertEqual(reclaimed_claim.attempt, 2)
-
-    def test_document_run_executor_controller_runner_reconcile_is_best_effort_and_throttled(self) -> None:
-        run_id = self._create_running_run()
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root="/tmp",
-            translation_worker=None,
-            controller_reconcile_interval_seconds=999.0,
-        )
-
-        calls: list[str] = []
-
-        class _ExplodingRunner:
-            def reconcile_run(self, *, run_id: str) -> None:
-                calls.append(run_id)
-                raise RuntimeError("controller runner exploded")
-
-        executor._controller_runner = _ExplodingRunner()  # type: ignore[assignment]
-
-        executor._maybe_reconcile_controllers(run_id)
-        self.assertEqual(calls, [run_id])
-
-        # Second call should be throttled even if the first attempt errored.
-        executor._maybe_reconcile_controllers(run_id)
-        self.assertEqual(calls, [run_id])
 
     def test_claim_translate_work_items_prefers_front_packet_even_when_work_item_order_is_reversed(self) -> None:
         document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1, 2]])
@@ -1114,7 +497,37 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertTrue(executor._reclaim_expired_leases(run_id))
 
-    def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_review(self) -> None:
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
+            self.assertEqual(len(refreshed_items), 1)
+            self.assertEqual(refreshed_items[0].status, WorkItemStatus.RETRYABLE_FAILED)
+            self.assertEqual(str(refreshed_items[0].scope_id), first_packet_id)
+
+            blocked_seedable = executor._plan_translate_frontier(
+                session=session,
+                run_id=run_id,
+                document_id=document_id,
+                translate_items=refreshed_items,
+            ).packet_ids
+            self.assertEqual(blocked_seedable, [])
+
+            reclaimed_claim = executor._claim_translate_work_items(
+                session=session,
+                execution=execution,
+                run_id=run_id,
+                translate_items=refreshed_items,
+            )
+            self.assertEqual(len(reclaimed_claim), 1)
+            self.assertEqual(reclaimed_claim[0].scope_id, first_packet_id)
+            self.assertEqual(reclaimed_claim[0].attempt, 2)
+
+            waiting_packet = session.get(TranslationPacket, second_packet_id)
+            self.assertIsNotNone(waiting_packet)
+            assert waiting_packet is not None
+            self.assertEqual(waiting_packet.packet_json["runtime_state"]["substate"], "ready")
+
+    def test_process_translate_stage_cancels_stale_legacy_translate_item_and_advances_to_model_review(self) -> None:
         document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1]])
         packet_id = packet_ids_by_chapter[0][0]
         run_id = self._create_running_run_for_document(document_id)
@@ -1159,40 +572,11 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertEqual(stale_item.status, WorkItemStatus.CANCELLED)
         self.assertEqual(stale_item.error_class, "stale_translate_packet_reference")
-        self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "review")
+        # The default translate_full plan runs the Reviewer Agent right after translation.
+        self.assertEqual(summary.status_detail_json["pipeline"]["current_stage"], "model_review")
         pipeline = summary.status_detail_json["pipeline"]
         cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
         self.assertEqual(cached_stages["translate"]["status"], "succeeded")
-
-        with self.session_factory() as session:
-            execution = RunExecutionService(RunControlRepository(session))
-            refreshed_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
-            self.assertEqual(len(refreshed_items), 1)
-            self.assertEqual(refreshed_items[0].status, WorkItemStatus.RETRYABLE_FAILED)
-            self.assertEqual(str(refreshed_items[0].scope_id), first_packet_id)
-
-            blocked_seedable = executor._plan_translate_frontier(
-                session=session,
-                run_id=run_id,
-                document_id=document_id,
-                translate_items=refreshed_items,
-            ).packet_ids
-            self.assertEqual(blocked_seedable, [])
-
-            reclaimed_claim = executor._claim_translate_work_items(
-                session=session,
-                execution=execution,
-                run_id=run_id,
-                translate_items=refreshed_items,
-            )
-            self.assertEqual(len(reclaimed_claim), 1)
-            self.assertEqual(reclaimed_claim[0].scope_id, first_packet_id)
-            self.assertEqual(reclaimed_claim[0].attempt, 2)
-
-            waiting_packet = session.get(TranslationPacket, second_packet_id)
-            self.assertIsNotNone(waiting_packet)
-            assert waiting_packet is not None
-            self.assertEqual(waiting_packet.packet_json["runtime_state"]["substate"], "ready")
 
     def test_budget_guardrail_pauses_run_when_cost_limit_is_exceeded(self) -> None:
         run_id = self._create_running_run(
@@ -1222,6 +606,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             self.assertIsNotNone(claimed)
             assert claimed is not None
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            _emit_completed_call(session, run_id=run_id, token_in=10, token_out=5, cost_usd=0.005, latency_ms=100)
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,
@@ -1277,17 +662,6 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(guardrail.stop_reason, "budget.consecutive_failures_exceeded")
         self.assertEqual(guardrail.run_summary.status, "failed")
 
-    def test_retryable_exception_helper_treats_http_429_as_retryable(self) -> None:
-        exc = RuntimeError("Provider returned HTTP 429: rate limit exceeded")
-        self.assertTrue(_is_retryable_exception(exc))
-
-    def test_retryable_exception_helper_treats_http_402_insufficient_balance_as_non_retryable(self) -> None:
-        exc = RuntimeError(
-            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
-        )
-        self.assertFalse(_is_retryable_exception(exc))
-        self.assertEqual(_pause_reason_for_exception(exc), "provider.insufficient_balance")
-
     def test_provider_insufficient_balance_pauses_run_immediately(self) -> None:
         run_id = self._create_running_run(
             budget=RunBudgetSummary(
@@ -1323,9 +697,7 @@ class RunExecutionServiceTests(unittest.TestCase):
             export_root="/tmp",
             translation_worker=None,
         )
-        exc = RuntimeError(
-            'Provider returned HTTP 402: {"error":{"message":"Insufficient Balance","type":"unknown_error"}}'
-        )
+        exc = ProviderHTTPError(402, '{"error":{"message":"Insufficient Balance","type":"unknown_error"}}')
         executor._complete_failure(
             run_id=run_id,
             claimed=claimed,
@@ -1338,137 +710,9 @@ class RunExecutionServiceTests(unittest.TestCase):
 
         self.assertEqual(summary.status, "paused")
         self.assertEqual(summary.stop_reason, "provider.insufficient_balance")
-        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 1)
-
-    def test_recover_export_misrouting_rebinds_run_to_effective_bundle_revision(self) -> None:
-        document_id = self._create_document()
-        run_id = self._create_running_run_for_document(document_id)
-        export_scope_id = str(uuid4())
-        proposal_id = str(uuid4())
-        stable_revision_id = str(uuid4())
-        bad_revision_id = str(uuid4())
-
-        with self.session_factory() as session:
-            work_item = WorkItem(
-                run_id=run_id,
-                stage=WorkItemStage.EXPORT,
-                scope_type=WorkItemScopeType.EXPORT,
-                scope_id=export_scope_id,
-                priority=100,
-                status=WorkItemStatus.RETRYABLE_FAILED,
-                input_version_bundle_json={"document_id": document_id, "export_type": "rebuilt_pdf"},
-                output_artifact_refs_json={},
-                error_detail_json={},
-            )
-            session.add(work_item)
-            stable_revision = RuntimeBundleRevision(
-                id=stable_revision_id,
-                bundle_type="runtime",
-                revision_name="bundle-stable",
-                status=RuntimeBundleRevisionStatus.PUBLISHED,
-                manifest_json={},
-                rollout_scope_json={"mode": "dev"},
-            )
-            bad_revision = RuntimeBundleRevision(
-                id=bad_revision_id,
-                bundle_type="runtime",
-                revision_name="bundle-bad",
-                status=RuntimeBundleRevisionStatus.ROLLED_BACK,
-                parent_bundle_revision_id=stable_revision_id,
-                rollback_target_revision_id=stable_revision_id,
-                manifest_json={},
-                rollout_scope_json={"mode": "dev"},
-            )
-            session.add(stable_revision)
-            session.add(bad_revision)
-            incident = RuntimeIncident(
-                id=str(uuid4()),
-                run_id=run_id,
-                scope_type=JobScopeType.DOCUMENT,
-                scope_id=export_scope_id,
-                incident_kind=RuntimeIncidentKind.EXPORT_MISROUTING,
-                fingerprint=f"export-misrouting:{uuid4()}",
-                source_type="epub",
-                selected_route="pdf.direct",
-                runtime_bundle_revision_id=stable_revision_id,
-                status=RuntimeIncidentStatus.FROZEN,
-                failure_count=1,
-                route_evidence_json={},
-                latest_error_json={},
-                bundle_json={},
-                status_detail_json={},
-            )
-            proposal = RuntimePatchProposal(
-                id=proposal_id,
-                incident_id=incident.id,
-                status=RuntimePatchProposalStatus.ROLLED_BACK,
-                published_bundle_revision_id=bad_revision_id,
-                diff_manifest_json={},
-                validation_report_json={},
-                status_detail_json={
-                    "bundle_guard": {
-                        "rollback_performed": True,
-                        "effective_revision_id": stable_revision_id,
-                        "rollback_target_revision_id": stable_revision_id,
-                    }
-                },
-            )
-            session.add(incident)
-            session.add(proposal)
-            session.commit()
-            work_item_id = work_item.id
-
-        executor = DocumentRunExecutor(
-            session_factory=self.session_factory,
-            export_root="/tmp",
-            translation_worker=None,
-        )
-        claimed = SimpleNamespace(
-            run_id=run_id,
-            work_item_id=work_item_id,
-            stage=WorkItemStage.EXPORT.value,
-            scope_type=WorkItemScopeType.EXPORT.value,
-            scope_id=export_scope_id,
-            attempt=1,
-            priority=100,
-            lease_token="lease-test",
-            worker_name="executor-test",
-            worker_instance_id="executor-test-worker",
-            lease_expires_at=datetime.now(timezone.utc).isoformat(),
-        )
-
-        with self.session_factory() as session:
-            with patch(
-                "book_agent.app.runtime.document_run_executor.ExportController.recover_export_misrouting",
-                return_value=SimpleNamespace(
-                    incident_id=incident.id,
-                    proposal_id=proposal_id,
-                    bundle_revision_id=None,
-                    repair_work_item_id="repair-work-item-1",
-                    corrected_route="epub.rebuilt_pdf_via_html",
-                    bound_work_item_ids=[],
-                ),
-            ):
-                executor._recover_export_misrouting(
-                    session=session,
-                    run_id=run_id,
-                    claimed=claimed,
-                    exc=RuntimeError("export misrouting"),
-                )
-                session.commit()
-
-        with self.session_factory() as session:
-            repository = RunControlRepository(session)
-            run = repository.get_run(run_id)
-            runtime_v2 = dict((run.status_detail_json or {}).get("runtime_v2") or {})
-            pending = dict(runtime_v2.get("pending_export_route_repair") or {})
-
-        self.assertEqual(run.runtime_bundle_revision_id, stable_revision_id)
-        self.assertEqual(pending["incident_id"], incident.id)
-        self.assertEqual(pending["proposal_id"], proposal_id)
-        self.assertEqual(pending["repair_work_item_id"], "repair-work-item-1")
-        self.assertEqual(pending["replay_scope_id"], export_scope_id)
-        self.assertEqual(pending["corrected_route"], "epub.rebuilt_pdf_via_html")
+        # The packet is not lost: it waits for the operator to resume the run.
+        self.assertEqual(summary.work_items.status_counts["retryable_failed"], 1)
+        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 0)
 
     def test_run_control_isoformat_treats_naive_sqlite_datetimes_as_utc(self) -> None:
         with self.session_factory() as session:

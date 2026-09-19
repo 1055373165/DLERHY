@@ -1,9 +1,6 @@
-export type DocumentStatus =
-  | "active"
-  | "failed"
-  | "partially_exported"
-  | "exported"
-  | string;
+import type * as Generated from "./api-types.gen";
+
+export type DocumentStatus = Generated.DocumentStatus;
 
 export type RunStatus =
   | "pending"
@@ -17,9 +14,7 @@ export type RunStatus =
   | "cancelled"
   | string;
 
-export interface HealthResponse {
-  status: string;
-}
+export type HealthResponse = Generated.HealthResponse;
 
 export interface ChapterSummary {
   chapter_id: string;
@@ -129,10 +124,7 @@ export interface RunLeaseSummary {
   latest_heartbeat_at?: string | null;
 }
 
-export interface RunEventSummary {
-  event_count: number;
-  latest_event_at?: string | null;
-}
+export type RunEventSummary = Generated.RunEventSummaryResponse;
 
 export interface DocumentRunSummary {
   run_id: string;
@@ -180,21 +172,9 @@ export interface RunAuditEventPage {
   entries: RunAuditEvent[];
 }
 
-export interface TranslationUsageSummary {
-  run_count: number;
-  succeeded_run_count: number;
-  total_token_in: number;
-  total_token_out: number;
-  total_cost_usd: number;
-}
+export type TranslationUsageSummary = Generated.TranslationUsageSummaryResponse;
 
-export interface IssueHotspotEntry {
-  issue_type: string;
-  root_cause_layer?: string | null;
-  issue_count: number;
-  open_issue_count: number;
-  blocking_issue_count: number;
-}
+export type IssueHotspotEntry = Generated.IssueHotspotEntryResponse;
 
 export interface IssueChapterHighlightEntry {
   chapter_id: string;
@@ -205,22 +185,9 @@ export interface IssueChapterHighlightEntry {
   blocking_issue_count: number;
 }
 
-export interface IssueChapterHighlights {
-  top_open_chapter?: IssueChapterHighlightEntry | null;
-  top_blocking_chapter?: IssueChapterHighlightEntry | null;
-  top_resolved_chapter?: IssueChapterHighlightEntry | null;
-}
+export type IssueChapterHighlights = Generated.IssueChapterHighlightsResponse;
 
-export interface ExportRecordSummary {
-  export_id: string;
-  export_type: string;
-  status: string;
-  file_path: string;
-  manifest_path?: string | null;
-  chapter_id?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type ExportRecordSummary = Generated.ExportRecordSummaryResponse;
 
 export interface DocumentExportDashboard {
   document_id: string;
@@ -240,26 +207,9 @@ export interface DocumentExportDashboard {
   records: ExportRecordSummary[];
 }
 
-export interface ChapterMemoryProposalDecisionAudit {
-  proposal_id: string;
-  decision: "approved" | "rejected";
-  actor_type: string;
-  actor_id?: string | null;
-  note?: string | null;
-  created_at: string;
-}
+export type ChapterMemoryProposalDecisionAudit = Generated.ChapterMemoryProposalDecisionAuditResponse;
 
-export interface ChapterMemoryProposal {
-  proposal_id: string;
-  packet_id: string;
-  translation_run_id: string;
-  status: string;
-  base_snapshot_version?: number | null;
-  committed_snapshot_id?: string | null;
-  created_at: string;
-  updated_at: string;
-  last_decision?: ChapterMemoryProposalDecisionAudit | null;
-}
+export type ChapterMemoryProposal = Generated.ChapterMemoryProposalResponse;
 
 export interface ChapterMemoryProposalSurface {
   proposal_count: number;
@@ -271,24 +221,7 @@ export interface ChapterMemoryProposalSurface {
   recent_decisions: ChapterMemoryProposalDecisionAudit[];
 }
 
-export interface ChapterWorklistTimelineEntry {
-  event_id: string;
-  source_kind: "action" | "assignment" | "memory_proposal" | string;
-  event_kind: string;
-  created_at: string;
-  actor_name?: string | null;
-  note?: string | null;
-  issue_id?: string | null;
-  issue_type?: string | null;
-  action_id?: string | null;
-  action_type?: string | null;
-  scope_type?: string | null;
-  scope_id?: string | null;
-  status?: string | null;
-  proposal_id?: string | null;
-  decision?: "approved" | "rejected" | null;
-  owner_name?: string | null;
-}
+export type ChapterWorklistTimelineEntry = Generated.ChapterWorklistTimelineEntryResponse;
 
 export interface ChapterMemoryProposalQueueSummary {
   proposal_count: number;
@@ -388,17 +321,7 @@ export interface DocumentChapterWorklistFilters {
   assignedOwnerName?: string;
 }
 
-export interface ChapterWorklistAssignment {
-  assignment_id: string;
-  document_id: string;
-  chapter_id: string;
-  owner_name: string;
-  assigned_by: string;
-  note?: string | null;
-  assigned_at: string;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistAssignment = Generated.ChapterWorklistAssignmentResponse;
 
 export interface ChapterWorklistAssignmentRequest {
   owner_name: string;
@@ -411,40 +334,11 @@ export interface ChapterWorklistAssignmentClearRequest {
   note?: string;
 }
 
-export interface ChapterWorklistAssignmentClearResponse {
-  document_id: string;
-  chapter_id: string;
-  cleared: boolean;
-  cleared_by: string;
-  note?: string | null;
-  cleared_assignment_id: string;
-}
+export type ChapterWorklistAssignmentClearResponse = Generated.ChapterWorklistAssignmentClearResponse;
 
-export interface ChapterWorklistIssue {
-  issue_id: string;
-  issue_type: string;
-  root_cause_layer: string;
-  severity: string;
-  status: string;
-  blocking: boolean;
-  detector: string;
-  suggested_action?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistIssue = Generated.ChapterWorklistIssueResponse;
 
-export interface ChapterWorklistAction {
-  action_id: string;
-  issue_id: string;
-  issue_type: string;
-  action_type: string;
-  scope_type: string;
-  scope_id?: string | null;
-  status: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+export type ChapterWorklistAction = Generated.ChapterWorklistActionResponse;
 
 export interface ExecuteActionResponse {
   action_id: string;
@@ -465,14 +359,7 @@ export interface ExecuteActionResponse {
   recheck_issue_count?: number | null;
 }
 
-export interface ChapterWorklistAssignmentHistoryEntry {
-  event_id: string;
-  event_type: string;
-  owner_name?: string | null;
-  performed_by?: string | null;
-  note?: string | null;
-  created_at: string;
-}
+export type ChapterWorklistAssignmentHistoryEntry = Generated.ChapterWorklistAssignmentHistoryEntryResponse;
 
 export interface DocumentChapterWorklistDetail {
   document_id: string;
@@ -500,14 +387,7 @@ export interface ChapterMemoryProposalDecisionPayload {
   note?: string;
 }
 
-export interface ChapterMemoryProposalDecisionResponse {
-  document_id: string;
-  chapter_id: string;
-  decision: "approved" | "rejected";
-  proposal: ChapterMemoryProposal;
-  committed_snapshot_id?: string | null;
-  committed_snapshot_version?: number | null;
-}
+export type ChapterMemoryProposalDecisionResponse = Generated.ChapterMemoryProposalDecisionResponse;
 
 export interface HistoryFilters {
   query?: string;
@@ -524,13 +404,60 @@ export interface RunControlPayload {
   detail_json?: Record<string, unknown>;
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
+export type Approval = Generated.ApprovalResponse;
+export type ApprovalDecision = Generated.ApprovalDecisionRequest;
+export type BookGuide = Generated.BookGuideResponse;
+export type Decision = Generated.DecisionResponse;
+export type AgentTurn = Generated.AgentTurnResponse;
+export type Issue = Generated.IssueResponse;
+export type IssueDetail = Generated.IssueDetailResponse;
+export type IssueList = Generated.IssueListResponse;
+export type IssueDecision = Generated.IssueDecisionRequest;
+export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
+export type OrgBudget = Generated.OrgBudgetResponse;
+export type OrgCredit = Generated.OrgCreditResponse;
+export type Provider = Generated.ProviderCredentialRead;
+export type CostEstimate = Generated.CostEstimateResponse;
+export type ProviderCreate = Generated.ProviderCredentialCreate;
+export type ProviderUpdate = Generated.ProviderCredentialUpdate;
+export type ProviderTestResult = Generated.ProviderTestResult;
+export type StructureEditRequest = Generated.StructureEditRequest;
+export type StructureEdit = Generated.StructureEditResponse;
+export type StructureEditList = Generated.StructureEditListResponse;
+
+export interface IssueFilter {
+  status?: "active" | "all" | "open" | "triaged" | "resolved" | "wontfix";
+  blocking?: boolean;
+  detector?: "rule" | "model" | "human";
+  issueType?: string;
+  chapterId?: string;
+  offset?: number;
+  limit?: number;
+}
+
+declare global {
+  interface Window {
+    __BOOK_AGENT_CONFIG__?: { apiBaseUrl?: string };
+  }
+}
+
+// Runtime config (served by the API in production) wins over the build-time value.
+const RUNTIME_API_BASE_URL =
+  typeof window !== "undefined" ? window.__BOOK_AGENT_CONFIG__?.apiBaseUrl : undefined;
+const API_BASE_URL = (RUNTIME_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/$/, "");
 
 export const SERVICE_LINKS = {
   docs: `${API_BASE_URL}/docs`,
   openapi: `${API_BASE_URL}/openapi.json`,
   health: `${API_BASE_URL}/health`,
 };
+
+export function runStreamUrl(runId: string): string {
+  // EventSource cannot send headers; the stream route accepts the key as a query parameter.
+  const apiKey = getStoredApiKey();
+  const query = apiKey ? `?access_token=${encodeURIComponent(apiKey)}` : "";
+  return withApiBase(`/runs/${encodeURIComponent(runId)}/stream${query}`);
+}
 
 function withApiBase(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -565,8 +492,41 @@ async function parseError(response: Response): Promise<Error> {
   }
 }
 
+const API_KEY_STORAGE = "book-agent.api-key";
+
+/** The API key this browser sends (deployments with BOOK_AGENT_AUTH_MODE=api_key). */
+export function getStoredApiKey(): string {
+  try {
+    return window.localStorage.getItem(API_KEY_STORAGE) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setStoredApiKey(value: string): void {
+  try {
+    if (value.trim()) {
+      window.localStorage.setItem(API_KEY_STORAGE, value.trim());
+    } else {
+      window.localStorage.removeItem(API_KEY_STORAGE);
+    }
+  } catch {
+    /* storage unavailable: the key lasts for this page only */
+  }
+}
+
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    return fetch(withApiBase(path), init);
+  }
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${apiKey}`);
+  return fetch(withApiBase(path), { ...init, headers });
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(withApiBase(path), init);
+  const response = await apiFetch(path, init);
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -574,7 +534,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestBinary(path: string): Promise<Response> {
-  const response = await fetch(withApiBase(path));
+  const response = await apiFetch(path);
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -618,7 +578,7 @@ export async function getDocument(documentId: string): Promise<DocumentSummary> 
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
-  const response = await fetch(withApiBase(`/documents/${encodeURIComponent(documentId)}`), {
+  const response = await apiFetch(`/documents/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -857,24 +817,101 @@ async function saveBinaryResponse(response: Response, fallbackName: string): Pro
   return filename;
 }
 
+export type DocumentDownloadType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "review_package";
+
+const TERMINAL_RUN_STATUSES = new Set(["succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"]);
+
+async function waitForRunToFinish(
+  runId: string,
+  { pollIntervalMs, timeoutMs }: { pollIntervalMs: number; timeoutMs: number }
+): Promise<DocumentRunSummary> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const run = await getRun(runId);
+    if (TERMINAL_RUN_STATUSES.has(run.status)) {
+      return run;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error("导出仍在进行，请稍后在交付页下载。");
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+export type DownloadPackage = "single" | "zip" | "epub" | "preview";
+
+type ExportFetchOptions = { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage };
+
+/**
+ * The latest export of a document. Downloads only serve existing (and current)
+ * exports, so when there is none an export run is enqueued and awaited first.
+ */
+async function fetchDocumentExport(
+  documentId: string,
+  exportType: DocumentDownloadType,
+  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000, packaging = "single" }: ExportFetchOptions = {}
+): Promise<Response> {
+  const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
+    exportType
+  )}&package=${packaging}`;
+  let response = await apiFetch(downloadPath);
+  if (response.status === 404) {
+    const run = await requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ export_type: exportType }),
+    });
+    const finished = await waitForRunToFinish(run.run_id, { pollIntervalMs, timeoutMs });
+    if (finished.status !== "succeeded" && finished.status !== "succeeded_with_warnings") {
+      throw new Error(`导出未完成（${finished.stop_reason ?? finished.status}）。`);
+    }
+    response = await apiFetch(downloadPath);
+  }
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response;
+}
+
+/** Download the latest export of a document (exporting it first when needed). */
 export async function downloadDocumentExport(
   documentId: string,
-  exportType: "merged_html" | "bilingual_html" | "merged_markdown" | "bilingual_markdown" | "review_package"
+  exportType: DocumentDownloadType,
+  options: ExportFetchOptions = {}
 ): Promise<string> {
-  const response = await requestBinary(
-    `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
-      exportType
-    )}`
-  );
-  const extMap: Record<string, string> = {
+  const packaging = options.packaging ?? "single";
+  const response = await fetchDocumentExport(documentId, exportType, options);
+  const fallbackExtension: Record<DocumentDownloadType, string> = {
     merged_markdown: ".md",
-    bilingual_markdown: ".md",
     merged_html: ".html",
     bilingual_html: ".html",
+    rebuilt_pdf: ".pdf",
     review_package: ".zip",
   };
-  const ext = extMap[exportType] ?? ".zip";
-  return saveBinaryResponse(response, `book-agent-${exportType}${ext}`);
+  const extension = packaging === "epub" ? ".epub" : packaging === "zip" ? ".zip" : fallbackExtension[exportType];
+  return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
+}
+
+export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf";
+
+/** An export for reading in the app: HTML or Markdown text, or the PDF bytes (exporting first when needed). */
+export async function previewDocumentExport(
+  documentId: string,
+  exportType: ReadableExportType,
+  options: Omit<ExportFetchOptions, "packaging"> = {}
+): Promise<{ kind: "html" | "markdown"; text: string } | { kind: "pdf"; blob: Blob }> {
+  const response = await fetchDocumentExport(documentId, exportType, { ...options, packaging: "preview" });
+  if (exportType === "rebuilt_pdf") {
+    return { kind: "pdf", blob: await response.blob() };
+  }
+  return { kind: exportType === "merged_markdown" ? "markdown" : "html", text: await response.text() };
+}
+
+/** This month's model usage of the caller's organisation, per book, as CSV. */
+export async function downloadUsageStatement(month?: string): Promise<string> {
+  const query = month ? `&month=${encodeURIComponent(month)}` : "";
+  const response = await requestBinary(`/orgs/current/usage?format=csv${query}`);
+  return saveBinaryResponse(response, `usage-${month ?? "current"}.csv`);
 }
 
 export async function downloadChapterExport(
@@ -886,5 +923,117 @@ export async function downloadChapterExport(
       chapterId
     )}/exports/download?export_type=bilingual_html`
   );
-  return saveBinaryResponse(response, `${chapterId}-bilingual_html.zip`);
+  return saveBinaryResponse(response, `${chapterId}-bilingual_html.html`);
+}
+
+export async function listApprovals(documentId: string, status: "pending" | "all" = "pending"): Promise<Approval[]> {
+  return requestJson<Approval[]>(`/documents/${documentId}/approvals?status=${status}`);
+}
+
+export async function decideApproval(
+  approvalId: string,
+  approved: boolean,
+  payload: ApprovalDecision,
+): Promise<Approval> {
+  return requestJson<Approval>(`/approvals/${approvalId}/${approved ? "approve" : "reject"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getBookGuide(documentId: string): Promise<BookGuide> {
+  return requestJson<BookGuide>(`/documents/${documentId}/book-guide`);
+}
+
+export async function listDecisions(documentId: string): Promise<Decision[]> {
+  return requestJson<Decision[]>(`/documents/${documentId}/decisions`);
+}
+
+export async function listAgentTurns(documentId: string): Promise<AgentTurn[]> {
+  return requestJson<AgentTurn[]>(`/documents/${documentId}/agent-turns`);
+}
+
+export async function listIssues(documentId: string, filter: IssueFilter = {}): Promise<IssueList> {
+  const params = new URLSearchParams();
+  params.set("status", filter.status ?? "active");
+  if (filter.blocking !== undefined) params.set("blocking", String(filter.blocking));
+  if (filter.detector) params.set("detector", filter.detector);
+  if (filter.issueType) params.set("issue_type", filter.issueType);
+  if (filter.chapterId) params.set("chapter_id", filter.chapterId);
+  params.set("offset", String(filter.offset ?? 0));
+  params.set("limit", String(filter.limit ?? 50));
+  return requestJson<IssueList>(`/documents/${documentId}/issues?${params.toString()}`);
+}
+
+export async function getIssueDetail(issueId: string): Promise<IssueDetail> {
+  return requestJson<IssueDetail>(`/issues/${issueId}`);
+}
+
+export async function transitionIssue(
+  issueId: string,
+  transition: IssueTransition,
+  payload: IssueDecision,
+): Promise<Issue> {
+  return requestJson<Issue>(`/issues/${issueId}/${transition}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Model spend of the caller's organisation this month and its cap (null: unlimited). */
+export async function getCurrentOrgBudget(): Promise<OrgBudget> {
+  return requestJson<OrgBudget>("/orgs/current/budget");
+}
+
+/** The caller's organisation's prepaid balance (prepaid is false until its first top-up). */
+export async function getCurrentOrgCredit(): Promise<OrgCredit> {
+  return requestJson<OrgCredit>("/orgs/current/credit");
+}
+
+export async function listStructureEdits(documentId: string): Promise<StructureEditList> {
+  return requestJson<StructureEditList>(`/documents/${documentId}/structure-edits`);
+}
+
+export async function createStructureEdit(documentId: string, payload: StructureEditRequest): Promise<StructureEdit> {
+  return requestJson<StructureEdit>(`/documents/${documentId}/structure-edits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export async function listProviders(): Promise<Provider[]> {
+  return requestJson<Provider[]>("/providers");
+}
+
+export async function createProvider(payload: ProviderCreate): Promise<Provider> {
+  return requestJson<Provider>("/providers", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(payload) });
+}
+
+export async function updateProvider(id: string, payload: ProviderUpdate): Promise<Provider> {
+  return requestJson<Provider>(`/providers/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(payload) });
+}
+
+export async function activateProvider(id: string): Promise<Provider> {
+  return requestJson<Provider>(`/providers/${id}/activate`, { method: "POST" });
+}
+
+export async function testProvider(id: string): Promise<ProviderTestResult> {
+  return requestJson<ProviderTestResult>(`/providers/${id}/test`, { method: "POST" });
+}
+
+export async function deleteProvider(id: string): Promise<void> {
+  const response = await apiFetch(`/providers/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+}
+
+/** Tokens (and cost, when the provider has prices) a full run of this book will take, as a range. */
+export async function getCostEstimate(documentId: string): Promise<CostEstimate> {
+  return requestJson<CostEstimate>(`/documents/${encodeURIComponent(documentId)}/cost-estimate`);
 }

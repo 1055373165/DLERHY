@@ -1,6 +1,6 @@
 import { useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -19,10 +19,11 @@ import s from "./LibraryPage.module.css";
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
 const DOWNLOAD_OPTIONS = [
-  { label: "中文版 · HTML", exportType: "merged_html", enabled: true },
-  { label: "中文版 · Markdown", exportType: "merged_markdown", enabled: true },
-  { label: "中英文对照版 · HTML", exportType: "bilingual_html", enabled: true },
-  { label: "中英文对照版 · Markdown", exportType: "bilingual_markdown", enabled: true },
+  { key: "zh-html", label: "中文版 · HTML", exportType: "merged_html", packaging: "single", enabled: true },
+  { key: "zh-epub", label: "中文版 · EPUB", exportType: "merged_html", packaging: "epub", enabled: true },
+  { key: "zh-md", label: "中文版 · Markdown", exportType: "merged_markdown", packaging: "single", enabled: true },
+  { key: "zh-pdf", label: "中文版 · PDF", exportType: "rebuilt_pdf", packaging: "single", enabled: true },
+  { key: "bi-html", label: "中英文对照版 · HTML", exportType: "bilingual_html", packaging: "single", enabled: true },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [12, 24, 50, 100] as const;
@@ -102,16 +103,17 @@ export function LibraryPage() {
     await navigate("/");
   }
 
-  type ExportKey = typeof DOWNLOAD_OPTIONS[number]["exportType"];
-  async function handleDownload(documentId: string, exportType: ExportKey) {
+  type DownloadKey = typeof DOWNLOAD_OPTIONS[number]["key"];
+  async function handleDownload(documentId: string, key: DownloadKey) {
     setOpenMenu(null);
-    const opt = DOWNLOAD_OPTIONS.find((o) => o.exportType === exportType);
-    setFeedback({ tone: "success", text: `正在生成 ${opt?.label ?? exportType}...` });
+    const opt = DOWNLOAD_OPTIONS.find((o) => o.key === key);
+    if (!opt) return;
+    setFeedback({ tone: "success", text: `正在生成 ${opt.label}...` });
     try {
-      const filename = await downloadDocumentExport(documentId, exportType);
-      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
+      const filename = await downloadDocumentExport(documentId, opt.exportType, { packaging: opt.packaging });
+      setFeedback({ tone: "success", text: `已下载：${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -120,11 +122,11 @@ export function LibraryPage() {
     setDeleting(true);
     try {
       await deleteDocument(pendingDelete.id);
-      setFeedback({ tone: "success", text: `Deleted: ${pendingDelete.title}` });
+      setFeedback({ tone: "success", text: `已删除：${pendingDelete.title}` });
       setPendingDelete(null);
       await queryClient.invalidateQueries({ queryKey: ["document-history"] });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Delete failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "删除失败" });
     } finally {
       setDeleting(false);
     }
@@ -167,7 +169,7 @@ export function LibraryPage() {
             <input
               className={s.searchInput}
               type="search"
-              placeholder="Search title, author, path, or ID..."
+              placeholder="搜索书名、作者、路径或 ID…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -243,24 +245,29 @@ export function LibraryPage() {
                     <StatusBadge tone={badge.tone} label={badge.label} />
                     <div className={s.bookActions}>
                       <button className="btn btn-sm" onClick={() => void handleOpen(entry.document_id)}>
-                        Open
+                        打开
                       </button>
+                      {entry.merged_export_ready ? (
+                        <Link className="btn btn-sm" to={`/library/${entry.document_id}/read`}>
+                          阅读
+                        </Link>
+                      ) : null}
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
                           className="btn btn-sm"
                           disabled={!entry.merged_export_ready}
                           onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
                         >
-                          {entry.merged_export_ready ? "Download ▾" : "—"}
+                          {entry.merged_export_ready ? "下载 ▾" : "—"}
                         </button>
                         {openMenu === entry.document_id && (
                           <div className={s.dlMenu}>
                             {DOWNLOAD_OPTIONS.map((opt) => (
                               <button
-                                key={opt.exportType}
+                                key={opt.key}
                                 className={s.dlOption}
                                 disabled={!opt.enabled}
-                                onClick={() => void handleDownload(entry.document_id, opt.exportType)}
+                                onClick={() => void handleDownload(entry.document_id, opt.key)}
                               >
                                 {opt.label}
                               </button>
@@ -271,10 +278,10 @@ export function LibraryPage() {
                       <button
                         className={`btn btn-sm ${s.deleteBtn}`}
                         onClick={() => setPendingDelete({ id: entry.document_id, title: preferredTitle(entry) })}
-                        aria-label={`Delete ${preferredTitle(entry)}`}
-                        title="Delete"
+                        aria-label={`删除 ${preferredTitle(entry)}`}
+                        title="删除"
                       >
-                        Delete
+                        删除
                       </button>
                     </div>
                   </div>

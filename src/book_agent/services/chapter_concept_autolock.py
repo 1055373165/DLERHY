@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
 import re
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from sqlalchemy.orm import Session
@@ -10,9 +11,15 @@ from book_agent.core.config import Settings, get_settings
 from book_agent.domain.enums import LockLevel, TargetSegmentStatus, TermStatus
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository
 from book_agent.schemas.common import BaseSchema
-from book_agent.services.chapter_concept_lock import ChapterConceptLockResult, ChapterConceptLockService
-from book_agent.workers.contracts import TranslationUsage
+from book_agent.services.chapter_concept_lock import (
+    ChapterConceptLockResult,
+    ChapterConceptLockService,
+)
+from book_agent.translation.contracts import TranslationUsage
+from book_agent.workers.llm_calls import CALL_KIND_CONCEPT_RESOLVE, record_llm_usage
 from book_agent.workers.providers import OpenAICompatibleTranslationClient
+
+logger = logging.getLogger(__name__)
 
 
 class ConceptTranslationExample(BaseSchema):
@@ -215,12 +222,23 @@ class FallbackConceptResolver:
         examples: list[ConceptTranslationExample],
     ) -> tuple[ConceptResolutionPayload | None, TranslationUsage | None]:
         for resolver in self.resolvers:
-            resolution, usage = resolver.resolve(
-                source_term=source_term,
-                chapter_title=chapter_title,
-                chapter_brief=chapter_brief,
-                examples=examples,
-            )
+            try:
+                resolution, usage = resolver.resolve(
+                    source_term=source_term,
+                    chapter_title=chapter_title,
+                    chapter_brief=chapter_brief,
+                    examples=examples,
+                )
+            except Exception:
+                # A provider outage (e.g. HTTP 402) must fall through to the next
+                # resolver instead of failing the whole review.
+                logger.warning(
+                    "Concept resolver %s failed for %r; trying the next resolver",
+                    type(resolver).__name__,
+                    source_term,
+                    exc_info=True,
+                )
+                continue
             if resolution is not None and resolution.canonical_zh:
                 return resolution, usage
         return None, None
@@ -304,9 +322,28 @@ class OpenAICompatibleConceptResolver:
         )
 
 
-def build_default_concept_resolver(settings: Settings | None = None) -> ConceptResolver:
-    effective_settings = settings or get_settings()
+def build_default_concept_resolver(
+    settings: Settings | None = None,
+    *,
+    translation_worker: object | None = None,
+) -> ConceptResolver:
     heuristic = HeuristicConceptResolver()
+    if translation_worker is not None:
+        # Resolve concepts with the provider the translation run uses (the
+        # active stored credential), not a second client built from .env.
+        client = getattr(translation_worker, "client", None)
+        if not isinstance(client, OpenAICompatibleTranslationClient):
+            return heuristic
+        return FallbackConceptResolver(
+            resolvers=(
+                OpenAICompatibleConceptResolver(
+                    client=client,
+                    model_name=translation_worker.metadata().model_name,
+                ),
+                heuristic,
+            )
+        )
+    effective_settings = settings or get_settings()
     backend = effective_settings.translation_backend.lower().strip()
     if backend != "openai_compatible" or not effective_settings.translation_openai_api_key:
         return heuristic
@@ -416,6 +453,15 @@ class ChapterConceptAutoLockService:
                     else None,
                     examples=examples,
                 )
+            if usage is not None:
+                record_llm_usage(
+                    self.session,
+                    call_kind=CALL_KIND_CONCEPT_RESOLVE,
+                    model=self._resolver_model_name(),
+                    usage=usage,
+                    chapter_id=chapter_id,
+                    payload={"source_term": source_term},
+                )
             if resolution is None or not resolution.canonical_zh:
                 skipped_source_terms.append(source_term)
                 continue
@@ -433,6 +479,14 @@ class ChapterConceptAutoLockService:
             locked_records=locked_records,
             skipped_source_terms=skipped_source_terms,
         )
+
+    def _resolver_model_name(self) -> str:
+        resolver = self.resolver
+        for candidate in (resolver, *getattr(resolver, "resolvers", ())):
+            model_name = getattr(candidate, "model_name", None)
+            if isinstance(model_name, str) and model_name:
+                return model_name
+        return "unknown"
 
     def _candidate_source_terms(
         self,

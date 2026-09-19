@@ -1,7 +1,6 @@
 # ruff: noqa: E402
 """Tests for the TATR adapter shell (TATR-a)."""
 
-import os
 import sys
 import unittest
 from pathlib import Path

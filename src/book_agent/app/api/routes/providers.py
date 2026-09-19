@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from book_agent.app.api.access import current_principal
 from book_agent.app.api.deps import get_db_session
 from book_agent.core.config import get_settings
 from book_agent.schemas.provider import (
@@ -17,7 +18,17 @@ from book_agent.services.provider_credentials import api_key_preview
 router = APIRouter()
 
 
-def _to_read(record) -> ProviderCredentialRead:
+def _price(value) -> float | None:
+    return float(value) if value is not None else None
+
+
+def _scope(request: Request) -> str | None:
+    """Admins of the default organisation manage the shared credentials; other admins their organisation's own."""
+    return svc.credential_scope(current_principal(request).org_id)
+
+
+def _to_read(record, *, viewer_scope: str | None = None) -> ProviderCredentialRead:
+    shared_for_other_org = record.org_id is None and viewer_scope is not None
     return ProviderCredentialRead(
         id=record.id,
         name=record.name,
@@ -30,7 +41,13 @@ def _to_read(record) -> ProviderCredentialRead:
         max_retries=record.max_retries,
         retry_backoff_seconds=record.retry_backoff_seconds_x10 / 10.0,
         is_active=record.is_active,
-        api_key_preview=api_key_preview(record),
+        # Another organisation may see which shared provider it falls back to, not its key.
+        api_key_preview=None if shared_for_other_org else api_key_preview(record),
+        input_cost_per_1m_tokens=_price(record.input_cost_per_1m_tokens),
+        input_cache_hit_cost_per_1m_tokens=_price(record.input_cache_hit_cost_per_1m_tokens),
+        output_cost_per_1m_tokens=_price(record.output_cost_per_1m_tokens),
+        request_overrides=dict(record.request_overrides_json or {}),
+        shared=record.org_id is None,
         last_test_status=record.last_test_status,
         last_test_at=record.last_test_at,
         last_test_message=record.last_test_message,
@@ -44,9 +61,11 @@ def list_providers(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> list[ProviderCredentialRead]:
-    # First-touch bootstrap from .env if the table is empty.
+    # First-touch bootstrap from .env if the table is empty. GET sessions roll
+    # back on exit, so persist the seeded row explicitly.
     svc.resolve_active_credential(session, get_settings())
-    rows = svc.list_credentials(session)
+    session.commit()
+    rows = svc.list_credentials(session, _scope(request))
     return [_to_read(row) for row in rows]
 
 
@@ -56,20 +75,26 @@ def create_provider(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> ProviderCredentialRead:
-    record = svc.create_credential(
-        session,
-        name=payload.name,
-        provider_kind=payload.provider_kind,
-        model_name=payload.model_name,
-        base_url=payload.base_url,
-        api_key=payload.api_key,
-        streaming=payload.streaming,
-        max_output_tokens=payload.max_output_tokens,
-        timeout_seconds=payload.timeout_seconds,
-        max_retries=payload.max_retries,
-        retry_backoff_seconds=payload.retry_backoff_seconds,
-        activate=payload.activate,
-    )
+    try:
+        record = svc.create_credential(
+            session,
+            name=payload.name,
+            provider_kind=payload.provider_kind,
+            model_name=payload.model_name,
+            base_url=payload.base_url,
+            api_key=payload.api_key,
+            streaming=payload.streaming,
+            max_output_tokens=payload.max_output_tokens,
+            timeout_seconds=payload.timeout_seconds,
+            max_retries=payload.max_retries,
+            retry_backoff_seconds=payload.retry_backoff_seconds,
+            activate=payload.activate,
+            scope=_scope(request),
+            prices={name: getattr(payload, name) for name in svc.PRICE_FIELDS},
+            request_overrides=payload.request_overrides,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     if payload.activate:
         _invalidate_app_worker(request)
     return _to_read(record)
@@ -83,6 +108,7 @@ def update_provider(
     session: Session = Depends(get_db_session),
 ) -> ProviderCredentialRead:
     try:
+        svc.get_credential(session, credential_id, _scope(request))
         record = svc.update_credential(
             session,
             credential_id,
@@ -96,9 +122,14 @@ def update_provider(
             timeout_seconds=payload.timeout_seconds,
             max_retries=payload.max_retries,
             retry_backoff_seconds=payload.retry_backoff_seconds,
+            # Only the price fields the caller sent change; an explicit null clears one.
+            prices={name: getattr(payload, name) for name in svc.PRICE_FIELDS if name in payload.model_fields_set},
+            request_overrides=payload.request_overrides,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     if record.is_active:
         _invalidate_app_worker(request)
     return _to_read(record)
@@ -107,9 +138,11 @@ def update_provider(
 @router.delete("/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_provider(
     credential_id: str,
+    request: Request,
     session: Session = Depends(get_db_session),
 ) -> None:
     try:
+        svc.get_credential(session, credential_id, _scope(request))
         svc.delete_credential(session, credential_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
@@ -124,9 +157,12 @@ def activate_provider(
     session: Session = Depends(get_db_session),
 ) -> ProviderCredentialRead:
     try:
+        svc.get_credential(session, credential_id, _scope(request))
         record = svc.activate_credential(session, credential_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     _invalidate_app_worker(request)
     return _to_read(record)
 
@@ -134,10 +170,11 @@ def activate_provider(
 @router.post("/{credential_id}/test", response_model=ProviderTestResult)
 def test_provider(
     credential_id: str,
+    request: Request,
     session: Session = Depends(get_db_session),
 ) -> ProviderTestResult:
     try:
-        record = svc.get_credential(session, credential_id)
+        record = svc.get_credential(session, credential_id, _scope(request))
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")
     outcome = svc.test_credential_connection(record)
@@ -152,18 +189,18 @@ def test_provider(
 
 @router.get("/active", response_model=ProviderCredentialRead | None)
 def get_active_provider(
+    request: Request,
     session: Session = Depends(get_db_session),
 ) -> ProviderCredentialRead | None:
+    """The provider the caller's organisation translates with: its own active one, else the shared one."""
     settings = get_settings()
-    record = svc.resolve_active_credential(session, settings)
+    record = svc.resolve_active_credential(session, settings, current_principal(request).org_id)
+    session.commit()
     if record is None:
         return None
-    return _to_read(record)
+    return _to_read(record, viewer_scope=_scope(request))
 
 
 def _invalidate_app_worker(request: Request) -> None:
     """Clear the cached worker so the next packet rebuilds from DB."""
-    state = request.app.state
-    if hasattr(state, "translation_worker_revision"):
-        state.translation_worker_revision = -1
-    state.translation_worker = None
+    request.app.state.translation_worker_provider.invalidate()

@@ -1,44 +1,59 @@
 from __future__ import annotations
 
+import logging
+import os
+import socket
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
+from contextlib import ExitStack
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from book_agent.app.runtime.controller_runner import ControllerRunner
-from book_agent.app.runtime.controllers.export_controller import ExportController
-from book_agent.app.runtime.controllers.incident_controller import IncidentController
+from book_agent.infra import metrics, tracing
 from book_agent.core.ids import stable_id
+from book_agent.core.run_context import bind_run_context, current_run_id
+from book_agent.domain.enums import AgentTurnStatus
+from book_agent.harness.agents.repair import AGENT_KIND as RepairAgent_KIND
+from book_agent.harness.agents.repair import RepairAgent, remaining_blockers
+from book_agent.harness.agents.export_review import AGENT_KIND as ExportReviewAgent_KIND
+from book_agent.harness.agents.export_review import ExportReviewAgent
+from book_agent.harness.agents.reviewer import AGENT_KIND as ReviewerAgent_KIND
+from book_agent.harness.agents.structure import AGENT_KIND as StructureAgent_KIND
+from book_agent.harness.agents.structure import StructureAgent
+from book_agent.harness.agents.reviewer import ReviewerAgent
+from book_agent.harness.agents.terminology import AGENT_KIND as TerminologyAgent_KIND
+from book_agent.harness.agents.terminology import TerminologyAgent
+from book_agent.harness.kernel.openai_model import agent_model_for_worker
+from book_agent.harness.kernel.turn import AgentTurnRunner
+from book_agent.infra.repositories.agent import AgentLedgerRepository
 from book_agent.domain.enums import (
-    JobScopeType,
     DocumentRunStatus,
-    DocumentRunType,
     ExportType,
     PacketStatus,
-    RuntimeIncidentKind,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
 )
-from book_agent.domain.models import Block, Chapter
-from book_agent.domain.models.ops import DocumentRun, RuntimeIncident, RuntimePatchProposal, WorkItem
-from book_agent.infra.repositories.runtime_resources import RuntimeResourcesRepository
+from book_agent.domain.models import Block, Chapter, Document
+from book_agent.domain.models.ops import DocumentRun, WorkItem
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.db.session import session_scope
-from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.infra.repositories.run_control import LeaseLostError, RunControlRepository
 from book_agent.orchestrator.frontier_plan import TranslateFrontierPlan
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
     write_cached_stages,
 )
 from book_agent.orchestrator.reconciler import Reconciler
+from book_agent.orchestrator.run_plan import AGENT_STAGES, EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run, translate_packet_scope
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
     StageStatus,
@@ -55,101 +70,90 @@ from book_agent.orchestrator.state_machine import (
     build_packet_runtime_state,
     packet_runtime_state,
 )
+from book_agent.services.export import ExportGateError, ExportUnavailableError
+from book_agent.services.export_qa import AUDITED_EXPORT_TYPES, ExportQaService
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
-from book_agent.services.runtime_repair_executor import RuntimeRepairExecutorRegistry
-from book_agent.services.runtime_repair_registry import RuntimeRepairWorkerRegistry
-from book_agent.services.runtime_repair_worker import RuntimeRepairDecisionError
-from book_agent.services.export_routing import ExportRoutingError
 from book_agent.services.workflows import DocumentWorkflowService
+from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import TranslationWorker
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _append_recovered_lineage(
-    runtime_v2: dict[str, Any],
-    *,
-    lineage_entry: dict[str, Any],
-) -> None:
-    existing_entries = [
-        dict(entry)
-        for entry in (runtime_v2.get("recovered_lineage") or [])
-        if isinstance(entry, dict)
-    ]
-    proposal_id = lineage_entry.get("proposal_id")
-    if proposal_id:
-        existing_entries = [
-            entry
-            for entry in existing_entries
-            if entry.get("proposal_id") != proposal_id
-        ]
-    existing_entries.append(lineage_entry)
-    runtime_v2["recovered_lineage"] = existing_entries
-
-
-def _is_retryable_exception(exc: Exception) -> bool:
-    message = str(exc).lower()
-    non_retryable_markers = [
-        "http 400",
-        "http 401",
-        "http 402",
-        "http 403",
-        "http 404",
-        "insufficient balance",
-        "invalid api key",
-        "authentication failed",
-    ]
-    if any(marker in message for marker in non_retryable_markers):
-        return False
-    retryable_markers = [
-        "http 408",
-        "http 409",
-        "http 429",
-        "http 500",
-        "http 502",
-        "http 503",
-        "http 504",
-        "request failed",
-        "timed out",
-        "timeout",
-        "temporarily unavailable",
-        "connection reset",
-        "connection aborted",
-        "connection refused",
-        "database is locked",
-        "structured json output payload",
-        "translationworkeroutput schema",
-        "export misrouting",
-        "selected route",
-    ]
-    return any(marker in message for marker in retryable_markers)
-
-
-def _pause_reason_for_exception(exc: Exception) -> str | None:
-    message = str(exc).lower()
-    if "http 402" in message and "insufficient balance" in message:
-        return "provider.insufficient_balance"
-    return None
-
-
 def ensure_document_run_executor(app) -> "DocumentRunExecutor":
     executor = getattr(app.state, "document_run_executor", None)
     if executor is not None:
         return executor
+    from book_agent.core.config import get_settings
+
+    settings = get_settings()
+    if not settings.run_executor_enabled:
+        executor = DisabledRunExecutor()
+        app.state.document_run_executor = executor
+        return executor
     ensure_database_state = getattr(app.state, "ensure_database_state", None)
     if callable(ensure_database_state):
         ensure_database_state()
+    resolver = getattr(app.state, "resolve_translation_worker", None)
+
     executor = DocumentRunExecutor(
         session_factory=app.state.session_factory,
         export_root=app.state.export_root,
-        translation_worker=app.state.translation_worker,
+        translation_worker=getattr(app.state, "translation_worker", None),
+        translation_worker_resolver=resolver if callable(resolver) else None,
+        translation_max_output_repairs=settings.translation_max_output_repairs,
+        run_ownership_ttl_seconds=settings.run_ownership_ttl_seconds,
     )
     executor.start()
     app.state.document_run_executor = executor
     return executor
+
+
+# Agents whose failure degrades the run instead of failing it (the Repair Agent is not one).
+ADVISORY_AGENT_KINDS = frozenset(
+    {TerminologyAgent_KIND, ReviewerAgent_KIND, StructureAgent_KIND, ExportReviewAgent_KIND}
+)
+
+
+def _accepts_positional_argument(function: Callable[..., Any] | None) -> bool:
+    if function is None:
+        return False
+    import inspect
+
+    try:
+        parameters = inspect.signature(function).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD, parameter.VAR_POSITIONAL)
+        for parameter in parameters
+    )
+
+
+def executor_instance_id() -> str:
+    """host:pid:random, so a lease or run owner can be traced to a machine and process."""
+    return f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
+
+
+class DisabledRunExecutor:
+    """Stands in on API-only replicas (``run_executor_enabled=false``): runs are executed elsewhere."""
+
+    instance_id = None
+
+    def start(self) -> None:
+        return None
+
+    def stop(self, *, work_timeout_seconds: float = 30.0) -> bool:
+        return True
+
+    def wake(self, run_id: str | None = None) -> None:
+        return None
 
 
 class DocumentRunExecutor:
@@ -159,24 +163,39 @@ class DocumentRunExecutor:
         session_factory: sessionmaker,
         export_root: str | Path,
         translation_worker: TranslationWorker | None,
+        translation_worker_resolver: Callable[[], TranslationWorker] | None = None,
+        agent_model_resolver: Callable[[TranslationWorker], Any] | None = None,
         poll_interval_seconds: float = 1.0,
-        controller_reconcile_interval_seconds: float = 10.0,
         state_reconciler_interval_seconds: float = 30.0,
-        enable_controller_runner: bool = True,
         lease_seconds: int = 120,
         review_lease_seconds: int = 1800,
         heartbeat_interval_seconds: int = 15,
         default_max_auto_followup_attempts: int = 2,
         default_max_blocker_repair_rounds: int = 10,
         default_max_parallel_workers: int = 8,
+        translation_max_output_repairs: int = 1,
+        run_ownership_ttl_seconds: float = 30.0,
+        instance_id: str | None = None,
     ) -> None:
         self.session_factory = session_factory
+        self.instance_id = instance_id or executor_instance_id()
+        # A run loop belongs to one instance at a time; the supervisor renews
+        # ownership every poll, so another instance takes a run over only when
+        # this one has stopped renewing for this long.
+        self.run_ownership_ttl_seconds = max(float(poll_interval_seconds) * 3, float(run_ownership_ttl_seconds))
         self.export_root = str(Path(export_root).resolve())
         self.translation_worker = translation_worker
+        self.translation_max_output_repairs = max(0, int(translation_max_output_repairs))
+        # Resolved per workflow service so provider swaps and late app-state
+        # initialization are picked up; a fixed worker is used only when no
+        # resolver is supplied.
+        self.translation_worker_resolver = translation_worker_resolver
+        self._resolver_takes_org = _accepts_positional_argument(translation_worker_resolver)
+        self._run_org_cache: dict[str, str | None] = {}
+        # Builds the agent model from the resolved translation worker; tests
+        # inject scripted models here.
+        self.agent_model_resolver = agent_model_resolver or agent_model_for_worker
         self.poll_interval_seconds = poll_interval_seconds
-        self.controller_reconcile_interval_seconds = max(0.0, float(controller_reconcile_interval_seconds))
-        self._controller_runner = ControllerRunner(session_factory) if enable_controller_runner else None
-        self._controller_last_reconcile_at_by_run: dict[str, float] = {}
         self.state_reconciler_interval_seconds = max(
             0.0, float(state_reconciler_interval_seconds)
         )
@@ -187,41 +206,12 @@ class DocumentRunExecutor:
         self.default_max_auto_followup_attempts = default_max_auto_followup_attempts
         self.default_max_blocker_repair_rounds = max(1, int(default_max_blocker_repair_rounds))
         self.default_max_parallel_workers = max(1, int(default_max_parallel_workers))
-        self._runtime_repair_registry = RuntimeRepairWorkerRegistry(session_factory=session_factory)
-        self._runtime_repair_executor_registry = RuntimeRepairExecutorRegistry(session_factory=session_factory)
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
         self._supervisor_thread: threading.Thread | None = None
         self._active_run_threads: dict[str, threading.Thread] = {}
         self._active_work_threads: dict[str, dict[str, threading.Thread]] = {}
-        self._controller_runner = ControllerRunner(session_factory)
         self._lock = threading.Lock()
-
-    def _maybe_reconcile_controllers(self, run_id: str) -> None:
-        """
-        Phase A: best-effort controller reconcile integration.
-
-        Contract (for now):
-        - Mirror-only: controllers may only create/update Runtime V2 resources/checkpoints.
-        - Must not block or fail the existing V1 run loop.
-        """
-
-        runner = self._controller_runner
-        if runner is None:
-            return
-        now = time.monotonic()
-        last = self._controller_last_reconcile_at_by_run.get(run_id)
-        if last is not None and (now - last) < self.controller_reconcile_interval_seconds:
-            return
-        self._controller_last_reconcile_at_by_run[run_id] = now
-
-        try:
-            runner.reconcile_run(run_id=run_id)
-        except OperationalError:
-            return
-        except Exception:
-            # Keep Phase A wiring strictly non-invasive (no behavior change to V1 runner).
-            return
 
     def _maybe_reconcile_state(self, run_id: str) -> None:
         """Throttled read-only drift scan over stage cache vs physical state.
@@ -243,10 +233,8 @@ class DocumentRunExecutor:
         try:
             with session_scope(self.session_factory) as session:
                 Reconciler(session).check_and_audit(run_id)
-        except OperationalError:
-            return
         except Exception:
-            return
+            logger.warning("State reconciler scan failed for run %s", run_id, exc_info=True)
 
     def start(self) -> None:
         with self._lock:
@@ -261,27 +249,47 @@ class DocumentRunExecutor:
             )
             self._supervisor_thread.start()
 
-    def stop(self) -> None:
+    def stop(self, *, work_timeout_seconds: float = 30.0) -> bool:
+        """Stop scheduling and wait for threads; True when every thread has exited.
+
+        Work threads may be inside an LLM call that cannot be interrupted; they
+        finish (and record their result under their lease) after the timeout,
+        so callers must not dispose the database engine unless this returns True.
+        """
         self._stop_event.set()
         self._wake_event.set()
+        # Join tier by tier and re-read the registry after each tier: the
+        # supervisor may still start run threads, and run threads work threads,
+        # until they observe the stop event.
         with self._lock:
             supervisor = self._supervisor_thread
+        if supervisor is not None:
+            supervisor.join(timeout=5)
+        with self._lock:
             run_threads = list(self._active_run_threads.values())
+        for thread in run_threads:
+            thread.join(timeout=5)
+        with self._lock:
             work_threads = [
                 thread
                 for thread_map in self._active_work_threads.values()
                 for thread in thread_map.values()
             ]
-        if supervisor is not None:
-            supervisor.join(timeout=5)
-        for thread in run_threads:
-            thread.join(timeout=5)
         for thread in work_threads:
-            thread.join(timeout=5)
+            thread.join(timeout=work_timeout_seconds)
+            if thread.is_alive():
+                logger.warning("Work thread %s still running after stop", thread.name)
+        all_stopped = not any(
+            thread is not None and thread.is_alive() for thread in [supervisor, *run_threads, *work_threads]
+        )
+        # Hand the runs to other instances now instead of after the ownership TTL;
+        # work items still leased by lingering work threads stay protected by their leases.
+        self._release_run_ownership()
         with self._lock:
             self._active_run_threads = {}
             self._active_work_threads = {}
             self._supervisor_thread = None
+        return all_stopped
 
     def wake(self, run_id: str | None = None) -> None:
         self._wake_event.set()
@@ -293,11 +301,37 @@ class DocumentRunExecutor:
             with self._lock:
                 self._active_run_threads.pop(run_id, None)
 
+    def _current_translation_worker(self, run_id: str | None = None) -> TranslationWorker | None:
+        """The worker for the organisation that owns the run (work threads bind the run id)."""
+        if self.translation_worker_resolver is None:
+            return self.translation_worker
+        if not self._resolver_takes_org:
+            return self.translation_worker_resolver()
+        return self.translation_worker_resolver(self._org_for_run(run_id or current_run_id()))
+
+    def _org_for_run(self, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        with self._lock:
+            if run_id in self._run_org_cache:
+                return self._run_org_cache[run_id]
+        with session_scope(self.session_factory) as session:
+            org_id = session.scalar(
+                select(Document.org_id).join(DocumentRun, DocumentRun.document_id == Document.id).where(DocumentRun.id == run_id)
+            )
+        with self._lock:
+            # A run never changes organisation; bound the cache anyway.
+            if len(self._run_org_cache) > 4096:
+                self._run_org_cache.clear()
+            self._run_org_cache[run_id] = str(org_id) if org_id is not None else None
+        return self._run_org_cache[run_id]
+
     def _workflow_service(self, session) -> DocumentWorkflowService:
         return DocumentWorkflowService(
             session,
             export_root=self.export_root,
-            translation_worker=self.translation_worker,
+            translation_worker=self._current_translation_worker(),
+            translation_max_output_repairs=self.translation_max_output_repairs,
         )
 
     def _run_control_service(self, session) -> RunControlService:
@@ -312,11 +346,13 @@ class DocumentRunExecutor:
             try:
                 self._reap_finished_threads()
                 runnable_run_ids = self._list_runnable_run_ids()
-                for run_id in runnable_run_ids:
+                for run_id in self._acquire_run_ownership(runnable_run_ids):
                     self._ensure_run_thread(run_id)
+                self._reclaim_inactive_run_leases()
             except Exception:
                 if self._stop_event.is_set():
                     return
+                logger.exception("Run supervisor tick failed")
                 time.sleep(min(self.poll_interval_seconds, 1.0))
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
@@ -346,6 +382,8 @@ class DocumentRunExecutor:
 
     def _ensure_run_thread(self, run_id: str) -> None:
         with self._lock:
+            if self._stop_event.is_set():
+                return
             existing = self._active_run_threads.get(run_id)
             if existing is not None and existing.is_alive():
                 return
@@ -367,6 +405,8 @@ class DocumentRunExecutor:
         target,
     ) -> None:
         with self._lock:
+            if self._stop_event.is_set():
+                return
             thread_map = self._active_work_threads.setdefault(run_id, {})
             existing = thread_map.get(work_item_id)
             if existing is not None and existing.is_alive():
@@ -385,7 +425,7 @@ class DocumentRunExecutor:
                 session.scalars(
                     select(DocumentRun.id)
                     .where(
-                        DocumentRun.run_type == DocumentRunType.TRANSLATE_FULL,
+                        DocumentRun.run_type.in_(sorted(EXECUTABLE_RUN_TYPES)),
                         DocumentRun.status.in_(
                             [DocumentRunStatus.RUNNING, DocumentRunStatus.DRAINING]
                         ),
@@ -394,27 +434,81 @@ class DocumentRunExecutor:
                 ).all()
             )
 
+    def _acquire_run_ownership(self, run_ids: list[str]) -> list[str]:
+        """Take or renew ownership of runnable runs; returns the ones this instance owns now."""
+        if not run_ids:
+            return []
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(seconds=self.run_ownership_ttl_seconds)
+        owned: list[str] = []
+        with session_scope(self.session_factory) as session:
+            for run_id in run_ids:
+                result = session.execute(
+                    update(DocumentRun)
+                    .where(
+                        DocumentRun.id == run_id,
+                        or_(
+                            DocumentRun.executor_owner.is_(None),
+                            DocumentRun.executor_owner == self.instance_id,
+                            DocumentRun.executor_lease_expires_at.is_(None),
+                            DocumentRun.executor_lease_expires_at < now,
+                        ),
+                    )
+                    # Ownership is bookkeeping, not progress: keep updated_at, which stale-run
+                    # detection reads (the column's onupdate would otherwise bump it every tick).
+                    .values(
+                        executor_owner=self.instance_id,
+                        executor_lease_expires_at=expires_at,
+                        updated_at=DocumentRun.updated_at,
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                if result.rowcount == 1:
+                    owned.append(run_id)
+        return owned
+
+    def _release_run_ownership(self) -> None:
+        try:
+            with session_scope(self.session_factory) as session:
+                session.execute(
+                    update(DocumentRun)
+                    .where(DocumentRun.executor_owner == self.instance_id)
+                    .values(executor_owner=None, executor_lease_expires_at=None, updated_at=DocumentRun.updated_at)
+                    .execution_options(synchronize_session=False)
+                )
+        except Exception:
+            logger.warning("Could not release run ownership for %s", self.instance_id, exc_info=True)
+
     def _run_loop(self, run_id: str) -> None:
         while not self._stop_event.is_set():
+            if not self._acquire_run_ownership([run_id]):
+                # Another instance owns the run (this one stopped renewing in time).
+                return
             with session_scope(self.session_factory) as session:
                 run_control = self._run_control_service(session)
                 run_summary = run_control.get_run_summary(run_id)
             if run_summary.status not in {"running", "draining"}:
                 return
 
+            tick_started = time.monotonic()
+            tick_span = ExitStack()
+            tick_span.enter_context(tracing.span("executor.tick", **{"book_agent.run_id": run_id}))
             try:
-                self._maybe_reconcile_controllers(run_id)
                 self._maybe_reconcile_state(run_id)
                 self._reclaim_expired_leases(run_id)
-                if self._process_repair_stage(run_id):
+                if self._enforce_budget_guardrails(run_id):
+                    return
+                plan = plan_for_run(run_summary.run_type, run_summary.status_detail_json)
+                if any(self._process_agent_stage(run_id, stage, plan) for stage in plan.agent_stages):
                     continue
-                if self._process_translate_stage(run_id):
+                if plan.includes("translate") and self._process_translate_stage(run_id, plan):
                     continue
-                if self._process_review_stage(run_id):
+                if plan.includes("review") and self._process_review_stage(run_id, plan):
                     continue
-                if self._process_export_stage(run_id, export_type=ExportType.BILINGUAL_HTML):
-                    continue
-                if self._process_export_stage(run_id, export_type=ExportType.MERGED_HTML):
+                if any(
+                    self._process_export_stage(run_id, export_type=ExportType(stage), plan=plan)
+                    for stage in plan.export_stages
+                ):
                     continue
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
@@ -428,19 +522,57 @@ class DocumentRunExecutor:
                     "cancelled",
                 }:
                     return
-            except Exception as exc:  # pragma: no cover - defensive safety net
+            except (IntegrityError, OperationalError):
+                # Concurrent seeding lost a unique-index race or the database hiccuped;
+                # the next tick re-reads state instead of failing the whole run.
+                logger.warning("Run loop tick for %s hit a transient database error", run_id, exc_info=True)
+            except Exception as exc:
+                logger.exception("Run loop for %s failed with an unhandled exception", run_id)
+                tracing.record_error(exc)
                 self._fail_run(run_id, stop_reason="runner.unhandled_exception", exc=exc)
                 return
+            finally:
+                metrics.EXECUTOR_TICK.observe(time.monotonic() - tick_started)
+                tick_span.close()
 
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
 
-    def _reconcile_runtime_resources(self, run_id: str) -> None:
-        try:
-            self._controller_runner.reconcile_run(run_id=run_id)
-        except Exception:
-            # Phase A is mirror-only; control-plane scaffolding must not interrupt the V1 run loop.
-            return
+    def _plan_for(self, run: DocumentRun) -> RunPlan:
+        return plan_for_run(run.run_type, run.status_detail_json)
+
+    @staticmethod
+    def _next_stage_label(plan: RunPlan, stage: str) -> str:
+        if stage in plan.stages:
+            index = plan.stages.index(stage)
+            if index + 1 < len(plan.stages):
+                return plan.stages[index + 1]
+        return "completed"
+
+    def _enforce_budget_guardrails(self, run_id: str) -> bool:
+        """Pause or fail the run when a configured budget is exhausted.
+
+        Returns True when the run was stopped and the loop should exit.
+        """
+        with session_scope(self.session_factory) as session:
+            result = self._run_execution_service(session).enforce_budget_guardrails(run_id=run_id)
+        if not result.budget_exceeded:
+            return False
+        self._sync_pipeline_status(run_id, result.run_summary.status)
+        return True
+
+    def _reclaim_inactive_run_leases(self) -> list[str]:
+        """Sweep expired leases of runs that have no run loop (paused, cancelled, failed).
+
+        Their work threads may still be inside a provider call; once the lease
+        has expired the item is put back so a later resume or retry does not
+        race the old thread on the same packet.
+        """
+        with session_scope(self.session_factory) as session:
+            run_ids = self._run_execution_service(session).run_ids_with_expired_leases_outside_loops()
+        for run_id in run_ids:
+            self._reclaim_expired_leases(run_id)
+        return run_ids
 
     def _reclaim_expired_leases(self, run_id: str) -> bool:
         with session_scope(self.session_factory) as session:
@@ -461,14 +593,28 @@ class DocumentRunExecutor:
                         work_item_id=item.id,
                         attempt=item.attempt,
                     )
+        if reclaimed.expired_lease_count:
+            metrics.LEASES_RECLAIMED.inc(reclaimed.expired_lease_count)
         return reclaimed.expired_lease_count > 0
 
-    def _process_translate_stage(self, run_id: str) -> bool:
+    def _process_translate_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
+            packet_scope = plan.packet_ids
+            next_stage = self._next_stage_label(plan, "translate")
             document_id = run.document_id
+            if plan.agent_stages and not StageGateKeeper(session).can_start(
+                run_id, document_id, "translate", plan_stages=plan.stages
+            ):
+                return False
+            if self._downstream_stage_in_flight(session, run_id):
+                # A review or export thread owns the packets it re-opens for
+                # followup translation; seeding them here as well would translate
+                # the same packet twice.
+                return False
             translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             if self._reconcile_translate_work_items(
                 session=session,
@@ -486,6 +632,7 @@ class DocumentRunExecutor:
                 run_id=run_id,
                 document_id=document_id,
                 translate_items=active_translate_items,
+                packet_scope=packet_scope,
             )
             if seeded_packet_ids:
                 translate_items = self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
@@ -497,15 +644,17 @@ class DocumentRunExecutor:
                     "translate",
                     status="pending",
                     extra={
-                        "total_packet_count": len(self._list_all_packet_ids(session, document_id)),
-                        "pending_packet_count": len(self._list_pending_packet_ids(session, document_id)),
+                        "total_packet_count": len(self._list_all_packet_ids(session, document_id, packet_scope)),
+                        "pending_packet_count": len(
+                            self._list_pending_packet_ids(session, document_id, packet_scope)
+                        ),
                     },
                     current_stage="translate",
                     session=session,
                 )
             if not active_translate_items:
-                packet_ids = self._list_pending_packet_ids(session, document_id)
-                current_stage = "translate" if packet_ids else "review"
+                packet_ids = self._list_pending_packet_ids(session, document_id, packet_scope)
+                current_stage = "translate" if packet_ids else next_stage
                 execution.seed_translate_work_items(
                     run_id=run_id,
                     packet_ids=packet_ids,
@@ -516,7 +665,7 @@ class DocumentRunExecutor:
                     "translate",
                     status=("pending" if packet_ids else "succeeded"),
                     extra={
-                        "total_packet_count": len(self._list_all_packet_ids(session, document_id)),
+                        "total_packet_count": len(self._list_all_packet_ids(session, document_id, packet_scope)),
                         "pending_packet_count": len(packet_ids),
                     },
                     current_stage=current_stage,
@@ -551,39 +700,7 @@ class DocumentRunExecutor:
             return True
 
         if active_translate_items and all(item.status == WorkItemStatus.SUCCEEDED for item in active_translate_items):
-            self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage="review")
-        return False
-
-    def _process_repair_stage(self, run_id: str) -> bool:
-        with session_scope(self.session_factory) as session:
-            execution = self._run_execution_service(session)
-            repair_items = self._list_stage_items(session, run_id, WorkItemStage.REPAIR)
-            if not repair_items:
-                return False
-            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in repair_items):
-                return False
-
-            claimed_items: list[ClaimedRunWorkItem] = []
-            if any(item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED} for item in repair_items):
-                claimed = execution.claim_next_work_item(
-                    run_id=run_id,
-                    stage=WorkItemStage.REPAIR,
-                    worker_name="app.run.repair",
-                    worker_instance_id=f"app.repair:{uuid4()}",
-                    lease_seconds=self.lease_seconds,
-                )
-                if claimed is not None:
-                    claimed_items.append(claimed)
-
-        if claimed_items:
-            for claimed in claimed_items:
-                self._ensure_work_thread(
-                    run_id=run_id,
-                    work_item_id=claimed.work_item_id,
-                    thread_name=f"book-agent-repair-{claimed.work_item_id}",
-                    target=lambda claimed=claimed: self._execute_repair_work_item(run_id, claimed),
-                )
-            return True
+            self._update_pipeline_stage(run_id, "translate", status="succeeded", current_stage=next_stage)
         return False
 
     def _seed_translate_frontier_work_items(
@@ -594,6 +711,7 @@ class DocumentRunExecutor:
         run_id: str,
         document_id: str,
         translate_items: list[WorkItem],
+        packet_scope: frozenset[str] | None = None,
     ) -> list[str]:
         # DECIDE (read-only planner) → EXECUTE (single-writer seed).
         # Keep the two halves textually adjacent so any future tweak
@@ -604,6 +722,7 @@ class DocumentRunExecutor:
             run_id=run_id,
             document_id=document_id,
             translate_items=translate_items,
+            packet_scope=packet_scope,
         )
         if plan.is_empty:
             return []
@@ -614,13 +733,307 @@ class DocumentRunExecutor:
         )
         return plan.packet_ids
 
-    def _process_review_stage(self, run_id: str) -> bool:
+    def _process_agent_stage(self, run_id: str, stage_key: str, plan: RunPlan | None = None) -> bool:
+        """Drive an agent stage: one AGENT work item per turn attempt.
+
+        The turn is the durable state. A new work item is seeded when there is
+        no turn yet, or when the latest turn is RUNNING again after an approval
+        or budget decision and nobody is executing it. A turn waiting for a
+        decision leaves the stage RUNNING without seeding anything.
+        """
+        agent_kind = AGENT_STAGES[stage_key]
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
+            if not StageGateKeeper(session).can_start(run_id, run.document_id, stage_key, plan_stages=plan.stages):
+                return False
+            items = [
+                item
+                for item in self._list_stage_items(session, run_id, WorkItemStage.AGENT)
+                if (item.input_version_bundle_json or {}).get("agent_kind") == agent_kind
+            ]
+            if any(item.status == WorkItemStatus.TERMINAL_FAILED for item in items):
+                return False
+            if any(item.status in {WorkItemStatus.LEASED, WorkItemStatus.RUNNING} for item in items):
+                return False
+            turn = AgentLedgerRepository(session).latest_turn(document_id=run.document_id, agent_kind=agent_kind, run_id=run_id)
+            claimable = [item for item in items if item.status in {WorkItemStatus.PENDING, WorkItemStatus.RETRYABLE_FAILED}]
+            if not claimable:
+                if turn is not None and turn.status in {AgentTurnStatus.AWAITING_APPROVAL, AgentTurnStatus.PAUSED}:
+                    self._update_pipeline_stage(
+                        run_id, stage_key, status="running",
+                        extra={"turn_id": turn.id, "turn_status": turn.status.value, "stop_reason": turn.stop_reason},
+                        current_stage=stage_key, session=session,
+                    )
+                    return False
+                if turn is not None and turn.status in {AgentTurnStatus.SUCCEEDED, AgentTurnStatus.CANCELLED}:
+                    if turn.status == AgentTurnStatus.SUCCEEDED:
+                        self._update_pipeline_stage(
+                            run_id, stage_key, status="succeeded",
+                            extra={"turn_id": turn.id}, current_stage=self._next_stage_label(plan, stage_key), session=session,
+                        )
+                    return False
+                if turn is not None and turn.status == AgentTurnStatus.FAILED:
+                    return False
+                # No turn yet, or a turn resumed after a decision: seed an attempt.
+                scope_id = stable_id("document-run-agent", run_id, agent_kind, str(len(items) + 1))
+                execution.seed_work_items(
+                    run_id=run_id,
+                    stage=WorkItemStage.AGENT,
+                    scope_type=WorkItemScopeType.DOCUMENT,
+                    scope_ids=[scope_id],
+                    input_version_bundle_by_scope_id={
+                        scope_id: {
+                            "document_id": run.document_id,
+                            "agent_kind": agent_kind,
+                            "stage": stage_key,
+                            "terminology_mode": plan.terminology_mode,
+                            "model_review_mode": plan.model_review_mode,
+                            "structure_review_mode": plan.structure_review_mode,
+                            "structure_edits": plan.structure_edits,
+                            "export_review_mode": plan.export_review_mode,
+                            **({"resume_turn_id": turn.id} if turn is not None else {}),
+                        }
+                    },
+                )
+                self._update_pipeline_stage(run_id, stage_key, status="running", current_stage=stage_key, session=session)
+                return True
+            self._update_pipeline_stage(run_id, stage_key, status="running", current_stage=stage_key, session=session)
+            claimed = execution.claim_work_item_by_id(
+                work_item_id=claimable[0].id,
+                worker_name=f"app.run.agent.{agent_kind}",
+                worker_instance_id=f"app.agent:{self.instance_id}:{uuid4()}",
+                lease_seconds=self.review_lease_seconds,
+            )
+        if claimed is None:
+            return False
+        self._ensure_work_thread(
+            run_id=run_id,
+            work_item_id=claimed.work_item_id,
+            thread_name=f"book-agent-agent-{agent_kind}-{claimed.work_item_id}",
+            target=lambda claimed=claimed: self._execute_agent_work_item(run_id, claimed, stage_key, plan),
+        )
+        return True
+
+    def _execute_agent_work_item(self, run_id: str, claimed: ClaimedRunWorkItem, stage_key: str, plan: RunPlan | None) -> None:
+        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+        agent_kind = str(input_bundle.get("agent_kind") or AGENT_STAGES.get(stage_key, stage_key))
+        next_stage = self._next_stage_label(plan, stage_key) if plan is not None else "translate"
+
+        def _lease_check(session) -> None:
+            self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+
+        def _run_agent() -> dict[str, Any]:
+            worker = self._current_translation_worker()
+            model = self.agent_model_resolver(worker)
+            registry, policy = self._agent_tools(agent_kind, input_bundle)
+            with session_scope(self.session_factory) as session:
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                resume_turn_id = input_bundle.get("resume_turn_id")
+                if resume_turn_id:
+                    turn_id = str(resume_turn_id)
+                else:
+                    turn_id = self._start_agent_turn(
+                        session,
+                        agent_kind=agent_kind,
+                        document_id=str(input_bundle.get("document_id") or ""),
+                        run_id=run_id,
+                        work_item_id=claimed.work_item_id,
+                        worker=worker,
+                        input_bundle=input_bundle,
+                    )
+            runner = AgentTurnRunner(
+                session_factory=self.session_factory,
+                model=model,
+                registry=registry,
+                policy=policy,
+                lease_check=_lease_check,
+                tool_extras={"workflow_factory": self._workflow_service},
+            )
+            try:
+                outcome = runner.run(turn_id)
+            except LeaseLostError:
+                raise
+            except Exception as exc:
+                runner.fail(turn_id, error=exc)
+                raise
+            if outcome.status == AgentTurnStatus.FAILED:
+                raise RuntimeError(f"agent turn {turn_id} failed: {outcome.stop_reason}")
+            if outcome.status == AgentTurnStatus.SUCCEEDED and agent_kind == RepairAgent_KIND:
+                with session_scope(self.session_factory) as session:
+                    left = remaining_blockers(session, str(input_bundle.get("document_id") or ""))
+                if left:
+                    raise RuntimeError(
+                        f"Document still has unresolved blocking review issues after the repair agent: {left} remaining "
+                        f"(turn {turn_id})."
+                    )
+            return {
+                "document_id": str(input_bundle.get("document_id") or ""),
+                "agent_kind": agent_kind,
+                "turn_id": turn_id,
+                "turn_status": outcome.status.value,
+                "stop_reason": outcome.stop_reason,
+                "usage": outcome.usage,
+            }
+
+        def _run_agent_or_degrade() -> dict[str, Any]:
+            """Advisory agents improve a run but must not sink it: after their last attempt the
+            stage finishes as degraded (the reason is kept) and translation goes on."""
+            try:
+                return _run_agent()
+            except LeaseLostError:
+                raise
+            except Exception as exc:
+                if agent_kind not in ADVISORY_AGENT_KINDS:
+                    raise
+                failure = classify_failure(exc)
+                if failure.pause_reason is not None:
+                    raise
+                if failure.retryable and claimed.attempt < self._attempt_cap(run_id):
+                    raise
+                logger.warning("Advisory agent %s gave up after %s attempt(s): %s", agent_kind, claimed.attempt, exc)
+                with session_scope(self.session_factory) as session:
+                    turn = AgentLedgerRepository(session).latest_turn(
+                        document_id=str(input_bundle.get("document_id") or ""), agent_kind=agent_kind, run_id=run_id
+                    )
+                    turn_id = turn.id if turn is not None else None
+                return {
+                    "document_id": str(input_bundle.get("document_id") or ""),
+                    "agent_kind": agent_kind,
+                    "turn_id": turn_id,
+                    "turn_status": AgentTurnStatus.SUCCEEDED.value,
+                    "degraded": True,
+                    "degraded_reason": f"{type(exc).__name__}: {str(exc)[:500]}",
+                    "failure_reason": failure.reason,
+                    "attempts": claimed.attempt,
+                }
+
+        def _on_success(payload: dict[str, Any], lease_token: str) -> None:
+            with session_scope(self.session_factory) as session:
+                execution = self._run_execution_service(session)
+                execution.complete_work_item_success(
+                    lease_token=lease_token,
+                    output_artifact_refs_json={
+                        "turn_id": payload["turn_id"],
+                        "agent_kind": agent_kind,
+                        **({"degraded": True} if payload.get("degraded") else {}),
+                    },
+                    payload_json=payload,
+                )
+                succeeded = payload.get("turn_status") == AgentTurnStatus.SUCCEEDED.value
+                self._update_pipeline_stage(
+                    run_id,
+                    stage_key,
+                    status="succeeded" if succeeded else "running",
+                    extra=payload,
+                    current_stage=next_stage if succeeded else stage_key,
+                    session=session,
+                )
+
+        self._execute_claimed_work_item(
+            run_id=run_id,
+            claimed=claimed,
+            worker_fn=_run_agent_or_degrade,
+            on_success=_on_success,
+            stage_key=stage_key,
+            lease_seconds=self.review_lease_seconds,
+        )
+
+    def _attempt_cap(self, run_id: str) -> int:
+        from book_agent.services.run_execution import DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
+
+        with session_scope(self.session_factory) as session:
+            budget = RunControlRepository(session).get_budget_for_run(run_id)
+        cap = budget.max_retry_count_per_work_item if budget is not None else None
+        return int(cap) if cap is not None else DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
+
+    def _agent_tools(self, agent_kind: str, input_bundle: dict[str, Any] | None = None):
+        if agent_kind == TerminologyAgent_KIND:
+            return TerminologyAgent.registry(), TerminologyAgent.policy()
+        if agent_kind == ReviewerAgent_KIND:
+            return ReviewerAgent.registry(), ReviewerAgent.policy()
+        if agent_kind == RepairAgent_KIND:
+            return RepairAgent.registry(), RepairAgent.policy()
+        if agent_kind == StructureAgent_KIND:
+            allow_edits = bool((input_bundle or {}).get("structure_edits"))
+            return StructureAgent.registry(allow_edits=allow_edits), StructureAgent.policy()
+        if agent_kind == ExportReviewAgent_KIND:
+            return ExportReviewAgent.registry(), ExportReviewAgent.policy()
+        raise RuntimeError(f"unknown agent kind: {agent_kind}")
+
+    def _start_agent_turn(
+        self,
+        session,
+        *,
+        agent_kind: str,
+        document_id: str,
+        run_id: str,
+        work_item_id: str,
+        worker,
+        input_bundle: dict[str, Any],
+    ) -> str:
+        if agent_kind == TerminologyAgent_KIND:
+            client = getattr(worker, "client", None)
+            extraction_client = client if client is not None and hasattr(client, "generate_structured_object") else None
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = TerminologyAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                extraction_client=extraction_client,
+                mode=str(input_bundle.get("terminology_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == ReviewerAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = ReviewerAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("model_review_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == ExportReviewAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = ExportReviewAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("export_review_mode") or "sampled"),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == StructureAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = StructureAgent(session).start_turn(
+                document_id=document_id,
+                model_name=model_name,
+                mode=str(input_bundle.get("structure_review_mode") or "sampled"),
+                allow_edits=bool(input_bundle.get("structure_edits")),
+                run_id=run_id,
+                work_item_id=work_item_id,
+            )
+            return seed.turn_id
+        if agent_kind == RepairAgent_KIND:
+            model_name = worker.metadata().model_name if worker is not None else "echo-worker"
+            seed = RepairAgent(session).start_turn(
+                document_id=document_id, model_name=model_name, run_id=run_id, work_item_id=work_item_id
+            )
+            return seed.turn_id
+        raise RuntimeError(f"unknown agent kind: {agent_kind}")
+
+    def _process_review_stage(self, run_id: str, plan: RunPlan | None = None) -> bool:
+        with session_scope(self.session_factory) as session:
+            repository = RunControlRepository(session)
+            execution = self._run_execution_service(session)
+            run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, "review"
+                run_id, run.document_id, "review", plan_stages=plan.stages
             ):
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
@@ -644,28 +1057,47 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     stage=WorkItemStage.REVIEW,
                     worker_name="app.run.review",
-                    worker_instance_id=f"app.review:{uuid4()}",
+                    worker_instance_id=f"app.review:{self.instance_id}:{uuid4()}",
                     lease_seconds=self.lease_seconds,
                 )
             else:
                 claimed = None
 
         if claimed is not None:
-            self._execute_review_work_item(run_id, claimed)
+            # Review can take many minutes; run it off the run thread so lease
+            # reclaim, budgets and cancellation keep ticking.
+            self._ensure_work_thread(
+                run_id=run_id,
+                work_item_id=claimed.work_item_id,
+                thread_name=f"book-agent-review-{claimed.work_item_id}",
+                target=lambda claimed=claimed: self._execute_review_work_item(run_id, claimed, plan),
+            )
             return True
 
         if review_items and all(item.status == WorkItemStatus.SUCCEEDED for item in review_items):
-            self._update_pipeline_stage(run_id, "review", status="succeeded", current_stage="bilingual_html")
+            self._update_pipeline_stage(
+                run_id,
+                "review",
+                status="succeeded",
+                current_stage=self._next_stage_label(plan, "review"),
+            )
         return False
 
-    def _process_export_stage(self, run_id: str, *, export_type: ExportType) -> bool:
+    def _process_export_stage(
+        self,
+        run_id: str,
+        *,
+        export_type: ExportType,
+        plan: RunPlan | None = None,
+    ) -> bool:
         pipeline_key = export_type.value
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
+            plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, pipeline_key
+                run_id, run.document_id, pipeline_key, plan_stages=plan.stages
             ):
                 return False
 
@@ -694,32 +1126,61 @@ class DocumentRunExecutor:
                     run_id=run_id,
                     stage=WorkItemStage.EXPORT,
                     worker_name=f"app.run.export.{export_type.value}",
-                    worker_instance_id=f"app.export.{export_type.value}:{uuid4()}",
+                    worker_instance_id=f"app.export.{export_type.value}:{self.instance_id}:{uuid4()}",
                     lease_seconds=self.lease_seconds,
                 )
             else:
                 claimed = None
 
         if claimed is not None:
-            self._execute_export_work_item(run_id, claimed, export_type=export_type)
+            self._ensure_work_thread(
+                run_id=run_id,
+                work_item_id=claimed.work_item_id,
+                thread_name=f"book-agent-export-{export_type.value}-{claimed.work_item_id}",
+                target=lambda claimed=claimed: self._execute_export_work_item(
+                    run_id,
+                    claimed,
+                    export_type=export_type,
+                    plan=plan,
+                ),
+            )
             return True
 
         if export_items and all(item.status == WorkItemStatus.SUCCEEDED for item in export_items):
-            next_stage = "merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"
-            self._update_pipeline_stage(run_id, pipeline_key, status="succeeded", current_stage=next_stage)
+            self._update_pipeline_stage(
+                run_id,
+                pipeline_key,
+                status="succeeded",
+                current_stage=self._next_stage_label(plan, pipeline_key),
+            )
         return False
 
     def _execute_translate_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         self._execute_claimed_work_item(
             run_id=run_id,
             claimed=claimed,
-            worker_fn=lambda: self._translate_single_packet(claimed.scope_id, run_id=run_id),
-            on_success=self._complete_translate_success,
+            worker_fn=lambda: self._translate_single_packet(
+                claimed.scope_id,
+                run_id=run_id,
+                lease_token=claimed.lease_token,
+            ),
+            on_success=lambda payload, lease_token: self._complete_translate_success(
+                payload, lease_token, run_id=run_id
+            ),
             lease_seconds=self.lease_seconds,
         )
 
-    def _execute_review_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
+    def _execute_review_work_item(
+        self,
+        run_id: str,
+        claimed: ClaimedRunWorkItem,
+        plan: RunPlan | None = None,
+    ) -> None:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
+        repairs_blockers = plan.review_repairs_blockers if plan is not None else True
+        # With the Repair Agent planned, blockers rule repair leaves are its job.
+        hands_off_to_repair_agent = plan is not None and plan.includes("repair")
+        next_stage = self._next_stage_label(plan, "review") if plan is not None else "bilingual_html"
 
         def _run_review() -> dict[str, Any]:
             payload: dict[str, Any]
@@ -727,46 +1188,10 @@ class DocumentRunExecutor:
             stop_reason = "unknown"
             with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                if claimed.scope_type == WorkItemScopeType.CHAPTER.value:
-                    chapter_id = str(input_bundle.get("chapter_id") or claimed.scope_id)
-                    document_id = str(input_bundle.get("document_id") or "")
-                    artifacts = workflow.review_service.review_chapter(chapter_id)
-                    remaining_blocking_issue_count = int(artifacts.summary.blocking_issue_count or 0)
-                    payload = {
-                        "document_id": document_id,
-                        "chapter_id": chapter_id,
-                        "total_issue_count": len(artifacts.issues),
-                        "total_action_count": len(artifacts.actions),
-                        "chapter_count": 1,
-                        "auto_followup_requested": False,
-                        "auto_followup_applied": False,
-                        "auto_followup_attempt_count": 0,
-                        "blocker_repair_requested": False,
-                        "blocker_repair_applied": False,
-                        "blocker_repair_round_count": 0,
-                        "blocker_repair_round_limit": 0,
-                        "blocker_repair_execution_count": 0,
-                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
-                    }
-                else:
-                    document_id = str(input_bundle.get("document_id") or claimed.scope_id)
-                    initial_result = workflow.review_document(
-                        document_id,
-                        auto_execute_packet_followups=True,
-                        max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
-                    )
-                    repair_result = workflow.repair_document_blockers_until_exportable(
-                        document_id,
-                        max_rounds=self._max_blocker_repair_rounds(session, run_id),
-                    )
-                    result = initial_result
-                    if repair_result.applied:
-                        result = workflow.review_document(
-                            document_id,
-                            auto_execute_packet_followups=False,
-                        )
-                    remaining_blocking_issue_count = repair_result.blocking_issue_count_after
-                    stop_reason = repair_result.stop_reason or "unknown"
+                document_id = str(input_bundle.get("document_id") or claimed.scope_id)
+                if not repairs_blockers:
+                    # Standalone review run: record issues, like the synchronous review.
+                    result = workflow.review_document(document_id)
                     payload = {
                         "document_id": document_id,
                         "total_issue_count": result.total_issue_count,
@@ -775,26 +1200,56 @@ class DocumentRunExecutor:
                         "examined_chapter_count": result.examined_chapter_count,
                         "skipped_chapter_count": result.skipped_chapter_count,
                         "total_chapter_count": result.total_chapter_count,
-                        "skipped_chapters": [
-                            {
-                                "chapter_id": s.chapter_id,
-                                "reason": s.reason,
-                                "pending_packet_count": s.pending_packet_count,
-                                "failed_packet_count": s.failed_packet_count,
-                            }
-                            for s in result.skipped_chapters
-                        ],
-                        "auto_followup_requested": initial_result.auto_followup_requested,
-                        "auto_followup_applied": initial_result.auto_followup_applied,
-                        "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
-                        "blocker_repair_requested": repair_result.requested,
-                        "blocker_repair_applied": repair_result.applied,
-                        "blocker_repair_round_count": repair_result.round_count,
-                        "blocker_repair_round_limit": repair_result.round_limit,
-                        "blocker_repair_execution_count": len(repair_result.executions),
-                        "remaining_blocking_issue_count": remaining_blocking_issue_count,
                     }
-            if remaining_blocking_issue_count > 0:
+                    self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                    return payload
+                initial_result = workflow.review_document(
+                    document_id,
+                    auto_execute_packet_followups=True,
+                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                )
+                repair_result = workflow.repair_document_blockers_until_exportable(
+                    document_id,
+                    max_rounds=self._max_blocker_repair_rounds(session, run_id),
+                )
+                result = initial_result
+                if repair_result.applied:
+                    result = workflow.review_document(
+                        document_id,
+                        auto_execute_packet_followups=False,
+                    )
+                remaining_blocking_issue_count = repair_result.blocking_issue_count_after
+                stop_reason = repair_result.stop_reason or "unknown"
+                payload = {
+                    "document_id": document_id,
+                    "total_issue_count": result.total_issue_count,
+                    "total_action_count": result.total_action_count,
+                    "chapter_count": len(result.chapter_results),
+                    "examined_chapter_count": result.examined_chapter_count,
+                    "skipped_chapter_count": result.skipped_chapter_count,
+                    "total_chapter_count": result.total_chapter_count,
+                    "skipped_chapters": [
+                        {
+                            "chapter_id": s.chapter_id,
+                            "reason": s.reason,
+                            "pending_packet_count": s.pending_packet_count,
+                            "failed_packet_count": s.failed_packet_count,
+                        }
+                        for s in result.skipped_chapters
+                    ],
+                    "auto_followup_requested": initial_result.auto_followup_requested,
+                    "auto_followup_applied": initial_result.auto_followup_applied,
+                    "auto_followup_attempt_count": initial_result.auto_followup_attempt_count,
+                    "blocker_repair_requested": repair_result.requested,
+                    "blocker_repair_applied": repair_result.applied,
+                    "blocker_repair_round_count": repair_result.round_count,
+                    "blocker_repair_round_limit": repair_result.round_limit,
+                    "blocker_repair_execution_count": len(repair_result.executions),
+                    "remaining_blocking_issue_count": remaining_blocking_issue_count,
+                    "handed_to_repair_agent": bool(remaining_blocking_issue_count and hands_off_to_repair_agent),
+                }
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+            if remaining_blocking_issue_count > 0 and not hands_off_to_repair_agent:
                 self._update_pipeline_stage(
                     run_id,
                     "review",
@@ -820,21 +1275,22 @@ class DocumentRunExecutor:
                     },
                     payload_json=payload,
                 )
-            # Skip visibility (Phase 3): if any chapters were excluded from
-            # review because their translate packets weren't TRANSLATED, mark
-            # the stage as ``partial`` so the UI does not claim "done" for
-            # content that was never examined.
-            stage_status = (
-                "partial" if int(payload.get("skipped_chapter_count") or 0) > 0
-                else "succeeded"
-            )
-            self._update_pipeline_stage(
-                run_id,
-                "review",
-                status=stage_status,
-                extra=payload,
-                current_stage="bilingual_html",
-            )
+                # Skip visibility (Phase 3): if any chapters were excluded from
+                # review because their translate packets weren't TRANSLATED, mark
+                # the stage as ``partial`` so the UI does not claim "done" for
+                # content that was never examined.
+                stage_status = (
+                    "partial" if int(payload.get("skipped_chapter_count") or 0) > 0
+                    else "succeeded"
+                )
+                self._update_pipeline_stage(
+                    run_id,
+                    "review",
+                    status=stage_status,
+                    extra=payload,
+                    current_stage=next_stage,
+                    session=session,
+                )
 
         self._execute_claimed_work_item(
             run_id=run_id,
@@ -851,20 +1307,44 @@ class DocumentRunExecutor:
         claimed: ClaimedRunWorkItem,
         *,
         export_type: ExportType,
+        plan: RunPlan | None = None,
     ) -> None:
         pipeline_key = export_type.value
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
         document_id = str(input_bundle.get("document_id") or "")
+        auto_followup = plan.auto_followup_on_export_gate if plan is not None else True
+        next_stage = (
+            self._next_stage_label(plan, pipeline_key)
+            if plan is not None
+            else ("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed")
+        )
 
         def _run_export() -> dict[str, Any]:
             with session_scope(self.session_factory) as session:
+                # PDF books have no Chinese title of their own; translate it once, before rendering.
+                self._workflow_service(session).ensure_translated_title(document_id)
+            with session_scope(self.session_factory) as session:
                 workflow = self._workflow_service(session)
-                result = workflow.export_document(
-                    document_id,
-                    export_type,
-                    auto_execute_followup_on_gate=True,
-                    max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                max_attempts = (
+                    plan.max_auto_followup_attempts
+                    if plan is not None and plan.max_auto_followup_attempts is not None
+                    else self._max_auto_followup_attempts(session, run_id)
                 )
+                try:
+                    result = workflow.export_document(
+                        document_id,
+                        export_type,
+                        auto_execute_followup_on_gate=auto_followup,
+                        max_auto_followup_attempts=max_attempts,
+                    )
+                except ExportGateError:
+                    # Keep the review issues and followup attempts the gate
+                    # recorded; the work item still fails with the gate detail.
+                    self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+                    session.commit()
+                    raise
+                self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
+            qa_summary = self._audit_export(document_id, export_type, result)
             return {
                 "document_id": document_id,
                 "export_type": export_type.value,
@@ -872,6 +1352,7 @@ class DocumentRunExecutor:
                 "manifest_path": result.manifest_path,
                 "chapter_export_count": len(result.chapter_results),
                 "chapter_export_ids": [chapter.export_id for chapter in result.chapter_results],
+                **({"qa": qa_summary} if qa_summary is not None else {}),
             }
 
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:
@@ -882,13 +1363,14 @@ class DocumentRunExecutor:
                     output_artifact_refs_json=payload,
                     payload_json=payload,
                 )
-            self._update_pipeline_stage(
-                run_id,
-                pipeline_key,
-                status="succeeded",
-                extra=payload,
-                current_stage=("merged_html" if export_type == ExportType.BILINGUAL_HTML else "completed"),
-            )
+                self._update_pipeline_stage(
+                    run_id,
+                    pipeline_key,
+                    status="succeeded",
+                    extra=payload,
+                    current_stage=next_stage,
+                    session=session,
+                )
 
         self._execute_claimed_work_item(
             run_id=run_id,
@@ -899,40 +1381,21 @@ class DocumentRunExecutor:
             lease_seconds=self.lease_seconds,
         )
 
-    def _execute_repair_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
-        input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-        repair_agent = None
-        repair_executor = None
-
-        def _prepare_repair_execution() -> dict[str, Any]:
-            nonlocal repair_agent, repair_executor
-            repair_agent = self._runtime_repair_registry.resolve_for_input_bundle(input_bundle)
-            repair_executor = self._runtime_repair_executor_registry.resolve_for_input_bundle(
-                input_bundle=input_bundle,
-                repair_agent=repair_agent,
-            )
-            return repair_executor.prepare_execution(
-                claimed=claimed,
-                input_bundle=input_bundle,
-            )
-
-        def _complete_repair_execution(payload: dict[str, Any], lease_token: str) -> None:
-            if repair_executor is None:
-                raise RuntimeError("Repair executor was not resolved before completion.")
-            repair_executor.complete_execution(
-                run_id=run_id,
-                payload=payload,
-                lease_token=lease_token,
-            )
-
-        self._execute_claimed_work_item(
-            run_id=run_id,
-            claimed=claimed,
-            worker_fn=_prepare_repair_execution,
-            on_success=_complete_repair_execution,
-            stage_key="repair",
-            lease_seconds=self.lease_seconds,
+    def _audit_export(self, document_id: str, export_type: ExportType, result) -> dict[str, Any] | None:
+        """Export QA after a successful export; a QA problem is recorded, never raised."""
+        if export_type not in AUDITED_EXPORT_TYPES:
+            return None
+        artifacts: list[tuple[str | None, Path]] = (
+            [(chapter.chapter_id, Path(chapter.file_path)) for chapter in result.chapter_results]
+            if result.chapter_results
+            else ([(None, Path(result.file_path))] if result.file_path else [])
         )
+        try:
+            with session_scope(self.session_factory) as session:
+                return ExportQaService(session).audit(document_id, export_type, artifacts).to_json()
+        except Exception as exc:  # the export already succeeded
+            logger.exception("Export QA failed for document %s (%s)", document_id, export_type.value)
+            return {"export_type": export_type.value, "error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
     def _execute_claimed_work_item(
         self,
@@ -955,6 +1418,39 @@ class DocumentRunExecutor:
             },
             daemon=True,
         )
+        with bind_run_context(run_id), tracing.span(
+            f"work_item.{claimed.stage}",
+            **{
+                "book_agent.run_id": run_id,
+                "book_agent.work_item_id": claimed.work_item_id,
+                "book_agent.scope_type": claimed.scope_type,
+                "book_agent.scope_id": claimed.scope_id,
+                "book_agent.attempt": claimed.attempt,
+            },
+        ):
+            self._execute_claimed_work_item_in_context(
+                run_id=run_id,
+                claimed=claimed,
+                worker_fn=worker_fn,
+                on_success=on_success,
+                stage_key=stage_key,
+                lease_window_seconds=lease_window_seconds,
+                stop_event=stop_event,
+                heartbeat_thread=heartbeat_thread,
+            )
+
+    def _execute_claimed_work_item_in_context(
+        self,
+        *,
+        run_id: str,
+        claimed: ClaimedRunWorkItem,
+        worker_fn,
+        on_success,
+        stage_key: str | None,
+        lease_window_seconds: int,
+        stop_event: threading.Event,
+        heartbeat_thread: threading.Thread,
+    ) -> None:
         try:
             with session_scope(self.session_factory) as session:
                 execution = self._run_execution_service(session)
@@ -976,23 +1472,62 @@ class DocumentRunExecutor:
                     )
             heartbeat_thread.start()
             payload = worker_fn()
-            stop_event.set()
-            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
+            self._stop_heartbeat(heartbeat_thread, stop_event)
             on_success(payload, claimed.lease_token)
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="succeeded")
+            tracing.annotate_current(**{"book_agent.outcome": "succeeded"})
+            self.wake(run_id)
+        except LeaseLostError:
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="lease_lost")
+            tracing.annotate_current(**{"book_agent.outcome": "lease_lost"})
+            self._stop_heartbeat(heartbeat_thread, stop_event)
+            # The lease expired and the work item was reclaimed; its new owner
+            # records the outcome, so discard this attempt without touching it.
+            logger.warning(
+                "Work item %s lost its lease; discarded this attempt's result",
+                claimed.work_item_id,
+            )
             self.wake(run_id)
         except Exception as exc:
-            stop_event.set()
-            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
-            self._complete_failure(
-                run_id=run_id,
-                claimed=claimed,
-                exc=exc,
-                stage_key=stage_key or claimed.stage,
-            )
+            metrics.WORK_ITEMS.inc(stage=str(claimed.stage), outcome="failed")
+            tracing.annotate_current(**{"book_agent.outcome": "failed"})
+            tracing.record_error(exc)
+            self._stop_heartbeat(heartbeat_thread, stop_event)
+            try:
+                self._complete_failure(
+                    run_id=run_id,
+                    claimed=claimed,
+                    exc=exc,
+                    stage_key=stage_key or claimed.stage,
+                )
+            except LeaseLostError:
+                logger.warning("Work item %s lost its lease before its failure was recorded", claimed.work_item_id)
+            except Exception:
+                # The lease will expire and the run loop reclaims the item.
+                logger.exception(
+                    "Recording failure of work item %s failed (original error: %s)",
+                    claimed.work_item_id,
+                    exc,
+                )
 
-    def _translate_single_packet(self, packet_id: str, *, run_id: str | None = None) -> dict[str, Any]:
+    def _stop_heartbeat(self, heartbeat_thread: threading.Thread, stop_event: threading.Event) -> None:
+        stop_event.set()
+        # The thread is not started yet if starting the work item itself failed.
+        if heartbeat_thread.is_alive():
+            heartbeat_thread.join(timeout=max(1, self.heartbeat_interval_seconds))
+
+    def _translate_single_packet(
+        self,
+        packet_id: str,
+        *,
+        run_id: str | None = None,
+        lease_token: str | None = None,
+    ) -> dict[str, Any]:
+        # Three transactions so no database connection is held open across the
+        # LLM call: prepare (commits the call-started event), call the worker
+        # outside any session, then persist the result.
         with session_scope(self.session_factory) as session:
-            workflow = self._workflow_service(session)
+            translation_service = self._workflow_service(session).translation_service
             packet = session.get(TranslationPacket, packet_id)
             if packet is None:
                 raise RuntimeError(f"Packet {packet_id} was not found.")
@@ -1005,11 +1540,25 @@ class DocumentRunExecutor:
                     "cost_usd": 0.0,
                     "latency_ms": 0,
                 }
-            artifacts = workflow.translation_service.execute_packet(
-                packet_id,
+            prepared = translation_service.prepare_packet(packet_id, run_id=run_id)
+
+        try:
+            worker_result = translation_service.call_worker(prepared)
+        except Exception as exc:
+            with session_scope(self.session_factory) as session:
+                self._workflow_service(session).translation_service.record_worker_failure(prepared, exc)
+            raise
+
+        with session_scope(self.session_factory) as session:
+            artifacts = self._workflow_service(session).translation_service.persist_packet_result(
+                prepared,
+                worker_result,
                 auto_commit_memory=False,
-                run_id=run_id,
             )
+            if lease_token is not None:
+                # The LLM call may outlive the lease; only commit results while
+                # this worker still owns the work item.
+                self._run_execution_service(session).assert_lease_held(lease_token=lease_token)
             translation_run = artifacts.translation_run
             return {
                 "packet_id": packet_id,
@@ -1020,7 +1569,9 @@ class DocumentRunExecutor:
                 "latency_ms": translation_run.latency_ms or 0,
             }
 
-    def _complete_translate_success(self, payload: dict[str, Any], lease_token: str) -> None:
+    def _complete_translate_success(
+        self, payload: dict[str, Any], lease_token: str, *, run_id: str | None = None
+    ) -> None:
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_translate_success(
@@ -1037,6 +1588,11 @@ class DocumentRunExecutor:
                 packet_id=str(payload["packet_id"]),
                 substate=PACKET_RUNTIME_SUBSTATE_TRANSLATED,
             )
+            if run_id is not None:
+                # Check spend as soon as it is known instead of waiting for
+                # the next run-loop tick, so an overrun stops at one packet
+                # rather than one packet per parallel worker.
+                execution.enforce_budget_guardrails(run_id=run_id)
 
     def _complete_failure(
         self,
@@ -1046,25 +1602,22 @@ class DocumentRunExecutor:
         exc: Exception,
         stage_key: str,
     ) -> None:
-        export_misrouting = isinstance(exc, ExportRoutingError)
-        retryable = _is_retryable_exception(exc) or export_misrouting
-        pause_reason = _pause_reason_for_exception(exc)
+        failure = classify_failure(exc)
+        retryable = failure.retryable
+        pause_reason = failure.pause_reason
         error_class = exc.__class__.__name__
         error_detail = {
             "message": str(exc),
+            "failure_reason": failure.reason,
             "traceback": traceback.format_exc(limit=8),
         }
-        repair_result_json: dict[str, Any] | None = None
-        if isinstance(exc, RuntimeRepairDecisionError):
-            retryable = exc.retryable
-            repair_result_json = dict(exc.result_json or {})
-            error_class = exc.__class__.__name__
-            if exc.decision:
-                error_detail["repair_agent_decision"] = exc.decision
-            if exc.decision_reason:
-                error_detail["repair_agent_decision_reason"] = exc.decision_reason
-            if repair_result_json:
-                error_detail["repair_result_json"] = dict(repair_result_json)
+        if retryable and pause_reason is None:
+            error_detail["retry_backoff"] = True
+        if isinstance(exc, ExportGateError):
+            error_detail["export_gate"] = exc.to_http_detail()
+        elif isinstance(exc, ExportUnavailableError):
+            # Not a review block: the renderer, the source file or the export type is the problem.
+            error_detail["export_unavailable"] = {"reason": exc.reason}
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
             execution.complete_work_item_failure(
@@ -1072,22 +1625,8 @@ class DocumentRunExecutor:
                 error_class=error_class,
                 error_detail_json=error_detail,
                 retryable=retryable,
+                pauses_run=pause_reason is not None,
             )
-            if claimed.stage == WorkItemStage.REPAIR.value:
-                input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
-                proposal_id = str(input_bundle.get("proposal_id") or claimed.scope_id)
-                try:
-                    result_json = dict(repair_result_json or {})
-                    result_json.setdefault("error_class", error_class)
-                    result_json.setdefault("error_message", str(exc))
-                    IncidentController(session=session).record_repair_dispatch_execution(
-                        proposal_id=proposal_id,
-                        succeeded=False,
-                        result_json=result_json,
-                        manage_work_item_lifecycle=False,
-                    )
-                except Exception:
-                    pass
             if (
                 claimed.stage == WorkItemStage.TRANSLATE.value
                 and claimed.scope_type == WorkItemScopeType.PACKET.value
@@ -1097,20 +1636,28 @@ class DocumentRunExecutor:
                     packet_id=claimed.scope_id,
                     substate=(
                         PACKET_RUNTIME_SUBSTATE_RETRYABLE_FAILED
-                        if retryable and pause_reason is None
+                        if retryable or pause_reason is not None
                         else PACKET_RUNTIME_SUBSTATE_TERMINAL_FAILED
                     ),
                     run_id=run_id,
                     work_item_id=claimed.work_item_id,
                     attempt=claimed.attempt,
                 )
-            if export_misrouting and claimed.stage == WorkItemStage.EXPORT.value:
-                self._recover_export_misrouting(
-                    session=session,
-                    run_id=run_id,
-                    claimed=claimed,
-                    exc=exc,
-                )
+            # Same transaction as the work-item failure and the terminal
+            # decision, so nobody observes a finished run with a stale stage.
+            self._update_pipeline_stage(
+                run_id,
+                stage_key,
+                status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
+                extra={
+                    "error_class": error_class,
+                    "error_message": str(exc),
+                    **({"stop_reason": pause_reason} if pause_reason is not None else {}),
+                    **({"export_gate": error_detail["export_gate"]} if "export_gate" in error_detail else {}),
+                },
+                current_stage=stage_key,
+                session=session,
+            )
             if pause_reason is not None:
                 control = self._run_control_service(session)
                 summary = control.pause_run_system(
@@ -1126,266 +1673,9 @@ class DocumentRunExecutor:
                 )
             else:
                 summary = execution.reconcile_run_terminal_state(run_id=run_id)
-        self._update_pipeline_stage(
-            run_id,
-            stage_key,
-            status=("paused" if pause_reason is not None else ("retryable_failed" if retryable else "failed")),
-            extra={
-                "error_class": error_class,
-                "error_message": str(exc),
-                **({"stop_reason": pause_reason} if pause_reason is not None else {}),
-            },
-            current_stage=stage_key,
-        )
         if summary.status in {"failed", "paused", "cancelled"}:
             self._sync_pipeline_status(run_id, summary.status)
         self.wake(run_id)
-
-    def _recover_export_misrouting(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        claimed: ClaimedRunWorkItem,
-        exc: Exception,
-    ) -> None:
-        export_error = exc if isinstance(exc, ExportRoutingError) else None
-        route_evidence_json = dict(getattr(export_error, "route_evidence_json", {}) or {})
-        route_candidates = list(getattr(export_error, "expected_route_candidates", []) or [])
-        selected_route = str(
-            getattr(export_error, "selected_route", "")
-            or route_evidence_json.get("selected_route")
-            or ""
-        )
-        source_type = str(route_evidence_json.get("source_type") or "epub")
-        runtime_bundle_revision_id = route_evidence_json.get("runtime_bundle_revision_id")
-        export_type = str(route_evidence_json.get("export_type") or "rebuilt_pdf")
-        run = session.get(DocumentRun, run_id)
-        if run is not None:
-            status_detail = dict(run.status_detail_json or {})
-            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-            runtime_v2["last_export_route_evidence"] = route_evidence_json
-            status_detail["runtime_v2"] = runtime_v2
-            run.status_detail_json = status_detail
-            run.updated_at = _utcnow()
-            session.add(run)
-            session.flush()
-        try:
-            controller = ExportController(session=session)
-            recovery = controller.recover_export_misrouting(
-                run_id=run_id,
-                work_item_id=claimed.work_item_id,
-                scope_id=claimed.scope_id,
-                source_type=source_type,
-                selected_route=selected_route,
-                runtime_bundle_revision_id=(
-                    str(runtime_bundle_revision_id) if runtime_bundle_revision_id is not None else None
-                ),
-                route_candidates=route_candidates,
-                route_evidence_json=route_evidence_json,
-                error_message=str(exc),
-                export_type=export_type,
-            )
-        except Exception as recovery_exc:  # pragma: no cover - defensive recovery path
-            if run is not None:
-                status_detail = dict(run.status_detail_json or {})
-                runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-                runtime_v2["last_export_route_recovery_error"] = {
-                    "error_class": recovery_exc.__class__.__name__,
-                    "error_message": str(recovery_exc),
-                }
-                status_detail["runtime_v2"] = runtime_v2
-                run.status_detail_json = status_detail
-                run.updated_at = _utcnow()
-                session.add(run)
-                session.flush()
-            return
-
-        if run is not None:
-            status_detail = dict(run.status_detail_json or {})
-            runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-            runtime_v2["pending_export_route_repair"] = {
-                "incident_id": recovery.incident_id,
-                "proposal_id": recovery.proposal_id,
-                "repair_work_item_id": recovery.repair_work_item_id,
-                "selected_route": selected_route,
-                "corrected_route": recovery.corrected_route,
-                "route_candidates": route_candidates,
-                "replay_scope_id": claimed.scope_id,
-            }
-            status_detail["runtime_v2"] = runtime_v2
-            run.status_detail_json = status_detail
-            run.updated_at = _utcnow()
-            session.add(run)
-            session.flush()
-        self.wake(run_id)
-
-    def _finalize_export_route_repair(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        incident: RuntimeIncident,
-        proposal: RuntimePatchProposal,
-        bundle_revision_id: str,
-        corrected_route: str | None = None,
-    ) -> None:
-        run = session.get(DocumentRun, run_id)
-        if run is None:
-            return
-        proposal_detail = dict(proposal.status_detail_json or {})
-        bundle_guard = dict(proposal_detail.get("bundle_guard") or {})
-        route_candidates = list((incident.bundle_json or {}).get("route_candidates") or [])
-        export_type = (incident.bundle_json or {}).get("export_type")
-        route_evidence_json = dict(incident.route_evidence_json or {})
-        published_bundle_revision_id = proposal.published_bundle_revision_id or bundle_revision_id
-        active_bundle_revision_id = str(
-            bundle_guard.get("effective_revision_id")
-            or run.runtime_bundle_revision_id
-            or published_bundle_revision_id
-        )
-        rollback_target_revision_id = bundle_guard.get("rollback_target_revision_id")
-        rollback_performed = bool(bundle_guard.get("rollback_performed"))
-        bound_work_item_ids = [
-            str(work_item_id)
-            for work_item_id in list(proposal_detail.get("bound_work_item_ids") or [])
-            if str(work_item_id).strip()
-        ]
-        repair_dispatch = dict(proposal_detail.get("repair_dispatch") or {})
-        replay_scope_id = str((repair_dispatch.get("replay") or {}).get("scope_id") or incident.scope_id)
-        replay_work_item_id = bound_work_item_ids[0] if bound_work_item_ids else ""
-        corrected_route = str(
-            corrected_route
-            or (repair_dispatch.get("last_result") or {}).get("result_json", {}).get("corrected_route")
-            or (route_evidence_json.get("corrected_route"))
-            or ""
-        )
-        lineage_entry = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "published_bundle_revision_id": published_bundle_revision_id,
-            "active_bundle_revision_id": active_bundle_revision_id,
-            "rollback_performed": rollback_performed,
-            "rollback_target_revision_id": rollback_target_revision_id,
-            "replay_scope_id": replay_scope_id,
-            "replay_work_item_id": replay_work_item_id,
-            "bound_work_item_ids": bound_work_item_ids,
-            "recorded_at": _utcnow().isoformat(),
-        }
-        status_detail = dict(run.status_detail_json or {})
-        runtime_v2 = dict(status_detail.get("runtime_v2") or {})
-        runtime_v2["last_export_route_recovery"] = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "bundle_revision_id": published_bundle_revision_id,
-            "published_bundle_revision_id": published_bundle_revision_id,
-            "active_bundle_revision_id": active_bundle_revision_id,
-            "selected_route": incident.selected_route,
-            "rollback_performed": rollback_performed,
-            "rollback_target_revision_id": rollback_target_revision_id,
-            "corrected_route": corrected_route,
-            "route_candidates": route_candidates,
-            "export_type": export_type,
-            "replay_scope_id": replay_scope_id,
-            "replay_work_item_id": replay_work_item_id,
-            "bound_work_item_ids": bound_work_item_ids,
-        }
-        runtime_v2["active_runtime_bundle_revision_id"] = active_bundle_revision_id
-        runtime_v2["runtime_bundle_revision_id"] = active_bundle_revision_id
-        runtime_v2.pop("pending_export_route_repair", None)
-        runtime_v2["last_export_route_evidence"] = route_evidence_json
-        _append_recovered_lineage(runtime_v2, lineage_entry=lineage_entry)
-        status_detail["runtime_v2"] = runtime_v2
-        run.status_detail_json = status_detail
-        run.runtime_bundle_revision_id = active_bundle_revision_id
-        run.updated_at = _utcnow()
-        session.add(run)
-        session.flush()
-
-    def _finalize_review_deadlock_repair(
-        self,
-        *,
-        session: Session,
-        run_id: str,
-        incident: RuntimeIncident,
-        proposal: RuntimePatchProposal,
-        bundle_revision_id: str,
-        validation_report_json: dict[str, Any],
-    ) -> None:
-        runtime_repo = RuntimeResourcesRepository(session)
-        route_evidence = dict(incident.route_evidence_json or {})
-        chapter_run_id = str(route_evidence.get("chapter_run_id") or (incident.bundle_json or {}).get("chapter_run_id") or "")
-        review_session_id = str(route_evidence.get("review_session_id") or (incident.bundle_json or {}).get("review_session_id") or "")
-        chapter_id = str((proposal.status_detail_json or {}).get("repair_plan", {}).get("replay", {}).get("scope_id") or incident.scope_id)
-        if not chapter_run_id or not review_session_id or not chapter_id:
-            return
-        review_session = runtime_repo.get_review_session(review_session_id)
-        chapter_run = runtime_repo.get_chapter_run(chapter_run_id)
-        replay_work_item_ids = RunExecutionService(RunControlRepository(session)).ensure_scope_replay_work_items(
-            run_id=run_id,
-            stage=WorkItemStage.REVIEW,
-            scope_type=WorkItemScopeType.CHAPTER,
-            scope_ids=[chapter_id],
-            input_version_bundle_by_scope_id={
-                chapter_id: {
-                    "document_id": chapter_run.document_id,
-                    "chapter_id": chapter_id,
-                    "chapter_run_id": chapter_run.id,
-                    "review_session_id": review_session.id,
-                }
-            },
-        )
-        proposal_detail = dict(proposal.status_detail_json or {})
-        bound_work_item_ids = [
-            str(work_item_id)
-            for work_item_id in list(proposal_detail.get("bound_work_item_ids") or [])
-            if str(work_item_id).strip()
-        ]
-        recovery_payload = {
-            "incident_id": incident.id,
-            "proposal_id": proposal.id,
-            "bundle_revision_id": bundle_revision_id,
-            "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
-            "replay_scope_id": chapter_id,
-            "replay_work_item_ids": replay_work_item_ids,
-            "bound_work_item_ids": bound_work_item_ids,
-            "reason_code": route_evidence.get("reason_code"),
-            "lane_health_state": route_evidence.get("lane_health_state"),
-            "status": "published",
-        }
-        runtime_repo.merge_review_session_status_detail(
-            review_session.id,
-            {
-                "runtime_v2": {
-                    "last_deadlock_recovery": recovery_payload,
-                }
-            },
-        )
-        runtime_repo.append_chapter_recovered_lineage(
-            chapter_run_id=chapter_run.id,
-            lineage_event={
-                "source": "runtime.review_deadlock",
-                "incident_id": incident.id,
-                "proposal_id": proposal.id,
-                "bundle_revision_id": bundle_revision_id,
-                "replay_scope_id": chapter_id,
-                "repair_work_item_id": str((proposal_detail.get("repair_dispatch") or {}).get("repair_work_item_id") or ""),
-                "status": "published",
-            },
-        )
-        runtime_repo.upsert_checkpoint(
-            run_id=run_id,
-            scope_type=JobScopeType.CHAPTER,
-            scope_id=chapter_id,
-            checkpoint_key="review_controller.deadlock_recovery",
-            checkpoint_json={
-                "chapter_run_id": chapter_run.id,
-                "review_session_id": review_session.id,
-                "recovery": recovery_payload,
-                "validation_report": validation_report_json,
-            },
-            generation=int(chapter_run.generation or 1),
-        )
 
     def _claim_translate_work_items(
         self,
@@ -1453,7 +1743,7 @@ class DocumentRunExecutor:
             claimed = execution.claim_work_item_by_id(
                 work_item_id=item.id,
                 worker_name="app.run.translate",
-                worker_instance_id=f"app.translate:{uuid4()}",
+                worker_instance_id=f"app.translate:{self.instance_id}:{uuid4()}",
                 lease_seconds=self.lease_seconds,
             )
             if claimed is None:
@@ -1714,6 +2004,7 @@ class DocumentRunExecutor:
         run_id: str,
         document_id: str,
         translate_items: list[WorkItem] | None = None,
+        packet_scope: frozenset[str] | None = None,
     ) -> TranslateFrontierPlan:
         """DECIDE-phase planner: pick next TRANSLATE work_item targets.
 
@@ -1752,7 +2043,7 @@ class DocumentRunExecutor:
             self._translate_item_chapter_id_map(session, chapter_blocking_items).values()
         )
         represented_packet_ids = frozenset(str(item.scope_id) for item in stage_items)
-        candidate_packet_ids = self._list_pending_packet_ids(session, document_id)
+        candidate_packet_ids = self._list_pending_packet_ids(session, document_id, packet_scope)
         if not candidate_packet_ids:
             return TranslateFrontierPlan(
                 packet_ids=[],
@@ -1866,11 +2157,19 @@ class DocumentRunExecutor:
                         lease_seconds=lease_seconds,
                     )
                 if not alive:
+                    logger.warning("Lease %s is no longer active; stopping heartbeat", lease_token)
                     return
             except Exception:
-                continue
+                logger.warning("Heartbeat failed for lease %s", lease_token, exc_info=True)
 
-    def _list_all_packet_ids(self, session, document_id: str) -> list[str]:
+    def _list_all_packet_ids(
+        self,
+        session,
+        document_id: str,
+        packet_scope: frozenset[str] | None = None,
+    ) -> list[str]:
+        if packet_scope is not None:
+            return [packet_id for packet_id in self._list_all_packet_ids(session, document_id) if packet_id in packet_scope]
         return list(
             session.scalars(
                 select(TranslationPacket.id)
@@ -1880,7 +2179,16 @@ class DocumentRunExecutor:
             ).all()
         )
 
-    def _list_pending_packet_ids(self, session, document_id: str) -> list[str]:
+    def _list_pending_packet_ids(
+        self,
+        session,
+        document_id: str,
+        packet_scope: frozenset[str] | None = None,
+    ) -> list[str]:
+        if packet_scope is not None:
+            return [
+                packet_id for packet_id in self._list_pending_packet_ids(session, document_id) if packet_id in packet_scope
+            ]
         return list(
             session.scalars(
                 select(TranslationPacket.id)
@@ -1891,6 +2199,18 @@ class DocumentRunExecutor:
                 )
                 .order_by(TranslationPacket.created_at.asc(), TranslationPacket.id.asc())
             ).all()
+        )
+
+    def _downstream_stage_in_flight(self, session, run_id: str) -> bool:
+        return bool(
+            session.scalar(
+                select(func.count(WorkItem.id)).where(
+                    WorkItem.run_id == run_id,
+                    # Agent turns (the Repair Agent) re-open and retranslate packets too.
+                    WorkItem.stage.in_([WorkItemStage.REVIEW, WorkItemStage.EXPORT, WorkItemStage.AGENT]),
+                    WorkItem.status.in_([WorkItemStatus.LEASED, WorkItemStatus.RUNNING]),
+                )
+            )
         )
 
     def _list_stage_items(self, session, run_id: str, stage: WorkItemStage) -> list[WorkItem]:
@@ -1955,7 +2275,7 @@ class DocumentRunExecutor:
         current_stage: str | None,
     ) -> None:
         repository = RunControlRepository(session)
-        run = repository.get_run(run_id)
+        run = repository.get_run_for_update(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
         stages = dict(read_cached_stages(pipeline) or {})
@@ -2005,13 +2325,14 @@ class DocumentRunExecutor:
         # status — the cache becomes a snapshot of truth, never a
         # fabrication.
         repository = RunControlRepository(session)
-        run = repository.get_run(run_id)
+        run = repository.get_run_for_update(run_id)
         detail = dict(run.status_detail_json or {})
         pipeline = dict(detail.get("pipeline") or {})
         stages = dict(read_cached_stages(pipeline) or {})
         if not stages:
             return
         calculator = StageStatusCalculator(session)
+        packet_scope = translate_packet_scope(run.run_type, run.status_detail_json)
         now = _utcnow().isoformat()
         changed = False
         for stage_key, stage_detail in list(stages.items()):
@@ -2020,7 +2341,12 @@ class DocumentRunExecutor:
             if not isinstance(stage_detail, dict):
                 continue
             try:
-                derived = calculator.stage_status(run_id, run.document_id, stage_key)
+                derived = calculator.stage_status(
+                    run_id,
+                    run.document_id,
+                    stage_key,
+                    packet_ids=packet_scope if stage_key == "translate" else None,
+                )
             except ValueError:
                 continue
             derived_label = stage_status_to_cache_label(derived)

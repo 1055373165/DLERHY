@@ -1,12 +1,12 @@
-import os
 import json
+import os
+import sys
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
-import sys
 
 from sqlalchemy import delete, func, select
 
@@ -31,29 +31,40 @@ from book_agent.domain.enums import (
     JobScopeType,
     LockLevel,
     MemoryScopeType,
+    PacketStatus,
     RootCauseLayer,
     Severity,
     SnapshotType,
     TermStatus,
     TermType,
+    WorkerLeaseStatus,
     WorkItemScopeType,
     WorkItemStage,
     WorkItemStatus,
-    WorkerLeaseStatus,
 )
 from book_agent.domain.models import Chapter, MemorySnapshot, Sentence, TermEntry
-from book_agent.domain.models.ops import RunAuditEvent, WorkItem, WorkerLease
+from book_agent.domain.models.ops import RunAuditEvent, WorkerLease, WorkItem
 from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationPacket, TranslationRun
-from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    TargetSegment,
+    TranslationPacket,
+    TranslationRun,
+)
 from book_agent.infra.db.session import build_session_factory, session_scope
+from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+from book_agent.infra.repositories.events import emit_event
+from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.services.export import ExportGateError
 from book_agent.services.run_control import RunBudgetSummary, RunControlService
 from book_agent.services.run_execution import RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
+from book_agent.translation.contracts import (
+    AlignmentSuggestion,
+    TranslationTargetSegment,
+    TranslationWorkerOutput,
+)
 from book_agent.workers.translator import TranslationTask, TranslationWorkerMetadata
-
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -732,8 +743,10 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             merged_html = Path(export.file_path).read_text(encoding="utf-8")
             # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
             self.assertNotIn(">Reading Map<", merged_html)
-            self.assertIn("Back to top", merged_html)
-            self.assertIn("href='#chapter-", merged_html)
+            self.assertIn("回到顶部", merged_html)
+            # The merged reading edition no longer renders a table of contents.
+            self.assertIn("id='chapter-", merged_html)
+            self.assertNotIn("class='sidebar'", merged_html)
             self.assertIn("ZH::Use the example carefully.", merged_html)
             self.assertNotIn("代码保持原样", merged_html)
             self.assertIn("python agent.py --dry-run", merged_html)
@@ -794,14 +807,15 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             self.assertEqual(export.document_status, "exported")
             assert export.file_path is not None
             merged_html = Path(export.file_path).read_text(encoding="utf-8")
-            self.assertIn("图片锚点保留", merged_html)
+            # The merged reading edition omits per-artifact preservation notices.
+            self.assertNotIn("图片锚点保留", merged_html)
             self.assertIn("images/agent-loop.png", merged_html)
-            self.assertIn("公式保持原样", merged_html)
+            self.assertNotIn("公式保持原样", merged_html)
             self.assertIn("x=1", merged_html)
-            self.assertIn("保留原始结构，优先保证可复制与结构保真", merged_html)
+            self.assertNotIn("保留原始结构，优先保证可复制与结构保真", merged_html)
             self.assertIn("Tier | Latency", merged_html)
             self.assertIn("Basic | Slow", merged_html)
-            self.assertIn("参考标识保留", merged_html)
+            self.assertNotIn("参考标识保留", merged_html)
             self.assertIn("https://example.com/agent-docs", merged_html)
 
     def test_postgres_realign_only_restores_missing_alignment_edges(self) -> None:
@@ -1808,9 +1822,10 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             repository = RunControlRepository(session)
             run_control = RunControlService(repository)
             execution = RunExecutionService(repository, run_control)
+            # A targeted run only requires translate, so a green ledger is terminal.
             run = run_control.create_run(
                 document_id=document_id,
-                run_type=DocumentRunType.TRANSLATE_FULL,
+                run_type=DocumentRunType.TRANSLATE_TARGETED,
                 requested_by="pg-runner",
                 budget=RunBudgetSummary(
                     max_wall_clock_seconds=1800,
@@ -1826,7 +1841,12 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             )
             resumed = run_control.resume_run(run.run_id, actor_id="pg-runner", note="start execution smoke")
 
-            packet_id = str(uuid4())
+            document_packets = session.scalars(
+                select(TranslationPacket)
+                .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
+                .where(Chapter.document_id == document_id)
+            ).all()
+            packet_id = document_packets[0].id
             seeded = execution.seed_translate_work_items(run_id=resumed.run_id, packet_ids=[packet_id])
             self.assertEqual(len(seeded), 1)
 
@@ -1840,6 +1860,23 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             assert claimed is not None
 
             execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            # Run spend is read from llm.call.completed events; record the call
+            # the way the translation service does before completing the item.
+            emit_event(
+                session,
+                kind=LLM_CALL_COMPLETED,
+                run_id=resumed.run_id,
+                actor_kind="agent",
+                actor_id="test.worker",
+                payload={
+                    "call_kind": "translate",
+                    "token_in": 64,
+                    "token_out": 32,
+                    "total_tokens": 96,
+                    "cost_usd": 0.0012,
+                    "latency_ms": 220,
+                },
+            )
             execution.complete_translate_success(
                 lease_token=claimed.lease_token,
                 packet_id=packet_id,
@@ -1849,6 +1886,11 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
                 cost_usd=0.0012,
                 latency_ms=220,
             )
+            # Terminal success is derived from packet state; this smoke drives
+            # the run ledger directly, so mark the document translated by hand.
+            for packet in document_packets:
+                packet.status = PacketStatus.TRANSLATED
+            session.flush()
             final_summary = execution.reconcile_run_terminal_state(run_id=resumed.run_id)
 
             self.assertEqual(final_summary.status, "succeeded")

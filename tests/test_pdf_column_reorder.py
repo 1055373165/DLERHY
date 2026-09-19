@@ -12,7 +12,6 @@ grouping-failure fallback.
 See tasks/pdf-pipeline-v2.md §M1.3 and spec §3.1 failure mode 2.
 """
 
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -22,12 +21,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from book_agent.domain.structure.pdf import (
-    PdfFileProfile,
-    PdfPage,
-    PdfStructureRecoveryService,
-    PdfTextBlock,
-)
+from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+from book_agent.ingestion.pdf.models import PdfFileProfile, PdfPage, PdfTextBlock
 
 
 def _mk_block(
@@ -128,8 +123,8 @@ class PdfMultiColumnReorderTests(unittest.TestCase):
         # appear before the three RIGHT blocks. The prior top-down sort
         # would have produced LEFT-1, RIGHT-1, LEFT-2, RIGHT-2, LEFT-3,
         # RIGHT-3 — a regression we explicitly guard against here.
-        left_indices = [i for i, l in enumerate(ordered_labels) if l.startswith("LEFT")]
-        right_indices = [i for i, l in enumerate(ordered_labels) if l.startswith("RIGHT")]
+        left_indices = [i for i, label in enumerate(ordered_labels) if label.startswith("LEFT")]
+        right_indices = [i for i, label in enumerate(ordered_labels) if label.startswith("RIGHT")]
         self.assertEqual(
             len(left_indices), 3, f"unexpected left count: {ordered_labels}"
         )

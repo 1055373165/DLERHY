@@ -20,8 +20,10 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from book_agent.orchestrator.run_plan import plan_for_run
 from book_agent.orchestrator.stage_status import (
     OPTIONAL_PIPELINE_STAGES,
+    PIPELINE_STAGES,
     REQUIRED_PIPELINE_STAGES,
     RunOutcome,
     StageStatus,
@@ -164,6 +166,31 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
             ),
             RunOutcome.RUNNING,
         )
+
+
+    def test_translate_full_requires_every_pipeline_stage(self) -> None:
+        # The repair, structure review and export review agent stages are opt-in; every other pipeline stage is required by default.
+        self.assertEqual(
+            plan_for_run("translate_full", {}).required_stages, frozenset(PIPELINE_STAGES) - {"repair", "structure_review", "export_review"}
+        )
+        self.assertEqual(
+            plan_for_run("translate_full", {"run_request": {"repair_agent": "on", "structure_review": "sampled", "export_review": "sampled"}}).required_stages,
+            frozenset(PIPELINE_STAGES),
+        )
+        self.assertEqual(plan_for_run("translate_targeted", {}).required_stages, REQUIRED_PIPELINE_STAGES)
+
+    def test_failed_review_fails_run_when_review_is_required(self) -> None:
+        statuses = {
+            "translate": StageStatus.SUCCEEDED,
+            "review": StageStatus.FAILED,
+            "bilingual_html": StageStatus.NOT_STARTED,
+            "merged_html": StageStatus.NOT_STARTED,
+        }
+        self.assertEqual(
+            classify_run_outcome(statuses, plan_for_run("translate_full", {}).required_stages),
+            RunOutcome.FAILED,
+        )
+        self.assertEqual(classify_run_outcome(statuses), RunOutcome.SUCCEEDED_WITH_WARNINGS)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -20,6 +21,7 @@ import {
   statusLabel,
   translateProgress,
 } from "../../lib/workflow";
+import { stopReasonNote } from "../../lib/runStopReason";
 import s from "./RunsPage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
@@ -44,13 +46,14 @@ export function RunsPage() {
   const currentStage = currentStageKey(currentRun);
   const progress = translateProgress(currentDocument, currentRun);
   const pct = Math.round(progress.ratio * 100);
+  const stopNote = stopReasonNote(currentRun?.status, currentRun?.stop_reason);
 
   async function handleAction() {
     try {
       const run = await runPrimaryAction();
-      setFeedback({ tone: "success", text: `Run ${run.run_id.slice(0, 6)} pushed` });
+      setFeedback({ tone: "success", text: `已提交运行 ${run.run_id.slice(0, 6)}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Action failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "操作失败" });
     }
   }
 
@@ -59,7 +62,7 @@ export function RunsPage() {
       const filename = await downloadChapterAsset(chapterId);
       setFeedback({ tone: "success", text: filename });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -117,12 +120,24 @@ export function RunsPage() {
                 disabled={action.disabled || runActionPending}
                 onClick={handleAction}
               >
-                {runActionPending ? "Executing..." : action.label}
+                {runActionPending ? "提交中…" : action.label}
               </button>
               <button className="btn btn-sm" onClick={() => void refreshCurrentDocument()}>
-                Refresh
+                刷新
               </button>
             </div>
+
+            {stopNote && (
+              <div className={s.feedback} data-tone="error" role="status">
+                {stopNote.text}
+                {stopNote.link && (
+                  <>
+                    {" "}
+                    <Link to={stopNote.link.to}>{stopNote.link.label}</Link>
+                  </>
+                )}
+              </div>
+            )}
 
             {feedback && (
               <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
@@ -165,8 +180,8 @@ export function RunsPage() {
               <circle cx="32" cy="32" r="26" />
               <polygon points="26,20 26,44 46,32" />
             </svg>
-            <span className={s.emptyTitle}>No active run</span>
-            <span className={s.emptySubtitle}>Bootstrap a document first to start a translation pipeline.</span>
+            <span className={s.emptyTitle}>还没有运行</span>
+            <span className={s.emptySubtitle}>先在工作台上传一本书，再开始翻译。</span>
           </div>
         )}
       </Surface>
@@ -184,16 +199,16 @@ export function RunsPage() {
                     tone={ch.open_issue_count > 0 ? "warning" : "success"}
                     label={statusLabel(ch.status)}
                   />
-                  <span className={s.chTitle}>{ch.title_src || "Untitled"}</span>
+                  <span className={s.chTitle}>{ch.title_src || "未命名"}</span>
                   <span className={s.chMeta}>
-                    {formatNumber(ch.open_issue_count)} issues &middot; {formatNumber(ch.packet_count)} pkt
+                    {formatNumber(ch.open_issue_count)} 个问题 &middot; {formatNumber(ch.packet_count)} 包
                   </span>
                   <button
                     className="btn btn-sm"
                     disabled={!ch.bilingual_export_ready}
                     onClick={() => void handleChapterDownload(ch.chapter_id)}
                   >
-                    {ch.bilingual_export_ready ? "Download" : "—"}
+                    {ch.bilingual_export_ready ? "下载" : "—"}
                   </button>
                 </div>
               ))}
@@ -202,7 +217,7 @@ export function RunsPage() {
             <div className={s.emptyState}>
               {currentDocument
                 ? `No focus chapters for ${preferredTitle(currentDocument)}`
-                : "Load a document to see focus chapters."}
+                : "载入一本书后，这里显示需要关注的章节。"}
             </div>
           )}
         </div>
@@ -223,7 +238,7 @@ export function RunsPage() {
               ))}
             </div>
           ) : (
-            <div className={s.emptyState}>No run events yet.</div>
+            <div className={s.emptyState}>还没有运行事件。</div>
           )}
         </div>
       </div>

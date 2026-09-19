@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import (
@@ -20,6 +20,7 @@ from book_agent.domain.enums import (
 from book_agent.infra.db.base import (
     Base,
     CreatedAtMixin,
+    JsonDocument,
     TimestampMixin,
     UUIDPrimaryKeyMixin,
     enum_value_type,
@@ -28,12 +29,20 @@ from book_agent.infra.db.base import (
 
 class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "documents"
+    # The same file may be imported once per organisation.
+    __table_args__ = (UniqueConstraint("org_id", "file_fingerprint", name="uq_documents_org_fingerprint"),)
 
+    org_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("orgs.id", ondelete="RESTRICT"),
+        nullable=False,
+        default="00000000-0000-4000-8000-000000000001",
+    )
     source_type: Mapped[SourceType] = mapped_column(
         enum_value_type(SourceType, name="source_type"),
         nullable=False,
     )
-    file_fingerprint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    file_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
     source_path: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
     title_src: Mapped[str | None] = mapped_column(Text)
@@ -48,7 +57,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     parser_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     segmentation_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active_book_profile_version: Mapped[int | None] = mapped_column(Integer)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class Chapter(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -73,7 +82,7 @@ class Chapter(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     risk_level: Mapped[Severity | None] = mapped_column(
         enum_value_type(Severity, name="chapter_risk_level"),
     )
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
 
 class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -98,7 +107,7 @@ class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_text: Mapped[str | None] = mapped_column(Text)
     source_anchor: Mapped[str | None] = mapped_column(Text)
-    source_span_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_span_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     parse_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     protected_policy: Mapped[ProtectedPolicy] = mapped_column(
         enum_value_type(ProtectedPolicy, name="protected_policy"),
@@ -112,8 +121,21 @@ class Block(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A source sentence. Sentences are never rewritten when a block is re-segmented:
+    the parse-revision fork retires them (``retired_by_revision_id``) and inserts
+    a new set; ``sentence_lineage`` links the two. Readers use active sentences only."""
+
     __tablename__ = "sentences"
-    __table_args__ = (UniqueConstraint("block_id", "ordinal_in_block", name="uq_sentences_block_ordinal"),)
+    __table_args__ = (
+        Index(
+            "uq_sentences_block_ordinal_active",
+            "block_id",
+            "ordinal_in_block",
+            unique=True,
+            postgresql_where=text("retired_by_revision_id IS NULL"),
+            sqlite_where=text("retired_by_revision_id IS NULL"),
+        ),
+    )
 
     block_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False),
@@ -142,7 +164,7 @@ class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     translatable: Mapped[bool] = mapped_column(nullable=False, default=True)
     nontranslatable_reason: Mapped[str | None] = mapped_column(Text)
     source_anchor: Mapped[str | None] = mapped_column(Text)
-    source_span_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_span_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     upstream_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     sentence_status: Mapped[SentenceStatus] = mapped_column(
         enum_value_type(SentenceStatus, name="sentence_status"),
@@ -150,6 +172,72 @@ class Sentence(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=SentenceStatus.PENDING,
     )
     active_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    retired_by_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="SET NULL"),
+    )
+
+
+class SentenceLineage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """How a retired sentence maps onto the sentences of the revision that replaced it."""
+
+    __tablename__ = "sentence_lineage"
+    __table_args__ = (
+        CheckConstraint("relation IN ('same', 'split', 'merge', 'removed')", name="ck_sentence_lineage_relation"),
+        Index("idx_sentence_lineage_from", "from_sentence_id"),
+        Index("idx_sentence_lineage_to", "to_sentence_id"),
+    )
+
+    parse_revision_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("document_parse_revisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    from_sentence_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("sentences.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    to_sentence_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("sentences.id", ondelete="CASCADE"),
+    )
+    # same | split | merge | removed
+    relation: Mapped[str] = mapped_column(Text, nullable=False)
+    similarity: Mapped[float | None] = mapped_column(Numeric(4, 3))
+
+
+class StructureEdit(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One structure edit (relabel, merge, caption link) as applied, re-applied after a reparse, or found stale.
+
+    Append-only: a replay writes a new row pointing at the original edit.
+    ``blocks_json`` fingerprints the blocks as they were before the edit so a
+    replay can tell whether the parser gave back the same structure.
+    """
+
+    __tablename__ = "structure_edits"
+    __table_args__ = (
+        CheckConstraint("kind IN ('relabel_block', 'split_block', 'merge_blocks', 'link_caption')", name="ck_structure_edits_kind"),
+        CheckConstraint("status IN ('applied', 'reapplied', 'stale')", name="ck_structure_edits_status"),
+        Index("idx_structure_edits_document", "document_id", "created_at"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    args_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    blocks_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    replay_of_edit_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("structure_edits.id", ondelete="CASCADE")
+    )
+    parse_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("document_parse_revisions.id", ondelete="SET NULL")
+    )
+    turn_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    actor_id: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
 
 
 class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -166,10 +254,10 @@ class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         enum_value_type(BookType, name="book_type"),
         nullable=False,
     )
-    style_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    quote_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    style_policy_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    quote_policy_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     special_content_policy_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON,
+        JsonDocument,
         nullable=False,
         default=dict,
     )
@@ -204,7 +292,7 @@ class MemorySnapshot(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    content_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     status: Mapped[MemoryStatus] = mapped_column(
         enum_value_type(MemoryStatus, name="memory_status"),
         nullable=False,
@@ -227,10 +315,10 @@ class DocumentImage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     image_type: Mapped[str] = mapped_column(Text, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    bbox_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    bbox_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     ocr_text: Mapped[str | None] = mapped_column(Text)
     latex: Mapped[str | None] = mapped_column(Text)
     alt_text: Mapped[str | None] = mapped_column(Text)
     width_px: Mapped[int | None] = mapped_column(Integer)
     height_px: Mapped[int | None] = mapped_column(Integer)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import (
+    IssueStatus,
     ActionStatus,
     ActionType,
     ActorType,
@@ -33,6 +34,10 @@ class ActionExecutionArtifacts:
     audits: list[AuditEvent]
 
 
+class ActionNotExecutable(ValueError):
+    """The action or its issue is in a state that forbids (re)execution."""
+
+
 class IssueActionExecutor:
     def __init__(self, repository: OpsRepository):
         self.repository = repository
@@ -41,6 +46,14 @@ class IssueActionExecutor:
     def execute(self, action_id: str) -> ActionExecutionArtifacts:
         action = self.repository.get_issue_action(action_id)
         issue = self.repository.get_issue(action.issue_id)
+        if action.status in (ActionStatus.RUNNING, ActionStatus.COMPLETED):
+            raise ActionNotExecutable(
+                f"Issue action {action_id} is {action.status.value}; it is re-planned only when its issue is seen again."
+            )
+        if issue.status in (IssueStatus.RESOLVED, IssueStatus.WONTFIX):
+            raise ActionNotExecutable(
+                f"Issue {issue.id} is {issue.status.value}; its actions cannot run."
+            )
         now = _utcnow()
         action.status = ActionStatus.RUNNING
         self.repository.mark_issue_triaged(issue, "Action executed; awaiting rerun validation.")
@@ -151,7 +164,6 @@ class IssueActionExecutor:
 
     def _audit(self, object_type: str, object_id: str, action: str, issue_id: str, now: datetime) -> AuditEvent:
         return AuditEvent(
-            id=stable_id("audit", object_type, object_id, action, issue_id),
             object_type=object_type,
             object_id=object_id,
             action=action,

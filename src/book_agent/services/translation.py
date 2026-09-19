@@ -1,12 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import re
-from typing import Any
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+from typing import Any, Protocol
 
+from book_agent.workers.llm_calls import usage_payload
 from book_agent.core.ids import stable_id
+from book_agent.core.run_context import current_run_id
+from book_agent.harness.context.book_md import book_prompt_guidance
+from book_agent.domain.enums import (
+    ActorType,
+    PacketStatus,
+    RelationType,
+    RunStatus,
+    SegmentType,
+    SentenceStatus,
+    TargetSegmentStatus,
+)
 from book_agent.domain.event_kinds import (
+    TRANSLATION_OUTPUT_REJECTED,
     GLOSSARY_VIOLATION,
     LLM_CALL_COMPLETED,
     LLM_CALL_FAILED,
@@ -14,24 +28,31 @@ from book_agent.domain.event_kinds import (
     PACKET_TRANSLATED,
 )
 from book_agent.domain.models import MemorySnapshot, Sentence
-from book_agent.domain.enums import ActorType, PacketStatus, RelationType, RunStatus, SegmentType, SentenceStatus, TargetSegmentStatus
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TranslationRun
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.services.glossary_enforcement import detect_violations
+from book_agent.domain.terminology.enforcement import LockedTerm, find_term_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
 from book_agent.services.term_normalization import normalize_concept_payload
-from book_agent.workers.contracts import (
+from book_agent.translation.chapter_memory import ChapterMemory
+from book_agent.translation.contracts import (
     CompiledTranslationContext,
-    RelevantTerm,
     TranslationUsage,
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
-from book_agent.workers.translator import EchoTranslationWorker, TranslationTask, TranslationWorker
+from book_agent.translation.heuristics import DEFAULT_HEURISTICS
+from book_agent.translation.output_validation import OutputCorrection, OutputRejection, OutputValidator
+from book_agent.workers.failures import classify_failure
+from book_agent.workers.translator import (
+    EchoTranslationWorker,
+    TranslationTask,
+    TranslationWorker,
+    TranslationWorkerMetadata,
+)
 
 
 def _utcnow() -> datetime:
@@ -45,61 +66,9 @@ def _coerce_nonnegative_int(value: object) -> int:
         return 0
 
 
-CONCEPT_HINT_KEYWORDS = {
-    "agent",
-    "agentic",
-    "ai",
-    "context",
-    "engineering",
-    "generative",
-    "language",
-    "llm",
-    "memory",
-    "model",
-    "models",
-    "architecture",
-    "distributed",
-    "infrastructure",
-    "planning",
-    "retrieval",
-    "sql",
-    "substrate",
-}
-CONCEPT_HEADWORDS = {
-    "ai",
-    "agent",
-    "agents",
-    "architecture",
-    "engineering",
-    "infrastructure",
-    "llm",
-    "mechanisms",
-    "memory",
-    "model",
-    "models",
-    "modules",
-    "sql",
-    "stores",
-    "substrate",
-}
-CONCEPT_MODIFIERS = {
-    "adaptive",
-    "agentic",
-    "context",
-    "data",
-    "distributed",
-    "durable",
-    "external",
-    "generative",
-    "language",
-    "large",
-    "memory",
-    "planning",
-    "prompt",
-    "reactive",
-    "retrieval",
-    "structured",
-}
+CONCEPT_HINT_KEYWORDS = DEFAULT_HEURISTICS.concept_hint_keywords
+CONCEPT_HEADWORDS = DEFAULT_HEURISTICS.concept_headwords
+CONCEPT_MODIFIERS = DEFAULT_HEURISTICS.concept_modifiers
 STOPWORDS = {
     "about",
     "a",
@@ -263,6 +232,27 @@ class TranslationExecutionArtifacts:
     updated_sentences: list[Sentence]
 
 
+@dataclass(slots=True)
+class PreparedPacketTranslation:
+    """Everything needed to run the worker and later persist its result."""
+
+    packet_id: str
+    chapter_id: str
+    run_id: str | None
+    task: TranslationTask
+    worker_metadata: TranslationWorkerMetadata
+    chapter_memory_snapshot_id: str | None
+    call_id: str
+    started_at: datetime
+    # Glossary locks for the chapter, loaded with the packet so the output
+    # guardrail can enforce them without a database session.
+    locked_terms: tuple[LockedTerm, ...] = ()
+
+    @property
+    def correlation_id(self) -> str:
+        return f"packet:{self.packet_id}"
+
+
 class TranslationService:
     def __init__(
         self,
@@ -272,6 +262,9 @@ class TranslationService:
         context_compiler: ChapterContextCompiler | None = None,
         memory_service: MemoryService | None = None,
         default_auto_commit_memory: bool = False,
+        post_translation_hooks: Sequence[PostTranslationHook] | None = None,
+        output_validator: OutputValidator | None = None,
+        max_output_repairs: int = 1,
     ):
         self.repository = repository
         self.worker = worker or EchoTranslationWorker()
@@ -284,6 +277,13 @@ class TranslationService:
             context_compiler=self.context_compiler,
         )
         self.default_auto_commit_memory = default_auto_commit_memory
+        self.output_validator = output_validator or OutputValidator()
+        self.max_output_repairs = max(0, int(max_output_repairs))
+        self.post_translation_hooks: tuple[PostTranslationHook, ...] = (
+            tuple(post_translation_hooks)
+            if post_translation_hooks is not None
+            else (GlossaryViolationHook(), ChapterMemoryProposalHook(), ModelIssueSupersedeHook())
+        )
 
     def execute_packet(
         self,
@@ -294,9 +294,39 @@ class TranslationService:
         auto_commit_memory: bool | None = None,
         run_id: str | None = None,
     ) -> TranslationExecutionArtifacts:
-        effective_auto_commit_memory = (
-            self.default_auto_commit_memory if auto_commit_memory is None else auto_commit_memory
+        """Prepare, translate and persist a packet within the current session.
+
+        Callers that must not hold a database transaction across the LLM call
+        (the run executor) use prepare_packet / call_worker /
+        persist_packet_result with separate sessions instead.
+        """
+        prepared = self.prepare_packet(
+            packet_id,
+            compile_options=compile_options,
+            rerun_hints=rerun_hints,
+            run_id=run_id,
         )
+        try:
+            worker_result = self.call_worker(prepared)
+        except Exception as exc:
+            self.record_worker_failure(prepared, exc)
+            raise
+        return self.persist_packet_result(
+            prepared,
+            worker_result,
+            auto_commit_memory=auto_commit_memory,
+        )
+
+    def prepare_packet(
+        self,
+        packet_id: str,
+        *,
+        compile_options: ChapterContextCompileOptions | None = None,
+        rerun_hints: tuple[str, ...] = (),
+        run_id: str | None = None,
+    ) -> PreparedPacketTranslation:
+        if run_id is None:
+            run_id = current_run_id()
         bundle = self.repository.load_packet_bundle(packet_id)
         compiled_context_result = self.memory_service.load_compiled_context(
             packet=bundle.context_packet,
@@ -305,66 +335,159 @@ class TranslationService:
         )
         chapter_memory_snapshot = compiled_context_result.chapter_memory_snapshot
         compiled_context_packet = compiled_context_result.context
-        # PDF v2 M2.7b: inject document-level locked glossary into the
-        # compiled context so the prompt builder surfaces it as authoritative
-        # term mappings — defense in depth alongside the M2.7 post-validator.
-        # Failure here is non-fatal: translation must proceed even if the
-        # glossary lookup hiccups.
-        try:
-            compiled_context_packet = self._inject_locked_glossary(
-                compiled_context_packet
-            )
-        except Exception:  # pragma: no cover - defensive
-            pass
         worker_metadata = self.worker.metadata()
-        call_id = stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp()))
-        correlation_id = f"packet:{bundle.packet.id}"
+        prepared = PreparedPacketTranslation(
+            packet_id=bundle.packet.id,
+            chapter_id=bundle.packet.chapter_id,
+            run_id=run_id,
+            task=TranslationTask(
+                context_packet=compiled_context_packet,
+                current_sentences=bundle.current_sentences,
+                book_guidance=book_prompt_guidance(self.repository.session, compiled_context_packet.document_id) or None,
+            ),
+            worker_metadata=worker_metadata,
+            chapter_memory_snapshot_id=(
+                chapter_memory_snapshot.id if chapter_memory_snapshot is not None else None
+            ),
+            call_id=stable_id("llm-call", bundle.packet.id, str(_utcnow().timestamp())),
+            started_at=_utcnow(),
+            locked_terms=tuple(
+                GlossaryService(self.repository.session).locked_terms_for_chapter(
+                    compiled_context_packet.document_id, bundle.packet.chapter_id
+                )
+            ),
+        )
         emit_event(
             self.repository.session,
             kind=LLM_CALL_STARTED,
             run_id=run_id,
-            chapter_id=bundle.packet.chapter_id,
-            packet_id=bundle.packet.id,
+            chapter_id=prepared.chapter_id,
+            packet_id=prepared.packet_id,
             actor_kind="agent",
             actor_id=f"worker.{worker_metadata.worker_name}",
-            correlation_id=correlation_id,
+            correlation_id=prepared.correlation_id,
             payload={
-                "call_id": call_id,
+                "call_id": prepared.call_id,
+                "call_kind": "translate",
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "sentence_count": len(bundle.current_sentences),
             },
         )
-        _call_started_at = _utcnow()
-        try:
-            worker_result = self._coerce_worker_result(
-                self.worker.translate(
-                    TranslationTask(
-                        context_packet=compiled_context_packet,
-                        current_sentences=bundle.current_sentences,
-                    )
+        return prepared
+
+    def call_worker(self, prepared: PreparedPacketTranslation) -> TranslationWorkerResult:
+        """Run the translation worker behind the output guardrail. Touches no database state.
+
+        A rejected answer is sent back to the model with the findings
+        (``TranslationTask.correction``) up to ``max_output_repairs`` times.
+        The returned result carries the summed usage of every call and the
+        rejected outputs for the audit trail; when the budget runs out the
+        last answer is returned and persisted with its error_code.
+        """
+        task = prepared.task
+        result = self._coerce_worker_result(self.worker.translate(task))
+        report = self.output_validator.validate_task(task, result.output, locked_terms=prepared.locked_terms)
+        usage = result.usage
+        rejections: list[OutputRejection] = []
+        while not report.ok and len(rejections) < self.max_output_repairs:
+            rejections.append(
+                OutputRejection(
+                    attempt=len(rejections) + 1,
+                    report=report,
+                    token_in=int(result.usage.token_in or 0),
+                    token_out=int(result.usage.token_out or 0),
                 )
             )
-        except Exception as exc:
-            emit_event(
-                self.repository.session,
-                kind=LLM_CALL_FAILED,
-                run_id=run_id,
-                chapter_id=bundle.packet.chapter_id,
-                packet_id=bundle.packet.id,
-                actor_kind="agent",
-                actor_id=f"worker.{worker_metadata.worker_name}",
-                correlation_id=correlation_id,
-                payload={
-                    "call_id": call_id,
-                    "backend": worker_metadata.worker_name,
-                    "model": worker_metadata.model_name,
-                    "error_class": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                    "elapsed_ms": int((_utcnow() - _call_started_at).total_seconds() * 1000),
-                },
+            repair_task = replace(
+                task,
+                correction=OutputCorrection(
+                    previous_output=result.output,
+                    report=report,
+                    attempt=len(rejections),
+                ),
             )
-            raise
+            result = self._coerce_worker_result(self.worker.translate(repair_task))
+            usage = _merge_usage(usage, result.usage)
+            report = self.output_validator.validate_task(task, result.output, locked_terms=prepared.locked_terms)
+        if not rejections:
+            return result
+        return result.model_copy(
+            update={
+                "usage": usage,
+                "rejected_outputs": [
+                    {"attempt": item.attempt, "token_in": item.token_in, "token_out": item.token_out, **item.report.to_json()}
+                    for item in rejections
+                ],
+            }
+        )
+
+    def record_worker_failure(self, prepared: PreparedPacketTranslation, exc: Exception) -> None:
+        """Record a failed attempt: a FAILED translation run with its error code, and the event."""
+        metadata = prepared.worker_metadata
+        now = _utcnow()
+        attempt = self.repository.next_attempt(prepared.packet_id)
+        error_code = classify_failure(exc).reason
+        self.repository.session.add(
+            TranslationRun(
+                id=stable_id("translation-run", prepared.packet_id, attempt),
+                packet_id=prepared.packet_id,
+                model_name=metadata.model_name,
+                model_config_json={"worker": metadata.worker_name, **metadata.runtime_config},
+                prompt_version=metadata.prompt_version,
+                attempt=attempt,
+                status=RunStatus.FAILED,
+                error_code=error_code,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        self.repository.session.flush()
+        emit_event(
+            self.repository.session,
+            kind=LLM_CALL_FAILED,
+            run_id=prepared.run_id,
+            chapter_id=prepared.chapter_id,
+            packet_id=prepared.packet_id,
+            actor_kind="agent",
+            actor_id=f"worker.{metadata.worker_name}",
+            correlation_id=prepared.correlation_id,
+            payload={
+                "call_id": prepared.call_id,
+                "call_kind": "translate",
+                "backend": metadata.worker_name,
+                "model": metadata.model_name,
+                **(
+                    {key: value for key, value in usage_payload(exc.usage).items() if value is not None}
+                    if getattr(exc, "usage", None) is not None
+                    else {}
+                ),
+                "error_class": type(exc).__name__,
+                "error_code": error_code,
+                "error_message": str(exc)[:500],
+                "elapsed_ms": int((_utcnow() - prepared.started_at).total_seconds() * 1000),
+            },
+        )
+
+    def persist_packet_result(
+        self,
+        prepared: PreparedPacketTranslation,
+        worker_result: TranslationWorkerResult,
+        *,
+        auto_commit_memory: bool | None = None,
+    ) -> TranslationExecutionArtifacts:
+        effective_auto_commit_memory = (
+            self.default_auto_commit_memory if auto_commit_memory is None else auto_commit_memory
+        )
+        run_id = prepared.run_id
+        worker_metadata = prepared.worker_metadata
+        compiled_context_packet = prepared.task.context_packet
+        bundle = self.repository.load_packet_bundle(prepared.packet_id)
+        chapter_memory_snapshot = (
+            self.repository.session.get(MemorySnapshot, prepared.chapter_memory_snapshot_id)
+            if prepared.chapter_memory_snapshot_id is not None
+            else None
+        )
         _usage = worker_result.usage
         emit_event(
             self.repository.session,
@@ -374,9 +497,10 @@ class TranslationService:
             packet_id=bundle.packet.id,
             actor_kind="agent",
             actor_id=f"worker.{worker_metadata.worker_name}",
-            correlation_id=correlation_id,
+            correlation_id=prepared.correlation_id,
             payload={
-                "call_id": call_id,
+                "call_id": prepared.call_id,
+                "call_kind": "translate",
                 "backend": worker_metadata.worker_name,
                 "model": worker_metadata.model_name,
                 "token_in": int(_usage.token_in or 0),
@@ -387,7 +511,20 @@ class TranslationService:
                 "provider_request_id": _usage.provider_request_id,
             },
         )
-        artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet)
+        validation = self.output_validator.validate(
+            [sentence.id for sentence in bundle.current_sentences],
+            worker_result.output,
+            source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
+            locked_terms=prepared.locked_terms,
+        )
+        artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
+        artifacts.translation_run.error_code = validation.error_code
+        if worker_result.rejected_outputs:
+            artifacts.translation_run.model_config_json = {
+                **(artifacts.translation_run.model_config_json or {}),
+                "output_repairs": len(worker_result.rejected_outputs),
+            }
+            self._emit_output_rejections(prepared, worker_result, accepted=validation.ok)
         self.repository.save_translation_artifacts(
             translation_run=artifacts.translation_run,
             target_segments=artifacts.target_segments,
@@ -395,6 +532,16 @@ class TranslationService:
             updated_sentences=artifacts.updated_sentences,
             packet=bundle.packet,
         )
+        translated_payload = {
+            "translation_run_id": artifacts.translation_run.id,
+            "attempt": artifacts.translation_run.attempt,
+            "target_segment_count": len(artifacts.target_segments),
+            "sentence_count": len(bundle.current_sentences),
+        }
+        if not validation.ok:
+            translated_payload["output_validation"] = validation.to_json()
+        if worker_result.rejected_outputs:
+            translated_payload["output_repairs"] = len(worker_result.rejected_outputs)
         emit_event(
             self.repository.session,
             kind=PACKET_TRANSLATED,
@@ -403,107 +550,49 @@ class TranslationService:
             packet_id=bundle.packet.id,
             actor_kind="system",
             actor_id="services.translation",
-            payload={
-                "translation_run_id": artifacts.translation_run.id,
-                "attempt": artifacts.translation_run.attempt,
-                "target_segment_count": len(artifacts.target_segments),
-                "sentence_count": len(bundle.current_sentences),
-            },
+            payload=translated_payload,
         )
-        # PDF v2 M2.7: post-validate translated artifacts against the
-        # document-level locked glossary. Violations are surfaced as
-        # GLOSSARY_VIOLATION events for review/observability without
-        # blocking the translation run — the principle is "report,
-        # don't crash" so a glossary anomaly never derails throughput.
-        try:
-            self._emit_glossary_violations(
-                bundle=bundle,
-                artifacts=artifacts,
-                run_id=run_id,
-            )
-        except Exception:  # pragma: no cover - defensive guard
-            # Post-validation must never break the translation flow.
-            pass
-        proposed_content_json = self._build_chapter_memory_content_json(
+        outcome = PacketTranslationOutcome(
             bundle=bundle,
             artifacts=artifacts,
-            current_snapshot=chapter_memory_snapshot,
             compiled_context_packet=compiled_context_packet,
+            chapter_memory_snapshot=chapter_memory_snapshot,
+            run_id=run_id,
+            auto_commit_memory=effective_auto_commit_memory,
         )
-        self.memory_service.record_translation_proposals(
-            document_id=bundle.context_packet.document_id,
-            chapter_id=bundle.context_packet.chapter_id,
-            packet_id=bundle.packet.id,
-            translation_run_id=artifacts.translation_run.id,
-            current_snapshot=chapter_memory_snapshot,
-            proposed_content_json=proposed_content_json,
-        )
-        if effective_auto_commit_memory:
-            self.memory_service.commit_approved_packet_memory(
-                document_id=bundle.context_packet.document_id,
-                chapter_id=bundle.context_packet.chapter_id,
-                translation_run_id=artifacts.translation_run.id,
-            )
+        for hook in self.post_translation_hooks:
+            hook.after_packet_translated(self, outcome)
         self.repository.session.flush()
         return artifacts
 
-    def _inject_locked_glossary(
+    def _emit_output_rejections(
         self,
-        compiled_context_packet: CompiledTranslationContext,
-    ) -> CompiledTranslationContext:
-        """Merge document-level locked glossary entries into the compiled
-        context's `relevant_terms`. PDF v2 M2.7b prompt injection.
-
-        The existing prompt builder (`_sorted_term_lines` in workers/translator.py)
-        already renders `relevant_terms` as `- {source} => {target} ({lock_level})`
-        and orders them with locked first — so injecting LOCKED rows here
-        makes them appear at the top of the term mappings the LLM sees,
-        without touching any prompt profile.
-
-        Dedup rule: existing entries (e.g., chapter-scope termbase matches
-        already populated by the context compiler) win over our document
-        scope entries. The compiler's choice was made with packet context;
-        we only fill gaps.
-        """
-        document_id = compiled_context_packet.document_id
-        if not document_id:
-            return compiled_context_packet
-        glossary_service = GlossaryService(self.repository.session)
-        document_terms = glossary_service.list_document_entries(
-            document_id, include_superseded=False
-        )
-        if not document_terms:
-            return compiled_context_packet
-
-        existing_keys = {
-            term.source_term.casefold()
-            for term in compiled_context_packet.relevant_terms
-        }
-        additions: list[RelevantTerm] = []
-        for entry in document_terms:
-            # Skip suggested-only entries with no target — they have no
-            # actionable signal for the translator yet.
-            if not entry.target_term or not entry.target_term.strip():
-                continue
-            key = entry.source_term.casefold()
-            if key in existing_keys:
-                continue
-            additions.append(
-                RelevantTerm(
-                    source_term=entry.source_term,
-                    target_term=entry.target_term,
-                    lock_level=entry.lock_level.value,
-                )
+        prepared: PreparedPacketTranslation,
+        worker_result: TranslationWorkerResult,
+        *,
+        accepted: bool,
+    ) -> None:
+        """One audit event per rejected answer, written with the persisted result."""
+        metadata = prepared.worker_metadata
+        for rejection in worker_result.rejected_outputs:
+            emit_event(
+                self.repository.session,
+                kind=TRANSLATION_OUTPUT_REJECTED,
+                run_id=prepared.run_id,
+                chapter_id=prepared.chapter_id,
+                packet_id=prepared.packet_id,
+                actor_kind="system",
+                actor_id="services.translation.output_guardrail",
+                correlation_id=prepared.correlation_id,
+                payload={
+                    "call_id": prepared.call_id,
+                    "backend": metadata.worker_name,
+                    "model": metadata.model_name,
+                    "repair_budget": self.max_output_repairs,
+                    "repaired": accepted,
+                    **rejection,
+                },
             )
-            existing_keys.add(key)
-
-        if not additions:
-            return compiled_context_packet
-
-        merged_terms = list(compiled_context_packet.relevant_terms) + additions
-        return compiled_context_packet.model_copy(
-            update={"relevant_terms": merged_terms}
-        )
 
     def _emit_glossary_violations(
         self,
@@ -525,16 +614,20 @@ class TranslationService:
         document_id = bundle.context_packet.document_id
         if not document_id:
             return
-        glossary_service = GlossaryService(self.repository.session)
-        locked = glossary_service.get_locked_terms(document_id)
-        if not locked:
+        locked_terms = GlossaryService(self.repository.session).locked_terms_for_chapter(
+            document_id, bundle.packet.chapter_id
+        )
+        if not locked_terms:
             return
         source_text = "\n".join(s.source_text for s in bundle.current_sentences if s.source_text)
         target_text = "\n".join(
             seg.text_zh for seg in artifacts.target_segments if getattr(seg, "text_zh", None)
         )
-        violations = detect_violations(source_text, target_text, locked)
-        for v in violations:
+        seen: set[str] = set()
+        for violation in find_term_violations([(bundle.packet.id, source_text, target_text)], locked_terms):
+            if violation.source_term in seen:
+                continue
+            seen.add(violation.source_term)
             emit_event(
                 self.repository.session,
                 kind=GLOSSARY_VIOLATION,
@@ -546,11 +639,13 @@ class TranslationService:
                 payload={
                     "translation_run_id": artifacts.translation_run.id,
                     "document_id": document_id,
-                    "source_term": v.source_term,
-                    "expected_target": v.expected_target,
-                    "source_match_count": v.source_match_count,
-                    "target_match_count": v.target_match_count,
-                    "severity_hint": v.severity_hint,
+                    "source_term": violation.source_term,
+                    "expected_target": violation.expected_target_term,
+                    "accepted_renderings": list(violation.accepted_renderings),
+                    "source_match_count": violation.source_occurrences,
+                    # The shared matcher is presence-based: no accepted rendering was found.
+                    "target_match_count": 0,
+                    "severity_hint": "hard",
                 },
             )
 
@@ -559,10 +654,10 @@ class TranslationService:
         bundle: TranslationPacketBundle,
         worker_result: TranslationWorkerResult,
         compiled_context_packet: CompiledTranslationContext,
+        metadata: TranslationWorkerMetadata,
     ) -> TranslationExecutionArtifacts:
         now = _utcnow()
         attempt = self.repository.next_attempt(bundle.packet.id)
-        metadata = self.worker.metadata()
         output = worker_result.output
         usage = worker_result.usage
         translation_run = TranslationRun(
@@ -680,23 +775,12 @@ class TranslationService:
         current_snapshot: MemorySnapshot | None,
         compiled_context_packet,
     ) -> dict[str, Any]:
-        existing_content = dict(current_snapshot.content_json) if current_snapshot is not None else {}
-        recent_accepted = existing_content.get("recent_accepted_translations", [])
-        if not isinstance(recent_accepted, list):
-            recent_accepted = []
-        active_concepts = existing_content.get("active_concepts", [])
-        if not isinstance(active_concepts, list):
-            active_concepts = []
-        existing_brief_version = _coerce_nonnegative_int(existing_content.get("chapter_brief_version"))
-        packet_brief_version = _coerce_nonnegative_int(bundle.packet.chapter_brief_version)
-        chapter_brief = existing_content.get("chapter_brief")
-        heading_path = existing_content.get("heading_path") or compiled_context_packet.heading_path
-        if compiled_context_packet.chapter_brief and (
-            chapter_brief is None or packet_brief_version >= existing_brief_version
-        ):
-            chapter_brief = compiled_context_packet.chapter_brief
-            existing_brief_version = packet_brief_version
-            heading_path = compiled_context_packet.heading_path
+        memory = ChapterMemory.from_content(current_snapshot.content_json if current_snapshot is not None else None)
+        memory = memory.with_brief(
+            compiled_context_packet.chapter_brief,
+            version=bundle.packet.chapter_brief_version,
+            heading_path=compiled_context_packet.heading_path,
+        )
 
         target_excerpt = " ".join(segment.text_zh.strip() for segment in artifacts.target_segments if segment.text_zh).strip()
         source_excerpt = " ".join(
@@ -704,40 +788,28 @@ class TranslationService:
             for sentence in bundle.current_sentences
         ).strip()
         if source_excerpt and target_excerpt:
-            entry: dict[str, Any] = {
-                "packet_id": bundle.packet.id,
-                "block_id": bundle.packet.block_start_id,
-                "source_excerpt": source_excerpt,
-                "target_excerpt": target_excerpt,
-                "source_sentence_ids": [sentence.id for sentence in bundle.current_sentences],
-            }
-            recent_accepted = [
-                item
-                for item in recent_accepted
-                if not (isinstance(item, dict) and item.get("packet_id") == bundle.packet.id)
-            ]
-            recent_accepted.append(entry)
-            recent_accepted = recent_accepted[-4:]
+            memory = memory.with_recent_translation(
+                {
+                    "packet_id": bundle.packet.id,
+                    "block_id": bundle.packet.block_start_id,
+                    "source_excerpt": source_excerpt,
+                    "target_excerpt": target_excerpt,
+                    "source_sentence_ids": [sentence.id for sentence in bundle.current_sentences],
+                }
+            )
 
-        active_concepts = self._merge_active_concepts(
-            existing_concepts=active_concepts,
-            source_sentences=[sentence.source_text for sentence in bundle.current_sentences],
-            packet_id=bundle.packet.id,
+        memory = replace(
+            memory,
+            chapter_id=bundle.packet.chapter_id,
+            active_concepts=self._merge_active_concepts(
+                existing_concepts=memory.active_concepts,
+                source_sentences=[sentence.source_text for sentence in bundle.current_sentences],
+                packet_id=bundle.packet.id,
+            ),
+            last_packet_id=bundle.packet.id,
+            last_translation_run_id=artifacts.translation_run.id,
         )
-
-        content_json = {
-            "schema_version": 1,
-            "chapter_id": bundle.packet.chapter_id,
-            "chapter_title": existing_content.get("chapter_title"),
-            "heading_path": heading_path,
-            "chapter_brief": chapter_brief,
-            "chapter_brief_version": existing_brief_version or None,
-            "active_concepts": active_concepts,
-            "recent_accepted_translations": recent_accepted,
-            "last_packet_id": bundle.packet.id,
-            "last_translation_run_id": artifacts.translation_run.id,
-        }
-        return content_json
+        return memory.to_content()
 
     def _merge_active_concepts(
         self,
@@ -867,3 +939,119 @@ class TranslationService:
         if isinstance(payload, TranslationWorkerOutput):
             return TranslationWorkerResult(output=payload, usage=TranslationUsage())
         raise TypeError(f"Unsupported translation worker payload: {type(payload)!r}")
+
+
+def _merge_usage(first: TranslationUsage, second: TranslationUsage) -> TranslationUsage:
+    """Sum the usage of a rejected call and its repair call; provider fields come from the last call."""
+    cost = None
+    if first.cost_usd is not None or second.cost_usd is not None:
+        cost = float(first.cost_usd or 0.0) + float(second.cost_usd or 0.0)
+    return TranslationUsage(
+        token_in=int(first.token_in or 0) + int(second.token_in or 0),
+        token_out=int(first.token_out or 0) + int(second.token_out or 0),
+        total_tokens=int(first.total_tokens or 0) + int(second.total_tokens or 0),
+        latency_ms=int(first.latency_ms or 0) + int(second.latency_ms or 0),
+        cost_usd=cost,
+        provider_request_id=second.provider_request_id or first.provider_request_id,
+        raw_usage={**second.raw_usage, "merged_calls": int(first.raw_usage.get("merged_calls", 1)) + 1},
+    )
+
+
+@dataclass(slots=True)
+class PacketTranslationOutcome:
+    """A packet translation that has just been persisted, as seen by post-translation hooks."""
+
+    bundle: TranslationPacketBundle
+    artifacts: TranslationExecutionArtifacts
+    compiled_context_packet: CompiledTranslationContext
+    chapter_memory_snapshot: MemorySnapshot | None
+    run_id: str | None
+    auto_commit_memory: bool
+
+
+class PostTranslationHook(Protocol):
+    def after_packet_translated(self, service: TranslationService, outcome: PacketTranslationOutcome) -> None:
+        ...
+
+
+class GlossaryViolationHook:
+    """PDF v2 M2.7: report locked-glossary violations as events without failing the run."""
+
+    def after_packet_translated(self, service: TranslationService, outcome: PacketTranslationOutcome) -> None:
+        try:
+            service._emit_glossary_violations(
+                bundle=outcome.bundle,
+                artifacts=outcome.artifacts,
+                run_id=outcome.run_id,
+            )
+        except Exception:  # pragma: no cover - post-validation must never break translation
+            pass
+
+
+class ChapterMemoryProposalHook:
+    """Record the chapter memory proposal for the packet and commit it when auto-commit is on."""
+
+    def after_packet_translated(self, service: TranslationService, outcome: PacketTranslationOutcome) -> None:
+        context_packet = outcome.bundle.context_packet
+        service.memory_service.record_translation_proposals(
+            document_id=context_packet.document_id,
+            chapter_id=context_packet.chapter_id,
+            packet_id=outcome.bundle.packet.id,
+            translation_run_id=outcome.artifacts.translation_run.id,
+            current_snapshot=outcome.chapter_memory_snapshot,
+            proposed_content_json=service._build_chapter_memory_content_json(
+                bundle=outcome.bundle,
+                artifacts=outcome.artifacts,
+                current_snapshot=outcome.chapter_memory_snapshot,
+                compiled_context_packet=outcome.compiled_context_packet,
+            ),
+        )
+        if outcome.auto_commit_memory:
+            service.memory_service.commit_approved_packet_memory(
+                document_id=context_packet.document_id,
+                chapter_id=context_packet.chapter_id,
+                translation_run_id=outcome.artifacts.translation_run.id,
+            )
+
+
+class ModelIssueSupersedeHook:
+    """A new translation of a packet closes the Reviewer Agent's open findings on it.
+
+    The finding was about text that no longer exists. Human-decided issues
+    are left alone; if the new text still has the problem, the next model
+    review reports it again and the ledger reopens (and eventually escalates)
+    the same issue.
+    """
+
+    def after_packet_translated(self, service: TranslationService, outcome: PacketTranslationOutcome) -> None:
+        from sqlalchemy import select
+
+        from book_agent.domain.enums import Detector, IssueStatus
+        from book_agent.domain.models.review import ReviewIssue
+        from book_agent.infra.repositories.review import ReviewRepository
+
+        session = service.repository.session
+        sentence_ids = [sentence.id for sentence in outcome.bundle.current_sentences]
+        if not sentence_ids:
+            return
+        stale = list(
+            session.scalars(
+                select(ReviewIssue).where(
+                    ReviewIssue.sentence_id.in_(sentence_ids),
+                    ReviewIssue.detector == Detector.MODEL,
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                    ReviewIssue.decided_by.is_(None),
+                )
+            ).all()
+        )
+        if not stale:
+            return
+        attempt = outcome.artifacts.translation_run.attempt
+        ReviewRepository(session).sync_issues(
+            [],
+            [],
+            owned_existing=stale,
+            resolution_note=f"Translation updated (attempt {attempt}); awaiting the next model review.",
+            actor_id="services.translation",
+        )
+

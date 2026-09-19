@@ -1,0 +1,975 @@
+{
+ "author": "Test Author",
+ "chapters": [
+  {
+   "blocks": [
+    {
+     "anchor": "p1-b1",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Preface",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 1,
+      "recovery_flags": [
+       "page_family_frontmatter"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          147.812,
+          124.578
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "Preface",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b2",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Preface",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 2,
+      "recovery_flags": [
+       "page_family_frontmatter"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          407.472,
+          175.588
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "This preface explains why the book begins with mental models.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p1-b3",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "frontmatter",
+      "pdf_page_family_heading": "Preface",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 3,
+      "recovery_flags": [
+       "page_family_frontmatter"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 1
+        }
+       ]
+      },
+      "source_page_end": 1,
+      "source_page_start": 1,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/1",
+     "style_hints": {},
+     "text": "1",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-001",
+   "href": "pdf://page/1",
+   "metadata": {
+    "pdf_section_family": "frontmatter",
+    "source_page_end": 1,
+    "source_page_start": 1,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Preface"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p2-b4",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 1,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 4,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          344.668,
+          124.578
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "Chapter 1 Durable Products",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b5",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 5,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          359.472,
+          175.588
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "Great products keep compounding trust as they scale.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p2-b6",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "body",
+      "pdf_page_family_source": "body",
+      "reading_order_index": 6,
+      "recovery_flags": [],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 2
+        }
+       ]
+      },
+      "source_page_end": 2,
+      "source_page_start": 2,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/2",
+     "style_hints": {},
+     "text": "2",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-002",
+   "href": "pdf://page/2",
+   "metadata": {
+    "pdf_section_family": "body",
+    "source_page_end": 2,
+    "source_page_start": 2,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Chapter 1 Durable Products"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p3-b7",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 1,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "appendix",
+      "pdf_page_family_heading": "Appendix A Metrics",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 7,
+      "recovery_flags": [
+       "page_family_appendix"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          261.508,
+          124.578
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "Appendix A Metrics",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p3-b8",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "appendix",
+      "pdf_page_family_heading": "Appendix A Metrics",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 8,
+      "recovery_flags": [
+       "page_family_appendix"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          424.176,
+          175.588
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "Retention, payback period, and margin expansion matter together.",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p3-b9",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "appendix",
+      "pdf_page_family_heading": "Appendix A Metrics",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 9,
+      "recovery_flags": [
+       "page_family_appendix"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 3
+        }
+       ]
+      },
+      "source_page_end": 3,
+      "source_page_start": 3,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/3",
+     "style_hints": {},
+     "text": "3",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-003",
+   "href": "pdf://page/3",
+   "metadata": {
+    "pdf_section_family": "appendix",
+    "source_page_end": 3,
+    "source_page_start": 3,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Appendix A Metrics"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p4-b10-s1",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_heading_recovery_source": "embedded_references_heading_recovered",
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 10,
+      "recovery_flags": [
+       "page_family_references",
+       "embedded_references_heading_recovered"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          184.486,
+          124.578
+         ],
+         "page_number": 4
+        },
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          314.1,
+          175.588
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "References",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p4-b10-s2",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_heading_recovery_source": "embedded_references_heading_recovered",
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 11,
+      "recovery_flags": [
+       "page_family_references",
+       "embedded_references_heading_recovered"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          184.486,
+          124.578
+         ],
+         "page_number": 4
+        },
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          314.1,
+          175.588
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "Hamilton, J. Compounding Companies. 2024",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p4-b12",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "references",
+      "pdf_page_family_heading": "References",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 12,
+      "recovery_flags": [
+       "page_family_references"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 4
+        }
+       ]
+      },
+      "source_page_end": 4,
+      "source_page_start": 4,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/4",
+     "style_hints": {},
+     "text": "4",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-004",
+   "href": "pdf://page/4",
+   "metadata": {
+    "pdf_section_family": "references",
+    "source_page_end": 4,
+    "source_page_start": 4,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "References"
+  },
+  {
+   "blocks": [
+    {
+     "anchor": "p5-b13",
+     "block_type": "heading",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "heading_level": 2,
+      "nontranslatable_reason": null,
+      "pdf_block_role": "heading",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "index",
+      "pdf_page_family_heading": "Index",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 13,
+      "recovery_flags": [
+       "page_family_index"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          94.35,
+          125.812,
+          124.578
+         ],
+         "page_number": 5
+        }
+       ]
+      },
+      "source_page_end": 5,
+      "source_page_start": 5,
+      "translatable": true
+     },
+     "ordinal": 1,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/5",
+     "style_hints": {},
+     "text": "Index",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p5-b14",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": null,
+      "pdf_block_role": "body",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "index",
+      "pdf_page_family_heading": "Index",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 14,
+      "recovery_flags": [
+       "page_family_index"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          72.0,
+          159.1,
+          436.86,
+          175.588
+         ],
+         "page_number": 5
+        }
+       ]
+      },
+      "source_page_end": 5,
+      "source_page_start": 5,
+      "translatable": true
+     },
+     "ordinal": 2,
+     "parse_confidence": 0.96,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/5",
+     "style_hints": {},
+     "text": "advantage, durable products, retention loops, and switching costs 12",
+     "translatability": "translate_all"
+    },
+    {
+     "anchor": "p5-b15",
+     "block_type": "paragraph",
+     "confidence_breakdown": {
+      "sanity_ok": true
+     },
+     "metadata": {
+      "nontranslatable_reason": "pdf_footer",
+      "pdf_block_role": "footer",
+      "pdf_font_names": [
+       "Helvetica"
+      ],
+      "pdf_page_family": "index",
+      "pdf_page_family_heading": "Index",
+      "pdf_page_family_source": "heading",
+      "reading_order_index": 15,
+      "recovery_flags": [
+       "page_family_index"
+      ],
+      "source_bbox_json": {
+       "regions": [
+        {
+         "bbox": [
+          298.0,
+          795.25,
+          303.56,
+          808.99
+         ],
+         "page_number": 5
+        }
+       ]
+      },
+      "source_page_end": 5,
+      "source_page_start": 5,
+      "translatable": false
+     },
+     "ordinal": 3,
+     "parse_confidence": 0.98,
+     "provenance": "text_layer",
+     "source_path": "pdf://page/5",
+     "style_hints": {},
+     "text": "5",
+     "translatability": "translate_none"
+    }
+   ],
+   "chapter_id": "pdf-chapter-005",
+   "href": "pdf://page/5",
+   "metadata": {
+    "pdf_section_family": "index",
+    "source_page_end": 5,
+    "source_page_start": 5,
+    "source_path": "<root>/fixture.pdf"
+   },
+   "title": "Index"
+  }
+ ],
+ "language": "en",
+ "metadata": {
+  "author": "Test Author",
+  "document_title_resolution_source": "extraction_metadata",
+  "format": "PDF 1.4",
+  "outline_entry_count": 0,
+  "pdf_extractor": "pymupdf",
+  "pdf_page_evidence": {
+   "extractor_kind": "pymupdf",
+   "page_count": 5,
+   "pdf_outline_entries": [],
+   "pdf_pages": [
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_frontmatter",
+      "page_family_source_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "frontmatter",
+     "page_family_heading": "Preface",
+     "page_family_source": "heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 1,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [
+      "page_family_frontmatter"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "body",
+     "page_family_heading": null,
+     "page_family_source": "body",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 2,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_appendix",
+      "page_family_source_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "appendix",
+     "page_family_heading": "Appendix A Metrics",
+     "page_family_source": "heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 3,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [
+      "page_family_appendix"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_references",
+      "page_family_source_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "references",
+     "page_family_heading": "References",
+     "page_family_source": "heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 4,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [
+      "embedded_references_heading_recovered",
+      "page_family_references"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    },
+    {
+     "appendix_nested_subheadings": [],
+     "backmatter_cue": null,
+     "backmatter_cue_source": null,
+     "content_family": null,
+     "extraction_intent": "native_text",
+     "extraction_intent_reasons": [
+      "page_family_index",
+      "page_family_source_heading",
+      "text_preserving"
+     ],
+     "extraction_intent_scope": "page",
+     "has_strong_heading": true,
+     "is_toc_page": false,
+     "layout_signals": [],
+     "layout_suspect": false,
+     "matched_footnote_count": 0,
+     "max_footnote_segment_count": 0,
+     "orphan_footnote_count": 0,
+     "page_family": "index",
+     "page_family_heading": "Index",
+     "page_family_source": "heading",
+     "page_layout_reasons": [],
+     "page_layout_risk": "low",
+     "page_number": 5,
+     "raw_block_count": 3,
+     "raw_image_block_count": 0,
+     "recovered_block_count": 3,
+     "recovery_flags": [
+      "page_family_index"
+     ],
+     "relocated_footnote_count": 0,
+     "role_counts": {
+      "body": 1,
+      "footer": 1,
+      "heading": 1
+     },
+     "toc_entries": []
+    }
+   ],
+   "schema_version": 1
+  },
+  "pdf_profile": {
+   "academic_paper_candidate": false,
+   "average_span_count": 1.0,
+   "average_text_density": 71.4,
+   "extractor_kind": "pymupdf",
+   "fragment_page_count": 0,
+   "has_extractable_text": true,
+   "layout_risk": "low",
+   "multi_column_page_count": 0,
+   "ocr_required": false,
+   "outline_present": false,
+   "page_count": 5,
+   "pdf_kind": "text_pdf",
+   "recovery_lane": null,
+   "suspicious_page_numbers": [],
+   "trailing_reference_page_count": 1
+  },
+  "title": "Section Family Sample"
+ },
+ "title": "Section Family Sample"
+}

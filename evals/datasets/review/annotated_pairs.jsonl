@@ -1,0 +1,12 @@
+{"id": "r01", "source": "Prices rose sharply after the announcement.", "target": "公告发布后价格大幅上涨。", "expected": []}
+{"id": "r02", "source": "Prices rose sharply after the announcement.", "target": "公告发布后价格大幅下跌。", "expected": ["MISTRANSLATION_SEMANTIC"]}
+{"id": "r03", "source": "Do not enter a trade without a plan.", "target": "没有计划就进入交易。", "expected": ["MISTRANSLATION_SEMANTIC"]}
+{"id": "r04", "source": "The indicator lags because it averages past closes, and it therefore reacts slowly.", "target": "该指标滞后，因为它对过去的收盘价求平均。", "expected": ["OMISSION"]}
+{"id": "r05", "source": "Volume confirms the move.", "target": "成交量确认了这一走势。", "expected": []}
+{"id": "r06", "source": "It is important to note that the trend is your friend.", "target": "重要的是要注意到趋势是你的朋友这件事情。", "expected": ["STYLE_DRIFT"]}
+{"id": "r07", "source": "The stop loss was triggered at 42.", "target": "止损在42处被触发。", "expected": []}
+{"id": "r08", "source": "The stop loss was triggered at 42.", "target": "止损在24处被触发。", "expected": ["MISTRANSLATION_SEMANTIC"]}
+{"id": "r09", "source": "Because the market gapped down, the order filled below the stop.", "target": "订单在止损价下方成交，因此市场跳空低开。", "expected": ["MISTRANSLATION_LOGIC"]}
+{"id": "r10", "source": "Risk no more than one percent of capital per trade.", "target": "每笔交易的风险不超过资金的百分之一。", "expected": []}
+{"id": "r11", "source": "Risk no more than one percent of capital per trade.", "target": "每笔交易的风险不少于资金的百分之一。", "expected": ["MISTRANSLATION_SEMANTIC"]}
+{"id": "r12", "source": "Momentum fades when fewer stocks join the rally.", "target": "当参与上涨的股票减少时，动量会减弱。", "expected": []}

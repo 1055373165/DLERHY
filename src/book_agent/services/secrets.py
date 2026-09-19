@@ -3,9 +3,11 @@
 Design:
 - Provider API keys live in DB as Fernet ciphertext (bytes).
 - The Fernet key is derived from ``BOOK_AGENT_SECRET_KEY`` (urlsafe-b64,
-  32 bytes after decode). If the env var is missing on first use we
-  generate one, write it to the project ``.env``, and warn the user to
-  back it up. Losing the key only forces the user to re-enter API keys.
+  32 bytes after decode). In dev/smoke/e2e scopes a missing key is
+  generated on first use, written to the project ``.env`` and logged with a
+  backup warning; prod scope refuses to start without one (a generated key
+  would die with the container). Losing the key only forces the user to
+  re-enter API keys.
 - Echo provider rows have no key; encrypt/decrypt are no-ops on empty
   inputs to keep the service layer simple.
 """
@@ -64,6 +66,31 @@ def _read_secret_from_dotenv() -> str | None:
     return None
 
 
+def _generation_allowed() -> bool:
+    """Only development-style scopes may invent a key and write it to .env.
+
+    In production the key must be provisioned (and backed up) by the
+    operator: a generated key would live in the container's writable layer
+    and vanish with it, taking every stored provider API key along.
+    """
+    from book_agent.core.config import AppScope, get_settings
+
+    return get_settings().app_scope != AppScope.PROD
+
+
+def require_configured_secret_key() -> None:
+    """Fail fast at startup when the scope forbids generating a key and none is set."""
+    if _generation_allowed():
+        return
+    raw = os.environ.get(_SECRET_ENV_VAR, "").strip() or _read_secret_from_dotenv()
+    if not raw:
+        raise SecretKeyError(
+            f"{_SECRET_ENV_VAR} is not set. app_scope=prod refuses to generate one; "
+            "create it with: python -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\" and keep a backup."
+        )
+
+
 def _ensure_secret_key() -> str:
     raw = os.environ.get(_SECRET_ENV_VAR)
     if raw and raw.strip():
@@ -74,6 +101,10 @@ def _ensure_secret_key() -> str:
     if from_file:
         os.environ[_SECRET_ENV_VAR] = from_file
         return from_file
+    if not _generation_allowed():
+        raise SecretKeyError(
+            f"{_SECRET_ENV_VAR} is not set and app_scope=prod refuses to generate one."
+        )
     generated = Fernet.generate_key().decode("ascii")
     os.environ[_SECRET_ENV_VAR] = generated
     try:

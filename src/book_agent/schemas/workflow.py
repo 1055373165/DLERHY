@@ -70,7 +70,6 @@ class DocumentSummaryResponse(BaseSchema):
     latest_run_status: str | None = None
     latest_run_current_stage: str | None = None
     latest_run_updated_at: str | None = None
-    runtime_v2_context: dict[str, Any] | None = None
     chapters: list[ChapterSummaryResponse] = Field(default_factory=list)
 
 
@@ -96,7 +95,6 @@ class DocumentHistoryEntryResponse(BaseSchema):
     latest_run_current_stage: str | None = None
     latest_run_completed_work_item_count: int | None = None
     latest_run_total_work_item_count: int | None = None
-    latest_run_runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentHistoryPageResponse(BaseSchema):
@@ -210,6 +208,7 @@ class ExportDocumentRequest(BaseSchema):
         "merged_markdown",
         "rebuilt_epub",
         "rebuilt_pdf",
+        "zh_epub",
     ]
     auto_execute_followup_on_gate: bool = False
     max_auto_followup_attempts: int = Field(default=3, ge=1)
@@ -248,7 +247,6 @@ class ExportDocumentResponse(BaseSchema):
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list[ExportAutoFollowupExecutionResponse] = Field(default_factory=list)
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class ExportAutoFollowupSummaryResponse(BaseSchema):
@@ -637,7 +635,6 @@ class ExportRecordSummaryResponse(BaseSchema):
     translation_usage_highlights: TranslationUsageHighlightsResponse | None = None
     export_auto_followup_summary: ExportAutoFollowupSummaryResponse | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummaryResponse | None = None
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class DocumentExportDashboardResponse(BaseSchema):
@@ -691,7 +688,6 @@ class ExportDetailResponse(BaseSchema):
     export_auto_followup_summary: ExportAutoFollowupSummaryResponse | None = None
     export_time_misalignment_counts: ExportMisalignmentCountSummaryResponse | None = None
     version_evidence_summary: ExportVersionEvidenceSummaryResponse
-    runtime_v2_context: dict[str, Any] | None = None
 
 
 class RebuiltSnapshotEvidenceResponse(BaseSchema):
@@ -718,3 +714,108 @@ class ExecuteActionResponse(BaseSchema):
     rerun_translation_run_ids: list[str] = Field(default_factory=list)
     issue_resolved: bool | None = None
     recheck_issue_count: int | None = None
+
+
+class ExportVersionResponse(BaseSchema):
+    version: int
+    file_path: str
+    manifest_path: str | None = None
+    content_sha256: str | None = None
+    byte_count: int | None = None
+    created_at: str | None = None
+
+
+class ExportVersionHistoryResponse(BaseSchema):
+    document_id: str
+    export_id: str
+    export_type: str
+    current_version: int
+    versions: list[ExportVersionResponse] = Field(default_factory=list)
+
+
+class RecoverySkillResponse(BaseSchema):
+    name: str
+    title: str
+    description: str
+    passes: list[str] = Field(default_factory=list)
+    default_enabled: bool
+    enabled: bool
+
+
+class RecoverySkillsResponse(BaseSchema):
+    document_id: str
+    applies_to: str
+    skills: list[RecoverySkillResponse] = Field(default_factory=list)
+
+
+class RecoverySkillsUpdateRequest(BaseSchema):
+    skills: dict[str, bool] = Field(default_factory=dict)
+
+
+class CostEstimateResponse(BaseSchema):
+    document_id: str
+    packet_count: int
+    source_tokens: int
+    token_in: int
+    token_out: int
+    token_in_range: tuple[int, int]
+    token_out_range: tuple[int, int]
+    breakdown: dict[str, dict[str, int]]
+    cost_usd: float | None = None
+    cost_usd_range: tuple[float, float] | None = None
+    price_source: str | None = None
+    input_cost_per_1m_tokens: float | None = None
+    output_cost_per_1m_tokens: float | None = None
+    # The ratios assume thinking is off; with it on, output runs well above the estimate.
+    thinking_may_inflate_output: bool = False
+    notes: list[str] = Field(default_factory=list)
+
+
+class StructureEditRequest(BaseSchema):
+    kind: Literal["relabel_block", "split_block", "merge_blocks", "link_caption"]
+    reason: str = Field(min_length=1, max_length=2000)
+    # relabel_block
+    block_id: str | None = None
+    block_type: str | None = None
+    heading_level: int | None = Field(default=None, ge=1, le=6)
+    # split_block (with block_id)
+    second_part_starts_with: str | None = None
+    # merge_blocks
+    first_block_id: str | None = None
+    second_block_id: str | None = None
+    # link_caption
+    caption_block_id: str | None = None
+    artifact_block_id: str | None = None
+
+
+class StructureEditResponse(BaseSchema):
+    edit_id: str
+    kind: str
+    status: str
+    block_ids: list[str] = Field(default_factory=list)
+    args: dict[str, Any] = Field(default_factory=dict)
+    actor_id: str
+    reason: str | None = None
+    turn_id: str | None = None
+    replay_of_edit_id: str | None = None
+    parse_revision_version: int | None = None
+    retranslate_packet_count: int = 0
+    created_at: str | None = None
+
+
+class StructureEditListResponse(BaseSchema):
+    document_id: str
+    edits: list[StructureEditResponse]
+
+
+class StructureRefreshResponse(BaseSchema):
+    document_id: str
+    source_type: str
+    refreshed_chapter_count: int
+    refreshed_block_count: int
+    parse_revision_version: int | None = None
+    retired_sentence_count: int = 0
+    created_sentence_count: int = 0
+    carried_ratio: float | None = None
+    retranslate_packet_count: int = 0
+
