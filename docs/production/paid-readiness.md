@@ -48,9 +48,12 @@
 |---|---|---|
 | API key、角色、组织隔离、OIDC | ✅ | `tests/test_api_auth.py`、`test_oidc.py`、`test_org_tenancy.py` |
 | 指标与链路追踪 | ✅ | `/metrics`、OpenTelemetry（`tests/test_metrics.py`、`test_tracing.py`） |
-| Docker 镜像构建验证 | 🔒 | 本机构建曾与 Docker 守护进程崩溃同时发生，需用户同意后再试 |
+| Docker 镜像构建验证 | ✅ | 2026-09-19 经用户同意构建成功（`book-agent:readiness-check`，非 root 用户 `bookagent`，端口 8000）；按约定只构建、未启动容器 |
+| 镜像内的扫描版 PDF OCR | 🟡 | 镜像没有 `uv`，OCR（Surya，运行时下载数 GB 模型）不可用；现在上传扫描版会明确提示（422），不再 500。要在镜像里支持，需要装 uv 并预热模型缓存，镜像会大很多，是否要做需决定 |
+| 镜像依赖可复现 | 🟡 | `.dockerignore` 排除了 `uv.lock`，镜像按版本范围装最新依赖；建议改为按锁文件安装（需再构建一次验证） |
 | 按组织、按书的月度用量明细（计费依据） | ✅ | `GET /v1/orgs/current/usage?month=&format=csv`，与月度预算同一账本、合计一致；侧栏「下载本月用量明细」；`tests/test_org_tenancy.py` |
-| 支付与套餐（收费渠道） | 🔒 | 需用户决定定价方式（按书 / 按用量 / 预付 / 订阅）与支付服务商；用量明细已可作为任一方式的计费依据 |
+| 收费方式：预付额度 | ✅ | 用户 2026-09-19 选定。`services/prepaid_credit.py`、迁移 0045：充值台账（支付单号幂等）、按用量 × `BOOK_AGENT_BILLING_PRICE_MULTIPLIER` 扣费、余额用完拒绝启动并暂停运行中的（`billing.credit_exhausted`）、预付组织必须使用有单价的服务商；`POST /v1/orgs/{id}/credit`、`book-agent add-org-credit`；侧栏余额、开始前余额不足提示；`tests/test_prepaid_credit.py`，Postgres 16 上验证迁移与扣费 |
+| 在线支付渠道（接收付款后自动充值） | 🔒 | 需用户选定支付服务商（如 Stripe、支付宝、微信支付）；接入时由支付回调调用 `POST /v1/orgs/{id}/credit`，以支付单号作 `reference` 防重复 |
 | 删除书稿时同时删除其文件（上传原件、导出、图片、独占的 blob） | ✅ | `services/document_files.py`；`tests/test_document_delete_files.py` |
 | 上传处的版权提示 | ✅ | 工作台上传按钮下方提示只上传有权翻译的书稿 |
 | 用户协议、版权声明 | 🔒 草案已备 | `docs/legal/terms-draft.md`：条款与当前实现逐条对应，方括号处（计费、退款、运营主体、适用法律）待用户决定并经法律审阅 |
