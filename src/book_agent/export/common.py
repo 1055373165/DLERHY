@@ -306,7 +306,8 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # export stamped with an older version answer 404, and clients (the library UI) re-export first.
 # 2: Chinese chapter labels and book titles, chapters with digit-leading titles, reader EPUB.
 # 3: bilingual source text shown open under 原文; 回到顶部 instead of "Back to top".
-EXPORT_RENDERER_VERSION = 3
+# 4: the Markdown book has no translation statistics and a Chinese author line.
+EXPORT_RENDERER_VERSION = 4
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",

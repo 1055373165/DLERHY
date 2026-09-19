@@ -640,17 +640,6 @@ class ExportService:
             lines.append(("最近一次调用", str(latest_run_at)))
         return lines
 
-    def _build_usage_summary_markdown(self, runs: list[object]) -> list[str]:
-        rows = self._format_usage_summary_lines(runs)
-        if not rows:
-            return []
-        lines: list[str] = ["> **翻译统计**  "]
-        for index, (label, value) in enumerate(rows):
-            suffix = "  " if index < len(rows) - 1 else ""
-            lines.append(f"> - {label}: {value}{suffix}")
-        lines.append("")
-        return lines
-
     def _build_usage_summary_html(self, runs: list[object]) -> str:
         rows = self._format_usage_summary_lines(runs)
         if not rows:
@@ -1399,14 +1388,10 @@ class ExportService:
         # (title + author). No "Merged Reading Edition" kicker, no
         # "Document Summary" bullet list, no chapter TOC. Synthetic
         # export metadata doesn't belong in a reader-facing file.
+        # Translation statistics stay in the app and the usage statement.
         lines: list[str] = [f"# {title}", ""]
         if author:
-            lines.extend([f"_Author: {author}_", ""])
-        usage_lines = self._build_usage_summary_markdown(
-            evidence.collect_document_translation_runs(bundle)
-        )
-        if usage_lines:
-            lines.extend(usage_lines)
+            lines.extend([f"_作者：{author}_", ""])
 
         for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
             lines.extend(

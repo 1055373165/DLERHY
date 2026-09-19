@@ -463,6 +463,13 @@ def download_document_export(
     )
 
 
+def _pdf_renderer_installed() -> bool:
+    """PDF export prints the merged HTML with Playwright's Chromium."""
+    import importlib.util
+
+    return importlib.util.find_spec("playwright") is not None
+
+
 def _recovery_skills_response(document) -> RecoverySkillsResponse:
     from book_agent.domain.structure import recovery_skills as registry
 
@@ -849,6 +856,13 @@ def export_document(
     request: Request,
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
+    if payload.export_type == "rebuilt_pdf" and not _pdf_renderer_installed():
+        # Refuse up front instead of enqueueing a run that can only fail.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="当前部署没有安装 PDF 渲染组件（Playwright 与 Chromium），暂时不能生成 PDF；"
+            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试。",
+        )
     return _enqueue_document_run(
         request,
         session,

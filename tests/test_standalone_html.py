@@ -205,6 +205,12 @@ class DownloadTests(unittest.TestCase):
         refused = self.client.get(f"{base}?export_type=review_package&package=preview")
         self.assertEqual(refused.status_code, 422)
 
+    def test_pdf_export_is_refused_with_a_reason_when_the_renderer_is_missing(self) -> None:
+        with patch("importlib.util.find_spec", return_value=None):
+            response = self.client.post(f"/v1/documents/{self.document_id}/export", json={"export_type": "rebuilt_pdf"})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("PDF", response.json()["detail"])
+
     def test_the_chinese_book_downloads_with_a_table_of_contents_and_without_run_statistics(self) -> None:
         merged = self._get(f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html").text
         self.assertIn("class='reader-toc'", merged)
