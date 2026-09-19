@@ -90,6 +90,12 @@ class RunOwnershipTests(_Base):
 
         self.assertEqual(first._acquire_run_ownership([run_id]), [run_id])
         self.assertEqual(second._acquire_run_ownership([run_id]), [])
+        # Taking ownership is not progress: updated_at (read by stale-run detection) stays put.
+        with self.session_factory() as session:
+            before_updated = session.get(DocumentRun, run_id).updated_at
+        first._acquire_run_ownership([run_id])
+        with self.session_factory() as session:
+            self.assertEqual(session.get(DocumentRun, run_id).updated_at, before_updated)
         # Renewal by the owner succeeds and pushes the expiry forward.
         _, expires_before = self._owner(run_id)
         self.assertEqual(first._acquire_run_ownership([run_id]), [run_id])

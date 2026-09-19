@@ -454,7 +454,13 @@ class DocumentRunExecutor:
                             DocumentRun.executor_lease_expires_at < now,
                         ),
                     )
-                    .values(executor_owner=self.instance_id, executor_lease_expires_at=expires_at)
+                    # Ownership is bookkeeping, not progress: keep updated_at, which stale-run
+                    # detection reads (the column's onupdate would otherwise bump it every tick).
+                    .values(
+                        executor_owner=self.instance_id,
+                        executor_lease_expires_at=expires_at,
+                        updated_at=DocumentRun.updated_at,
+                    )
                     .execution_options(synchronize_session=False)
                 )
                 if result.rowcount == 1:
@@ -467,7 +473,7 @@ class DocumentRunExecutor:
                 session.execute(
                     update(DocumentRun)
                     .where(DocumentRun.executor_owner == self.instance_id)
-                    .values(executor_owner=None, executor_lease_expires_at=None)
+                    .values(executor_owner=None, executor_lease_expires_at=None, updated_at=DocumentRun.updated_at)
                     .execution_options(synchronize_session=False)
                 )
         except Exception:
