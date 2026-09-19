@@ -24,7 +24,9 @@
 > Kill the process mid-run — restart it — translation resumes from the exact packet it left off.
 > Change the LLM provider by editing **one** environment variable.
 
-One required variable: `OPENAI_API_KEY`. Everything else has sane defaults.
+One required variable: `OPENAI_API_KEY`. Everything else has sane defaults. Providers can also be added, priced and switched in the UI (「服务商」page) without a restart.
+
+中文使用指南（配服务商、上传、费用预估、暂停原因、下载格式）：[docs/user-guide.md](docs/user-guide.md)
 
 ---
 
