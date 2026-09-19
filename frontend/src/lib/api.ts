@@ -863,7 +863,7 @@ export async function downloadDocumentExport(
   const fallbackExtension: Record<DocumentDownloadType, string> = {
     merged_markdown: ".md",
     merged_html: ".html",
-    bilingual_html: ".zip",
+    bilingual_html: ".html",
     review_package: ".zip",
   };
   return saveBinaryResponse(response, `book-agent-${exportType}${fallbackExtension[exportType]}`);
@@ -878,7 +878,7 @@ export async function downloadChapterExport(
       chapterId
     )}/exports/download?export_type=bilingual_html`
   );
-  return saveBinaryResponse(response, `${chapterId}-bilingual_html.zip`);
+  return saveBinaryResponse(response, `${chapterId}-bilingual_html.html`);
 }
 
 export async function listApprovals(documentId: string, status: "pending" | "all" = "pending"): Promise<Approval[]> {

@@ -4,7 +4,6 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -412,14 +411,18 @@ def download_document_chapter_export(
     chapter_id: str,
     request: Request,
     export_type: ExportType = Query(default=ExportType.BILINGUAL_HTML),
+    package: Literal["single", "zip"] = Query(
+        default="single", description="single: one HTML with images embedded; zip: the stored files with their assets."
+    ),
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     return chapter_export_response(
         _workflow_service(request, session).export_repository,
         document_id,
         chapter_id,
         export_type,
         artifact_roots=_artifact_roots(request),
+        package=package,
     )
 
 
@@ -428,13 +431,18 @@ def download_document_export(
     document_id: str,
     request: Request,
     export_type: ExportType = Query(...),
+    package: Literal["single", "zip"] = Query(
+        default="single",
+        description="single: one HTML file (images embedded; bilingual assembled into one book); zip: the stored files.",
+    ),
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     return document_export_response(
         _workflow_service(request, session).export_repository,
         document_id,
         export_type,
         artifact_roots=_artifact_roots(request),
+        package=package,
     )
 
 

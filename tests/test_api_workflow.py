@@ -1824,7 +1824,8 @@ class ApiWorkflowTests(unittest.TestCase):
 
         download = self.client.get(
             f"/v1/documents/{document_id}/exports/download",
-            params={"export_type": "bilingual_html"},
+            # The default is one assembled HTML book (tests/test_standalone_html.py); the zip stays on request.
+            params={"export_type": "bilingual_html", "package": "zip"},
         )
         self.assertEqual(download.status_code, 200)
         self.assertIn("application/zip", download.headers["content-type"])
@@ -2800,7 +2801,7 @@ class ApiWorkflowTests(unittest.TestCase):
 
         download = self.client.get(
             f"/v1/documents/{document_id}/exports/download",
-            params={"export_type": "merged_html"},
+            params={"export_type": "merged_html", "package": "zip"},
         )
         self.assertEqual(download.status_code, 200)
         self.assertIn("application/zip", download.headers["content-type"])

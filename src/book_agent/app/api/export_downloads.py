@@ -19,13 +19,35 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
 from book_agent.domain.document_titles import document_display_title, safe_title_for_filename
 from book_agent.domain.enums import ExportStatus, ExportType
 from book_agent.infra.repositories.export import ExportRepository
 from book_agent.infra.storage.blobs import UNRECOVERABLE_SCHEME
+
+# Download packaging: one self-contained HTML file (images embedded) or the stored files zipped.
+PACKAGE_SINGLE = "single"
+PACKAGE_ZIP = "zip"
+SINGLE_FILE_TYPES = frozenset({ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML})
+
+
+def _standalone_html(file_path: Path, canonical_path: Path) -> str | None:
+    """The export with its local assets embedded, or None when an asset is missing (serve the zip then)."""
+    from book_agent.export.standalone import drop_unused_katex, inline_local_assets, local_references
+
+    document = file_path.read_text(encoding="utf-8")
+    document = drop_unused_katex(inline_local_assets(document, canonical_path.parent))
+    return None if local_references(document) else document
+
+
+def _html_response(document: str, filename: str) -> Response:
+    return Response(
+        content=document.encode("utf-8"),
+        media_type="text/html; charset=utf-8",
+        headers={"content-disposition": content_disposition(filename)},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,8 +360,9 @@ def chapter_export_response(
     export_type: ExportType,
     *,
     artifact_roots: tuple[Path, ...],
-) -> FileResponse:
-    """Serve a chapter's latest successful export, zipped with its sidecar assets if any."""
+    package: str = PACKAGE_SINGLE,
+) -> Response:
+    """Serve a chapter's latest successful export: one HTML file with its images embedded, or zipped with its assets."""
     chapter_bundle = export_repository.load_chapter_bundle(chapter_id)
     try:
         records = export_repository.list_document_exports_filtered(
@@ -376,6 +399,15 @@ def chapter_export_response(
     canonical_path = _canonical_artifact_path(
         chapter_record.file_path, roots=artifact_roots, document_id=document_id
     ) or file_path
+    if package == PACKAGE_SINGLE and export_type in SINGLE_FILE_TYPES and canonical_suffix.lower() == ".html":
+        document = _standalone_html(file_path, canonical_path)
+        if document is not None:
+            return _html_response(
+                document,
+                _chapter_export_download_filename(
+                    chapter_bundle.document, chapter_bundle.chapter, export_type, file_suffix=".html"
+                ),
+            )
     archive_inputs = [
         ArchiveInput(path=file_path, archive_name=_preferred_archive_name(chapter_record.file_path, file_path)),
         *[
@@ -422,14 +454,20 @@ def document_export_response(
     export_type: ExportType,
     *,
     artifact_roots: tuple[Path, ...],
-) -> FileResponse:
-    """Serve a document's latest successful export, zipped with its sidecar assets if any."""
+    package: str = PACKAGE_SINGLE,
+) -> Response:
+    """Serve a document's latest successful export.
+
+    HTML exports come as one self-contained file by default (images embedded;
+    the bilingual version assembled from the chapter exports into one book).
+    ``package=zip`` returns the stored files and their assets folder instead.
+    """
     try:
         document = export_repository.get_document(document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if export_type == ExportType.BILINGUAL_HTML:
-        return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots)
+        return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots, package=package)
     lookup_type = export_type
 
     try:
@@ -487,6 +525,11 @@ def document_export_response(
         primary_record.file_path, roots=artifact_roots, document_id=document_id
     ) or file_path
 
+    if package == PACKAGE_SINGLE and export_type in SINGLE_FILE_TYPES and ext.lower() == ".html":
+        document_html = _standalone_html(file_path, canonical_path)
+        if document_html is not None:
+            return _html_response(document_html, main_filename)
+
     archive_inputs: list[ArchiveInput] = []
     seen_paths: set[str] = set()
     _append_archive_input(
@@ -534,8 +577,9 @@ def _bilingual_document_response(
     document: Any,
     *,
     artifact_roots: tuple[Path, ...],
-) -> FileResponse:
-    """Zip the latest successful bilingual export of every chapter, in chapter order."""
+    package: str = PACKAGE_SINGLE,
+) -> Response:
+    """The bilingual book: one HTML assembled from every chapter's latest export, or the chapter files zipped."""
     records = export_repository.list_document_exports_filtered(
         document.id,
         export_type=ExportType.BILINGUAL_HTML,
@@ -554,6 +598,12 @@ def _bilingual_document_response(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No successful bilingual_html chapter exports are available for download.",
         )
+
+    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
+    if package == PACKAGE_SINGLE:
+        book = _bilingual_book_html(document, chapters, latest_by_chapter, artifact_roots=artifact_roots)
+        if book is not None:
+            return _html_response(book, f"{book_title}-中英文对照.html")
 
     archive_inputs: list[ArchiveInput] = []
     seen_paths: set[str] = set()
@@ -586,7 +636,6 @@ def _bilingual_document_response(
                 preferred_archive_name=_sidecar_archive_name(sidecar_path, canonical_path),
             )
 
-    book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
     archive_folder = f"{book_title}-中英文对照"
     archive_path = build_export_archive(
         document.id,
@@ -600,3 +649,36 @@ def _bilingual_document_response(
         headers={"content-disposition": content_disposition(f"{archive_folder}.zip")},
         background=BackgroundTask(cleanup_path, archive_path),
     )
+
+
+def _bilingual_book_html(
+    document: Any,
+    chapters: list[Any],
+    latest_by_chapter: dict[str, Any],
+    *,
+    artifact_roots: tuple[Path, ...],
+) -> str | None:
+    from book_agent.export.standalone import BookChapter, assemble_bilingual_book, drop_unused_katex, local_references
+
+    parts: list[BookChapter] = []
+    for chapter in chapters:
+        record = latest_by_chapter[chapter.id]
+        assert_record_serviceable(record)
+        file_path = resolve_artifact_path(
+            record.file_path, roots=artifact_roots, document_id=document.id, content_sha256=record.content_sha256
+        )
+        canonical_path = _canonical_artifact_path(record.file_path, roots=artifact_roots, document_id=document.id) or file_path
+        chapter_html = _standalone_html(file_path, canonical_path)
+        if chapter_html is None:
+            return None
+        title = getattr(chapter, "title_tgt", None) or getattr(chapter, "title_src", None) or f"第{chapter.ordinal}章"
+        parts.append(BookChapter(title=str(title), document=chapter_html))
+    display_title = document_display_title(document)
+    source_title = getattr(document, "title_src", None) or getattr(document, "title", None)
+    book = assemble_bilingual_book(
+        title=display_title,
+        subtitle=source_title if source_title and source_title != display_title else None,
+        chapters=parts,
+    )
+    book = drop_unused_katex(book)
+    return None if local_references(book) else book
