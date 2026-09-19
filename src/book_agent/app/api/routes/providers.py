@@ -97,6 +97,7 @@ def create_provider(
         raise HTTPException(status_code=409, detail=str(exc))
     if payload.activate:
         _invalidate_app_worker(request)
+        _resume_runs_waiting_for_a_provider(request, session, record)
     return _to_read(record)
 
 
@@ -132,6 +133,7 @@ def update_provider(
         raise HTTPException(status_code=422, detail=str(exc))
     if record.is_active:
         _invalidate_app_worker(request)
+        _resume_runs_waiting_for_a_provider(request, session, record)
     return _to_read(record)
 
 
@@ -164,6 +166,7 @@ def activate_provider(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     _invalidate_app_worker(request)
+    _resume_runs_waiting_for_a_provider(request, session, record)
     return _to_read(record)
 
 
@@ -199,6 +202,41 @@ def get_active_provider(
     if record is None:
         return None
     return _to_read(record, viewer_scope=_scope(request))
+
+
+def _resume_runs_waiting_for_a_provider(request: Request, session: Session, record) -> None:
+    """Runs paused because no provider was configured continue once one is: nobody has to press resume."""
+    if record is None or not record.is_active:
+        return
+    from sqlalchemy import select
+
+    from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+    from book_agent.domain.enums import DocumentRunStatus
+    from book_agent.domain.models import Document
+    from book_agent.domain.models.ops import DocumentRun
+    from book_agent.infra.repositories.run_control import RunControlRepository
+    from book_agent.services.run_control import RunControlService
+
+    query = (
+        select(DocumentRun.id)
+        .join(Document, Document.id == DocumentRun.document_id)
+        .where(DocumentRun.status == DocumentRunStatus.PAUSED, DocumentRun.stop_reason == "provider.not_configured")
+    )
+    if record.org_id is not None:
+        # An organisation's own provider serves only its books; a shared one serves those without their own.
+        query = query.where(Document.org_id == record.org_id)
+    control = RunControlService(RunControlRepository(session))
+    resumed: list[str] = []
+    for run_id in session.scalars(query).all():
+        try:
+            control.resume_run(str(run_id), actor_id="system.provider_configured", note="a provider is configured now")
+            resumed.append(str(run_id))
+        except Exception:  # a budget or state check refused: leave it for the person
+            session.rollback()
+    session.commit()
+    executor = ensure_document_run_executor(request.app)
+    for run_id in resumed:
+        executor.wake(run_id)
 
 
 def _invalidate_app_worker(request: Request) -> None:
