@@ -8,8 +8,14 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.config import Settings
-from book_agent.workers.providers import OpenAICompatibleTranslationClient
-from book_agent.workers.translator import EchoTranslationWorker, LLMTranslationWorker, TranslationWorker
+from book_agent.workers.providers import OpenAICompatibleTranslationClient, ProviderNotConfigured
+from book_agent.workers.translator import (
+    EchoTranslationWorker,
+    LLMTranslationWorker,
+    TranslationTask,
+    TranslationWorker,
+    TranslationWorkerMetadata,
+)
 
 if TYPE_CHECKING:
     from book_agent.domain.models.provider_credential import ProviderCredential
@@ -86,11 +92,7 @@ def build_translation_worker(settings: Settings) -> TranslationWorker:
         )
     if backend == "openai_compatible":
         if not settings.translation_openai_api_key:
-            raise ValueError(
-                "Missing OpenAI-compatible provider credentials. "
-                "Set OPENAI_API_KEY in the project-root .env before using "
-                "the 'openai_compatible' translation backend."
-            )
+            raise ProviderNotConfigured()
         return _openai_compatible_worker(
             settings,
             api_key=settings.translation_openai_api_key,
@@ -124,7 +126,7 @@ def build_worker_from_credential(record: ProviderCredential, settings: Settings)
         raise ValueError(f"Unsupported provider_kind: {record.provider_kind}")
     api_key = decrypt_secret(record.api_key_ciphertext) or ""
     if not api_key:
-        raise ValueError(f"Provider '{record.name}' is openai_compatible but has no API key.")
+        raise ProviderNotConfigured(f"服务商「{record.name}」没有 API key：请在「服务商」页为它填入 API key。")
     return _openai_compatible_worker(
         settings,
         api_key=api_key,
@@ -159,9 +161,32 @@ def resolve_translation_worker(session: Session, settings: Settings, org_id: str
     from book_agent.services.provider_credentials import resolve_active_credential
 
     record = resolve_active_credential(session, settings, org_id)
-    if record is not None:
-        return build_worker_from_credential(record, settings)
-    return build_translation_worker(settings)
+    try:
+        if record is not None:
+            return build_worker_from_credential(record, settings)
+        return build_translation_worker(settings)
+    except ProviderNotConfigured as exc:
+        # Pages that only read the library still work; translating says what to set up.
+        return UnconfiguredTranslationWorker(str(exc))
+
+
+class UnconfiguredTranslationWorker:
+    """Stands in until a provider is configured: every translation raises ProviderNotConfigured."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        self._metadata = TranslationWorkerMetadata(
+            worker_name=self.__class__.__name__,
+            model_name="unconfigured",
+            prompt_version="unconfigured",
+            runtime_config={},
+        )
+
+    def metadata(self) -> TranslationWorkerMetadata:
+        return self._metadata
+
+    def translate(self, task: TranslationTask):
+        raise ProviderNotConfigured(self.reason)
 
 
 class TranslationWorkerProvider:

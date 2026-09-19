@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -20,6 +21,7 @@ import {
   statusLabel,
   translateProgress,
 } from "../../lib/workflow";
+import { stopReasonNote } from "../../lib/runStopReason";
 import s from "./RunsPage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
@@ -44,6 +46,7 @@ export function RunsPage() {
   const currentStage = currentStageKey(currentRun);
   const progress = translateProgress(currentDocument, currentRun);
   const pct = Math.round(progress.ratio * 100);
+  const stopNote = stopReasonNote(currentRun?.status, currentRun?.stop_reason);
 
   async function handleAction() {
     try {
@@ -123,6 +126,18 @@ export function RunsPage() {
                 Refresh
               </button>
             </div>
+
+            {stopNote && (
+              <div className={s.feedback} data-tone="error" role="status">
+                {stopNote.text}
+                {stopNote.link && (
+                  <>
+                    {" "}
+                    <Link to={stopNote.link.to}>{stopNote.link.label}</Link>
+                  </>
+                )}
+              </div>
+            )}
 
             {feedback && (
               <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>

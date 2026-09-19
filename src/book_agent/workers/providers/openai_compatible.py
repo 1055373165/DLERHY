@@ -99,6 +99,19 @@ class ProviderDeadlineExceeded(ProviderTransportError):
     """The per-call deadline ran out before a retry could be attempted."""
 
 
+PROVIDER_NOT_CONFIGURED_MESSAGE = (
+    "还没有可用的模型服务商：请在「服务商」页添加并启用一个服务商（填入 API key），"
+    "或由管理员在 .env 中设置 OPENAI_API_KEY。"
+)
+
+
+class ProviderNotConfigured(ValueError):
+    """No usable model provider: nothing active on the providers page and no key in settings."""
+
+    def __init__(self, message: str = PROVIDER_NOT_CONFIGURED_MESSAGE):
+        super().__init__(message)
+
+
 class JSONTransport(Protocol):
     def post_json(
         self,

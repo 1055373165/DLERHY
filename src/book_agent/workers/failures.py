@@ -14,6 +14,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from book_agent.workers.providers.openai_compatible import (
     ProviderHTTPError,
+    ProviderNotConfigured,
     ProviderOutputTruncated,
     ProviderResponseFormatError,
     ProviderTransportError,
@@ -41,6 +42,13 @@ class FailureClassification:
 def classify_failure(exc: BaseException) -> FailureClassification:
     if isinstance(exc, ProviderHTTPError):
         return _classify_http_error(exc)
+    if isinstance(exc, ProviderNotConfigured):
+        # Nothing to retry until someone adds a provider; resume picks up where it stopped.
+        return FailureClassification(
+            FailureDisposition.PAUSE,
+            "provider.not_configured",
+            pause_reason="provider.not_configured",
+        )
     if isinstance(exc, ProviderOutputTruncated):
         if exc.reasoning_only:
             # Every call will do the same until the provider config changes: stop and tell the operator.
