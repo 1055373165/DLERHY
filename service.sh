@@ -137,12 +137,12 @@ prepare_runtime() {
         UVICORN_CMD=(uv run uvicorn)
         ALEMBIC_CMD=(uv run alembic)
         info "Syncing dependencies (uv)..."
-        uv sync --quiet
+        uv sync --quiet --extra pdf
     else
         if [[ ! -d "$ROOT_DIR/.venv" ]] && [[ -z "${VIRTUAL_ENV:-}" ]]; then
             warn "uv not found. Creating .venv and installing dependencies..."
             python3 -m venv "$ROOT_DIR/.venv"
-            "$ROOT_DIR/.venv/bin/pip" install -e ".[dev]" -q
+            "$ROOT_DIR/.venv/bin/pip" install -e ".[dev,pdf]" -q
         fi
         PYTHON_BIN="${VIRTUAL_ENV:-$ROOT_DIR/.venv}/bin/python"
         PYTHON_CMD=("$PYTHON_BIN")

@@ -201,14 +201,14 @@ start_compose_postgres() {
 
 if command -v uv >/dev/null 2>&1; then
     info "同步 Python 依赖 (uv)..."
-    uv sync --quiet
+    uv sync --quiet --extra pdf
     UVICORN_CMD=(uv run uvicorn)
     ALEMBIC_CMD=(uv run alembic)
 else
     if [[ ! -d "$ROOT_DIR/.venv" ]] && [[ -z "${VIRTUAL_ENV:-}" ]]; then
         warn "未找到 uv，创建 .venv..."
         python3 -m venv "$ROOT_DIR/.venv"
-        "$ROOT_DIR/.venv/bin/pip" install -e ".[dev]" -q
+        "$ROOT_DIR/.venv/bin/pip" install -e ".[dev,pdf]" -q
     fi
     PY_BIN="${VIRTUAL_ENV:-$ROOT_DIR/.venv}/bin/python"
     UVICORN_CMD=("$PY_BIN" -m uvicorn)

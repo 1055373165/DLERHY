@@ -511,10 +511,18 @@ def download_document_export(
 
 
 def _pdf_renderer_installed() -> bool:
-    """PDF export prints the merged HTML with Playwright's Chromium."""
+    """PDF export prints the merged HTML with Playwright's Chromium: both the package and the browser."""
     import importlib.util
 
-    return importlib.util.find_spec("playwright") is not None
+    if importlib.util.find_spec("playwright") is None:
+        return False
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            return Path(playwright.chromium.executable_path).exists()
+    except Exception:
+        return False
 
 
 def _recovery_skills_response(document) -> RecoverySkillsResponse:
@@ -908,7 +916,8 @@ def export_document(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="当前部署没有安装 PDF 渲染组件（Playwright 与 Chromium），暂时不能生成 PDF；"
-            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试。",
+            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试"
+            "（uv sync --extra pdf，再运行 playwright install chromium）。",
         )
     return _enqueue_document_run(
         request,
