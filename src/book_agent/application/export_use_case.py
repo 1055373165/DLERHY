@@ -38,6 +38,7 @@ _DOCUMENT_LEVEL_EXPORTERS: dict[ExportType, str] = {
     ExportType.MERGED_MARKDOWN: "export_document_merged_markdown",
     ExportType.REBUILT_EPUB: "export_document_rebuilt_epub",
     ExportType.ZH_EPUB: "export_document_zh_epub",
+    ExportType.WEB_HTML: "export_document_web_html",
     ExportType.REBUILT_PDF: "export_document_rebuilt_pdf",
 }
 

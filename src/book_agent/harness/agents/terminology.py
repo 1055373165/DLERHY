@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from book_agent.domain.context.builders import is_web_chrome
 from book_agent.domain.enums import AgentItemKind, BlockType
 from book_agent.domain.models import Block, Chapter, Document
 from book_agent.harness.context.book_md import load_book_guide
@@ -111,11 +112,14 @@ class TerminologyAgent:
         budget = max_chars if mode != MODE_THOROUGH else 10**9
         used = 0
         for chapter in chapters:
-            blocks = list(
-                self.session.scalars(
+            blocks = [
+                block
+                for block in self.session.scalars(
                     select(Block).where(Block.chapter_id == chapter.id).order_by(Block.ordinal)
                 ).all()
-            )
+                # A web page's menus and footer say nothing about its terminology.
+                if not is_web_chrome(block)
+            ]
             if mode == MODE_THOROUGH:
                 picked = [b for b in blocks if b.block_type in _PROSE_TYPES]
             else:

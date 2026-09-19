@@ -792,6 +792,12 @@ function installFetchMock() {
         cleared_assignment_id: "assign-2",
       });
     }
+    if (path.endsWith("/v1/documents/bootstrap-url") && init?.method === "POST") {
+      return new Response(JSON.stringify({ ...documentPayload, source_type: "web" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     if (path.endsWith("/v1/documents/doc-123")) {
       return jsonResponse(documentPayload);
     }
@@ -844,8 +850,32 @@ describe("Workspace page", () => {
     await user.click(screen.getByRole("button", { name: "回到首页上传新书" }));
 
     expect(await screen.findByRole("heading", { name: "载入书稿" })).toBeInTheDocument();
-    expect(screen.getByText("上传英文 PDF 或 EPUB，开始翻译")).toBeInTheDocument();
+    expect(screen.getByText("上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "回到首页上传新书" })).not.toBeInTheDocument();
     expect(window.localStorage.getItem(STORAGE_KEY_DOCUMENT)).toBeNull();
+  });
+
+  it("loads a pasted web page link as a document", async () => {
+    const fetchMock = installFetchMock();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const input = await screen.findByRole("textbox", { name: "网页链接" });
+    await user.click(input);
+    await user.paste("https://www.anthropic.com/institute/recursive-self-improvement");
+    await user.click(screen.getByRole("button", { name: "抓取网页" }));
+
+    // The message moves from the upload homepage to the compact bar once the document loads: query afresh.
+    await waitFor(() => expect(screen.getByText(/已载入网页/)).toBeInTheDocument());
+    const call = fetchMock.mock.calls.find(([request]) => String(request).includes("/v1/documents/bootstrap-url"));
+    expect(call).toBeDefined();
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      url: "https://www.anthropic.com/institute/recursive-self-improvement",
+    });
   });
 });

@@ -3,7 +3,7 @@
 # 📚 Book Agent
 
 ### Whole-book English → Chinese translation agent
-**EPUB / PDF in, HTML · Markdown · EPUB · PDF out — with packet-level retries, resumable runs, and deterministic review-driven repair.**
+**EPUB / PDF / web page links in, HTML · Markdown · EPUB · PDF out — with packet-level retries, resumable runs, and deterministic review-driven repair.**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -70,6 +70,7 @@ book-agent add-org-credit ...     # any other command goes to the Python CLI of 
 ### Your first translation — 3 clicks
 
 1. Open `http://localhost:4173` → **Library** → drag in an `.epub` or `.pdf`.
+   Or paste an English web page link in the workspace: the page is captured with its styles and comes back as the same page in Chinese (export type `web_html`).
 2. **Bootstrap** parses & segments the book into chapters → blocks → sentences → packets.
 3. **Translate** streams progress live; **Export** delivers bilingual MD / HTML / EPUB / PDF.
 

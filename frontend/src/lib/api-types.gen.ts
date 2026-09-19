@@ -78,6 +78,10 @@ export interface BootstrapDocumentRequest {
   source_path: string;
 }
 
+export interface BootstrapUrlRequest {
+  url: string;
+}
+
 export interface ChapterMemoryProposalDecisionAuditResponse {
   proposal_id: string;
   decision: "approved" | "rejected";
@@ -491,6 +495,7 @@ export interface DocumentSummaryResponse {
   latest_run_current_stage?: string | null;
   latest_run_updated_at?: string | null;
   chapters?: ChapterSummaryResponse[];
+  source_url?: string | null;
 }
 
 export interface ExecuteActionResponse {
@@ -544,7 +549,7 @@ export interface ExportDetailResponse {
 }
 
 export interface ExportDocumentRequest {
-  export_type: "review_package" | "bilingual_html" | "merged_html" | "merged_markdown" | "rebuilt_epub" | "rebuilt_pdf" | "zh_epub";
+  export_type: "review_package" | "bilingual_html" | "merged_html" | "merged_markdown" | "rebuilt_epub" | "rebuilt_pdf" | "zh_epub" | "web_html";
   auto_execute_followup_on_gate?: boolean;
   max_auto_followup_attempts?: number;
 }
@@ -583,7 +588,7 @@ export interface ExportRecordSummaryResponse {
 
 export type ExportStatus = "running" | "succeeded" | "failed";
 
-export type ExportType = "bilingual_html" | "merged_html" | "merged_markdown" | "rebuilt_epub" | "rebuilt_pdf" | "zh_epub" | "review_package";
+export type ExportType = "bilingual_html" | "merged_html" | "merged_markdown" | "rebuilt_epub" | "rebuilt_pdf" | "zh_epub" | "web_html" | "review_package";
 
 export interface ExportVersionEvidenceSummaryResponse {
   document_parser_version?: number | null;
@@ -1053,7 +1058,7 @@ export interface RunWorkItemSummaryResponse {
   stage_counts?: Record<string, number>;
 }
 
-export type SourceType = "epub" | "pdf_text" | "pdf_scan" | "pdf_mixed";
+export type SourceType = "epub" | "pdf_text" | "pdf_scan" | "pdf_mixed" | "web";
 
 export interface StoredChapterQualitySummaryResponse {
   issue_count: number;

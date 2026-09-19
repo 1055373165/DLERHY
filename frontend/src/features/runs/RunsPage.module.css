@@ -86,6 +86,10 @@
   color: var(--red);
 }
 
+.feedback[data-tone="warning"] {
+  border-left-color: var(--status-warning);
+}
+
 /* ── Pipeline Steps (clean list) ── */
 .stepList {
   display: flex;

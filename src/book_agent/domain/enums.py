@@ -6,6 +6,7 @@ class SourceType(StrEnum):
     PDF_TEXT = "pdf_text"
     PDF_SCAN = "pdf_scan"
     PDF_MIXED = "pdf_mixed"
+    WEB = "web"
 
 
 class DocumentStatus(StrEnum):
@@ -279,6 +280,7 @@ class ExportType(StrEnum):
     REBUILT_EPUB = "rebuilt_epub"
     REBUILT_PDF = "rebuilt_pdf"
     ZH_EPUB = "zh_epub"
+    WEB_HTML = "web_html"
     REVIEW_PACKAGE = "review_package"
 
 

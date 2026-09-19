@@ -5,7 +5,7 @@ import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import {
-  PIPELINE_STEPS,
+  awaitingApprovalStage,
   currentStageKey,
   documentBadge,
   eventTitle,
@@ -16,6 +16,7 @@ import {
   getPrimaryRunAction,
   pipelineMeta,
   pipelineStageLabel,
+  pipelineStepsFor,
   preferredTitle,
   stageStatus,
   statusLabel,
@@ -43,6 +44,7 @@ export function RunsPage() {
   const badge = documentBadge(currentDocument, currentRun);
   const focusChapters = getFocusChapters(currentDocument);
   const failedStage = failedPipelineStage(currentDocument, currentRun);
+  const approvalStage = awaitingApprovalStage(currentDocument, currentRun);
   const currentStage = currentStageKey(currentRun);
   const progress = translateProgress(currentDocument, currentRun);
   const pct = Math.round(progress.ratio * 100);
@@ -94,7 +96,7 @@ export function RunsPage() {
               </span>
               <span className={s.stat}>
                 <span className={s.statLabel}>Status</span>
-                <span className={s.statValue}>{statusLabel(failedStage?.status || currentRun.status)}</span>
+                <span className={s.statValue}>{statusLabel(failedStage?.status || (approvalStage ? "awaiting_approval" : currentRun.status))}</span>
               </span>
               <span className={s.stat}>
                 <span className={s.statLabel}>Updated</span>
@@ -139,13 +141,20 @@ export function RunsPage() {
               </div>
             )}
 
+            {approvalStage && (
+              <div className={s.feedback} data-tone="warning" role="status">
+                「{approvalStage.label}」在等你审批，处理完运行会自动继续。{" "}
+                <Link to="/approvals">去「审批」页</Link>
+              </div>
+            )}
+
             {feedback && (
               <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
             )}
 
             {/* Pipeline steps */}
             <div className={s.stepList}>
-              {PIPELINE_STEPS.map((step, idx) => {
+              {pipelineStepsFor(currentDocument).map((step, idx) => {
                 const state = stageStatus(currentDocument, currentRun, step.key);
                 return (
                   <div
@@ -163,7 +172,7 @@ export function RunsPage() {
                         state === "failed" ? "danger"
                         : state === "succeeded" ? "success"
                         : state === "partial" ? "warning"
-                        : state === "paused" ? "warning"
+                        : state === "paused" || state === "awaiting_approval" ? "warning"
                         : state === "running" || state === "queued" || state === "draining" ? "active"
                         : "muted"
                       }

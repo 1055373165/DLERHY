@@ -12,6 +12,12 @@ export interface PipelineStep {
   key: string;
   label: string;
   description: string;
+  /** Only documents of these source types have this step; omitted means every document. */
+  sourceTypes?: string[];
+}
+
+export function pipelineStepsFor(document: DocumentSummary | null | undefined): PipelineStep[] {
+  return PIPELINE_STEPS.filter((step) => !step.sourceTypes || step.sourceTypes.includes(document?.source_type ?? ""));
 }
 
 export interface BadgeMeta {
@@ -72,6 +78,12 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     key: "merged_html",
     label: "中文阅读稿",
     description: "输出最终整书阅读包。",
+  },
+  {
+    key: "web_html",
+    label: "中文网页",
+    description: "（仅网页）按原网页的排版输出中文网页。",
+    sourceTypes: ["web"],
   },
   {
     key: "export_review",
@@ -170,6 +182,7 @@ export function sourceLabel(sourceType?: string | null): string {
     pdf_text: "PDF（文本）",
     pdf_scan: "PDF（扫描）",
     pdf_mixed: "PDF（混合）",
+    web: "网页",
   };
   if (!sourceType) {
     return "未识别";
@@ -189,7 +202,7 @@ export function pipelineStageLabel(stage?: string | null): string {
   if (!stage) {
     return "等待开始";
   }
-  return labels[stage] ?? stage;
+  return labels[stage] ?? PIPELINE_STEPS.find((step) => step.key === stage)?.label ?? stage;
 }
 
 export function preferredTitle(entity?: {
@@ -204,7 +217,9 @@ export function currentPipelineDetail(run?: DocumentRunSummary | null): {
   current_stage?: string | null;
   stages?: Record<string, RunStageDetail>;
 } {
-  return run?.status_detail_json?.pipeline ?? {};
+  const pipeline = run?.status_detail_json?.pipeline ?? {};
+  // The server writes `_cached_pipeline_stages`; runs from before that rename still carry `stages`.
+  return { current_stage: pipeline.current_stage, stages: pipeline._cached_pipeline_stages ?? pipeline.stages };
 }
 
 export function currentStageKey(run?: DocumentRunSummary | null): string | null {
@@ -227,6 +242,9 @@ export function stageStatus(
     return document.status === "failed" ? "failed" : "succeeded";
   }
   const detail = stageDetail(run, stepKey);
+  if (detail?.status === "running" && detail.turn_status === "awaiting_approval") {
+    return "awaiting_approval";
+  }
   if (detail?.status) {
     return detail.status;
   }
@@ -237,6 +255,14 @@ export function stageStatus(
     return "succeeded";
   }
   return "pending";
+}
+
+/** The pipeline step whose agent is waiting for a human decision, if any. */
+export function awaitingApprovalStage(
+  document: DocumentSummary | null | undefined,
+  run: DocumentRunSummary | null | undefined
+): PipelineStep | null {
+  return PIPELINE_STEPS.find((step) => stageStatus(document, run, step.key) === "awaiting_approval") ?? null;
 }
 
 export function failedPipelineStage(
@@ -446,7 +472,7 @@ export function pipelineMeta(
     const core = `issues ${formatNumber(detail.total_issue_count)} · actions ${formatNumber(detail.total_action_count)}`;
     return coverage ? `${coverage} · ${core}` : core;
   }
-  if (stepKey === "bilingual_html" || stepKey === "merged_html") {
+  if (stepKey === "bilingual_html" || stepKey === "merged_html" || stepKey === "web_html") {
     return detail.chapter_export_count
       ? `导出记录 ${formatNumber(detail.chapter_export_count)} 个章节结果`
       : "等待生成导出资产";

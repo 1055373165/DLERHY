@@ -44,11 +44,13 @@ export function WorkspacePage() {
     rejectMemoryProposal,
     executeChapterAction,
     uploadFile,
+    importWebPage,
     runPrimaryAction,
     downloadChapterAsset,
   } = useWorkspace();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [pageUrl, setPageUrl] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
 
   const doc = currentDocument;
@@ -76,6 +78,48 @@ export function WorkspacePage() {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
     }
   }
+
+  async function handleImportUrl() {
+    const url = pageUrl.trim();
+    if (!url) return;
+    try {
+      const result = await importWebPage(url);
+      setFeedback({ tone: "success", text: `已载入网页：${result.title ?? url}` });
+      setPageUrl("");
+    } catch (err) {
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "网页抓取失败" });
+    }
+  }
+
+  const urlForm = (compact: boolean) => (
+    <form
+      className={compact ? s.compactUploadGroup : s.urlForm}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleImportUrl();
+      }}
+    >
+      <input
+        type="url"
+        inputMode="url"
+        className={s.urlInput}
+        placeholder={compact ? "或粘贴网页链接…" : "https://example.com/article"}
+        aria-label="网页链接"
+        value={pageUrl}
+        onChange={(e) => {
+          setPageUrl(e.target.value);
+          setFeedback(null);
+        }}
+      />
+      <button
+        type="submit"
+        className={compact ? "btn btn-sm" : "btn"}
+        disabled={!pageUrl.trim() || uploadPending}
+      >
+        {uploadPending ? "…" : "抓取网页"}
+      </button>
+    </form>
+  );
 
   async function handlePrimaryAction() {
     try {
@@ -153,7 +197,7 @@ export function WorkspacePage() {
             </svg>
           </div>
           <h2 className={s.uploadTitle}>载入书稿</h2>
-          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，开始翻译</p>
+          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译</p>
           <label className={s.fileLabel}>
             <input
               type="file"
@@ -177,8 +221,10 @@ export function WorkspacePage() {
               {uploadPending ? "上传中…" : "上传并解析"}
             </button>
           </div>
+          <div className={s.orDivider}>或翻译一个网页（保留原页面排版，输出中文网页）</div>
+          {urlForm(false)}
           <p className={s.rightsNote}>
-            请只上传你有权翻译的书稿（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
+            请只上传或抓取你有权翻译的书稿与网页（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
           </p>
           {feedback && (
             <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
@@ -212,6 +258,7 @@ export function WorkspacePage() {
               {uploadPending ? "…" : "上传并解析"}
             </button>
           </div>
+          {urlForm(true)}
           {feedback && (
             <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
           )}

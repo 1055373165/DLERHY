@@ -145,6 +145,8 @@ def _document_export_label(export_type: ExportType) -> str:
         return "中文阅读稿-Markdown"
     if export_type == ExportType.ZH_EPUB:
         return "中文EPUB"
+    if export_type == ExportType.WEB_HTML:
+        return "中文网页"
     if export_type == ExportType.REBUILT_EPUB:
         return "重建EPUB"
     if export_type == ExportType.REBUILT_PDF:

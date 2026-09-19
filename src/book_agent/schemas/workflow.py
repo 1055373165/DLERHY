@@ -9,6 +9,10 @@ class BootstrapDocumentRequest(BaseSchema):
     source_path: str
 
 
+class BootstrapUrlRequest(BaseSchema):
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class StoredChapterQualitySummaryResponse(BaseSchema):
     issue_count: int
     action_count: int
@@ -71,6 +75,7 @@ class DocumentSummaryResponse(BaseSchema):
     latest_run_current_stage: str | None = None
     latest_run_updated_at: str | None = None
     chapters: list[ChapterSummaryResponse] = Field(default_factory=list)
+    source_url: str | None = None
 
 
 class DocumentHistoryEntryResponse(BaseSchema):
@@ -209,6 +214,7 @@ class ExportDocumentRequest(BaseSchema):
         "rebuilt_epub",
         "rebuilt_pdf",
         "zh_epub",
+        "web_html",
     ]
     auto_execute_followup_on_gate: bool = False
     max_auto_followup_attempts: int = Field(default=3, ge=1)

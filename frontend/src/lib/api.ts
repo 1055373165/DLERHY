@@ -33,6 +33,8 @@ export interface DocumentSummary {
   status: DocumentStatus;
   title?: string | null;
   title_src?: string | null;
+  /** Web page sources: the page that was captured. */
+  source_url?: string | null;
   title_tgt?: string | null;
   author?: string | null;
   chapter_count: number;
@@ -88,6 +90,9 @@ export interface RunStageDetail {
   status?: RunStatus;
   updated_at?: string | null;
   error_message?: string | null;
+  /** Agent stages: the turn's own state, e.g. "awaiting_approval" while the stage stays running. */
+  turn_status?: string | null;
+  stop_reason?: string | null;
   total_issue_count?: number | null;
   total_action_count?: number | null;
   chapter_export_count?: number | null;
@@ -105,6 +110,8 @@ export interface RunStageDetail {
 
 export interface RunPipelineDetail {
   current_stage?: string | null;
+  /** Where the server writes stage details; older runs still carry `stages`. */
+  _cached_pipeline_stages?: Record<string, RunStageDetail>;
   stages?: Record<string, RunStageDetail>;
 }
 
@@ -554,6 +561,15 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
   });
 }
 
+/** Capture a web page (styles kept, scripts removed) and bootstrap it like an uploaded book. */
+export async function bootstrapWebPage(url: string): Promise<DocumentSummary> {
+  return requestJson<DocumentSummary>("/documents/bootstrap-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function listDocumentHistory(filters: HistoryFilters = {}): Promise<DocumentHistoryPage> {
   const params = new URLSearchParams();
   params.set("limit", String(filters.limit ?? 12));
@@ -817,7 +833,13 @@ async function saveBinaryResponse(response: Response, fallbackName: string): Pro
   return filename;
 }
 
-export type DocumentDownloadType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "review_package";
+export type DocumentDownloadType =
+  | "merged_html"
+  | "bilingual_html"
+  | "merged_markdown"
+  | "rebuilt_pdf"
+  | "review_package"
+  | "web_html";
 
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "succeeded_with_warnings", "failed", "paused", "cancelled"]);
 
@@ -887,12 +909,13 @@ export async function downloadDocumentExport(
     bilingual_html: ".html",
     rebuilt_pdf: ".pdf",
     review_package: ".zip",
+    web_html: ".html",
   };
   const extension = packaging === "epub" ? ".epub" : packaging === "zip" ? ".zip" : fallbackExtension[exportType];
   return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
 }
 
-export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf";
+export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "web_html";
 
 /** An export for reading in the app: HTML or Markdown text, or the PDF bytes (exporting first when needed). */
 export async function previewDocumentExport(
