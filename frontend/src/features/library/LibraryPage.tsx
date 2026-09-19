@@ -110,9 +110,9 @@ export function LibraryPage() {
     setFeedback({ tone: "success", text: `正在生成 ${opt.label}...` });
     try {
       const filename = await downloadDocumentExport(documentId, opt.exportType, { packaging: opt.packaging });
-      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
+      setFeedback({ tone: "success", text: `已下载：${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -121,11 +121,11 @@ export function LibraryPage() {
     setDeleting(true);
     try {
       await deleteDocument(pendingDelete.id);
-      setFeedback({ tone: "success", text: `Deleted: ${pendingDelete.title}` });
+      setFeedback({ tone: "success", text: `已删除：${pendingDelete.title}` });
       setPendingDelete(null);
       await queryClient.invalidateQueries({ queryKey: ["document-history"] });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Delete failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "删除失败" });
     } finally {
       setDeleting(false);
     }
@@ -168,7 +168,7 @@ export function LibraryPage() {
             <input
               className={s.searchInput}
               type="search"
-              placeholder="Search title, author, path, or ID..."
+              placeholder="搜索书名、作者、路径或 ID…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -244,7 +244,7 @@ export function LibraryPage() {
                     <StatusBadge tone={badge.tone} label={badge.label} />
                     <div className={s.bookActions}>
                       <button className="btn btn-sm" onClick={() => void handleOpen(entry.document_id)}>
-                        Open
+                        打开
                       </button>
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
@@ -252,7 +252,7 @@ export function LibraryPage() {
                           disabled={!entry.merged_export_ready}
                           onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
                         >
-                          {entry.merged_export_ready ? "Download ▾" : "—"}
+                          {entry.merged_export_ready ? "下载 ▾" : "—"}
                         </button>
                         {openMenu === entry.document_id && (
                           <div className={s.dlMenu}>
@@ -272,10 +272,10 @@ export function LibraryPage() {
                       <button
                         className={`btn btn-sm ${s.deleteBtn}`}
                         onClick={() => setPendingDelete({ id: entry.document_id, title: preferredTitle(entry) })}
-                        aria-label={`Delete ${preferredTitle(entry)}`}
-                        title="Delete"
+                        aria-label={`删除 ${preferredTitle(entry)}`}
+                        title="删除"
                       >
-                        Delete
+                        删除
                       </button>
                     </div>
                   </div>

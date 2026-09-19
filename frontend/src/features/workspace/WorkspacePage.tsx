@@ -70,7 +70,7 @@ export function WorkspacePage() {
     if (!selectedFile) return;
     try {
       const result = await uploadFile(selectedFile);
-      setFeedback({ tone: "success", text: `Loaded: ${result.title ?? selectedFile.name}` });
+      setFeedback({ tone: "success", text: `已载入：${result.title ?? selectedFile.name}` });
       setSelectedFile(null);
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
@@ -116,9 +116,9 @@ export function WorkspacePage() {
   async function handleChapterDownload(chapterId: string) {
     try {
       const filename = await downloadChapterAsset(chapterId);
-      setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
+      setFeedback({ tone: "success", text: `已下载：${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -350,7 +350,7 @@ export function WorkspacePage() {
                       className="btn btn-sm"
                       onClick={() => handleChapterDownload(selectedReviewChapterId)}
                     >
-                      Download bilingual
+                      下载本章对照版
                     </button>
                   </div>
                   <div className={s.chapterStats}>

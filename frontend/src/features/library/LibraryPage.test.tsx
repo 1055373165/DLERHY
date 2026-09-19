@@ -127,7 +127,7 @@ describe("Library page", () => {
     );
 
     expect(await screen.findByText("Open the Desk")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open" }));
+    await user.click(screen.getByRole("button", { name: "打开" }));
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1, name: "Open the Desk" })).toBeInTheDocument();
