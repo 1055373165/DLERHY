@@ -196,6 +196,46 @@ class BookOverviewTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409, response.text)
         self.assertIn("还有一项任务在进行", response.json()["detail"])
 
+    def _finish(self, run_id: str, status: DocumentRunStatus, minutes_ago: int = 0, stop_reason: str | None = None) -> None:
+        from datetime import datetime, timedelta, timezone
+
+        with self.session_factory() as session:
+            run = RunControlRepository(session).get_run(run_id)
+            run.status = status
+            run.stop_reason = stop_reason
+            run.finished_at = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+            session.commit()
+
+    def test_the_inbox_reports_translations_that_just_became_readable_or_failed(self) -> None:
+        run_id = self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        self.assertEqual(self.client.get("/v1/inbox").json()["updates"], [])
+        self._export(ExportType.WEB_HTML)
+        self._finish(run_id, DocumentRunStatus.SUCCEEDED)
+        (update,) = self.client.get("/v1/inbox").json()["updates"]
+        self.assertEqual((update["kind"], update["run_id"], update["document_title"]), ("readable", run_id, "Harness"))
+
+        failed = self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        self._finish(failed, DocumentRunStatus.FAILED, stop_reason="stage.evidence_failed")
+        kinds = {item["run_id"]: item["kind"] for item in self.client.get("/v1/inbox").json()["updates"]}
+        self.assertEqual(kinds[failed], "failed")
+
+    def test_old_endings_are_not_news(self) -> None:
+        run_id = self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        self._export(ExportType.WEB_HTML)
+        self._finish(run_id, DocumentRunStatus.SUCCEEDED, minutes_ago=30)
+        self.assertEqual(self.client.get("/v1/inbox").json()["updates"], [])
+        since = "2000-01-01T00:00:00+00:00"
+        self.assertEqual(len(self.client.get("/v1/inbox", params={"since": since}).json()["updates"]), 1)
+
+    def test_overviews_of_several_books_for_the_home_page(self) -> None:
+        self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        response = self.client.get("/v1/overviews", params={"ids": f"{self.document_id},00000000-0000-4000-8000-000000000000"})
+        self.assertEqual(response.status_code, 200, response.text)
+        (overview,) = response.json()["overviews"]
+        self.assertEqual(overview["document_id"], self.document_id)
+        self.assertEqual(overview["translation"]["state"], "running")
+        self.assertIsNone(overview["cost"])
+
     def test_unknown_book_is_404(self) -> None:
         self.assertEqual(self.client.get("/v1/documents/00000000-0000-4000-8000-000000000000/overview").status_code, 404)
 

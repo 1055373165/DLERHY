@@ -154,6 +154,10 @@ def _succeeded_export_types(session: Session, document_id: str) -> set[str]:
     return {row.value if hasattr(row, "value") else str(row) for row in rows}
 
 
+def _readable(exported: set[str], web: bool) -> bool:
+    return (ExportType.WEB_HTML.value if web else ExportType.MERGED_HTML.value) in exported
+
+
 def _packet_progress(session: Session, document_id: str) -> dict[str, int]:
     rows = session.execute(
         select(TranslationPacket.status, func.count(TranslationPacket.id))
@@ -310,7 +314,7 @@ def _primary_action(translation: dict[str, Any], readable: bool, needs_you: list
     return {"kind": "none", "label": ""}
 
 
-def build_overview(session: Session, document_id: str, context: OverviewContext) -> dict[str, Any]:
+def build_overview(session: Session, document_id: str, context: OverviewContext, *, include_cost: bool = True) -> dict[str, Any]:
     document = session.get(Document, document_id)
     if document is None:
         raise LookupError(f"document not found: {document_id}")
@@ -320,7 +324,7 @@ def build_overview(session: Session, document_id: str, context: OverviewContext)
     web = document.source_type == SourceType.WEB
     # Readable means the reader's first format exists: the Chinese page for a web page (it is
     # generated after the merged copy; opening the reader in between would ask for it too early).
-    readable_ready = (ExportType.WEB_HTML.value if web else ExportType.MERGED_HTML.value) in exported
+    readable_ready = _readable(exported, web)
     formats = ([ExportType.WEB_HTML.value] if web else []) + [fmt.value for fmt in _READING_FORMATS]
     if context.pdf_renderer:
         formats.append(ExportType.REBUILT_PDF.value)
@@ -377,7 +381,8 @@ def build_overview(session: Session, document_id: str, context: OverviewContext)
         "activity": {"exporting": exporting},
         "needs_you": needs_you,
         "quality": {"open_issues": int(issues[0] or 0), "blocking": int(issues[1] or 0)},
-        "cost": _cost(session, document, context),
+        # The estimate reads the whole book: skipped for lists of books (the home page's cards).
+        "cost": _cost(session, document, context) if include_cost else None,
     }
 
 
@@ -402,3 +407,44 @@ def inbox_items(session: Session, *, org_id: str | None) -> list[dict[str, Any]]
         for item in _needs_you(session, document, run):
             items.append({**item, "document_id": document.id, "document_title": title})
     return items
+
+
+_FINISHED = (DocumentRunStatus.SUCCEEDED, DocumentRunStatus.SUCCEEDED_WITH_WARNINGS, DocumentRunStatus.FAILED)
+
+
+def inbox_updates(session: Session, *, org_id: str | None, since) -> list[dict[str, Any]]:
+    """Full translations that ended since ``since``: ready to read, or failed. What a notification says."""
+    runs = session.scalars(
+        select(DocumentRun)
+        .where(
+            DocumentRun.run_type == DocumentRunType.TRANSLATE_FULL,
+            DocumentRun.status.in_(_FINISHED),
+            DocumentRun.finished_at.is_not(None),
+            DocumentRun.finished_at >= since,
+        )
+        .order_by(DocumentRun.finished_at)
+    ).all()
+    updates: list[dict[str, Any]] = []
+    for run in runs:
+        document = session.get(Document, run.document_id)
+        if document is None or (org_id is not None and document.org_id != org_id):
+            continue
+        title = document.title_tgt or document.title or document.title_src
+        if run.status == DocumentRunStatus.FAILED:
+            kind, text = "failed", stop_reason_text(run.stop_reason, DocumentRunStatus.FAILED.value) or "翻译失败了。"
+        elif _readable(_succeeded_export_types(session, document.id), document.source_type == SourceType.WEB):
+            kind, text = "readable", "中文版已就绪，可以阅读了。"
+        else:
+            continue
+        updates.append(
+            {
+                "kind": kind,
+                "run_id": run.id,
+                "document_id": document.id,
+                "document_title": title,
+                "text": text,
+                "at": run.finished_at.isoformat(),
+            }
+        )
+    return updates
+

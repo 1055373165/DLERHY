@@ -27,6 +27,7 @@ api_router.include_router(harness.documents_router, prefix="/documents", tags=["
 api_router.include_router(harness.approvals_router, prefix="/approvals", tags=["harness"], dependencies=_protected)
 api_router.include_router(overview.documents_router, prefix="/documents", tags=["overview"], dependencies=_protected)
 api_router.include_router(overview.inbox_router, prefix="/inbox", tags=["overview"], dependencies=_protected)
+api_router.include_router(overview.overviews_router, prefix="/overviews", tags=["overview"], dependencies=_protected)
 api_router.include_router(actions.router, prefix="/actions", tags=["actions"], dependencies=_protected)
 api_router.include_router(issues.documents_router, prefix="/documents", tags=["issues"], dependencies=_protected)
 api_router.include_router(issues.issues_router, prefix="/issues", tags=["issues"], dependencies=_protected)
