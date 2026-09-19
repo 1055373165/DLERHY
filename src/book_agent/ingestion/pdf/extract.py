@@ -261,13 +261,16 @@ class PdfTextExtractor(Protocol):
 
 class PyMuPDFTextExtractor:
     def __init__(self, *, image_output_dir: str | Path | None = None) -> None:
-        if image_output_dir is not None:
-            self._image_output_dir = Path(image_output_dir)
-        else:
-            # Auto-create a temp directory so images are always materialized.
+        # Without a directory, images go to a temp directory made on the first
+        # image, so PDFs without pictures leave nothing behind.
+        self._image_output_dir = Path(image_output_dir) if image_output_dir is not None else None
+
+    def _image_dir(self) -> Path:
+        if self._image_output_dir is None:
             import tempfile
 
             self._image_output_dir = Path(tempfile.mkdtemp(prefix="book-agent-pdf-images-"))
+        return self._image_output_dir
 
     def extract(self, file_path: str | Path) -> PdfExtraction:
         try:
@@ -649,12 +652,9 @@ class PyMuPDFTextExtractor:
     ) -> tuple[str | None, int | None]:
         """Extract the embedded image nearest to *bbox* and save to disk.
 
-        Returns ``(materialized_path, xref)`` or ``(None, None)`` when the
-        image output directory is not configured or extraction fails.
+        Returns ``(materialized_path, xref)`` or ``(None, None)`` when
+        extraction fails.
         """
-        if self._image_output_dir is None:
-            return None, None
-
         try:
             import fitz
         except ImportError:
@@ -704,7 +704,7 @@ class PyMuPDFTextExtractor:
             # Convert CMYK/other colour spaces to RGB for broad compatibility.
             if pix.n - pix.alpha > 3:
                 pix = fitz.Pixmap(fitz.csRGB, pix)
-            output_dir = self._image_output_dir
+            output_dir = self._image_dir()
             output_dir.mkdir(parents=True, exist_ok=True)
             filename = f"p{page_number:04d}_b{block_number:03d}.png"
             output_path = output_dir / filename
