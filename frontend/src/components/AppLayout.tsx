@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-import { useWorkspace } from "../app/WorkspaceContext";
+import { getHealth } from "../lib/api";
 import { SERVICE_LINKS } from "../lib/api";
 import { getInbox } from "../lib/overview";
 import s from "./AppLayout.module.css";
@@ -78,7 +78,9 @@ const APP_TITLE = "Book Agent";
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
-  const { health, healthLoading } = useWorkspace();
+  const healthQuery = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 30_000, retry: false });
+  const health = healthQuery.data;
+  const healthLoading = healthQuery.isLoading;
   // Across every book: approvals and pauses only a person can fix (GET /inbox).
   const inbox = useQuery({ queryKey: ["inbox"], queryFn: getInbox, refetchInterval: 15_000, retry: false });
   const pendingCount = inbox.data?.count ?? 0;

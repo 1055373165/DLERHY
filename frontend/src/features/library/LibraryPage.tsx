@@ -2,7 +2,6 @@ import { useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import { deleteDocument, downloadDocumentExport, listDocumentHistory } from "../../lib/api";
@@ -47,7 +46,6 @@ function buildPageWindow(current: number, total: number): (number | "…")[] {
 export function LibraryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { selectDocument } = useWorkspace();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -100,7 +98,6 @@ export function LibraryPage() {
   const rangeEnd = offset + shown;
 
   async function handleOpen(documentId: string) {
-    selectDocument(documentId);
     await navigate(`/books/${documentId}`);
   }
 

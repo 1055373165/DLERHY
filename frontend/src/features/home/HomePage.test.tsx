@@ -17,7 +17,7 @@ function installFetchMock(provider: unknown) {
     if (url.includes("/v1/documents/history")) {
       return json({
         total_count: 1, offset: 0, limit: 8, has_more: false,
-        entries: [{ document_id: "doc-old", title: "Deep Work", title_src: "Deep Work", source_type: "epub", status: "exported", merged_export_ready: true }],
+        entries: [{ document_id: "doc-old", title: "Deep Work", title_src: "Deep Work", source_type: "epub", status: "exported", merged_export_ready: true, latest_run_id: "run-old", latest_run_status: "running" }],
       });
     }
     if (url.includes("/v1/health")) return json({ status: "ok" });
@@ -65,6 +65,15 @@ describe("Home page", () => {
     const card = await screen.findByRole("link", { name: /Deep Work/ });
     expect(card).toHaveAttribute("href", "/books/doc-old");
     expect(card).toHaveTextContent("可以阅读");
+  });
+
+  it("stays home even while a book is translating (no automatic jump into it)", async () => {
+    installFetchMock(echo);
+    window.localStorage.setItem("book-agent.current-document-id", "doc-old");
+    renderHome();
+    await screen.findByRole("link", { name: /Deep Work/ });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/$/);
   });
 
   it("says a provider is needed before anything is imported", async () => {

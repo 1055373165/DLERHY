@@ -13,16 +13,8 @@ import { LibraryPage } from "../features/library/LibraryPage";
 import { ReaderPage } from "../features/library/ReaderPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { WorkspacePage } from "../features/workspace/WorkspacePage";
-import { STORAGE_KEY_DOCUMENT, WorkspaceProvider } from "./WorkspaceContext";
+import { currentBookId } from "../lib/currentBook";
 import { queryClient } from "./queryClient";
-
-function currentBookId(): string | null {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY_DOCUMENT);
-  } catch {
-    return null;
-  }
-}
 
 /** Old per-concept pages now live on the book's page; without a current book, go home. Replace, so Back does not bounce. */
 function ToCurrentBook({ tab }: { tab: string }) {
@@ -38,7 +30,6 @@ function OldReaderLink() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <WorkspaceProvider>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomePage />} />
@@ -64,7 +55,6 @@ export function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
-      </WorkspaceProvider>
     </QueryClientProvider>
   );
 }

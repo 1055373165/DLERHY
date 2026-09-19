@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { queryClient } from "../../app/queryClient";
-import { useWorkspace } from "../../app/WorkspaceContext";
+import { useBook } from "../book/BookPage";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import {
@@ -98,8 +98,7 @@ function evidenceSummary(issue: Issue): string {
 }
 
 export function IssuesPage() {
-  const { currentDocument } = useWorkspace();
-  const documentId = currentDocument?.document_id ?? null;
+  const documentId: string | null = useBook().document_id;
   const [filter, setFilter] = useState<IssueFilter>({ status: "active" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewer, setReviewer] = useState<string>(loadReviewerName);

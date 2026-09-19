@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
-import { useWorkspace } from "../../app/WorkspaceContext";
+import { rememberBook } from "../../lib/currentBook";
 import { FastReadingToggle } from "../../components/FastReadingToggle";
 import { CostEstimateNote } from "./CostEstimateNote";
 import { createRun, decideApproval, pauseRun, resumeRun, retryRun } from "../../lib/api";
@@ -53,15 +53,14 @@ async function refresh(documentId: string): Promise<void> {
 export function BookPage() {
   const { documentId = "" } = useParams();
   const location = useLocation();
-  const { selectDocument } = useWorkspace();
   const overview = useBookOverview(documentId);
   const data = overview.data;
   useRunEventStream(data?.translation.run_id ?? null, Boolean(data && ACTIVE.has(data.translation.state)));
 
-  // The advanced tabs (issues, chapter review) still read the workspace's current book.
+  // Old addresses (/runs, /issues...) land on the last book opened.
   useEffect(() => {
-    selectDocument(documentId);
-  }, [documentId]); // eslint-disable-line react-hooks/exhaustive-deps
+    rememberBook(documentId);
+  }, [documentId]);
 
   const act = useMutation({
     mutationFn: async (kind: "start" | "autostart" | "resume" | "retry" | "stop") => {

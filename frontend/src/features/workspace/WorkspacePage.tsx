@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { useWorkspace } from "../../app/WorkspaceContext";
+import { useBook } from "../book/BookPage";
+import { useChapterReview } from "./useChapterReview";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
@@ -13,8 +14,15 @@ type Feedback = { tone: "success" | "error"; text: string } | null;
 
 /** The book page's 逐章审校 tab: chapter queue, memory proposals, issues and repairs (for reviewers). */
 export function WorkspacePage() {
+  const book = useBook();
+  const documentId = book.document_id;
+  // Fetch all chapters so users can browse even when the worklist is empty.
+  const allChaptersQuery = useQuery({
+    queryKey: ["document-chapters", documentId],
+    queryFn: () => listDocumentChapters(documentId),
+  });
+  const allChapters = allChaptersQuery.data ?? [];
   const {
-    currentDocument,
     chapterWorklist,
     chapterWorklistLoading,
     chapterWorklistFilters,
@@ -31,20 +39,11 @@ export function WorkspacePage() {
     rejectMemoryProposal,
     executeChapterAction,
     downloadChapterAsset,
-  } = useWorkspace();
+  } = useChapterReview(documentId, allChapters, { active: ["queued", "running", "draining"].includes(book.translation.state) });
 
   const [feedback, setFeedback] = useState<Feedback>(null);
 
-  const doc = currentDocument;
   const queueEntries = chapterWorklist?.entries ?? [];
-
-  // Fetch all chapters so users can browse even when worklist is empty
-  const allChaptersQuery = useQuery({
-    queryKey: ["document-chapters", doc?.document_id],
-    queryFn: () => listDocumentChapters(doc!.document_id),
-    enabled: !!doc,
-  });
-  const allChapters = allChaptersQuery.data ?? [];
 
   /* ── Handlers ── */
 
@@ -56,7 +55,7 @@ export function WorkspacePage() {
       } else {
         await rejectMemoryProposal(proposalId, payload);
       }
-      setFeedback({ tone: "success", text: `Proposal ${accept ? "approved" : "rejected"}` });
+      setFeedback({ tone: "success", text: accept ? "已批准这条记忆" : "已拒绝这条记忆" });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "提交失败" });
     }
@@ -104,7 +103,7 @@ export function WorkspacePage() {
       )}
 
       {/* ── Chapter Workbench ── */}
-      {doc && (
+      {(
         <div className={s.workbench}>
           {/* Queue Rail */}
           <aside className={s.queueRail}>
