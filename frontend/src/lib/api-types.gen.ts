@@ -82,6 +82,10 @@ export interface BootstrapUrlRequest {
   url: string;
 }
 
+export interface CapabilitiesResponse {
+  pdf_renderer?: boolean;
+}
+
 export interface ChapterMemoryProposalDecisionAuditResponse {
   proposal_id: string;
   decision: "approved" | "rejected";
@@ -841,6 +845,7 @@ export interface MetaResponse {
   environment: string;
   api_prefix: string;
   docs_path: string;
+  capabilities?: CapabilitiesResponse;
 }
 
 export interface OrgBudgetResponse {

@@ -552,6 +552,12 @@ export async function getHealth(): Promise<HealthResponse> {
   return requestJson<HealthResponse>("/health");
 }
 
+export type MetaResponse = Generated.MetaResponse;
+
+export async function getMeta(): Promise<MetaResponse> {
+  return requestJson<MetaResponse>("/meta");
+}
+
 export async function uploadDocument(file: File): Promise<DocumentSummary> {
   const formData = new FormData();
   formData.append("source_file", file);

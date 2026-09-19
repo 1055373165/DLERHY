@@ -511,18 +511,9 @@ def download_document_export(
 
 
 def _pdf_renderer_installed() -> bool:
-    """PDF export prints the merged HTML with Playwright's Chromium: both the package and the browser."""
-    import importlib.util
+    from book_agent.app.capabilities import pdf_renderer_installed
 
-    if importlib.util.find_spec("playwright") is None:
-        return False
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as playwright:
-            return Path(playwright.chromium.executable_path).exists()
-    except Exception:
-        return False
+    return pdf_renderer_installed()
 
 
 def _recovery_skills_response(document) -> RecoverySkillsResponse:

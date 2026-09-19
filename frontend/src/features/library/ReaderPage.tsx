@@ -6,6 +6,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   downloadDocumentExport,
   getDocument,
+  getMeta,
   previewDocumentExport,
   type ReadableExportType,
 } from "../../lib/api";
@@ -47,9 +48,14 @@ export function ReaderPage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const document = useQuery({ queryKey: ["document", documentId], queryFn: () => getDocument(documentId), retry: false });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: getMeta, staleTime: 60_000, retry: false });
   // A web page reads first as itself in Chinese (the original layout); books have no such format.
   const isWebPage = document.data?.source_type === "web";
-  const formats = FORMATS.filter((item) => item.key !== "web" || isWebPage);
+  // Offer PDF only where this deployment can print it (Playwright + Chromium); unknown counts as no.
+  const pdfAvailable = meta.data?.capabilities?.pdf_renderer === true;
+  const formats = FORMATS.filter(
+    (item) => (item.key !== "web" || isWebPage) && (item.key !== "pdf" || pdfAvailable),
+  );
   const requested = params.get("format");
   const format: FormatKey = formats.some((item) => item.key === requested)
     ? (requested as FormatKey)

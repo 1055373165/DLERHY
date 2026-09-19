@@ -3,7 +3,8 @@ from sqlalchemy import text
 
 from book_agent.app.api.deps import get_session_factory
 from book_agent.core.config import get_settings
-from book_agent.schemas.health import HealthResponse, MetaResponse
+from book_agent.app.capabilities import pdf_renderer_available
+from book_agent.schemas.health import CapabilitiesResponse, HealthResponse, MetaResponse
 
 router = APIRouter()
 
@@ -25,4 +26,5 @@ def meta() -> MetaResponse:
         environment=settings.environment,
         api_prefix=settings.api_prefix,
         docs_path=str(settings.docs_dir),
+        capabilities=CapabilitiesResponse(pdf_renderer=pdf_renderer_available()),
     )
