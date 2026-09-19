@@ -827,6 +827,10 @@ export interface ProviderCredentialCreate {
   timeout_seconds?: number;
   max_retries?: number;
   retry_backoff_seconds?: number;
+  input_cost_per_1m_tokens?: number | null;
+  input_cache_hit_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  request_overrides?: Record<string, unknown>;
   api_key?: string | null;
   activate?: boolean;
 }
@@ -841,6 +845,10 @@ export interface ProviderCredentialRead {
   timeout_seconds?: number;
   max_retries?: number;
   retry_backoff_seconds?: number;
+  input_cost_per_1m_tokens?: number | null;
+  input_cache_hit_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  request_overrides?: Record<string, unknown>;
   id: string;
   is_active: boolean;
   api_key_preview?: string | null;
@@ -863,6 +871,10 @@ export interface ProviderCredentialUpdate {
   timeout_seconds?: number | null;
   max_retries?: number | null;
   retry_backoff_seconds?: number | null;
+  input_cost_per_1m_tokens?: number | null;
+  input_cache_hit_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  request_overrides?: Record<string, unknown> | null;
 }
 
 export type ProviderKind = "openai_compatible" | "echo";

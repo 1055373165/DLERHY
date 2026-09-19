@@ -415,6 +415,10 @@ export type IssueList = Generated.IssueListResponse;
 export type IssueDecision = Generated.IssueDecisionRequest;
 export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
 export type OrgBudget = Generated.OrgBudgetResponse;
+export type Provider = Generated.ProviderCredentialRead;
+export type ProviderCreate = Generated.ProviderCredentialCreate;
+export type ProviderUpdate = Generated.ProviderCredentialUpdate;
+export type ProviderTestResult = Generated.ProviderTestResult;
 export type StructureEditRequest = Generated.StructureEditRequest;
 export type StructureEdit = Generated.StructureEditResponse;
 export type StructureEditList = Generated.StructureEditListResponse;
@@ -959,4 +963,33 @@ export async function createStructureEdit(documentId: string, payload: Structure
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export async function listProviders(): Promise<Provider[]> {
+  return requestJson<Provider[]>("/providers");
+}
+
+export async function createProvider(payload: ProviderCreate): Promise<Provider> {
+  return requestJson<Provider>("/providers", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(payload) });
+}
+
+export async function updateProvider(id: string, payload: ProviderUpdate): Promise<Provider> {
+  return requestJson<Provider>(`/providers/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(payload) });
+}
+
+export async function activateProvider(id: string): Promise<Provider> {
+  return requestJson<Provider>(`/providers/${id}/activate`, { method: "POST" });
+}
+
+export async function testProvider(id: string): Promise<ProviderTestResult> {
+  return requestJson<ProviderTestResult>(`/providers/${id}/test`, { method: "POST" });
+}
+
+export async function deleteProvider(id: string): Promise<void> {
+  const response = await apiFetch(`/providers/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
 }

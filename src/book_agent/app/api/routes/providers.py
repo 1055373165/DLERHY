@@ -18,6 +18,10 @@ from book_agent.services.provider_credentials import api_key_preview
 router = APIRouter()
 
 
+def _price(value) -> float | None:
+    return float(value) if value is not None else None
+
+
 def _scope(request: Request) -> str | None:
     """Admins of the default organisation manage the shared credentials; other admins their organisation's own."""
     return svc.credential_scope(current_principal(request).org_id)
@@ -39,6 +43,10 @@ def _to_read(record, *, viewer_scope: str | None = None) -> ProviderCredentialRe
         is_active=record.is_active,
         # Another organisation may see which shared provider it falls back to, not its key.
         api_key_preview=None if shared_for_other_org else api_key_preview(record),
+        input_cost_per_1m_tokens=_price(record.input_cost_per_1m_tokens),
+        input_cache_hit_cost_per_1m_tokens=_price(record.input_cache_hit_cost_per_1m_tokens),
+        output_cost_per_1m_tokens=_price(record.output_cost_per_1m_tokens),
+        request_overrides=dict(record.request_overrides_json or {}),
         shared=record.org_id is None,
         last_test_status=record.last_test_status,
         last_test_at=record.last_test_at,
@@ -82,6 +90,8 @@ def create_provider(
             retry_backoff_seconds=payload.retry_backoff_seconds,
             activate=payload.activate,
             scope=_scope(request),
+            prices={name: getattr(payload, name) for name in svc.PRICE_FIELDS},
+            request_overrides=payload.request_overrides,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -112,6 +122,9 @@ def update_provider(
             timeout_seconds=payload.timeout_seconds,
             max_retries=payload.max_retries,
             retry_backoff_seconds=payload.retry_backoff_seconds,
+            # Only the price fields the caller sent change; an explicit null clears one.
+            prices={name: getattr(payload, name) for name in svc.PRICE_FIELDS if name in payload.model_fields_set},
+            request_overrides=payload.request_overrides,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="provider credential not found")

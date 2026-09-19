@@ -31,9 +31,18 @@ def _openai_compatible_worker(
     max_output_tokens: int,
     streaming: bool,
     runtime_config: dict[str, Any],
+    prices: dict[str, float | None] | None = None,
+    request_overrides: dict[str, Any] | None = None,
 ) -> LLMTranslationWorker:
-    # Connection parameters come from the caller (settings or a stored
-    # credential); prompt profile and token prices always come from settings.
+    # Connection parameters, prices and request overrides come from the caller (a stored
+    # credential) and fall back to settings; the prompt profile always comes from settings.
+    prices = prices or {}
+
+    def price(name: str) -> float | None:
+        value = prices.get(name)
+        return float(value) if value is not None else getattr(settings, f"translation_{name}")
+
+    overrides = dict(request_overrides) if request_overrides else dict(settings.translation_openai_request_overrides)
     client = OpenAICompatibleTranslationClient(
         api_key=api_key,
         base_url=base_url,
@@ -41,11 +50,11 @@ def _openai_compatible_worker(
         max_retries=max_retries,
         retry_backoff_seconds=retry_backoff_seconds,
         max_output_tokens=max_output_tokens,
-        input_cache_hit_cost_per_1m_tokens=settings.translation_input_cache_hit_cost_per_1m_tokens,
-        input_cost_per_1m_tokens=settings.translation_input_cost_per_1m_tokens,
-        output_cost_per_1m_tokens=settings.translation_output_cost_per_1m_tokens,
+        input_cache_hit_cost_per_1m_tokens=price("input_cache_hit_cost_per_1m_tokens"),
+        input_cost_per_1m_tokens=price("input_cost_per_1m_tokens"),
+        output_cost_per_1m_tokens=price("output_cost_per_1m_tokens"),
         streaming=streaming,
-        request_overrides=dict(settings.translation_openai_request_overrides),
+        request_overrides=overrides,
         structured_output_mode=settings.translation_openai_structured_output_mode,
     )
     return LLMTranslationWorker(
@@ -61,7 +70,7 @@ def _openai_compatible_worker(
             "max_retries": max_retries,
             "retry_backoff_seconds": retry_backoff_seconds,
             "max_output_tokens": max_output_tokens,
-            "request_overrides": dict(settings.translation_openai_request_overrides),
+            "request_overrides": overrides,
             **runtime_config,
         },
     )
@@ -132,6 +141,12 @@ def build_worker_from_credential(record: ProviderCredential, settings: Settings)
             "credential_name": record.name,
             "streaming": bool(record.streaming),
         },
+        prices={
+            "input_cost_per_1m_tokens": record.input_cost_per_1m_tokens,
+            "input_cache_hit_cost_per_1m_tokens": record.input_cache_hit_cost_per_1m_tokens,
+            "output_cost_per_1m_tokens": record.output_cost_per_1m_tokens,
+        },
+        request_overrides=dict(record.request_overrides_json or {}),
     )
 
 

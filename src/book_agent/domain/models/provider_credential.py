@@ -1,11 +1,14 @@
 from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, Text, Uuid, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, Numeric, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from book_agent.domain.enums import ProviderKind, ProviderTestStatus
 from book_agent.infra.db.base import (
     Base,
+    JsonDocument,
     TimestampMixin,
     UUIDPrimaryKeyMixin,
     enum_value_type,
@@ -62,6 +65,13 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Integer, nullable=False, default=20
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Token prices (per million tokens, in the provider's billing currency, USD assumed); NULL falls back
+    # to the BOOK_AGENT_TRANSLATION_*_COST_PER_1M_TOKENS settings. Without prices, cost reads as unknown.
+    input_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    input_cache_hit_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    output_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    # Extra request fields sent with every call, e.g. {"thinking": {"type": "disabled"}} for reasoning models.
+    request_overrides_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     # Bumped on every change that affects the worker built from this row
     # (config edits, activation); worker caches in every process compare
     # (active id, config_revision) against their cached key.

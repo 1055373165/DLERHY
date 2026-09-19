@@ -10,6 +10,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -97,6 +98,33 @@ def check_provider_base_url(base_url: str, provider_kind: ProviderKind) -> None:
     ensure_public_http_url(base_url)
 
 
+PRICE_FIELDS = ("input_cost_per_1m_tokens", "input_cache_hit_cost_per_1m_tokens", "output_cost_per_1m_tokens")
+# Request fields the client builds itself; overriding them would break prompts, tools or parsing.
+RESERVED_REQUEST_FIELDS = frozenset(
+    {"model", "messages", "input", "tools", "tool_choice", "stream", "response_format", "text", "max_tokens"}
+)
+
+
+def validate_request_overrides(overrides: dict | None) -> dict:
+    if overrides is None:
+        return {}
+    if not isinstance(overrides, dict):
+        raise ValueError("request_overrides must be a JSON object")
+    reserved = sorted(RESERVED_REQUEST_FIELDS & set(overrides))
+    if reserved:
+        raise ValueError(f"request_overrides cannot set {', '.join(reserved)}: the client builds these fields")
+    return dict(overrides)
+
+
+def _set_prices(record: ProviderCredential, prices: dict[str, float | None]) -> None:
+    for field_name, value in prices.items():
+        if field_name not in PRICE_FIELDS:
+            raise ValueError(f"unknown price field: {field_name}")
+        if value is not None and value < 0:
+            raise ValueError(f"{field_name} must be >= 0")
+        setattr(record, field_name, None if value is None else Decimal(str(value)))
+
+
 def create_credential(
     session: Session,
     *,
@@ -112,8 +140,11 @@ def create_credential(
     retry_backoff_seconds: float,
     activate: bool,
     scope: str | None = None,
+    prices: dict[str, float | None] | None = None,
+    request_overrides: dict | None = None,
 ) -> ProviderCredential:
     check_provider_base_url(base_url, provider_kind)
+    overrides = validate_request_overrides(request_overrides)
     ciphertext = encrypt_secret(api_key) if api_key else None
     record = ProviderCredential(
         name=name,
@@ -128,7 +159,9 @@ def create_credential(
         retry_backoff_seconds_x10=int(round(retry_backoff_seconds * 10)),
         is_active=False,
         org_id=scope,
+        request_overrides_json=overrides,
     )
+    _set_prices(record, prices or {})
     session.add(record)
     session.flush()
     if activate:
@@ -150,8 +183,14 @@ def update_credential(
     timeout_seconds: int | None = None,
     max_retries: int | None = None,
     retry_backoff_seconds: float | None = None,
+    prices: dict[str, float | None] | None = None,  # present keys are set; None clears
+    request_overrides: dict | None = None,  # None leaves alone, {} clears
 ) -> ProviderCredential:
     record = get_credential(session, credential_id)
+    if prices:
+        _set_prices(record, prices)
+    if request_overrides is not None:
+        record.request_overrides_json = validate_request_overrides(request_overrides)
     if name is not None:
         record.name = name
     if provider_kind is not None:
