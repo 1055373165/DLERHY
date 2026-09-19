@@ -117,7 +117,11 @@ def extract_main_chapter_number(title: str | None) -> int | None:
         return None
     remainder = stripped[match.end():]
     normalized_remainder = remainder.lstrip(" .:_-/\\)\u2013\u2014")
-    if normalized_remainder and not normalized_remainder[:1].isupper():
+    # "Chapter 3 of this book explains…" is prose, not a title. A title continues with a
+    # capital letter, a digit ("CHAPTER 9: 20 POPULAR STRATEGIES") or a quote.
+    if normalized_remainder and not (
+        normalized_remainder[:1].isupper() or normalized_remainder[:1].isdigit() or normalized_remainder[:1] in "\"'\u201c\u2018"
+    ):
         return None
     try:
         return int(match.group(1))
@@ -130,5 +134,9 @@ def looks_like_appendix_title(title: str | None) -> bool:
 
 
 def looks_like_frontmatter_title(title: str | None) -> bool:
+    """"Preface", and also a front-matter label with a subtitle: "INTRODUCTION: WHY RSI IS SO MAGICAL?"."""
     normalized = re.sub(r"\s+", " ", (title or "")).strip().casefold()
-    return normalized in _FRONTMATTER_TITLES
+    if normalized in _FRONTMATTER_TITLES:
+        return True
+    label = re.split(r"\s*[:：\u2013\u2014]\s*|\s+-\s+", normalized, maxsplit=1)[0]
+    return label != normalized and label in _FRONTMATTER_TITLES

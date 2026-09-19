@@ -220,3 +220,15 @@ def untranslated_ratio_check(translatable: int, untranslated: int, *, error_rati
         severity=ERROR if ratio > error_ratio else WARNING,
         data={"untranslated": untranslated, "translatable": translatable, "ratio": round(ratio, 4)},
     )
+
+
+def chapter_sections_check(missing_titles: list[str], expected: int) -> QaCheck:
+    """Chapters that look like chapters (numbered, front matter, appendix) but got no section of their own."""
+    return QaCheck(
+        "Q4 chapter_sections",
+        not missing_titles,
+        f"chapters folded into a neighbour: {len(missing_titles)}/{expected}"
+        + (f" ({'; '.join(missing_titles[:5])})" if missing_titles else ""),
+        severity=ERROR,
+        data={"missing": missing_titles, "expected": expected},
+    )

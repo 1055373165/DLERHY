@@ -46,6 +46,14 @@ class QaCheckTests(unittest.TestCase):
         self.assertTrue(by_name["R6 image_render_coverage"].ok)
         self.assertNotIn("R7 source_fold_well_formed", by_name)
 
+    def test_folded_chapters_are_reported(self) -> None:
+        from book_agent.export.qa import chapter_sections_check
+
+        self.assertTrue(chapter_sections_check([], 12).ok)
+        folded = chapter_sections_check(["CHAPTER 9: 20 POPULAR RSI TRADING STRATEGIES"], 12)
+        self.assertFalse(folded.ok)
+        self.assertIn("CHAPTER 9", folded.detail)
+
     def test_product_checks(self) -> None:
         self.assertFalse(heading_hierarchy_check(BROKEN_HTML).ok)
         self.assertTrue(heading_hierarchy_check("<h1>a</h1><h2>b</h2><h3>c</h3><h1>d</h1>").ok)

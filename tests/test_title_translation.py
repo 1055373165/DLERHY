@@ -87,6 +87,18 @@ class ChapterLabelTests(unittest.TestCase):
         self.assertEqual(localize_chapter_label("CHAPTER 2: BIRTH OF RSI"), "CHAPTER 2: BIRTH OF RSI")
         self.assertEqual(localize_chapter_label("第1章：挑战"), "第1章：挑战")
 
+    def test_numbered_chapters_whose_title_starts_with_a_digit_are_chapters(self) -> None:
+        from book_agent.export.titles import extract_main_chapter_number, looks_like_frontmatter_title
+
+        # The RSI book's Chapter 9 was folded into Chapter 8 because "20" is not a capital letter.
+        self.assertEqual(extract_main_chapter_number("CHAPTER 9: 20 POPULAR RSI TRADING STRATEGIES"), 9)
+        self.assertEqual(extract_main_chapter_number("Chapter 2: Birth of RSI"), 2)
+        self.assertIsNone(extract_main_chapter_number("Chapter 3 of this book explains the formula"))
+        # Its introduction carries a subtitle; it is still front matter.
+        self.assertTrue(looks_like_frontmatter_title("INTRODUCTION: WHY RSI IS SO MAGICAL?"))
+        self.assertTrue(looks_like_frontmatter_title("Preface"))
+        self.assertFalse(looks_like_frontmatter_title("Introduction to Momentum Trading"))
+
     def test_structural_chapter_names_have_chinese_labels(self) -> None:
         self.assertEqual(localized_structural_title_fallback("Front Matter"), "卷首")
         self.assertEqual(localized_structural_title_fallback("Introduction"), "引言")

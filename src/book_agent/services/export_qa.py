@@ -35,7 +35,16 @@ from book_agent.domain.enums import (
 from book_agent.domain.models import Block, Chapter, Sentence
 from book_agent.domain.models.review import ReviewIssue
 from book_agent.export.atomic import atomic_write_text
-from book_agent.export.qa import ERROR, WARNING, QaCheck, audit_html, empty_block_check, heading_hierarchy_check, untranslated_ratio_check
+from book_agent.export.qa import (
+    ERROR,
+    WARNING,
+    QaCheck,
+    audit_html,
+    chapter_sections_check,
+    empty_block_check,
+    heading_hierarchy_check,
+    untranslated_ratio_check,
+)
 from book_agent.infra.repositories.review import ReviewRepository, active_target_texts
 from book_agent.orchestrator.rule_engine import build_issue_action
 
@@ -150,7 +159,33 @@ class ExportQaService:
         checks.append(empty_block_check(html))
         translatable, untranslated = self._untranslated(document_id, chapter_id)
         checks.append(untranslated_ratio_check(translatable, untranslated))
+        if export_type == ExportType.MERGED_HTML and chapter_id is None:
+            checks.append(self._chapter_sections(document_id, html))
         return checks
+
+    def _chapter_sections(self, document_id: str, html: str) -> QaCheck:
+        """The merged book folds continuation fragments into the chapter before them; a real chapter must not be."""
+        from book_agent.export import titles
+
+        expected: list[Chapter] = []
+        for chapter in self.session.scalars(
+            select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)
+        ).all():
+            source_title = str(chapter.title_src or "").strip()
+            chapter_like = (
+                titles.extract_main_chapter_number(source_title) is not None
+                or titles.looks_like_frontmatter_title(source_title)
+                or titles.looks_like_appendix_title(source_title)
+            )
+            has_text = self.session.scalar(
+                select(Sentence.id)
+                .where(Sentence.chapter_id == chapter.id, Sentence.translatable.is_(True), Sentence.retired_by_revision_id.is_(None))
+                .limit(1)
+            )
+            if chapter_like and has_text:
+                expected.append(chapter)
+        missing = [str(chapter.title_src) for chapter in expected if f"id='chapter-{chapter.id}'" not in html]
+        return chapter_sections_check(missing, len(expected))
 
     def _image_block_count(self, document_id: str, chapter_id: str | None) -> int:
         stmt = (
