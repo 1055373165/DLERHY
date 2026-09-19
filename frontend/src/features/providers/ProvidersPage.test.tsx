@@ -75,7 +75,7 @@ describe("ProvidersPage", () => {
   });
 
   it("rejects invalid advanced parameters before sending anything", async () => {
-    const fetchMock = vi.fn(async () => json([]));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json([]));
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
     await screen.findByText(/还没有服务商/);

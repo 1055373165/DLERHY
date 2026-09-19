@@ -15,6 +15,7 @@ import {
   sourceLabel,
   statusLabel,
 } from "../../lib/workflow";
+import { CostEstimateNote } from "./CostEstimateNote";
 import s from "./WorkspacePage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
@@ -242,6 +243,7 @@ export function WorkspacePage() {
               </button>
             )}
           </div>
+          {action.mode === "create" ? <CostEstimateNote documentId={doc.document_id} /> : null}
         </div>
       )}
 

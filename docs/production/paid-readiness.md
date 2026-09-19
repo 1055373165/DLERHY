@@ -37,7 +37,7 @@
 | 按组织月度预算与限额 | ✅ | `services/org_budget.py`；`tests/test_org_tenancy.py` |
 | 服务商单价在界面配置（不改 .env） | ✅ | 「服务商」页；迁移 0044；`tests/test_provider_settings.py`、`ProvidersPage.test.tsx` |
 | 思考模式等请求参数在界面配置 | ✅ | 「关闭思考模式」开关 + 高级 JSON；保留字段（model、messages 等）被拒绝 |
-| 开始翻译前的费用预估 | ⬜ | |
+| 开始翻译前的费用预估 | ✅ | `services/cost_estimate.py`（按真实整书运行校准，RSI 书估算与实测相差约 5%，给出 ±30% 区间）；工作台开始按钮下显示；`tests/test_cost_estimate.py` |
 
 ## 4. 账号与部署
 

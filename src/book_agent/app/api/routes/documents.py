@@ -22,6 +22,7 @@ from book_agent.schemas.workflow import (
     RecoverySkillResponse,
     RecoverySkillsResponse,
     RecoverySkillsUpdateRequest,
+    CostEstimateResponse,
     StructureEditListResponse,
     StructureEditRequest,
     StructureEditResponse,
@@ -534,6 +535,26 @@ def refresh_document_structure(
         carried_ratio=round(fork.carried_ratio, 3) if fork is not None and fork.forked else None,
         retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
     )
+
+
+@router.get("/{document_id}/cost-estimate", response_model=CostEstimateResponse)
+def get_cost_estimate(
+    document_id: str,
+    terminology: Literal["skip", "sampled", "thorough"] = Query(default="sampled"),
+    model_review: Literal["skip", "sampled", "full"] = Query(default="sampled"),
+    session: Session = Depends(get_db_session),
+) -> CostEstimateResponse:
+    """Tokens (and cost, when the provider has prices) a full translation run of this book will take, as a range."""
+    from book_agent.core.config import get_settings
+    from book_agent.services.cost_estimate import estimate_document_cost
+
+    try:
+        estimate = estimate_document_cost(
+            session, document_id, get_settings(), terminology=terminology, model_review=model_review
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return CostEstimateResponse(**estimate.to_json())
 
 
 def _structure_edit_response(edit, *, block_ids: list[str] | None = None, fork=None) -> StructureEditResponse:

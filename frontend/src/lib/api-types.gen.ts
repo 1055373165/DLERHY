@@ -258,6 +258,23 @@ export interface ChapterWorklistTimelineEntryResponse {
   owner_name?: string | null;
 }
 
+export interface CostEstimateResponse {
+  document_id: string;
+  packet_count: number;
+  source_tokens: number;
+  token_in: number;
+  token_out: number;
+  token_in_range: unknown[];
+  token_out_range: unknown[];
+  breakdown: Record<string, Record<string, number>>;
+  cost_usd?: number | null;
+  cost_usd_range?: unknown[] | null;
+  price_source?: string | null;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  notes?: string[];
+}
+
 export interface CreateDocumentRunRequest {
   document_id: string;
   run_type: DocumentRunType;

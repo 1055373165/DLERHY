@@ -416,6 +416,7 @@ export type IssueDecision = Generated.IssueDecisionRequest;
 export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
 export type OrgBudget = Generated.OrgBudgetResponse;
 export type Provider = Generated.ProviderCredentialRead;
+export type CostEstimate = Generated.CostEstimateResponse;
 export type ProviderCreate = Generated.ProviderCredentialCreate;
 export type ProviderUpdate = Generated.ProviderCredentialUpdate;
 export type ProviderTestResult = Generated.ProviderTestResult;
@@ -992,4 +993,9 @@ export async function deleteProvider(id: string): Promise<void> {
   if (!response.ok) {
     throw await parseError(response);
   }
+}
+
+/** Tokens (and cost, when the provider has prices) a full run of this book will take, as a range. */
+export async function getCostEstimate(documentId: string): Promise<CostEstimate> {
+  return requestJson<CostEstimate>(`/documents/${encodeURIComponent(documentId)}/cost-estimate`);
 }

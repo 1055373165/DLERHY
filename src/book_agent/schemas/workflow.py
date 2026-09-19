@@ -752,6 +752,23 @@ class RecoverySkillsUpdateRequest(BaseSchema):
     skills: dict[str, bool] = Field(default_factory=dict)
 
 
+class CostEstimateResponse(BaseSchema):
+    document_id: str
+    packet_count: int
+    source_tokens: int
+    token_in: int
+    token_out: int
+    token_in_range: tuple[int, int]
+    token_out_range: tuple[int, int]
+    breakdown: dict[str, dict[str, int]]
+    cost_usd: float | None = None
+    cost_usd_range: tuple[float, float] | None = None
+    price_source: str | None = None
+    input_cost_per_1m_tokens: float | None = None
+    output_cost_per_1m_tokens: float | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
 class StructureEditRequest(BaseSchema):
     kind: Literal["relabel_block", "split_block", "merge_blocks", "link_caption"]
     reason: str = Field(min_length=1, max_length=2000)
