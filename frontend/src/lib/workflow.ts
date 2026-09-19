@@ -257,8 +257,9 @@ export function stageStatus(
   if (run.status === "succeeded" && ["translate", "review", "bilingual_html", "merged_html"].includes(stepKey)) {
     return "succeeded";
   }
-  // A finished run never reached this stage: it was not part of this run (optional, or skipped).
-  if (["succeeded", "succeeded_with_warnings"].includes(run.status)) {
+  // A finished full translation never reached this stage: it was not part of it (optional, or skipped).
+  // Other run types (a single export, a review) say nothing about the book's other stages.
+  if (run.run_type === "translate_full" && ["succeeded", "succeeded_with_warnings"].includes(run.status)) {
     return "skipped";
   }
   return "pending";

@@ -54,5 +54,7 @@ describe("pipeline stage status", () => {
     expect(pipelineMeta(null, run, "model_review")).toBe("这次转换没有这一步");
     expect(stageStatus(null, run, "review")).toBe("succeeded");
     expect(pipelineMeta(null, run, "review")).toBe("已完成");
+    const exportRun = { ...run, run_type: "export_full" } as DocumentRunSummary;
+    expect(stageStatus(null, exportRun, "model_review")).toBe("pending");
   });
 });
