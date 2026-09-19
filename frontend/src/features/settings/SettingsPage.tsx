@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { ApiKeySetting } from "../../components/ApiKeySetting";
 import { FastReadingToggle } from "../../components/FastReadingToggle";
+import { NotifyMe } from "../../components/NotifyMe";
 import { Surface } from "../../components/Surface";
 import { autoStartCapUsd, DEFAULT_AUTO_START_CAP_USD, setAutoStartCapUsd } from "../../lib/preferences";
 import { ProvidersPage } from "../providers/ProvidersPage";
@@ -35,6 +36,9 @@ export function SettingsPage() {
             {!valid && <span style={{ color: "var(--red)" }}>请输入 0 或更大的数。</span>}
           </label>
           <FastReadingToggle />
+          <div>
+            <strong>浏览器通知</strong>：翻译完成、失败或需要你处理时提醒你（每 30 秒检查一次）。 <NotifyMe label="开启通知" />
+          </div>
           <ApiKeySetting />
         </div>
       </Surface>

@@ -53,15 +53,39 @@ export interface BookOverview {
   activity: { exporting: string[] };
   needs_you: NeedsYouItem[];
   quality: { open_issues: number; blocking: number };
-  cost: { estimate_usd_range: [number, number] | null; max_charge_usd: number | null; prepaid: boolean; spent_usd: number };
+  // null in lists of books (GET /overviews skips the estimate).
+  cost: { estimate_usd_range: [number, number] | null; max_charge_usd: number | null; prepaid: boolean; spent_usd: number } | null;
 }
 
 export async function getOverview(documentId: string): Promise<BookOverview> {
   return requestJson<BookOverview>(`/documents/${encodeURIComponent(documentId)}/overview`);
 }
 
-export async function getInbox(): Promise<{ count: number; items: InboxItem[] }> {
-  return requestJson<{ count: number; items: InboxItem[] }>("/inbox");
+/** A full translation that ended: ready to read, or failed. */
+export interface InboxUpdate {
+  kind: "readable" | "failed";
+  run_id: string;
+  document_id: string;
+  document_title: string | null;
+  text: string;
+  at: string;
+}
+
+export interface Inbox {
+  count: number;
+  items: InboxItem[];
+  updates?: InboxUpdate[];
+}
+
+export async function getInbox(since?: string): Promise<Inbox> {
+  return requestJson<Inbox>(since ? `/inbox?since=${encodeURIComponent(since)}` : "/inbox");
+}
+
+/** Overviews of several books at once, without cost (for lists of books). */
+export async function getOverviews(ids: string[]): Promise<BookOverview[]> {
+  if (!ids.length) return [];
+  const page = await requestJson<{ overviews: BookOverview[] }>(`/overviews?ids=${ids.map(encodeURIComponent).join(",")}`);
+  return page.overviews;
 }
 
 export function usd(amount: number): string {

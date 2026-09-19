@@ -1,7 +1,8 @@
 """The reader's main path in a real browser: paste a link -> ... -> read the Chinese version.
 
 Measures what the UI/UX spec (docs/specs/ui-ux-overhaul/SPEC.md §2.3) sets targets for: clicks
-from pasting the link to the first Chinese text, and how often the reader leaves the book's page.
+from pasting the link to the first Chinese text, and how often the reader leaves the book's page;
+and checks that a "ready to read" browser notification is sent (Notification is mocked in the page).
 
 Everything is local and costs nothing: a throwaway SQLite database, the echo translation model,
 a local article (e2e/fixtures/article.html) and this repo's frontend built into a temp directory
@@ -78,6 +79,7 @@ def _start_api(work: Path, dist: Path, *, priced: bool) -> tuple[subprocess.Pope
         "BOOK_AGENT_FRONTEND_DIST_DIR": str(dist),
     }
     if priced:
+        # Arbitrary test prices, small enough that the local article is well within the $1 cap.
         env["BOOK_AGENT_TRANSLATION_INPUT_COST_PER_1M_TOKENS"] = "0.3"
         env["BOOK_AGENT_TRANSLATION_OUTPUT_COST_PER_1M_TOKENS"] = "1.0"
     # SQLite has no migrations here: create the schema the way the unit tests do.
@@ -134,6 +136,19 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=not headed)
         page = browser.new_page(viewport={"width": 1400, "height": 900})
+        # A stand-in for the browser's notifications: granted, and the reader has turned them on.
+        page.add_init_script(
+            """
+            window.__notifications = [];
+            window.Notification = class {
+              static permission = "granted";
+              static requestPermission = async () => "granted";
+              constructor(title, options) { window.__notifications.push({ title, body: options && options.body }); }
+              close() {}
+            };
+            localStorage.setItem("book-agent.notify", "on");
+            """
+        )
         page.on("framenavigated", lambda frame: frame == page.main_frame and paths.append(re.sub(r"^https?://[^/]+", "", frame.url).split("?")[0]))
         page.goto(f"{base}/")
 
@@ -200,6 +215,11 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         text = frame.locator("body").inner_text(timeout=60_000)
         if shots:
             page.screenshot(path=str(shots / "core-path-read.png"))
+        # The inbox is polled every 30 s: the "ready to read" notification comes within one poll.
+        page.wait_for_function(
+            "window.__notifications.some((n) => n.title.startsWith('可以阅读了'))", timeout=45_000
+        )
+        notifications = page.evaluate("window.__notifications")
         browser.close()
 
     visited = [path for index, path in enumerate(paths) if index == 0 or path != paths[index - 1]]
@@ -217,6 +237,7 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         "paths": visited,
         "auto_started": auto_started,
         "read_text_sample": text[:80],
+        "notifications": notifications,
     }
 
 

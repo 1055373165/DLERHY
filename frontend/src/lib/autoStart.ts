@@ -8,7 +8,7 @@ export function decideAutoStart(overview: BookOverview, capUsd: number): StartDe
   if (overview.translation.state !== "never_started") {
     return { auto: false, reason: "" };
   }
-  const maxCharge = overview.cost.max_charge_usd;
+  const maxCharge = overview.cost?.max_charge_usd ?? null;
   if (maxCharge === null) {
     return { auto: false, reason: "服务商没有设置单价，估算不出费用，所以没有自动开始。" };
   }

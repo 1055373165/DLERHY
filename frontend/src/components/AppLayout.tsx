@@ -1,11 +1,12 @@
 import { ApiKeySetting } from "./ApiKeySetting";
 import { BudgetMeter } from "./BudgetMeter";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { getHealth } from "../lib/api";
 import { SERVICE_LINKS } from "../lib/api";
+import { announce, loadSeen } from "../lib/notifications";
 import { getInbox } from "../lib/overview";
 import s from "./AppLayout.module.css";
 
@@ -82,8 +83,15 @@ export function AppLayout() {
   const health = healthQuery.data;
   const healthLoading = healthQuery.isLoading;
   // Across every book: approvals and pauses only a person can fix (GET /inbox).
-  const inbox = useQuery({ queryKey: ["inbox"], queryFn: getInbox, refetchInterval: 15_000, retry: false });
+  // Endings before this page opened are not news.
+  const [openedAt] = useState(() => new Date().toISOString());
+  const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => getInbox(openedAt), refetchInterval: 30_000, retry: false });
   const pendingCount = inbox.data?.count ?? 0;
+  const navigate = useNavigate();
+  const seen = useRef<Set<string>>(loadSeen());
+  useEffect(() => {
+    if (inbox.data) announce(inbox.data, seen.current, (path) => navigate(path));
+  }, [inbox.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // The tab title says it too, so a reader on another tab sees that the book is waiting on them.

@@ -2,13 +2,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
+import { NotifyMe } from "../../components/NotifyMe";
 import { decideApproval, resumeRun } from "../../lib/api";
 import { getInbox } from "../../lib/overview";
 import s from "../book/Tabs.module.css";
 
 /** Everything that waits on you, across books, each with the one thing to do about it. */
 export function InboxPage() {
-  const inbox = useQuery({ queryKey: ["inbox"], queryFn: getInbox, refetchInterval: 15_000 });
+  const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => getInbox(), refetchInterval: 15_000 });
   const settle = async () => {
     await queryClient.invalidateQueries({ queryKey: ["inbox"] });
     await queryClient.invalidateQueries({ queryKey: ["overview"] });
@@ -27,6 +28,9 @@ export function InboxPage() {
       <h1 className={s.heading} style={{ fontSize: "1.25rem" }}>
         需要你处理
       </h1>
+      <p className={s.meta}>
+        <NotifyMe label="有事等我处理时通知我" />
+      </p>
       {inbox.isError ? (
         <div className={s.error}>没能加载：{(inbox.error as Error).message}</div>
       ) : items.length === 0 ? (

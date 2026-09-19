@@ -5,6 +5,7 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useOutletContext, usePara
 import { queryClient } from "../../app/queryClient";
 import { rememberBook } from "../../lib/currentBook";
 import { FastReadingToggle } from "../../components/FastReadingToggle";
+import { NotifyMe } from "../../components/NotifyMe";
 import { CostEstimateNote } from "./CostEstimateNote";
 import { createRun, decideApproval, pauseRun, resumeRun, retryRun } from "../../lib/api";
 import { decideAutoStart } from "../../lib/autoStart";
@@ -112,7 +113,7 @@ export function BookPage() {
   const progress = data.translation.progress;
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
   const primary = data.primary_action;
-  const estimate = data.cost.max_charge_usd;
+  const estimate = data.cost?.max_charge_usd ?? null;
   const showStartPanel = primary.kind === "start" && !act.isPending && !(justImported && decision?.auto);
 
   return (
@@ -157,6 +158,7 @@ export function BookPage() {
               停止翻译
             </button>
           )}
+          {(ACTIVE.has(state) || act.isPending) && <NotifyMe />}
           {act.isError && <span className={s.errorText}>{act.error instanceof Error ? act.error.message : "操作失败"}</span>}
         </div>
 

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
 import { bootstrapWebPage, getActiveProvider, listDocumentHistory, uploadDocument } from "../../lib/api";
+import { getOverviews } from "../../lib/overview";
 import { preferredTitle } from "../../lib/workflow";
 import s from "./HomePage.module.css";
 
@@ -14,6 +15,16 @@ export function HomePage() {
   const [file, setFile] = useState<File | null>(null);
   const provider = useQuery({ queryKey: ["active-provider"], queryFn: getActiveProvider, retry: false });
   const recent = useQuery({ queryKey: ["document-history", "home"], queryFn: () => listDocumentHistory({ limit: 8, offset: 0 }) });
+  const ids = (recent.data?.entries ?? []).map((entry) => entry.document_id);
+  // Each card says where its book stands, in the server's words (GET /overviews), refreshed while any moves.
+  const overviews = useQuery({
+    queryKey: ["overviews", ids],
+    queryFn: () => getOverviews(ids),
+    enabled: ids.length > 0,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((item) => ["queued", "running", "draining"].includes(item.translation.state)) ? 10_000 : false,
+  });
+  const headlines = new Map((overviews.data ?? []).map((item) => [item.document_id, item]));
   const active = provider.data;
   // No provider, or one that cannot be called: importing would only lead to a run that stops at once.
   const providerMissing =
@@ -104,7 +115,9 @@ export function HomePage() {
               <li key={entry.document_id}>
                 <Link className={s.card} to={`/books/${entry.document_id}`}>
                   <span className={s.cardTitle}>{preferredTitle(entry)}</span>
-                  <span className={s.cardMeta}>{entry.merged_export_ready ? "可以阅读" : "还没有中文版"}</span>
+                  <span className={s.cardMeta} data-needs-you={(headlines.get(entry.document_id)?.needs_you.length ?? 0) > 0 || undefined}>
+                    {headlines.get(entry.document_id)?.headline ?? (overviews.isError ? "状态没能加载" : "…")}
+                  </span>
                 </Link>
               </li>
             ))}

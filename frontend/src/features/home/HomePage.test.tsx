@@ -14,6 +14,9 @@ function installFetchMock(provider: unknown) {
     if (url.includes("/v1/providers/active")) return json(provider);
     if (url.includes("/v1/documents/bootstrap-url")) return json({ document_id: "doc-new", title: "When AI builds itself", source_type: "web" }, 201);
     if (url.includes("/v1/documents/doc-new/overview")) return json(makeOverview("doc-new"));
+    if (url.includes("/v1/overviews")) {
+      return json({ overviews: [makeOverview("doc-old", { title: "Deep Work", headline: "中文版已就绪。", cost: null })] });
+    }
     if (url.includes("/v1/documents/history")) {
       return json({
         total_count: 1, offset: 0, limit: 8, has_more: false,
@@ -59,12 +62,13 @@ describe("Home page", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ url: LINK });
   });
 
-  it("lists recent books, readable ones marked", async () => {
+  it("lists recent books, each with where it stands", async () => {
     installFetchMock(echo);
     renderHome();
     const card = await screen.findByRole("link", { name: /Deep Work/ });
     expect(card).toHaveAttribute("href", "/books/doc-old");
-    expect(card).toHaveTextContent("可以阅读");
+    // The card's line is the book's own headline from the server.
+    await waitFor(() => expect(card).toHaveTextContent("中文版已就绪。"));
   });
 
   it("stays home even while a book is translating (no automatic jump into it)", async () => {
