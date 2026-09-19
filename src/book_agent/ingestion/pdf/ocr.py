@@ -79,6 +79,10 @@ class OcrCommandRunner(Protocol):
         ...
 
 
+class OcrUnavailable(RuntimeError):
+    """This deployment cannot OCR: the OCR runtime (uv, which fetches Surya) is not installed."""
+
+
 class OcrTimeoutError(RuntimeError):
     pass
 
@@ -210,7 +214,7 @@ class UvSuryaOcrRunner:
 
     def run(self, *, file_path: str | Path, output_dir: str | Path) -> Path:
         if shutil.which("uv") is None:
-            raise RuntimeError("OCR support requires `uv` to be installed and available on PATH.")
+            raise OcrUnavailable("OCR support requires `uv` to be installed and available on PATH.")
         command = self._build_command(file_path=file_path, output_dir=output_dir)
         started_at = _utcnow()
         self._write_status(

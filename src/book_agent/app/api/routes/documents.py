@@ -49,6 +49,7 @@ from book_agent.schemas.workflow import (
 )
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
 from book_agent.schemas.run_control import DocumentRunSummaryResponse
+from book_agent.ingestion.pdf.ocr import OcrUnavailable
 from book_agent.services.document_files import remove_document_files
 from book_agent.services.run_control import RunControlService, RunControlTransitionError
 from book_agent.services.workflows import DocumentBusyError, DocumentWorkflowService
@@ -179,6 +180,13 @@ def bootstrap_uploaded_document(
     except ValueError as exc:
         cleanup_path(target_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except OcrUnavailable as exc:
+        cleanup_path(target_path)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="这是扫描版 PDF，需要 OCR 才能识别文字，但当前部署没有安装 OCR 组件。"
+            "请上传文字版 PDF 或 EPUB，或请管理员安装 OCR（见部署文档）。",
+        ) from exc
     except Exception:
         cleanup_path(target_path)
         raise
