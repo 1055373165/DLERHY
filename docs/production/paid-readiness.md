@@ -16,7 +16,7 @@
 | 书名、章节标题为中文 | ✅ | `services/title_translation.py`、`export/titles.localize_chapter_label`；`tests/test_title_translation.py` |
 | 章节结构不丢章（数字开头标题、带副标题的前置内容） | ✅ | `extract_main_chapter_number`、`looks_like_frontmatter_title`；QA Q4 `chapter_sections` |
 | 渲染器升级后旧导出自动刷新 | ✅ | `EXPORT_RENDERER_VERSION`；下载旧版本返回 404 → 前端自动重导出 |
-| 句级对齐粒度（整段译文挂在多个句子上） | 🟡 | 成品不受影响（按块渲染）；句级视图与审校受影响，未修 |
+| 句级对齐粒度（整段译文挂在多个句子上） | 🟡 不阻塞 | 实测（RSI 付费运行）：1219 个译文段中 1076 个（88%）一句对一句；多句段大多是表格（整表作为一个单元翻译，按设计如此），另有少数 6–10 句的长段落被模型合译。成品按块渲染不受影响；只影响句级视图里这几段的逐句对照 |
 
 ## 2. 可控与可恢复
 
