@@ -884,6 +884,51 @@ describe("Workspace page", () => {
     expect(screen.queryByRole("link", { name: "阅读中文版" })).not.toBeInTheDocument();
   });
 
+  it("reports an executed repair as done, not as a failure", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
+    installFetchMock();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const execute = await screen.findByRole("button", { name: "执行" });
+    await user.click(execute);
+    expect(await screen.findByText("修复已执行，问题已解决。")).toBeInTheDocument();
+  });
+
+  it("says when the selected book fails to load instead of showing an empty upload page", async () => {
+    window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-broken");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/v1/documents/doc-broken")) {
+          return new Response(JSON.stringify({ detail: "database unavailable" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.includes("/v1/health")) return jsonResponse({ status: "ok" });
+        return new Response(JSON.stringify({ detail: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("这本书没能打开");
+    expect(within(alert).getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "载入书稿" })).not.toBeInTheDocument();
+  });
+
   it("loads a pasted web page link as a document", async () => {
     const fetchMock = installFetchMock();
     const user = userEvent.setup();

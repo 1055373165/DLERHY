@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 
 import {
   approveChapterMemoryProposal,
@@ -225,6 +226,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     assignedOwnerName: chapterWorklistFilters.assignedOwnerName || undefined,
   };
 
+  // The chapter workbench lives on the workspace page only: elsewhere its two queries would poll for
+  // nothing (they were about a third of all requests during a run).
+  const workbenchVisible = useLocation().pathname === "/";
+
   const currentChapterWorklistQuery = useQuery({
     queryKey: [
       "chapter-worklist",
@@ -233,7 +238,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       chapterWorklistFilters.assignment,
       chapterWorklistFilters.assignedOwnerName,
     ],
-    enabled: Boolean(selectedDocumentId),
+    enabled: Boolean(selectedDocumentId) && workbenchVisible,
     queryFn: () => getDocumentChapterWorklist(selectedDocumentId as string, chapterWorklistApiFilters),
     refetchInterval: runPollInterval(
       isRunActive(currentRunQuery.data?.status || currentDocumentQuery.data?.latest_run_status),
@@ -244,7 +249,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const currentChapterReviewQuery = useQuery({
     queryKey: ["chapter-worklist-detail", selectedDocumentId, selectedReviewChapterId],
-    enabled: Boolean(selectedDocumentId && selectedReviewChapterId),
+    enabled: Boolean(selectedDocumentId && selectedReviewChapterId) && workbenchVisible,
     queryFn: () =>
       getDocumentChapterWorklistDetail(
         selectedDocumentId as string,

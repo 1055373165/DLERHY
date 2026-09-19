@@ -49,6 +49,10 @@ export function WorkspacePage() {
     importWebPage,
     runPrimaryAction,
     downloadChapterAsset,
+    selectedDocumentId,
+    currentDocumentLoading,
+    currentDocumentError,
+    refreshCurrentDocument,
   } = useWorkspace();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -149,10 +153,15 @@ export function WorkspacePage() {
   async function handleAction(actionId: string) {
     try {
       const result: ExecuteActionResponse = await executeChapterAction(actionId, true);
-      const ok = result.status === "executed" || result.issue_resolved;
+      // The API answers "completed" once the action ran; the issue itself may still be open.
+      const ran = result.status === "completed";
       setFeedback({
-        tone: ok ? "success" : "error",
-        text: `Action ${result.action_id.slice(0, 8)} :: ${result.status}`,
+        tone: ran ? "success" : "error",
+        text: !ran
+          ? "修复没有执行成功，请稍后重试。"
+          : result.issue_resolved
+            ? "修复已执行，问题已解决。"
+            : "修复已执行，问题还在，复核后会再次检查。",
       });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "执行失败" });
@@ -183,10 +192,29 @@ export function WorkspacePage() {
   const actions = detail?.recent_actions ?? [];
   const selectedChapterEntry = queueEntries.find((e) => e.chapter_id === selectedReviewChapterId);
 
+  // A book is selected but did not load: say so instead of showing the upload page as if none were.
+  const opening = !doc && Boolean(selectedDocumentId) && currentDocumentLoading;
+  const openFailed = !doc && Boolean(selectedDocumentId) && Boolean(currentDocumentError);
+
   return (
     <div className={s.layout}>
+      {opening && <div className={s.detailEmpty}>正在打开这本书…</div>}
+      {openFailed && (
+        <div className={s.feedback} data-tone="error" role="alert">
+          这本书没能打开：{currentDocumentError}
+          <div className={s.uploadActions}>
+            <button className="btn btn-sm" onClick={() => void refreshCurrentDocument()}>
+              重试
+            </button>
+            <button className="btn btn-sm" onClick={handleReturnHome}>
+              回到首页
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Upload Hero (when no document loaded) ── */}
-      {!doc && (
+      {!doc && !opening && !openFailed && (
         <div className={s.uploadHero}>
           <div className={s.uploadIllustration}>
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -487,7 +515,7 @@ export function WorkspacePage() {
                         <div key={act.action_id} className={s.actionRow}>
                           <StatusBadge
                             label={act.status}
-                            tone={act.status === "executed" ? "success" : "warning"}
+                            tone={act.status === "completed" ? "success" : "warning"}
                           />
                           <span className={s.actionType}>{act.action_type}</span>
                           <button

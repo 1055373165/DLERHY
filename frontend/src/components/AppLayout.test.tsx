@@ -59,6 +59,15 @@ describe("Pending approvals in the shell", () => {
     await waitFor(() => expect(document.title).toBe("(2) 等你审批 · Book Agent"));
   });
 
+  it("does not load the chapter workbench on pages that do not show it", async () => {
+    installFetchMock([]);
+    renderAt("/library");
+    await screen.findByText("服务在线");
+    const calls = (fetch as unknown as { mock: { calls: [RequestInfo | URL][] } }).mock.calls.map(([input]) => String(input));
+    expect(calls.some((url) => url.includes(`/v1/documents/${DOCUMENT_ID}`))).toBe(true);
+    expect(calls.filter((url) => url.includes("/worklist"))).toEqual([]);
+  });
+
   it("stays quiet when nothing waits", async () => {
     installFetchMock([]);
     renderAt("/library");
