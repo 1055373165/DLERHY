@@ -215,6 +215,13 @@ class WebPageWorkflowTests(unittest.TestCase):
                         document_id, ExportType.WEB_HTML
                     )
                 page = Path(result.file_path).read_text(encoding="utf-8")
+                reading = {}
+                for export_type in (ExportType.MERGED_HTML, ExportType.MERGED_MARKDOWN):
+                    with session_scope(session_factory) as session:
+                        exported = DocumentWorkflowService(session, export_root=exports).export_document(
+                            document_id, export_type
+                        )
+                    reading[export_type] = Path(exported.file_path).read_text(encoding="utf-8")
             finally:
                 engine.dispose()
 
@@ -226,6 +233,18 @@ class WebPageWorkflowTests(unittest.TestCase):
         self.assertIn('<html lang="zh-CN">', page)
         self.assertNotIn(web.NODE_ATTR, page)
         self.assertNotIn("<script", page)
+        # The reading formats read the page as an article: markers become words, menus and footer go.
+        for export_type, text in reading.items():
+            self.assertIn("accelerating fast", text, export_type)
+            self.assertNotIn("][1]", text, export_type)
+            self.assertNotIn("**", text, export_type)
+            self.assertNotIn("Terms of service", text, export_type)
+            self.assertNotIn("ZH::Research", text, export_type)
+        # The article's own heading titles the chapter once; the <title> with the site name is gone.
+        merged = reading[ExportType.MERGED_HTML]
+        self.assertIn("<h2>ZH::When AI builds itself</h2>", merged)
+        self.assertEqual(merged.count("ZH::When AI builds itself<"), 1)
+        self.assertNotIn("<div class='zh'>ZH::When AI builds itself \\ Example", merged)
 
 
 class WebRunPlanTests(unittest.TestCase):

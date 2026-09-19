@@ -212,9 +212,19 @@ class DownloadTests(unittest.TestCase):
         self.assertIn("PDF", response.json()["detail"])
 
     def test_the_chinese_book_downloads_with_a_table_of_contents_and_without_run_statistics(self) -> None:
+        from book_agent.export.reader_epub import reader_html
+
         merged = self._get(f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html").text
-        self.assertIn("class='reader-toc'", merged)
         self.assertNotIn("usage-summary'", merged.split("</style>")[-1])
+        # One chapter needs no table of contents; two or more get one.
+        self.assertNotIn("class='reader-toc'", merged)
+        start = merged.index("<section class='chapter'")
+        end = merged.index("回到顶部</a></section>") + len("回到顶部</a></section>")
+        chapter = merged[start:end]
+        second = chapter.replace("id='chapter-", "id='chapter-2-", 1).replace("ZH::Chapter One", "ZH::Chapter Two", 1)
+        two_chapters = reader_html(merged[:end] + second + merged[end:])
+        self.assertIn("class='reader-toc'", two_chapters)
+        self.assertIn("ZH::Chapter Two", two_chapters.split("class='reader-toc'")[1].split("</nav>")[0])
 
     def test_the_chinese_book_downloads_as_a_valid_epub(self) -> None:
         import xml.etree.ElementTree as ET

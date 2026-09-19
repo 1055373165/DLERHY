@@ -53,5 +53,5 @@ a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
 .inline-token{font-family:'SFMono-Regular',Menlo,Monaco,monospace;background:#e3edf4;padding:1px 6px;border-radius:6px;font-size:.92em;}
 .back-top{display:inline-flex;margin-top:16px;font-family:var(--font-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
 @media (max-width: 980px){.page-shell{grid-template-columns:1fr;padding:18px 14px 40px;}.sidebar{position:relative;top:auto;order:-1;}.hero{padding:26px 22px;}.chapter{padding:22px 18px;}.block .zh{font-size:17px;max-width:none;}}
-@media print{body{background:#fff;}.page-shell{display:block;max-width:none;padding:0;}.sidebar{display:none;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;break-inside:avoid;}.artifact{box-shadow:none;}}
+@media print{body{background:#fff;}.page-shell{display:block;max-width:none;padding:0;}.sidebar{display:none;}.hero,.chapter{box-shadow:none;border:1px solid #d7d7d7;}.hero,.block,.artifact{break-inside:avoid;}.heading{break-after:avoid;}.chapter+.chapter{break-before:page;}.artifact{box-shadow:none;}}
 .math-block{margin:16px 0;text-align:center;}.math-block.equation-text pre{display:inline-block;text-align:left;}

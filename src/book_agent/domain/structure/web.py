@@ -513,6 +513,18 @@ class WebPageParser:
 _MARKUP = re.compile(r"\[(?P<ref_text>[^\[\]]+)\]\[(?P<ref>\d+)\]|(?P<marker>\*\*|\*|`)(?P<inner>.+?)(?P=marker)")
 
 
+def plain_text(marked: str) -> str:
+    """Marked source or translation as plain words: link and emphasis markers dropped, their text kept.
+
+    For the reading formats (merged HTML, bilingual, Markdown, PDF); only the web page export
+    turns the markers back into the page's own tags.
+    """
+    def unwrap(match: re.Match[str]) -> str:
+        return plain_text(match.group("ref_text") if match.group("ref") is not None else match.group("inner"))
+
+    return _MARKUP.sub(unwrap, marked)
+
+
 def _end_tag(element: Element) -> str:
     return element.end or f"</{element.tag}>"
 

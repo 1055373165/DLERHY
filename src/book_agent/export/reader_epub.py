@@ -107,7 +107,8 @@ def reader_html(document: str) -> str:
     """The merged book for readers: no translation statistics, a table of contents after the title."""
     document = _USAGE_SUMMARY.sub("", document)
     _, chapters = split_merged_book(document)
-    if not chapters:
+    if len(chapters) < 2:
+        # One chapter (a web page, a short story) needs no table of contents.
         return document
     items = "".join(f"<li><a href='#{html.escape(c.anchor)}'>{html.escape(c.title)}</a></li>" for c in chapters)
     toc = f"<nav class='reader-toc' aria-label='目录'><h2>目录</h2><ol>{items}</ol></nav>"

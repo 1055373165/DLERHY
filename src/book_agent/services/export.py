@@ -2014,6 +2014,8 @@ class ExportService:
             ):
                 render_blocks[-2] = render_repair.merge_adjacent_code_render_blocks(render_blocks[-2], render_blocks[-1])
                 render_blocks.pop()
+        if bundle.document.source_type == SourceType.WEB:
+            return _web_page_reading_blocks(render_blocks)
         if _is_academic_paper_document(bundle.document):
             return render_repair.normalize_academic_paper_render_blocks(bundle, render_blocks)
         if _is_pdf_document(bundle.document):
@@ -2723,13 +2725,19 @@ class ExportService:
             raise ExportUnavailableError(
                 "Rebuilt PDF renderer is unavailable because Playwright is not installed.", reason="renderer_missing"
             ) from exc
+        from book_agent.export.reader_epub import reader_html
+
+        # Print what readers see (no translation statistics, a table of contents), next to the
+        # merged HTML so its relative asset paths still resolve.
+        print_source = html_path.with_name(f"{html_path.stem}.print.html")
+        print_source.write_text(reader_html(html_path.read_text(encoding="utf-8")), encoding="utf-8")
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch()
                 try:
                     page = browser.new_page()
                     page.emulate_media(media="print")
-                    page.goto(html_path.resolve().as_uri(), wait_until="load")
+                    page.goto(print_source.resolve().as_uri(), wait_until="load")
                     with atomic_path(pdf_path) as temporary:
                         page.pdf(path=str(temporary), print_background=True, format="A4")
                 finally:
@@ -2741,6 +2749,8 @@ class ExportService:
                 "Rebuilt PDF renderer is unavailable or failed to render the merged HTML substrate.",
                 reason="renderer_failed",
             ) from exc
+        finally:
+            print_source.unlink(missing_ok=True)
 
     def _export_epub_assets_for_chapter_bundle(
         self,
@@ -3154,6 +3164,23 @@ class DocumentRenderer:
     uses_upstream_exports: bool = False
     syncs_document_title: bool = True
     apply_status_updates: Callable[[ExportService, DocumentExportBundle], None] | None = None
+
+
+def _web_page_reading_blocks(render_blocks: list[MergedRenderBlock]) -> list[MergedRenderBlock]:
+    """A web page read as an article: no site menus or footer, no repeat of the <title>, markers as words."""
+    kept: list[MergedRenderBlock] = []
+    for block in render_blocks:
+        metadata = block.source_metadata or {}
+        if metadata.get("web_region") == web_page.WEB_REGION_CHROME or metadata.get("web_role") == "page_title":
+            continue
+        kept.append(
+            replace(
+                block,
+                source_text=web_page.plain_text(block.source_text),
+                target_text=web_page.plain_text(block.target_text) if block.target_text else block.target_text,
+            )
+        )
+    return kept
 
 
 def _render_merged(builder_name: str) -> Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str]:

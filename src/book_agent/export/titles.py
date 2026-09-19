@@ -7,6 +7,7 @@ import re
 
 from book_agent.domain.enums import (
     BlockType,
+    SourceType,
 )
 from book_agent.export import render_repair
 from book_agent.export.common import (
@@ -56,6 +57,20 @@ def resolved_chapter_title_text(
     )
     if _is_pdf_document(chapter_bundle.document):
         fallback_title = localize_chapter_label(localized_structural_title_fallback(fallback_title))
+    if chapter_bundle.document.source_type == SourceType.WEB:
+        # The page is the chapter: its title is the article's own first heading (a byline may
+        # come first), not the <title> with the site name appended.
+        heading = next(
+            (
+                block
+                for block in render_blocks
+                if block.block_type == BlockType.HEADING.value and _normalize_render_text(block.target_text or "")
+            ),
+            None,
+        )
+        if heading is not None:
+            return str(heading.target_text).strip()
+        return chapter_bundle.document.title_tgt or fallback_title
     first_content_block = next(
         (
             block
