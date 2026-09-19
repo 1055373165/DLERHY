@@ -434,7 +434,7 @@ start_all() {
         info "  Frontend: ${CYAN}${FRONTEND_URL}${NC}"
         info "            $FRONTEND_LOG_FILE"
     fi
-    info "  Status:   ${BOLD}./service.sh status${NC}"
+    info "  Status:   ${BOLD}book-agent status${NC}  (or ./service.sh status)"
 }
 
 stop_all() {

@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# ------------------------------------------------------------------
+#  book-agent: one command for the service and the CLI, from any directory.
+#
+#    book-agent start|stop|restart|status [options]   services (service.sh)
+#    book-agent logs [backend|frontend]                follow a service log
+#    book-agent install | uninstall                    put this command on PATH
+#    book-agent <anything else>                        the Python CLI (bootstrap,
+#                                                       add-org-credit, eval, ...)
+#
+#  Install once from the repository:  ./book-agent install
+#  (links ~/.local/bin/book-agent to this file; override with BOOK_AGENT_BIN_DIR).
+# ------------------------------------------------------------------
+set -euo pipefail
+
+# The repository is wherever this file really lives, even when called through the PATH link.
+SELF="${BASH_SOURCE[0]}"
+while [[ -L "$SELF" ]]; do
+    target="$(readlink "$SELF")"
+    [[ "$target" == /* ]] || target="$(dirname "$SELF")/$target"
+    SELF="$target"
+done
+ROOT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+BIN_DIR="${BOOK_AGENT_BIN_DIR:-$HOME/.local/bin}"
+LINK="$BIN_DIR/book-agent"
+
+usage() {
+    cat <<EOF
+Usage: book-agent <command> [options]
+
+Services (from any directory):
+  start [--reload]     start PostgreSQL, backend and frontend
+  stop [--keep-db]     stop them (--keep-db leaves PostgreSQL running)
+  restart              stop, then start
+  status               show what is running
+  logs [backend|frontend]
+                       follow a service log (default: backend)
+
+Setup:
+  install              link $LINK -> this script
+  uninstall            remove that link
+
+Anything else goes to the Python CLI (book-agent --help for its commands),
+run in this project: $ROOT_DIR
+EOF
+}
+
+install_link() {
+    mkdir -p "$BIN_DIR"
+    if [[ -e "$LINK" || -L "$LINK" ]]; then
+        if [[ -L "$LINK" && "$(readlink "$LINK")" == "$ROOT_DIR/book-agent" ]]; then
+            echo "Already installed: $LINK -> $ROOT_DIR/book-agent"
+            return
+        fi
+        echo "Refusing to overwrite $LINK (it is not a link to this project). Remove it first." >&2
+        exit 1
+    fi
+    ln -s "$ROOT_DIR/book-agent" "$LINK"
+    echo "Installed: $LINK -> $ROOT_DIR/book-agent"
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ;;
+        *) echo "Note: $BIN_DIR is not on your PATH; add it to use 'book-agent' everywhere." ;;
+    esac
+}
+
+uninstall_link() {
+    if [[ -L "$LINK" && "$(readlink "$LINK")" == "$ROOT_DIR/book-agent" ]]; then
+        rm "$LINK"
+        echo "Removed $LINK"
+    else
+        echo "Nothing to remove: $LINK is not a link to this project."
+    fi
+}
+
+follow_log() {
+    local which="${1:-backend}" file
+    case "$which" in
+        backend) file="${BOOK_AGENT_BACKEND_LOG:-$ROOT_DIR/artifacts/server.log}" ;;
+        frontend) file="${BOOK_AGENT_FRONTEND_LOG:-$ROOT_DIR/artifacts/frontend.log}" ;;
+        *) echo "logs: expected backend or frontend, got '$which'" >&2; exit 1 ;;
+    esac
+    [[ -f "$file" ]] || { echo "No log yet: $file" >&2; exit 1; }
+    exec tail -n 100 -f "$file"
+}
+
+# The Python CLI resolves its default paths (artifacts/, the database file) against the
+# working directory, so it runs from the project; paths given relative to where the user
+# is are made absolute first.
+run_cli() {
+    local args=() arg
+    for arg in "$@"; do
+        if [[ "$arg" != -* && "$arg" != /* && -e "$PWD/$arg" ]]; then
+            args+=("$PWD/$arg")
+        else
+            args+=("$arg")
+        fi
+    done
+    cd "$ROOT_DIR"
+    if command -v uv >/dev/null 2>&1; then
+        exec uv run --quiet --project "$ROOT_DIR" book-agent ${args[@]+"${args[@]}"}
+    fi
+    exec "$ROOT_DIR/.venv/bin/book-agent" ${args[@]+"${args[@]}"}
+}
+
+command="${1:-}"
+case "$command" in
+    start|stop|restart|status|toggle)
+        exec "$ROOT_DIR/service.sh" "$@"
+        ;;
+    logs)
+        shift
+        follow_log "$@"
+        ;;
+    install)
+        install_link
+        ;;
+    uninstall)
+        uninstall_link
+        ;;
+    ""|-h|--help|help)
+        usage
+        ;;
+    *)
+        run_cli "$@"
+        ;;
+esac

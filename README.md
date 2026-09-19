@@ -57,6 +57,16 @@ cp .env.example .env              # edit: OPENAI_API_KEY=sk-...
 
 `dev.sh` installs Python deps via [`uv`](https://docs.astral.sh/uv/), starts PostgreSQL in Docker, runs Alembic migrations, and boots backend + frontend with hot reload.
 
+To run the services in the background and control them from any directory:
+
+```bash
+./book-agent install              # once: links ~/.local/bin/book-agent to this repo
+book-agent start                  # PostgreSQL + migrations + backend (:8999) + frontend (:4173)
+book-agent status | logs | restart
+book-agent stop                   # --keep-db leaves PostgreSQL running
+book-agent add-org-credit ...     # any other command goes to the Python CLI of this project
+```
+
 ### Your first translation — 3 clicks
 
 1. Open `http://localhost:4173` → **Library** → drag in an `.epub` or `.pdf`.
