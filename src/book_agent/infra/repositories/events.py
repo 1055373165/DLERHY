@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Session
@@ -64,14 +65,17 @@ def resolve_event_org(
     for scope, value, statement in lookups:
         if not value:
             continue
+        try:
+            # Ids are UUIDs; anything else cannot name a row, and on PostgreSQL a bad UUID
+            # literal would abort the caller's transaction.
+            UUID(str(value))
+        except ValueError:
+            continue
         key = (scope, str(value))
         cached = _org_cache.get(key)
         if cached is not None:
             return cached
-        try:
-            org_id = session.scalar(statement(str(value)))
-        except (ValueError, TypeError):
-            org_id = None
+        org_id = session.scalar(statement(str(value)))
         if org_id is not None:
             if len(_org_cache) >= _ORG_CACHE_LIMIT:
                 _org_cache.clear()
