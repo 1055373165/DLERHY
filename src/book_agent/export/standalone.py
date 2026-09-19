@@ -41,6 +41,25 @@ def inline_local_assets(document: str, base_dir: Path, *, resolve: Callable[[Pat
     content-addressed blob of an asset). References that leave ``base_dir``,
     point elsewhere (http, #anchors, data:) or cannot be found are kept.
     """
+    data_uri = _data_uri_resolver(base_dir, resolve)
+
+    def replace(match: re.Match[str]) -> str:
+        url = html.unescape(match.group("url"))
+        if url.startswith("#") or _SCHEME.match(url):
+            return match.group(0)
+        uri = data_uri(url)
+        if uri is None:
+            return match.group(0)
+        quote = match.group("quote")
+        return f"{match.group('attr')}={quote}{uri}{quote}"
+
+    return _ATTRIBUTE_URL.sub(replace, document)
+
+
+def _data_uri_resolver(
+    base_dir: Path, resolve: Callable[[Path], Path | None] | None = None
+) -> Callable[[str], str | None]:
+    """url -> data URI for an embeddable file under ``base_dir``, else None (cached per call site)."""
     root = base_dir.resolve()
     cache: dict[str, str | None] = {}
 
@@ -65,17 +84,31 @@ def inline_local_assets(document: str, base_dir: Path, *, resolve: Callable[[Pat
         cache[url] = f"data:{media_type};base64,{encoded}"
         return cache[url]
 
-    def replace(match: re.Match[str]) -> str:
+    return data_uri
+
+
+# ![alt](url) and ![alt](url "title"); the URL has no spaces (the exporter percent-encodes them).
+_MARKDOWN_IMAGE = re.compile(r"(?P<head>!\[[^\]]*\]\()(?P<url>[^)\s]+)(?P<tail>(?:\s+\"[^\"]*\")?\))")
+
+
+def inline_markdown_images(markdown: str, base_dir: Path) -> str:
+    """The Markdown with its local images (``![..](..)`` and raw ``<img src>``) as data URIs, for previewing."""
+    data_uri = _data_uri_resolver(base_dir)
+
+    def replace_markdown(match: re.Match[str]) -> str:
+        url = match.group("url")
+        uri = None if url.startswith("#") or _SCHEME.match(url) else data_uri(url)
+        return match.group(0) if uri is None else f"{match.group('head')}{uri}{match.group('tail')}"
+
+    def replace_attribute(match: re.Match[str]) -> str:
         url = html.unescape(match.group("url"))
-        if url.startswith("#") or _SCHEME.match(url):
-            return match.group(0)
-        uri = data_uri(url)
+        uri = None if url.startswith("#") or _SCHEME.match(url) else data_uri(url)
         if uri is None:
             return match.group(0)
         quote = match.group("quote")
         return f"{match.group('attr')}={quote}{uri}{quote}"
 
-    return _ATTRIBUTE_URL.sub(replace, document)
+    return _ATTRIBUTE_URL.sub(replace_attribute, _MARKDOWN_IMAGE.sub(replace_markdown, markdown))
 
 
 def drop_unused_katex(document: str) -> str:

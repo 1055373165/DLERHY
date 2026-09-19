@@ -444,11 +444,12 @@ def download_document_export(
     document_id: str,
     request: Request,
     export_type: ExportType = Query(...),
-    package: Literal["single", "zip", "epub"] = Query(
+    package: Literal["single", "zip", "epub", "preview"] = Query(
         default="single",
         description=(
             "single: one HTML file (images embedded; bilingual assembled into one book); zip: the stored files; "
-            "epub: an e-book of the merged Chinese book (export_type=merged_html)."
+            "epub: an e-book of the merged Chinese book (export_type=merged_html); "
+            "preview: for reading in the app (HTML as one file, Markdown with images inlined, PDF inline)."
         ),
     ),
     session: Session = Depends(get_db_session),

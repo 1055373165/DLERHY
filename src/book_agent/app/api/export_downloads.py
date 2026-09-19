@@ -32,6 +32,12 @@ PACKAGE_SINGLE = "single"
 PACKAGE_ZIP = "zip"
 # An EPUB built from the merged Chinese book (any source type, PDF included).
 PACKAGE_EPUB = "epub"
+# For reading in the app: HTML as one self-contained file, Markdown as text with its
+# images inlined, PDF as the file itself, all served inline rather than as attachments.
+PACKAGE_PREVIEW = "preview"
+PREVIEW_TYPES = frozenset(
+    {ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML, ExportType.MERGED_MARKDOWN, ExportType.REBUILT_PDF}
+)
 SINGLE_FILE_TYPES = frozenset({ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML})
 
 
@@ -188,14 +194,15 @@ def _ascii_fallback_name(filename: str) -> str:
     return f"{ascii_stem}{ext}" if ext else ascii_stem
 
 
-def content_disposition(filename: str) -> str:
+def content_disposition(filename: str, *, inline: bool = False) -> str:
     # Produce a dual-form Content-Disposition header per RFC 6266.
     # Starlette only emits one form; when the payload name is non-ASCII
     # it drops the ``filename=`` alternative entirely, which loses the
     # extension on at least macOS Safari downloads.
     ascii_name = _ascii_fallback_name(filename)
     encoded = quote(filename, safe="")
-    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
+    kind = "inline" if inline else "attachment"
+    return f'{kind}; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
 
 
 def _canonical_basename(file_path: str | Path) -> str:
@@ -474,6 +481,14 @@ def document_export_response(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
         )
+    preview = package == PACKAGE_PREVIEW
+    if preview:
+        if export_type not in PREVIEW_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="package=preview serves merged_html, bilingual_html, merged_markdown and rebuilt_pdf.",
+            )
+        package = PACKAGE_SINGLE
     if export_type == ExportType.BILINGUAL_HTML:
         return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots, package=package)
     lookup_type = export_type
@@ -541,6 +556,21 @@ def document_export_response(
                 detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
             )
         return _reader_epub_response(document, file_path, canonical_path, f"{book_title}-{label}.epub")
+    if preview and export_type == ExportType.MERGED_MARKDOWN:
+        from book_agent.export.standalone import inline_markdown_images
+
+        markdown = inline_markdown_images(file_path.read_text(encoding="utf-8"), canonical_path.parent)
+        return Response(
+            content=markdown.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={"content-disposition": content_disposition(main_filename, inline=True)},
+        )
+    if preview and export_type == ExportType.REBUILT_PDF:
+        return FileResponse(
+            path=file_path,
+            media_type="application/pdf",
+            headers={"content-disposition": content_disposition(main_filename, inline=True)},
+        )
     if package == PACKAGE_SINGLE and export_type in SINGLE_FILE_TYPES and ext.lower() == ".html":
         document_html = _standalone_html(file_path, canonical_path)
         if document_html is not None:

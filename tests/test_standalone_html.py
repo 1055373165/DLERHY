@@ -62,6 +62,23 @@ class StandaloneHelpersTests(unittest.TestCase):
         self.assertIn("../outside.png", result)
         self.assertEqual(local_references(result), ["assets/missing.png", "../outside.png"])
 
+    def test_markdown_images_are_inlined_for_previewing(self) -> None:
+        from book_agent.export.standalone import inline_markdown_images
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "assets").mkdir()
+            (root / "assets" / "a b.png").write_bytes(PNG)
+            markdown = (
+                "# 标题\n\n![图片](assets/a%20b.png)\n![说明](assets/a%20b.png \"题注\")\n"
+                "![缺](assets/missing.png)\n![外](https://example.com/x.png)\n<img src='assets/a%20b.png'>\n"
+            )
+            result = inline_markdown_images(markdown, root)
+        self.assertEqual(result.count("data:image/png;base64,"), 3)
+        self.assertIn('"题注")', result)
+        self.assertIn("(assets/missing.png)", result)
+        self.assertIn("(https://example.com/x.png)", result)
+
     def test_the_formula_renderer_goes_only_when_no_element_needs_it(self) -> None:
         without = drop_unused_katex(f"<head>{KATEX}</head><p>plain</p>")
         self.assertNotIn("katex", without)
@@ -120,6 +137,7 @@ class DownloadTests(unittest.TestCase):
                 ReviewService(ReviewRepository(session)).review_chapter(chapter.id)
             workflow = DocumentWorkflowService(session, export_root=self.export_root)
             workflow.export_document(artifacts.document.id, ExportType.MERGED_HTML)
+            workflow.export_document(artifacts.document.id, ExportType.MERGED_MARKDOWN)
             for chapter in artifacts.chapters:
                 workflow.export_service.export_bilingual_html(chapter.id, enforce_gate=False)
             session.commit()
@@ -132,6 +150,9 @@ class DownloadTests(unittest.TestCase):
         for html_file in document_dir.glob("*.html"):
             text = html_file.read_text(encoding="utf-8")
             html_file.write_text(text.replace("</main>", "<img src='assets/pdf-images/fig.png'></main>"), encoding="utf-8")
+        for markdown_file in document_dir.glob("*.md"):
+            with markdown_file.open("a", encoding="utf-8") as handle:
+                handle.write("\n![图片](assets/pdf-images/fig.png)\n")
 
         patcher = patch.dict(os.environ, {"BOOK_AGENT_AUTH_MODE": "disabled", "BOOK_AGENT_RUN_EXECUTOR_ENABLED": "false"})
         patcher.start()
@@ -170,6 +191,19 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(zipped.headers["content-type"], "application/zip")
         with zipfile.ZipFile(io.BytesIO(zipped.content)) as archive:
             self.assertTrue(any(name.endswith("fig.png") for name in archive.namelist()))
+
+    def test_previews_serve_each_format_readable_in_the_app(self) -> None:
+        base = f"/v1/documents/{self.document_id}/exports/download"
+        markdown = self._get(f"{base}?export_type=merged_markdown&package=preview")
+        self.assertTrue(markdown.headers["content-type"].startswith("text/markdown"))
+        self.assertTrue(markdown.headers["content-disposition"].startswith("inline"))
+        self.assertIn("![图片](data:image/png;base64,", markdown.text)
+        for export_type in ("merged_html", "bilingual_html"):
+            page = self._get(f"{base}?export_type={export_type}&package=preview")
+            self.assertTrue(page.headers["content-type"].startswith("text/html"))
+            self.assertEqual(local_references(page.text), [])
+        refused = self.client.get(f"{base}?export_type=review_package&package=preview")
+        self.assertEqual(refused.status_code, 422)
 
     def test_the_chinese_book_downloads_with_a_table_of_contents_and_without_run_statistics(self) -> None:
         merged = self._get(f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html").text
