@@ -1,10 +1,11 @@
 import { ApiKeySetting } from "./ApiKeySetting";
 import { BudgetMeter } from "./BudgetMeter";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useWorkspace } from "../app/WorkspaceContext";
-import { SERVICE_LINKS } from "../lib/api";
+import { SERVICE_LINKS, listApprovals } from "../lib/api";
 import { preferredTitle } from "../lib/workflow";
 import s from "./AppLayout.module.css";
 
@@ -59,21 +60,40 @@ const Icons = {
 } as const;
 
 const NAV_ITEMS = [
-  { to: "/", label: "WORK", zh: "工作台", icon: Icons.work },
-  { to: "/runs", label: "RUNS", zh: "运行", icon: Icons.runs },
-  { to: "/deliverables", label: "SHIP", zh: "交付", icon: Icons.ship },
-  { to: "/issues", label: "ISSUES", zh: "问题", icon: Icons.issues },
-  { to: "/approvals", label: "APPROVE", zh: "审批", icon: Icons.approve },
-  { to: "/library", label: "LIB", zh: "书库", icon: Icons.lib },
-  { to: "/providers", label: "MODELS", zh: "服务商", icon: Icons.settings },
+  { to: "/", label: "工作台", icon: Icons.work },
+  { to: "/library", label: "书库", icon: Icons.lib },
+  { to: "/approvals", label: "审批", icon: Icons.approve },
+  { to: "/runs", label: "运行", icon: Icons.runs },
+  { to: "/deliverables", label: "交付", icon: Icons.ship },
+  { to: "/issues", label: "问题", icon: Icons.issues },
+  { to: "/providers", label: "服务商", icon: Icons.settings },
 ] as const;
+
+const APP_TITLE = "Book Agent";
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const { currentDocument, health, healthLoading } = useWorkspace();
+  const documentId = currentDocument?.document_id ?? null;
+  // Same query key as the approvals page, so deciding there updates the count here at once.
+  const pendingApprovals = useQuery({
+    queryKey: ["approvals", documentId],
+    queryFn: () => listApprovals(documentId as string, "pending"),
+    enabled: Boolean(documentId),
+    refetchInterval: 10_000,
+  });
+  const pendingCount = pendingApprovals.data?.length ?? 0;
 
   const docTitle = currentDocument ? preferredTitle(currentDocument) : null;
+
+  useEffect(() => {
+    // The tab title says it too, so a reader on another tab sees that the book is waiting on them.
+    document.title = pendingCount > 0 ? `(${pendingCount}) 等你审批 · ${APP_TITLE}` : APP_TITLE;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [pendingCount]);
 
   const activeNav =
     NAV_ITEMS.find((n) =>
@@ -107,11 +127,15 @@ export function AppLayout() {
                 `${s.navItem} ${isActive ? s.navActive : ""}`
               }
               onClick={() => setNavOpen(false)}
-              title={`${item.label} ${item.zh}`}
+              title={item.label}
             >
               <span className={s.navIcon}>{item.icon}</span>
               <span className={s.navLabel}>{item.label}</span>
-              <span className={s.navZh}>{item.zh}</span>
+              {item.to === "/approvals" && pendingCount > 0 && (
+                <span className={s.navBadge} aria-label={`${pendingCount} 项待审批`}>
+                  {pendingCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -135,7 +159,7 @@ export function AppLayout() {
               data-status={healthLoading ? "check" : health?.status === "ok" ? "ok" : "down"}
             />
             <span className={s.healthLabel}>
-              {healthLoading ? "..." : health?.status === "ok" ? "Online" : "Offline"}
+              {healthLoading ? "检查中" : health?.status === "ok" ? "服务在线" : "服务离线"}
             </span>
           </div>
         </div>
@@ -161,6 +185,11 @@ export function AppLayout() {
               </>
             )}
           </div>
+          {pendingCount > 0 && !location.pathname.startsWith("/approvals") && (
+            <NavLink to="/approvals" className={s.pendingNotice} role="status">
+              有 {pendingCount} 项等你审批，处理后翻译会继续 →
+            </NavLink>
+          )}
         </header>
 
         <div className={s.content}>

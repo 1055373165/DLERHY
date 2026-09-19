@@ -124,9 +124,9 @@
 }
 
 .navLabel {
+  font-family: var(--font-cjk);
   font-weight: 500;
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
+  font-size: var(--text-sm);
   opacity: 0;
   transition: opacity 150ms ease;
 }
@@ -135,17 +135,37 @@
   opacity: 1;
 }
 
-.navZh {
-  font-family: var(--font-cjk);
+/* Pending count: on the icon while the sidebar is collapsed, so it shows without hovering. */
+.navBadge {
+  position: absolute;
+  left: 22px;
+  top: 3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--red);
+  color: var(--white);
   font-size: 10px;
-  color: var(--text-muted);
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity 150ms ease;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
 }
 
-.sidebar:hover .navZh {
-  opacity: 1;
+.pendingNotice {
+  flex-shrink: 0;
+  padding: 2px var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--amber-light);
+  color: var(--amber);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pendingNotice:hover {
+  text-decoration: underline;
 }
 
 /* ── Sidebar Footer ── */
@@ -321,7 +341,6 @@
   /* Show all labels on mobile (sidebar is full-width drawer) */
   .sidebar .logoText,
   .sidebar .navLabel,
-  .sidebar .navZh,
   .sidebar .systemLinks,
   .sidebar .healthLabel {
     opacity: 1;
