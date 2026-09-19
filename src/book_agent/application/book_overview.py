@@ -295,6 +295,8 @@ def _primary_action(translation: dict[str, Any], readable: bool, needs_you: list
     run_id = translation.get("run_id")
     if needs_you:
         return {"kind": "handle", "label": "去处理"}
+    if state in {"queued", "running", "draining"} and translation.get("stalled"):
+        return {"kind": "retry", "label": "重试", "run_id": run_id}
     if state in {"queued", "running", "draining"}:
         return {"kind": "read", "label": "阅读中文版"} if readable else {"kind": "stop", "label": "停止", "run_id": run_id}
     if state == "paused":
@@ -316,7 +318,9 @@ def build_overview(session: Session, document_id: str, context: OverviewContext)
 
     exported = _succeeded_export_types(session, document.id)
     web = document.source_type == SourceType.WEB
-    readable_ready = ExportType.MERGED_HTML.value in exported or (web and ExportType.WEB_HTML.value in exported)
+    # Readable means the reader's first format exists: the Chinese page for a web page (it is
+    # generated after the merged copy; opening the reader in between would ask for it too early).
+    readable_ready = (ExportType.WEB_HTML.value if web else ExportType.MERGED_HTML.value) in exported
     formats = ([ExportType.WEB_HTML.value] if web else []) + [fmt.value for fmt in _READING_FORMATS]
     if context.pdf_renderer:
         formats.append(ExportType.REBUILT_PDF.value)
@@ -338,6 +342,8 @@ def build_overview(session: Session, document_id: str, context: OverviewContext)
             "auto_started": bool(request.get("auto_started")),
             "started_at": summary.started_at,
             "finished_at": summary.finished_at,
+            # Still marked running, but a step failed and nothing has moved for a while: offer a retry.
+            "stalled": service._is_stale_failed_stage_run(run.id),
         }
     translation["progress"] = progress
 

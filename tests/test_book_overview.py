@@ -153,9 +153,16 @@ class BookOverviewTests(unittest.TestCase):
         self.assertEqual(overview["primary_action"]["kind"], "read")
         self.assertEqual(overview["headline"], "中文版已就绪。")
 
+    def test_a_web_page_is_readable_once_its_chinese_page_exists(self) -> None:
+        self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        self._export(ExportType.MERGED_HTML)
+        self.assertFalse(self._overview()["readable"]["ready"])
+        self._export(ExportType.WEB_HTML)
+        self.assertTrue(self._overview()["readable"]["ready"])
+
     def test_background_exports_are_activity_not_translation(self) -> None:
         self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.SUCCEEDED)
-        self._export(ExportType.MERGED_HTML)
+        self._export(ExportType.WEB_HTML)
         self._run(DocumentRunType.EXPORT_FULL, DocumentRunStatus.RUNNING, request={"export_type": "rebuilt_pdf"})
         overview = self._overview()
         self.assertEqual(overview["activity"]["exporting"], ["rebuilt_pdf"])
@@ -182,6 +189,12 @@ class BookOverviewTests(unittest.TestCase):
         overview = self._overview()
         self.assertIn("有些可选检查没有完成", overview["headline"])
         self.assertEqual(overview["primary_action"]["kind"], "read")
+
+    def test_asking_for_an_export_while_the_book_is_busy_says_so(self) -> None:
+        self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        response = self.client.post(f"/v1/documents/{self.document_id}/export", json={"export_type": "web_html"})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("还有一项任务在进行", response.json()["detail"])
 
     def test_unknown_book_is_404(self) -> None:
         self.assertEqual(self.client.get("/v1/documents/00000000-0000-4000-8000-000000000000/overview").status_code, 404)
