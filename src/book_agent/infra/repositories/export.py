@@ -334,6 +334,12 @@ class ExportRepository:
         persisted = self.session.merge(export)
         self.session.flush()
         sha256, byte_count = _file_digest(Path(persisted.file_path))
+        # The row must describe the bytes just written. A merge leaves attributes the new
+        # object never set, so a re-export used to keep the previous digest, and downloads,
+        # which prefer the content-addressed blob of that digest, served the old file.
+        persisted.content_sha256 = sha256
+        persisted.byte_count = byte_count
+        persisted.stale_reason = None
         self.session.add(
             ExportVersion(
                 export_id=persisted.id,

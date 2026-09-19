@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import threading
 import unittest
@@ -127,6 +128,31 @@ class ExportVersionTests(unittest.TestCase):
         body = response.json()
         self.assertEqual((body["current_version"], [v["version"] for v in body["versions"]]), (2, [2, 1]))
         self.assertEqual(client.get(f"/v1/documents/{self.document_id}/exports/00000000-0000-0000-0000-000000000000/versions").status_code, 404)
+
+    def test_a_direct_re_render_updates_the_digest_that_downloads_follow(self) -> None:
+        from book_agent.domain.models import Chapter
+        from book_agent.services.export import ExportService
+        from book_agent.infra.repositories.export import ExportRepository
+
+        with self.session_factory() as session:
+            chapter_id = session.scalar(select(Chapter.id))
+            service = ExportService(ExportRepository(session), output_root=self.export_root)
+            service.export_bilingual_html(chapter_id, enforce_gate=False)
+            session.commit()
+            export = session.scalars(select(Export).where(Export.export_type == ExportType.BILINGUAL_HTML)).one()
+            first_digest = export.content_sha256
+            from book_agent.domain.models.translation import TargetSegment
+
+            segment = session.scalars(select(TargetSegment)).first()
+            segment.text_zh = "重新渲染后的译文。"
+            session.flush()
+            # A render outside the export use case (no separate digest stamping afterwards).
+            service.export_bilingual_html(chapter_id, enforce_gate=False)
+            session.commit()
+            session.refresh(export)
+            self.assertNotEqual(export.content_sha256, first_digest)
+            digest = hashlib.sha256(Path(export.file_path).read_bytes()).hexdigest()
+            self.assertEqual(export.content_sha256, digest)
 
     def test_history_is_capped(self) -> None:
         self.assertGreaterEqual(EXPORT_VERSION_RETENTION, 5)
