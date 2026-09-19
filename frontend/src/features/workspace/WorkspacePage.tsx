@@ -177,6 +177,9 @@ export function WorkspacePage() {
               {uploadPending ? "上传中…" : "上传并解析"}
             </button>
           </div>
+          <p className={s.rightsNote}>
+            请只上传你有权翻译的书稿（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
+          </p>
           {feedback && (
             <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
           )}

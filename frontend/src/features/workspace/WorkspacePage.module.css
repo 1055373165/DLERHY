@@ -663,3 +663,12 @@
   margin-top: var(--sp-1);
   color: var(--text-amber);
 }
+
+.rightsNote {
+  max-width: 420px;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-cjk);
+  text-align: center;
+}

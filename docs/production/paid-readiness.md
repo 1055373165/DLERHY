@@ -49,5 +49,8 @@
 | API key、角色、组织隔离、OIDC | ✅ | `tests/test_api_auth.py`、`test_oidc.py`、`test_org_tenancy.py` |
 | 指标与链路追踪 | ✅ | `/metrics`、OpenTelemetry（`tests/test_metrics.py`、`test_tracing.py`） |
 | Docker 镜像构建验证 | 🔒 | 本机构建曾与 Docker 守护进程崩溃同时发生，需用户同意后再试 |
-| 支付与套餐（收费渠道） | 🔒 | 需用户决定定价与支付服务商 |
-| 用户协议、版权声明 | 🔒 | 需用户决定 |
+| 按组织、按书的月度用量明细（计费依据） | ✅ | `GET /v1/orgs/current/usage?month=&format=csv`，与月度预算同一账本、合计一致；侧栏「下载本月用量明细」；`tests/test_org_tenancy.py` |
+| 支付与套餐（收费渠道） | 🔒 | 需用户决定定价方式（按书 / 按用量 / 预付 / 订阅）与支付服务商；用量明细已可作为任一方式的计费依据 |
+| 删除书稿时同时删除其文件（上传原件、导出、图片、独占的 blob） | ✅ | `services/document_files.py`；`tests/test_document_delete_files.py` |
+| 上传处的版权提示 | ✅ | 工作台上传按钮下方提示只上传有权翻译的书稿 |
+| 用户协议、版权声明 | 🔒 草案已备 | `docs/legal/terms-draft.md`：条款与当前实现逐条对应，方括号处（计费、退款、运营主体、适用法律）待用户决定并经法律审阅 |
