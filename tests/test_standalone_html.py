@@ -171,6 +171,43 @@ class DownloadTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(zipped.content)) as archive:
             self.assertTrue(any(name.endswith("fig.png") for name in archive.namelist()))
 
+    def test_the_chinese_book_downloads_with_a_table_of_contents_and_without_run_statistics(self) -> None:
+        merged = self._get(f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html").text
+        self.assertIn("class='reader-toc'", merged)
+        self.assertNotIn("usage-summary'", merged.split("</style>")[-1])
+
+    def test_the_chinese_book_downloads_as_a_valid_epub(self) -> None:
+        import xml.etree.ElementTree as ET
+
+        response = self._get(f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html&package=epub")
+        self.assertEqual(response.headers["content-type"], "application/epub+zip")
+        self.assertIn(".epub", response.headers["content-disposition"])
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+            self.assertEqual(names[0], "mimetype")
+            self.assertEqual(archive.getinfo("mimetype").compress_type, zipfile.ZIP_STORED)
+            self.assertEqual(archive.read("mimetype"), b"application/epub+zip")
+            for name in names:
+                if name.endswith((".xhtml", ".opf", ".ncx", ".xml")):
+                    ET.fromstring(archive.read(name))  # well-formed XML
+            self.assertTrue(any(name.startswith("OEBPS/images/") for name in names))
+            chapters = [name for name in names if name.startswith("OEBPS/text/chapter-")]
+            self.assertTrue(chapters)
+            chapter = archive.read(chapters[0]).decode("utf-8")
+            self.assertIn('src="../images/img0001.png"', chapter)
+            self.assertNotIn("<script", chapter)
+        import fitz
+
+        with tempfile.NamedTemporaryFile(suffix=".epub") as handle:
+            handle.write(response.content)
+            handle.flush()
+            book = fitz.open(handle.name)
+            self.assertGreater(book.page_count, 0)
+            self.assertTrue(book.get_toc())
+
+        bad = self.client.get(f"/v1/documents/{self.document_id}/exports/download?export_type=bilingual_html&package=epub")
+        self.assertEqual(bad.status_code, 422)
+
     def test_chapter_downloads_embed_their_images_too(self) -> None:
         response = self._get(f"/v1/documents/{self.document_id}/chapters/{self.chapter_id}/exports/download?export_type=bilingual_html")
         self.assertTrue(response.headers["content-type"].startswith("text/html"))

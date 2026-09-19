@@ -19,9 +19,10 @@ import s from "./LibraryPage.module.css";
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
 const DOWNLOAD_OPTIONS = [
-  { label: "中文版 · HTML", exportType: "merged_html", enabled: true },
-  { label: "中文版 · Markdown", exportType: "merged_markdown", enabled: true },
-  { label: "中英文对照版 · HTML", exportType: "bilingual_html", enabled: true },
+  { key: "zh-html", label: "中文版 · HTML", exportType: "merged_html", packaging: "single", enabled: true },
+  { key: "zh-epub", label: "中文版 · EPUB", exportType: "merged_html", packaging: "epub", enabled: true },
+  { key: "zh-md", label: "中文版 · Markdown", exportType: "merged_markdown", packaging: "single", enabled: true },
+  { key: "bi-html", label: "中英文对照版 · HTML", exportType: "bilingual_html", packaging: "single", enabled: true },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [12, 24, 50, 100] as const;
@@ -101,13 +102,14 @@ export function LibraryPage() {
     await navigate("/");
   }
 
-  type ExportKey = typeof DOWNLOAD_OPTIONS[number]["exportType"];
-  async function handleDownload(documentId: string, exportType: ExportKey) {
+  type DownloadKey = typeof DOWNLOAD_OPTIONS[number]["key"];
+  async function handleDownload(documentId: string, key: DownloadKey) {
     setOpenMenu(null);
-    const opt = DOWNLOAD_OPTIONS.find((o) => o.exportType === exportType);
-    setFeedback({ tone: "success", text: `正在生成 ${opt?.label ?? exportType}...` });
+    const opt = DOWNLOAD_OPTIONS.find((o) => o.key === key);
+    if (!opt) return;
+    setFeedback({ tone: "success", text: `正在生成 ${opt.label}...` });
     try {
-      const filename = await downloadDocumentExport(documentId, exportType);
+      const filename = await downloadDocumentExport(documentId, opt.exportType, { packaging: opt.packaging });
       setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
@@ -256,10 +258,10 @@ export function LibraryPage() {
                           <div className={s.dlMenu}>
                             {DOWNLOAD_OPTIONS.map((opt) => (
                               <button
-                                key={opt.exportType}
+                                key={opt.key}
                                 className={s.dlOption}
                                 disabled={!opt.enabled}
-                                onClick={() => void handleDownload(entry.document_id, opt.exportType)}
+                                onClick={() => void handleDownload(entry.document_id, opt.key)}
                               >
                                 {opt.label}
                               </button>

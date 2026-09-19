@@ -836,14 +836,20 @@ async function waitForRunToFinish(
  * Download the latest export of a document. Downloads only serve existing
  * exports, so when none exists yet an export run is enqueued and awaited first.
  */
+export type DownloadPackage = "single" | "zip" | "epub";
+
 export async function downloadDocumentExport(
   documentId: string,
   exportType: DocumentDownloadType,
-  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000 }: { pollIntervalMs?: number; timeoutMs?: number } = {}
+  {
+    pollIntervalMs = 2000,
+    timeoutMs = 10 * 60 * 1000,
+    packaging = "single",
+  }: { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage } = {}
 ): Promise<string> {
   const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
     exportType
-  )}`;
+  )}&package=${packaging}`;
   let response = await apiFetch(downloadPath);
   if (response.status === 404) {
     const run = await requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/export`, {
@@ -866,7 +872,8 @@ export async function downloadDocumentExport(
     bilingual_html: ".html",
     review_package: ".zip",
   };
-  return saveBinaryResponse(response, `book-agent-${exportType}${fallbackExtension[exportType]}`);
+  const extension = packaging === "epub" ? ".epub" : packaging === "zip" ? ".zip" : fallbackExtension[exportType];
+  return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
 }
 
 export async function downloadChapterExport(

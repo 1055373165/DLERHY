@@ -30,6 +30,8 @@ from book_agent.infra.storage.blobs import UNRECOVERABLE_SCHEME
 # Download packaging: one self-contained HTML file (images embedded) or the stored files zipped.
 PACKAGE_SINGLE = "single"
 PACKAGE_ZIP = "zip"
+# An EPUB built from the merged Chinese book (any source type, PDF included).
+PACKAGE_EPUB = "epub"
 SINGLE_FILE_TYPES = frozenset({ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML})
 
 
@@ -466,6 +468,11 @@ def document_export_response(
         document = export_repository.get_document(document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if package == PACKAGE_EPUB and export_type != ExportType.MERGED_HTML:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
+        )
     if export_type == ExportType.BILINGUAL_HTML:
         return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots, package=package)
     lookup_type = export_type
@@ -525,9 +532,21 @@ def document_export_response(
         primary_record.file_path, roots=artifact_roots, document_id=document_id
     ) or file_path
 
+    if package == PACKAGE_EPUB:
+        if ext.lower() != ".html":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
+            )
+        return _reader_epub_response(document, file_path, canonical_path, f"{book_title}-{label}.epub")
     if package == PACKAGE_SINGLE and export_type in SINGLE_FILE_TYPES and ext.lower() == ".html":
         document_html = _standalone_html(file_path, canonical_path)
         if document_html is not None:
+            if export_type == ExportType.MERGED_HTML:
+                from book_agent.export.reader_epub import reader_html
+
+                # Readers get a table of contents and no translation statistics.
+                document_html = reader_html(document_html)
             return _html_response(document_html, main_filename)
 
     archive_inputs: list[ArchiveInput] = []
@@ -682,3 +701,30 @@ def _bilingual_book_html(
     )
     book = drop_unused_katex(book)
     return None if local_references(book) else book
+
+
+def _reader_epub_response(document: Any, file_path: Path, canonical_path: Path, filename: str) -> FileResponse:
+    from book_agent.domain.document_titles import document_display_title
+    from book_agent.export.reader_epub import build_reader_epub
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="book-agent-epub-"))
+    output = temp_dir / "book.epub"
+    try:
+        build_reader_epub(
+            file_path.read_text(encoding="utf-8"),
+            canonical_path.parent,
+            output,
+            title=document_display_title(document),
+            author=getattr(document, "author", None),
+            lang="zh-CN",
+            identifier=f"urn:book-agent:{document.id}",
+        )
+    except ValueError as exc:
+        cleanup_path(output)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return FileResponse(
+        path=output,
+        media_type="application/epub+zip",
+        headers={"content-disposition": content_disposition(filename)},
+        background=BackgroundTask(cleanup_path, output),
+    )

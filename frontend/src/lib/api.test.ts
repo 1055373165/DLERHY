@@ -45,10 +45,10 @@ describe("downloadDocumentExport", () => {
 
     expect(filename).toBe("book.md");
     expect(calls.map((call) => call.replace(/^(\w+) .*\/v1/, "$1 "))).toEqual([
-      "GET /documents/doc-1/exports/download?export_type=merged_markdown",
+      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=single",
       "POST /documents/doc-1/export",
       "GET /runs/run-1",
-      "GET /documents/doc-1/exports/download?export_type=merged_markdown",
+      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=single",
     ]);
   });
 
