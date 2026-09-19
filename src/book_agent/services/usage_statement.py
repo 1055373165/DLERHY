@@ -13,6 +13,7 @@ import csv
 import io
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -31,6 +32,8 @@ class UsageLine:
     token_in: int = 0
     token_out: int = 0
     cost_usd: float = 0.0
+    # What the organisation is charged: cost_usd times the price multiplier.
+    charged_usd: float = 0.0
 
 
 @dataclass(slots=True)
@@ -44,6 +47,8 @@ class UsageStatement:
     token_in: int
     token_out: int
     cost_usd: float
+    charged_usd: float
+    price_multiplier: float
     # Calls whose provider had no price: their tokens are counted, their cost is not.
     unpriced_call_count: int
     documents: list[UsageLine] = field(default_factory=list)
@@ -54,13 +59,33 @@ class UsageStatement:
     def to_csv(self) -> str:
         buffer = io.StringIO()
         writer = csv.writer(buffer)
-        writer.writerow(["month", "document_id", "title", "call_count", "token_in", "token_out", "cost_usd"])
+        writer.writerow(["month", "document_id", "title", "call_count", "token_in", "token_out", "cost_usd", "charged_usd"])
         for line in self.documents:
             writer.writerow(
-                [self.month, line.document_id or "", line.title or "", line.call_count, line.token_in, line.token_out, f"{line.cost_usd:.6f}"]
+                [
+                    self.month,
+                    line.document_id or "",
+                    line.title or "",
+                    line.call_count,
+                    line.token_in,
+                    line.token_out,
+                    f"{line.cost_usd:.6f}",
+                    f"{line.charged_usd:.6f}",
+                ]
             )
-        writer.writerow([self.month, "", "TOTAL", self.call_count, self.token_in, self.token_out, f"{self.cost_usd:.6f}"])
+        writer.writerow(
+            [self.month, "", "TOTAL", self.call_count, self.token_in, self.token_out, f"{self.cost_usd:.6f}", f"{self.charged_usd:.6f}"]
+        )
         return buffer.getvalue()
+
+
+def _is_uuid(value: str) -> bool:
+    # A malformed id in an event payload must not fail the statement on a UUID column.
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def month_bounds(month: str | None, *, now: datetime | None = None) -> tuple[str, datetime, datetime]:
@@ -79,7 +104,9 @@ def month_bounds(month: str | None, *, now: datetime | None = None) -> tuple[str
     return f"{year:04d}-{number:02d}", start, end
 
 
-def usage_statement(session: Session, org_id: str, *, month: str | None = None) -> UsageStatement:
+def usage_statement(
+    session: Session, org_id: str, *, month: str | None = None, price_multiplier: float = 1.0
+) -> UsageStatement:
     org = session.get(Org, org_id)
     if org is None:
         raise LookupError("organisation not found")
@@ -87,10 +114,13 @@ def usage_statement(session: Session, org_id: str, *, month: str | None = None) 
     # Rows written before events carried their organisation used the literal "default".
     org_keys = [org_id, "default"] if org_id == DEFAULT_ORG_ID else [org_id]
     cost = Event.payload["cost_usd"].as_float()
+    # One labelled expression for SELECT and GROUP BY: Postgres treats two renderings of the
+    # same JSON path (separate bind parameters) as different expressions.
+    payload_document = Event.payload["document_id"].as_string().label("payload_document_id")
     rows = session.execute(
         select(
             Event.run_id,
-            Event.payload["document_id"].as_string(),
+            payload_document,
             func.count(),
             func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0),
             func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0),
@@ -103,7 +133,7 @@ def usage_statement(session: Session, org_id: str, *, month: str | None = None) 
             Event.occurred_at >= start,
             Event.occurred_at < end,
         )
-        .group_by(Event.run_id, Event.payload["document_id"].as_string())
+        .group_by(Event.run_id, payload_document)
     ).all()
 
     run_ids = {run_id for run_id, *_ in rows if run_id is not None}
@@ -124,12 +154,13 @@ def usage_statement(session: Session, org_id: str, *, month: str | None = None) 
         line.cost_usd += float(cost_usd or 0.0)
         unpriced += int(unpriced_calls or 0)
 
-    known = [key for key in lines if key is not None]
+    known = [key for key in lines if key is not None and _is_uuid(key)]
     if known:
         for document in session.scalars(select(Document).where(Document.id.in_(known))):
             lines[str(document.id)].title = document.title_tgt or document.title or document.title_src
     ordered = sorted(lines.values(), key=lambda line: (-line.cost_usd, -(line.token_in + line.token_out)))
     for line in ordered:
+        line.charged_usd = round(line.cost_usd * price_multiplier, 6)
         line.cost_usd = round(line.cost_usd, 6)
     return UsageStatement(
         org_id=str(org.id),
@@ -141,6 +172,8 @@ def usage_statement(session: Session, org_id: str, *, month: str | None = None) 
         token_in=sum(line.token_in for line in ordered),
         token_out=sum(line.token_out for line in ordered),
         cost_usd=round(sum(line.cost_usd for line in ordered), 6),
+        charged_usd=round(sum(line.charged_usd for line in ordered), 6),
+        price_multiplier=price_multiplier,
         unpriced_call_count=unpriced,
         documents=ordered,
     )
