@@ -44,15 +44,28 @@ _MODEL_RUN_TYPES = {
 }
 
 
-def _require_provider(request: Request, run_type: str | None) -> None:
+def _require_provider(request: Request, session: Session, run_type: str | None) -> None:
     """Refuse to start model work while no provider is configured, instead of pausing on the first call."""
     if run_type not in _MODEL_RUN_TYPES:
         return
     from book_agent.workers.factory import UnconfiguredTranslationWorker
+    from book_agent.workers.translator import EchoTranslationWorker
 
     worker = request.app.state.resolve_translation_worker(current_principal(request).org_id)
     if isinstance(worker, UnconfiguredTranslationWorker):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=worker.reason)
+    if isinstance(worker, EchoTranslationWorker):
+        return
+    from book_agent.core.config import get_settings
+    from book_agent.services.cost_estimate import active_provider_pricing
+    from book_agent.services.prepaid_credit import UnpricedProviderForPrepaid, ensure_priced_for_prepaid
+
+    org_id = current_principal(request).org_id
+    input_price, output_price, _, _ = active_provider_pricing(session, org_id, get_settings())
+    try:
+        ensure_priced_for_prepaid(session, org_id, prices_known=input_price is not None and output_price is not None)
+    except UnpricedProviderForPrepaid as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 def _service(session: Session) -> RunControlService:
@@ -140,7 +153,7 @@ def create_run(
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
     require_document_in_org(session, request, payload.document_id)
-    _require_provider(request, payload.run_type)
+    _require_provider(request, session, payload.run_type)
     service = _service(session)
     try:
         summary = service.create_run(
@@ -259,7 +272,7 @@ def resume_run(
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
     run = session.get(DocumentRun, run_id)
-    _require_provider(request, run.run_type if run is not None else None)
+    _require_provider(request, session, run.run_type if run is not None else None)
     try:
         summary = _service(session).resume_run(
             run_id,

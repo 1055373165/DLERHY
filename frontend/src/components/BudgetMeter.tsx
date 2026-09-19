@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { downloadUsageStatement, getCurrentOrgBudget } from "../lib/api";
+import { downloadUsageStatement, getCurrentOrgBudget, getCurrentOrgCredit } from "../lib/api";
 import s from "./BudgetMeter.module.css";
 
 function usd(value: number): string {
@@ -15,6 +15,12 @@ export function BudgetMeter() {
     refetchInterval: 60_000,
     retry: false,
   });
+  const credit = useQuery({
+    queryKey: ["org-credit"],
+    queryFn: getCurrentOrgCredit,
+    refetchInterval: 60_000,
+    retry: false,
+  }).data;
   const budget = query.data;
   if (!budget) return null;
   const cap = budget.monthly_budget_usd;
@@ -35,6 +41,13 @@ export function BudgetMeter() {
         </div>
       ) : null}
       {budget.exhausted ? <div className={s.warning}>预算已用完：新运行会被拒绝，运行中的会暂停。</div> : null}
+      {credit?.prepaid ? (
+        <div className={s.row} data-tone={credit.exhausted ? "danger" : undefined}>
+          <span className={s.label}>预付余额</span>
+          <span className={s.value}>{usd(credit.balance_usd)}</span>
+        </div>
+      ) : null}
+      {credit?.exhausted ? <div className={s.warning}>余额已用完：充值后运行才能继续。</div> : null}
       <button type="button" className={s.statement} onClick={() =>
           void downloadUsageStatement().catch((err) => window.alert(err instanceof Error ? err.message : "下载失败"))
         }>

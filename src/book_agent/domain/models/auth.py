@@ -29,6 +29,31 @@ class Org(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     # Model spend cap per calendar month (UTC); NULL means unlimited.
     monthly_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # Set by the first credit entry: from then on usage is charged against the prepaid balance.
+    prepaid_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+CREDIT_ENTRY_KINDS = ("top_up", "refund", "adjustment")
+
+
+class CreditEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One movement of an organisation's prepaid balance; usage is charged from the event ledger, not here."""
+
+    __tablename__ = "credit_entries"
+    __table_args__ = (
+        CheckConstraint("kind IN ('top_up', 'refund', 'adjustment')", name="ck_credit_entries_kind"),
+        CheckConstraint("kind <> 'top_up' OR amount_usd > 0", name="ck_credit_entries_top_up_positive"),
+        # A payment's id: a retried webhook or a double click credits once.
+        Index("uq_credit_entries_org_reference", "org_id", "reference", unique=True),
+        Index("idx_credit_entries_org_created", "org_id", "created_at"),
+    )
+
+    org_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    reference: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str | None] = mapped_column(Text)
 
 
 class ApiKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

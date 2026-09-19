@@ -415,6 +415,7 @@ export type IssueList = Generated.IssueListResponse;
 export type IssueDecision = Generated.IssueDecisionRequest;
 export type IssueTransition = "triage" | "wontfix" | "resolve" | "reopen";
 export type OrgBudget = Generated.OrgBudgetResponse;
+export type OrgCredit = Generated.OrgCreditResponse;
 export type Provider = Generated.ProviderCredentialRead;
 export type CostEstimate = Generated.CostEstimateResponse;
 export type ProviderCreate = Generated.ProviderCredentialCreate;
@@ -959,6 +960,11 @@ export async function transitionIssue(
 /** Model spend of the caller's organisation this month and its cap (null: unlimited). */
 export async function getCurrentOrgBudget(): Promise<OrgBudget> {
   return requestJson<OrgBudget>("/orgs/current/budget");
+}
+
+/** The caller's organisation's prepaid balance (prepaid is false until its first top-up). */
+export async function getCurrentOrgCredit(): Promise<OrgCredit> {
+  return requestJson<OrgCredit>("/orgs/current/credit");
 }
 
 export async function listStructureEdits(documentId: string): Promise<StructureEditList> {

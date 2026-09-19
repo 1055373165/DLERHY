@@ -110,6 +110,15 @@ def build_parser() -> argparse.ArgumentParser:
     org_budget.add_argument("--org", required=True, help="Organisation name")
     org_budget.add_argument("--monthly-usd", required=True, help="Amount in USD, or 'none' to remove the cap")
 
+    org_credit = subparsers.add_parser(
+        "add-org-credit", help="Credit an organisation's prepaid balance (USD), e.g. after a bank transfer"
+    )
+    org_credit.add_argument("--org", required=True, help="Organisation name")
+    org_credit.add_argument("--usd", required=True, type=float, help="Amount; negative only with --kind refund/adjustment")
+    org_credit.add_argument("--kind", default="top_up", choices=["top_up", "refund", "adjustment"])
+    org_credit.add_argument("--reference", default=None, help="Payment id; the same reference twice credits once")
+    org_credit.add_argument("--note", default=None)
+
     evaluate = subparsers.add_parser("eval", help="Run the release evals (evals/README.md) and write a report")
     evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
     evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
@@ -175,6 +184,28 @@ def main(argv: list[str] | None = None) -> int:
             amount = None if str(args.monthly_usd).strip().lower() == "none" else float(args.monthly_usd)
             set_monthly_budget(session, org.id, amount)
             _dump(budget_status(session, org.id).to_json())
+            return 0
+        if args.command == "add-org-credit":
+            from sqlalchemy import select
+
+            from book_agent.domain.models.auth import Org
+            from book_agent.services.prepaid_credit import add_credit, credit_status
+
+            org = session.scalar(select(Org).where(Org.name == args.org))
+            if org is None:
+                parser.error(f"unknown organisation: {args.org}")
+            try:
+                _, created = add_credit(
+                    session, org.id, args.usd, kind=args.kind, reference=args.reference, note=args.note, created_by="cli"
+                )
+            except ValueError as exc:
+                parser.error(str(exc))
+            _dump(
+                {
+                    "created": created,
+                    **credit_status(session, org.id, price_multiplier=settings.billing_price_multiplier).to_json(),
+                }
+            )
             return 0
         service = DocumentWorkflowService(
             session,

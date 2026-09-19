@@ -388,11 +388,17 @@ class RunControlService:
         run = self.repository.get_run(run_id)
         current_status = run.status
         if current_status in {DocumentRunStatus.QUEUED, DocumentRunStatus.PAUSED}:
+            from book_agent.core.config import get_settings
             from book_agent.services.org_budget import OrgBudgetExhausted, ensure_budget_available, org_id_for_run
+            from book_agent.services.prepaid_credit import OrgCreditExhausted, ensure_credit_available
 
+            org_id = org_id_for_run(self.repository.session, run.id)
             try:
-                ensure_budget_available(self.repository.session, org_id_for_run(self.repository.session, run.id))
-            except OrgBudgetExhausted as exc:
+                ensure_budget_available(self.repository.session, org_id)
+                ensure_credit_available(
+                    self.repository.session, org_id, price_multiplier=get_settings().billing_price_multiplier
+                )
+            except (OrgBudgetExhausted, OrgCreditExhausted) as exc:
                 raise RunControlTransitionError(str(exc)) from exc
         return self._transition_run(
             run_id=run_id,

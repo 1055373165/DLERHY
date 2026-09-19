@@ -156,11 +156,18 @@ def estimate_document_cost(
 def _provider(
     session: Session, document: Document, settings: Settings
 ) -> tuple[float | None, float | None, str | None, bool]:
-    """(input price, output price, where the prices came from, whether thinking is known to be off)."""
+    return active_provider_pricing(session, document.org_id, settings)
+
+
+def active_provider_pricing(
+    session: Session, org_id: str | None, settings: Settings
+) -> tuple[float | None, float | None, str | None, bool]:
+    """For the provider an organisation translates with: (input price, output price, where the
+    prices came from, whether thinking is known to be off)."""
     from book_agent.domain.enums import ProviderKind
     from book_agent.services.provider_credentials import credential_scope, get_active_credential
 
-    scope = credential_scope(document.org_id)
+    scope = credential_scope(org_id)
     record = (get_active_credential(session, scope) if scope is not None else None) or get_active_credential(session, None)
     # Like the worker factory: the credential's overrides, else the settings'.
     overrides = (record.request_overrides_json if record is not None else None) or settings.translation_openai_request_overrides

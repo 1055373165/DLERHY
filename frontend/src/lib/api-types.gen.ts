@@ -288,6 +288,23 @@ export interface CreateDocumentRunRequest {
   budget?: RunBudgetRequest | null;
 }
 
+export interface CreditEntryResponse {
+  id: string;
+  amount_usd: number;
+  kind: string;
+  reference?: string | null;
+  note?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+}
+
+export interface CreditTopUp {
+  amount_usd: number;
+  kind?: "top_up" | "refund" | "adjustment";
+  reference?: string | null;
+  note?: string | null;
+}
+
 export interface DecisionResponse {
   id: string;
   scope: string;
@@ -833,6 +850,19 @@ export interface OrgBudgetResponse {
 
 export interface OrgBudgetUpdate {
   monthly_budget_usd?: number | null;
+}
+
+export interface OrgCreditResponse {
+  org_id: string;
+  org_name: string;
+  prepaid: boolean;
+  credited_usd: number;
+  charged_usd: number;
+  balance_usd: number;
+  exhausted: boolean;
+  price_multiplier: number;
+  prepaid_since?: string | null;
+  entries?: CreditEntryResponse[];
 }
 
 export interface ProviderCredentialCreate {

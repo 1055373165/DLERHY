@@ -23,6 +23,9 @@ const NOTES: Record<string, StopReasonNote> = {
     text: "思考模型把输出额度都用在了思考上，没有写出译文。在服务商设置里关闭思考模式或调大最大输出 token，然后点「继续当前转换」。",
     link: PROVIDERS,
   },
+  "billing.credit_exhausted": {
+    text: "预付余额已用完，运行已暂停。充值后点「继续当前转换」，会从停下的地方接着翻译，已完成的部分不会重复扣费。",
+  },
   "budget.org_monthly_exhausted": {
     text: "本组织本月的模型花费已达上限。提高月度预算或等到下个月后点「继续当前转换」。",
   },

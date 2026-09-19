@@ -499,6 +499,21 @@ class RunExecutionService:
                 run_id, stop_reason=org_budget.STOP_REASON, detail_json=exhausted.to_json()
             )
             return RunBudgetGuardrailResult(summary, True, org_budget.STOP_REASON)
+        from book_agent.core.config import get_settings
+        from book_agent.services import prepaid_credit
+
+        out_of_credit = (
+            prepaid_credit.cached_exhausted_status(
+                self.repository.session, org_id, price_multiplier=get_settings().billing_price_multiplier
+            )
+            if org_id
+            else None
+        )
+        if out_of_credit is not None:
+            summary = self.control_service.pause_run_system(
+                run_id, stop_reason=prepaid_credit.STOP_REASON, detail_json=out_of_credit.to_json()
+            )
+            return RunBudgetGuardrailResult(summary, True, prepaid_credit.STOP_REASON)
         budget = self.repository.get_budget_for_run(run_id)
         if budget is None:
             return RunBudgetGuardrailResult(
