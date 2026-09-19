@@ -334,9 +334,10 @@ class RunControlService:
         *,
         limit: int | None = None,
         offset: int = 0,
+        milestones_only: bool = False,
     ) -> RunAuditEventPage:
         self.repository.get_run(run_id)
-        bundle = self.repository.list_run_events(run_id, limit=limit, offset=offset)
+        bundle = self.repository.list_run_events(run_id, limit=limit, offset=offset, milestones_only=milestones_only)
         entries = [
             RunAuditEventRecord(
                 event_id=event.id,

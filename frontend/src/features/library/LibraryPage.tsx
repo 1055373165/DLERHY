@@ -157,11 +157,11 @@ export function LibraryPage() {
   return (
     <div className={s.layout}>
       <Surface
-        eyebrow="LIB"
+        eyebrow="书库"
         title="书库"
         aside={
           historyQuery.data
-            ? `${total} total / ${shown} shown${total ? ` · ${rangeStart}-${rangeEnd}` : ""}`
+            ? `共 ${total} 本${total ? ` · 第 ${rangeStart}–${rangeEnd} 本` : ""}`
             : null
         }
       >
@@ -186,33 +186,33 @@ export function LibraryPage() {
             )}
           </div>
           <select className={s.filterSelect} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Status</option>
-            <option value="active">Active</option>
-            <option value="partially_exported">Partial</option>
-            <option value="exported">Exported</option>
-            <option value="failed">Failed</option>
+            <option value="">全部状态</option>
+            <option value="active">已导入</option>
+            <option value="partially_exported">部分可读</option>
+            <option value="exported">可阅读</option>
+            <option value="failed">失败</option>
           </select>
           <select className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
-            <option value="">Run</option>
-            <option value="queued">Queued</option>
-            <option value="running">Running</option>
-            <option value="paused">Paused</option>
-            <option value="failed">Failed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="succeeded">Succeeded</option>
+            <option value="">全部转换</option>
+            <option value="queued">排队中</option>
+            <option value="running">进行中</option>
+            <option value="paused">已暂停</option>
+            <option value="failed">失败</option>
+            <option value="cancelled">已取消</option>
+            <option value="succeeded">已完成</option>
           </select>
           <select
             className={s.filterSelect}
             value={mergedReady}
             onChange={(e) => setMergedReady(e.target.value as "" | "true" | "false")}
           >
-            <option value="">Delivery</option>
-            <option value="true">Ready</option>
-            <option value="false">Not Ready</option>
+            <option value="">全部</option>
+            <option value="true">可阅读</option>
+            <option value="false">未完成</option>
           </select>
           {hasFilters && (
             <button type="button" className={s.resetBtn} onClick={resetFilters}>
-              Reset
+              清除筛选
             </button>
           )}
         </div>
@@ -222,7 +222,7 @@ export function LibraryPage() {
         )}
 
         {historyQuery.isLoading ? (
-          <div className={s.loading}>Loading...</div>
+          <div className={s.loading}>加载中…</div>
         ) : historyQuery.data?.entries.length ? (
           <>
             <div className={s.bookList}>
@@ -294,8 +294,7 @@ export function LibraryPage() {
 
             <div className={s.paginationBar}>
               <div className={s.paginationInfo}>
-                Showing <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> of{" "}
-                <strong>{total}</strong>
+                第 <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> 本，共 <strong>{total}</strong> 本
               </div>
               <div className={s.paginationControls}>
                 <button
@@ -312,7 +311,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page <= 1}
                   onClick={() => goTo(page - 1)}
-                  aria-label="Previous page"
+                  aria-label="上一页"
                 >
                   ‹
                 </button>
@@ -337,7 +336,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page >= pageCount}
                   onClick={() => goTo(page + 1)}
-                  aria-label="Next page"
+                  aria-label="下一页"
                 >
                   ›
                 </button>
@@ -353,7 +352,7 @@ export function LibraryPage() {
               </div>
               <form className={s.jumpForm} onSubmit={handleJump}>
                 <label className={s.jumpLabel}>
-                  Jump to
+                  跳到
                   <input
                     className={s.jumpInput}
                     type="number"
@@ -367,7 +366,7 @@ export function LibraryPage() {
                 <span className={s.jumpTotal}>/ {pageCount}</span>
               </form>
               <label className={s.pageSizeLabel}>
-                Per page
+                每页
                 <select
                   className={s.filterSelect}
                   value={pageSize}
@@ -391,15 +390,15 @@ export function LibraryPage() {
               <line x1="45" y1="12" x2="51" y2="12" />
               <line x1="45" y1="16" x2="51" y2="16" />
             </svg>
-            <span className={s.emptyTitle}>No results</span>
+            <span className={s.emptyTitle}>没有找到</span>
             <span className={s.emptySubtitle}>
               {hasFilters
-                ? "No documents matching current filters. Try adjusting your search or reset filters."
-                : "No documents yet. Upload a book to get started."}
+                ? "没有符合当前条件的书。换个关键词，或清除筛选。"
+                : "书库还是空的。上传一本书或粘贴一个网页链接开始。"}
             </span>
             {hasFilters && (
               <button type="button" className="btn btn-sm" onClick={resetFilters}>
-                Reset filters
+                清除筛选
               </button>
             )}
           </div>

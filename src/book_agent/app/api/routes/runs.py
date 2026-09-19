@@ -233,10 +233,11 @@ def get_run_events(
     run_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    milestones: bool = Query(default=False, description="Only the run's state changes and failed steps."),
     session: Session = Depends(get_db_session),
 ) -> RunAuditEventPageResponse:
     try:
-        page = _service(session).get_run_events(run_id, limit=limit, offset=offset)
+        page = _service(session).get_run_events(run_id, limit=limit, offset=offset, milestones_only=milestones)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_run_events_response(page)

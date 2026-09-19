@@ -65,7 +65,7 @@ export function StructureEditForm({ documentId, issue }: Props) {
       setFeedback({
         tone: "success",
         text: `已应用${edit.parse_revision_version ? `（解析版本 v${edit.parse_revision_version}）` : ""}${
-          retranslate ? `，${retranslate} 个 packet 需要重译` : "，译文无需重译"
+          retranslate ? `，${retranslate} 段需要重译` : "，译文无需重译"
         }。确认无误后可将问题标记为已解决。`,
       });
       await queryClient.invalidateQueries({ queryKey: ["issues"] });

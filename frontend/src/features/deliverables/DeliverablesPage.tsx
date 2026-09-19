@@ -30,7 +30,7 @@ export function DeliverablesPage() {
       const filename = await downloadAsset(exportType);
       setFeedback({ tone: "success", text: `Downloaded: ${filename}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Download failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }
   }
 
@@ -38,7 +38,7 @@ export function DeliverablesPage() {
     <div className={s.layout}>
       {/* ── Assets ── */}
       <Surface
-        eyebrow="SHIP"
+        eyebrow="交付"
         title="交付资产"
         aside={currentDocument ? <StatusBadge tone={badge.tone} label={badge.label} /> : null}
       >
@@ -75,15 +75,15 @@ export function DeliverablesPage() {
               <line x1="22" y1="36" x2="42" y2="36" />
               <line x1="26" y1="42" x2="38" y2="42" />
             </svg>
-            <span className={s.emptyTitle}>Deliverables</span>
-            <span className={s.emptySubtitle}>Load a document to view export assets and download packages.</span>
+            <span className={s.emptyTitle}>交付</span>
+            <span className={s.emptySubtitle}>先在工作台或书库选择一本书，这里会列出可下载的文件。</span>
           </div>
         )}
       </Surface>
 
       {/* ── Blocker Status ── */}
       <Surface
-        eyebrow="GATE"
+        eyebrow="阻塞"
         title="交付阻塞"
         aside={
           currentDocument ? (
@@ -97,10 +97,10 @@ export function DeliverablesPage() {
               }
               label={
                 currentDocument.merged_export_ready
-                  ? "CLEAR"
+                  ? "可交付"
                   : blockingIssueCount(currentExports) > 0
-                    ? "BLOCKED"
-                    : "PENDING"
+                    ? "有阻塞"
+                    : "未完成"
               }
             />
           ) : null
@@ -109,7 +109,7 @@ export function DeliverablesPage() {
         {currentDocument ? (
           <>
             <div className={s.gateRow}>
-              <span className={s.gateLabel}>DELIVERY STATUS</span>
+              <span className={s.gateLabel}>交付状态</span>
               <span className={s.gateText}>
                 {deliverableBlockerReason(currentDocument, currentRun, currentExports)}
               </span>
@@ -133,13 +133,13 @@ export function DeliverablesPage() {
             ) : null}
           </>
         ) : (
-          <div className={s.emptyState}>No blocker status available.</div>
+          <div className={s.emptyState}>暂无阻塞信息。</div>
         )}
       </Surface>
 
       {/* ── Export Records ── */}
       <Surface
-        eyebrow="LOG"
+        eyebrow="记录"
         title="导出记录"
         aside={currentDocument ? preferredTitle(currentDocument) : null}
       >
@@ -157,7 +157,7 @@ export function DeliverablesPage() {
             ))}
           </div>
         ) : (
-          <div className={s.emptyState}>No export records yet.</div>
+          <div className={s.emptyState}>还没有导出记录。</div>
         )}
       </Surface>
     </div>

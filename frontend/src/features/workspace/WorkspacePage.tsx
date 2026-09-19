@@ -77,7 +77,7 @@ export function WorkspacePage() {
       setFeedback({ tone: "success", text: `已载入：${result.title ?? selectedFile.name}` });
       setSelectedFile(null);
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "上传失败" });
     }
   }
 
@@ -128,7 +128,7 @@ export function WorkspacePage() {
       await runPrimaryAction();
       setFeedback({ tone: "success", text: action.label });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Action failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "操作失败" });
     }
   }
 
@@ -142,7 +142,7 @@ export function WorkspacePage() {
       }
       setFeedback({ tone: "success", text: `Proposal ${accept ? "approved" : "rejected"}` });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Decision failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "提交失败" });
     }
   }
 
@@ -155,7 +155,7 @@ export function WorkspacePage() {
         text: `Action ${result.action_id.slice(0, 8)} :: ${result.status}`,
       });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Execute failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "执行失败" });
     }
   }
 
@@ -286,11 +286,11 @@ export function WorkspacePage() {
             </div>
           </div>
           <div className={s.docStats}>
-            <Stat label="Status" value={statusLabel(doc.status)} />
-            <Stat label="Source" value={sourceLabel(doc.source_type)} />
-            <Stat label="Ch" value={formatNumber(doc.chapter_count)} />
-            <Stat label="Pkt" value={formatNumber(doc.packet_count)} />
-            <Stat label="Sent" value={formatNumber(doc.sentence_count)} />
+            <Stat label="状态" value={statusLabel(doc.status)} />
+            <Stat label="来源" value={sourceLabel(doc.source_type)} />
+            <Stat label="章节" value={formatNumber(doc.chapter_count)} />
+            <Stat label="翻译段" value={formatNumber(doc.packet_count)} />
+            <Stat label="句子" value={formatNumber(doc.sentence_count)} />
             {action.mode !== "disabled" && (
               <button
                 className="btn btn-sm"
@@ -311,7 +311,7 @@ export function WorkspacePage() {
           {/* Queue Rail */}
           <aside className={s.queueRail}>
             <div className={s.queueHeader}>
-              <h3 className={s.queueTitle}>Chapters</h3>
+              <h3 className={s.queueTitle}>章节</h3>
               <span className={s.queueCount}>{queueEntries.length || allChapters.length}</span>
             </div>
 
@@ -321,30 +321,30 @@ export function WorkspacePage() {
                 value={chapterWorklistFilters.queuePriority}
                 onChange={(e) => setChapterQueuePriorityFilter(e.target.value as "all" | "immediate" | "high" | "medium")}
               >
-                <option value="all">All priority</option>
-                <option value="immediate">Immediate</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
+                <option value="all">全部优先级</option>
+                <option value="immediate">立即</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
               </select>
               <select
                 className={s.filterSelect}
                 value={chapterWorklistFilters.assignment}
                 onChange={(e) => setChapterAssignmentFilter(e.target.value as "all" | "assigned" | "unassigned")}
               >
-                <option value="all">All assign</option>
-                <option value="assigned">Assigned</option>
-                <option value="unassigned">Unassigned</option>
+                <option value="all">全部指派</option>
+                <option value="assigned">已指派</option>
+                <option value="unassigned">未指派</option>
               </select>
               {(chapterWorklistFilters.queuePriority !== "all" ||
                 chapterWorklistFilters.assignment !== "all") && (
                 <button className={s.filterClear} onClick={clearChapterWorklistFilters}>
-                  Reset
+                  清除
                 </button>
               )}
             </div>
 
             <div className={s.queueList}>
-              {chapterWorklistLoading && <div className={s.loading}>Loading...</div>}
+              {chapterWorklistLoading && <div className={s.loading}>加载中…</div>}
               {queueEntries.map((entry) => (
                 <button
                   key={entry.chapter_id}
@@ -381,7 +381,7 @@ export function WorkspacePage() {
                 ))
               )}
               {!chapterWorklistLoading && queueEntries.length === 0 && allChapters.length === 0 && (
-                <div className={s.emptyQueue}>No chapters found.</div>
+                <div className={s.emptyQueue}>没有章节。</div>
               )}
             </div>
           </aside>
@@ -389,11 +389,11 @@ export function WorkspacePage() {
           {/* Detail Panel */}
           <div className={s.detailPanel}>
             {!selectedReviewChapterId && (
-              <div className={s.detailEmpty}>Select a chapter from the queue.</div>
+              <div className={s.detailEmpty}>从左侧选择一个章节。</div>
             )}
 
             {selectedReviewChapterId && currentChapterReviewLoading && (
-              <div className={s.detailEmpty}>Loading chapter data...</div>
+              <div className={s.detailEmpty}>正在加载章节…</div>
             )}
 
             {selectedReviewChapterId && detail && (
@@ -412,16 +412,16 @@ export function WorkspacePage() {
                     </button>
                   </div>
                   <div className={s.chapterStats}>
-                    <Stat label="Issues" value={String(detail.current_open_issue_count ?? 0)} />
-                    <Stat label="Proposals" value={String(proposals.length)} />
-                    <Stat label="Actions" value={String(actions.length)} />
+                    <Stat label="问题" value={String(detail.current_open_issue_count ?? 0)} />
+                    <Stat label="记忆" value={String(proposals.length)} />
+                    <Stat label="修复" value={String(actions.length)} />
                   </div>
                 </div>
 
                 {/* Memory Proposals */}
                 {proposals.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>MEMORY PROPOSALS</h4>
+                    <h4 className={s.sectionTitle}>待确认的记忆</h4>
                     <div className={s.proposalList}>
                       {proposals.map((p) => (
                         <div key={p.proposal_id} className={s.proposalRow}>
@@ -435,14 +435,14 @@ export function WorkspacePage() {
                               disabled={reviewDecisionPending}
                               onClick={() => handleProposal(p.proposal_id, true)}
                             >
-                              Approve
+                              批准
                             </button>
                             <button
                               className="btn btn-sm btn-reject"
                               disabled={reviewDecisionPending}
                               onClick={() => handleProposal(p.proposal_id, false)}
                             >
-                              Reject
+                              拒绝
                             </button>
                           </div>
                         </div>
@@ -454,7 +454,7 @@ export function WorkspacePage() {
                 {/* Issues */}
                 {issues.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>RECENT ISSUES</h4>
+                    <h4 className={s.sectionTitle}>最近的问题</h4>
                     <div className={s.issueList}>
                       {issues.map((issue) => (
                         <div key={issue.issue_id} className={s.issueRow}>
@@ -481,7 +481,7 @@ export function WorkspacePage() {
                 {/* Actions */}
                 {actions.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>PENDING ACTIONS</h4>
+                    <h4 className={s.sectionTitle}>待执行的修复</h4>
                     <div className={s.actionList}>
                       {actions.map((act) => (
                         <div key={act.action_id} className={s.actionRow}>
@@ -495,7 +495,7 @@ export function WorkspacePage() {
                             disabled={actionExecutionPending}
                             onClick={() => handleAction(act.action_id)}
                           >
-                            Execute
+                            执行
                           </button>
                         </div>
                       ))}
@@ -506,7 +506,7 @@ export function WorkspacePage() {
                 {/* Timeline */}
                 {timeline.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>TIMELINE</h4>
+                    <h4 className={s.sectionTitle}>时间线</h4>
                     <div className={s.timelineList}>
                       {timeline.slice(0, 20).map((entry: ChapterWorklistTimelineEntry) => (
                         <div key={entry.event_id} className={s.timelineRow}>

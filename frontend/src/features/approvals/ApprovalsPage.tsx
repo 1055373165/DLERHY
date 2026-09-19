@@ -103,7 +103,7 @@ export function ApprovalsPage() {
   return (
     <div className={s.layout}>
       <Surface
-        eyebrow="APPROVE"
+        eyebrow="审批"
         title="审批收件箱"
         aside={documentId ? <StatusBadge tone={pending.length ? "warning" : "success"} label={pending.length ? `${pending.length} 待审` : "无待审"} /> : null}
       >
@@ -173,7 +173,7 @@ export function ApprovalsPage() {
         )}
       </Surface>
 
-      <Surface eyebrow="AGENTS" title="代理回合" aside={documentId ? `${turns.length} 回合` : null}>
+      <Surface eyebrow="代理" title="代理回合" aside={documentId ? `${turns.length} 回合` : null}>
         {turns.length === 0 ? (
           <div className={s.emptyState}>还没有代理回合。</div>
         ) : (

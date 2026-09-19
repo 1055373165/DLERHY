@@ -756,7 +756,7 @@ export async function getRun(runId: string): Promise<DocumentRunSummary> {
 
 export async function getRunEvents(runId: string): Promise<RunAuditEventPage> {
   return requestJson<RunAuditEventPage>(
-    `/runs/${encodeURIComponent(runId)}/events?limit=8&offset=0`
+    `/runs/${encodeURIComponent(runId)}/events?limit=8&offset=0&milestones=true`
   );
 }
 

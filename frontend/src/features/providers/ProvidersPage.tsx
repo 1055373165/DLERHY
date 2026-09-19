@@ -177,7 +177,7 @@ export function ProvidersPage() {
   return (
     <div className={s.layout}>
       <Surface
-        eyebrow="PROVIDERS"
+        eyebrow="服务商"
         title="模型服务商"
         aside={
           <button

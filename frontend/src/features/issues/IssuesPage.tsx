@@ -149,8 +149,8 @@ export function IssuesPage() {
       setFeedback({
         tone: result.issue_resolved ? "success" : "error",
         text: result.issue_resolved
-          ? `动作已执行，问题已解决（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`
-          : `动作已执行，问题仍在（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`,
+          ? `动作已执行，问题已解决（重译 ${result.rerun_packet_ids?.length ?? 0} 段）`
+          : `动作已执行，问题仍在（重译 ${result.rerun_packet_ids?.length ?? 0} 段）`,
       });
       await queryClient.invalidateQueries({ queryKey: ["issues", documentId] });
       await queryClient.invalidateQueries({ queryKey: ["issue", selectedId] });
@@ -166,7 +166,7 @@ export function IssuesPage() {
   return (
     <div className={s.layout}>
       <Surface
-        eyebrow="ISSUES"
+        eyebrow="问题"
         title="问题清单"
         aside={documentId && listQuery.data ? `${listQuery.data.total_count} 条` : null}
       >
@@ -244,7 +244,7 @@ export function IssuesPage() {
         )}
       </Surface>
 
-      <Surface eyebrow="DETAIL" title="问题详情" aside={selected ? `v${selected.version}` : null}>
+      <Surface eyebrow="详情" title="问题详情" aside={selected ? `v${selected.version}` : null}>
         {!selectedId ? (
           <div className={s.emptyState}>在左侧选择一个问题。</div>
         ) : !detail || !selected ? (

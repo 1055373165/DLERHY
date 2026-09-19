@@ -1,9 +1,11 @@
+import { stopReasonNote } from "./runStopReason";
 import type {
   ChapterSummary,
   DocumentExportDashboard,
   DocumentHistoryEntry,
   DocumentRunSummary,
   DocumentSummary,
+  RunAuditEvent,
   RunStageDetail,
   RunStatus,
 } from "./api";
@@ -52,7 +54,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
   {
     key: "translate",
     label: "全文翻译",
-    description: "逐 packet 产出中文译文并写回进度。",
+    description: "逐段翻译成中文。",
   },
   {
     key: "model_review",
@@ -62,7 +64,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
   {
     key: "review",
     label: "自动复核",
-    description: "处理导出前必须解决的 blocker。",
+    description: "导出前自动检查并修复阻断问题。",
   },
   {
     key: "repair",
@@ -345,7 +347,7 @@ export function nextMilestoneText(
   if (stage === "review") {
     const blockers = blockingIssueCount(exportsDashboard);
     return blockers > 0
-      ? "仍有 blocker 未清理，系统不会继续整书导出。"
+      ? "还有阻断问题没处理，暂时不会导出整本书。"
       : "复核接近完成，系统即将进入导出。";
   }
   if (stage === "bilingual_html") {
@@ -458,7 +460,7 @@ export function pipelineMeta(
   stepKey: string
 ): string {
   if (stepKey === "bootstrap" && document) {
-    return `已准备 ${formatNumber(document.packet_count)} 个 packet`;
+    return `已切分为 ${formatNumber(document.packet_count)} 段`;
   }
   const detail = stageDetail(run, stepKey);
   if (!detail) {
@@ -466,7 +468,7 @@ export function pipelineMeta(
   }
   if (stepKey === "translate") {
     const progress = translateProgress(document, run);
-    return `已完成 ${formatNumber(progress.completed)} / ${formatNumber(progress.total)} 个 packet`;
+    return `已翻译 ${formatNumber(progress.completed)} / ${formatNumber(progress.total)} 段`;
   }
   if (stepKey === "review") {
     const examined = Number(detail.examined_chapter_count ?? 0);
@@ -545,10 +547,10 @@ export function historyProgress(entry: DocumentHistoryEntry): string {
     return "中文阅读包已经可直接下载。";
   }
   if (entry.latest_run_current_stage === "translate" && total > 0) {
-    return `全文翻译阶段 · 已完成 ${formatNumber(completed)} / ${formatNumber(total)} 个 packet`;
+    return `正在翻译 · 已完成 ${formatNumber(completed)} / ${formatNumber(total)} 段`;
   }
   if (entry.latest_run_current_stage === "review") {
-    return "自动复核阶段 · 等待清理 blocker 后再进入导出。";
+    return "正在自动复核 · 处理完阻断问题后开始导出。";
   }
   if (entry.latest_run_current_stage === "bilingual_html") {
     return "双语章节包正在生成，整书中文阅读包尚未完成。";
@@ -621,7 +623,7 @@ export function assetAvailabilityText(
     }
   }
   if (key === "review_package") {
-    return "当 review 诊断产物存在时，这里会开放下载。";
+    return "复核报告生成后，这里可以下载。";
   }
   return "尚未生成";
 }
@@ -642,21 +644,37 @@ export function deliverableBlockerReason(
   }
   const blockers = blockingIssueCount(exportsDashboard);
   if (blockers > 0) {
-    return `当前仍有 ${formatNumber(blockers)} 个 blocking issue，系统不会放行整书导出。`;
+    return `还有 ${formatNumber(blockers)} 个阻断问题没处理，暂时不会导出整本书。`;
   }
   return nextMilestoneText(document, run, exportsDashboard);
 }
 
-export function eventTitle(eventType: string): string {
-  const mapping: Record<string, string> = {
-    "run.created": "创建 run",
-    "run.started": "启动 run",
-    "run.resumed": "继续 run",
-    "run.paused": "暂停 run",
-    "run.retry_requested": "请求重试",
-    "run.cancelled": "取消 run",
-    "run.succeeded": "run 完成",
-    "run.failed": "run 失败",
-  };
-  return mapping[eventType] ?? eventType;
+/** A run event as a sentence for the reader, or null when it is internal bookkeeping. */
+export function describeRunEvent(event: RunAuditEvent): { title: string; detail: string | null } | null {
+  const payload = event.payload_json ?? {};
+  const note = typeof payload.note === "string" ? payload.note : null;
+  switch (event.event_type) {
+    case "run.created":
+      return { title: "已提交转换", detail: null };
+    case "run.started":
+      return { title: "开始转换", detail: null };
+    case "run.resumed":
+      return { title: "继续转换", detail: "从停下的地方接着做，已完成的部分不会重做。" };
+    case "run.paused":
+      return { title: "转换已暂停", detail: note ? (stopReasonNote("paused", note)?.text ?? null) : null };
+    case "run.retry_requested":
+      return { title: "重新尝试失败的部分", detail: null };
+    case "run.cancelled":
+      return { title: "转换已取消", detail: null };
+    case "run.succeeded":
+      return { title: "转换完成", detail: "可以阅读中文版了。" };
+    case "run.failed":
+      return { title: "转换失败", detail: note ? (stopReasonNote("failed", note)?.text ?? null) : null };
+    case "work_item.retryable_failed":
+      return { title: "有一步出错，正在自动重试", detail: null };
+    case "work_item.terminal_failed":
+      return { title: "有一步失败，已放弃重试", detail: null };
+    default:
+      return null;
+  }
 }

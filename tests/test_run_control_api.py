@@ -249,6 +249,35 @@ class RunControlApiTests(unittest.TestCase):
         self.assertIsNotNone(summary_data["worker_leases"]["latest_heartbeat_at"])
         self.assertEqual(summary_data["events"]["event_count"], 2)
 
+    def test_milestone_events_leave_out_per_packet_chatter(self) -> None:
+        document_id = self._create_document()
+        run_id = self.client.post(
+            "/v1/runs",
+            json={"document_id": document_id, "run_type": DocumentRunType.TRANSLATE_FULL.value, "requested_by": "ops-user"},
+        ).json()["run_id"]
+        with self.session_factory() as session:
+            for event_type in (
+                "run.work_items.seeded",
+                "work_item.leased",
+                "work_item.started",
+                "work_item.succeeded",
+                "work_item.retryable_failed",
+                "run.paused",
+            ):
+                session.add(
+                    RunAuditEvent(run_id=run_id, event_type=event_type, actor_type=ActorType.SYSTEM, actor_id="w", payload_json={})
+                )
+            session.commit()
+
+        everything = self.client.get(f"/v1/runs/{run_id}/events").json()
+        milestones = self.client.get(f"/v1/runs/{run_id}/events", params={"milestones": "true"}).json()
+        self.assertEqual(everything["event_count"], 7)
+        self.assertEqual(
+            sorted(entry["event_type"] for entry in milestones["entries"]),
+            ["run.created", "run.paused", "work_item.retryable_failed"],
+        )
+        self.assertEqual(milestones["event_count"], 3)
+
     def test_run_summary_wakes_executor_for_active_run(self) -> None:
         document_id = self._create_document()
         create_response = self.client.post(

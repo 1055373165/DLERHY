@@ -8,7 +8,7 @@ import {
   awaitingApprovalStage,
   currentStageKey,
   documentBadge,
-  eventTitle,
+  describeRunEvent,
   failedPipelineStage,
   formatDate,
   formatNumber,
@@ -55,7 +55,7 @@ export function RunsPage() {
   async function handleAction() {
     try {
       const run = await runPrimaryAction();
-      setFeedback({ tone: "success", text: `已提交运行 ${run.run_id.slice(0, 6)}` });
+      setFeedback({ tone: "success", text: "已提交，转换开始了" });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "操作失败" });
     }
@@ -74,7 +74,7 @@ export function RunsPage() {
     <div className={s.layout}>
       {/* ── Run Overview ── */}
       <Surface
-        eyebrow="RUN"
+        eyebrow="运行"
         title="运行总览"
         aside={currentDocument ? <StatusBadge tone={badge.tone} label={badge.label} /> : null}
       >
@@ -83,25 +83,21 @@ export function RunsPage() {
             {/* Compact summary row */}
             <div className={s.summaryRow}>
               <span className={s.stat}>
-                <span className={s.statLabel}>Stage</span>
+                <span className={s.statLabel}>当前步骤</span>
                 <span className={s.statValue}>{pipelineStageLabel(currentStage)}</span>
               </span>
               <span className={s.stat}>
-                <span className={s.statLabel}>Run</span>
-                <span className={s.statValue}>{currentRun.run_id.slice(0, 6)}</span>
-              </span>
-              <span className={s.stat}>
-                <span className={s.statLabel}>Progress</span>
+                <span className={s.statLabel}>进度</span>
                 <span className={s.statValue}>
                   {formatNumber(progress.completed)}/{formatNumber(progress.total)}
                 </span>
               </span>
               <span className={s.stat}>
-                <span className={s.statLabel}>Status</span>
+                <span className={s.statLabel}>状态</span>
                 <span className={s.statValue}>{statusLabel(failedStage?.status || (approvalStage ? "awaiting_approval" : currentRun.status))}</span>
               </span>
               <span className={s.stat}>
-                <span className={s.statLabel}>Updated</span>
+                <span className={s.statLabel}>更新于</span>
                 <span className={s.statValue}>{formatDate(currentRun.updated_at)}</span>
               </span>
             </div>
@@ -205,12 +201,12 @@ export function RunsPage() {
       {/* ── Split: Chapters + Events ── */}
       <div className={s.splitGrid}>
         <div className={s.section}>
-          <h4 className={s.sectionTitle}>FOCUS CHAPTERS</h4>
+          <h4 className={s.sectionTitle}>需要关注的章节</h4>
           {focusChapters.length ? (
             <div className={s.chapterList}>
               {focusChapters.map((ch) => (
                 <div key={ch.chapter_id} className={s.chapterRow}>
-                  <span className={s.chOrd}>CH.{ch.ordinal}</span>
+                  <span className={s.chOrd}>第 {ch.ordinal} 章</span>
                   <StatusBadge
                     tone={ch.open_issue_count > 0 ? "warning" : "success"}
                     label={statusLabel(ch.status)}
@@ -232,26 +228,27 @@ export function RunsPage() {
           ) : (
             <div className={s.emptyState}>
               {currentDocument
-                ? `No focus chapters for ${preferredTitle(currentDocument)}`
+                ? "没有需要关注的章节。"
                 : "载入一本书后，这里显示需要关注的章节。"}
             </div>
           )}
         </div>
 
         <div className={s.section}>
-          <h4 className={s.sectionTitle}>RECENT EVENTS</h4>
+          <h4 className={s.sectionTitle}>最近动态</h4>
           {currentRunEvents.length ? (
             <div className={s.eventList}>
-              {currentRunEvents.map((ev) => (
-                <div key={ev.event_id} className={s.eventRow}>
-                  <span className={s.eventKind}>{eventTitle(ev.event_type)}</span>
-                  <span className={s.eventText}>
-                    {ev.event_type}
-                    {ev.work_item_id ? ` :: ${ev.work_item_id.slice(0, 6)}` : ""}
-                  </span>
-                  <span className={s.eventDate}>{formatDate(ev.created_at)}</span>
-                </div>
-              ))}
+              {currentRunEvents.map((ev) => {
+                const described = describeRunEvent(ev);
+                if (!described) return null;
+                return (
+                  <div key={ev.event_id} className={s.eventRow}>
+                    <span className={s.eventKind}>{described.title}</span>
+                    <span className={s.eventText}>{described.detail ?? ""}</span>
+                    <span className={s.eventDate}>{formatDate(ev.created_at)}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className={s.emptyState}>还没有运行事件。</div>
