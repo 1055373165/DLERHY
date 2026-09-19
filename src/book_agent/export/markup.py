@@ -923,9 +923,22 @@ def url_encode_asset_path(path: str) -> str:
     return urllib.parse.quote(path, safe="/-_.~")
 
 
+MARKDOWN_IMAGE_PLACEHOLDER_ALT = "图片"
+
+
 def markdown_image_reference(alt_text: str, path: str) -> str:
-    escaped_alt = re.sub(r"([\[\]\\])", r"\\\1", str(alt_text or ""))
-    return f"![{escaped_alt}]({url_encode_asset_path(path)})"
+    """``![alt](path)`` that common Markdown viewers render.
+
+    Escaped brackets inside the alt text (``![\\[Image\\]](...)``) are valid
+    CommonMark, but many viewers (Typora, Quick Look, some editors) then show the
+    line as literal text. Placeholder alt text becomes a plain label, and
+    brackets in real captions become parentheses instead of being escaped.
+    """
+    alt = " ".join(str(alt_text or "").split())
+    if alt in ARTIFACT_PLACEHOLDER_TEXTS:
+        alt = MARKDOWN_IMAGE_PLACEHOLDER_ALT
+    alt = alt.replace("[", "(").replace("]", ")").replace("\\", "/")
+    return f"![{alt}]({url_encode_asset_path(path)})"
 
 
 def build_merged_toc(
