@@ -53,7 +53,7 @@
 
 | 条款 | 实现 |
 |---|---|
-| 3.3 删除书稿一并删除关联数据 | 书库「删除」→ `DELETE /v1/documents/{id}` |
+| 3.3 删除书稿一并删除关联数据 | 书库「删除」→ `DELETE /v1/documents/{id}`，同时删除上传原件、导出、图片；`tests/test_document_delete_files.py` |
 | 3.4 组织隔离 | `tests/test_org_tenancy.py` |
 | 4.1 预付扣费与余额用完即停 | `services/prepaid_credit.py`；`tests/test_prepaid_credit.py` |
 | 4.2 月度用量明细 | `GET /v1/orgs/current/usage?format=csv`；侧栏预算条下「下载本月用量明细」 |
