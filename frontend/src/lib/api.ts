@@ -532,7 +532,7 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(withApiBase(path), { ...init, headers });
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(path, init);
   if (!response.ok) {
     throw await parseError(response);
@@ -754,13 +754,18 @@ export async function getRun(runId: string): Promise<DocumentRunSummary> {
   return requestJson<DocumentRunSummary>(`/runs/${encodeURIComponent(runId)}`);
 }
 
-export async function getRunEvents(runId: string): Promise<RunAuditEventPage> {
+/** A run's events, newest first: by default only what a reader follows (milestones). */
+export async function getRunEvents(runId: string, options: { all?: boolean; limit?: number } = {}): Promise<RunAuditEventPage> {
+  const limit = options.limit ?? 8;
   return requestJson<RunAuditEventPage>(
-    `/runs/${encodeURIComponent(runId)}/events?limit=8&offset=0&milestones=true`
+    `/runs/${encodeURIComponent(runId)}/events?limit=${limit}&offset=0${options.all ? "" : "&milestones=true"}`
   );
 }
 
-export async function createRun(documentId: string, options: { fastReading?: boolean } = {}): Promise<DocumentRunSummary> {
+export async function createRun(
+  documentId: string,
+  options: { fastReading?: boolean; autoStarted?: boolean } = {},
+): Promise<DocumentRunSummary> {
   return requestJson<DocumentRunSummary>("/runs", {
     method: "POST",
     headers: {
@@ -773,7 +778,10 @@ export async function createRun(documentId: string, options: { fastReading?: boo
       status_detail_json: {
         source: "react-ui",
         surface: "translation-workspace-react",
-        run_request: { fast_reading: options.fastReading ? "on" : "off" },
+        run_request: {
+          fast_reading: options.fastReading ? "on" : "off",
+          ...(options.autoStarted ? { auto_started: true } : {}),
+        },
       },
     }),
   });
@@ -790,6 +798,14 @@ export async function resumeRun(runId: string, payload: RunControlPayload): Prom
       note: payload.note,
       detail_json: payload.detail_json ?? {},
     }),
+  });
+}
+
+export async function pauseRun(runId: string, payload: RunControlPayload): Promise<DocumentRunSummary> {
+  return requestJson<DocumentRunSummary>(`/runs/${encodeURIComponent(runId)}/pause`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actor_id: payload.actor_id, note: payload.note, detail_json: payload.detail_json ?? {} }),
   });
 }
 
@@ -883,18 +899,30 @@ async function fetchDocumentExport(
   const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
     exportType
   )}&package=${packaging}`;
+  const deadline = Date.now() + timeoutMs;
   let response = await apiFetch(downloadPath);
-  if (response.status === 404) {
-    const run = await requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/export`, {
+  while (response.status === 404) {
+    const started = await apiFetch(`/documents/${encodeURIComponent(documentId)}/export`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ export_type: exportType }),
     });
+    if (started.status === 409 && Date.now() < deadline) {
+      // The book is busy (its translation may be producing this very format): wait and look again.
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      response = await apiFetch(downloadPath);
+      continue;
+    }
+    if (!started.ok) {
+      throw await parseError(started);
+    }
+    const run = (await started.json()) as DocumentRunSummary;
     const finished = await waitForRunToFinish(run.run_id, { pollIntervalMs, timeoutMs });
     if (finished.status !== "succeeded" && finished.status !== "succeeded_with_warnings") {
       throw new Error(`导出未完成（${finished.stop_reason ?? finished.status}）。`);
     }
     response = await apiFetch(downloadPath);
+    break;
   }
   if (!response.ok) {
     throw await parseError(response);
@@ -1053,6 +1081,11 @@ export async function createStructureEdit(documentId: string, payload: Structure
 }
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
+
+/** The provider this organisation translates with, or null when none is set up. */
+export async function getActiveProvider(): Promise<Provider | null> {
+  return requestJson<Provider | null>("/providers/active");
+}
 
 export async function listProviders(): Promise<Provider[]> {
   return requestJson<Provider[]>("/providers");

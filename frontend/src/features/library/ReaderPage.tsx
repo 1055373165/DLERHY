@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { marked } from "marked";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import {
   downloadDocumentExport,
@@ -40,7 +40,7 @@ function markdownPage(markdown: string): string {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>${MARKDOWN_PAGE_STYLE}</style></head><body>${body}</body></html>`;
 }
 
-/** Read a book's exports in place: to check a translation without finding the downloaded file. */
+/** The book page's 阅读 tab: the book's exports, read in place (title and source link live on the book page). */
 export function ReaderPage() {
   const { documentId = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -99,12 +99,6 @@ export function ReaderPage() {
   return (
     <div className={s.layout}>
       <div className={s.toolbar}>
-        <Link to="/library" className={s.back}>
-          ← 书库
-        </Link>
-        <span className={s.title} title={title}>
-          {title}
-        </span>
         <div className={s.tabs} role="tablist" aria-label="阅读格式">
           {formats.map((item) => (
             <button
@@ -126,11 +120,6 @@ export function ReaderPage() {
           <button className="btn btn-sm" onClick={() => setShowSource((value) => !value)}>
             {showSource ? "看排版" : "看源码"}
           </button>
-        )}
-        {document.data?.source_url && (
-          <a className="btn btn-sm" href={document.data.source_url} target="_blank" rel="noreferrer noopener">
-            原网页 ↗
-          </a>
         )}
         <button className="btn btn-sm" onClick={() => void handleDownload()}>
           下载

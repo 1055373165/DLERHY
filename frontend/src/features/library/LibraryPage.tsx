@@ -101,7 +101,7 @@ export function LibraryPage() {
 
   async function handleOpen(documentId: string) {
     selectDocument(documentId);
-    await navigate("/");
+    await navigate(`/books/${documentId}`);
   }
 
   type DownloadKey = typeof DOWNLOAD_OPTIONS[number]["key"];
@@ -249,7 +249,7 @@ export function LibraryPage() {
                         打开
                       </button>
                       {entry.merged_export_ready ? (
-                        <Link className="btn btn-sm" to={`/library/${entry.document_id}/read`}>
+                        <Link className="btn btn-sm" to={`/books/${entry.document_id}/read`}>
                           阅读
                         </Link>
                       ) : null}

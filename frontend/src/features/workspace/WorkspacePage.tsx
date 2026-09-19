@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
@@ -7,28 +6,15 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
 import { listDocumentChapters } from "../../lib/api";
-import {
-  documentBadge,
-  formatDate,
-  formatNumber,
-  getPrimaryRunAction,
-  preferredTitle,
-  readerPath,
-  sourceLabel,
-  statusLabel,
-} from "../../lib/workflow";
-import { FastReadingToggle } from "../../components/FastReadingToggle";
-import { CostEstimateNote } from "./CostEstimateNote";
+import { formatDate, formatNumber, statusLabel } from "../../lib/workflow";
 import s from "./WorkspacePage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
+/** The book page's 逐章审校 tab: chapter queue, memory proposals, issues and repairs (for reviewers). */
 export function WorkspacePage() {
   const {
     currentDocument,
-    currentRun,
-    currentExports,
-    returnToHome,
     chapterWorklist,
     chapterWorklistLoading,
     chapterWorklistFilters,
@@ -39,30 +25,17 @@ export function WorkspacePage() {
     selectReviewChapter,
     currentChapterReviewDetail,
     currentChapterReviewLoading,
-    uploadPending,
-    runActionPending,
     reviewDecisionPending,
     actionExecutionPending,
     approveMemoryProposal,
     rejectMemoryProposal,
     executeChapterAction,
-    uploadFile,
-    importWebPage,
-    runPrimaryAction,
     downloadChapterAsset,
-    selectedDocumentId,
-    currentDocumentLoading,
-    currentDocumentError,
-    refreshCurrentDocument,
   } = useWorkspace();
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [pageUrl, setPageUrl] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
 
   const doc = currentDocument;
-  const action = getPrimaryRunAction(doc, currentRun);
-  const badge = documentBadge(doc, currentRun);
   const queueEntries = chapterWorklist?.entries ?? [];
 
   // Fetch all chapters so users can browse even when worklist is empty
@@ -74,68 +47,6 @@ export function WorkspacePage() {
   const allChapters = allChaptersQuery.data ?? [];
 
   /* ── Handlers ── */
-
-  async function handleUpload() {
-    if (!selectedFile) return;
-    try {
-      const result = await uploadFile(selectedFile);
-      setFeedback({ tone: "success", text: `已载入：${result.title ?? selectedFile.name}` });
-      setSelectedFile(null);
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "上传失败" });
-    }
-  }
-
-  async function handleImportUrl() {
-    const url = pageUrl.trim();
-    if (!url) return;
-    try {
-      const result = await importWebPage(url);
-      setFeedback({ tone: "success", text: `已载入网页：${result.title ?? url}` });
-      setPageUrl("");
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "网页抓取失败" });
-    }
-  }
-
-  const urlForm = (compact: boolean) => (
-    <form
-      className={compact ? s.compactUploadGroup : s.urlForm}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void handleImportUrl();
-      }}
-    >
-      <input
-        type="url"
-        inputMode="url"
-        className={s.urlInput}
-        placeholder={compact ? "或粘贴网页链接…" : "https://example.com/article"}
-        aria-label="网页链接"
-        value={pageUrl}
-        onChange={(e) => {
-          setPageUrl(e.target.value);
-          setFeedback(null);
-        }}
-      />
-      <button
-        type="submit"
-        className={compact ? "btn btn-sm" : "btn"}
-        disabled={!pageUrl.trim() || uploadPending}
-      >
-        {uploadPending ? "…" : "抓取网页"}
-      </button>
-    </form>
-  );
-
-  async function handlePrimaryAction() {
-    try {
-      await runPrimaryAction();
-      setFeedback({ tone: "success", text: action.label });
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "操作失败" });
-    }
-  }
 
   async function handleProposal(proposalId: string, accept: boolean) {
     const payload = { actor_name: "reviewer-ui" };
@@ -178,14 +89,7 @@ export function WorkspacePage() {
     }
   }
 
-  function handleReturnHome() {
-    setSelectedFile(null);
-    setFeedback(null);
-    returnToHome();
-  }
-
   /* ── Derived ── */
-  const readPath = readerPath(doc);
   const detail = currentChapterReviewDetail;
   const proposals = detail?.memory_proposals?.pending_proposals ?? [];
   const timeline = detail?.timeline ?? [];
@@ -193,150 +97,10 @@ export function WorkspacePage() {
   const actions = detail?.recent_actions ?? [];
   const selectedChapterEntry = queueEntries.find((e) => e.chapter_id === selectedReviewChapterId);
 
-  // A book is selected but did not load: say so instead of showing the upload page as if none were.
-  const opening = !doc && Boolean(selectedDocumentId) && currentDocumentLoading;
-  const openFailed = !doc && Boolean(selectedDocumentId) && Boolean(currentDocumentError);
-
   return (
     <div className={s.layout}>
-      {opening && <div className={s.detailEmpty}>正在打开这本书…</div>}
-      {openFailed && (
-        <div className={s.feedback} data-tone="error" role="alert">
-          这本书没能打开：{currentDocumentError}
-          <div className={s.uploadActions}>
-            <button className="btn btn-sm" onClick={() => void refreshCurrentDocument()}>
-              重试
-            </button>
-            <button className="btn btn-sm" onClick={handleReturnHome}>
-              回到首页
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Upload Hero (when no document loaded) ── */}
-      {!doc && !opening && !openFailed && (
-        <div className={s.uploadHero}>
-          <div className={s.uploadIllustration}>
-            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="16" y="8" width="48" height="64" rx="3" />
-              <path d="M28 8V4a2 2 0 012-2h20a2 2 0 012 2v4" />
-              <line x1="28" y1="28" x2="52" y2="28" />
-              <line x1="28" y1="36" x2="52" y2="36" />
-              <line x1="28" y1="44" x2="44" y2="44" />
-              <path d="M40 56l6-6 6 6" />
-              <line x1="46" y1="50" x2="46" y2="64" />
-            </svg>
-          </div>
-          <h2 className={s.uploadTitle}>载入书稿</h2>
-          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译</p>
-          <label className={s.fileLabel}>
-            <input
-              type="file"
-              accept=".pdf,.epub"
-              className={s.fileInput}
-              onChange={(e) => {
-                setSelectedFile(e.target.files?.[0] ?? null);
-                setFeedback(null);
-              }}
-            />
-            <span className={s.fileText}>
-              {selectedFile ? selectedFile.name : "点击选择 .pdf / .epub 文件"}
-            </span>
-          </label>
-          <div className={s.uploadActions}>
-            <button
-              className="btn btn-primary"
-              disabled={!selectedFile || uploadPending}
-              onClick={handleUpload}
-            >
-              {uploadPending ? "上传中…" : "上传并解析"}
-            </button>
-          </div>
-          <div className={s.orDivider}>或翻译一个网页（保留原页面排版，输出中文网页）</div>
-          {urlForm(false)}
-          <p className={s.rightsNote}>
-            请只上传或抓取你有权翻译的书稿与网页（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
-          </p>
-          {feedback && (
-            <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
-          )}
-        </div>
-      )}
-
-      {/* ── Compact upload (when document already loaded) ── */}
-      {doc && (
-        <div className={s.compactUpload}>
-          <div className={s.compactUploadGroup}>
-            <label className={s.fileLabel}>
-              <input
-                type="file"
-                accept=".pdf,.epub"
-                className={s.fileInput}
-                onChange={(e) => {
-                  setSelectedFile(e.target.files?.[0] ?? null);
-                  setFeedback(null);
-                }}
-              />
-              <span className={s.fileTextSmall}>
-                {selectedFile ? selectedFile.name : "选择新文件…"}
-              </span>
-            </label>
-            <button
-              className="btn btn-sm"
-              disabled={!selectedFile || uploadPending}
-              onClick={handleUpload}
-            >
-              {uploadPending ? "…" : "上传并解析"}
-            </button>
-          </div>
-          {urlForm(true)}
-          {feedback && (
-            <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
-          )}
-        </div>
-      )}
-
-      {/* ── Document Header (dense row) ── */}
-      {doc && (
-        <div className={s.docHeader}>
-          <div className={s.docHeaderTop}>
-            <h1 className={s.docTitle}>{preferredTitle(doc)}</h1>
-            <div className={s.docHeaderAside}>
-              {readPath && (
-                <Link className="btn btn-primary btn-sm" to={readPath}>
-                  阅读中文版
-                </Link>
-              )}
-              <StatusBadge label={badge.label} tone={badge.tone} />
-              <button className={`btn btn-sm ${s.homeButton}`} onClick={handleReturnHome}>
-                回到首页上传新书
-              </button>
-            </div>
-          </div>
-          <div className={s.docStats}>
-            <Stat label="状态" value={statusLabel(doc.status)} />
-            <Stat label="来源" value={sourceLabel(doc.source_type)} />
-            <Stat label="章节" value={formatNumber(doc.chapter_count)} />
-            <Stat label="翻译段" value={formatNumber(doc.packet_count)} />
-            <Stat label="句子" value={formatNumber(doc.sentence_count)} />
-            {action.mode !== "disabled" && (
-              <button
-                className="btn btn-sm"
-                disabled={action.disabled || runActionPending}
-                onClick={handlePrimaryAction}
-              >
-                {runActionPending ? "..." : action.label}
-              </button>
-            )}
-          </div>
-          {action.mode === "create" ? (
-            <>
-              <FastReadingToggle />
-              <CostEstimateNote documentId={doc.document_id} />
-            </>
-          ) : null}
-        </div>
+      {feedback && (
+        <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
       )}
 
       {/* ── Chapter Workbench ── */}

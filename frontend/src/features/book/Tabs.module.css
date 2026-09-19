@@ -1,0 +1,86 @@
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-6);
+}
+
+@media (max-width: 860px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0 0 var(--sp-3);
+}
+
+.steps,
+.events,
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.step,
+.event,
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.step[data-status="succeeded"] .stepStatus {
+  color: var(--green);
+}
+
+.step[data-status="running"] .stepStatus,
+.step[data-status="awaiting_approval"] .stepStatus {
+  color: var(--amber);
+}
+
+.step[data-status="failed"] .stepStatus {
+  color: var(--red);
+}
+
+.stepStatus,
+.eventDate,
+.meta {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.eventTitle {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.eventDetail {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: var(--sp-4) 0;
+}
+
+.error {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+.markdown {
+  white-space: pre-wrap;
+  font-size: var(--text-sm);
+  background: var(--bg-panel-alt);
+  padding: var(--sp-4);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}

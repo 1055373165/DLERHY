@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
 import { App } from "../../app/App";
+import { makeOverview } from "../../test/fixtures";
 
 const DOCUMENT_ID = "11111111-1111-4111-8111-111111111111";
 const ISSUE_ID = "33333333-3333-4333-8333-333333333333";
@@ -30,6 +31,8 @@ function installFetchMock() {
   const posts: string[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes(`/v1/documents/${DOCUMENT_ID}/overview`)) return json(makeOverview(DOCUMENT_ID, { title: "Momentum" }));
+    if (url.includes("/v1/inbox")) return json({ count: 0, items: [] });
     if (init?.method === "POST") {
       posts.push(url);
     }
@@ -108,7 +111,7 @@ describe("IssuesPage", () => {
     const { fetchMock, posts } = installFetchMock();
     window.localStorage.setItem("book-agent.current-document-id", DOCUMENT_ID);
     render(
-      <MemoryRouter initialEntries={["/issues"]}>
+      <MemoryRouter initialEntries={[`/books/${DOCUMENT_ID}/issues`]}>
         <App />
       </MemoryRouter>,
     );

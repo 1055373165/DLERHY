@@ -51,7 +51,7 @@ import {
 } from "../lib/api";
 import { fastReadingPreferred } from "../lib/preferences";
 import { runPollInterval, useRunEventStream } from "../lib/runEvents";
-import { getPrimaryRunAction, isRunActive } from "../lib/workflow";
+import { isRunActive } from "../lib/workflow";
 
 interface WorkspaceContextValue {
   serviceLinks: typeof SERVICE_LINKS;
@@ -86,13 +86,11 @@ interface WorkspaceContextValue {
   currentChapterReviewError: string | null;
   bootstrapHistory: DocumentHistoryEntry[];
   uploadPending: boolean;
-  runActionPending: boolean;
   reviewDecisionPending: boolean;
   assignmentPending: boolean;
   actionExecutionPending: boolean;
   uploadFile: (file: File) => Promise<DocumentSummary>;
   importWebPage: (url: string) => Promise<DocumentSummary>;
-  runPrimaryAction: () => Promise<DocumentRunSummary>;
   refreshCurrentDocument: () => Promise<void>;
   approveMemoryProposal: (
     proposalId: string,
@@ -117,7 +115,7 @@ interface WorkspaceContextValue {
   downloadChapterAsset: (chapterId: string) => Promise<string>;
 }
 
-const STORAGE_KEY_DOCUMENT = "book-agent.current-document-id";
+export const STORAGE_KEY_DOCUMENT = "book-agent.current-document-id";
 const DEFAULT_CHAPTER_WORKLIST_FILTERS = {
   queuePriority: "all",
   assignment: "all",
@@ -229,7 +227,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // The chapter workbench lives on the workspace page only: elsewhere its two queries would poll for
   // nothing (they were about a third of all requests during a run).
-  const workbenchVisible = useLocation().pathname === "/";
+  const workbenchVisible = /^\/books\/[^/]+\/chapters/.test(useLocation().pathname);
 
   const currentChapterWorklistQuery = useQuery({
     queryKey: [
@@ -418,62 +416,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const runActionMutation = useMutation({
-    mutationFn: async () => {
-      const currentDocument = currentDocumentQuery.data;
-      const currentRun = currentRunQuery.data;
-      const action = getPrimaryRunAction(currentDocument, currentRun);
-      if (!currentDocument || action.disabled) {
-        throw new Error("请先上传并解析书稿。");
-      }
-      if (action.mode === "create") {
-        const created = await createRun(currentDocument.document_id, { fastReading: fastReadingPreferred() });
-        return resumeRun(created.run_id, {
-          actor_id: "react-ui",
-          note: "start from standalone React workspace",
-        });
-      }
-      if (action.mode === "resume" && action.runId) {
-        return resumeRun(action.runId, {
-          actor_id: "react-ui",
-          note: "resume from standalone React workspace",
-        });
-      }
-      if (action.mode === "retry" && action.runId) {
-        return retryRun(action.runId, {
-          actor_id: "react-ui",
-          note: "retry from standalone React workspace",
-        });
-      }
-      if (action.mode === "recover" && currentDocument.document_id) {
-        const refreshedDocument = await getDocument(currentDocument.document_id);
-        const refreshedRunId = refreshedDocument.latest_run_id;
-        if (!refreshedRunId) {
-          throw new Error("这条 run 还没有收敛成可恢复状态，请稍后再试。");
-        }
-        const refreshedRun = await getRun(refreshedRunId);
-        const refreshedAction = getPrimaryRunAction(refreshedDocument, refreshedRun);
-        if (refreshedAction.mode === "resume" && refreshedAction.runId) {
-          return resumeRun(refreshedAction.runId, {
-            actor_id: "react-ui",
-            note: "resume after refresh from standalone React workspace",
-          });
-        }
-        if (refreshedAction.mode === "retry" && refreshedAction.runId) {
-          return retryRun(refreshedAction.runId, {
-            actor_id: "react-ui",
-            note: "retry after refresh from standalone React workspace",
-          });
-        }
-        throw new Error("阶段失败已识别，但当前 run 仍未转为可恢复状态。");
-      }
-      throw new Error("当前没有可执行的运行操作。");
-    },
-    onSuccess: async () => {
-      await invalidateWorkspaceQueries();
-    },
-  });
-
   const reviewDecisionMutation = useMutation({
     mutationFn: async ({
       proposalId,
@@ -605,13 +547,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       currentChapterReviewQuery.error instanceof Error ? currentChapterReviewQuery.error.message : null,
     bootstrapHistory: bootstrapHistoryQuery.data?.entries ?? [],
     uploadPending: uploadMutation.isPending,
-    runActionPending: runActionMutation.isPending,
     reviewDecisionPending: reviewDecisionMutation.isPending,
     assignmentPending: assignmentMutation.isPending,
     actionExecutionPending: actionExecutionMutation.isPending,
     uploadFile: uploadMutation.mutateAsync,
     importWebPage: uploadMutation.mutateAsync,
-    runPrimaryAction: runActionMutation.mutateAsync,
     refreshCurrentDocument,
     approveMemoryProposal: (proposalId, payload) =>
       reviewDecisionMutation.mutateAsync({ proposalId, decision: "approved", payload }),

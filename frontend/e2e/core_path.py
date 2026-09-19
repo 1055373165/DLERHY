@@ -182,7 +182,21 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         if read.get_attribute("aria-selected") != "true":
             click(read, "read")
         frame = page.frame_locator("iframe").first
-        frame.locator("body").wait_for(timeout=120_000)
+        try:
+            frame.locator("body").wait_for(timeout=120_000)
+        except Exception:
+            if shots:
+                page.screenshot(path=str(shots / "core-path-stuck.png"))
+            document_id = re.search(r"/books/([^/]+)", page.url)
+            overview = page.request.get(f"{base}/v1/documents/{document_id.group(1)}/overview").json() if document_id else {}
+            raise AssertionError(
+                "the Chinese text never showed: "
+                + page.locator("main, body").first.inner_text()[:600].replace("\n", " | ")
+                + " overview: "
+                + json.dumps({k: overview.get(k) for k in ("headline", "readable", "activity", "primary_action")}, ensure_ascii=False)
+                + " translation: "
+                + json.dumps({k: (overview.get("translation") or {}).get(k) for k in ("state", "steps")}, ensure_ascii=False)
+            )
         text = frame.locator("body").inner_text(timeout=60_000)
         if shots:
             page.screenshot(path=str(shots / "core-path-read.png"))

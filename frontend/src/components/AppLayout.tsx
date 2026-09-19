@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useWorkspace } from "../app/WorkspaceContext";
-import { SERVICE_LINKS, listApprovals } from "../lib/api";
-import { preferredTitle } from "../lib/workflow";
+import { SERVICE_LINKS } from "../lib/api";
+import { getInbox } from "../lib/overview";
 import s from "./AppLayout.module.css";
 
 /* ── Inline SVG Icons (16×16) ── */
@@ -60,45 +60,37 @@ const Icons = {
 } as const;
 
 const NAV_ITEMS = [
-  { to: "/", label: "工作台", icon: Icons.work },
-  { to: "/library", label: "书库", icon: Icons.lib },
-  { to: "/approvals", label: "审批", icon: Icons.approve },
-  { to: "/runs", label: "运行", icon: Icons.runs },
-  { to: "/deliverables", label: "交付", icon: Icons.ship },
-  { to: "/issues", label: "问题", icon: Icons.issues },
-  { to: "/providers", label: "服务商", icon: Icons.settings },
+  { to: "/", label: "首页", icon: Icons.work },
+  { to: "/inbox", label: "需要你处理", icon: Icons.approve },
+  { to: "/settings", label: "设置", icon: Icons.settings },
 ] as const;
+
+function pageName(pathname: string): string {
+  if (pathname.startsWith("/books/")) return "书";
+  if (pathname.startsWith("/library")) return "全部书";
+  if (pathname.startsWith("/inbox")) return "需要你处理";
+  if (pathname.startsWith("/settings")) return "设置";
+  return "首页";
+}
 
 const APP_TITLE = "Book Agent";
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
-  const { currentDocument, health, healthLoading } = useWorkspace();
-  const documentId = currentDocument?.document_id ?? null;
-  // Same query key as the approvals page, so deciding there updates the count here at once.
-  const pendingApprovals = useQuery({
-    queryKey: ["approvals", documentId],
-    queryFn: () => listApprovals(documentId as string, "pending"),
-    enabled: Boolean(documentId),
-    refetchInterval: 10_000,
-  });
-  const pendingCount = pendingApprovals.data?.length ?? 0;
-
-  const docTitle = currentDocument ? preferredTitle(currentDocument) : null;
+  const { health, healthLoading } = useWorkspace();
+  // Across every book: approvals and pauses only a person can fix (GET /inbox).
+  const inbox = useQuery({ queryKey: ["inbox"], queryFn: getInbox, refetchInterval: 15_000, retry: false });
+  const pendingCount = inbox.data?.count ?? 0;
 
   useEffect(() => {
     // The tab title says it too, so a reader on another tab sees that the book is waiting on them.
-    document.title = pendingCount > 0 ? `(${pendingCount}) 等你审批 · ${APP_TITLE}` : APP_TITLE;
+    document.title = pendingCount > 0 ? `(${pendingCount}) 等你处理 · ${APP_TITLE}` : APP_TITLE;
     return () => {
       document.title = APP_TITLE;
     };
   }, [pendingCount]);
 
-  const activeNav =
-    NAV_ITEMS.find((n) =>
-      n.to === "/" ? location.pathname === "/" : location.pathname.startsWith(n.to),
-    ) ?? NAV_ITEMS[0];
 
   return (
     <div className={s.shell} data-nav-open={navOpen}>
@@ -131,8 +123,8 @@ export function AppLayout() {
             >
               <span className={s.navIcon}>{item.icon}</span>
               <span className={s.navLabel}>{item.label}</span>
-              {item.to === "/approvals" && pendingCount > 0 && (
-                <span className={s.navBadge} aria-label={`${pendingCount} 项待审批`}>
+              {item.to === "/inbox" && pendingCount > 0 && (
+                <span className={s.navBadge} aria-label={`${pendingCount} 件事等你处理`}>
                   {pendingCount}
                 </span>
               )}
@@ -177,17 +169,11 @@ export function AppLayout() {
             {navOpen ? "\u2715" : "\u2630"}
           </button>
           <div className={s.topbarLeft}>
-            <span className={s.pageName}>{activeNav.label}</span>
-            {docTitle && (
-              <>
-                <span className={s.separator}>/</span>
-                <span className={s.docTitle}>{docTitle}</span>
-              </>
-            )}
+            <span className={s.pageName}>{pageName(location.pathname)}</span>
           </div>
-          {pendingCount > 0 && !location.pathname.startsWith("/approvals") && (
-            <NavLink to="/approvals" className={s.pendingNotice} role="status">
-              有 {pendingCount} 项等你审批，处理后翻译会继续 →
+          {pendingCount > 0 && !location.pathname.startsWith("/inbox") && (
+            <NavLink to="/inbox" className={s.pendingNotice} role="status">
+              有 {pendingCount} 件事等你处理，处理后翻译会继续 →
             </NavLink>
           )}
         </header>

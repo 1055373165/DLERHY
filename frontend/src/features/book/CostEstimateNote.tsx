@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getCostEstimate, getCurrentOrgCredit } from "../../lib/api";
-import s from "./WorkspacePage.module.css";
+import s from "./BookPage.module.css";
 
 function tokenCount(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;

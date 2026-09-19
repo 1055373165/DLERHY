@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
 import { App } from "../../app/App";
+import { makeOverview } from "../../test/fixtures";
 
 function installFetchMock() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -53,6 +54,18 @@ function installFetchMock() {
           headers: { "Content-Type": "application/json" },
         }
       );
+    }
+    if (url.includes("/v1/documents/doc-open/overview")) {
+      return new Response(JSON.stringify(makeOverview("doc-open", { title: "Open the Desk", source_type: "epub" })), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/v1/inbox")) {
+      return new Response(JSON.stringify({ count: 0, items: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/v1/runs/")) {
+      return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
     }
     if (url.includes("/v1/documents/doc-open/exports")) {
       return new Response(
@@ -116,7 +129,7 @@ function installFetchMock() {
 }
 
 describe("Library page", () => {
-  it("opens a history entry into the workspace", async () => {
+  it("opens a history entry on its book page", async () => {
     installFetchMock();
     const user = userEvent.setup();
 
