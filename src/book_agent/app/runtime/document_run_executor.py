@@ -795,6 +795,7 @@ class DocumentRunExecutor:
                             "model_review_mode": plan.model_review_mode,
                             "structure_review_mode": plan.structure_review_mode,
                             "structure_edits": plan.structure_edits,
+                            "fast_reading": plan.fast_reading,
                             "export_review_mode": plan.export_review_mode,
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
@@ -953,7 +954,9 @@ class DocumentRunExecutor:
 
     def _agent_tools(self, agent_kind: str, input_bundle: dict[str, Any] | None = None):
         if agent_kind == TerminologyAgent_KIND:
-            return TerminologyAgent.registry(), TerminologyAgent.policy()
+            return TerminologyAgent.registry(), TerminologyAgent.policy(
+                fast_reading=bool((input_bundle or {}).get("fast_reading"))
+            )
         if agent_kind == ReviewerAgent_KIND:
             return ReviewerAgent.registry(), ReviewerAgent.policy()
         if agent_kind == RepairAgent_KIND:

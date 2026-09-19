@@ -260,7 +260,10 @@ def book_tool_registry() -> ToolRegistry:
     )
 
 
-def terminology_policy() -> PermissionPolicy:
+FAST_READING_POLICY_ID = "auto.fast_reading_mode"
+
+
+def terminology_policy(*, fast_reading: bool = False) -> PermissionPolicy:
     def _is_name_like(ctx: ToolContext, args: BaseModel) -> bool:
         try:
             return _term_type(getattr(args, "term_type", "concept")) in _AUTO_LOCK_TERM_TYPES
@@ -279,6 +282,19 @@ def terminology_policy() -> PermissionPolicy:
                 "lock_term",
                 _is_frequent,
                 f"terms occurring in at least {FREQUENT_TERM_AUTO_LOCK_OCCURRENCES} sentences lock without review",
+            ),
+            # Last, so names and frequent terms keep their own, more specific reason on record.
+            *(
+                [
+                    AutoApproveRule(
+                        FAST_READING_POLICY_ID,
+                        "lock_term",
+                        lambda ctx, args: True,
+                        "fast reading mode: term locks are approved without a person (change them in the glossary)",
+                    )
+                ]
+                if fast_reading
+                else []
             ),
         ]
     )

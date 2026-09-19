@@ -210,5 +210,37 @@ class AgentStageExecutionTests(unittest.TestCase):
             self.assertEqual(GlossaryService(session).get_locked_terms(self.document_id), {"Momentum": "动量"})
 
 
+    def test_fast_reading_mode_locks_terms_without_stopping_and_records_each_approval(self) -> None:
+        with self.session_factory() as session:
+            run = RunControlRepository(session).get_run(self.run_id)
+            run.status_detail_json = {**(run.status_detail_json or {}), "run_request": {"fast_reading": "on"}}
+            session.commit()
+        model = _ScriptedModel(
+            [
+                AgentStep(text=None, tool_calls=[ToolCall("c1", "lock_term", {"source_term": "Momentum", "target_term": "动量"})], usage=TranslationUsage(token_in=1, token_out=1)),
+                AgentStep(text="done", usage=TranslationUsage(token_in=1, token_out=1)),
+            ]
+        )
+        plan = self._plan()
+        self.assertTrue(plan.fast_reading)
+        executor = self._executor(model)
+        executor._process_agent_stage(self.run_id, "terminology", plan)
+        executor._process_agent_stage(self.run_id, "terminology", plan)
+        self._join_work_threads(executor)
+        # One pass, no pending approval, no second attempt: the stage is done and translation may start.
+        self.assertEqual(self._stage("terminology"), StageStatus.SUCCEEDED)
+        with self.session_factory() as session:
+            ledger = AgentLedgerRepository(session)
+            self.assertEqual(ledger.list_approvals(self.document_id, status=ApprovalStatus.PENDING), [])
+            (approval,) = ledger.list_approvals(self.document_id, status=None)
+            self.assertEqual(approval.status, ApprovalStatus.AUTO_APPROVED)
+            self.assertEqual(approval.decided_by, "auto.fast_reading_mode")
+            items = session.scalars(select(WorkItem).where(WorkItem.run_id == self.run_id, WorkItem.stage == WorkItemStage.AGENT)).all()
+            self.assertEqual([item.status for item in items], [WorkItemStatus.SUCCEEDED])
+            from book_agent.services.glossary_service import GlossaryService
+            self.assertEqual(GlossaryService(session).get_locked_terms(self.document_id), {"Momentum": "动量"})
+            self.assertTrue(StageGateKeeper(session).can_start(self.run_id, self.document_id, "translate", plan_stages=plan.stages))
+
+
 if __name__ == "__main__":
     unittest.main()
