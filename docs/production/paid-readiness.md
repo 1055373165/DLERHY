@@ -27,7 +27,8 @@
 | 顾问型 agent 失败不拖垮整本书 | ✅ | 阶段降级（degraded）；`tests/test_agent_stage_execution.py` |
 | 审批按步批量提交、恢复一次 | ✅ | `tests/test_harness_kernel.py` |
 | 多实例、租约、崩溃恢复 | ✅ | `tests/test_multi_instance.py`、`test_runtime_recovery.py` |
-| kill -9 端到端恢复测试 | ⬜ | |
+| kill -9 端到端恢复测试 | ✅ | `scripts/crash_recovery_drill.py`：440 包的书在第 222 包时 SIGKILL 服务进程，新进程 5.3 秒后接手，run 成功，2440/2440 句、无一重复翻译，整书 HTML 可下载（`--kills 3` 连杀三次同样通过）；死进程手里的包在 120 秒租约到期后重做 |
+| 真实浏览器走通上传 → 预估 → 整书运行 → 三种下载 | ✅ | Playwright 驱动构建后的前端（echo 模型）；修掉了随之发现的英文按钮、折叠侧栏错位、小书预估偏高 |
 
 ## 3. 花费可见
 
