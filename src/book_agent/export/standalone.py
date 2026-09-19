@@ -102,6 +102,7 @@ _STYLE = re.compile(r"<style[^>]*>.*?</style>", re.DOTALL | re.IGNORECASE)
 _MAIN = re.compile(r"<main[^>]*>(?P<main>.*)</main>", re.DOTALL | re.IGNORECASE)
 _BODY = re.compile(r"<body[^>]*>(?P<body>.*)</body>", re.DOTALL | re.IGNORECASE)
 _USAGE = re.compile(r"<section class='usage-summary'.*?</ul>\s*</section>", re.DOTALL)
+_HERO_HEADING = re.compile(r"<header class='hero'>.*?<h1[^>]*>(.*?)</h1>", re.DOTALL)
 _CHAPTER_KICKER = re.compile(r"<div class='hero-kicker'>[^<]*</div>")
 _SCRIPTS = re.compile(r"<script[^>]*>.*?</script>", re.DOTALL | re.IGNORECASE)
 
@@ -136,10 +137,13 @@ def assemble_bilingual_book(*, title: str, subtitle: str | None, chapters: list[
             if script not in scripts:
                 scripts.append(script)
         body = _SCRIPTS.sub("", body)
-        # Inside a book each chapter's banner names its place, not the export it came from.
-        body = _CHAPTER_KICKER.sub(f"<div class='hero-kicker'>第 {index} 部分</div>", body, count=1)
+        # Inside a book the chapter heading speaks for itself; the "Chapter Export" label goes.
+        body = _CHAPTER_KICKER.sub("", body, count=1)
         anchor = f"chapter-{index}"
-        toc.append(f"<li><a href='#{anchor}'>{html.escape(chapter.title)}</a></li>")
+        # The chapter export's own banner heading is the translated title; the stored one may be empty.
+        heading = _HERO_HEADING.search(body)
+        toc_title = re.sub(r"<[^>]+>", "", heading.group(1)).strip() if heading else ""
+        toc.append(f"<li><a href='#{anchor}'>{html.escape(html.unescape(toc_title) or chapter.title)}</a></li>")
         sections.append(
             f"<section class='book-chapter' id='{anchor}'>{body}<a class='back-to-toc' href='#toc'>↑ 目录</a></section>"
         )

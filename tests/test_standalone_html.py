@@ -79,7 +79,7 @@ class StandaloneHelpersTests(unittest.TestCase):
             title="交易者",
             subtitle="Dear Traders",
             chapters=[
-                BookChapter("第一章", chapter.replace("{title}", "第一章").replace("{body}", "一")),
+                BookChapter("Chapter One", chapter.replace("{title}", "第一章").replace("{body}", "一")),
                 BookChapter("第二章", chapter.replace("{title}", "第二章").replace("{body}", "二")),
             ],
         )
@@ -88,7 +88,7 @@ class StandaloneHelpersTests(unittest.TestCase):
         self.assertIn("id='chapter-2'", book)
         self.assertNotIn("usage-summary", book)
         self.assertNotIn("Chapter Export", book)
-        self.assertIn("第 2 部分", book)
+        self.assertEqual(book.count("class='hero-kicker'"), 1)  # only the book's own banner
         self.assertEqual(book.count("katex.min.js"), 1)
         self.assertLess(book.index("<p>一</p>"), book.index("<p>二</p>"))
 
