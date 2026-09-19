@@ -1123,6 +1123,21 @@ export interface StructureRefreshResponse {
   retranslate_packet_count?: number;
 }
 
+export interface TermResponse {
+  source_term: string;
+  target_term: string;
+  term_type: string;
+  lock_level: string;
+  locked_by?: string | null;
+}
+
+export interface TermUpdateRequest {
+  source_term: string;
+  target_term?: string | null;
+  lock?: boolean;
+  decided_by: string;
+}
+
 export interface TranslateDocumentRequest {
   packet_ids?: string[];
 }

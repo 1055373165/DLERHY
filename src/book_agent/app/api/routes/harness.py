@@ -7,17 +7,20 @@ from sqlalchemy.orm import Session
 
 from book_agent.app.api.deps import get_db_session
 from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
-from book_agent.domain.enums import ApprovalStatus, DecisionScope
+from book_agent.domain.enums import ApprovalStatus, DecisionScope, LockLevel
 from book_agent.domain.models import Document
 from book_agent.harness.approvals.service import ApprovalService
 from book_agent.harness.context.book_md import load_book_guide
 from book_agent.infra.repositories.agent import AgentLedgerRepository
+from book_agent.services.glossary_service import GlossaryService
 from book_agent.schemas.harness import (
     AgentTurnResponse,
     ApprovalDecisionRequest,
     ApprovalResponse,
     BookGuideResponse,
     DecisionResponse,
+    TermResponse,
+    TermUpdateRequest,
 )
 
 documents_router = APIRouter()
@@ -151,3 +154,77 @@ def approve(approval_id: str, payload: ApprovalDecisionRequest, request: Request
 @approvals_router.post("/{approval_id}/reject", response_model=ApprovalResponse)
 def reject(approval_id: str, payload: ApprovalDecisionRequest, request: Request, session: Session = Depends(get_db_session)) -> ApprovalResponse:
     return _decide(request, session, approval_id, payload, approved=False)
+
+
+def _lockers(session: Session, document_id: str) -> dict[str, str]:
+    """source term (casefolded) -> who approved its latest lock_term call."""
+    lockers: dict[str, str] = {}
+    for approval in sorted(AgentLedgerRepository(session).list_approvals(document_id), key=lambda a: a.created_at):
+        arguments = (approval.payload_json or {}).get("arguments") or {}
+        source = str(arguments.get("source_term") or "").casefold()
+        if approval.kind == "lock_term" and source and approval.status in {ApprovalStatus.APPROVED, ApprovalStatus.AUTO_APPROVED}:
+            lockers[source] = approval.decided_by or approval.policy_id or ""
+    for decision in AgentLedgerRepository(session).list_decisions(document_id):
+        if decision.key.startswith("term:") and str(decision.decided_by).startswith("human:"):
+            lockers[decision.key[len("term:"):]] = decision.decided_by
+    return lockers
+
+
+def _terms(session: Session, document_id: str) -> list[TermResponse]:
+    lockers = _lockers(session, document_id)
+    entries = [
+        entry
+        for entry in GlossaryService(session).list_document_entries(document_id)
+        if entry.lock_level in {LockLevel.LOCKED, LockLevel.PREFERRED}
+    ]
+    return [
+        TermResponse(
+            source_term=entry.source_term,
+            target_term=entry.target_term,
+            term_type=entry.term_type.value,
+            lock_level=entry.lock_level.value,
+            locked_by=lockers.get(entry.source_term.casefold()),
+        )
+        for entry in sorted(entries, key=lambda e: (e.lock_level != LockLevel.LOCKED, e.source_term.casefold()))
+    ]
+
+
+@documents_router.get("/{document_id}/terms", response_model=list[TermResponse])
+def list_terms(document_id: str, session: Session = Depends(get_db_session)) -> list[TermResponse]:
+    """The book's locked and preferred terms, with who locked each."""
+    _require_document(session, document_id)
+    return _terms(session, document_id)
+
+
+@documents_router.put("/{document_id}/terms", response_model=list[TermResponse])
+def update_term(document_id: str, payload: TermUpdateRequest, session: Session = Depends(get_db_session)) -> list[TermResponse]:
+    """Change or unlock a term, e.g. one fast reading mode locked without asking.
+
+    Applies to translation from now on; already translated sentences are checked against it
+    at the next review.
+    """
+    _require_document(session, document_id)
+    glossary = GlossaryService(session)
+    source = payload.source_term.strip()
+    current = next((e for e in glossary.list_document_entries(document_id) if e.source_term.casefold() == source.casefold()), None)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"term not in the glossary: {source}")
+    if payload.lock:
+        target = (payload.target_term or "").strip()
+        if not target:
+            raise HTTPException(status_code=422, detail="target_term is required to lock a term")
+        entry = glossary.lock_term(document_id, current.source_term, target, term_type=current.term_type)
+        value = {"target_term": entry.target_term, "lock_level": LockLevel.LOCKED.value, "note": "changed by a person"}
+    else:
+        glossary.unlock_term(document_id, current.source_term)
+        value = {"target_term": current.target_term, "lock_level": "unlocked", "note": "unlocked by a person"}
+    AgentLedgerRepository(session).record_decision(
+        document_id=document_id,
+        scope=DecisionScope.BOOK,
+        key=f"term:{current.source_term.casefold()}",
+        value=value,
+        decided_by=payload.decided_by,
+    )
+    session.commit()
+    return _terms(session, document_id)
+
