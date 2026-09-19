@@ -532,7 +532,8 @@ def render_block_html(
                 "</section>"
             )
     source_details = (
-        f"<details><summary>Source</summary><div class='source'>{source_html}</div></details>"
+        # Open: a bilingual edition shows both languages; readers can still fold the English away.
+        f"<details open><summary>原文</summary><div class='source'>{source_html}</div></details>"
         if include_source_toggle
         and block.source_text
         and block.target_text

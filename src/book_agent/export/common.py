@@ -305,7 +305,8 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # Bump when the renderers change what an existing book's exports look like. Downloads of an
 # export stamped with an older version answer 404, and clients (the library UI) re-export first.
 # 2: Chinese chapter labels and book titles, chapters with digit-leading titles, reader EPUB.
-EXPORT_RENDERER_VERSION = 2
+# 3: bilingual source text shown open under 原文; 回到顶部 instead of "Back to top".
+EXPORT_RENDERER_VERSION = 3
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",

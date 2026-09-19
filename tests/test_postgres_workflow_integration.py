@@ -743,7 +743,7 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
             merged_html = Path(export.file_path).read_text(encoding="utf-8")
             # Post-UX-cleanup: no "Reading Map" sidebar kicker is rendered.
             self.assertNotIn(">Reading Map<", merged_html)
-            self.assertIn("Back to top", merged_html)
+            self.assertIn("回到顶部", merged_html)
             # The merged reading edition no longer renders a table of contents.
             self.assertIn("id='chapter-", merged_html)
             self.assertNotIn("class='sidebar'", merged_html)

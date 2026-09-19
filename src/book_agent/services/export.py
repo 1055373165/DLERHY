@@ -1676,7 +1676,7 @@ class ExportService:
             f"<section class='chapter' id='chapter-{html.escape(bundle.chapter.id)}'>"
             f"{chapter_head}"
             f"{blocks_html}"
-            "<a class='back-top' href='#top'>Back to top</a>"
+            "<a class='back-top' href='#top'>回到顶部</a>"
             "</section>"
         )
 
