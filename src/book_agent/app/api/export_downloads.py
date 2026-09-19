@@ -390,6 +390,7 @@ def chapter_export_response(
         )
 
     assert_record_serviceable(chapter_record)
+    assert_record_current(chapter_record)
     file_path = resolve_artifact_path(
         chapter_record.file_path,
         roots=artifact_roots,
@@ -509,6 +510,7 @@ def document_export_response(
     # a 404 and confuse operators.
     for record in primary_records:
         assert_record_serviceable(record)
+    assert_record_current(primary_records[0])
     files = [
         resolve_artifact_path(
             record.file_path,
@@ -629,6 +631,7 @@ def _bilingual_document_response(
     for chapter in chapters:
         record = latest_by_chapter[chapter.id]
         assert_record_serviceable(record)
+        assert_record_current(record)
         file_path = resolve_artifact_path(
             record.file_path,
             roots=artifact_roots,
@@ -683,6 +686,7 @@ def _bilingual_book_html(
     for chapter in chapters:
         record = latest_by_chapter[chapter.id]
         assert_record_serviceable(record)
+        assert_record_current(record)
         file_path = resolve_artifact_path(
             record.file_path, roots=artifact_roots, document_id=document.id, content_sha256=record.content_sha256
         )
@@ -728,3 +732,18 @@ def _reader_epub_response(document: Any, file_path: Path, canonical_path: Path, 
         headers={"content-disposition": content_disposition(filename)},
         background=BackgroundTask(cleanup_path, output),
     )
+
+
+def assert_record_current(record: Any) -> None:
+    """404 for an export rendered by an older renderer, so clients re-export and get the fixes."""
+    from book_agent.export.common import EXPORT_RENDERER_VERSION
+
+    version = int((record.input_version_bundle_json or {}).get("renderer_version") or 1)
+    if version < EXPORT_RENDERER_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"The stored {record.export_type.value} export was rendered by renderer version {version} "
+                f"(current {EXPORT_RENDERER_VERSION}); export again (POST /documents/{{id}}/export) to refresh it."
+            ),
+        )

@@ -51,6 +51,7 @@ from book_agent.export import (
     stylesheets,
     titles,
 )
+from book_agent.export.common import EXPORT_RENDERER_VERSION
 from book_agent.export.common import (
     _SEVERITY_RANK,
     _SPECIAL_PDF_PAGE_FAMILIES,
@@ -473,6 +474,7 @@ class ExportService:
             document_id=bundle.chapter.document_id,
             export_type=export_type,
             input_version_bundle_json={
+                "renderer_version": EXPORT_RENDERER_VERSION,
                 "chapter_id": bundle.chapter.id,
                 "sentence_count": len(bundle.sentences),
                 "target_segment_count": len(bundle.target_segments),
@@ -517,6 +519,7 @@ class ExportService:
             document_id=bundle.document.id,
             export_type=export_type,
             input_version_bundle_json={
+                "renderer_version": EXPORT_RENDERER_VERSION,
                 "chapter_id": None,
                 "chapter_count": len(visible_chapters),
                 "issue_count": chapter_issue_count,

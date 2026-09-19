@@ -208,6 +208,22 @@ class DownloadTests(unittest.TestCase):
         bad = self.client.get(f"/v1/documents/{self.document_id}/exports/download?export_type=bilingual_html&package=epub")
         self.assertEqual(bad.status_code, 422)
 
+    def test_exports_from_an_older_renderer_are_refused_until_re_exported(self) -> None:
+        from book_agent.domain.models.review import Export
+
+        with self.session_factory() as session:
+            export = session.scalars(select(Export).where(Export.export_type == ExportType.MERGED_HTML)).one()
+            export.input_version_bundle_json = {**export.input_version_bundle_json, "renderer_version": 1}
+            session.commit()
+        url = f"/v1/documents/{self.document_id}/exports/download?export_type=merged_html"
+        stale = self.client.get(url)
+        self.assertEqual(stale.status_code, 404)
+        self.assertIn("renderer version 1", stale.json()["detail"])
+        with self.session_factory() as session:
+            DocumentWorkflowService(session, export_root=self.export_root).export_document(self.document_id, ExportType.MERGED_HTML)
+            session.commit()
+        self.assertEqual(self.client.get(url).status_code, 200)
+
     def test_chapter_downloads_embed_their_images_too(self) -> None:
         response = self._get(f"/v1/documents/{self.document_id}/chapters/{self.chapter_id}/exports/download?export_type=bilingual_html")
         self.assertTrue(response.headers["content-type"].startswith("text/html"))
