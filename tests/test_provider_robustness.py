@@ -57,6 +57,34 @@ class ProviderOutputTests(unittest.TestCase):
         self.assertEqual(classification.disposition, FailureDisposition.PAUSE)
         self.assertEqual(classification.pause_reason, "provider.reasoning_exhausted_output")
 
+    def test_deepseek_retries_once_with_thinking_off_and_bills_both_attempts(self) -> None:
+        payloads: list[dict] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            payloads.append(json.loads(request.content))
+            if len(payloads) == 1:
+                return _chat("", finish="length", completion=8192, reasoning=8192)
+            return _chat('{"terms": []}', finish="stop", completion=40, reasoning=0)
+
+        client, _ = _client(handler, base_url="https://api.deepseek.com")
+        payload, usage = _structured(client)
+        self.assertEqual(payload, {"terms": []})
+        self.assertNotIn("thinking", payloads[0])
+        self.assertEqual(payloads[1]["thinking"], {"type": "disabled"})
+        self.assertEqual((usage.token_in, usage.token_out), (600, 8232))
+
+    def test_thinking_already_off_still_pauses(self) -> None:
+        calls: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            return _chat("", finish="length", completion=8192, reasoning=8192)
+
+        client, _ = _client(handler, base_url="https://api.deepseek.com", request_overrides={"thinking": {"type": "disabled"}})
+        with self.assertRaises(ProviderOutputTruncated):
+            _structured(client)
+        self.assertEqual(len(calls), 1)
+
     def test_partial_truncation_retries_and_bad_json_keeps_its_usage(self) -> None:
         client, _ = _client(lambda request: _chat('{"terms": [', finish="length", completion=900, reasoning=100))
         with self.assertRaises(ProviderOutputTruncated) as caught:
