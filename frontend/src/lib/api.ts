@@ -760,7 +760,7 @@ export async function getRunEvents(runId: string): Promise<RunAuditEventPage> {
   );
 }
 
-export async function createRun(documentId: string): Promise<DocumentRunSummary> {
+export async function createRun(documentId: string, options: { fastReading?: boolean } = {}): Promise<DocumentRunSummary> {
   return requestJson<DocumentRunSummary>("/runs", {
     method: "POST",
     headers: {
@@ -773,6 +773,7 @@ export async function createRun(documentId: string): Promise<DocumentRunSummary>
       status_detail_json: {
         source: "react-ui",
         surface: "translation-workspace-react",
+        run_request: { fast_reading: options.fastReading ? "on" : "off" },
       },
     }),
   });
@@ -953,6 +954,24 @@ export async function downloadChapterExport(
     )}/exports/download?export_type=bilingual_html`
   );
   return saveBinaryResponse(response, `${chapterId}-bilingual_html.html`);
+}
+
+export type GlossaryTerm = Generated.TermResponse;
+
+export async function listTerms(documentId: string): Promise<GlossaryTerm[]> {
+  return requestJson<GlossaryTerm[]>(`/documents/${encodeURIComponent(documentId)}/terms`);
+}
+
+/** Change a term's rendering (lock) or unlock it. */
+export async function updateTerm(
+  documentId: string,
+  payload: { source_term: string; target_term?: string; lock: boolean; decided_by: string },
+): Promise<GlossaryTerm[]> {
+  return requestJson<GlossaryTerm[]>(`/documents/${encodeURIComponent(documentId)}/terms`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function listApprovals(documentId: string, status: "pending" | "all" = "pending"): Promise<Approval[]> {

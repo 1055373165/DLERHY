@@ -13,6 +13,7 @@ function json(payload: unknown, status = 200): Response {
 
 function installFetchMock() {
   const posts: string[] = [];
+  const puts: string[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST") {
@@ -21,6 +22,14 @@ function installFetchMock() {
     if (url.includes("/v1/health")) return json({ status: "ok" });
     if (url.includes("/v1/documents/history")) {
       return json({ total_count: 0, record_count: 0, offset: 0, limit: 12, has_more: false, entries: [] });
+    }
+    if (url.includes(`/v1/documents/${DOCUMENT_ID}/terms`)) {
+      const changed = init?.method === "PUT";
+      if (changed) puts.push(String(init?.body));
+      const target = puts.length ? "驾驭框架" : "马具";
+      return json([
+        { source_term: "harness", target_term: target, term_type: "concept", lock_level: "locked", locked_by: puts.length ? "human:alice" : "auto.fast_reading_mode" },
+      ]);
     }
     if (url.includes(`/v1/documents/${DOCUMENT_ID}/approvals`)) {
       return json(
@@ -79,7 +88,7 @@ function installFetchMock() {
     throw new Error(`unexpected fetch: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
-  return { fetchMock, posts };
+  return { fetchMock, posts, puts };
 }
 
 describe("ApprovalsPage", () => {
@@ -97,5 +106,23 @@ describe("ApprovalsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "批准" }));
     await waitFor(() => expect(posts.some((url) => url.includes(`/v1/approvals/${APPROVAL_ID}/approve`))).toBe(true));
     await screen.findByText(/已批准/);
+  });
+
+  it("shows terms fast reading mode locked and lets a person change them", async () => {
+    const { puts } = installFetchMock();
+    window.localStorage.setItem("book-agent.current-document-id", DOCUMENT_ID);
+    render(
+      <MemoryRouter initialEntries={["/approvals"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("harness => 马具")).toBeInTheDocument();
+    expect(screen.getByText("快速阅读模式自动锁定")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("审批人"), { target: { value: "alice" } });
+    fireEvent.click(screen.getByRole("button", { name: "修改" }));
+    fireEvent.change(screen.getByLabelText("harness 的译法"), { target: { value: "驾驭框架" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByText("harness => 驾驭框架")).toBeInTheDocument();
+    expect(JSON.parse(puts[0])).toEqual({ source_term: "harness", target_term: "驾驭框架", lock: true, decided_by: "human:alice" });
   });
 });

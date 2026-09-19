@@ -17,6 +17,7 @@ import {
   sourceLabel,
   statusLabel,
 } from "../../lib/workflow";
+import { FastReadingToggle } from "../../components/FastReadingToggle";
 import { CostEstimateNote } from "./CostEstimateNote";
 import s from "./WorkspacePage.module.css";
 
@@ -329,7 +330,12 @@ export function WorkspacePage() {
               </button>
             )}
           </div>
-          {action.mode === "create" ? <CostEstimateNote documentId={doc.document_id} /> : null}
+          {action.mode === "create" ? (
+            <>
+              <FastReadingToggle />
+              <CostEstimateNote documentId={doc.document_id} />
+            </>
+          ) : null}
         </div>
       )}
 

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
+import { FastReadingToggle } from "../../components/FastReadingToggle";
 import { Surface } from "../../components/Surface";
 import {
   awaitingApprovalStage,
@@ -131,6 +132,8 @@ export function RunsPage() {
                 刷新
               </button>
             </div>
+
+            {action.mode === "create" && <FastReadingToggle />}
 
             {stopNote && (
               <div className={s.feedback} data-tone="error" role="status">

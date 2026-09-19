@@ -49,6 +49,7 @@ import {
   type HealthResponse,
   type RunAuditEvent,
 } from "../lib/api";
+import { fastReadingPreferred } from "../lib/preferences";
 import { runPollInterval, useRunEventStream } from "../lib/runEvents";
 import { getPrimaryRunAction, isRunActive } from "../lib/workflow";
 
@@ -426,7 +427,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         throw new Error("请先上传并解析书稿。");
       }
       if (action.mode === "create") {
-        const created = await createRun(currentDocument.document_id);
+        const created = await createRun(currentDocument.document_id, { fastReading: fastReadingPreferred() });
         return resumeRun(created.run_id, {
           actor_id: "react-ui",
           note: "start from standalone React workspace",
