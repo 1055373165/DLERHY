@@ -51,6 +51,7 @@ from book_agent.infra.repositories.review import ReviewRepository
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+from book_agent.services.document_files import DocumentFiles, plan_document_files
 from book_agent.services.structure_edits import StructureEditService
 from book_agent.services.actions import IssueActionExecutor
 from book_agent.services.bootstrap import BootstrapArtifacts
@@ -232,8 +233,11 @@ class DocumentWorkflowService:
     def get_document_summary(self, document_id: str) -> DocumentSummary:
         return self.documents.get_document_summary(document_id)
 
-    def delete_document(self, document_id: str) -> None:
+    def delete_document(self, document_id: str) -> DocumentFiles:
         """Hard-delete a document and all dependent rows via FK CASCADE.
+
+        Returns the document's files for the caller to remove once the
+        delete has committed (``services.document_files``).
 
         Refuses to delete while a run is in the hot active set
         ({RUNNING, DRAINING}) to avoid yanking the rug under the
@@ -252,8 +256,10 @@ class DocumentWorkflowService:
                 f"Document {document_id} has an active run ({latest_run.status.value}); "
                 "pause or cancel it before deletion."
             )
+        files = plan_document_files(self.session, document, self.export_service.output_root)
         self.session.delete(document)
         self.session.flush()
+        return files
 
     def list_document_history(
         self,

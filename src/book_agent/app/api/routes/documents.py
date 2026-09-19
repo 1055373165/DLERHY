@@ -49,6 +49,7 @@ from book_agent.schemas.workflow import (
 )
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
 from book_agent.schemas.run_control import DocumentRunSummaryResponse
+from book_agent.services.document_files import remove_document_files
 from book_agent.services.run_control import RunControlService, RunControlTransitionError
 from book_agent.services.workflows import DocumentBusyError, DocumentWorkflowService
 
@@ -241,11 +242,14 @@ def delete_document(
     session: Session = Depends(get_db_session),
 ) -> Response:
     try:
-        _workflow_service(request, session).delete_document(document_id)
+        files = _workflow_service(request, session).delete_document(document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentBusyError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    # Files go only once the rows are gone for good.
+    session.commit()
+    remove_document_files(session, files, upload_root=_upload_root(request))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
