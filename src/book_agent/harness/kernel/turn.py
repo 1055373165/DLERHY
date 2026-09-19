@@ -291,7 +291,10 @@ class AgentTurnRunner:
         try:
             for hook in self.hooks:
                 hook.before_tool(ctx, tool, arguments)
-            output = tool.handler(ctx, arguments)
+            # A savepoint per call: a failed statement (e.g. a malformed id on
+            # Postgres) rolls back this tool only, not the whole turn.
+            with ctx.session.begin_nested():
+                output = tool.handler(ctx, arguments)
             outcome = ToolOutcome(ok=True, output=output)
         except ToolRejected as exc:
             outcome = ToolOutcome(ok=False, error=f"rejected: {exc}")
