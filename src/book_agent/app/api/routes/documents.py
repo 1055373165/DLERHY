@@ -339,7 +339,7 @@ def list_document_chapters(
 ):
     """List all chapters for a document (lightweight, no issue/worklist data)."""
     from book_agent.domain.models.document import Chapter
-    chapters = (
+    chapters = list(
         session.execute(
             select(Chapter)
             .where(Chapter.document_id == document_id)
@@ -348,16 +348,30 @@ def list_document_chapters(
         .scalars()
         .all()
     )
+    titles = _chapter_display_titles(session, document_id, chapters)
     return [
         {
             "chapter_id": ch.id,
             "ordinal": ch.ordinal,
             "title_src": ch.title_src,
             "title_tgt": ch.title_tgt,
+            # The title to show. The interface must not decide this for itself.
+            "title": titles.get(str(ch.id)) or ch.title_tgt or ch.title_src,
             "status": ch.status.value if hasattr(ch.status, "value") else str(ch.status),
         }
         for ch in chapters
     ]
+
+
+def _chapter_display_titles(session: Session, document_id: str, chapters: list) -> dict[str, str | None]:
+    """The reader-facing title of each chapter, decided the way the export decides it."""
+    from book_agent.application.chapter_titles import display_titles
+    from book_agent.domain.models.document import Document as DocumentModel
+
+    document = session.get(DocumentModel, document_id)
+    if document is None or not chapters:
+        return {}
+    return display_titles(session, document, chapters)
 
 
 @router.get("/{document_id}/chapters/worklist", response_model=DocumentChapterWorklistResponse)
@@ -388,7 +402,9 @@ def get_document_chapter_worklist(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return DocumentChapterWorklistResponse.model_validate(worklist, from_attributes=True)
+    response = DocumentChapterWorklistResponse.model_validate(worklist, from_attributes=True)
+    _fill_chapter_titles(session, document_id, response.entries)
+    return response
 
 
 @router.get(
@@ -408,7 +424,24 @@ def get_document_chapter_worklist_detail(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return DocumentChapterWorklistDetailResponse.model_validate(detail, from_attributes=True)
+    response = DocumentChapterWorklistDetailResponse.model_validate(detail, from_attributes=True)
+    _fill_chapter_titles(session, document_id, [response])
+    return response
+
+
+def _fill_chapter_titles(session: Session, document_id: str, entries: list) -> None:
+    """Put the reader-facing title on entries that carry a chapter id."""
+    from book_agent.domain.models.document import Chapter
+
+    chapter_ids = [str(entry.chapter_id) for entry in entries if getattr(entry, "chapter_id", None)]
+    if not chapter_ids:
+        return
+    chapters = list(
+        session.scalars(select(Chapter).where(Chapter.id.in_(chapter_ids))).all()
+    )
+    titles = _chapter_display_titles(session, document_id, chapters)
+    for entry in entries:
+        entry.title = titles.get(str(entry.chapter_id)) or entry.title_src
 
 
 @router.put(

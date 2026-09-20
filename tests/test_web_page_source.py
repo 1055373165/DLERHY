@@ -206,7 +206,8 @@ class WebPageWorkflowTests(unittest.TestCase):
                     )
                     document = workflow.export_repository.get_document(document_id)
                     self.assertEqual(document.source_type, SourceType.WEB)
-                    self.assertEqual(document.title, "When AI builds itself \\ Example")
+                    # The <title> carries the site name; the book is titled by the article itself.
+                    self.assertEqual(document.title, "When AI builds itself")
                     self.assertEqual(document.metadata_json.get("source_url"), "https://example.com/post")
                     workflow.translate_document(document_id)
                     workflow.review_document(document_id)
@@ -245,6 +246,26 @@ class WebPageWorkflowTests(unittest.TestCase):
         self.assertIn("<h2>ZH::When AI builds itself</h2>", merged)
         self.assertEqual(merged.count("ZH::When AI builds itself<"), 1)
         self.assertNotIn("<div class='zh'>ZH::When AI builds itself \\ Example", merged)
+
+
+class PageTitleTests(unittest.TestCase):
+    def test_the_site_name_is_dropped_only_when_the_tail_names_the_site(self) -> None:
+        from book_agent.domain.structure.web import article_title
+
+        url = "https://www.anthropic.com/institute/x"
+        # The <title> is the article heading plus the site name.
+        self.assertEqual(article_title("When AI builds itself \\ Anthropic", "When AI builds itself", url), "When AI builds itself")
+        # No heading captured: the tail still names the site.
+        self.assertEqual(article_title("Scaling Managed Agents \\ Anthropic", None, url), "Scaling Managed Agents")
+        self.assertEqual(article_title("Attention Is All You Need - arXiv", None, "https://arxiv.org/abs/1"), "Attention Is All You Need")
+        # A dash that belongs to the title, and a tail that is not the site, both stay.
+        self.assertEqual(
+            article_title("The Rise and Fall - a history", None, "https://example.com/x"),
+            "The Rise and Fall - a history",
+        )
+        # A title that is only the site name stays as it is.
+        self.assertEqual(article_title("Anthropic", None, url), "Anthropic")
+        self.assertEqual(article_title(None, "Just the heading", url), "Just the heading")
 
 
 class WebRunPlanTests(unittest.TestCase):

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
+from typing import Any, Protocol
 
 from book_agent.domain.enums import (
     BlockType,
@@ -44,20 +46,42 @@ def resolved_chapter_title_text(
     chapter_bundle: ChapterExportBundle,
     render_blocks: list[MergedRenderBlock],
 ) -> str | None:
+    return resolve_chapter_title(chapter_bundle.document, chapter_bundle.chapter, render_blocks)
+
+
+class TitleBlock(Protocol):
+    """What resolving a title needs of a block: what kind it is and how it reads."""
+
+    block_type: Any
+    target_text: str | None
+    source_text: str | None
+
+
+def resolve_chapter_title(
+    document: Any,
+    chapter: Any,
+    blocks: Sequence[TitleBlock],
+) -> str | None:
+    """The chapter's title as a reader should see it.
+
+    The export and the interface must say the same thing, so both call this. `blocks` are the
+    chapter's blocks in order, carrying the Chinese text where there is one.
+    """
     fallback_title = next(
         (
             str(candidate).strip()
             for candidate in (
-                chapter_bundle.chapter.title_tgt,
-                chapter_bundle.chapter.title_src,
+                chapter.title_tgt,
+                chapter.title_src,
             )
             if str(candidate or "").strip()
         ),
         None,
     )
-    if _is_pdf_document(chapter_bundle.document):
+    render_blocks = blocks
+    if _is_pdf_document(document):
         fallback_title = localize_chapter_label(localized_structural_title_fallback(fallback_title))
-    if chapter_bundle.document.source_type == SourceType.WEB:
+    if document.source_type == SourceType.WEB:
         # The page is the chapter: its title is the article's own first heading (a byline may
         # come first), not the <title> with the site name appended.
         heading = next(
@@ -70,7 +94,7 @@ def resolved_chapter_title_text(
         )
         if heading is not None:
             return str(heading.target_text).strip()
-        return chapter_bundle.document.title_tgt or fallback_title
+        return document.title_tgt or fallback_title
     first_content_block = next(
         (
             block

@@ -330,6 +330,8 @@ class IssueChapterPressureEntryResponse(BaseSchema):
     chapter_id: str
     ordinal: int
     title_src: str | None = None
+    # What a reader should see: the export's own conclusion, not the raw source title.
+    title: str | None = None
     chapter_status: str
     issue_count: int
     open_issue_count: int
@@ -385,6 +387,8 @@ class IssueChapterQueueEntryResponse(BaseSchema):
     chapter_id: str
     ordinal: int
     title_src: str | None = None
+    # What a reader should see: the export's own conclusion, not the raw source title.
+    title: str | None = None
     chapter_status: str
     issue_count: int
     open_issue_count: int
@@ -563,6 +567,8 @@ class DocumentChapterWorklistDetailResponse(BaseSchema):
     chapter_id: str
     ordinal: int
     title_src: str | None = None
+    # What a reader should see: the export's own conclusion, not the raw source title.
+    title: str | None = None
     chapter_status: str
     packet_count: int
     translated_packet_count: int

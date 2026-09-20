@@ -242,6 +242,8 @@ export interface IssueChapterQueueEntry {
   chapter_id: string;
   ordinal: number;
   title_src?: string | null;
+  /** The title to show, decided by the backend the same way the export decides it. */
+  title?: string | null;
   chapter_status: string;
   issue_count: number;
   open_issue_count: number;
@@ -373,6 +375,8 @@ export interface DocumentChapterWorklistDetail {
   chapter_id: string;
   ordinal: number;
   title_src?: string | null;
+  /** The title to show, decided by the backend the same way the export decides it. */
+  title?: string | null;
   chapter_status: string;
   packet_count: number;
   translated_packet_count: number;
@@ -628,6 +632,8 @@ export interface ChapterListItem {
   ordinal: number;
   title_src: string | null;
   title_tgt: string | null;
+  /** The title to show, decided by the backend the same way the export decides it. */
+  title?: string | null;
   status: string;
 }
 
