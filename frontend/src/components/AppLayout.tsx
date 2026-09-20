@@ -1,11 +1,9 @@
-import { ApiKeySetting } from "./ApiKeySetting";
 import { BudgetMeter } from "./BudgetMeter";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { getHealth } from "../lib/api";
-import { SERVICE_LINKS } from "../lib/api";
 import { announce, loadSeen } from "../lib/notifications";
 import { getInbox } from "../lib/overview";
 import s from "./AppLayout.module.css";
@@ -161,15 +159,6 @@ export function AppLayout() {
 
         <div className={s.sidebarFooter}>
           <BudgetMeter />
-          <ApiKeySetting />
-          <div className={s.systemLinks}>
-            <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
-              API
-            </a>
-            <a href={SERVICE_LINKS.openapi} target="_blank" rel="noopener" className={s.sysLink}>
-              OpenAPI
-            </a>
-          </div>
           <div className={s.healthRow}>
             <span
               className={s.healthDot}

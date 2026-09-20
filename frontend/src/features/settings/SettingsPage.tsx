@@ -1,10 +1,12 @@
 import { useState } from "react";
 
 import { ApiKeySetting } from "../../components/ApiKeySetting";
+import { BudgetMeter } from "../../components/BudgetMeter";
 import { FastReadingToggle } from "../../components/FastReadingToggle";
 import { NotifyMe } from "../../components/NotifyMe";
 import { Surface } from "../../components/Surface";
 import { ThemeToggle } from "../../components/ThemeToggle";
+import { SERVICE_LINKS } from "../../lib/api";
 import { autoStartCapUsd, DEFAULT_AUTO_START_CAP_USD, setAutoStartCapUsd } from "../../lib/preferences";
 import { ProvidersPage } from "../providers/ProvidersPage";
 
@@ -41,7 +43,21 @@ export function SettingsPage() {
           <div>
             <strong>浏览器通知</strong>：翻译完成、失败或需要你处理时提醒你（每 30 秒检查一次）。 <NotifyMe label="开启通知" />
           </div>
+        </div>
+      </Surface>
+
+      <Surface eyebrow="账单" title="花费与接入">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", maxWidth: 640 }}>
+          <BudgetMeter statement />
           <ApiKeySetting />
+          <div style={{ display: "flex", gap: "var(--sp-4)" }}>
+            <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener">
+              接口文档
+            </a>
+            <a href={SERVICE_LINKS.openapi} target="_blank" rel="noopener">
+              OpenAPI
+            </a>
+          </div>
         </div>
       </Surface>
       <div id="providers">

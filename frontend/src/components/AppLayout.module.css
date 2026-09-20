@@ -157,20 +157,6 @@
   gap: var(--sp-3);
 }
 
-.systemLinks {
-  display: flex;
-  gap: var(--sp-4);
-}
-
-.sysLink {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
-.sysLink:hover {
-  color: var(--text-accent);
-}
-
 .healthRow {
   display: flex;
   align-items: center;

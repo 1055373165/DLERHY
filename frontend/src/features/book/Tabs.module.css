@@ -1,7 +1,16 @@
+/* Each column is a card, so a tab's body is not loose text on the page background. */
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--sp-6);
+  gap: var(--sp-5);
+  align-items: start;
+}
+
+.columns > section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
 }
 
 @media (max-width: 860px) {
@@ -11,9 +20,12 @@
 }
 
 .heading {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  margin: 0 0 var(--sp-3);
+  font-family: var(--font-cjk);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }
 
 .steps,
@@ -30,9 +42,16 @@
   display: flex;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-2) 0;
+  padding: var(--sp-3) 0;
   border-bottom: 1px solid var(--border);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
+}
+
+.step:last-child,
+.event:last-child,
+.item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .step[data-status="succeeded"] .stepStatus {
@@ -56,7 +75,7 @@
 }
 
 .eventTitle {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   white-space: nowrap;
 }
 
@@ -67,21 +86,22 @@
 
 .empty {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   padding: var(--sp-4) 0;
 }
 
 .error {
   color: var(--red);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .markdown {
   white-space: pre-wrap;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
   background: var(--bg-panel-alt);
   padding: var(--sp-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   overflow-x: auto;
 }
 
@@ -94,24 +114,25 @@
 .runSummary {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-5);
-  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
   background: var(--bg-panel-alt);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
 .runSummary strong {
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
 }
 
 .stopReason {
   padding: var(--sp-3) var(--sp-4);
   border-left: 3px solid var(--amber);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   background: var(--amber-light);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .rawEvents {

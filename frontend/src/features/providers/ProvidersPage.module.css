@@ -1,12 +1,17 @@
+/* One column until there is a form to put beside the list: an empty column is wasted width. */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--sp-6);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
   align-items: start;
 }
 
+.layout[data-editing] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
 @media (max-width: 900px) {
-  .layout {
+  .layout[data-editing] {
     grid-template-columns: 1fr;
   }
 }
@@ -16,7 +21,8 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
 }
 
 .row {
