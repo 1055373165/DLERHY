@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { CostEstimateNote } from "./CostEstimateNote";
 import { enableNotifications, notificationsOn, notificationsSupported } from "../../lib/notifications";
 import { usd } from "../../lib/overview";
 import { fastReadingPreferred, setFastReadingPreferred } from "../../lib/preferences";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import s from "./StartDialog.module.css";
 
 /** The one stop before translating: what it may cost, whether terms lock by themselves,
@@ -25,17 +26,13 @@ export function StartDialog({
   const [notify, setNotify] = useState(notificationsOn);
   const [notifyRefused, setNotifyRefused] = useState(false);
   const confirmRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    confirmRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onCancel();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Escape, the Tab cycle and giving the focus back to 开始翻译 all live in the hook.
+  useFocusTrap(dialogRef, { onClose: onCancel, initialFocus: confirmRef });
 
   return (
     <div className={s.backdrop} onClick={onCancel}>
-      <div className={s.dialog} role="dialog" aria-modal="true" aria-label="开始翻译" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} className={s.dialog} role="dialog" aria-modal="true" aria-label="开始翻译" onClick={(event) => event.stopPropagation()}>
         <h2 className={s.title}>开始翻译这本书</h2>
         <p className={s.cost}>
           {maxChargeUsd === null

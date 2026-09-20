@@ -106,14 +106,15 @@ export function WorkspacePage() {
       {(
         <div className={s.workbench}>
           {/* Queue Rail */}
-          <aside className={s.queueRail}>
+          <aside className={s.queueRail} aria-label="章节列表">
             <div className={s.queueHeader}>
-              <h3 className={s.queueTitle}>章节</h3>
+              <h2 className={s.queueTitle}>章节</h2>
               <span className={s.queueCount}>{queueEntries.length || allChapters.length}</span>
             </div>
 
             <div className={s.queueFilters}>
               <select
+                aria-label="按优先级筛选章节"
                 className={s.filterSelect}
                 value={chapterWorklistFilters.queuePriority}
                 onChange={(e) => setChapterQueuePriorityFilter(e.target.value as "all" | "immediate" | "high" | "medium")}
@@ -124,6 +125,7 @@ export function WorkspacePage() {
                 <option value="medium">中</option>
               </select>
               <select
+                aria-label="按认领情况筛选章节"
                 className={s.filterSelect}
                 value={chapterWorklistFilters.assignment}
                 onChange={(e) => setChapterAssignmentFilter(e.target.value as "all" | "assigned" | "unassigned")}
@@ -198,9 +200,9 @@ export function WorkspacePage() {
                 {/* Chapter Header */}
                 <div className={s.chapterHeader}>
                   <div className={s.chapterHeaderTop}>
-                    <h3 className={s.chapterTitle}>
+                    <h2 className={s.chapterTitle}>
                       CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} {detail.title_src}
-                    </h3>
+                    </h2>
                     <button
                       className="btn btn-sm"
                       onClick={() => handleChapterDownload(selectedReviewChapterId)}
@@ -218,7 +220,7 @@ export function WorkspacePage() {
                 {/* Memory Proposals */}
                 {proposals.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>待确认的记忆</h4>
+                    <h3 className={s.sectionTitle}>待确认的记忆</h3>
                     <div className={s.proposalList}>
                       {proposals.map((p) => (
                         <div key={p.proposal_id} className={s.proposalRow}>
@@ -251,7 +253,7 @@ export function WorkspacePage() {
                 {/* Issues */}
                 {issues.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>最近的问题</h4>
+                    <h3 className={s.sectionTitle}>最近的问题</h3>
                     <div className={s.issueList}>
                       {issues.map((issue) => (
                         <div key={issue.issue_id} className={s.issueRow}>
@@ -278,7 +280,7 @@ export function WorkspacePage() {
                 {/* Actions */}
                 {actions.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>待执行的修复</h4>
+                    <h3 className={s.sectionTitle}>待执行的修复</h3>
                     <div className={s.actionList}>
                       {actions.map((act) => (
                         <div key={act.action_id} className={s.actionRow}>
@@ -303,7 +305,7 @@ export function WorkspacePage() {
                 {/* Timeline */}
                 {timeline.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>时间线</h4>
+                    <h3 className={s.sectionTitle}>时间线</h3>
                     <div className={s.timelineList}>
                       {timeline.slice(0, 20).map((entry: ChapterWorklistTimelineEntry) => (
                         <div key={entry.event_id} className={s.timelineRow}>

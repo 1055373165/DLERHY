@@ -92,8 +92,18 @@
   font-size: var(--text-sm);
 }
 
+.drop:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .fileInput {
-  display: none;
+  /* Out of sight but not out of the tab order: the drop zone is its visible face. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .notice {

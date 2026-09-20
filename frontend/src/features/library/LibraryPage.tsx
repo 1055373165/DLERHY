@@ -154,8 +154,9 @@ export function LibraryPage() {
   return (
     <div className={s.layout}>
       <Surface
+        level={1}
         eyebrow="书库"
-        title="书库"
+        title="全部书"
         aside={
           historyQuery.data
             ? `共 ${total} 本${total ? ` · 第 ${rangeStart}–${rangeEnd} 本` : ""}`
@@ -182,14 +183,14 @@ export function LibraryPage() {
               </button>
             )}
           </div>
-          <select className={s.filterSelect} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select aria-label="按书的状态筛选" className={s.filterSelect} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">全部状态</option>
             <option value="active">已导入</option>
             <option value="partially_exported">部分可读</option>
             <option value="exported">可阅读</option>
             <option value="failed">失败</option>
           </select>
-          <select className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
+          <select aria-label="按转换状态筛选" className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
             <option value="">全部转换</option>
             <option value="queued">排队中</option>
             <option value="running">进行中</option>
@@ -199,6 +200,7 @@ export function LibraryPage() {
             <option value="succeeded">已完成</option>
           </select>
           <select
+            aria-label="按是否可读筛选"
             className={s.filterSelect}
             value={mergedReady}
             onChange={(e) => setMergedReady(e.target.value as "" | "true" | "false")}
@@ -365,6 +367,7 @@ export function LibraryPage() {
               <label className={s.pageSizeLabel}>
                 每页
                 <select
+                  aria-label="每页显示多少本"
                   className={s.filterSelect}
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}

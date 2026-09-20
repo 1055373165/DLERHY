@@ -40,7 +40,7 @@ function resolve(vars: Record<string, string>, name: string): string {
   let value: string | undefined = vars[name];
   for (let hop = 0; hop < 10; hop += 1) {
     if (value === undefined) throw new Error(`tokens.css never defines ${name}`);
-    const ref = value.match(/^var\((--[\w-]+)\)$/);
+    const ref: RegExpMatchArray | null = value.match(/^var\((--[\w-]+)\)$/);
     if (!ref) return value;
     value = vars[ref[1]];
   }

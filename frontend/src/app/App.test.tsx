@@ -34,10 +34,11 @@ describe("App navigation", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "把英文读成中文" })).toBeInTheDocument();
-    const nav = screen.getByRole("navigation");
+    const nav = screen.getByRole("navigation", { name: "主导航" });
     expect([...nav.querySelectorAll("a")].map((link) => link.textContent)).toEqual(["首页", "需要你处理", "设置"]);
 
     await user.click(screen.getByRole("link", { name: "全部书 →" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "书库" })).toBeInTheDocument());
+    // The library's own title is its h1: one per page, which axe checks for.
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "全部书" })).toBeInTheDocument());
   });
 });

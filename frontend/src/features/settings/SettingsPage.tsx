@@ -15,7 +15,7 @@ export function SettingsPage() {
   const valid = cap.trim() !== "" && Number.isFinite(parsed) && parsed >= 0;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
-      <Surface eyebrow="偏好" title="阅读偏好">
+      <Surface level={1} eyebrow="设置" title="阅读偏好">
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", maxWidth: 640 }}>
             <span>

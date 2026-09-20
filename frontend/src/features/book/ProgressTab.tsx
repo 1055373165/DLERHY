@@ -76,7 +76,8 @@ export function ProgressTab() {
         )}
       </section>
 
-      {stopText && (
+      {/* The banner above already carries the headline: repeat it here only if it says something else. */}
+      {stopText && stopText !== book.headline && (
         <div className={s.stopReason} role="note">
           {stopText}
         </div>
@@ -84,7 +85,7 @@ export function ProgressTab() {
 
       <div className={s.columns}>
         <section>
-          <h3 className={s.heading}>步骤</h3>
+          <h2 className={s.heading}>步骤</h2>
           <ol className={s.steps}>
             {book.translation.steps.map((step) => (
               <li key={step.key} className={s.step} data-status={step.status}>
@@ -99,7 +100,7 @@ export function ProgressTab() {
         </section>
 
         <section>
-          <h3 className={s.heading}>运行记录</h3>
+          <h2 className={s.heading}>运行记录</h2>
           {milestones.isError ? (
             <div className={s.error}>运行记录没能加载：{(milestones.error as Error).message}</div>
           ) : told.length === 0 ? (

@@ -18,7 +18,7 @@ export function LogTab() {
   return (
     <div className={s.columns}>
       <section>
-        <h3 className={s.heading}>代理回合</h3>
+        <h2 className={s.heading}>代理回合</h2>
         <ul className={s.list}>
           {(turns.data ?? []).map((turn) => {
             const usage = (turn.usage_json ?? {}) as Record<string, unknown>;
@@ -39,7 +39,7 @@ export function LogTab() {
         {turns.data?.length === 0 && <div className={s.empty}>没有代理回合。</div>}
       </section>
       <section>
-        <h3 className={s.heading}>运行事件（最近 100 条）</h3>
+        <h2 className={s.heading}>运行事件（最近 100 条）</h2>
         {!runId ? (
           <div className={s.empty}>还没开始翻译。</div>
         ) : (

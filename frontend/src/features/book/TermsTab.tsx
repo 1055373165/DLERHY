@@ -40,7 +40,7 @@ export function TermsTab() {
   return (
     <div className={s.columns}>
       <section>
-        <h3 className={s.heading}>术语表 · {locked.length} 个锁定</h3>
+        <h2 className={s.heading}>术语表 · {locked.length} 个锁定</h2>
         <p className={s.meta}>改动对之后的翻译生效；已经翻译的内容会在下次复核时按新译法检查。</p>
         {terms.isError ? (
           <div className={s.error}>术语表没能加载：{(terms.error as Error).message}</div>
@@ -97,7 +97,7 @@ export function TermsTab() {
         {save.isError && <div className={s.error}>{save.error instanceof Error ? save.error.message : "保存失败"}</div>}
       </section>
       <section>
-        <h3 className={s.heading}>翻译决策（BOOK.md）</h3>
+        <h2 className={s.heading}>翻译决策（BOOK.md）</h2>
         {guide.data ? <pre className={s.markdown}>{guide.data.markdown}</pre> : <div className={s.empty}>{guide.isError ? "没能加载。" : "加载中…"}</div>}
       </section>
     </div>

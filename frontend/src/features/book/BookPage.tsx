@@ -147,7 +147,10 @@ export function BookPage() {
             已自动开始{estimate !== null ? `：预计最多 ${usd(estimate)}，在你的自动开始上限 ${usd(cap)} 以内` : ""}。不想继续可以停止。
           </div>
         )}
-        {data.translation.stop_reason_text && state !== "paused" && <div className={s.note}>{data.translation.stop_reason_text}</div>}
+        {/* The headline is often the stop reason itself: say it once. */}
+        {data.translation.stop_reason_text && state !== "paused" && data.translation.stop_reason_text !== data.headline && (
+          <div className={s.note}>{data.translation.stop_reason_text}</div>
+        )}
         <div className={s.row}>
           {primary.kind === "read" && !location.pathname.endsWith("/read") && (
             <Link className="btn btn-primary" to={`/books/${documentId}/read`}>

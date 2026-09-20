@@ -127,7 +127,7 @@ export function AppLayout() {
       />
 
       {/* ── Sidebar ── */}
-      <aside className={s.sidebar}>
+      <aside className={s.sidebar} aria-label="侧边栏">
         <NavLink to="/" className={s.logo} onClick={() => setNavOpen(false)}>
           <span className={s.logoMark} aria-hidden="true">
             B

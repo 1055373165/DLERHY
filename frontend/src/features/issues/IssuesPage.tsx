@@ -103,6 +103,10 @@ export function IssuesPage() {
     if (selectedId && !entries.some((entry) => entry.id === selectedId) && !listQuery.isFetching) {
       setSelectedId(null);
     }
+    // A detail pane asking to be filled is wasted space: open the first issue by itself.
+    if (!selectedId && entries.length > 0) {
+      setSelectedId(entries[0].id);
+    }
   }, [entries, selectedId, listQuery.isFetching]);
 
   const detailQuery = useQuery({
@@ -148,8 +152,11 @@ export function IssuesPage() {
   const detail = detailQuery.data;
   const selected = detail?.issue;
 
+  // With nothing to show on the right, the list takes the whole width.
+  const showDetail = entries.length > 0;
+
   return (
-    <div className={s.layout}>
+    <div className={s.layout} data-single={showDetail ? undefined : true}>
       <Surface
         eyebrow="问题"
         title="问题清单"
@@ -229,6 +236,7 @@ export function IssuesPage() {
         )}
       </Surface>
 
+      {showDetail && (
       <Surface eyebrow="详情" title="问题详情" aside={selected ? `v${selected.version}` : null}>
         {!selectedId ? (
           <div className={s.emptyState}>在左侧选择一个问题。</div>
@@ -345,6 +353,7 @@ export function IssuesPage() {
           </div>
         )}
       </Surface>
+      )}
     </div>
   );
 }
