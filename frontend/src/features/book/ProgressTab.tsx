@@ -33,19 +33,29 @@ function elapsed(from: string | null | undefined, to: string | null | undefined)
 export function ProgressTab() {
   const book = useBook();
   const runId = book.translation.run_id;
+  const active = ["queued", "running", "draining"].includes(book.translation.state);
+  // The story of the run (its own milestones, oldest kept) and, separately, the raw tail for developers.
+  const milestones = useQuery({
+    queryKey: ["run-events", runId, "milestones"],
+    queryFn: () => getRunEvents(runId as string, { limit: 50 }),
+    enabled: Boolean(runId),
+    refetchInterval: active ? 5000 : false,
+  });
   const events = useQuery({
     queryKey: ["run-events", runId, "all"],
     queryFn: () => getRunEvents(runId as string, { all: true, limit: 100 }),
     enabled: Boolean(runId),
-    refetchInterval: ["queued", "running", "draining"].includes(book.translation.state) ? 5000 : false,
+    refetchInterval: active ? 15_000 : false,
   });
   if (!runId) {
     return <div className={s.empty}>还没开始翻译。开始后，这里会显示每一步的进展。</div>;
   }
   const entries = events.data?.entries ?? [];
-  const told = entries.map((event) => ({ event, text: describeRunEvent(event) })).filter((item) => item.text !== null);
+  const told = (milestones.data?.entries ?? [])
+    .map((event) => ({ event, text: describeRunEvent(event) }))
+    .filter((item) => item.text !== null);
   const { started_at: startedAt, finished_at: finishedAt, progress, stop_reason_text: stopText } = book.translation;
-  const running = ["queued", "running", "draining"].includes(book.translation.state);
+  const running = active;
 
   return (
     <div className={s.stack}>
@@ -90,10 +100,10 @@ export function ProgressTab() {
 
         <section>
           <h3 className={s.heading}>运行记录</h3>
-          {events.isError ? (
-            <div className={s.error}>运行记录没能加载：{(events.error as Error).message}</div>
+          {milestones.isError ? (
+            <div className={s.error}>运行记录没能加载：{(milestones.error as Error).message}</div>
           ) : told.length === 0 ? (
-            <div className={s.empty}>{events.isLoading ? "加载中…" : "还没有记录。"}</div>
+            <div className={s.empty}>{milestones.isLoading ? "加载中…" : "还没有记录。"}</div>
           ) : (
             <ul className={s.events}>
               {told.map(({ event, text }) => (

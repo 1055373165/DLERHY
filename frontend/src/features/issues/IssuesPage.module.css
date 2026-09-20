@@ -16,9 +16,17 @@
   padding: var(--sp-2) var(--sp-3) var(--sp-3);
 }
 
+/* Wrap instead of squeezing: the status names were being cut off mid-character. */
 .filters {
-  grid-template-columns: auto 1fr auto 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
+}
+
+.filters select {
+  min-width: 9rem;
 }
 
 .fieldLabel {
