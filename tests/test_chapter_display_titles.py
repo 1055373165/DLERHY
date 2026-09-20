@@ -7,8 +7,13 @@ from the backend, decided by the same function the merged export uses.
 
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
 
 from book_agent.application.chapter_titles import display_titles
 from book_agent.domain.enums import (
@@ -42,10 +47,38 @@ NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
 
 class ChapterDisplayTitleTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.engine = build_engine("sqlite+pysqlite:///:memory:")
+        self.engine = build_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
         self.addCleanup(self.engine.dispose)
         Base.metadata.create_all(self.engine)
         self.session_factory = build_session_factory(engine=self.engine)
+
+    def _client(self) -> TestClient:
+        from book_agent.core.config import get_settings
+
+        patcher = patch.dict(
+            os.environ,
+            {
+                "BOOK_AGENT_APP_SCOPE": "smoke",
+                "BOOK_AGENT_DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "BOOK_AGENT_AUTH_MODE": "disabled",
+                "BOOK_AGENT_RUN_EXECUTOR_ENABLED": "false",
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        get_settings.cache_clear()
+        self.addCleanup(get_settings.cache_clear)
+        from book_agent.app.main import create_app
+
+        app = create_app()
+        app.state.session_factory = self.session_factory
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        return client
 
     def _build(self, *, source_type: SourceType, document_title: str, blocks: list[tuple[BlockType, str, str | None]]) -> tuple[str, str]:
         """A document with one chapter whose blocks are (kind, English, Chinese-or-None)."""
@@ -212,6 +245,23 @@ class ChapterDisplayTitleTests(unittest.TestCase):
             blocks=[(BlockType.HEADING, "Why Momentum Matters", None)],
         )
         self.assertEqual(self._title(document_id, chapter_id), "Momentum Handbook")
+
+
+    def test_the_chapters_endpoint_hands_the_interface_the_resolved_title(self) -> None:
+        document_id, chapter_id = self._build(
+            source_type=SourceType.WEB,
+            document_title="Scaling Managed Agents: Decoupling the brain from the hands \\ Anthropic",
+            blocks=[
+                (BlockType.PARAGRAPH, "By the Anthropic team", "作者：Anthropic 团队"),
+                (BlockType.HEADING, "Scaling Managed Agents", "规模化托管代理"),
+            ],
+        )
+        response = self._client().get(f"/v1/documents/{document_id}/chapters")
+        self.assertEqual(response.status_code, 200)
+        entry = next(row for row in response.json() if row["chapter_id"] == chapter_id)
+        # The interface prints `title` as it is; it must not need title_src to work it out.
+        self.assertEqual(entry["title"], "规模化托管代理")
+        self.assertIn("Anthropic", entry["title_src"])
 
 
 if __name__ == "__main__":
