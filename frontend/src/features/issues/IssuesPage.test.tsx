@@ -115,7 +115,7 @@ describe("IssuesPage", () => {
         <App />
       </MemoryRouter>,
     );
-    await screen.findByRole("button", { name: /MISTRANSLATION_SEMANTIC/ });
+    await screen.findByRole("button", { name: /意思译错/ });
     fireEvent.change(screen.getByLabelText("来源"), { target: { value: "model" } });
     fireEvent.click(screen.getByLabelText("只看阻断"));
     await waitFor(() =>
@@ -126,10 +126,10 @@ describe("IssuesPage", () => {
         }),
       ).toBe(true),
     );
-    fireEvent.click(await screen.findByRole("button", { name: /MISTRANSLATION_SEMANTIC/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /意思译错/ }));
     expect(await screen.findByText("Momentum persists.")).toBeInTheDocument();
     expect(screen.getByText("动量消失。")).toBeInTheDocument();
-    expect(screen.getByText(/RERUN_PACKET/)).toBeInTheDocument();
+    expect(screen.getByText(/重译这一段/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "执行并复核" }));
     await waitFor(() =>
       expect(posts.some((url) => url.includes("/v1/actions/a1/execute") && url.includes("run_followup=true"))).toBe(true),
