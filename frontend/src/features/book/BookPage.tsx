@@ -1,12 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { Link, Navigate, NavLink, Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
 import { rememberBook } from "../../lib/currentBook";
-import { FastReadingToggle } from "../../components/FastReadingToggle";
 import { NotifyMe } from "../../components/NotifyMe";
-import { CostEstimateNote } from "./CostEstimateNote";
+import { StartDialog } from "./StartDialog";
 import { createRun, decideApproval, pauseRun, resumeRun, retryRun } from "../../lib/api";
 import { decideAutoStart } from "../../lib/autoStart";
 import { type BookOverview, type NeedsYouItem, getOverview, usd } from "../../lib/overview";
@@ -54,6 +53,7 @@ async function refresh(documentId: string): Promise<void> {
 export function BookPage() {
   const { documentId = "" } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const overview = useBookOverview(documentId);
   const data = overview.data;
   useRunEventStream(data?.translation.run_id ?? null, Boolean(data && ACTIVE.has(data.translation.state)));
@@ -63,6 +63,7 @@ export function BookPage() {
     rememberBook(documentId);
   }, [documentId]);
 
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
   const act = useMutation({
     mutationFn: async (kind: "start" | "autostart" | "resume" | "retry" | "stop") => {
       const runId = data?.translation.run_id ?? "";
@@ -73,6 +74,11 @@ export function BookPage() {
       if (kind === "resume") return resumeRun(runId, { ...ACTOR, note: "resumed by the reader" });
       if (kind === "retry") return retryRun(runId, { ...ACTOR, note: "retried by the reader" });
       return pauseRun(runId, { ...ACTOR, note: "stopped by the reader" });
+    },
+    onSuccess: (_result, kind) => {
+      setStartDialogOpen(false);
+      // Straight into this book's progress, where the run tells its story.
+      if (kind === "start" || kind === "autostart") navigate(`/books/${documentId}/progress`, { replace: true });
     },
     onSettled: () => refresh(documentId),
   });
@@ -164,7 +170,7 @@ export function BookPage() {
 
         {showStartPanel && (
           <div className={s.start}>
-            <button className="btn btn-primary" disabled={act.isPending} onClick={() => act.mutate("start")}>
+            <button className="btn btn-primary" disabled={act.isPending} onClick={() => setStartDialogOpen(true)}>
               {estimate !== null ? `开始翻译（约 ${usd(estimate)}）` : "开始翻译"}
             </button>
             {decision && !decision.auto && decision.reason && (
@@ -172,11 +178,19 @@ export function BookPage() {
                 {decision.reason} <Link to="/settings">修改自动开始上限</Link>
               </div>
             )}
-            <CostEstimateNote documentId={documentId} />
-            <FastReadingToggle />
           </div>
         )}
       </section>
+
+      {startDialogOpen && (
+        <StartDialog
+          documentId={documentId}
+          maxChargeUsd={estimate}
+          pending={act.isPending}
+          onCancel={() => setStartDialogOpen(false)}
+          onStart={() => act.mutate("start")}
+        />
+      )}
 
       {data.needs_you.length > 0 && <NeedsYou documentId={documentId} items={data.needs_you} />}
 

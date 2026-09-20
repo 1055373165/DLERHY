@@ -1,0 +1,67 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+  background: rgba(17, 17, 17, 0.35);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--sp-6);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-panel);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-cjk);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cost {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.option input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.option strong {
+  color: var(--text-primary);
+}
+
+.refused {
+  display: block;
+  color: var(--red);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}

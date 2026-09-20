@@ -26,12 +26,53 @@
   margin: 0;
 }
 
-.urlRow,
-.fileRow {
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-5);
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-panel);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.drop:hover,
+.drop[data-dragging] {
+  border-color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.drop[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dropTitle {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dropHint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.urlRow {
   display: flex;
   gap: var(--sp-3);
   align-items: center;
   flex-wrap: wrap;
+}
+
+.urlLabel {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .urlInput {

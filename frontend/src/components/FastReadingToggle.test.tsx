@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
@@ -28,34 +28,36 @@ function runRequestSent(fetchMock: ReturnType<typeof installFetchMock>) {
   return JSON.parse(String(call?.[1]?.body)).status_detail_json.run_request;
 }
 
-async function openBook() {
+async function openStartDialog(user: ReturnType<typeof userEvent.setup>) {
   const fetchMock = installFetchMock();
   render(
     <MemoryRouter initialEntries={[`/books/${DOCUMENT_ID}`]}>
       <App />
     </MemoryRouter>,
   );
-  const toggle = await screen.findByRole("checkbox", { name: /快速阅读模式/ });
-  return { fetchMock, toggle };
+  await user.click(await screen.findByRole("button", { name: "开始翻译" }));
+  const dialog = await screen.findByRole("dialog", { name: "开始翻译" });
+  const toggle = within(dialog).getByRole("checkbox", { name: /快速阅读模式/ });
+  return { fetchMock, toggle, dialog };
 }
 
 describe("Fast reading mode", () => {
-  it("is on by default next to the start button, says what it costs, and starts the run with it", async () => {
+  it("is on by default in the start dialog, says what it costs, and starts the run with it", async () => {
     const user = userEvent.setup();
-    const { fetchMock, toggle } = await openBook();
+    const { fetchMock, toggle, dialog } = await openStartDialog(user);
     expect(toggle).toBeChecked();
-    expect(screen.getByText(/术语直接锁定，不再停下来等你确认/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "开始翻译" }));
+    expect(within(dialog).getByText(/术语直接锁定，不停下来等你确认/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "开始翻译" }));
     await waitFor(() => expect(runRequestSent(fetchMock)).toEqual({ fast_reading: "on" }));
   });
 
-  it("can be turned off, and stays off for the next book", async () => {
+  it("can be turned off in the dialog, and stays off for the next book", async () => {
     const user = userEvent.setup();
-    const { fetchMock, toggle } = await openBook();
+    const { fetchMock, toggle, dialog } = await openStartDialog(user);
     await user.click(toggle);
     expect(toggle).not.toBeChecked();
+    await user.click(within(dialog).getByRole("button", { name: "开始翻译" }));
     expect(window.localStorage.getItem("book-agent.fast-reading")).toBe("off");
-    await user.click(screen.getByRole("button", { name: "开始翻译" }));
     await waitFor(() => expect(runRequestSent(fetchMock)).toEqual({ fast_reading: "off" }));
   });
 });

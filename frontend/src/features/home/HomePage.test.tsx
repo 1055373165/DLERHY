@@ -13,6 +13,8 @@ function installFetchMock(provider: unknown) {
     const url = String(input);
     if (url.includes("/v1/providers/active")) return json(provider);
     if (url.includes("/v1/documents/bootstrap-url")) return json({ document_id: "doc-new", title: "When AI builds itself", source_type: "web" }, 201);
+    if (url.includes("/v1/documents/bootstrap-upload")) return json({ document_id: "doc-file", title: "Deep Work", source_type: "epub" }, 201);
+    if (url.includes("/v1/documents/doc-file/overview")) return json(makeOverview("doc-file"));
     if (url.includes("/v1/documents/doc-new/overview")) return json(makeOverview("doc-new"));
     if (url.includes("/v1/overviews")) {
       return json({ overviews: [makeOverview("doc-old", { title: "Deep Work", headline: "中文版已就绪。", cost: null })] });
@@ -62,6 +64,17 @@ describe("Home page", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ url: LINK });
   });
 
+  it("takes a chosen file straight in: the file is the main way in", async () => {
+    const fetchMock = installFetchMock(echo);
+    const user = userEvent.setup();
+    renderHome();
+    const input = (await screen.findByLabelText("选择书稿文件")) as HTMLInputElement;
+    await user.upload(input, new File(["book"], "deep-work.epub", { type: "application/epub+zip" }));
+    // No second button: choosing the file starts the import.
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/books/doc-file"));
+    expect(fetchMock.mock.calls.some(([request]) => String(request).includes("/v1/documents/bootstrap-upload"))).toBe(true);
+  });
+
   it("lists recent books, each with where it stands", async () => {
     installFetchMock(echo);
     renderHome();
@@ -88,6 +101,7 @@ describe("Home page", () => {
     expect(screen.getByRole("link", { name: "去设置服务商" })).toHaveAttribute("href", "/settings");
     await user.type(screen.getByRole("textbox", { name: "网页链接" }), "https://example.com/a");
     expect(screen.getByRole("button", { name: "翻译这个网页" })).toBeDisabled();
+    expect(screen.getByLabelText("选择书稿文件")).toBeDisabled();
   });
 
   it("treats a provider without an API key as missing", async () => {

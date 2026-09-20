@@ -12,7 +12,7 @@ import s from "./HomePage.module.css";
 export function HomePage() {
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const provider = useQuery({ queryKey: ["active-provider"], queryFn: getActiveProvider, retry: false });
   const recent = useQuery({ queryKey: ["document-history", "home"], queryFn: () => listDocumentHistory({ limit: 8, offset: 0 }) });
   const ids = (recent.data?.entries ?? []).map((entry) => entry.document_id);
@@ -40,19 +40,52 @@ export function HomePage() {
     },
   });
   const busy = importing.isPending;
+  const file = importing.isPending && importing.variables && "file" in importing.variables ? importing.variables.file.name : null;
   const blocked = busy || providerMissing;
 
   return (
     <div className={s.layout}>
       <section className={s.hero}>
         <h1 className={s.title}>把英文读成中文</h1>
-        <p className={s.subtitle}>粘贴一个英文网页链接，或上传一本 PDF / EPUB。翻译好后直接在这里读。</p>
+        <p className={s.subtitle}>选一本英文 PDF 或 EPUB，翻译好后直接在这里读。</p>
 
         {providerMissing && (
           <div className={s.notice} role="alert">
             还没有可用的模型服务商，翻译没法开始。<Link to="/settings">去设置服务商</Link>
           </div>
         )}
+
+        <label
+          className={s.drop}
+          data-dragging={dragging || undefined}
+          data-disabled={blocked || undefined}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!blocked) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            const dropped = event.dataTransfer.files?.[0];
+            if (dropped && !blocked) importing.mutate({ file: dropped });
+          }}
+        >
+          <input
+            type="file"
+            accept=".pdf,.epub"
+            className={s.fileInput}
+            aria-label="选择书稿文件"
+            disabled={blocked}
+            onChange={(event) => {
+              const chosen = event.target.files?.[0];
+              // Choosing the file is the decision: no second button to press.
+              if (chosen) importing.mutate({ file: chosen });
+            }}
+          />
+          <span className={s.dropTitle}>{busy && file ? `正在导入 ${file}…` : "把 PDF / EPUB 拖到这里，或点击选择"}</span>
+          <span className={s.dropHint}>支持文字版 PDF、扫描版 PDF（需 OCR 组件）和 EPUB</span>
+        </label>
 
         <form
           className={s.urlRow}
@@ -61,6 +94,7 @@ export function HomePage() {
             if (url.trim()) importing.mutate({ url: url.trim() });
           }}
         >
+          <span className={s.urlLabel}>也可以翻译一个网页：</span>
           <input
             type="url"
             inputMode="url"
@@ -70,25 +104,10 @@ export function HomePage() {
             value={url}
             onChange={(event) => setUrl(event.target.value)}
           />
-          <button type="submit" className="btn btn-primary" disabled={blocked || !url.trim()}>
-            {busy && "url" in (importing.variables ?? {}) ? "正在抓取…" : "翻译这个网页"}
+          <button type="submit" className="btn" disabled={blocked || !url.trim()}>
+            {busy && !file ? "正在抓取…" : "翻译这个网页"}
           </button>
         </form>
-
-        <div className={s.fileRow}>
-          <label className={s.fileLabel}>
-            <input
-              type="file"
-              accept=".pdf,.epub"
-              className={s.fileInput}
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-            <span>{file ? file.name : "或选择一个 .pdf / .epub 文件"}</span>
-          </label>
-          <button className="btn" disabled={blocked || !file} onClick={() => file && importing.mutate({ file })}>
-            {busy && "file" in (importing.variables ?? {}) ? "正在上传…" : "上传并翻译"}
-          </button>
-        </div>
 
         {importing.isError && (
           <div className={s.error} role="alert">

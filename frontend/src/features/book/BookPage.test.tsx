@@ -87,8 +87,14 @@ describe("Book page", () => {
     const start = await screen.findByRole("button", { name: "开始翻译（约 $3.00）" });
     expect(screen.getByText(/预计最多 \$3\.00，超过了自动开始上限 \$1\.00/)).toBeInTheDocument();
     expect(posted(calls, "/v1/runs")).toHaveLength(0);
-    await userEvent.setup().click(start);
+    const user = userEvent.setup();
+    await user.click(start);
+    // The dialog is where cost, fast reading mode and notifications are settled.
+    const dialog = await screen.findByRole("dialog", { name: "开始翻译" });
+    expect(dialog).toHaveTextContent("预计最多花费 $3.00");
+    await user.click(within(dialog).getByRole("button", { name: "开始翻译" }));
     await waitFor(() => expect(posted(calls, "/v1/runs")).toHaveLength(1));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(`/books/${ID}/progress`));
   });
 
   it("never starts by itself without prices, or on a later visit", async () => {

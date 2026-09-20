@@ -8,7 +8,7 @@ import { json, makeOverview } from "./fixtures";
 /** Brand, format and file-type names that stay as they are in a Chinese interface. */
 const ALLOWED = new Set([
   "Book", "Agent", "API", "OpenAPI", "PDF", "EPUB", "Markdown", "HTML", "CSV", "key", "token", "pdf", "epub",
-  "BOOK", "md", "Deep", "Work", "Cal", "Newport", "Momentum", "harness", "RSI",
+  "BOOK", "md", "OCR", "Deep", "Work", "Cal", "Newport", "Momentum", "harness", "RSI",
 ]);
 
 const DOCUMENT_ID = "doc-copy";

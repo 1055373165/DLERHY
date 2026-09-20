@@ -8,7 +8,8 @@ Everything is local and costs nothing: a throwaway SQLite database, the echo tra
 a local article (e2e/fixtures/article.html) and this repo's frontend built into a temp directory
 and served by the API itself. The dev servers on 8999/4173 are not touched.
 
-    uv run python frontend/e2e/core_path.py                        # measure and print
+    uv run python frontend/e2e/core_path.py                        # a pasted link
+    uv run python frontend/e2e/core_path.py --source file          # an EPUB, the main way in
     uv run python frontend/e2e/core_path.py --max-clicks 3 --max-leaves 0   # fail above the targets
     uv run python frontend/e2e/core_path.py --priced               # provider has prices: auto-start path
 
@@ -27,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import zipfile
 import time
 import urllib.request
 from functools import partial
@@ -35,6 +37,47 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+EPUB_CHAPTERS = [
+    ("Why Momentum Matters", "chapter1.xhtml", "<h1>Why Momentum Matters</h1><p>Momentum is the tendency of a trend to continue.</p>"),
+    ("What the evidence says", "chapter2.xhtml", "<h1>What the evidence says</h1><p>Past winners keep winning for several months.</p>"),
+]
+
+
+def _write_epub(path: Path) -> Path:
+    """A two-chapter EPUB, the smallest thing the ingest path accepts."""
+    manifest = " ".join(
+        ['<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />']
+        + [f'<item id="c{i}" href="{href}" media-type="application/xhtml+xml" />' for i, (_, href, _) in enumerate(EPUB_CHAPTERS, 1)]
+    )
+    spine = " ".join(f'<itemref idref="c{i}" />' for i, _ in enumerate(EPUB_CHAPTERS, 1))
+    links = "".join(f'<li><a href="{href}">{title}</a></li>' for title, href, _ in EPUB_CHAPTERS)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", "application/epub+zip")
+        archive.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml" /></rootfiles></container>',
+        )
+        archive.writestr(
+            "OEBPS/content.opf",
+            '<?xml version="1.0" encoding="UTF-8"?><package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Momentum Handbook</dc:title>'
+            "<dc:creator>Test Author</dc:creator><dc:language>en</dc:language></metadata>"
+            f"<manifest>{manifest}</manifest><spine>{spine}</spine></package>",
+        )
+        archive.writestr(
+            "OEBPS/nav.xhtml",
+            '<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
+            f'<body><nav epub:type="toc"><ol>{links}</ol></nav></body></html>',
+        )
+        for _title, href, body in EPUB_CHAPTERS:
+            archive.writestr(
+                f"OEBPS/{href}",
+                f'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>{body}</body></html>',
+            )
+    return path
 
 
 def _free_port() -> int:
@@ -112,6 +155,15 @@ def _start_api(work: Path, dist: Path, *, priced: bool) -> tuple[subprocess.Pope
     raise RuntimeError("API did not start")
 
 
+def _wait_until(condition, page, *, timeout_ms: int) -> None:
+    deadline = time.time() + timeout_ms / 1000
+    while time.time() < deadline:
+        if condition():
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError("timed out waiting for the page to be ready")
+
+
 def _first_visible(page, locators, timeout_ms: int):
     """The first of several candidate controls to become visible (old and new layouts name them differently)."""
     deadline = time.time() + timeout_ms / 1000
@@ -123,7 +175,7 @@ def _first_visible(page, locators, timeout_ms: int):
     return None
 
 
-def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dict:
+def run(*, base: str, article_url: str, epub: Path, source: str, headed: bool, shots: Path | None) -> dict:
     from playwright.sync_api import sync_playwright
 
     clicks: list[str] = []
@@ -152,10 +204,20 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         page.on("framenavigated", lambda frame: frame == page.main_frame and paths.append(re.sub(r"^https?://[^/]+", "", frame.url).split("?")[0]))
         page.goto(f"{base}/")
 
-        link_input = page.get_by_role("textbox", name="网页链接").first
-        link_input.wait_for(timeout=20_000)
-        link_input.fill(article_url)  # pasting: not counted as a click
-        click(page.get_by_role("button", name=re.compile("抓取网页|翻译这个网页")).first, "fetch")
+        if source == "file":
+            chooser = page.get_by_label("选择书稿文件")
+            chooser.wait_for(state="attached", timeout=20_000)
+            # Choosing a file is one action for the reader (the dialog itself is the browser's).
+            clicks.append("choose file")
+            chooser.set_input_files(str(epub))
+        else:
+            link_input = page.get_by_role("textbox", name="网页链接").first
+            link_input.wait_for(timeout=20_000)
+            link_input.fill(article_url)  # pasting: not counted as a click
+            fetch_button = page.get_by_role("button", name=re.compile("抓取网页|翻译这个网页")).first
+            # The button enables once the page has taken the pasted link.
+            _wait_until(lambda: fetch_button.is_enabled(), page, timeout_ms=10_000)
+            click(fetch_button, "fetch")
 
         # Either the run starts by itself, or there is one button to start it.
         start = _first_visible(
@@ -166,6 +228,10 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         auto_started = start is None
         if start is not None:
             click(start, "start")
+            # Starting by hand asks once: cost, fast reading mode, notifications.
+            dialog = page.get_by_role("dialog", name="开始翻译")
+            dialog.wait_for(timeout=20_000)
+            click(dialog.get_by_role("button", name="开始翻译"), "confirm start")
 
         read = _first_visible(
             page,
@@ -235,6 +301,7 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
         "page_switches": max(0, len(visited) - 1),
         "left_book_page": leaves,
         "paths": visited,
+        "source": source,
         "auto_started": auto_started,
         "read_text_sample": text[:80],
         "notifications": notifications,
@@ -243,6 +310,7 @@ def run(*, base: str, article_url: str, headed: bool, shots: Path | None) -> dic
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--source", choices=("link", "file"), default="link", help="what the reader brings: a web page link or an EPUB")
     parser.add_argument("--priced", action="store_true", help="give the provider prices, so a cheap page may start by itself")
     parser.add_argument("--max-clicks", type=int)
     parser.add_argument("--max-leaves", type=int, help="most times the reader may leave the book's page")
@@ -261,6 +329,8 @@ def main() -> int:
             result = run(
                 base=f"http://127.0.0.1:{port}",
                 article_url=f"http://127.0.0.1:{fixtures_port}/article.html",
+                epub=_write_epub(work / "momentum.epub"),
+                source=args.source,
                 headed=args.headed,
                 shots=args.screenshots,
             )
