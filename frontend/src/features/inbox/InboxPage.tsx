@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
 import { NotifyMe } from "../../components/NotifyMe";
+import { Surface } from "../../components/Surface";
 import { decideApproval, resumeRun } from "../../lib/api";
 import { getInbox } from "../../lib/overview";
 import s from "../book/Tabs.module.css";
@@ -24,13 +25,13 @@ export function InboxPage() {
   });
   const items = inbox.data?.items ?? [];
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      <h1 className={s.heading} style={{ fontSize: "1.25rem" }}>
-        需要你处理
-      </h1>
-      <p className={s.meta}>
-        <NotifyMe label="有事等我处理时通知我" />
-      </p>
+    <Surface
+      level={1}
+      eyebrow="待办"
+      title="需要你处理"
+      aside={items.length > 0 ? `${items.length} 件` : null}
+    >
+      <NotifyMe label="有事等我处理时通知我" />
       {inbox.isError ? (
         <div className={s.error}>没能加载：{(inbox.error as Error).message}</div>
       ) : items.length === 0 ? (
@@ -73,6 +74,6 @@ export function InboxPage() {
           ))}
         </ul>
       )}
-    </div>
+    </Surface>
   );
 }

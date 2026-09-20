@@ -252,13 +252,14 @@ export function LibraryPage() {
                           阅读
                         </Link>
                       ) : null}
+                      {/* Nothing to download yet means no button, rather than a dash that does nothing. */}
+                      {entry.merged_export_ready ? (
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
                           className="btn btn-sm"
-                          disabled={!entry.merged_export_ready}
                           onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
                         >
-                          {entry.merged_export_ready ? "下载 ▾" : "—"}
+                          下载 ▾
                         </button>
                         {openMenu === entry.document_id && (
                           <div className={s.dlMenu}>
@@ -277,6 +278,7 @@ export function LibraryPage() {
                           </div>
                         )}
                       </div>
+                      ) : null}
                       <button
                         className={`btn btn-sm ${s.deleteBtn}`}
                         onClick={() => setPendingDelete({ id: entry.document_id, title: preferredTitle(entry) })}

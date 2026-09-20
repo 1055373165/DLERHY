@@ -32,7 +32,7 @@ AXE_OPTIONS = {
 }
 
 # The book page's tabs, by the path segment the router uses.
-BOOK_TABS = ["progress", "read", "terms", "issues", "runs", "chapters"]
+BOOK_TABS = ["progress", "read", "terms", "issues", "log", "chapters"]
 
 
 def _another_epub(source: Path, target: Path, title: str) -> Path:
@@ -76,6 +76,63 @@ def _visit(page, base: str, path: str, *, name: str, shots: Path, theme: str, ch
     if not check:
         return []
     return [{**violation, "page": name, "path": path} for violation in _axe(page)]
+
+
+# Nothing on screen may be smaller than this: the old interface labelled things at 10px.
+MIN_FONT_PX = 12
+
+
+def _style_checks(page, *, name: str) -> list[str]:
+    """What the eye was asked to check by hand: label sizes, and text too small to read."""
+    return page.evaluate(
+        """(min) => {
+            const problems = [];
+            const seen = new Set();
+            for (const node of document.querySelectorAll("body *")) {
+              const text = [...node.childNodes]
+                .filter((c) => c.nodeType === 3)
+                .map((c) => c.textContent.trim())
+                .join("")
+                .trim();
+              if (!text) continue;
+              const style = getComputedStyle(node);
+              if (style.visibility === "hidden" || style.display === "none") continue;
+              const size = parseFloat(style.fontSize);
+              if (size < min) {
+                const key = `${size}px`;
+                if (seen.has(key + text.slice(0, 10))) continue;
+                seen.add(key + text.slice(0, 10));
+                problems.push(`「${text.slice(0, 14)}」只有 ${size}px`);
+              }
+            }
+            return problems;
+        }""",
+        MIN_FONT_PX,
+    )
+
+
+def _sidebar_checks(page) -> list[str]:
+    """The sidebar must read as words without being hovered, and a book must offer the way back."""
+    problems = page.evaluate(
+        """() => {
+            const problems = [];
+            const nav = document.querySelector("nav[aria-label=主导航]");
+            if (!nav) return ["找不到主导航"];
+            for (const link of nav.querySelectorAll("a")) {
+              const label = link.textContent.trim();
+              if (!label) { problems.push("导航里有一个没有文字的按钮"); continue; }
+              const span = [...link.querySelectorAll("span")].find((s) => s.textContent.trim() === label);
+              const style = getComputedStyle(span ?? link);
+              if (parseFloat(style.opacity) < 1) problems.push(`导航「${label}」要悬停才看得见`);
+              if ((span ?? link).getBoundingClientRect().width < 8) problems.push(`导航「${label}」没有占位`);
+            }
+            return problems;
+        }"""
+    )
+    back = page.get_by_role("link", name=re.compile("返回"))
+    if back.count() == 0:
+        problems.append("书的页面上没有返回的入口")
+    return problems
 
 
 def _keyboard_walk(page, base: str, epub: Path, shots: Path) -> list[str]:
@@ -191,8 +248,12 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         destinations = [("home", "/"), ("library", "/library"), ("inbox", "/inbox"), ("settings", "/settings")]
         destinations += [(f"book-{tab}", f"/books/{document_id}/{tab}") for tab in BOOK_TABS]
 
+        style_problems: list[str] = []
         for name, path in destinations:
             findings += _visit(page, base, path, name=name, shots=shots, theme="light", check=True)
+            style_problems += [f"{name}: {problem}" for problem in _style_checks(page, name=name)]
+            if name.startswith("book-"):
+                style_problems += [f"{name}: {problem}" for problem in _sidebar_checks(page)]
 
         # Narrow: the tabs and the sidebar have to survive a phone-width window.
         page.set_viewport_size({"width": 420, "height": 860})
@@ -221,7 +282,12 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         context.close()
         browser.close()
 
-    return {"violations": findings, "keyboard": keyboard_problems, "screenshots": sorted(p.name for p in shots.glob("*.png"))}
+    return {
+        "violations": findings,
+        "keyboard": keyboard_problems,
+        "style": style_problems,
+        "screenshots": sorted(p.name for p in shots.glob("*.png")),
+    }
 
 
 def main() -> int:
@@ -251,8 +317,13 @@ def main() -> int:
             shutil.rmtree(work, ignore_errors=True)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    ok = not report["violations"] and not report["keyboard"]
-    print("\n无障碍检查通过" if ok else f"\n{len(report['violations'])} 项 axe 问题，{len(report['keyboard'])} 项键盘问题", file=sys.stderr)
+    ok = not report["violations"] and not report["keyboard"] and not report["style"]
+    print(
+        "\n无障碍检查通过"
+        if ok
+        else f"\n{len(report['violations'])} 项 axe 问题，{len(report['keyboard'])} 项键盘问题，{len(report['style'])} 项样式问题",
+        file=sys.stderr,
+    )
     return 0 if ok else 1
 
 
