@@ -13,6 +13,7 @@ import { preferredTitle } from "../../lib/workflow";
 import s from "./ReaderPage.module.css";
 
 const FORMATS = [
+  { key: "web", label: "中文网页", exportType: "web_html" },
   { key: "zh", label: "中文版", exportType: "merged_html" },
   { key: "bi", label: "中英对照", exportType: "bilingual_html" },
   { key: "md", label: "Markdown", exportType: "merged_markdown" },
@@ -42,19 +43,27 @@ function markdownPage(markdown: string): string {
 export function ReaderPage() {
   const { documentId = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const format: FormatKey = FORMATS.some((item) => item.key === params.get("format"))
-    ? (params.get("format") as FormatKey)
-    : "zh";
-  const current = FORMATS.find((item) => item.key === format) ?? FORMATS[0];
   const [showSource, setShowSource] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const document = useQuery({ queryKey: ["document", documentId], queryFn: () => getDocument(documentId), retry: false });
+  // A web page reads first as itself in Chinese (the original layout); books have no such format.
+  const isWebPage = document.data?.source_type === "web";
+  const formats = FORMATS.filter((item) => item.key !== "web" || isWebPage);
+  const requested = params.get("format");
+  const format: FormatKey = formats.some((item) => item.key === requested)
+    ? (requested as FormatKey)
+    : isWebPage
+      ? "web"
+      : "zh";
+  const current = formats.find((item) => item.key === format) ?? formats[0];
   const preview = useQuery({
     queryKey: ["export-preview", documentId, current.exportType],
     queryFn: () => previewDocumentExport(documentId, current.exportType),
     retry: false,
     staleTime: 5 * 60_000,
+    // Wait for the document: until its source type is known the default format is not.
+    enabled: document.isSuccess || document.isError,
   });
 
   // Served from a blob URL rather than srcdoc: a srcdoc page resolves "#chapter" links against
@@ -91,7 +100,7 @@ export function ReaderPage() {
           {title}
         </span>
         <div className={s.tabs} role="tablist" aria-label="阅读格式">
-          {FORMATS.map((item) => (
+          {formats.map((item) => (
             <button
               key={item.key}
               role="tab"
@@ -111,6 +120,11 @@ export function ReaderPage() {
           <button className="btn btn-sm" onClick={() => setShowSource((value) => !value)}>
             {showSource ? "看排版" : "看源码"}
           </button>
+        )}
+        {document.data?.source_url && (
+          <a className="btn btn-sm" href={document.data.source_url} target="_blank" rel="noreferrer noopener">
+            原网页 ↗
+          </a>
         )}
         <button className="btn btn-sm" onClick={() => void handleDownload()}>
           下载

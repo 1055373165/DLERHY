@@ -36,6 +36,7 @@ from book_agent.domain.enums import (
     SourceType,
 )
 from book_agent.domain.models.review import Export, ReviewIssue
+from book_agent.domain.structure import web as web_page
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.domain.structure.epub import (
     _parse_xml_document,
@@ -249,6 +250,9 @@ class ExportService:
     def export_document_zh_epub(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
         return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB], enforce_gate=enforce_gate)
 
+    def export_document_web_html(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
+        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.WEB_HTML], enforce_gate=enforce_gate)
+
     def export_document_rebuilt_pdf(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
         return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF], enforce_gate=enforce_gate)
 
@@ -257,8 +261,8 @@ class ExportService:
         self, document_id: str, renderer: DocumentRenderer, *, enforce_gate: bool = True
     ) -> ExportArtifacts:
         bundle = self.repository.load_document_bundle(document_id)
-        if renderer.epub_source_only_error is not None and bundle.document.source_type != SourceType.EPUB:
-            raise ExportUnavailableError(renderer.epub_source_only_error, reason="source_type_not_supported")
+        if renderer.source_only_error is not None and bundle.document.source_type != renderer.required_source_type:
+            raise ExportUnavailableError(renderer.source_only_error, reason="source_type_not_supported")
         for chapter_bundle in bundle.chapters if enforce_gate else ():
             self._enforce_gate(chapter_bundle, renderer.export_type)
         upstream_exports: dict[ExportType, ExportArtifacts] = {}
@@ -1617,6 +1621,9 @@ class ExportService:
             manifest["epub_path"] = str(output_path)
         elif export_type == ExportType.ZH_EPUB:
             manifest["epub_path"] = str(output_path)
+        elif export_type == ExportType.WEB_HTML:
+            manifest["html_path"] = str(output_path)
+            manifest["source_url"] = (bundle.document.metadata_json or {}).get("source_url")
         elif export_type == ExportType.REBUILT_PDF:
             manifest["pdf_path"] = str(output_path)
         return manifest
@@ -2007,6 +2014,8 @@ class ExportService:
             ):
                 render_blocks[-2] = render_repair.merge_adjacent_code_render_blocks(render_blocks[-2], render_blocks[-1])
                 render_blocks.pop()
+        if bundle.document.source_type == SourceType.WEB:
+            return _web_page_reading_blocks(render_blocks)
         if _is_academic_paper_document(bundle.document):
             return render_repair.normalize_academic_paper_render_blocks(bundle, render_blocks)
         if _is_pdf_document(bundle.document):
@@ -2653,6 +2662,52 @@ class ExportService:
             self._clear_epub_text_recursively(child)
             child.tail = ""
 
+    def _web_page_translations(self, bundle: DocumentExportBundle) -> dict[int, str]:
+        """Each marked node's Chinese text, joined from its own block's aligned segments.
+
+        Read per block rather than from the merged render blocks: those may fold
+        neighbouring blocks together, and every node must get exactly its own text.
+        """
+        translations: dict[int, str] = {}
+        for chapter_bundle in bundle.chapters:
+            target_map = alignment.build_target_map(chapter_bundle)
+            sentence_targets = alignment.sentence_target_map(chapter_bundle)
+            sentences_by_block: dict[str, list[object]] = {}
+            for sentence in sorted(chapter_bundle.sentences, key=lambda item: (item.block_id, item.ordinal_in_block)):
+                sentences_by_block.setdefault(sentence.block_id, []).append(sentence)
+            for block in chapter_bundle.blocks:
+                metadata = block.source_span_json or {}
+                node_id = metadata.get("web_node")
+                if not isinstance(node_id, int):
+                    continue
+                target_text = str(metadata.get("repair_target_text") or "").strip()
+                if not target_text:
+                    target_ids = alignment.target_ids_for_block_sentences(
+                        sentences_by_block.get(block.id, []), sentence_targets, target_map
+                    )
+                    target_text = markup.join_block_target_text(
+                        [target_map[target_id].text_zh for target_id in target_ids],
+                        block_type=block.block_type,
+                        source_text=block.source_text,
+                    )
+                if target_text:
+                    translations[node_id] = target_text
+        return translations
+
+    def _write_translated_web_page(self, bundle: DocumentExportBundle, file_path: Path) -> str:
+        source_path = Path(bundle.document.source_path or "")
+        if not source_path.exists():
+            raise ExportUnavailableError(
+                "Web page export requires the captured page snapshot.", reason="source_file_missing"
+            )
+        page, _patched = web_page.translate_web_page(
+            source_path.read_text(encoding="utf-8"),
+            self._web_page_translations(bundle),
+            lang="zh-CN" if (bundle.document.tgt_lang or "zh") == "zh" else bundle.document.tgt_lang,
+        )
+        atomic_write_text(file_path, page)
+        return page
+
     def _apply_source_preserving_epub_status_updates(self, bundle: DocumentExportBundle) -> None:
         now = _utcnow()
         for chapter_bundle in bundle.chapters:
@@ -2670,13 +2725,19 @@ class ExportService:
             raise ExportUnavailableError(
                 "Rebuilt PDF renderer is unavailable because Playwright is not installed.", reason="renderer_missing"
             ) from exc
+        from book_agent.export.reader_epub import reader_html
+
+        # Print what readers see (no translation statistics, a table of contents), next to the
+        # merged HTML so its relative asset paths still resolve.
+        print_source = html_path.with_name(f"{html_path.stem}.print.html")
+        print_source.write_text(reader_html(html_path.read_text(encoding="utf-8")), encoding="utf-8")
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch()
                 try:
                     page = browser.new_page()
                     page.emulate_media(media="print")
-                    page.goto(html_path.resolve().as_uri(), wait_until="load")
+                    page.goto(print_source.resolve().as_uri(), wait_until="load")
                     with atomic_path(pdf_path) as temporary:
                         page.pdf(path=str(temporary), print_background=True, format="A4")
                 finally:
@@ -2688,6 +2749,8 @@ class ExportService:
                 "Rebuilt PDF renderer is unavailable or failed to render the merged HTML substrate.",
                 reason="renderer_failed",
             ) from exc
+        finally:
+            print_source.unlink(missing_ok=True)
 
     def _export_epub_assets_for_chapter_bundle(
         self,
@@ -3095,10 +3158,29 @@ class DocumentRenderer:
     manifest_name: str
     render: Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str | None]
     manifest: Callable[[ExportService, DocumentExportBundle, Path, dict], dict]
-    epub_source_only_error: str | None = None
+    # Set for renderers that patch the original source file, which only one source type has.
+    source_only_error: str | None = None
+    required_source_type: SourceType = SourceType.EPUB
     uses_upstream_exports: bool = False
     syncs_document_title: bool = True
     apply_status_updates: Callable[[ExportService, DocumentExportBundle], None] | None = None
+
+
+def _web_page_reading_blocks(render_blocks: list[MergedRenderBlock]) -> list[MergedRenderBlock]:
+    """A web page read as an article: no site menus or footer, no repeat of the <title>, markers as words."""
+    kept: list[MergedRenderBlock] = []
+    for block in render_blocks:
+        metadata = block.source_metadata or {}
+        if metadata.get("web_region") == web_page.WEB_REGION_CHROME or metadata.get("web_role") == "page_title":
+            continue
+        kept.append(
+            replace(
+                block,
+                source_text=web_page.plain_text(block.source_text),
+                target_text=web_page.plain_text(block.target_text) if block.target_text else block.target_text,
+            )
+        )
+    return kept
 
 
 def _render_merged(builder_name: str) -> Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str]:
@@ -3123,6 +3205,13 @@ def _render_zh_epub(
     service: ExportService, bundle: DocumentExportBundle, _output_dir: Path, file_path: Path, _upstream: dict
 ) -> None:
     service._write_source_preserving_epub(bundle, file_path)
+    return None
+
+
+def _render_web_html(
+    service: ExportService, bundle: DocumentExportBundle, _output_dir: Path, file_path: Path, _upstream: dict
+) -> None:
+    service._write_translated_web_page(bundle, file_path)
     return None
 
 
@@ -3192,7 +3281,7 @@ _DOCUMENT_RENDERERS: dict[ExportType, DocumentRenderer] = {
             ],
             upstream=True,
         ),
-        epub_source_only_error="Rebuilt EPUB is only available for EPUB source documents.",
+        source_only_error="Rebuilt EPUB is only available for EPUB source documents.",
         uses_upstream_exports=True,
     ),
     ExportType.ZH_EPUB: DocumentRenderer(
@@ -3210,8 +3299,30 @@ _DOCUMENT_RENDERERS: dict[ExportType, DocumentRenderer] = {
             ],
             upstream=False,
         ),
-        epub_source_only_error="Source-preserving EPUB export is only available for EPUB source documents.",
+        source_only_error="Source-preserving EPUB export is only available for EPUB source documents.",
         syncs_document_title=False,
+        apply_status_updates=lambda service, bundle: service._apply_source_preserving_epub_status_updates(bundle),
+    ),
+    ExportType.WEB_HTML: DocumentRenderer(
+        export_type=ExportType.WEB_HTML,
+        file_name="web-page.html",
+        manifest_name="web-page.manifest.json",
+        render=_render_web_html,
+        manifest=_rebuilt_manifest(
+            ExportType.WEB_HTML,
+            "web_page_patcher",
+            [
+                "source_page_markup_and_styles_preserved",
+                "scripts_removed",
+                "only_marked_text_nodes_patched",
+                "no_in_image_text_rewrite",
+            ],
+            upstream=False,
+        ),
+        source_only_error="The translated web page is only available for web page sources.",
+        required_source_type=SourceType.WEB,
+        syncs_document_title=False,
+        # Same effect as for the source-preserving EPUB: chapters and document marked exported.
         apply_status_updates=lambda service, bundle: service._apply_source_preserving_epub_status_updates(bundle),
     ),
     ExportType.REBUILT_PDF: DocumentRenderer(

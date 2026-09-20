@@ -145,6 +145,8 @@ def _document_export_label(export_type: ExportType) -> str:
         return "中文阅读稿-Markdown"
     if export_type == ExportType.ZH_EPUB:
         return "中文EPUB"
+    if export_type == ExportType.WEB_HTML:
+        return "中文网页"
     if export_type == ExportType.REBUILT_EPUB:
         return "重建EPUB"
     if export_type == ExportType.REBUILT_PDF:
@@ -307,7 +309,9 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # 2: Chinese chapter labels and book titles, chapters with digit-leading titles, reader EPUB.
 # 3: bilingual source text shown open under 原文; 回到顶部 instead of "Back to top".
 # 4: the Markdown book has no translation statistics and a Chinese author line.
-EXPORT_RENDERER_VERSION = 4
+# 5: web pages read as articles (no site menus, markers as words, titled by their own heading);
+#    PDF prints the reader copy and lets chapters run across pages.
+EXPORT_RENDERER_VERSION = 5
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",

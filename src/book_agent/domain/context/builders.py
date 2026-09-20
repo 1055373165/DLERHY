@@ -46,6 +46,10 @@ MAX_MERGED_PACKET_CHARS = 900
 MAX_MERGED_PACKET_SENTENCES = 6
 MAX_MERGED_SINGLE_BLOCK_CHARS = 420
 MAX_MERGED_SINGLE_BLOCK_SENTENCES = 3
+# Web page navigation and footers are dozens of one- or two-word labels: pack them together, but in
+# small batches (with 30 labels per packet the model translated a locked product name anyway).
+MAX_MERGED_CHROME_PACKET_BLOCKS = 12
+MAX_MERGED_CHROME_PACKET_CHARS = 600
 CHAPTER_BRIEF_PRIORITY_KEYWORDS = {
     "agentic",
     "context",
@@ -56,6 +60,11 @@ CHAPTER_BRIEF_PRIORITY_KEYWORDS = {
     "retrieval",
     "sql",
 }
+
+
+def is_web_chrome(block: Block) -> bool:
+    """A web page's navigation, banner or footer block (see domain.structure.web)."""
+    return (block.source_span_json or {}).get("web_region") == "chrome"
 
 
 def _group_by(items: Iterable, key):
@@ -500,20 +509,26 @@ class ContextPacketBuilder:
                 continue
 
             group = [block]
+            chrome = is_web_chrome(block)
+            max_blocks = MAX_MERGED_CHROME_PACKET_BLOCKS if chrome else MAX_MERGED_PACKET_BLOCKS
+            max_chars = MAX_MERGED_CHROME_PACKET_CHARS if chrome else MAX_MERGED_PACKET_CHARS
+            max_sentences = MAX_MERGED_CHROME_PACKET_BLOCKS if chrome else MAX_MERGED_PACKET_SENTENCES
             total_chars = self._merge_block_char_count(block)
             total_sentences = len(sentences_by_block.get(block.id, []))
             cursor = index + 1
-            while cursor < len(translatable_blocks) and len(group) < MAX_MERGED_PACKET_BLOCKS:
+            while cursor < len(translatable_blocks) and len(group) < max_blocks:
                 candidate = translatable_blocks[cursor]
                 if candidate.ordinal != group[-1].ordinal + 1:
                     break
                 if not self._is_merge_candidate(candidate, sentences_by_block):
                     break
+                if is_web_chrome(candidate) != chrome:
+                    break
                 candidate_chars = self._merge_block_char_count(candidate)
                 candidate_sentences = len(sentences_by_block.get(candidate.id, []))
-                if total_chars + candidate_chars > MAX_MERGED_PACKET_CHARS:
+                if total_chars + candidate_chars > max_chars:
                     break
-                if total_sentences + candidate_sentences > MAX_MERGED_PACKET_SENTENCES:
+                if total_sentences + candidate_sentences > max_sentences:
                     break
                 group.append(candidate)
                 total_chars += candidate_chars
@@ -528,7 +543,7 @@ class ContextPacketBuilder:
         block: Block,
         sentences_by_block: dict[str, list[Sentence]],
     ) -> bool:
-        if block.block_type != BlockType.PARAGRAPH:
+        if block.block_type != BlockType.PARAGRAPH and not is_web_chrome(block):
             return False
         sentence_count = len(sentences_by_block.get(block.id, []))
         if sentence_count == 0 or sentence_count > MAX_MERGED_SINGLE_BLOCK_SENTENCES:

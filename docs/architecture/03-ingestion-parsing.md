@@ -783,3 +783,14 @@ Fallback 路径差异：未知标签（如 `<custom>`）的开闭标签**以字�
 3. **抽取层缺陷**：行内空白折叠让多条表格/TOC 规则失效；`FileDataError` 静默退化；outline -1 页号；图页多的书被整本 OCR；双重抽取与临时目录泄漏。
 4. **启发式的系统性误报源**：IGNORECASE 的代码/列表/标题正则、固定 12% 页区、pt 绝对阈值在 OCR 像素坐标下失真、Manning 专属 listing 规则、英文停用词/标题词表。
 5. **生产要素缺失**：无日志/指标、无超时/大小限制、同步阻塞请求、OCR 依赖网络与 `uv`、sidecar/临时文件路径不受配置管理、非英文源完全未处理。
+
+## 网页来源（`source_type = web`，2026-09-19 新增）
+
+入口 `POST /v1/documents/bootstrap-url {url}` →
+`ingestion/web.py::capture_web_page` 抓取页面并写成**快照 HTML**。之后和上传的文件走同一个 `bootstrap_document`（`.html` 后缀对应 `SourceType.WEB`）。
+
+- **快照**：服务端渲染的 HTML；外链样式表内联为 `<style data-ba-href>`，`url()` 改成绝对地址，`@font-face` 字体转成 data URI 内嵌（字体需要 CORS，换个来源就加载不了）；其余 URL（图片、srcset、链接）改成绝对地址；去掉 `<script>`、`<base>`、preload 类 `<link>`、CSP/refresh `<meta>`。每一跳重定向、每个样式表和字体请求都经过 SSRF 守卫（`hardened` 下生效，`BOOK_AGENT_WEB_ALLOW_PRIVATE_HOSTS` 可放开）。
+- **契约**（`domain/structure/web.py`）：无损 HTML 树（serialize 与原文逐字节一致）；`mark_translatable_nodes` 在每个文本段落元素上打 `data-ba-node="N"`：只含文字和行内元素的元素整体一段；块和文字混排的容器，把散文字包进 `<span>`；只含单个行内子元素的元素下探到这个子元素，这样导航链接标的是 `<a>` 本身。`WebPageParser` 把一个快照解析成一章，每个标记节点是一个 block（`source_span_json.web_node = N`，anchor `ba-node-N`）。
+- **行内标记**：链接和 `<sup>/<sub>/<mark>/<abbr>/<q>/<cite>` 写成 `[文字][n]`（节点内第 n 个保留元素；嵌套时保留最内层，导出时再套回外层，例如脚注 `<sup><a>`），`<strong>/<b>` 写成 `**`，`<em>/<i>` 写成 `*`，`<code>` 写成反引号。导出时还原成该节点**原来的**标签（class 等属性一并保留）；源文里没有的标记按普通文字输出。
+- **导出** `ExportType.WEB_HTML`（`ExportService._write_translated_web_page`）：逐 block 取对齐后的译文，只替换标记节点的内容，设置 `<html lang="zh-CN">`，最后去掉 `data-ba-node`。不走 merged render blocks，它们可能把相邻 block 合并，节点就对不上了。
+- **已知限制**：只拿到服务端渲染的内容（纯前端渲染的页面抓不到正文，会被拒绝）；脚本驱动的动画和交互会丢失；图片里的文字不翻译；`alt`、`title`、`aria-label` 等属性暂不翻译。

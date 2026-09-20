@@ -225,7 +225,7 @@ def resolve_document_titles(
     title_src = explicit_src
     resolution_source = "parsed_metadata" if explicit_src else None
     if title_src is None:
-        if source_type == SourceType.EPUB:
+        if source_type in {SourceType.EPUB, SourceType.WEB}:
             title_src = normalized_parsed_title or filename_candidate
             resolution_source = "parsed_title" if normalized_parsed_title else "source_filename"
         elif pdf_recovery_lane == "academic_paper":

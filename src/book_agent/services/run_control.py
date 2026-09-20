@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType
+from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType, SourceType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
-from book_agent.orchestrator.run_plan import translate_packet_scope
+from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY, WEB_EXPORT_REQUEST_KEY, translate_packet_scope
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
     write_cached_stages,
@@ -155,7 +155,12 @@ class RunControlService:
         status_detail_json: dict[str, Any] | None = None,
         budget: RunBudgetSummary | None = None,
     ) -> DocumentRunSummary:
-        self.repository.get_document(document_id)
+        document = self.repository.get_document(document_id)
+        status_detail_json = dict(status_detail_json or {})
+        if run_type == DocumentRunType.TRANSLATE_FULL and document.source_type == SourceType.WEB:
+            request = dict(status_detail_json.get(RUN_REQUEST_KEY) or {})
+            request.setdefault(WEB_EXPORT_REQUEST_KEY, True)
+            status_detail_json[RUN_REQUEST_KEY] = request
         if resume_from_run_id is not None:
             resume_from_run = self.repository.get_run(resume_from_run_id)
             if resume_from_run.document_id != document_id:
@@ -170,7 +175,7 @@ class RunControlService:
             requested_by=requested_by,
             priority=priority,
             resume_from_run_id=resume_from_run_id,
-            status_detail_json=self._with_default_status_detail(status_detail_json or {}),
+            status_detail_json=self._with_default_status_detail(status_detail_json),
         )
         created_at = _utcnow()
         run_budget = self._to_budget_model(budget)

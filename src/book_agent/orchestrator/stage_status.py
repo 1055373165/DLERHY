@@ -54,6 +54,7 @@ PIPELINE_STAGES = (
     "repair",
     "bilingual_html",
     "merged_html",
+    "web_html",
     "export_review",
 )
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.

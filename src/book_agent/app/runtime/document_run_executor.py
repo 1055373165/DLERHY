@@ -119,6 +119,8 @@ def ensure_document_run_executor(app) -> "DocumentRunExecutor":
 ADVISORY_AGENT_KINDS = frozenset(
     {TerminologyAgent_KIND, ReviewerAgent_KIND, StructureAgent_KIND, ExportReviewAgent_KIND}
 )
+# Stage cache fields describing a failed attempt; cleared when the stage runs or succeeds again.
+_STAGE_ERROR_KEYS = ("error_class", "error_message")
 
 
 def _accepts_positional_argument(function: Callable[..., Any] | None) -> bool:
@@ -2283,6 +2285,12 @@ class DocumentRunExecutor:
         previous_status = stage_detail.get("status", "unknown")
         stage_detail["status"] = status
         stage_detail["updated_at"] = _utcnow().isoformat()
+        if status in {"pending", "running", "succeeded"}:
+            # An earlier attempt's error no longer describes the stage.
+            for key in _STAGE_ERROR_KEYS:
+                stage_detail.pop(key, None)
+        if stage_key == "translate" and status == "succeeded":
+            stage_detail["pending_packet_count"] = 0
         if extra:
             stage_detail.update(extra)
         stages[stage_key] = stage_detail

@@ -19,6 +19,7 @@ import s from "./LibraryPage.module.css";
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
 const DOWNLOAD_OPTIONS = [
+  { key: "zh-web", label: "中文网页 · 原排版", exportType: "web_html", packaging: "single", enabled: true },
   { key: "zh-html", label: "中文版 · HTML", exportType: "merged_html", packaging: "single", enabled: true },
   { key: "zh-epub", label: "中文版 · EPUB", exportType: "merged_html", packaging: "epub", enabled: true },
   { key: "zh-md", label: "中文版 · Markdown", exportType: "merged_markdown", packaging: "single", enabled: true },
@@ -262,7 +263,9 @@ export function LibraryPage() {
                         </button>
                         {openMenu === entry.document_id && (
                           <div className={s.dlMenu}>
-                            {DOWNLOAD_OPTIONS.map((opt) => (
+                            {DOWNLOAD_OPTIONS.filter(
+                              (opt) => opt.exportType !== "web_html" || entry.source_type === "web"
+                            ).map((opt) => (
                               <button
                                 key={opt.key}
                                 className={s.dlOption}

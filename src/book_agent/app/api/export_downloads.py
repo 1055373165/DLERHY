@@ -36,7 +36,13 @@ PACKAGE_EPUB = "epub"
 # images inlined, PDF as the file itself, all served inline rather than as attachments.
 PACKAGE_PREVIEW = "preview"
 PREVIEW_TYPES = frozenset(
-    {ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML, ExportType.MERGED_MARKDOWN, ExportType.REBUILT_PDF}
+    {
+        ExportType.MERGED_HTML,
+        ExportType.BILINGUAL_HTML,
+        ExportType.MERGED_MARKDOWN,
+        ExportType.REBUILT_PDF,
+        ExportType.WEB_HTML,
+    }
 )
 SINGLE_FILE_TYPES = frozenset({ExportType.MERGED_HTML, ExportType.BILINGUAL_HTML})
 
@@ -486,7 +492,7 @@ def document_export_response(
         if export_type not in PREVIEW_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="package=preview serves merged_html, bilingual_html, merged_markdown and rebuilt_pdf.",
+                detail="package=preview serves merged_html, bilingual_html, merged_markdown, rebuilt_pdf and web_html.",
             )
         package = PACKAGE_SINGLE
     if export_type == ExportType.BILINGUAL_HTML:
@@ -517,6 +523,7 @@ def document_export_response(
         ExportType.REBUILT_EPUB: "重建EPUB",
         ExportType.REBUILT_PDF: "重建PDF",
         ExportType.REVIEW_PACKAGE: "审校包",
+        ExportType.WEB_HTML: "中文网页",
     }
     label = label_map.get(export_type, export_type.value)
 
@@ -563,6 +570,12 @@ def document_export_response(
         return Response(
             content=markdown.encode("utf-8"),
             media_type="text/markdown; charset=utf-8",
+            headers={"content-disposition": content_disposition(main_filename, inline=True)},
+        )
+    if preview and export_type == ExportType.WEB_HTML:
+        return FileResponse(
+            path=file_path,
+            media_type="text/html; charset=utf-8",
             headers={"content-disposition": content_disposition(main_filename, inline=True)},
         )
     if preview and export_type == ExportType.REBUILT_PDF:

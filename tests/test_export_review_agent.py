@@ -154,7 +154,7 @@ class ExportReviewAgentTests(unittest.TestCase):
         self.assertEqual(plan.stages[-1], "export_review")
         self.assertIn("export_review", plan.agent_stages)
         self.assertNotIn("export_review", plan.export_stages)
-        self.assertEqual(STAGE_DEPENDENCIES["export_review"], ("bilingual_html", "merged_html"))
+        self.assertEqual(STAGE_DEPENDENCIES["export_review"], ("bilingual_html", "merged_html", "web_html"))
 
 
 if __name__ == "__main__":

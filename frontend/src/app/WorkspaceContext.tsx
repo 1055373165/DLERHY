@@ -30,6 +30,7 @@ import {
   retryRun,
   resumeRun,
   uploadDocument,
+  bootstrapWebPage,
   type ChapterMemoryProposalDecisionResponse,
   type ChapterMemoryProposalDecisionPayload,
   type ChapterWorklistAssignment,
@@ -88,6 +89,7 @@ interface WorkspaceContextValue {
   assignmentPending: boolean;
   actionExecutionPending: boolean;
   uploadFile: (file: File) => Promise<DocumentSummary>;
+  importWebPage: (url: string) => Promise<DocumentSummary>;
   runPrimaryAction: () => Promise<DocumentRunSummary>;
   refreshCurrentDocument: () => Promise<void>;
   approveMemoryProposal: (
@@ -401,7 +403,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }
 
   const uploadMutation = useMutation({
-    mutationFn: uploadDocument,
+    mutationFn: (source: File | string) =>
+      typeof source === "string" ? bootstrapWebPage(source) : uploadDocument(source),
     onSuccess: async (document) => {
       queryClient.setQueryData(["document", document.document_id], document);
       selectDocument(document.document_id);
@@ -601,6 +604,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     assignmentPending: assignmentMutation.isPending,
     actionExecutionPending: actionExecutionMutation.isPending,
     uploadFile: uploadMutation.mutateAsync,
+    importWebPage: uploadMutation.mutateAsync,
     runPrimaryAction: runActionMutation.mutateAsync,
     refreshCurrentDocument,
     approveMemoryProposal: (proposalId, payload) =>

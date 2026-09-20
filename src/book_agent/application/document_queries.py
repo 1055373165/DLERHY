@@ -154,6 +154,7 @@ class DocumentQueryService:
             latest_run_current_stage=latest_run_current_stage,
             latest_run_updated_at=(latest_run.updated_at.isoformat() if latest_run is not None else None),
             chapters=chapter_summaries,
+            source_url=(bundle.document.metadata_json or {}).get("source_url"),
         )
 
     def list_document_history(

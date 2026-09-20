@@ -75,6 +75,8 @@ class DocumentSummary:
     latest_run_current_stage: str | None
     latest_run_updated_at: str | None
     chapters: list[ChapterSummary] = field(default_factory=list)
+    # Web page sources: the page that was captured.
+    source_url: str | None = None
 
 
 @dataclass(slots=True)

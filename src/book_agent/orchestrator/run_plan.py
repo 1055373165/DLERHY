@@ -52,6 +52,10 @@ FULL_PIPELINE_STAGES: tuple[str, ...] = (
     EXPORT_REVIEW_STAGE,
 )
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
+# Web page documents also get the Chinese page in the original layout, right after the reading copy.
+WEB_EXPORT_STAGE = ExportType.WEB_HTML.value
+# Run request flag, set when a TRANSLATE_FULL run is created for a web page document.
+WEB_EXPORT_REQUEST_KEY = "web_export"
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +130,9 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         if not repair_agent:
             skipped.add(REPAIR_STAGE)
         stages = tuple(stage for stage in FULL_PIPELINE_STAGES if stage not in skipped)
+        if request.get(WEB_EXPORT_REQUEST_KEY):
+            at = stages.index("merged_html") + 1
+            stages = (*stages[:at], WEB_EXPORT_STAGE, *stages[at:])
         return RunPlan(
             run_type=run_type,
             stages=stages,

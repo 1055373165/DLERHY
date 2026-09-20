@@ -324,6 +324,41 @@ class HarnessKernelTests(unittest.TestCase):
         self.assertIn("unknown tool", results[2]["error"])
         self.assertIn("invalid arguments", results[3]["error"])
 
+    def test_a_database_error_inside_a_tool_fails_that_call_only(self) -> None:
+        def broken_write(ctx: ToolContext, args: LookupArgs) -> dict[str, Any]:
+            AgentLedgerRepository(ctx.session).record_decision(
+                document_id=ctx.document_id,
+                scope=DecisionScope.BOOK,
+                key="term:half-written",
+                value={"target_term": "x"},
+                decided_by=ctx.actor_id,
+                turn_id=ctx.turn_id,
+            )
+            # Like a malformed id on Postgres: the statement fails and would poison the transaction.
+            ctx.session.add(Document(source_type=SourceType.EPUB, file_fingerprint=None, title="bad", status=DocumentStatus.ACTIVE))
+            ctx.session.flush()
+            return {"written": True}
+
+        registry = self._registry()
+        registry.register(ToolSpec("broken_write", "Writes, then hits a database error.", LookupArgs, ToolPermission.READ, broken_write))
+        model = _FakeModel(
+            [
+                AgentStep(text=None, tool_calls=[ToolCall("c1", "broken_write", {"term": "x"})], usage=_usage()),
+                AgentStep(text=None, tool_calls=[ToolCall("c2", "lookup_term", {"term": "agent"})], usage=_usage()),
+                AgentStep(text="Recovered.", usage=_usage()),
+            ]
+        )
+        turn_id = self._new_turn()
+        outcome = self._runner(model, registry=registry).run(turn_id)
+
+        self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
+        results = [content["result"] for kind, content in self._items(turn_id) if kind == "tool_result"]
+        self.assertEqual([r["ok"] for r in results], [False, True])
+        self.assertIn("IntegrityError", results[0]["error"])
+        with self.session_factory() as session:
+            keys = [decision.key for decision in AgentLedgerRepository(session).list_decisions(self.document_id)]
+        self.assertNotIn("term:half-written", keys)
+
     def test_tool_call_limit_hook_rejects_extra_calls_across_steps(self) -> None:
         model = _FakeModel(
             [

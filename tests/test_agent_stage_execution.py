@@ -133,6 +133,24 @@ class AgentStageExecutionTests(unittest.TestCase):
         with self.session_factory() as session:
             self.assertTrue(StageGateKeeper(session).can_start(self.run_id, self.document_id, "translate", plan_stages=plan.stages))
 
+    def test_stage_cache_drops_an_earlier_attempts_error_once_the_stage_recovers(self) -> None:
+        from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
+
+        executor = self._executor(EchoAgentModel())
+        executor._update_pipeline_stage(
+            self.run_id, "terminology", status="failed", extra={"error_class": "Boom", "error_message": "first attempt"}
+        )
+        executor._update_pipeline_stage(self.run_id, "terminology", status="running")
+        executor._update_pipeline_stage(self.run_id, "translate", status="running", extra={"pending_packet_count": 1})
+        executor._update_pipeline_stage(self.run_id, "translate", status="succeeded")
+        with self.session_factory() as session:
+            run = RunControlRepository(session).get_run(self.run_id)
+            stages = read_cached_stages(run.status_detail_json["pipeline"])
+        self.assertEqual(stages["terminology"]["status"], "running")
+        self.assertNotIn("error_message", stages["terminology"])
+        self.assertNotIn("error_class", stages["terminology"])
+        self.assertEqual(stages["translate"]["pending_packet_count"], 0)
+
     def test_a_failing_advisory_agent_degrades_its_stage_instead_of_failing_the_run(self) -> None:
         from book_agent.workers.providers.openai_compatible import ProviderHTTPError
 

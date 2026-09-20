@@ -28,7 +28,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 import httpx
 
@@ -87,6 +87,27 @@ class ProviderOutputTruncated(ProviderResponseFormatError):
     def __init__(self, message: str, *, usage: Any = None, finish_reason: str | None = None, reasoning_only: bool = False) -> None:
         super().__init__(message, usage=usage, finish_reason=finish_reason)
         self.reasoning_only = reasoning_only
+
+
+_T = TypeVar("_T")
+
+DEEPSEEK_THINKING_OFF: dict[str, Any] = {"thinking": {"type": "disabled"}}
+
+
+def _add_usage(first: TranslationUsage | None, second: TranslationUsage | None) -> TranslationUsage | None:
+    """Both attempts were billed: report them as one call."""
+    if first is None or second is None:
+        return second if first is None else first
+    costs = [cost for cost in (first.cost_usd, second.cost_usd) if cost is not None]
+    return second.model_copy(
+        update={
+            "token_in": first.token_in + second.token_in,
+            "token_out": first.token_out + second.token_out,
+            "total_tokens": first.total_tokens + second.total_tokens,
+            "latency_ms": first.latency_ms + second.latency_ms,
+            "cost_usd": sum(costs) if costs else None,
+        }
+    )
 
 
 class ProviderNetworkError(ProviderTransportError):
@@ -386,11 +407,18 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     random_fraction: Callable[[], float] = field(default=random.random)
 
     def generate_translation(self, request: TranslationPromptRequest) -> TranslationWorkerResult:
+        result, extra = self._with_reasoning_fallback(
+            request.model_name, lambda overrides: self._generate_translation(request, overrides)
+        )
+        result.usage = _add_usage(extra, result.usage)
+        return result
+
+    def _generate_translation(self, request: TranslationPromptRequest, overrides: dict[str, Any]) -> TranslationWorkerResult:
         endpoint_url, api_mode = self._resolve_endpoint()
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
             url=endpoint_url,
-            payload={**self._build_payload(request, api_mode=api_mode), **self.request_overrides},
+            payload={**self._build_payload(request, api_mode=api_mode), **overrides},
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         try:
@@ -416,6 +444,29 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         response_schema: dict[str, Any],
         schema_name: str = "structured_output",
     ) -> tuple[dict[str, Any], TranslationUsage]:
+        (payload, usage), extra = self._with_reasoning_fallback(
+            model_name,
+            lambda overrides: self._generate_structured_object(
+                model_name=model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_schema=response_schema,
+                schema_name=schema_name,
+                overrides=overrides,
+            ),
+        )
+        return payload, _add_usage(extra, usage)
+
+    def _generate_structured_object(
+        self,
+        *,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any],
+        schema_name: str,
+        overrides: dict[str, Any],
+    ) -> tuple[dict[str, Any], TranslationUsage]:
         endpoint_url, api_mode = self._resolve_endpoint()
         request_started_at = time.perf_counter()
         response = self._request_with_retries(
@@ -429,7 +480,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     schema_name=schema_name,
                     api_mode=api_mode,
                 ),
-                **self.request_overrides,
+                **overrides,
             },
         )
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
@@ -452,6 +503,20 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         Returns ``{"text", "tool_calls": [{"call_id", "name", "arguments"}],
         "usage": TranslationUsage, "finish_reason", "raw"}``.
         """
+        step, extra = self._with_reasoning_fallback(
+            model_name, lambda overrides: self._generate_agent_step(model_name=model_name, messages=messages, tools=tools, overrides=overrides)
+        )
+        step["usage"] = _add_usage(extra, step["usage"])
+        return step
+
+    def _generate_agent_step(
+        self,
+        *,
+        model_name: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        overrides: dict[str, Any],
+    ) -> dict[str, Any]:
         endpoint_url, api_mode = self._resolve_endpoint()
         request_started_at = time.perf_counter()
         if api_mode == "chat_completions":
@@ -473,7 +538,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     }
                     for tool in tools
                 ]
-        response = self._request_with_retries(url=endpoint_url, payload={**payload, **self.request_overrides})
+        response = self._request_with_retries(url=endpoint_url, payload={**payload, **overrides})
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         usage = self._extract_usage(response, api_mode=api_mode, latency_ms=latency_ms)
         try:
@@ -486,6 +551,33 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         except ProviderResponseFormatError as exc:
             raise self._format_failure(exc, response, api_mode=api_mode, latency_ms=latency_ms) from exc
         return {"text": text, "tool_calls": tool_calls, "usage": usage, "finish_reason": finish_reason, "raw": response}
+
+    def _with_reasoning_fallback(
+        self, model_name: str, call: Callable[[dict[str, Any]], _T]
+    ) -> tuple[_T, TranslationUsage | None]:
+        """Run ``call`` with the configured overrides; when every output token went to
+        reasoning and we know how to switch reasoning off for this provider, retry once
+        with it off. Returns the result and the billed usage of the discarded attempt."""
+        try:
+            return call(self.request_overrides), None
+        except ProviderOutputTruncated as exc:
+            fallback = self._reasoning_off_overrides(model_name)
+            if not exc.reasoning_only or fallback is None:
+                raise
+            discarded = exc.usage
+        try:
+            return call({**self.request_overrides, **fallback}), discarded
+        except ProviderResponseFormatError as exc:
+            exc.usage = _add_usage(discarded, exc.usage)
+            raise
+
+    def _reasoning_off_overrides(self, model_name: str) -> dict[str, Any] | None:
+        """The request fields that switch reasoning off, for providers where we know them."""
+        if self.request_overrides.get("thinking") == DEEPSEEK_THINKING_OFF["thinking"]:
+            return None
+        if "deepseek" in self.base_url.lower() or model_name.lower().startswith("deepseek"):
+            return DEEPSEEK_THINKING_OFF
+        return None
 
     def _parse_chat_agent_step(self, response: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
         choices = response.get("choices")

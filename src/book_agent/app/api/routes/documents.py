@@ -18,6 +18,7 @@ from book_agent.app.api.export_downloads import chapter_export_response, cleanup
 
 from book_agent.schemas.document import DocumentContractResponse
 from book_agent.schemas.workflow import (
+    BootstrapUrlRequest,
     BootstrapDocumentRequest,
     RecoverySkillResponse,
     RecoverySkillsResponse,
@@ -50,6 +51,8 @@ from book_agent.schemas.workflow import (
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
 from book_agent.schemas.run_control import DocumentRunSummaryResponse
 from book_agent.ingestion.pdf.ocr import OcrUnavailable
+from book_agent.ingestion.web import capture_web_page
+from book_agent.services.url_guard import ensure_public_http_url
 from book_agent.services.document_files import remove_document_files
 from book_agent.services.run_control import RunControlService, RunControlTransitionError
 from book_agent.services.workflows import DocumentBusyError, DocumentWorkflowService
@@ -192,6 +195,50 @@ def bootstrap_uploaded_document(
         raise
     finally:
         source_file.file.close()
+    return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
+
+
+def _web_url_guard():
+    """With auth on or in prod, pages (and every redirect and stylesheet) must be on public hosts (SSRF, R1)."""
+    settings = get_settings()
+    if not settings.hardened or settings.web_allow_private_hosts:
+        return None
+
+    def guard(url: str) -> None:
+        ensure_public_http_url(
+            url,
+            label="url",
+            hint="set BOOK_AGENT_WEB_ALLOW_PRIVATE_HOSTS=true to translate pages on a private network",
+        )
+
+    return guard
+
+
+@router.post("/bootstrap-url", response_model=DocumentSummaryResponse, status_code=status.HTTP_201_CREATED)
+def bootstrap_web_page(
+    payload: BootstrapUrlRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> DocumentSummaryResponse:
+    """Capture a web page (styles inlined, scripts removed) and bootstrap it like an uploaded file."""
+    upload_root = _upload_root(request)
+    target_dir = upload_root / uuid4().hex
+    try:
+        capture = capture_web_page(payload.url, target_dir, guard=_web_url_guard())
+    except ValueError as exc:  # WebCaptureError, UnsafeUrlError
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    try:
+        summary = _workflow_service(request, session).bootstrap_document(
+            capture.path, org_id=current_principal(request).org_id
+        )
+        session.commit()
+    except ValueError as exc:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
     return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
 
 
@@ -464,10 +511,18 @@ def download_document_export(
 
 
 def _pdf_renderer_installed() -> bool:
-    """PDF export prints the merged HTML with Playwright's Chromium."""
+    """PDF export prints the merged HTML with Playwright's Chromium: both the package and the browser."""
     import importlib.util
 
-    return importlib.util.find_spec("playwright") is not None
+    if importlib.util.find_spec("playwright") is None:
+        return False
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            return Path(playwright.chromium.executable_path).exists()
+    except Exception:
+        return False
 
 
 def _recovery_skills_response(document) -> RecoverySkillsResponse:
@@ -861,7 +916,8 @@ def export_document(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="当前部署没有安装 PDF 渲染组件（Playwright 与 Chromium），暂时不能生成 PDF；"
-            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试。",
+            "可以阅读或下载中文版 HTML、EPUB，或请管理员安装后再试"
+            "（uv sync --extra pdf，再运行 playwright install chromium）。",
         )
     return _enqueue_document_run(
         request,

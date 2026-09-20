@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     # Provider base URLs that resolve to private or loopback addresses are
     # refused when auth is on or in prod (SSRF), unless this is set.
     provider_allow_private_hosts: bool = False
+    # Web pages to translate (POST /documents/bootstrap-url) are held to the same
+    # rule: with auth on or in prod, only public hosts unless this is set.
+    web_allow_private_hosts: bool = False
     # Bearer token for GET /metrics (Prometheus). Unset: admin API key when auth is on, open otherwise.
     metrics_token: str | None = None
     # Multi-instance: API-only replicas set this to false; replicas that run the

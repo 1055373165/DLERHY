@@ -51,6 +51,7 @@ from book_agent.domain.segmentation.sentences import EnglishSentenceSegmenter
 from book_agent.domain.structure.epub import EPUBParser
 from book_agent.ingestion.pdf.ocr import OcrPdfParser, build_ocr_pdf_parser
 from book_agent.domain.structure.pdf import PDFParser
+from book_agent.domain.structure.web import WebPageParser
 from book_agent.ingestion.pdf.extract import PdfFileProfiler
 from book_agent.ingestion.pdf.models import PdfFileProfile
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
@@ -243,6 +244,8 @@ class IngestService:
         suffix = path.suffix.lower()
         if suffix == ".epub":
             return SourceType.EPUB, None
+        if suffix in {".html", ".htm"}:
+            return SourceType.WEB, None
         if suffix == ".pdf":
             pdf_profile = self.pdf_profiler.profile(path)
             if pdf_profile.pdf_kind == "text_pdf":
@@ -271,6 +274,7 @@ class ParseService:
         modality_options: ModalityPipelineOptions | None = None,
     ):
         self.epub_parser = epub_parser or EPUBParser()
+        self.web_parser = WebPageParser()
         self.pdf_parser = pdf_parser or PDFParser(image_output_dir=image_output_dir)
         self.ocr_pdf_parser = ocr_pdf_parser or build_ocr_pdf_parser(get_settings())
         self.parse_ir_service = parse_ir_service or ParseIrService()
@@ -280,6 +284,8 @@ class ParseService:
     def parse(self, document: Document, file_path: str | Path) -> ParseArtifacts:
         if document.source_type == SourceType.EPUB:
             parsed = self.epub_parser.parse(file_path)
+        elif document.source_type == SourceType.WEB:
+            parsed = self.web_parser.parse(file_path)
         elif document.source_type == SourceType.PDF_TEXT:
             pdf_profile = document.metadata_json.get("pdf_profile")
             parsed = self.pdf_parser.parse(
