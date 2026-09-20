@@ -67,11 +67,18 @@ const NAV_ITEMS = [
 ] as const;
 
 function pageName(pathname: string): string {
-  if (pathname.startsWith("/books/")) return "书";
+  if (pathname.startsWith("/books/")) return "这本书";
   if (pathname.startsWith("/library")) return "全部书";
   if (pathname.startsWith("/inbox")) return "需要你处理";
   if (pathname.startsWith("/settings")) return "设置";
   return "首页";
+}
+
+/* Where 「返回」 goes from here. A book belongs to the shelf; everything else to the home page. */
+function backLink(pathname: string): { to: string; label: string } | null {
+  if (pathname.startsWith("/books/")) return { to: "/library", label: "返回书架" };
+  if (pathname === "/" ) return null;
+  return { to: "/", label: "返回首页" };
 }
 
 const APP_TITLE = "Book Agent";
@@ -102,8 +109,15 @@ export function AppLayout() {
   }, [pendingCount]);
 
 
+  const back = backLink(location.pathname);
+
   return (
     <div className={s.shell} data-nav-open={navOpen}>
+      {/* First stop of a keyboard walk: jump past the navigation. */}
+      <a className="skip-link" href="#main">
+        跳到主要内容
+      </a>
+
       {/* Mobile backdrop */}
       <button
         className={s.backdrop}
@@ -114,12 +128,14 @@ export function AppLayout() {
 
       {/* ── Sidebar ── */}
       <aside className={s.sidebar}>
-        <div className={s.logo}>
-          <span className={s.logoMark}>B</span>
+        <NavLink to="/" className={s.logo} onClick={() => setNavOpen(false)}>
+          <span className={s.logoMark} aria-hidden="true">
+            B
+          </span>
           <span className={s.logoText}>Book Agent</span>
-        </div>
+        </NavLink>
 
-        <nav className={s.nav}>
+        <nav className={s.nav} aria-label="主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -129,9 +145,10 @@ export function AppLayout() {
                 `${s.navItem} ${isActive ? s.navActive : ""}`
               }
               onClick={() => setNavOpen(false)}
-              title={item.label}
             >
-              <span className={s.navIcon}>{item.icon}</span>
+              <span className={s.navIcon} aria-hidden="true">
+                {item.icon}
+              </span>
               <span className={s.navLabel}>{item.label}</span>
               {item.to === "/inbox" && pendingCount > 0 && (
                 <span className={s.navBadge} aria-label={`${pendingCount} 件事等你处理`}>
@@ -143,10 +160,8 @@ export function AppLayout() {
         </nav>
 
         <div className={s.sidebarFooter}>
-          <div className={s.footerControls}>
-            <BudgetMeter />
-            <ApiKeySetting />
-          </div>
+          <BudgetMeter />
+          <ApiKeySetting />
           <div className={s.systemLinks}>
             <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
               API
@@ -178,19 +193,26 @@ export function AppLayout() {
           >
             {navOpen ? "\u2715" : "\u2630"}
           </button>
-          <div className={s.topbarLeft}>
-            <span className={s.pageName}>{pageName(location.pathname)}</span>
+          <div className={s.topbarInner}>
+            <div className={s.topbarLeft}>
+              {back && (
+                <NavLink to={back.to} className={s.backLink}>
+                  <span aria-hidden="true">←</span> {back.label}
+                </NavLink>
+              )}
+              <span className={s.pageName}>{pageName(location.pathname)}</span>
+            </div>
+            {pendingCount > 0 && !location.pathname.startsWith("/inbox") && (
+              <NavLink to="/inbox" className={s.pendingNotice} role="status">
+                有 {pendingCount} 件事等你处理，处理后翻译会继续 →
+              </NavLink>
+            )}
           </div>
-          {pendingCount > 0 && !location.pathname.startsWith("/inbox") && (
-            <NavLink to="/inbox" className={s.pendingNotice} role="status">
-              有 {pendingCount} 件事等你处理，处理后翻译会继续 →
-            </NavLink>
-          )}
         </header>
 
-        <div className={s.content}>
+        <main className={s.content} id="main">
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );
