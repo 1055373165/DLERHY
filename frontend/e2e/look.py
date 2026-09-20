@@ -248,6 +248,54 @@ def _style_checks(page, *, name: str) -> list[str]:
     )
 
 
+# Words a Chinese page may still show: names, formats, and the product's own name.
+# The fixture book is in English, so its title, author and text are allowed too.
+ALLOWED_ENGLISH = {
+    "Book", "Agent", "API", "OpenAPI", "PDF", "EPUB", "Markdown", "HTML", "CSV", "key", "token",
+    "pdf", "epub", "BOOK", "md", "OCR", "ZH", "Momentum", "Handbook", "Test", "Author", "Keyboard",
+    "Walk", "compounding", "CH", "echo", "worker", "offline", "built", "Built", "in",
+}
+
+# The fixture book is an English book: its own title and chapter titles appear as content,
+# in the reader, in the issue list's chapter line and in the library. Those words are the book.
+ALLOWED_ENGLISH |= set(re.findall(r"[A-Za-z]{2,}", LONG_TITLE))
+ALLOWED_ENGLISH |= {"Momentum", "Handbook", "What", "the", "evidence", "says"}
+
+# The book's own text is the book, not the interface: the reader and the source/target pair show it.
+BOOK_TEXT_SELECTORS = "iframe, ._pairText, ._markdown, [class*='pairText'], [class*='markdown'], [class*='readerBody']"
+
+
+def _chinese_check(page, *, name: str) -> list[str]:
+    """English left in the interface. The M2 review missed a whole page this way."""
+    words = page.evaluate(
+        """(args) => {
+            const [allowed, bookText] = args;
+            const found = new Set();
+            const strip = (text) => (text || "").replace(/https?:\/\/\S+/g, "").replace(/\/\S+/g, "");
+            const add = (text) => {
+              for (const word of strip(text).match(/[A-Za-z]{2,}/g) || []) found.add(word);
+            };
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              const parent = node.parentElement;
+              if (!parent) continue;
+              // Technical details behind a <details>, and the book's own text, are not interface copy.
+              if (parent.closest("details, pre, code")) continue;
+              if (parent.closest(bookText)) continue;
+              const style = getComputedStyle(parent);
+              if (style.display === "none" || style.visibility === "hidden") continue;
+              add(node.textContent);
+            }
+            for (const el of document.body.querySelectorAll("[aria-label], [title], [placeholder]")) {
+              for (const attr of ["aria-label", "title", "placeholder"]) add(el.getAttribute(attr));
+            }
+            return [...found].filter((word) => !allowed.includes(word));
+        }""",
+        [sorted(ALLOWED_ENGLISH), BOOK_TEXT_SELECTORS],
+    )
+    return [f"{name}: 界面上还有英文「{word}」" for word in sorted(words)]
+
+
 def _sidebar_checks(page) -> list[str]:
     """The sidebar must read as words without being hovered, and a book must offer the way back."""
     problems = page.evaluate(
@@ -577,6 +625,7 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
                 _seed_issues(db, document_id)
             findings += _visit(page, base, path, name=name, shots=shots, theme="light", check=True)
             style_problems += [f"{name}: {problem}" for problem in _style_checks(page, name=name)]
+            style_problems += _chinese_check(page, name=name)
             if name.startswith("book-"):
                 style_problems += [f"{name}: {problem}" for problem in _sidebar_checks(page)]
 

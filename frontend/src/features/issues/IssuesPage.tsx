@@ -7,11 +7,13 @@ import { StatusBadge } from "../../components/StatusBadge";
 import {
   actionStatusLabel,
   actionTypeLabel,
+  actorLabel,
   detectorLabel,
   issueEventLabel,
   issueExplanation,
   issueStatusLabel,
   issueTypeCopy,
+  resolutionNote,
   rootCauseLabel,
   scopeLabel,
   severityLabel,
@@ -256,7 +258,7 @@ export function IssuesPage() {
               {detail.chapter_title ? `${detail.chapter_title} · ` : ""}
               {`出在${rootCauseLabel(selected.root_cause_layer)}环节 · `}
               首次发现 {formatDate(selected.created_at ?? null)}
-              {selected.decided_by ? ` · 决定人 ${selected.decided_by}` : ""}
+              {selected.decided_by ? ` · 决定人 ${actorLabel(selected.decided_by)}` : ""}
             </div>
             <div className={s.pair}>
               <div>
@@ -269,7 +271,7 @@ export function IssuesPage() {
               </div>
             </div>
             {selected.resolution_note ? (
-              <div className={s.meta}>备注：{selected.resolution_note}</div>
+              <div className={s.meta}>备注：{resolutionNote(selected.resolution_note)}</div>
             ) : null}
             <details>
               <summary className={s.fieldLabel}>技术细节</summary>
@@ -344,9 +346,9 @@ export function IssuesPage() {
                 <li key={event.id} className={s.timelineItem}>
                   <span className={s.timelineKind}>{issueEventLabel(event.kind)}</span>
                   <span className={s.meta}>
-                    v{event.version} · {event.actor_id ?? event.actor_kind} · {formatDate(event.created_at ?? null)}
+                    v{event.version} · {actorLabel(event.actor_id ?? event.actor_kind)} · {formatDate(event.created_at ?? null)}
                   </span>
-                  {event.note ? <span className={s.meta}>{event.note}</span> : null}
+                  {event.note ? <span className={s.meta}>{resolutionNote(event.note)}</span> : null}
                 </li>
               ))}
             </ol>

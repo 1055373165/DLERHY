@@ -28,7 +28,7 @@ export function BudgetMeter({ statement = false }: { statement?: boolean } = {})
   const ratio = cap ? Math.min(1, budget.spent_usd / cap) : 0;
   const tone = budget.exhausted ? "danger" : ratio >= 0.8 ? "warning" : "ok";
   return (
-    <div className={s.meter} data-tone={tone} title={`${budget.org_name} · 自 ${budget.period_start.slice(0, 10)} 起`}>
+    <div className={s.meter} data-tone={tone} title={`本月用量 · 自 ${budget.period_start.slice(0, 10)} 起`}>
       <div className={s.row}>
         <span className={s.label}>本月花费</span>
         <span className={s.value}>

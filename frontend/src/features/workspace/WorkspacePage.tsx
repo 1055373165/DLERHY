@@ -7,7 +7,14 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
 import { listDocumentChapters } from "../../lib/api";
-import { queuePriorityLabel } from "../../lib/copy";
+import {
+  actionStatusLabel,
+  actionTypeLabel,
+  issueStatusLabel,
+  issueTypeCopy,
+  queuePriorityLabel,
+  rootCauseLabel,
+} from "../../lib/copy";
 import { formatDate, formatNumber, statusLabel } from "../../lib/workflow";
 import s from "./WorkspacePage.module.css";
 
@@ -259,7 +266,7 @@ export function WorkspacePage() {
                       {issues.map((issue) => (
                         <div key={issue.issue_id} className={s.issueRow}>
                           <StatusBadge
-                            label={issue.status}
+                            label={issueStatusLabel(issue.status)}
                             tone={
                               issue.status === "resolved" ? "success"
                               : issue.severity === "blocking" ? "danger"
@@ -267,7 +274,7 @@ export function WorkspacePage() {
                             }
                           />
                           <span className={s.issueType}>
-                            {issue.issue_type} :: {issue.root_cause_layer}
+                            {issueTypeCopy(issue.issue_type).label} · 出在{rootCauseLabel(issue.root_cause_layer)}
                           </span>
                           {issue.suggested_action && (
                             <span className={s.issueSuggestion}>{issue.suggested_action}</span>
@@ -286,10 +293,10 @@ export function WorkspacePage() {
                       {actions.map((act) => (
                         <div key={act.action_id} className={s.actionRow}>
                           <StatusBadge
-                            label={act.status}
+                            label={actionStatusLabel(act.status)}
                             tone={act.status === "completed" ? "success" : "warning"}
                           />
-                          <span className={s.actionType}>{act.action_type}</span>
+                          <span className={s.actionType}>{actionTypeLabel(act.action_type)}</span>
                           <button
                             className="btn btn-sm"
                             disabled={actionExecutionPending}

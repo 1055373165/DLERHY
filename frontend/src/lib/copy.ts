@@ -37,6 +37,36 @@ export function issueTypeCopy(issueType: string): IssueTypeCopy {
   return ISSUE_TYPES[issueType] ?? { label: "其他问题", meaning: "系统记录的一个问题，详情见下面的技术细节。" };
 }
 
+/** Who acted on an issue. The backend writes service ids; a reader should see what they mean. */
+const ACTORS: Record<string, string> = {
+  "services.review": "审校复核",
+  "services.translation": "翻译",
+  "services.export": "导出检查",
+  "services.export_qa": "导出前质检",
+  "auto.fast_reading_mode": "快速阅读模式",
+};
+
+export function actorLabel(actor: string): string {
+  if (ACTORS[actor]) return ACTORS[actor];
+  // human:someone → someone
+  const human = actor.match(/^human:(.+)$/);
+  return human ? human[1] : actor;
+}
+
+/** Notes the backend writes when a pass closes an issue by itself. */
+const RESOLUTION_NOTES: Record<string, string> = {
+  "Resolved by latest QA pass.": "最近一次复核没有再发现这个问题，已自动关闭。",
+  "Resolved by latest export-time alignment check.": "导出前的对齐检查没有再发现这个问题，已自动关闭。",
+  "Resolved by latest export-time layout validation check.": "导出前的版面检查没有再发现这个问题，已自动关闭。",
+};
+
+export function resolutionNote(note: string): string {
+  if (RESOLUTION_NOTES[note]) return RESOLUTION_NOTES[note];
+  const retranslated = note.match(/^Translation updated \(attempt (\d+)\); awaiting the next model review\.$/);
+  if (retranslated) return `已重新翻译（第 ${retranslated[1]} 次），等下一轮审校再看。`;
+  return note;
+}
+
 const AGENT_KIND: Record<string, string> = {
   terminology: "术语代理",
   reviewer: "审校代理",
