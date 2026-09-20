@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from book_agent.domain.structure.models import ParsedBlock, ParsedChapter, ParsedDocument
 
@@ -458,6 +459,44 @@ def page_source_url(root: Element) -> str | None:
     return None
 
 
+_TITLE_SEPARATORS = ("|", "\\", "/", "-", "–", "—", "·", "•", "::", "»", "<")
+
+
+def _site_names(source_url: str | None) -> set[str]:
+    """The site's own names, from its host: anthropic.com -> {anthropic, anthropic.com}."""
+    host = urlsplit(source_url or "").hostname or ""
+    host = host.removeprefix("www.")
+    if not host:
+        return set()
+    return {host, host.split(".")[0]}
+
+
+def article_title(page_title: str | None, heading: str | None, source_url: str | None) -> str | None:
+    """The page's own title, without the site name every page of the site repeats.
+
+    Prefers the article's heading when the <title> is that heading plus a suffix; otherwise drops a
+    trailing separator and segment only when that segment names the site, so titles that merely
+    contain a dash keep it.
+    """
+    title = (page_title or "").strip()
+    heading = (heading or "").strip()
+    if not title:
+        return heading or None
+    if heading and title.startswith(heading) and len(title) > len(heading):
+        return heading
+    names = _site_names(source_url)
+    if not names:
+        return title
+    for separator in _TITLE_SEPARATORS:
+        head, found, tail = title.rpartition(f" {separator} ")
+        if not found or not head.strip():
+            continue
+        candidate = tail.strip().casefold()
+        if any(name in candidate for name in names) or candidate in names:
+            return head.strip()
+    return title
+
+
 class WebPageParser:
     """A captured page as one chapter; each marked node is one block."""
 
@@ -493,7 +532,15 @@ class WebPageParser:
                     metadata=metadata,
                 )
             )
-        title = page_title or next((block.text for block in blocks if block.block_type == "heading"), None)
+        first_heading = next(
+            (
+                block.text
+                for block in blocks
+                if block.block_type == "heading" and block.metadata.get("web_region") != WEB_REGION_CHROME
+            ),
+            None,
+        )
+        title = article_title(page_title, first_heading, source_url) or first_heading
         chapter = ParsedChapter(
             chapter_id="chapter-1",
             href=PAGE_HREF,
