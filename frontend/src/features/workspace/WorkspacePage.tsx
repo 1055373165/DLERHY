@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
 import { listDocumentChapters } from "../../lib/api";
+import { queuePriorityLabel } from "../../lib/copy";
 import { formatDate, formatNumber, statusLabel } from "../../lib/workflow";
 import s from "./WorkspacePage.module.css";
 
@@ -154,13 +155,13 @@ export function WorkspacePage() {
                   <div className={s.queueCardTop}>
                     <span className={s.queueOrdinal}>CH.{entry.ordinal}</span>
                     <span className={s.queuePriority} data-pri={entry.queue_priority}>
-                      {entry.queue_priority}
+                      {queuePriorityLabel(entry.queue_priority)}
                     </span>
                   </div>
                   <div className={s.queueCardTitle}>{entry.title_src}</div>
                   <div className={s.queueCardMeta}>
-                    <span>{entry.open_issue_count} issues</span>
-                    <span>{entry.memory_proposals.pending_proposal_count} proposals</span>
+                    <span>{entry.open_issue_count} 个问题</span>
+                    <span>{entry.memory_proposals.pending_proposal_count} 条记忆待确认</span>
                   </div>
                 </button>
               ))}

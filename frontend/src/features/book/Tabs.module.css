@@ -7,6 +7,7 @@
 }
 
 .columns > section {
+  min-width: 0;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -67,11 +68,17 @@
   color: var(--red);
 }
 
+/* A timestamp should not be broken across lines; a sentence must be allowed to wrap,
+   or it sets the card's width and drags the page sideways on a phone. */
 .stepStatus,
-.eventDate,
-.meta {
+.eventDate {
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.meta {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .eventTitle {
@@ -97,6 +104,7 @@
 
 .markdown {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   background: var(--bg-panel-alt);

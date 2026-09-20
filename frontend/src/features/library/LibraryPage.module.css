@@ -153,9 +153,12 @@
 .bookMeta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-1);
+  min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .tag {
@@ -472,6 +475,11 @@
   .bookRow {
     flex-wrap: wrap;
     gap: var(--sp-2);
+  }
+
+  /* The title and its details take the whole row; the buttons go under them. */
+  .bookInfo {
+    flex-basis: 100%;
   }
 
   .bookProgress {

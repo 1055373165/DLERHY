@@ -16,13 +16,18 @@ import s from "./BookPage.module.css";
 const ACTIVE = new Set(["queued", "running", "draining"]);
 const ACTOR = { actor_id: "reader-ui" };
 
+/* What a reader opens a book for comes first and stays on screen at any width.
+   The three working tabs live behind 更多, where they are still one click away. */
 const TABS = [
-  { to: "progress", label: "进度" },
   { to: "read", label: "阅读" },
-  { to: "terms", label: "术语与决策", advanced: true },
-  { to: "issues", label: "问题", advanced: true },
-  { to: "log", label: "运行记录", advanced: true },
-  { to: "chapters", label: "逐章审校", advanced: true },
+  { to: "progress", label: "进度" },
+  { to: "issues", label: "问题" },
+] as const;
+
+const MORE_TABS = [
+  { to: "terms", label: "术语与决策" },
+  { to: "log", label: "运行记录" },
+  { to: "chapters", label: "逐章审校" },
 ] as const;
 
 export function useBookOverview(documentId: string) {
@@ -199,13 +204,71 @@ export function BookPage() {
 
       <nav className={s.tabs} aria-label="这本书">
         {TABS.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} className={({ isActive }) => `${s.tab} ${isActive ? s.tabActive : ""}`} data-advanced={"advanced" in tab || undefined}>
+          <NavLink key={tab.to} to={tab.to} className={({ isActive }) => `${s.tab} ${isActive ? s.tabActive : ""}`}>
             {tab.label}
           </NavLink>
         ))}
+        <MoreTabs />
       </nav>
 
       <Outlet context={data} />
+    </div>
+  );
+}
+
+/** 更多: the tabs a reader rarely needs, one click away and out of the way of the ones they do. */
+function MoreTabs() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const active = MORE_TABS.find((tab) => location.pathname.endsWith(`/${tab.to}`));
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    const onClick = (event: MouseEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
+  return (
+    <div className={s.more} ref={wrapRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`${s.tab} ${active ? s.tabActive : ""}`}
+        aria-expanded={open}
+        aria-controls="more-tabs"
+        onClick={() => setOpen((was) => !was)}
+      >
+        {active ? `更多 · ${active.label}` : "更多"}
+        <span aria-hidden="true"> ▾</span>
+      </button>
+      {open && (
+        <div className={s.moreMenu} id="more-tabs">
+          {MORE_TABS.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) => `${s.moreItem} ${isActive ? s.moreItemActive : ""}`}
+              onClick={() => setOpen(false)}
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

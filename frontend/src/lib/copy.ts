@@ -37,6 +37,44 @@ export function issueTypeCopy(issueType: string): IssueTypeCopy {
   return ISSUE_TYPES[issueType] ?? { label: "其他问题", meaning: "系统记录的一个问题，详情见下面的技术细节。" };
 }
 
+const AGENT_KIND: Record<string, string> = {
+  terminology: "术语代理",
+  reviewer: "审校代理",
+  structure: "结构代理",
+  memory: "记忆代理",
+  translator: "翻译代理",
+};
+
+/** Which agent took the turn. */
+export function agentKindLabel(kind: string): string {
+  return AGENT_KIND[kind] ?? kind;
+}
+
+const TURN_STATUS: Record<string, string> = {
+  succeeded: "完成",
+  failed: "失败",
+  running: "进行中",
+  cancelled: "已取消",
+  exhausted: "步数用尽",
+};
+
+/** How an agent turn ended. */
+export function turnStatusLabel(status: string): string {
+  return TURN_STATUS[status] ?? status;
+}
+
+const QUEUE_PRIORITY: Record<string, string> = {
+  immediate: "立即",
+  high: "高",
+  medium: "中",
+  low: "低",
+};
+
+/** How urgently a chapter wants a person's eyes. */
+export function queuePriorityLabel(priority: string): string {
+  return QUEUE_PRIORITY[priority] ?? priority;
+}
+
 const SEVERITY: Record<string, string> = { low: "轻微", medium: "一般", high: "严重", critical: "致命" };
 const ISSUE_STATUS: Record<string, string> = { open: "待处理", triaged: "已分诊", resolved: "已解决", wontfix: "不修复" };
 const DETECTOR: Record<string, string> = { rule: "自动检查", model: "审校代理", human: "人工" };

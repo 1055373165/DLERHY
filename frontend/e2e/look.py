@@ -35,6 +35,143 @@ AXE_OPTIONS = {
 BOOK_TABS = ["progress", "read", "terms", "issues", "log", "chapters"]
 
 
+def _seed_issues(db: Path, document_id: str) -> int:
+    """Put a few review issues on the book, and put them back if a later pass closed them.
+
+    A run with the echo backend finds none, so the 问题 page would be checked empty — and an
+    empty page cannot show the detail pane where the layout bugs live. Opening 阅读 triggers an
+    export, whose gate reconciles the ledger and resolves issues no detector still sees, so this
+    is called again before each pass rather than once.
+
+    The text is as long and as awkward as a real book's: a chapter title that does not wrap, a
+    sentence that fills the column, and a URL with no spaces to break at.
+    """
+    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
+
+    from book_agent.domain.enums import Detector, IssueStatus, RootCauseLayer, Severity
+    from book_agent.domain.models.document import Block, Sentence
+    from book_agent.domain.models.review import ReviewIssue
+    from book_agent.infra.db.session import build_engine
+
+    long_source = (
+        "Momentum compounds when the same small action repeats on a schedule, and the effect is "
+        "invisible until the curve turns; see the longitudinal dataset at "
+        "https://example.org/research/longitudinal-momentum-study-2019-2024/appendix-b.html"
+    )
+    seeds = [
+        {
+            "issue_type": "MISTRANSLATION_SEMANTIC",
+            "severity": Severity.HIGH,
+            "blocking": True,
+            "detector": Detector.MODEL,
+            "root_cause_layer": RootCauseLayer.TRANSLATION,
+            "evidence_json": {
+                # A model-detected issue carries its own explanation, and it is a whole sentence:
+                # this is what the list row has to show.
+                "explanation": (
+                    "审校代理认为这句把 compounding 译成「复合」是错的：原文说的是同一个小动作反复之后收益不断"
+                    "累积，而「复合」在中文里会让读者想到化学反应或复合材料，和上下文对不上。"
+                ),
+                "reason": "译文把 compounding 理解成了「复合」，这里指的是收益随时间累积，读者会以为在讲化学反应。",
+                "source": long_source,
+                "target": "当同一个小动作按计划重复时，动量就会复合，而这个效果在曲线拐弯之前是看不见的；纵向数据见附录 B。",
+                "suggestion": "当同一个小动作按计划重复时，势头会不断累积；效果要到曲线拐弯时才看得出来。",
+            },
+        },
+        {
+            "issue_type": "TERM_CONFLICT",
+            "severity": Severity.MEDIUM,
+            "blocking": False,
+            "detector": Detector.RULE,
+            "root_cause_layer": RootCauseLayer.MEMORY,
+            "evidence_json": {
+                "reason": "「momentum」在第一章译作「动量」，这里译作「势头」，与锁定的译法不一致。",
+                "term": "momentum",
+                "locked": "势头",
+                "found": "动量",
+            },
+        },
+        {
+            "issue_type": "OMISSION",
+            "severity": Severity.CRITICAL,
+            "blocking": True,
+            "detector": Detector.RULE,
+            "root_cause_layer": RootCauseLayer.ALIGNMENT,
+            "evidence_json": {
+                "reason": "原文的最后一个从句在译文里找不到对应内容。",
+                "source": "The evidence says it plainly, even when the effect takes months to show up.",
+                "target": "证据说得很清楚。",
+            },
+        },
+    ]
+
+    engine = build_engine(f"sqlite+pysqlite:///{db}")
+    added = 0
+    with Session(engine) as session:
+        block = session.scalars(select(Block).limit(1)).first()
+        sentence = session.scalars(
+            select(Sentence).order_by(func.length(Sentence.source_text).desc()).limit(1)
+        ).first()
+        for seed in seeds:
+            existing = session.scalars(
+                select(ReviewIssue).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.issue_type == seed["issue_type"],
+                )
+            ).first()
+            if existing is not None:
+                existing.status = IssueStatus.OPEN
+                existing.decided_by = None
+                existing.decided_at = None
+                existing.resolution_note = None
+            else:
+                session.add(
+                    ReviewIssue(
+                        document_id=document_id,
+                        chapter_id=block.chapter_id if block else None,
+                        block_id=block.id if block else None,
+                        sentence_id=sentence.id if sentence else None,
+                        status=IssueStatus.OPEN,
+                        confidence=0.82,
+                        version=1,
+                        **seed,
+                    )
+                )
+            added += 1
+        session.commit()
+    engine.dispose()
+    return added
+
+
+# A real book has long sentences, long chapter titles and URLs with nothing to break at.
+# The 问题 page shows a sentence pair, so a fixture of five-word sentences hides every width bug.
+LONG_SENTENCE = (
+    "Momentum compounds when the same small action repeats on a schedule, and the effect stays "
+    "invisible until the curve turns, which is why the longitudinal dataset published at "
+    "https://example.org/research/longitudinal-momentum-study-2019-2024/appendix-b.html matters "
+    "more than any single quarter of returns."
+)
+LONG_TITLE = "Why Momentum Matters More Than Any Single Quarter of Returns"
+
+
+def _wordy_epub(source: Path, target: Path) -> Path:
+    """The same book, with a chapter long enough to show how the pages behave under real text."""
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(target, "w") as copy:
+        for item in original.infolist():
+            data = original.read(item.filename)
+            if item.filename.endswith("chapter1.xhtml"):
+                data = (
+                    f"<?xml version='1.0' encoding='UTF-8'?><html xmlns='http://www.w3.org/1999/xhtml'><body>"
+                    f"<h1>{LONG_TITLE}</h1><p>{LONG_SENTENCE}</p>"
+                    f"<p>Momentum is the tendency of a trend to continue.</p></body></html>"
+                ).encode()
+            elif item.filename.endswith("content.opf") or item.filename.endswith("nav.xhtml"):
+                data = data.replace(b"Why Momentum Matters", LONG_TITLE.encode())
+            copy.writestr(item, data)
+    return target
+
+
 def _another_epub(source: Path, target: Path, title: str) -> Path:
     """The same book under a different title: importing the first one twice finds the first book."""
     with zipfile.ZipFile(source) as original, zipfile.ZipFile(target, "w") as copy:
@@ -132,6 +269,134 @@ def _sidebar_checks(page) -> list[str]:
     back = page.get_by_role("link", name=re.compile("返回"))
     if back.count() == 0:
         problems.append("书的页面上没有返回的入口")
+    return problems
+
+
+# Every width a reader might open this in: phone, small tablet, laptop, desktop, wide.
+WIDTHS = [420, 768, 1024, 1280, 1440]
+
+# Whatever the book's state, the status card offers exactly one obvious next move.
+PRIMARY_ACTION = re.compile("阅读中文版|开始翻译|继续|重试|停止翻译")
+
+
+def _overflow(page) -> list[str]:
+    """Anything that makes the page draggable sideways, or reaches past the right edge.
+
+    Content inside something that scrolls on its own is clipped there and does not drag the page.
+    """
+    return page.evaluate(
+        """() => {
+            const problems = [];
+            const root = document.documentElement;
+            const width = root.clientWidth;
+            if (root.scrollWidth > width + 1) {
+              problems.push(`页面可以左右拖动：scrollWidth ${root.scrollWidth} > ${width}`);
+            }
+            const scrolls = (node) => {
+              for (let el = node.parentElement; el && el !== root; el = el.parentElement) {
+                const overflow = getComputedStyle(el).overflowX;
+                if (overflow === "auto" || overflow === "scroll" || overflow === "hidden") return true;
+              }
+              return false;
+            };
+            const named = new Set();
+            const clipped = [];
+            for (const el of document.querySelectorAll("body *")) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width < 1 || rect.height < 1) continue;
+              if (rect.right <= width + 1) continue;
+              const name = (typeof el.className === "string" && el.className) || el.tagName;
+              if (scrolls(el)) {
+                if (clipped.length < 5 && !clipped.includes(name)) clipped.push(name);
+                continue;
+              }
+              if (named.has(name)) continue;
+              named.add(name);
+              problems.push(`${name} 右边缘到 ${Math.round(rect.right)}，超出 ${width}`);
+              if (named.size >= 5) break;
+            }
+            // The page scrolls but every wide element sits in something that scrolls on its own:
+            // name them anyway, or the finding says nothing about where to look.
+            if (problems.length && named.size === 0 && clipped.length) {
+              problems.push(`可疑元素（在会滚动的容器里）：${clipped.join("、")}`);
+            }
+            // Content wider than the box it is drawn in, with nothing to clip it: this is what
+            // pushes the page sideways even when every box still looks like it fits.
+            const spilling = [...document.querySelectorAll("body *")].filter((el) => {
+              if (getComputedStyle(el).overflowX !== "visible") return false;
+              return el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0;
+            });
+            const deepest = spilling.filter((el) => !spilling.some((other) => other !== el && el.contains(other)));
+            for (const el of deepest.slice(0, 5)) {
+              const name = (typeof el.className === "string" && el.className) || el.tagName;
+              problems.push(`${name} 里的内容宽 ${el.scrollWidth}，装它的框只有 ${el.clientWidth}`);
+            }
+            return problems;
+        }"""
+    )
+
+
+def _primary_action(page) -> list[str]:
+    """The status card must always show the one thing to do next, at any width."""
+    banner = page.locator("section[aria-label=状态]")
+    if banner.count() == 0:
+        return ["书页上没有状态卡片"]
+    action = banner.get_by_role("button").or_(banner.get_by_role("link")).filter(has_text=PRIMARY_ACTION)
+    visible = [i for i in range(action.count()) if action.nth(i).is_visible()]
+    if visible:
+        first = action.nth(visible[0])
+        box = first.bounding_box()
+        width = page.viewport_size["width"]
+        if box and (box["x"] < 0 or box["x"] + box["width"] > width + 1):
+            return [f"主操作「{first.inner_text().strip()}」有一部分在屏幕外"]
+        return []
+    return [f"状态卡片里没有可见的主操作，卡片上写着「{banner.inner_text().strip()[:60]}」"]
+
+
+# What a reader always needs within reach, whatever the window is.
+MAIN_TABS = ["阅读", "进度", "问题"]
+
+
+def _tabs_check(page) -> list[str]:
+    """Every main tab is on screen without scrolling sideways, and 更多 holds the rest."""
+    problems: list[str] = []
+    tabs = page.locator("nav[aria-label=这本书]")
+    if tabs.count() == 0:
+        return ["书页上没有标签栏"]
+    width = page.viewport_size["width"]
+    for label in MAIN_TABS + ["更多"]:
+        item = tabs.get_by_text(re.compile(f"^{label}")).first
+        if item.count() == 0 or not item.is_visible():
+            problems.append(f"标签「{label}」不在标签栏里")
+            continue
+        box = item.bounding_box()
+        if box and (box["x"] < 0 or box["x"] + box["width"] > width + 1):
+            problems.append(f"标签「{label}」有一部分在屏幕外")
+    return problems
+
+
+def _responsive_checks(browser, base: str, destinations: list[tuple[str, str]], shots: Path, *, reseed) -> list[str]:
+    """Five widths × both themes × every page: no sideways scrolling, and a reachable main action."""
+    problems: list[str] = []
+    for theme in ("light", "dark"):
+        context = browser.new_context(viewport={"width": WIDTHS[-1], "height": 900}, color_scheme=theme)
+        page = context.new_page()
+        for width in WIDTHS:
+            page.set_viewport_size({"width": width, "height": 900})
+            for name, path in destinations:
+                if name == "book-issues":
+                    reseed()
+                page.goto(f"{base}{path}")
+                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(250)
+                for problem in _overflow(page):
+                    problems.append(f"{name} {width}px {theme}: {problem}")
+                if name.startswith("book-"):
+                    for problem in _primary_action(page):
+                        problems.append(f"{name} {width}px {theme}: {problem}")
+                    for problem in _tabs_check(page):
+                        problems.append(f"{name} {width}px {theme}: {problem}")
+        context.close()
     return problems
 
 
@@ -247,7 +512,7 @@ def _keyboard_walk(page, base: str, epub: Path, shots: Path) -> list[str]:
     return problems
 
 
-def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
+def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
     from playwright.sync_api import sync_playwright
 
     findings: list[dict] = []
@@ -281,11 +546,28 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         if not overview.get("readable"):
             raise AssertionError("翻译没有跑完：" + json.dumps(overview, ensure_ascii=False)[:800])
 
+        # The 问题 page is only worth checking with issues on it.
+        seeded = _seed_issues(db, document_id)
+        listed = page.request.get(f"{base}/v1/documents/{document_id}/issues?status=active").json()
+        print(f"[look] 书 {document_id}：种了 {seeded} 条问题，接口按 active 看到 {listed.get('total_count')} 条", file=sys.stderr)
+        if seeded == 0 or listed.get("total_count", 0) != seeded:
+            raise AssertionError(f"种了 {seeded} 条问题，接口看到 {listed.get('total_count')} 条：{json.dumps(listed, ensure_ascii=False)[:400]}")
+
         destinations = [("home", "/"), ("library", "/library"), ("inbox", "/inbox"), ("settings", "/settings")]
         destinations += [(f"book-{tab}", f"/books/{document_id}/{tab}") for tab in BOOK_TABS]
 
+        # Temporary: see exactly what the 问题 page asks for and gets back.
+        page.on(
+            "response",
+            lambda response: print(f"[look] {response.status} {response.url}", file=sys.stderr)
+            if "/v1/documents/" in response.url and "/issues" in response.url
+            else None,
+        )
+
         style_problems: list[str] = []
         for name, path in destinations:
+            if name == "book-issues":
+                _seed_issues(db, document_id)
             findings += _visit(page, base, path, name=name, shots=shots, theme="light", check=True)
             style_problems += [f"{name}: {problem}" for problem in _style_checks(page, name=name)]
             if name.startswith("book-"):
@@ -301,6 +583,8 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark")
         dark_page = dark.new_page()
         for name, path in destinations:
+            if name == "book-issues":
+                _seed_issues(db, document_id)
             findings += _visit(dark_page, base, path, name=name, shots=shots, theme="dark", check=True)
         dark.close()
 
@@ -316,6 +600,8 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         theme_problems = _theme_check(keyboard_page, base, shots)
         keyboard.close()
 
+        responsive_problems = _responsive_checks(browser, base, destinations, shots, reseed=lambda: _seed_issues(db, document_id))
+
         context.close()
         browser.close()
 
@@ -323,6 +609,7 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         "violations": findings,
         "keyboard": keyboard_problems,
         "style": style_problems + theme_problems,
+        "responsive": responsive_problems,
         "screenshots": sorted(p.name for p in shots.glob("*.png")),
     }
 
@@ -344,8 +631,14 @@ def main() -> int:
     try:
         _build_frontend(dist)
         api, port = _start_api(work, dist, priced=False)
-        epub = _write_epub(work / "sample.epub")
-        report = run(base=f"http://127.0.0.1:{port}", epub=epub, shots=args.screenshots.resolve(), headed=args.headed)
+        epub = _wordy_epub(_write_epub(work / "plain.epub"), work / "sample.epub")
+        report = run(
+            base=f"http://127.0.0.1:{port}",
+            epub=epub,
+            shots=args.screenshots.resolve(),
+            headed=args.headed,
+            db=work / "e2e.db",
+        )
     finally:
         if api is not None:
             api.terminate()
@@ -354,11 +647,14 @@ def main() -> int:
             shutil.rmtree(work, ignore_errors=True)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    ok = not report["violations"] and not report["keyboard"] and not report["style"]
+    ok = not report["violations"] and not report["keyboard"] and not report["style"] and not report["responsive"]
     print(
         "\n无障碍检查通过"
         if ok
-        else f"\n{len(report['violations'])} 项 axe 问题，{len(report['keyboard'])} 项键盘问题，{len(report['style'])} 项样式问题",
+        else (
+            f"\n{len(report['violations'])} 项 axe 问题，{len(report['keyboard'])} 项键盘问题，"
+            f"{len(report['style'])} 项样式问题，{len(report['responsive'])} 项版面问题"
+        ),
         file=sys.stderr,
     )
     return 0 if ok else 1

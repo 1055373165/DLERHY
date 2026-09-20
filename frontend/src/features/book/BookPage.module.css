@@ -122,18 +122,19 @@
   font-weight: 500;
 }
 
-/* Tabs scroll sideways on narrow screens instead of wrapping into a pile. */
+/* Four stops fit a phone: three tabs and 更多. Nothing scrolls sideways. */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-1);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
+  position: relative;
 }
 
 .tab {
   flex-shrink: 0;
   padding: var(--sp-3) var(--sp-4);
+  min-width: 0;
   color: var(--text-secondary);
   text-decoration: none;
   border-bottom: 2px solid transparent;
@@ -145,6 +146,55 @@
 .tab:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.more {
+  position: relative;
+  margin-left: auto;
+}
+
+.more > .tab {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+}
+
+.moreMenu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 10rem;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-1);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.moreItem {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+
+.moreItem:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.moreItemActive {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
 }
 
 .tabActive,
