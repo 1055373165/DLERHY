@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
@@ -75,7 +76,11 @@ describe("Progress tab", () => {
     // Events in words, with the per-packet chatter only under the technical details.
     expect(await screen.findByText("翻译已暂停")).toBeInTheDocument();
     expect(screen.getByText("开始翻译")).toBeInTheDocument();
+    // The raw tail is folded away and not fetched until someone asks for it.
+    const fold = screen.getByText(/全部事件（技术细节）/);
+    expect(screen.queryByText("work_item.leased")).toBeNull();
+    await userEvent.click(fold);
+    expect(await screen.findByText("work_item.leased")).toBeInTheDocument();
     expect(screen.getByText(/全部事件（技术细节，3 条）/)).toBeInTheDocument();
-    expect(screen.getByText("work_item.leased")).toBeInTheDocument();
   });
 });

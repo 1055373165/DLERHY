@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { getRunEvents } from "../../lib/api";
 import { usd } from "../../lib/overview";
@@ -41,11 +42,13 @@ export function ProgressTab() {
     enabled: Boolean(runId),
     refetchInterval: active ? 5000 : false,
   });
+  // The raw tail is behind a fold: nobody has asked for it until they open it.
+  const [rawOpen, setRawOpen] = useState(false);
   const events = useQuery({
     queryKey: ["run-events", runId, "all"],
     queryFn: () => getRunEvents(runId as string, { all: true, limit: 100 }),
-    enabled: Boolean(runId),
-    refetchInterval: active ? 15_000 : false,
+    enabled: Boolean(runId) && rawOpen,
+    refetchInterval: active && rawOpen ? 15_000 : false,
   });
   if (!runId) {
     return <div className={s.empty}>还没开始翻译。开始后，这里会显示每一步的进展。</div>;
@@ -116,8 +119,11 @@ export function ProgressTab() {
               ))}
             </ul>
           )}
-          <details className={s.rawEvents}>
-            <summary className={s.fieldLabel}>全部事件（技术细节，{entries.length} 条）</summary>
+          <details className={s.rawEvents} onToggle={(event) => setRawOpen(event.currentTarget.open)}>
+            <summary className={s.fieldLabel}>
+              全部事件（技术细节{rawOpen ? `，${entries.length} 条` : ""}）
+            </summary>
+            {rawOpen && events.isLoading && <div className={s.empty}>加载中…</div>}
             <ul className={s.list}>
               {entries.map((event) => (
                 <li key={`raw-${event.event_id}`} className={s.item}>

@@ -455,6 +455,53 @@ def _responsive_checks(browser, base: str, destinations: list[tuple[str, str]], 
     return problems
 
 
+# What only the tabs behind 更多 need. Opening a book must not ask for any of it.
+# 进度 shows the run's milestones, so `events?...milestones=true` is not an advanced call;
+# the raw 100-event tail is, and it belongs to whoever unfolds 技术细节.
+ADVANCED_ENDPOINTS = {
+    "术语与决策": ("/terms", "/book-guide"),
+    "运行记录": ("/agent-turns", "events?limit=100"),
+    "逐章审校": ("/chapters",),
+}
+
+
+def _lazy_tabs_check(page, base: str, document_id: str, seen: dict) -> list[str]:
+    """Opening a book asks for nothing the advanced tabs need; opening one asks for its own."""
+    problems: list[str] = []
+    calls: list[str] = []
+    page.on("request", lambda request: calls.append(request.url) if "/v1/" in request.url else None)
+
+    # Both tabs a reader can land on, neither of which may fetch an advanced tab's data.
+    for tab, label in (("read", "阅读"), ("progress", "进度")):
+        calls.clear()
+        page.goto(f"{base}/books/{document_id}/{tab}")
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(1_500)
+        opening = [url.split("/v1/")[-1] for url in calls]
+        seen[f"打开书页停在「{label}」"] = opening
+        for advanced, endpoints in ADVANCED_ENDPOINTS.items():
+            for endpoint in endpoints:
+                hit = [call for call in opening if endpoint in call]
+                if hit:
+                    problems.append(f"停在「{label}」就请求了「{advanced}」的接口：{hit[0]}")
+
+    page.goto(f"{base}/books/{document_id}/read")
+    page.wait_for_load_state("networkidle")
+
+    # And each advanced tab asks for its own data the moment it is opened.
+    for label, endpoints in ADVANCED_ENDPOINTS.items():
+        calls.clear()
+        page.get_by_role("button", name=re.compile("^更多")).click()
+        page.get_by_role("link", name=label).click()
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(1_000)
+        opened = [url.split("/v1/")[-1] for url in calls]
+        seen[f"点开「{label}」"] = opened
+        if not any(endpoint in call for endpoint in endpoints for call in opened):
+            problems.append(f"点开「{label}」之后也没有请求它的接口（看到的是 {opened[:6]}）")
+    return problems
+
+
 def _theme_check(page, base: str, shots: Path) -> list[str]:
     """设置 → 界面配色 must override the system, and survive a reload."""
     problems: list[str] = []
@@ -660,6 +707,9 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
             keyboard_page.screenshot(path=str(shots / "keyboard-stuck.png"))
             keyboard_problems = [f"键盘走查中断：{type(error).__name__}: {error}".split("Call log")[0].strip()]
         theme_problems = _theme_check(keyboard_page, base, shots)
+        lazy_page = keyboard.new_page()
+        requests_seen: dict[str, list[str]] = {}
+        theme_problems += _lazy_tabs_check(lazy_page, base, document_id, requests_seen)
         keyboard.close()
 
         responsive_problems = _responsive_checks(browser, base, destinations, shots, reseed=lambda: _seed_issues(db, document_id))
@@ -672,6 +722,7 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
         "keyboard": keyboard_problems,
         "style": style_problems + theme_problems,
         "responsive": responsive_problems,
+        "requests": requests_seen,
         "screenshots": sorted(p.name for p in shots.glob("*.png")),
     }
 
