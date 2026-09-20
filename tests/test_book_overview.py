@@ -236,6 +236,19 @@ class BookOverviewTests(unittest.TestCase):
         self.assertEqual(overview["translation"]["state"], "running")
         self.assertIsNone(overview["cost"])
 
+    def test_steps_carry_when_they_last_changed(self) -> None:
+        run_id = self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING)
+        with self.session_factory() as session:
+            run = RunControlRepository(session).get_run(run_id)
+            run.status_detail_json = {
+                **(run.status_detail_json or {}),
+                "pipeline": {"_cached_pipeline_stages": {"translate": {"status": "running", "updated_at": "2026-09-20T08:00:00+00:00"}}},
+            }
+            session.commit()
+        steps = {step["key"]: step for step in self._overview()["translation"]["steps"]}
+        self.assertEqual(steps["translate"]["at"], "2026-09-20T08:00:00+00:00")
+        self.assertIsNone(steps["review"]["at"])
+
     def test_unknown_book_is_404(self) -> None:
         self.assertEqual(self.client.get("/v1/documents/00000000-0000-4000-8000-000000000000/overview").status_code, 404)
 

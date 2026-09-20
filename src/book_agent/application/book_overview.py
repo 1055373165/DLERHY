@@ -184,7 +184,8 @@ def _steps(summary, run: DocumentRun, source_type: SourceType) -> list[dict[str,
         status = str(detail.get("status") or ("succeeded" if finished else "pending"))
         if status == "running" and detail.get("turn_status") == "awaiting_approval":
             status = "awaiting_approval"
-        steps.append({"key": key, "label": label, "status": status})
+        # When the step last changed: the progress tab shows it as the step's time.
+        steps.append({"key": key, "label": label, "status": status, "at": detail.get("updated_at")})
     return steps
 
 

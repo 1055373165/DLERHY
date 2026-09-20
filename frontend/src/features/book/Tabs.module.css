@@ -84,3 +84,40 @@
   border-radius: var(--radius-sm);
   overflow-x: auto;
 }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.runSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-panel-alt);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.runSummary strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stopReason {
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid var(--amber);
+  background: var(--amber-light);
+  font-size: var(--text-sm);
+}
+
+.rawEvents {
+  margin-top: var(--sp-4);
+}
+
+.rawEvents summary {
+  cursor: pointer;
+}

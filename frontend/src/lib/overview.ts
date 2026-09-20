@@ -17,6 +17,8 @@ export interface OverviewStep {
   key: string;
   label: string;
   status: string;
+  /** When the step last changed. */
+  at?: string | null;
 }
 
 export interface NeedsYouItem {
@@ -49,6 +51,8 @@ export interface BookOverview {
     progress: { done: number; total: number };
     fast_reading?: boolean;
     auto_started?: boolean;
+    started_at?: string | null;
+    finished_at?: string | null;
   };
   activity: { exporting: string[] };
   needs_you: NeedsYouItem[];
