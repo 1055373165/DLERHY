@@ -1511,7 +1511,9 @@ class ApiWorkflowTests(unittest.TestCase):
 
         worker = threading.Thread(target=_run_stage, daemon=True)
         worker.start()
-        worker.join(timeout=2)
+        # A self-deadlock never finishes, so waiting longer only costs time on a loaded machine;
+        # two seconds used to fail here while the stage was simply still working.
+        worker.join(timeout=30)
 
         self.assertFalse(
             worker.is_alive(),
