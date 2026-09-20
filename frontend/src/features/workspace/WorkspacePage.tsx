@@ -165,7 +165,7 @@ export function WorkspacePage() {
                       {queuePriorityLabel(entry.queue_priority)}
                     </span>
                   </div>
-                  <div className={s.queueCardTitle}>{entry.title_src}</div>
+                  <div className={s.queueCardTitle}>{entry.title ?? entry.title_src}</div>
                   <div className={s.queueCardMeta}>
                     <span>{entry.open_issue_count} 个问题</span>
                     <span>{entry.memory_proposals.pending_proposal_count} 条记忆待确认</span>
@@ -183,7 +183,7 @@ export function WorkspacePage() {
                     <div className={s.queueCardTop}>
                       <span className={s.queueOrdinal}>CH.{ch.ordinal}</span>
                     </div>
-                    <div className={s.queueCardTitle}>{ch.title_tgt || ch.title_src || `Chapter ${ch.ordinal}`}</div>
+                    <div className={s.queueCardTitle}>{ch.title ?? ch.title_tgt ?? ch.title_src ?? `第 ${ch.ordinal} 章`}</div>
                   </button>
                 ))
               )}
@@ -209,7 +209,7 @@ export function WorkspacePage() {
                 <div className={s.chapterHeader}>
                   <div className={s.chapterHeaderTop}>
                     <h2 className={s.chapterTitle}>
-                      CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} {detail.title_src}
+                      CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} {detail.title ?? detail.title_src}
                     </h2>
                     <button
                       className="btn btn-sm"
