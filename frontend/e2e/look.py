@@ -135,6 +135,42 @@ def _sidebar_checks(page) -> list[str]:
     return problems
 
 
+def _theme_check(page, base: str, shots: Path) -> list[str]:
+    """设置 → 界面配色 must override the system, and survive a reload."""
+    problems: list[str] = []
+    page.goto(f"{base}/settings")
+    _settle(page)
+
+    def background() -> str:
+        return page.evaluate("getComputedStyle(document.body).backgroundColor")
+
+    def brightness(colour: str) -> float:
+        numbers = [float(n) for n in re.findall(r"[\d.]+", colour)[:3]]
+        return sum(numbers) / 3 if numbers else 0.0
+
+    light = background()
+    if brightness(light) < 128:
+        problems.append(f"系统是浅色，页面却是 {light}")
+
+    page.get_by_label("界面配色").select_option("dark")
+    page.wait_for_timeout(300)
+    dark = background()
+    if brightness(dark) > 100:
+        problems.append(f"选了深色，背景仍是 {dark}")
+    page.screenshot(path=str(shots / "settings-toggled-dark.png"))
+
+    page.reload()
+    _settle(page)
+    if background() != dark:
+        problems.append("刷新之后配色没有保持")
+
+    page.get_by_label("界面配色").select_option("system")
+    page.wait_for_timeout(300)
+    if background() != light:
+        problems.append("改回跟随系统后没有回到浅色")
+    return problems
+
+
 def _keyboard_walk(page, base: str, epub: Path, shots: Path) -> list[str]:
     """Import → start dialog → read, using only the keyboard. Returns what went wrong."""
     problems: list[str] = []
@@ -277,6 +313,7 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
         except Exception as error:  # a stuck walk is a finding, not a crash
             keyboard_page.screenshot(path=str(shots / "keyboard-stuck.png"))
             keyboard_problems = [f"键盘走查中断：{type(error).__name__}: {error}".split("Call log")[0].strip()]
+        theme_problems = _theme_check(keyboard_page, base, shots)
         keyboard.close()
 
         context.close()
@@ -285,7 +322,7 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool) -> dict:
     return {
         "violations": findings,
         "keyboard": keyboard_problems,
-        "style": style_problems,
+        "style": style_problems + theme_problems,
         "screenshots": sorted(p.name for p in shots.glob("*.png")),
     }
 
