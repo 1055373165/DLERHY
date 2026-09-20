@@ -1,11 +1,11 @@
-import { ApiKeySetting } from "./ApiKeySetting";
 import { BudgetMeter } from "./BudgetMeter";
-import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useWorkspace } from "../app/WorkspaceContext";
-import { SERVICE_LINKS } from "../lib/api";
-import { preferredTitle } from "../lib/workflow";
+import { getHealth } from "../lib/api";
+import { announce, loadSeen } from "../lib/notifications";
+import { getInbox } from "../lib/overview";
 import s from "./AppLayout.module.css";
 
 /* ── Inline SVG Icons (16×16) ── */
@@ -59,45 +59,81 @@ const Icons = {
 } as const;
 
 const NAV_ITEMS = [
-  { to: "/", label: "WORK", zh: "工作台", icon: Icons.work },
-  { to: "/runs", label: "RUNS", zh: "运行", icon: Icons.runs },
-  { to: "/deliverables", label: "SHIP", zh: "交付", icon: Icons.ship },
-  { to: "/issues", label: "ISSUES", zh: "问题", icon: Icons.issues },
-  { to: "/approvals", label: "APPROVE", zh: "审批", icon: Icons.approve },
-  { to: "/library", label: "LIB", zh: "书库", icon: Icons.lib },
-  { to: "/providers", label: "MODELS", zh: "服务商", icon: Icons.settings },
+  { to: "/", label: "首页", icon: Icons.work },
+  { to: "/inbox", label: "需要你处理", icon: Icons.approve },
+  { to: "/settings", label: "设置", icon: Icons.settings },
 ] as const;
+
+function pageName(pathname: string): string {
+  if (pathname.startsWith("/books/")) return "这本书";
+  if (pathname.startsWith("/library")) return "全部书";
+  if (pathname.startsWith("/inbox")) return "需要你处理";
+  if (pathname.startsWith("/settings")) return "设置";
+  return "首页";
+}
+
+/* Where 「返回」 goes from here. A book belongs to the shelf; everything else to the home page. */
+function backLink(pathname: string): { to: string; label: string } | null {
+  if (pathname.startsWith("/books/")) return { to: "/library", label: "返回书架" };
+  if (pathname === "/" ) return null;
+  return { to: "/", label: "返回首页" };
+}
+
+const APP_TITLE = "Book Agent";
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
-  const { currentDocument, health, healthLoading } = useWorkspace();
+  const healthQuery = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 30_000, retry: false });
+  const health = healthQuery.data;
+  const healthLoading = healthQuery.isLoading;
+  // Across every book: approvals and pauses only a person can fix (GET /inbox).
+  // Endings before this page opened are not news.
+  const [openedAt] = useState(() => new Date().toISOString());
+  const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => getInbox(openedAt), refetchInterval: 30_000, retry: false });
+  const pendingCount = inbox.data?.count ?? 0;
+  const navigate = useNavigate();
+  const seen = useRef<Set<string>>(loadSeen());
+  useEffect(() => {
+    if (inbox.data) announce(inbox.data, seen.current, (path) => navigate(path));
+  }, [inbox.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const docTitle = currentDocument ? preferredTitle(currentDocument) : null;
+  useEffect(() => {
+    // The tab title says it too, so a reader on another tab sees that the book is waiting on them.
+    document.title = pendingCount > 0 ? `(${pendingCount}) 等你处理 · ${APP_TITLE}` : APP_TITLE;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [pendingCount]);
 
-  const activeNav =
-    NAV_ITEMS.find((n) =>
-      n.to === "/" ? location.pathname === "/" : location.pathname.startsWith(n.to),
-    ) ?? NAV_ITEMS[0];
+
+  const back = backLink(location.pathname);
 
   return (
     <div className={s.shell} data-nav-open={navOpen}>
+      {/* First stop of a keyboard walk: jump past the navigation. */}
+      <a className="skip-link" href="#main">
+        跳到主要内容
+      </a>
+
       {/* Mobile backdrop */}
       <button
         className={s.backdrop}
         type="button"
-        aria-label="Close navigation"
+        aria-label="关闭导航"
         onClick={() => setNavOpen(false)}
       />
 
       {/* ── Sidebar ── */}
-      <aside className={s.sidebar}>
-        <div className={s.logo}>
-          <span className={s.logoMark}>B</span>
+      <aside className={s.sidebar} aria-label="侧边栏">
+        <NavLink to="/" className={s.logo} onClick={() => setNavOpen(false)}>
+          <span className={s.logoMark} aria-hidden="true">
+            B
+          </span>
           <span className={s.logoText}>Book Agent</span>
-        </div>
+        </NavLink>
 
-        <nav className={s.nav}>
+        <nav className={s.nav} aria-label="主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -107,35 +143,29 @@ export function AppLayout() {
                 `${s.navItem} ${isActive ? s.navActive : ""}`
               }
               onClick={() => setNavOpen(false)}
-              title={`${item.label} ${item.zh}`}
             >
-              <span className={s.navIcon}>{item.icon}</span>
+              <span className={s.navIcon} aria-hidden="true">
+                {item.icon}
+              </span>
               <span className={s.navLabel}>{item.label}</span>
-              <span className={s.navZh}>{item.zh}</span>
+              {item.to === "/inbox" && pendingCount > 0 && (
+                <span className={s.navBadge} aria-label={`${pendingCount} 件事等你处理`}>
+                  {pendingCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
 
         <div className={s.sidebarFooter}>
-          <div className={s.footerControls}>
-            <BudgetMeter />
-            <ApiKeySetting />
-          </div>
-          <div className={s.systemLinks}>
-            <a href={SERVICE_LINKS.docs} target="_blank" rel="noopener" className={s.sysLink}>
-              API
-            </a>
-            <a href={SERVICE_LINKS.openapi} target="_blank" rel="noopener" className={s.sysLink}>
-              OpenAPI
-            </a>
-          </div>
+          <BudgetMeter />
           <div className={s.healthRow}>
             <span
               className={s.healthDot}
               data-status={healthLoading ? "check" : health?.status === "ok" ? "ok" : "down"}
             />
             <span className={s.healthLabel}>
-              {healthLoading ? "..." : health?.status === "ok" ? "Online" : "Offline"}
+              {healthLoading ? "检查中" : health?.status === "ok" ? "服务在线" : "服务离线"}
             </span>
           </div>
         </div>
@@ -148,24 +178,30 @@ export function AppLayout() {
             className={s.mobileToggle}
             type="button"
             onClick={() => setNavOpen((o) => !o)}
-            aria-label="Toggle navigation"
+            aria-label="打开或关闭导航"
           >
             {navOpen ? "\u2715" : "\u2630"}
           </button>
-          <div className={s.topbarLeft}>
-            <span className={s.pageName}>{activeNav.label}</span>
-            {docTitle && (
-              <>
-                <span className={s.separator}>/</span>
-                <span className={s.docTitle}>{docTitle}</span>
-              </>
+          <div className={s.topbarInner}>
+            <div className={s.topbarLeft}>
+              {back && (
+                <NavLink to={back.to} className={s.backLink}>
+                  <span aria-hidden="true">←</span> {back.label}
+                </NavLink>
+              )}
+              <span className={s.pageName}>{pageName(location.pathname)}</span>
+            </div>
+            {pendingCount > 0 && !location.pathname.startsWith("/inbox") && (
+              <NavLink to="/inbox" className={s.pendingNotice} role="status">
+                有 {pendingCount} 件事等你处理，处理后翻译会继续 →
+              </NavLink>
             )}
           </div>
         </header>
 
-        <div className={s.content}>
+        <main className={s.content} id="main">
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );

@@ -2,7 +2,6 @@ import { useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useWorkspace } from "../../app/WorkspaceContext";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import { deleteDocument, downloadDocumentExport, listDocumentHistory } from "../../lib/api";
@@ -47,7 +46,6 @@ function buildPageWindow(current: number, total: number): (number | "…")[] {
 export function LibraryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { selectDocument } = useWorkspace();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -100,8 +98,7 @@ export function LibraryPage() {
   const rangeEnd = offset + shown;
 
   async function handleOpen(documentId: string) {
-    selectDocument(documentId);
-    await navigate("/");
+    await navigate(`/books/${documentId}`);
   }
 
   type DownloadKey = typeof DOWNLOAD_OPTIONS[number]["key"];
@@ -157,11 +154,12 @@ export function LibraryPage() {
   return (
     <div className={s.layout}>
       <Surface
-        eyebrow="LIB"
-        title="书库"
+        level={1}
+        eyebrow="书库"
+        title="全部书"
         aside={
           historyQuery.data
-            ? `${total} total / ${shown} shown${total ? ` · ${rangeStart}-${rangeEnd}` : ""}`
+            ? `共 ${total} 本${total ? ` · 第 ${rangeStart}–${rangeEnd} 本` : ""}`
             : null
         }
       >
@@ -170,7 +168,7 @@ export function LibraryPage() {
             <input
               className={s.searchInput}
               type="search"
-              placeholder="搜索书名、作者、路径或 ID…"
+              placeholder="搜索书名、作者或文件名…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -179,40 +177,41 @@ export function LibraryPage() {
                 type="button"
                 className={s.searchClear}
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
+                aria-label="清空搜索"
               >
                 ×
               </button>
             )}
           </div>
-          <select className={s.filterSelect} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Status</option>
-            <option value="active">Active</option>
-            <option value="partially_exported">Partial</option>
-            <option value="exported">Exported</option>
-            <option value="failed">Failed</option>
+          <select aria-label="按书的状态筛选" className={s.filterSelect} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">全部状态</option>
+            <option value="active">已导入</option>
+            <option value="partially_exported">部分可读</option>
+            <option value="exported">可阅读</option>
+            <option value="failed">失败</option>
           </select>
-          <select className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
-            <option value="">Run</option>
-            <option value="queued">Queued</option>
-            <option value="running">Running</option>
-            <option value="paused">Paused</option>
-            <option value="failed">Failed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="succeeded">Succeeded</option>
+          <select aria-label="按转换状态筛选" className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
+            <option value="">全部转换</option>
+            <option value="queued">排队中</option>
+            <option value="running">进行中</option>
+            <option value="paused">已暂停</option>
+            <option value="failed">失败</option>
+            <option value="cancelled">已取消</option>
+            <option value="succeeded">已完成</option>
           </select>
           <select
+            aria-label="按是否可读筛选"
             className={s.filterSelect}
             value={mergedReady}
             onChange={(e) => setMergedReady(e.target.value as "" | "true" | "false")}
           >
-            <option value="">Delivery</option>
-            <option value="true">Ready</option>
-            <option value="false">Not Ready</option>
+            <option value="">全部</option>
+            <option value="true">可阅读</option>
+            <option value="false">未完成</option>
           </select>
           {hasFilters && (
             <button type="button" className={s.resetBtn} onClick={resetFilters}>
-              Reset
+              清除筛选
             </button>
           )}
         </div>
@@ -222,7 +221,7 @@ export function LibraryPage() {
         )}
 
         {historyQuery.isLoading ? (
-          <div className={s.loading}>Loading...</div>
+          <div className={s.loading}>加载中…</div>
         ) : historyQuery.data?.entries.length ? (
           <>
             <div className={s.bookList}>
@@ -249,17 +248,18 @@ export function LibraryPage() {
                         打开
                       </button>
                       {entry.merged_export_ready ? (
-                        <Link className="btn btn-sm" to={`/library/${entry.document_id}/read`}>
+                        <Link className="btn btn-sm" to={`/books/${entry.document_id}/read`}>
                           阅读
                         </Link>
                       ) : null}
+                      {/* Nothing to download yet means no button, rather than a dash that does nothing. */}
+                      {entry.merged_export_ready ? (
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
                           className="btn btn-sm"
-                          disabled={!entry.merged_export_ready}
                           onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
                         >
-                          {entry.merged_export_ready ? "下载 ▾" : "—"}
+                          下载 ▾
                         </button>
                         {openMenu === entry.document_id && (
                           <div className={s.dlMenu}>
@@ -278,6 +278,7 @@ export function LibraryPage() {
                           </div>
                         )}
                       </div>
+                      ) : null}
                       <button
                         className={`btn btn-sm ${s.deleteBtn}`}
                         onClick={() => setPendingDelete({ id: entry.document_id, title: preferredTitle(entry) })}
@@ -294,8 +295,7 @@ export function LibraryPage() {
 
             <div className={s.paginationBar}>
               <div className={s.paginationInfo}>
-                Showing <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> of{" "}
-                <strong>{total}</strong>
+                第 <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> 本，共 <strong>{total}</strong> 本
               </div>
               <div className={s.paginationControls}>
                 <button
@@ -303,7 +303,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page <= 1}
                   onClick={() => goTo(1)}
-                  aria-label="First page"
+                  aria-label="第一页"
                 >
                   «
                 </button>
@@ -312,7 +312,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page <= 1}
                   onClick={() => goTo(page - 1)}
-                  aria-label="Previous page"
+                  aria-label="上一页"
                 >
                   ‹
                 </button>
@@ -337,7 +337,7 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page >= pageCount}
                   onClick={() => goTo(page + 1)}
-                  aria-label="Next page"
+                  aria-label="下一页"
                 >
                   ›
                 </button>
@@ -346,14 +346,14 @@ export function LibraryPage() {
                   className={s.pageBtn}
                   disabled={page >= pageCount}
                   onClick={() => goTo(pageCount)}
-                  aria-label="Last page"
+                  aria-label="最后一页"
                 >
                   »
                 </button>
               </div>
               <form className={s.jumpForm} onSubmit={handleJump}>
                 <label className={s.jumpLabel}>
-                  Jump to
+                  跳到
                   <input
                     className={s.jumpInput}
                     type="number"
@@ -367,8 +367,9 @@ export function LibraryPage() {
                 <span className={s.jumpTotal}>/ {pageCount}</span>
               </form>
               <label className={s.pageSizeLabel}>
-                Per page
+                每页
                 <select
+                  aria-label="每页显示多少本"
                   className={s.filterSelect}
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
@@ -391,15 +392,15 @@ export function LibraryPage() {
               <line x1="45" y1="12" x2="51" y2="12" />
               <line x1="45" y1="16" x2="51" y2="16" />
             </svg>
-            <span className={s.emptyTitle}>No results</span>
+            <span className={s.emptyTitle}>没有找到</span>
             <span className={s.emptySubtitle}>
               {hasFilters
-                ? "No documents matching current filters. Try adjusting your search or reset filters."
-                : "No documents yet. Upload a book to get started."}
+                ? "没有符合当前条件的书。换个关键词，或清除筛选。"
+                : "书库还是空的。上传一本书或粘贴一个网页链接开始。"}
             </span>
             {hasFilters && (
               <button type="button" className="btn btn-sm" onClick={resetFilters}>
-                Reset filters
+                清除筛选
               </button>
             )}
           </div>

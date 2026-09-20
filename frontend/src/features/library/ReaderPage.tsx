@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { marked } from "marked";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import {
   downloadDocumentExport,
   getDocument,
+  getMeta,
   previewDocumentExport,
   type ReadableExportType,
 } from "../../lib/api";
@@ -39,7 +40,7 @@ function markdownPage(markdown: string): string {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>${MARKDOWN_PAGE_STYLE}</style></head><body>${body}</body></html>`;
 }
 
-/** Read a book's exports in place: to check a translation without finding the downloaded file. */
+/** The book page's 阅读 tab: the book's exports, read in place (title and source link live on the book page). */
 export function ReaderPage() {
   const { documentId = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -47,9 +48,14 @@ export function ReaderPage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const document = useQuery({ queryKey: ["document", documentId], queryFn: () => getDocument(documentId), retry: false });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: getMeta, staleTime: 60_000, retry: false });
   // A web page reads first as itself in Chinese (the original layout); books have no such format.
   const isWebPage = document.data?.source_type === "web";
-  const formats = FORMATS.filter((item) => item.key !== "web" || isWebPage);
+  // Offer PDF only where this deployment can print it (Playwright + Chromium); unknown counts as no.
+  const pdfAvailable = meta.data?.capabilities?.pdf_renderer === true;
+  const formats = FORMATS.filter(
+    (item) => (item.key !== "web" || isWebPage) && (item.key !== "pdf" || pdfAvailable),
+  );
   const requested = params.get("format");
   const format: FormatKey = formats.some((item) => item.key === requested)
     ? (requested as FormatKey)
@@ -93,12 +99,6 @@ export function ReaderPage() {
   return (
     <div className={s.layout}>
       <div className={s.toolbar}>
-        <Link to="/library" className={s.back}>
-          ← 书库
-        </Link>
-        <span className={s.title} title={title}>
-          {title}
-        </span>
         <div className={s.tabs} role="tablist" aria-label="阅读格式">
           {formats.map((item) => (
             <button
@@ -120,11 +120,6 @@ export function ReaderPage() {
           <button className="btn btn-sm" onClick={() => setShowSource((value) => !value)}>
             {showSource ? "看排版" : "看源码"}
           </button>
-        )}
-        {document.data?.source_url && (
-          <a className="btn btn-sm" href={document.data.source_url} target="_blank" rel="noreferrer noopener">
-            原网页 ↗
-          </a>
         )}
         <button className="btn btn-sm" onClick={() => void handleDownload()}>
           下载

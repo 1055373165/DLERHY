@@ -112,5 +112,37 @@ class ProviderSettingsTests(unittest.TestCase):
         self.assertEqual(worker.client.output_cost_per_1m_tokens, 2.0)
 
 
+    def test_configuring_a_provider_resumes_runs_that_waited_for_one(self) -> None:
+        from book_agent.domain.enums import DocumentRunStatus, DocumentRunType, DocumentStatus, SourceType
+        from book_agent.domain.models import Document
+        from book_agent.infra.repositories.run_control import RunControlRepository
+        from book_agent.services.run_control import RunControlService
+
+        woken: list[str | None] = []
+        self.client.app.state.document_run_executor = type(
+            "Executor", (), {"wake": lambda self, run_id=None: woken.append(run_id), "stop": lambda self: True}
+        )()
+        with self.session_factory() as session:
+            run_ids = {}
+            for reason in ("provider.not_configured", "user.paused"):
+                document = Document(source_type=SourceType.WEB, file_fingerprint=reason, title=reason, status=DocumentStatus.ACTIVE)
+                session.add(document)
+                session.flush()
+                control = RunControlService(RunControlRepository(session))
+                run_id = control.create_run(document_id=document.id, run_type=DocumentRunType.TRANSLATE_FULL, requested_by="t").run_id
+                run = RunControlRepository(session).get_run(run_id)
+                run.status = DocumentRunStatus.PAUSED
+                run.stop_reason = reason
+                run_ids[reason] = run_id
+            session.commit()
+
+        created = self._create(activate=True)
+        self.assertEqual(created.status_code, 201, created.text)
+        with self.session_factory() as session:
+            repository = RunControlRepository(session)
+            self.assertEqual(repository.get_run(run_ids["provider.not_configured"]).status, DocumentRunStatus.RUNNING)
+            self.assertEqual(repository.get_run(run_ids["user.paused"]).status, DocumentRunStatus.PAUSED)
+        self.assertEqual(woken, [run_ids["provider.not_configured"]])
+
 if __name__ == "__main__":
     unittest.main()

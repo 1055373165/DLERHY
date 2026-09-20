@@ -61,8 +61,8 @@ class TerminologyAgent:
         return book_tool_registry()
 
     @staticmethod
-    def policy() -> PermissionPolicy:
-        return terminology_policy()
+    def policy(*, fast_reading: bool = False) -> PermissionPolicy:
+        return terminology_policy(fast_reading=fast_reading)
 
     # --- turn creation --------------------------------------------------------
 

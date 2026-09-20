@@ -2,8 +2,22 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { queryClient } from "../../app/queryClient";
-import { useWorkspace } from "../../app/WorkspaceContext";
+import { useBook } from "../book/BookPage";
 import { StatusBadge } from "../../components/StatusBadge";
+import {
+  actionStatusLabel,
+  actionTypeLabel,
+  actorLabel,
+  detectorLabel,
+  issueEventLabel,
+  issueExplanation,
+  issueStatusLabel,
+  issueTypeCopy,
+  resolutionNote,
+  rootCauseLabel,
+  scopeLabel,
+  severityLabel,
+} from "../../lib/copy";
 import { Surface } from "../../components/Surface";
 import {
   type Issue,
@@ -22,30 +36,6 @@ type Feedback = { tone: "success" | "error"; text: string } | null;
 type Tone = "active" | "success" | "warning" | "danger" | "muted";
 
 const REVIEWER_KEY = "book-agent.reviewer-name";
-
-const STATUS_TEXT: Record<string, string> = {
-  open: "待处理",
-  triaged: "已分诊",
-  resolved: "已解决",
-  wontfix: "不修复",
-};
-
-const DETECTOR_TEXT: Record<string, string> = {
-  rule: "规则",
-  model: "模型",
-  human: "人工",
-};
-
-const EVENT_TEXT: Record<string, string> = {
-  opened: "发现",
-  updated: "更新",
-  reopened: "重新打开",
-  seen_while_closed: "关闭后再次发现",
-  resolved: "解决",
-  triaged: "分诊",
-  wontfix: "标记不修复",
-  action_replanned: "重新计划动作",
-};
 
 // Which human transitions each status allows; mirrors services/issues.py.
 const TRANSITIONS: Record<string, IssueTransition[]> = {
@@ -91,15 +81,12 @@ function saveReviewerName(name: string): void {
   }
 }
 
-function evidenceSummary(issue: Issue): string {
-  const evidence = (issue.evidence_json ?? {}) as Record<string, unknown>;
-  const explanation = evidence.explanation ?? evidence.reason;
-  return explanation ? String(explanation) : "";
+function summaryOf(issue: Issue): string {
+  return issueExplanation(issue.issue_type, issue.evidence_json as Record<string, unknown> | null);
 }
 
 export function IssuesPage() {
-  const { currentDocument } = useWorkspace();
-  const documentId = currentDocument?.document_id ?? null;
+  const documentId: string | null = useBook().document_id;
   const [filter, setFilter] = useState<IssueFilter>({ status: "active" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewer, setReviewer] = useState<string>(loadReviewerName);
@@ -118,6 +105,10 @@ export function IssuesPage() {
     if (selectedId && !entries.some((entry) => entry.id === selectedId) && !listQuery.isFetching) {
       setSelectedId(null);
     }
+    // A detail pane asking to be filled is wasted space: open the first issue by itself.
+    if (!selectedId && entries.length > 0) {
+      setSelectedId(entries[0].id);
+    }
   }, [entries, selectedId, listQuery.isFetching]);
 
   const detailQuery = useQuery({
@@ -134,7 +125,7 @@ export function IssuesPage() {
     },
     onSuccess: async (issue, variables) => {
       setNote("");
-      setFeedback({ tone: "success", text: `${TRANSITION_TEXT[variables.action]}：${issue.issue_type}` });
+      setFeedback({ tone: "success", text: `已${TRANSITION_TEXT[variables.action]}：${issueTypeCopy(issue.issue_type).label}` });
       await queryClient.invalidateQueries({ queryKey: ["issues", documentId] });
       await queryClient.invalidateQueries({ queryKey: ["issue", issue.id] });
     },
@@ -149,8 +140,8 @@ export function IssuesPage() {
       setFeedback({
         tone: result.issue_resolved ? "success" : "error",
         text: result.issue_resolved
-          ? `动作已执行，问题已解决（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`
-          : `动作已执行，问题仍在（重译 ${result.rerun_packet_ids?.length ?? 0} 个 packet）`,
+          ? `动作已执行，问题已解决（重译 ${result.rerun_packet_ids?.length ?? 0} 段）`
+          : `动作已执行，问题仍在（重译 ${result.rerun_packet_ids?.length ?? 0} 段）`,
       });
       await queryClient.invalidateQueries({ queryKey: ["issues", documentId] });
       await queryClient.invalidateQueries({ queryKey: ["issue", selectedId] });
@@ -163,10 +154,13 @@ export function IssuesPage() {
   const detail = detailQuery.data;
   const selected = detail?.issue;
 
+  // With nothing to show on the right, the list takes the whole width.
+  const showDetail = entries.length > 0;
+
   return (
-    <div className={s.layout}>
+    <div className={s.layout} data-single={showDetail ? undefined : true}>
       <Surface
-        eyebrow="ISSUES"
+        eyebrow="问题"
         title="问题清单"
         aside={documentId && listQuery.data ? `${listQuery.data.total_count} 条` : null}
       >
@@ -227,14 +221,14 @@ export function IssuesPage() {
                       data-selected={issue.id === selectedId}
                       onClick={() => setSelectedId(issue.id)}
                     >
-                      <span className={s.issueType}>{issue.issue_type}</span>
+                      <span className={s.issueType}>{issueTypeCopy(issue.issue_type).label}</span>
                       <span className={s.badges}>
-                        {issue.blocking ? <StatusBadge tone="danger" label="阻断" /> : null}
-                        <StatusBadge tone={severityTone(issue.severity)} label={issue.severity} />
-                        <StatusBadge tone={statusTone(issue.status)} label={STATUS_TEXT[issue.status] ?? issue.status} />
-                        <StatusBadge tone="muted" label={DETECTOR_TEXT[issue.detector] ?? issue.detector} />
+                        {issue.blocking ? <StatusBadge tone="danger" label="必须处理" /> : null}
+                        <StatusBadge tone={severityTone(issue.severity)} label={severityLabel(issue.severity)} />
+                        <StatusBadge tone={statusTone(issue.status)} label={issueStatusLabel(issue.status)} />
+                        <StatusBadge tone="muted" label={detectorLabel(issue.detector)} />
                       </span>
-                      <span className={s.issueSummary}>{evidenceSummary(issue)}</span>
+                      <span className={s.issueSummary}>{summaryOf(issue)}</span>
                     </button>
                   </li>
                 ))}
@@ -244,7 +238,8 @@ export function IssuesPage() {
         )}
       </Surface>
 
-      <Surface eyebrow="DETAIL" title="问题详情" aside={selected ? `v${selected.version}` : null}>
+      {showDetail && (
+      <Surface eyebrow="详情" title="问题详情" aside={selected ? `v${selected.version}` : null}>
         {!selectedId ? (
           <div className={s.emptyState}>在左侧选择一个问题。</div>
         ) : !detail || !selected ? (
@@ -252,14 +247,18 @@ export function IssuesPage() {
         ) : (
           <div className={s.detail}>
             <div className={s.detailHeader}>
-              <span className={s.issueType}>{selected.issue_type}</span>
-              <StatusBadge tone={statusTone(selected.status)} label={STATUS_TEXT[selected.status] ?? selected.status} />
+              <span className={s.issueType}>{issueTypeCopy(selected.issue_type).label}</span>
+              <StatusBadge tone={severityTone(selected.severity)} label={severityLabel(selected.severity)} />
+              <StatusBadge tone={statusTone(selected.status)} label={issueStatusLabel(selected.status)} />
+              <StatusBadge tone="muted" label={detectorLabel(selected.detector)} />
               {selected.reopen_count ? <span className={s.meta}>重开 {selected.reopen_count} 次</span> : null}
             </div>
+            <p className={s.issueSummary}>{summaryOf(selected)}</p>
             <div className={s.meta}>
               {detail.chapter_title ? `${detail.chapter_title} · ` : ""}
+              {`出在${rootCauseLabel(selected.root_cause_layer)}环节 · `}
               首次发现 {formatDate(selected.created_at ?? null)}
-              {selected.decided_by ? ` · 决定人 ${selected.decided_by}` : ""}
+              {selected.decided_by ? ` · 决定人 ${actorLabel(selected.decided_by)}` : ""}
             </div>
             <div className={s.pair}>
               <div>
@@ -272,10 +271,12 @@ export function IssuesPage() {
               </div>
             </div>
             {selected.resolution_note ? (
-              <div className={s.meta}>备注：{selected.resolution_note}</div>
+              <div className={s.meta}>备注：{resolutionNote(selected.resolution_note)}</div>
             ) : null}
-            <div className={s.fieldLabel}>证据</div>
-            <pre className={s.evidence}>{JSON.stringify(selected.evidence_json ?? {}, null, 2)}</pre>
+            <details>
+              <summary className={s.fieldLabel}>技术细节</summary>
+              <pre className={s.evidence}>{JSON.stringify(selected.evidence_json ?? {}, null, 2)}</pre>
+            </details>
 
             <div className={s.decisionRow}>
               <label className={s.fieldLabel} htmlFor="issue-reviewer">处理人</label>
@@ -322,7 +323,7 @@ export function IssuesPage() {
                 {(detail.actions ?? []).map((action) => (
                   <li key={action.id} className={s.actionRow}>
                     <span className={s.meta}>
-                      {action.action_type} · {action.scope_type} · {action.status}
+                      {actionTypeLabel(action.action_type)} · 范围：{scopeLabel(action.scope_type)} · {actionStatusLabel(action.status)}
                     </span>
                     {action.status === "planned" && (selected.status === "open" || selected.status === "triaged") ? (
                       <button
@@ -343,17 +344,18 @@ export function IssuesPage() {
             <ol className={s.timeline}>
               {(detail.events ?? []).map((event) => (
                 <li key={event.id} className={s.timelineItem}>
-                  <span className={s.timelineKind}>{EVENT_TEXT[event.kind] ?? event.kind}</span>
+                  <span className={s.timelineKind}>{issueEventLabel(event.kind)}</span>
                   <span className={s.meta}>
-                    v{event.version} · {event.actor_id ?? event.actor_kind} · {formatDate(event.created_at ?? null)}
+                    v{event.version} · {actorLabel(event.actor_id ?? event.actor_kind)} · {formatDate(event.created_at ?? null)}
                   </span>
-                  {event.note ? <span className={s.meta}>{event.note}</span> : null}
+                  {event.note ? <span className={s.meta}>{resolutionNote(event.note)}</span> : null}
                 </li>
               ))}
             </ol>
           </div>
         )}
       </Surface>
+      )}
     </div>
   );
 }

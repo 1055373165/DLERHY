@@ -1,0 +1,223 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-cjk);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.source {
+  font-size: var(--text-sm);
+}
+
+/* One line of status needs one line's worth of room: the padding does not
+   grow with the card, and an empty row adds nothing. */
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+}
+
+.banner[data-state="failed"] {
+  border-color: var(--red);
+}
+
+/* A finished book on the 阅读 tab has nothing to ask of the reader: one line, not a card. */
+.quietStatus {
+  margin: 0;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.headline {
+  font-family: var(--font-cjk);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gray-200);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width 300ms ease;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.errorText {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+.error {
+  padding: var(--sp-5);
+  color: var(--red);
+}
+
+.loading {
+  padding: var(--sp-5);
+  color: var(--text-muted);
+}
+
+.needs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-left: 3px solid var(--amber);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--amber-light);
+}
+
+.needsTitle {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  font-weight: 500;
+}
+
+/* Four stops fit a phone: three tabs and 更多. Nothing scrolls sideways. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: var(--sp-3) var(--sp-4);
+  min-width: 0;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.more {
+  position: relative;
+  margin-left: auto;
+}
+
+.more > .tab {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+}
+
+.moreMenu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 10rem;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-1);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.moreItem {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+
+.moreItem:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.moreItemActive {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.tabActive,
+.tabActive[data-advanced] {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  border-bottom-color: var(--ink);
+}
+
+.costEstimate {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.costEstimateWarning {
+  margin-top: var(--sp-1);
+  color: var(--amber);
+}

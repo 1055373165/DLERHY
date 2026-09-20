@@ -9,6 +9,7 @@ from book_agent.app.api.routes import (
     issues,
     health,
     orgs,
+    overview,
     providers,
     run_cost,
     run_stream,
@@ -24,6 +25,9 @@ _protected = [Depends(enforce_access)]
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"], dependencies=_protected)
 api_router.include_router(harness.documents_router, prefix="/documents", tags=["harness"], dependencies=_protected)
 api_router.include_router(harness.approvals_router, prefix="/approvals", tags=["harness"], dependencies=_protected)
+api_router.include_router(overview.documents_router, prefix="/documents", tags=["overview"], dependencies=_protected)
+api_router.include_router(overview.inbox_router, prefix="/inbox", tags=["overview"], dependencies=_protected)
+api_router.include_router(overview.overviews_router, prefix="/overviews", tags=["overview"], dependencies=_protected)
 api_router.include_router(actions.router, prefix="/actions", tags=["actions"], dependencies=_protected)
 api_router.include_router(issues.documents_router, prefix="/documents", tags=["issues"], dependencies=_protected)
 api_router.include_router(issues.issues_router, prefix="/issues", tags=["issues"], dependencies=_protected)

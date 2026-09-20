@@ -7,15 +7,18 @@ interface SurfaceProps {
   title: string;
   description?: string;
   aside?: ReactNode;
+  /** 1 when this section is the whole page: every page needs exactly one h1. */
+  level?: 1 | 2;
   children: ReactNode;
 }
 
-export function Surface({ eyebrow, title, aside, children }: SurfaceProps) {
+export function Surface({ eyebrow, title, aside, level = 2, children }: SurfaceProps) {
+  const Heading = level === 1 ? "h1" : "h2";
   return (
     <section className={s.surface}>
       <div className={s.head}>
         <span className={s.eyebrow}>{eyebrow}</span>
-        <h2 className={s.title}>{title}</h2>
+        <Heading className={s.title}>{title}</Heading>
         {aside ? <div className={s.aside}>{aside}</div> : null}
       </div>
       <div className={s.body}>{children}</div>

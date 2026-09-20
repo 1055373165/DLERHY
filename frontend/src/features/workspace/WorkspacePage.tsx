@@ -1,31 +1,36 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { useWorkspace } from "../../app/WorkspaceContext";
+import { useBook } from "../book/BookPage";
+import { useChapterReview } from "./useChapterReview";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import type { ChapterWorklistTimelineEntry, ExecuteActionResponse } from "../../lib/api";
 import { listDocumentChapters } from "../../lib/api";
 import {
-  documentBadge,
-  formatDate,
-  formatNumber,
-  getPrimaryRunAction,
-  preferredTitle,
-  sourceLabel,
-  statusLabel,
-} from "../../lib/workflow";
-import { CostEstimateNote } from "./CostEstimateNote";
+  actionStatusLabel,
+  actionTypeLabel,
+  issueStatusLabel,
+  issueTypeCopy,
+  queuePriorityLabel,
+  rootCauseLabel,
+} from "../../lib/copy";
+import { formatDate, formatNumber, statusLabel } from "../../lib/workflow";
 import s from "./WorkspacePage.module.css";
 
 type Feedback = { tone: "success" | "error"; text: string } | null;
 
+/** The book page's 逐章审校 tab: chapter queue, memory proposals, issues and repairs (for reviewers). */
 export function WorkspacePage() {
+  const book = useBook();
+  const documentId = book.document_id;
+  // Fetch all chapters so users can browse even when the worklist is empty.
+  const allChaptersQuery = useQuery({
+    queryKey: ["document-chapters", documentId],
+    queryFn: () => listDocumentChapters(documentId),
+  });
+  const allChapters = allChaptersQuery.data ?? [];
   const {
-    currentDocument,
-    currentRun,
-    currentExports,
-    returnToHome,
     chapterWorklist,
     chapterWorklistLoading,
     chapterWorklistFilters,
@@ -36,99 +41,19 @@ export function WorkspacePage() {
     selectReviewChapter,
     currentChapterReviewDetail,
     currentChapterReviewLoading,
-    uploadPending,
-    runActionPending,
     reviewDecisionPending,
     actionExecutionPending,
     approveMemoryProposal,
     rejectMemoryProposal,
     executeChapterAction,
-    uploadFile,
-    importWebPage,
-    runPrimaryAction,
     downloadChapterAsset,
-  } = useWorkspace();
+  } = useChapterReview(documentId, allChapters, { active: ["queued", "running", "draining"].includes(book.translation.state) });
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [pageUrl, setPageUrl] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
 
-  const doc = currentDocument;
-  const action = getPrimaryRunAction(doc, currentRun);
-  const badge = documentBadge(doc, currentRun);
   const queueEntries = chapterWorklist?.entries ?? [];
 
-  // Fetch all chapters so users can browse even when worklist is empty
-  const allChaptersQuery = useQuery({
-    queryKey: ["document-chapters", doc?.document_id],
-    queryFn: () => listDocumentChapters(doc!.document_id),
-    enabled: !!doc,
-  });
-  const allChapters = allChaptersQuery.data ?? [];
-
   /* ── Handlers ── */
-
-  async function handleUpload() {
-    if (!selectedFile) return;
-    try {
-      const result = await uploadFile(selectedFile);
-      setFeedback({ tone: "success", text: `已载入：${result.title ?? selectedFile.name}` });
-      setSelectedFile(null);
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Upload failed" });
-    }
-  }
-
-  async function handleImportUrl() {
-    const url = pageUrl.trim();
-    if (!url) return;
-    try {
-      const result = await importWebPage(url);
-      setFeedback({ tone: "success", text: `已载入网页：${result.title ?? url}` });
-      setPageUrl("");
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "网页抓取失败" });
-    }
-  }
-
-  const urlForm = (compact: boolean) => (
-    <form
-      className={compact ? s.compactUploadGroup : s.urlForm}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void handleImportUrl();
-      }}
-    >
-      <input
-        type="url"
-        inputMode="url"
-        className={s.urlInput}
-        placeholder={compact ? "或粘贴网页链接…" : "https://example.com/article"}
-        aria-label="网页链接"
-        value={pageUrl}
-        onChange={(e) => {
-          setPageUrl(e.target.value);
-          setFeedback(null);
-        }}
-      />
-      <button
-        type="submit"
-        className={compact ? "btn btn-sm" : "btn"}
-        disabled={!pageUrl.trim() || uploadPending}
-      >
-        {uploadPending ? "…" : "抓取网页"}
-      </button>
-    </form>
-  );
-
-  async function handlePrimaryAction() {
-    try {
-      await runPrimaryAction();
-      setFeedback({ tone: "success", text: action.label });
-    } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Action failed" });
-    }
-  }
 
   async function handleProposal(proposalId: string, accept: boolean) {
     const payload = { actor_name: "reviewer-ui" };
@@ -138,22 +63,27 @@ export function WorkspacePage() {
       } else {
         await rejectMemoryProposal(proposalId, payload);
       }
-      setFeedback({ tone: "success", text: `Proposal ${accept ? "approved" : "rejected"}` });
+      setFeedback({ tone: "success", text: accept ? "已批准这条记忆" : "已拒绝这条记忆" });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Decision failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "提交失败" });
     }
   }
 
   async function handleAction(actionId: string) {
     try {
       const result: ExecuteActionResponse = await executeChapterAction(actionId, true);
-      const ok = result.status === "executed" || result.issue_resolved;
+      // The API answers "completed" once the action ran; the issue itself may still be open.
+      const ran = result.status === "completed";
       setFeedback({
-        tone: ok ? "success" : "error",
-        text: `Action ${result.action_id.slice(0, 8)} :: ${result.status}`,
+        tone: ran ? "success" : "error",
+        text: !ran
+          ? "修复没有执行成功，请稍后重试。"
+          : result.issue_resolved
+            ? "修复已执行，问题已解决。"
+            : "修复已执行，问题还在，复核后会再次检查。",
       });
     } catch (err) {
-      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Execute failed" });
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "执行失败" });
     }
   }
 
@@ -166,12 +96,6 @@ export function WorkspacePage() {
     }
   }
 
-  function handleReturnHome() {
-    setSelectedFile(null);
-    setFeedback(null);
-    returnToHome();
-  }
-
   /* ── Derived ── */
   const detail = currentChapterReviewDetail;
   const proposals = detail?.memory_proposals?.pending_proposals ?? [];
@@ -182,161 +106,52 @@ export function WorkspacePage() {
 
   return (
     <div className={s.layout}>
-      {/* ── Upload Hero (when no document loaded) ── */}
-      {!doc && (
-        <div className={s.uploadHero}>
-          <div className={s.uploadIllustration}>
-            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="16" y="8" width="48" height="64" rx="3" />
-              <path d="M28 8V4a2 2 0 012-2h20a2 2 0 012 2v4" />
-              <line x1="28" y1="28" x2="52" y2="28" />
-              <line x1="28" y1="36" x2="52" y2="36" />
-              <line x1="28" y1="44" x2="44" y2="44" />
-              <path d="M40 56l6-6 6 6" />
-              <line x1="46" y1="50" x2="46" y2="64" />
-            </svg>
-          </div>
-          <h2 className={s.uploadTitle}>载入书稿</h2>
-          <p className={s.uploadSubtitle}>上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译</p>
-          <label className={s.fileLabel}>
-            <input
-              type="file"
-              accept=".pdf,.epub"
-              className={s.fileInput}
-              onChange={(e) => {
-                setSelectedFile(e.target.files?.[0] ?? null);
-                setFeedback(null);
-              }}
-            />
-            <span className={s.fileText}>
-              {selectedFile ? selectedFile.name : "点击选择 .pdf / .epub 文件"}
-            </span>
-          </label>
-          <div className={s.uploadActions}>
-            <button
-              className="btn btn-primary"
-              disabled={!selectedFile || uploadPending}
-              onClick={handleUpload}
-            >
-              {uploadPending ? "上传中…" : "上传并解析"}
-            </button>
-          </div>
-          <div className={s.orDivider}>或翻译一个网页（保留原页面排版，输出中文网页）</div>
-          {urlForm(false)}
-          <p className={s.rightsNote}>
-            请只上传或抓取你有权翻译的书稿与网页（自有版权、已获授权，或法律允许的个人学习用途）。译文的发布与传播仍受原作版权约束。
-          </p>
-          {feedback && (
-            <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
-          )}
-        </div>
-      )}
-
-      {/* ── Compact upload (when document already loaded) ── */}
-      {doc && (
-        <div className={s.compactUpload}>
-          <div className={s.compactUploadGroup}>
-            <label className={s.fileLabel}>
-              <input
-                type="file"
-                accept=".pdf,.epub"
-                className={s.fileInput}
-                onChange={(e) => {
-                  setSelectedFile(e.target.files?.[0] ?? null);
-                  setFeedback(null);
-                }}
-              />
-              <span className={s.fileTextSmall}>
-                {selectedFile ? selectedFile.name : "选择新文件…"}
-              </span>
-            </label>
-            <button
-              className="btn btn-sm"
-              disabled={!selectedFile || uploadPending}
-              onClick={handleUpload}
-            >
-              {uploadPending ? "…" : "上传并解析"}
-            </button>
-          </div>
-          {urlForm(true)}
-          {feedback && (
-            <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
-          )}
-        </div>
-      )}
-
-      {/* ── Document Header (dense row) ── */}
-      {doc && (
-        <div className={s.docHeader}>
-          <div className={s.docHeaderTop}>
-            <h1 className={s.docTitle}>{preferredTitle(doc)}</h1>
-            <div className={s.docHeaderAside}>
-              <StatusBadge label={badge.label} tone={badge.tone} />
-              <button className={`btn btn-sm ${s.homeButton}`} onClick={handleReturnHome}>
-                回到首页上传新书
-              </button>
-            </div>
-          </div>
-          <div className={s.docStats}>
-            <Stat label="Status" value={statusLabel(doc.status)} />
-            <Stat label="Source" value={sourceLabel(doc.source_type)} />
-            <Stat label="Ch" value={formatNumber(doc.chapter_count)} />
-            <Stat label="Pkt" value={formatNumber(doc.packet_count)} />
-            <Stat label="Sent" value={formatNumber(doc.sentence_count)} />
-            {action.mode !== "disabled" && (
-              <button
-                className="btn btn-sm"
-                disabled={action.disabled || runActionPending}
-                onClick={handlePrimaryAction}
-              >
-                {runActionPending ? "..." : action.label}
-              </button>
-            )}
-          </div>
-          {action.mode === "create" ? <CostEstimateNote documentId={doc.document_id} /> : null}
-        </div>
+      {feedback && (
+        <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
       )}
 
       {/* ── Chapter Workbench ── */}
-      {doc && (
+      {(
         <div className={s.workbench}>
           {/* Queue Rail */}
-          <aside className={s.queueRail}>
+          <aside className={s.queueRail} aria-label="章节列表">
             <div className={s.queueHeader}>
-              <h3 className={s.queueTitle}>Chapters</h3>
+              <h2 className={s.queueTitle}>章节</h2>
               <span className={s.queueCount}>{queueEntries.length || allChapters.length}</span>
             </div>
 
             <div className={s.queueFilters}>
               <select
+                aria-label="按优先级筛选章节"
                 className={s.filterSelect}
                 value={chapterWorklistFilters.queuePriority}
                 onChange={(e) => setChapterQueuePriorityFilter(e.target.value as "all" | "immediate" | "high" | "medium")}
               >
-                <option value="all">All priority</option>
-                <option value="immediate">Immediate</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
+                <option value="all">全部优先级</option>
+                <option value="immediate">立即</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
               </select>
               <select
+                aria-label="按认领情况筛选章节"
                 className={s.filterSelect}
                 value={chapterWorklistFilters.assignment}
                 onChange={(e) => setChapterAssignmentFilter(e.target.value as "all" | "assigned" | "unassigned")}
               >
-                <option value="all">All assign</option>
-                <option value="assigned">Assigned</option>
-                <option value="unassigned">Unassigned</option>
+                <option value="all">全部指派</option>
+                <option value="assigned">已指派</option>
+                <option value="unassigned">未指派</option>
               </select>
               {(chapterWorklistFilters.queuePriority !== "all" ||
                 chapterWorklistFilters.assignment !== "all") && (
                 <button className={s.filterClear} onClick={clearChapterWorklistFilters}>
-                  Reset
+                  清除
                 </button>
               )}
             </div>
 
             <div className={s.queueList}>
-              {chapterWorklistLoading && <div className={s.loading}>Loading...</div>}
+              {chapterWorklistLoading && <div className={s.loading}>加载中…</div>}
               {queueEntries.map((entry) => (
                 <button
                   key={entry.chapter_id}
@@ -347,13 +162,13 @@ export function WorkspacePage() {
                   <div className={s.queueCardTop}>
                     <span className={s.queueOrdinal}>CH.{entry.ordinal}</span>
                     <span className={s.queuePriority} data-pri={entry.queue_priority}>
-                      {entry.queue_priority}
+                      {queuePriorityLabel(entry.queue_priority)}
                     </span>
                   </div>
                   <div className={s.queueCardTitle}>{entry.title_src}</div>
                   <div className={s.queueCardMeta}>
-                    <span>{entry.open_issue_count} issues</span>
-                    <span>{entry.memory_proposals.pending_proposal_count} proposals</span>
+                    <span>{entry.open_issue_count} 个问题</span>
+                    <span>{entry.memory_proposals.pending_proposal_count} 条记忆待确认</span>
                   </div>
                 </button>
               ))}
@@ -373,7 +188,7 @@ export function WorkspacePage() {
                 ))
               )}
               {!chapterWorklistLoading && queueEntries.length === 0 && allChapters.length === 0 && (
-                <div className={s.emptyQueue}>No chapters found.</div>
+                <div className={s.emptyQueue}>没有章节。</div>
               )}
             </div>
           </aside>
@@ -381,11 +196,11 @@ export function WorkspacePage() {
           {/* Detail Panel */}
           <div className={s.detailPanel}>
             {!selectedReviewChapterId && (
-              <div className={s.detailEmpty}>Select a chapter from the queue.</div>
+              <div className={s.detailEmpty}>从左侧选择一个章节。</div>
             )}
 
             {selectedReviewChapterId && currentChapterReviewLoading && (
-              <div className={s.detailEmpty}>Loading chapter data...</div>
+              <div className={s.detailEmpty}>正在加载章节…</div>
             )}
 
             {selectedReviewChapterId && detail && (
@@ -393,9 +208,9 @@ export function WorkspacePage() {
                 {/* Chapter Header */}
                 <div className={s.chapterHeader}>
                   <div className={s.chapterHeaderTop}>
-                    <h3 className={s.chapterTitle}>
+                    <h2 className={s.chapterTitle}>
                       CH.{selectedChapterEntry?.ordinal ?? detail.ordinal} {detail.title_src}
-                    </h3>
+                    </h2>
                     <button
                       className="btn btn-sm"
                       onClick={() => handleChapterDownload(selectedReviewChapterId)}
@@ -404,16 +219,16 @@ export function WorkspacePage() {
                     </button>
                   </div>
                   <div className={s.chapterStats}>
-                    <Stat label="Issues" value={String(detail.current_open_issue_count ?? 0)} />
-                    <Stat label="Proposals" value={String(proposals.length)} />
-                    <Stat label="Actions" value={String(actions.length)} />
+                    <Stat label="问题" value={String(detail.current_open_issue_count ?? 0)} />
+                    <Stat label="记忆" value={String(proposals.length)} />
+                    <Stat label="修复" value={String(actions.length)} />
                   </div>
                 </div>
 
                 {/* Memory Proposals */}
                 {proposals.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>MEMORY PROPOSALS</h4>
+                    <h3 className={s.sectionTitle}>待确认的记忆</h3>
                     <div className={s.proposalList}>
                       {proposals.map((p) => (
                         <div key={p.proposal_id} className={s.proposalRow}>
@@ -427,14 +242,14 @@ export function WorkspacePage() {
                               disabled={reviewDecisionPending}
                               onClick={() => handleProposal(p.proposal_id, true)}
                             >
-                              Approve
+                              批准
                             </button>
                             <button
                               className="btn btn-sm btn-reject"
                               disabled={reviewDecisionPending}
                               onClick={() => handleProposal(p.proposal_id, false)}
                             >
-                              Reject
+                              拒绝
                             </button>
                           </div>
                         </div>
@@ -446,12 +261,12 @@ export function WorkspacePage() {
                 {/* Issues */}
                 {issues.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>RECENT ISSUES</h4>
+                    <h3 className={s.sectionTitle}>最近的问题</h3>
                     <div className={s.issueList}>
                       {issues.map((issue) => (
                         <div key={issue.issue_id} className={s.issueRow}>
                           <StatusBadge
-                            label={issue.status}
+                            label={issueStatusLabel(issue.status)}
                             tone={
                               issue.status === "resolved" ? "success"
                               : issue.severity === "blocking" ? "danger"
@@ -459,7 +274,7 @@ export function WorkspacePage() {
                             }
                           />
                           <span className={s.issueType}>
-                            {issue.issue_type} :: {issue.root_cause_layer}
+                            {issueTypeCopy(issue.issue_type).label} · 出在{rootCauseLabel(issue.root_cause_layer)}
                           </span>
                           {issue.suggested_action && (
                             <span className={s.issueSuggestion}>{issue.suggested_action}</span>
@@ -473,21 +288,21 @@ export function WorkspacePage() {
                 {/* Actions */}
                 {actions.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>PENDING ACTIONS</h4>
+                    <h3 className={s.sectionTitle}>待执行的修复</h3>
                     <div className={s.actionList}>
                       {actions.map((act) => (
                         <div key={act.action_id} className={s.actionRow}>
                           <StatusBadge
-                            label={act.status}
-                            tone={act.status === "executed" ? "success" : "warning"}
+                            label={actionStatusLabel(act.status)}
+                            tone={act.status === "completed" ? "success" : "warning"}
                           />
-                          <span className={s.actionType}>{act.action_type}</span>
+                          <span className={s.actionType}>{actionTypeLabel(act.action_type)}</span>
                           <button
                             className="btn btn-sm"
                             disabled={actionExecutionPending}
                             onClick={() => handleAction(act.action_id)}
                           >
-                            Execute
+                            执行
                           </button>
                         </div>
                       ))}
@@ -498,7 +313,7 @@ export function WorkspacePage() {
                 {/* Timeline */}
                 {timeline.length > 0 && (
                   <div className={s.section}>
-                    <h4 className={s.sectionTitle}>TIMELINE</h4>
+                    <h3 className={s.sectionTitle}>时间线</h3>
                     <div className={s.timelineList}>
                       {timeline.slice(0, 20).map((entry: ChapterWorklistTimelineEntry) => (
                         <div key={entry.event_id} className={s.timelineRow}>

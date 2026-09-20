@@ -52,6 +52,8 @@ FULL_PIPELINE_STAGES: tuple[str, ...] = (
     EXPORT_REVIEW_STAGE,
 )
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
+# Run request flag: approve the terminology agent's term locks without asking (see RunPlan.fast_reading).
+FAST_READING_REQUEST_KEY = "fast_reading"
 # Web page documents also get the Chinese page in the original layout, right after the reading copy.
 WEB_EXPORT_STAGE = ExportType.WEB_HTML.value
 # Run request flag, set when a TRANSLATE_FULL run is created for a web page document.
@@ -76,6 +78,9 @@ class RunPlan:
     # Opt-in (run request repair_agent=on): blockers left after rule repair go
     # to the Repair Agent stage instead of failing the review stage.
     repair_agent: bool = False
+    # Fast reading mode (run request fast_reading=on): the terminology agent's term locks are
+    # approved automatically instead of waiting for a person; each is still recorded as an approval.
+    fast_reading: bool = False
     # How many doubtful PDF pages the Structure Agent reviews: sampled | full | skip (default).
     structure_review_mode: str = DEFAULT_STRUCTURE_REVIEW_MODE
     # Opt-in (run request structure_edits=on): the Structure Agent may propose block edits
@@ -117,6 +122,7 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         mode = _mode(request.get("terminology"), TERMINOLOGY_MODES, DEFAULT_TERMINOLOGY_MODE)
         review_mode = _mode(request.get("model_review"), MODEL_REVIEW_MODES, DEFAULT_MODEL_REVIEW_MODE)
         repair_agent = str(request.get("repair_agent") or "off").strip().lower() in {"on", "true", "1", "yes"}
+        fast_reading = str(request.get(FAST_READING_REQUEST_KEY) or "off").strip().lower() in {"on", "true", "1", "yes"}
         structure_mode = _mode(request.get("structure_review"), STRUCTURE_REVIEW_MODES, DEFAULT_STRUCTURE_REVIEW_MODE)
         structure_edits = str(request.get("structure_edits") or "off").strip().lower() in {"on", "true", "1", "yes"}
         skipped = {TERMINOLOGY_STAGE} if mode == "skip" else set()
@@ -139,6 +145,7 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             terminology_mode=mode,
             model_review_mode=review_mode,
             repair_agent=repair_agent,
+            fast_reading=fast_reading,
             structure_review_mode=structure_mode,
             structure_edits=structure_edits,
             export_review_mode=export_review_mode,

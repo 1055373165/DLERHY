@@ -71,7 +71,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 
@@ -86,7 +86,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   min-width: 80px;
 }
 
@@ -153,9 +153,12 @@
 .bookMeta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-1);
-  font-size: 10px;
+  min-width: 0;
+  font-size: var(--text-xs);
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .tag {
@@ -352,7 +355,7 @@
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -390,7 +393,7 @@
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -472,6 +475,11 @@
   .bookRow {
     flex-wrap: wrap;
     gap: var(--sp-2);
+  }
+
+  /* The title and its details take the whole row; the buttons go under them. */
+  .bookInfo {
+    flex-basis: 100%;
   }
 
   .bookProgress {

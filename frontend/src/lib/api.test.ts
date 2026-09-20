@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { downloadDocumentExport } from "./api";
+import { downloadDocumentExport, previewDocumentExport } from "./api";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -68,5 +68,28 @@ describe("downloadDocumentExport", () => {
     );
 
     await expect(downloadDocumentExport("doc-1", "merged_html", { pollIntervalMs: 1 })).rejects.toThrow("export_gate");
+  });
+
+  it("waits while the book is busy producing the format instead of failing", async () => {
+    let downloads = 0;
+    const exportPosts: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/exports/download")) {
+          downloads += 1;
+          return downloads < 3 ? jsonResponse({ detail: "none yet" }, 404) : new Response("<p>中文</p>", { status: 200 });
+        }
+        if (url.endsWith("/documents/doc-1/export") && init?.method === "POST") {
+          exportPosts.push(downloads);
+          return jsonResponse({ detail: "这本书还有一项任务在进行（翻译或导出），结束后再试。" }, 409);
+        }
+        throw new Error(`Unhandled fetch: ${url}`);
+      }),
+    );
+    const page = await previewDocumentExport("doc-1", "web_html", { pollIntervalMs: 1 });
+    expect(page).toEqual({ kind: "html", text: "<p>中文</p>" });
+    expect(exportPosts).toEqual([1, 2]);
   });
 });

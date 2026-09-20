@@ -57,6 +57,9 @@ const INVALIDATED_QUERY_PREFIXES = [
   "approvals",
   "agent-turns",
   "book-guide",
+  "overview",
+  "inbox",
+  "terms",
 ];
 
 const INVALIDATE_DEBOUNCE_MS = 400;

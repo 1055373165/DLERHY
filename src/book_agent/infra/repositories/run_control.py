@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import (
@@ -167,13 +167,22 @@ class RunControlRepository:
         *,
         limit: int | None = None,
         offset: int = 0,
+        milestones_only: bool = False,
     ) -> RunEventPageBundle:
-        total_count = self.session.scalar(
-            select(func.count(RunAuditEvent.id)).where(RunAuditEvent.run_id == run_id)
-        ) or 0
+        conditions = [RunAuditEvent.run_id == run_id]
+        if milestones_only:
+            # What a reader follows: the run's own state changes and failed steps, not the
+            # per-packet lease/start/success chatter (hundreds per book).
+            conditions.append(
+                or_(
+                    and_(RunAuditEvent.event_type.like("run.%"), RunAuditEvent.event_type != "run.work_items.seeded"),
+                    RunAuditEvent.event_type.in_(("work_item.retryable_failed", "work_item.terminal_failed")),
+                )
+            )
+        total_count = self.session.scalar(select(func.count(RunAuditEvent.id)).where(*conditions)) or 0
         query = (
             select(RunAuditEvent)
-            .where(RunAuditEvent.run_id == run_id)
+            .where(*conditions)
             .order_by(RunAuditEvent.created_at.desc(), RunAuditEvent.id.desc())
             .offset(offset)
         )

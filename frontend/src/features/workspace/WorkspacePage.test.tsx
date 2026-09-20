@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
 
 import { App } from "../../app/App";
+import { makeOverview } from "../../test/fixtures";
 
 const STORAGE_KEY_DOCUMENT = "book-agent.current-document-id";
 const STORAGE_KEY_WORKBENCH_MODE = "book-agent.workbench-mode";
@@ -42,7 +43,7 @@ interface ChapterState {
   }>;
 }
 
-function installFetchMock() {
+function installFetchMock(options: { document?: Record<string, unknown> } = {}) {
   const chapterState: Record<string, ChapterState> = {
     "ch-1": {
       proposalStatus: "proposed",
@@ -449,6 +450,7 @@ function installFetchMock() {
         bilingual_export_ready: true,
       },
     ],
+    ...options.document,
   };
 
   const runPayload = {
@@ -496,6 +498,12 @@ function installFetchMock() {
     const url = new URL(rawUrl, "http://localhost");
     const path = url.pathname;
 
+    if (path.endsWith("/overview")) {
+      return jsonResponse(makeOverview("doc-123", { title: "Systems Thinking", source_type: "epub" }));
+    }
+    if (path.endsWith("/v1/inbox")) {
+      return jsonResponse({ count: 0, items: [] });
+    }
     if (path.endsWith("/v1/health")) {
       return jsonResponse({ status: "ok" });
     }
@@ -833,49 +841,20 @@ function jsonResponse(payload: unknown) {
   });
 }
 
-describe("Workspace page", () => {
-  it("can return from an opened document to the upload homepage", async () => {
+describe("Chapter review tab", () => {
+  it("reports an executed repair as done, not as a failure", async () => {
     window.localStorage.setItem(STORAGE_KEY_DOCUMENT, "doc-123");
     installFetchMock();
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={["/books/doc-123/chapters"]}>
         <App />
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole("button", { name: "回到首页上传新书" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "回到首页上传新书" }));
-
-    expect(await screen.findByRole("heading", { name: "载入书稿" })).toBeInTheDocument();
-    expect(screen.getByText("上传英文 PDF 或 EPUB，或粘贴英文网页链接，开始翻译")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "回到首页上传新书" })).not.toBeInTheDocument();
-    expect(window.localStorage.getItem(STORAGE_KEY_DOCUMENT)).toBeNull();
-  });
-
-  it("loads a pasted web page link as a document", async () => {
-    const fetchMock = installFetchMock();
-    const user = userEvent.setup();
-
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>
-    );
-
-    const input = await screen.findByRole("textbox", { name: "网页链接" });
-    await user.click(input);
-    await user.paste("https://www.anthropic.com/institute/recursive-self-improvement");
-    await user.click(screen.getByRole("button", { name: "抓取网页" }));
-
-    // The message moves from the upload homepage to the compact bar once the document loads: query afresh.
-    await waitFor(() => expect(screen.getByText(/已载入网页/)).toBeInTheDocument());
-    const call = fetchMock.mock.calls.find(([request]) => String(request).includes("/v1/documents/bootstrap-url"));
-    expect(call).toBeDefined();
-    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
-      url: "https://www.anthropic.com/institute/recursive-self-improvement",
-    });
+    const execute = await screen.findByRole("button", { name: "执行" });
+    await user.click(execute);
+    expect(await screen.findByText("修复已执行，问题已解决。")).toBeInTheDocument();
   });
 });

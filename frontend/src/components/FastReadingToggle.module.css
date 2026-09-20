@@ -1,0 +1,19 @@
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  max-width: 640px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.toggle input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}

@@ -175,9 +175,9 @@ export function ProvidersPage() {
   });
 
   return (
-    <div className={s.layout}>
+    <div className={s.layout} data-editing={editing ? true : undefined}>
       <Surface
-        eyebrow="PROVIDERS"
+        eyebrow="服务商"
         title="模型服务商"
         aside={
           <button
@@ -250,7 +250,7 @@ export function ProvidersPage() {
       </Surface>
 
       {editing ? (
-        <Surface eyebrow={editing === "new" ? "NEW" : "EDIT"} title={editing === "new" ? "添加服务商" : "编辑服务商"}>
+        <Surface eyebrow={editing === "new" ? "新增" : "编辑"} title={editing === "new" ? "添加服务商" : "编辑服务商"}>
           <form
             className={s.form}
             onSubmit={(event) => {

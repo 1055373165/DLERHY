@@ -1,0 +1,205 @@
+/* The way in is one column down the middle; the shelf below uses the whole width. */
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-9);
+  padding-top: var(--sp-6);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.title {
+  font-family: var(--font-cjk);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-5);
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.drop:hover,
+.drop[data-dragging] {
+  border-color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.drop[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dropTitle {
+  font-family: var(--font-cjk);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.dropHint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.urlRow {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.urlLabel {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.urlInput {
+  flex: 1;
+  min-width: 240px;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--text-base, 0.9375rem);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.fileLabel {
+  flex: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.drop:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.fileInput {
+  /* Out of sight but not out of the tab order: the drop zone is its visible face. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notice {
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid var(--amber);
+  background: var(--amber-light);
+  font-size: var(--text-sm);
+}
+
+.notice a {
+  margin-left: var(--sp-2);
+}
+
+.error {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+.rights {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.recentHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.recentTitle {
+  font-family: var(--font-cjk);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: var(--sp-4) 0;
+}
+
+.cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  height: 100%;
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardTitle {
+  font-family: var(--font-cjk);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.cardMeta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.cardMeta[data-needs-you] {
+  color: var(--amber);
+  font-weight: 500;
+}

@@ -63,3 +63,22 @@ class AgentTurnResponse(BaseSchema):
     result_json: dict[str, Any] = Field(default_factory=dict)
     started_at: str | None = None
     finished_at: str | None = None
+
+
+class TermResponse(BaseSchema):
+    source_term: str
+    target_term: str
+    term_type: str
+    lock_level: str
+    # Who locked it last, from the approval record: e.g. auto.fast_reading_mode, or human:<name>.
+    locked_by: str | None = None
+
+
+class TermUpdateRequest(BaseSchema):
+    source_term: str = Field(min_length=1, max_length=500)
+    # New rendering; required when lock is true.
+    target_term: str | None = Field(default=None, max_length=500)
+    # false unlocks the term: review stops blocking on other renderings.
+    lock: bool = True
+    decided_by: str = Field(min_length=1, max_length=200)
+

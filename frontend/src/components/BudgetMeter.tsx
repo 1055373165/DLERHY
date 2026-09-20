@@ -7,8 +7,9 @@ function usd(value: number): string {
   return `$${value.toFixed(value >= 100 ? 0 : 2)}`;
 }
 
-/** This month's model spend of the caller's organisation; hidden when the server has no budget endpoint. */
-export function BudgetMeter() {
+/** This month's model spend of the caller's organisation; hidden when the server has no budget endpoint.
+ *  `statement` adds the CSV download, which belongs on the 设置 page rather than in the sidebar. */
+export function BudgetMeter({ statement = false }: { statement?: boolean } = {}) {
   const query = useQuery({
     queryKey: ["org-budget"],
     queryFn: getCurrentOrgBudget,
@@ -27,7 +28,7 @@ export function BudgetMeter() {
   const ratio = cap ? Math.min(1, budget.spent_usd / cap) : 0;
   const tone = budget.exhausted ? "danger" : ratio >= 0.8 ? "warning" : "ok";
   return (
-    <div className={s.meter} data-tone={tone} title={`${budget.org_name} · 自 ${budget.period_start.slice(0, 10)} 起`}>
+    <div className={s.meter} data-tone={tone} title={`本月用量 · 自 ${budget.period_start.slice(0, 10)} 起`}>
       <div className={s.row}>
         <span className={s.label}>本月花费</span>
         <span className={s.value}>
@@ -48,11 +49,13 @@ export function BudgetMeter() {
         </div>
       ) : null}
       {credit?.exhausted ? <div className={s.warning}>余额已用完：充值后运行才能继续。</div> : null}
-      <button type="button" className={s.statement} onClick={() =>
-          void downloadUsageStatement().catch((err) => window.alert(err instanceof Error ? err.message : "下载失败"))
-        }>
-        下载本月用量明细（CSV）
-      </button>
+      {statement ? (
+        <button type="button" className={s.statement} onClick={() =>
+            void downloadUsageStatement().catch((err) => window.alert(err instanceof Error ? err.message : "下载失败"))
+          }>
+          下载本月用量明细（CSV）
+        </button>
+      ) : null}
     </div>
   );
 }

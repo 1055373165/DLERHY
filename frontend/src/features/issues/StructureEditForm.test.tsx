@@ -47,7 +47,7 @@ describe("StructureEditForm", () => {
     expect(screen.getByLabelText("前一块")).toHaveValue("b1");
     expect(screen.getByLabelText("后一块")).toHaveValue("b2");
     fireEvent.click(screen.getByRole("button", { name: "应用编辑" }));
-    await screen.findByText(/解析版本 v3.*1 个 packet 需要重译/);
+    await screen.findByText(/解析版本 v3.*1 段需要重译/);
     expect(bodies[0]).toEqual({ kind: "merge_blocks", reason: "one paragraph cut at the page break", first_block_id: "b1", second_block_id: "b2" });
   });
 

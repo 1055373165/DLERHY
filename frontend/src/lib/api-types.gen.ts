@@ -82,6 +82,10 @@ export interface BootstrapUrlRequest {
   url: string;
 }
 
+export interface CapabilitiesResponse {
+  pdf_renderer?: boolean;
+}
+
 export interface ChapterMemoryProposalDecisionAuditResponse {
   proposal_id: string;
   decision: "approved" | "rejected";
@@ -841,6 +845,7 @@ export interface MetaResponse {
   environment: string;
   api_prefix: string;
   docs_path: string;
+  capabilities?: CapabilitiesResponse;
 }
 
 export interface OrgBudgetResponse {
@@ -1116,6 +1121,21 @@ export interface StructureRefreshResponse {
   created_sentence_count?: number;
   carried_ratio?: number | null;
   retranslate_packet_count?: number;
+}
+
+export interface TermResponse {
+  source_term: string;
+  target_term: string;
+  term_type: string;
+  lock_level: string;
+  locked_by?: string | null;
+}
+
+export interface TermUpdateRequest {
+  source_term: string;
+  target_term?: string | null;
+  lock?: boolean;
+  decided_by: string;
 }
 
 export interface TranslateDocumentRequest {

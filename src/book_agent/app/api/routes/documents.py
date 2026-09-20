@@ -511,18 +511,9 @@ def download_document_export(
 
 
 def _pdf_renderer_installed() -> bool:
-    """PDF export prints the merged HTML with Playwright's Chromium: both the package and the browser."""
-    import importlib.util
+    from book_agent.app.capabilities import pdf_renderer_installed
 
-    if importlib.util.find_spec("playwright") is None:
-        return False
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as playwright:
-            return Path(playwright.chromium.executable_path).exists()
-    except Exception:
-        return False
+    return pdf_renderer_installed()
 
 
 def _recovery_skills_response(document) -> RecoverySkillsResponse:
@@ -840,6 +831,8 @@ def _enqueue_document_run(
     run_type: DocumentRunType,
     run_request: dict[str, Any],
 ) -> DocumentRunSummaryResponse:
+    from sqlalchemy.exc import IntegrityError
+
     control = RunControlService(RunControlRepository(session))
     try:
         created = control.create_run(
@@ -850,6 +843,13 @@ def _enqueue_document_run(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        # A book has at most one active run (uq_document_runs_active_per_document): say it is busy.
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="这本书还有一项任务在进行（翻译或导出），结束后再试。",
+        ) from exc
     try:
         summary = control.resume_run(created.run_id, actor_id="api.documents", note="enqueued")
     except RunControlTransitionError as exc:
