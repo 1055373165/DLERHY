@@ -127,22 +127,67 @@ export function BookPage() {
   const estimate = data.cost?.max_charge_usd ?? null;
   const showStartPanel = primary.kind === "start" && !act.isPending && !(justImported && decision?.auto);
 
+  const bookHeader = (
+    <header className={s.header}>
+      <h1 className={s.title}>{data.title ?? "未命名"}</h1>
+      {data.source_url && (
+        <a className={s.source} href={data.source_url} target="_blank" rel="noreferrer noopener">
+          原网页 ↗
+        </a>
+      )}
+    </header>
+  );
+
+  const bookTabs = (
+    <nav className={s.tabs} aria-label="这本书">
+      {TABS.map((tab) => (
+        <NavLink key={tab.to} to={tab.to} className={({ isActive }) => `${s.tab} ${isActive ? s.tabActive : ""}`}>
+          {tab.label}
+        </NavLink>
+      ))}
+      <MoreTabs />
+    </nav>
+  );
+
+  const onReader = location.pathname.endsWith("/read");
+  const showProgressBar = (ACTIVE.has(state) || (state === "paused" && progress.total > 0)) && progress.total > 0;
+  // What the card would put under the headline. With none of it, the card is a sentence in a box:
+  // on the 阅读 tab of a finished book that is a whole phone screen spent saying "it is ready".
+  const hasSomethingToDo =
+    showStartPanel ||
+    showProgressBar ||
+    act.isPending ||
+    act.isError ||
+    primary.kind === "resume" ||
+    primary.kind === "retry" ||
+    primary.kind === "stop" ||
+    (primary.kind === "read" && !onReader) ||
+    (data.translation.stop_reason_text && data.translation.stop_reason_text !== data.headline) ||
+    (ACTIVE.has(state) && data.translation.auto_started);
+
+  if (!hasSomethingToDo) {
+    return (
+      <div className={s.layout}>
+        {bookHeader}
+        <p className={s.quietStatus} role="status">
+          {data.headline}
+        </p>
+        {data.needs_you.length > 0 && <NeedsYou documentId={documentId} items={data.needs_you} />}
+        {bookTabs}
+        <Outlet context={data} />
+      </div>
+    );
+  }
+
   return (
     <div className={s.layout}>
-      <header className={s.header}>
-        <h1 className={s.title}>{data.title ?? "未命名"}</h1>
-        {data.source_url && (
-          <a className={s.source} href={data.source_url} target="_blank" rel="noreferrer noopener">
-            原网页 ↗
-          </a>
-        )}
-      </header>
+      {bookHeader}
 
       <section className={s.banner} data-state={state} aria-label="状态">
         <div className={s.headline} role="status">
           {data.headline}
         </div>
-        {(ACTIVE.has(state) || (state === "paused" && progress.total > 0)) && progress.total > 0 && (
+        {showProgressBar && (
           <div className={s.progress} aria-label={`进度 ${pct}%`}>
             <span className={s.progressFill} style={{ width: `${pct}%` }} />
           </div>
@@ -157,7 +202,7 @@ export function BookPage() {
           <div className={s.note}>{data.translation.stop_reason_text}</div>
         )}
         <div className={s.row}>
-          {primary.kind === "read" && !location.pathname.endsWith("/read") && (
+          {primary.kind === "read" && !onReader && (
             <Link className="btn btn-primary" to={`/books/${documentId}/read`}>
               {primary.label}
             </Link>
@@ -202,14 +247,7 @@ export function BookPage() {
 
       {data.needs_you.length > 0 && <NeedsYou documentId={documentId} items={data.needs_you} />}
 
-      <nav className={s.tabs} aria-label="这本书">
-        {TABS.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} className={({ isActive }) => `${s.tab} ${isActive ? s.tabActive : ""}`}>
-            {tab.label}
-          </NavLink>
-        ))}
-        <MoreTabs />
-      </nav>
+      {bookTabs}
 
       <Outlet context={data} />
     </div>

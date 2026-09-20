@@ -39,6 +39,14 @@
   border-color: var(--red);
 }
 
+/* A finished book on the 阅读 tab has nothing to ask of the reader: one line, not a card. */
+.quietStatus {
+  margin: 0;
+  font-family: var(--font-cjk);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
 .headline {
   font-family: var(--font-cjk);
   font-size: var(--text-lg);

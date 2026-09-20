@@ -63,7 +63,7 @@ def _seed_issues(db: Path, document_id: str) -> int:
         {
             "issue_type": "MISTRANSLATION_SEMANTIC",
             "severity": Severity.HIGH,
-            "blocking": True,
+            "blocking": False,
             "detector": Detector.MODEL,
             "root_cause_layer": RootCauseLayer.TRANSLATION,
             "evidence_json": {
@@ -95,7 +95,7 @@ def _seed_issues(db: Path, document_id: str) -> int:
         {
             "issue_type": "OMISSION",
             "severity": Severity.CRITICAL,
-            "blocking": True,
+            "blocking": False,
             "detector": Detector.RULE,
             "root_cause_layer": RootCauseLayer.ALIGNMENT,
             "evidence_json": {
@@ -337,10 +337,17 @@ def _overflow(page) -> list[str]:
 
 
 def _primary_action(page) -> list[str]:
-    """The status card must always show the one thing to do next, at any width."""
+    """The status card must always show the one thing to do next, at any width.
+
+    A book with nothing to do — the finished translation, seen from the 阅读 tab — says so in a
+    line instead of a card. What must never happen is a card that states a status and offers no
+    way to act on it.
+    """
     banner = page.locator("section[aria-label=状态]")
     if banner.count() == 0:
-        return ["书页上没有状态卡片"]
+        if page.locator("nav[aria-label=这本书]").count() == 0:
+            return ["书页上既没有状态卡片，也没有标签栏"]
+        return []
     action = banner.get_by_role("button").or_(banner.get_by_role("link")).filter(has_text=PRIMARY_ACTION)
     visible = [i for i in range(action.count()) if action.nth(i).is_visible()]
     if visible:
@@ -575,7 +582,13 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
 
         # Narrow: the tabs and the sidebar have to survive a phone-width window.
         page.set_viewport_size({"width": 420, "height": 860})
-        for name, path in [("home", "/"), (f"book-progress", f"/books/{document_id}/progress")]:
+        _seed_issues(db, document_id)
+        for name, path in [
+            ("home", "/"),
+            ("book-progress", f"/books/{document_id}/progress"),
+            ("book-read", f"/books/{document_id}/read"),
+            ("book-issues", f"/books/{document_id}/issues"),
+        ]:
             findings += _visit(page, base, path, name=f"{name}-narrow", shots=shots, theme="light", check=True)
         page.set_viewport_size({"width": 1280, "height": 900})
 
@@ -625,7 +638,10 @@ def main() -> int:
         print("axe-core is missing: cd frontend && npm install", file=sys.stderr)
         return 2
 
-    work = Path(tempfile.mkdtemp(prefix="book-agent-look-"))
+    # Under the repo, not the system temp dir: the exports table refuses a temp-dir path,
+    # so a run whose workspace lives in $TMPDIR can never finish its exports.
+    (ROOT / ".test-tmp").mkdir(exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="look-", dir=ROOT / ".test-tmp"))
     dist = work / "dist"
     api = None
     try:
