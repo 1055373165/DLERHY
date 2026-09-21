@@ -45,6 +45,9 @@ from book_agent.workers.llm_calls import observed_llm_call
 logger = logging.getLogger(__name__)
 
 
+AUTO_BUDGET_POLICY_ID = "auto.fast_reading_budget"
+
+
 class LeaseLost(RuntimeError):
     """The runner's caller may raise this from ``lease_check`` to abandon the turn."""
 
@@ -73,6 +76,9 @@ class AgentTurnRunner:
     lease_check: Callable[[Session], None] | None = None
     # Extra context handed to tools (e.g. services the agent may use).
     tool_extras: dict[str, Any] = field(default_factory=dict)
+    # How many times this turn may double its own budget instead of pausing for a person.
+    # Fast reading mode grants one; otherwise an exhausted budget waits for a decision.
+    auto_budget_grants: int = 0
 
     # --- public -------------------------------------------------------------
 
@@ -112,8 +118,7 @@ class AgentTurnRunner:
             items = ledger.list_items(turn_id)
             budget = TurnBudget.from_json(turn.budget_json)
             exhausted = budget.exceeded(turn.usage_json or {})
-            if exhausted is not None:
-                self._pause_for_budget(session, ledger, turn, exhausted)
+            if exhausted is not None and self._halt_for_budget(session, ledger, turn, exhausted):
                 return _PreparedStep(outcome=self._outcome(turn))
             if self.compaction_threshold_tokens is not None and conversation_size(items) > self.compaction_threshold_tokens:
                 self._compact(session, ledger, turn, items)
@@ -401,7 +406,12 @@ class AgentTurnRunner:
 
     # --- budget / compaction / finish ----------------------------------------
 
-    def _pause_for_budget(self, session: Session, ledger: AgentLedgerRepository, turn: AgentTurn, reason: str) -> None:
+    def _halt_for_budget(self, session: Session, ledger: AgentLedgerRepository, turn: AgentTurn, reason: str) -> bool:
+        """True when the turn stops here; False when it granted itself more budget and goes on."""
+        if self.auto_budget_grants > 0:
+            self.auto_budget_grants -= 1
+            self._extend_budget_without_asking(session, ledger, turn, reason)
+            return False
         approval = ledger.create_approval(
             document_id=turn.document_id,
             turn_id=turn.id,
@@ -419,6 +429,44 @@ class AgentTurnRunner:
             run_id=turn.run_id,
             chapter_id=None,
             payload={"approval_id": approval.id, "kind": "budget_extension", "reason": reason},
+        )
+        return True
+
+    def _extend_budget_without_asking(
+        self, session: Session, ledger: AgentLedgerRepository, turn: AgentTurn, reason: str
+    ) -> None:
+        """Double this turn's budget on the spot, on record, instead of waiting for a person.
+
+        Fast reading mode promises not to interrupt; a budget the agent outgrew is the kind of
+        decision it was told to make on its own.
+        """
+        budget = dict(turn.budget_json or {})
+        extension = {key: int(budget.get(key, 0) or 0) for key in ("max_steps", "max_tool_calls")}
+        for key, value in extension.items():
+            budget[key] = int(budget.get(key, 0) or 0) + value
+        turn.budget_json = budget
+        approval = ledger.create_approval(
+            document_id=turn.document_id,
+            turn_id=turn.id,
+            kind="budget_extension",
+            payload={"reason": reason, "extension": extension, "usage": dict(turn.usage_json or {})},
+            status=ApprovalStatus.AUTO_APPROVED,
+            policy_id=AUTO_BUDGET_POLICY_ID,
+            decided_by=AUTO_BUDGET_POLICY_ID,
+        )
+        ledger.append_item(
+            turn.id,
+            kind=AgentItemKind.APPROVAL_RESULT,
+            content={"approval_id": approval.id, "kind": "budget_extension", "approved": True, "decided_by": AUTO_BUDGET_POLICY_ID},
+        )
+        session.flush()
+        trace.approval_decided(
+            session,
+            turn_id=turn.id,
+            agent_kind=turn.agent_kind,
+            run_id=turn.run_id,
+            chapter_id=None,
+            payload={"approval_id": approval.id, "approved": True, "decided_by": AUTO_BUDGET_POLICY_ID, "reason": reason},
         )
 
     def _compact(self, session: Session, ledger: AgentLedgerRepository, turn: AgentTurn, items: list[AgentItem]) -> None:

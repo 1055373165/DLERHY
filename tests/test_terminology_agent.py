@@ -121,6 +121,18 @@ class TerminologyAgentTests(unittest.TestCase):
         self.assertEqual(frequent.policy_id, "auto.lock_frequent_terms")
         self.assertEqual(rare.kind.value, "require_approval")
 
+    def test_the_default_budget_fits_a_technical_book_glossary(self) -> None:
+        # A distributed-systems book locked 100 terms; at 120 tool calls the run stopped to ask
+        # for a budget extension halfway through the glossary.
+        with self.session_factory() as session:
+            seed = TerminologyAgent(session).start_turn(
+                document_id=self.document_id, model_name="fake", extraction_client=None
+            )
+            session.commit()
+            budget = AgentLedgerRepository(session).get_turn(seed.turn_id).budget_json
+        self.assertGreaterEqual(budget["max_tool_calls"], 250)
+        self.assertGreaterEqual(budget["max_steps"], 40)
+
     def test_agent_turn_records_decisions_and_book_md_reaches_the_prompt(self) -> None:
         model = _ScriptedModel(
             [

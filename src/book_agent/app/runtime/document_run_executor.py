@@ -854,6 +854,8 @@ class DocumentRunExecutor:
                 policy=policy,
                 lease_check=_lease_check,
                 tool_extras={"workflow_factory": self._workflow_service},
+                # Fast reading mode promised not to interrupt: let the turn extend itself once.
+                auto_budget_grants=1 if bool((input_bundle or {}).get("fast_reading")) else 0,
             )
             try:
                 outcome = runner.run(turn_id)
