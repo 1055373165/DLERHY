@@ -9399,6 +9399,63 @@ class PersistenceAndReviewTests(unittest.TestCase):
             ]
             self.assertEqual(unlocked_issues, [])
 
+    def test_a_term_a_rule_locked_reports_without_blocking_the_book(self) -> None:
+        from book_agent.domain.enums import ApprovalStatus
+        from book_agent.domain.models.agent import Approval
+
+        document_id = self._bootstrap_custom_epub_to_db(
+            [("Chapter One", "chapter1.xhtml", AGENTIC_AI_XHTML)]
+        )
+        with self.session_factory() as session:
+            bundle = BootstrapRepository(session).load_document_bundle(document_id)
+            chapter_id = bundle.chapters[0].chapter.id
+            service = TranslationService(TranslationRepository(session), worker=AgenticLiteralWorker())
+            for packet in bundle.chapters[0].translation_packets:
+                service.execute_packet(packet.id)
+            ChapterConceptLockService(session).lock_concept(
+                chapter_id=chapter_id, source_term="agentic AI", canonical_zh="代理式AI"
+            )
+            session.add(
+                Approval(
+                    document_id=document_id,
+                    turn_id=None,
+                    kind="lock_term",
+                    status=ApprovalStatus.AUTO_APPROVED,
+                    policy_id="auto.lock_frequent_terms",
+                    decided_by="auto.lock_frequent_terms",
+                    payload_json={"tool": "lock_term", "arguments": {"source_term": "agentic AI"}},
+                )
+            )
+            session.commit()
+
+        with self.session_factory() as session:
+            issues = [
+                issue
+                for issue in ReviewService(ReviewRepository(session)).review_chapter(chapter_id).issues
+                if issue.issue_type == "TERM_CONFLICT"
+            ]
+            self.assertTrue(issues)
+            # A rule's guess is reported, but it does not stop the export.
+            self.assertTrue(all(not issue.blocking for issue in issues))
+            self.assertTrue(all(issue.evidence_json.get("lock_decided_by") == "rule" for issue in issues))
+
+        with self.session_factory() as session:
+            approval = session.query(Approval).filter(Approval.document_id == document_id).one()
+            approval.status = ApprovalStatus.APPROVED
+            approval.decided_by = "human:reviewer"
+            session.commit()
+
+        with self.session_factory() as session:
+            issues = [
+                issue
+                for issue in ReviewService(ReviewRepository(session)).review_chapter(chapter_id).issues
+                if issue.issue_type == "TERM_CONFLICT"
+            ]
+            self.assertTrue(issues)
+            # A person decided this rendering: a deviation still blocks.
+            self.assertTrue(all(issue.blocking for issue in issues))
+            self.assertTrue(all(issue.evidence_json.get("lock_decided_by") == "person" for issue in issues))
+
     def test_review_collapses_term_conflict_variants_with_shared_expected_target(self) -> None:
         document_id = self._bootstrap_custom_epub_to_db(
             [("Chapter One", "chapter1.xhtml", LANGUAGE_MODELS_XHTML)]

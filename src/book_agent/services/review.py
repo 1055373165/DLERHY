@@ -26,6 +26,7 @@ from book_agent.domain.structure.artifact_grouping import (
     resolve_artifact_group_context_ids,
 )
 from book_agent.domain.terminology.enforcement import find_term_violations
+from book_agent.domain.terminology.matching import source_term_key
 from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemoryRepository
 from book_agent.infra.repositories.review import ChapterReviewBundle, ReviewRepository, review_pass_owns
 from book_agent.orchestrator.rerun import RerunPlan, build_rerun_plan
@@ -392,8 +393,12 @@ class ReviewService:
                 locked_terms,
             )
         }
+        auto_locked_keys = self._auto_locked_term_keys(bundle.chapter.document_id)
         for term_position, term in enumerate(active_locked_terms):
             expected_target_term = locked_terms[term_position].expected_target_term
+            # A rule locked this on its own: report the mismatch, but do not hold the book
+            # hostage to a guess ("fault" locked as 故障 flags every "fault tolerance" = 容错).
+            rule_locked = source_term_key(term.source_term) in auto_locked_keys
             for sentence in bundle.sentences:
                 violation = violations.get((term_position, sentence.id))
                 if violation is None:
@@ -416,13 +421,14 @@ class ReviewService:
                         packet_id=self._find_packet_for_sentence(bundle, sentence.id),
                         issue_type="TERM_CONFLICT",
                         root_cause_layer=RootCauseLayer.MEMORY,
-                        severity=Severity.HIGH,
-                        blocking=True,
+                        severity=Severity.MEDIUM if rule_locked else Severity.HIGH,
+                        blocking=not rule_locked,
                         evidence={
                             "source_term": term.source_term,
                             "source_terms": [term.source_term],
                             "expected_target_term": expected_target_term,
                             "actual_target_text": aligned_text,
+                            "lock_decided_by": "rule" if rule_locked else "person",
                         },
                         unique_key=self._term_conflict_unique_key(expected_target_term, term.source_term),
                     )
@@ -760,6 +766,29 @@ class ReviewService:
             if sentence_id in sentence_ids:
                 return packet.id
         return None
+
+    def _auto_locked_term_keys(self, document_id: str) -> set[str]:
+        """Terms a rule locked with nobody asked, minus any a person later decided on."""
+        from sqlalchemy import select
+
+        from book_agent.domain.enums import ApprovalStatus
+        from book_agent.domain.models.agent import Approval
+
+        by_rule: set[str] = set()
+        by_person: set[str] = set()
+        approvals = self.repository.session.scalars(
+            select(Approval).where(Approval.document_id == document_id, Approval.kind == "lock_term")
+        )
+        for approval in approvals:
+            arguments = (approval.payload_json or {}).get("arguments") or {}
+            key = source_term_key(str(arguments.get("source_term") or ""))
+            if not key:
+                continue
+            if approval.status == ApprovalStatus.AUTO_APPROVED:
+                by_rule.add(key)
+            elif approval.status == ApprovalStatus.APPROVED:
+                by_person.add(key)
+        return by_rule - by_person
 
     def _should_skip_locked_term_conflict(
         self,
