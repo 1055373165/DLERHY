@@ -23,6 +23,7 @@ from book_agent.domain.document_titles import (
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.figure_clustering import (
+    FIGURE_REGION_CONTENT_EXTENT,
     FigureClusterConfig,
     cluster_figure_regions,
 )
@@ -669,6 +670,7 @@ class PdfStructureRecoveryService:
                         "image_ext": raw_image.image_ext,
                         "image_width_px": raw_image.width_px,
                         "image_height_px": raw_image.height_px,
+                        "figure_region": FIGURE_REGION_CONTENT_EXTENT,
                     }
                 )
                 if raw_image.materialized_path:
@@ -3675,6 +3677,11 @@ class PdfStructureRecoveryService:
             metadata["image_type"] = cluster.image_type or metadata.get(
                 "image_type", "vector_drawing"
             )
+            # The figure is more than one embedded picture: its other images,
+            # drawings or labels are only in the page region, so the export
+            # must crop that region rather than copy the primary's raster.
+            metadata.pop("image_path", None)
+            metadata.pop("image_xref", None)
             caption_block_anchor = (
                 recovered_blocks[cluster.caption_index].anchor
                 if cluster.caption_index is not None

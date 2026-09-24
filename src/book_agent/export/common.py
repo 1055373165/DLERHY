@@ -22,7 +22,7 @@ from book_agent.ingestion.pdf.classify import (
 )
 
 _SPECIAL_PDF_PAGE_FAMILIES = {"frontmatter", "appendix", "references", "index", "backmatter", "toc"}
-_DOCUMENT_IMAGE_MATERIALIZATION_VERSION = 3
+_DOCUMENT_IMAGE_MATERIALIZATION_VERSION = 4
 _PDF_IMAGE_MIN_RENDER_SCALE = 4.0
 _PDF_IMAGE_MAX_RENDER_SCALE = 8.0
 _PDF_IMAGE_TARGET_LONG_EDGE_PX = 1800

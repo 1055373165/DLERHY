@@ -8902,7 +8902,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             self.assertTrue(Path(document_image.storage_path).exists())
             self.assertEqual(Path(document_image.storage_path).read_bytes(), b"fake-jpg-bytes")
             self.assertEqual(document_image.metadata_json["materialized_via"], "epub_archive_asset")
-            self.assertEqual(document_image.metadata_json["materialized_version"], 3)
+            self.assertEqual(document_image.metadata_json["materialized_version"], 4)
             self.assertEqual(document_image.metadata_json["storage_status"], "materialized")
 
     def test_extract_main_chapter_number_rejects_lowercase_fragment_after_number(self) -> None:

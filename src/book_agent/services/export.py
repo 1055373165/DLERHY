@@ -3037,18 +3037,19 @@ class ExportService:
                 if page_number < 1 or page_number > document.page_count:
                     continue
                 page = document.load_page(page_number - 1)
-                resolved_bbox = (
-                    pdf_crop.caption_anchored_pdf_crop_bbox(page, bbox)
-                    if spec_kind == "caption_anchor"
-                    else pdf_crop.layout_guided_pdf_crop_bbox(page, bbox)
-                )
+                resolved_bbox = pdf_crop.resolve_pdf_crop_bbox(page, spec_kind, bbox)
                 if resolved_bbox is None:
                     continue
                 rect = fitz.Rect(*resolved_bbox)
                 if rect.width <= 1 or rect.height <= 1:
                     continue
                 persisted_image = document_image_by_block_id.get(block_id)
-                original_pdf_asset = pdf_crop.probe_pdf_original_asset(document, page, rect)
+                original_pdf_asset = pdf_crop.probe_pdf_original_asset(
+                    document,
+                    page,
+                    rect,
+                    content_extent=spec_kind == pdf_crop.FIGURE_REGION_CONTENT_EXTENT,
+                )
                 original_pdf_image = (
                     (original_pdf_asset["image_bytes"], original_pdf_asset["extension"])
                     if isinstance(original_pdf_asset.get("image_bytes"), (bytes, bytearray))

@@ -116,6 +116,12 @@ class FigureClusterConfig:
     almost always decorative rules or icons rather than real figures."""
 
 
+FIGURE_REGION_CONTENT_EXTENT = "content_extent"
+"""``metadata["figure_region"]`` of an image/figure block whose region was
+measured from the figure's own paths, images and labels (not padded). The
+export renders such a region as-is."""
+
+
 CAPTION_LEAD_PATTERN = re.compile(
     # English variant requires the body to look caption-shaped, not body-prose:
     # the artifact index ("3.1") must be followed by either a punctuation

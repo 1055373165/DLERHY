@@ -12,6 +12,7 @@ from pathlib import Path
 from book_agent.domain.enums import (
     BlockType,
 )
+from book_agent.domain.structure.figure_clustering import FIGURE_REGION_CONTENT_EXTENT
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
 from book_agent.export.common import (
     _DOCUMENT_IMAGE_MATERIALIZATION_VERSION,
@@ -47,7 +48,37 @@ def pdf_asset_crop_spec(block: MergedRenderBlock) -> tuple[str, int, list[float]
         return None
     if block.block_type == BlockType.CAPTION.value and block.render_mode == "image_anchor_with_translated_caption":
         return ("caption_anchor", page_number, bbox_values)
+    if block.source_metadata.get("figure_region") == FIGURE_REGION_CONTENT_EXTENT:
+        return (FIGURE_REGION_CONTENT_EXTENT, page_number, bbox_values)
     return ("direct", page_number, bbox_values)
+
+
+def resolve_pdf_crop_bbox(page: object, spec_kind: str, bbox: list[float]) -> list[float] | None:
+    """The page rectangle to render for a crop spec from :func:`pdf_asset_crop_spec`.
+
+    A content-extent region is the crop as measured by the parser: snapping
+    it to a layout image block or trimming text at its edges would cut the
+    figure's labels or the drawing around a raster picture. Older regions
+    (padded guesses) still go through the layout-guided trim.
+    """
+    if spec_kind == "caption_anchor":
+        return caption_anchored_pdf_crop_bbox(page, bbox)
+    if spec_kind == FIGURE_REGION_CONTENT_EXTENT:
+        return content_extent_pdf_crop_bbox(page, bbox)
+    return layout_guided_pdf_crop_bbox(page, bbox)
+
+
+def content_extent_pdf_crop_bbox(page: object, bbox: list[float]) -> list[float] | None:
+    page_rect = getattr(page, "rect", None)
+    if page_rect is None:
+        return list(bbox)
+    left = max(float(getattr(page_rect, "x0", 0.0)), bbox[0])
+    top = max(float(getattr(page_rect, "y0", 0.0)), bbox[1])
+    right = min(float(getattr(page_rect, "x1", 0.0)), bbox[2])
+    bottom = min(float(getattr(page_rect, "y1", 0.0)), bbox[3])
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right, bottom]
 
 
 def caption_anchored_pdf_crop_bbox(page: object, caption_bbox: list[float]) -> list[float] | None:
@@ -468,11 +499,24 @@ def save_pdf_crop(
         pixmap = None
 
 
+# An embedded image stands in for a content-extent crop only when the crop
+# shows nothing beyond it but this much margin (a frame stroke, padding).
+_ORIGINAL_IMAGE_MAX_MARGIN_PT = 6.0
+
+
 def probe_pdf_original_asset(
     document: object,
     page: object,
     rect: object,
+    *,
+    content_extent: bool = False,
 ) -> dict[str, object]:
+    """The embedded image that is the crop, if one is.
+
+    For a content-extent region the image must fill the crop up to a thin
+    margin: a region that also holds labels or drawings around the image is
+    a figure, and the bare image would drop them.
+    """
     get_images = getattr(page, "get_images", None)
     get_image_rects = getattr(page, "get_image_rects", None)
     extract_image = getattr(document, "extract_image", None)
@@ -524,6 +568,16 @@ def probe_pdf_original_asset(
                 ],
             )
             overlap_ratio = overlap_area / crop_area
+            if content_extent and not _image_fills_crop(
+                [float(rect_x0), float(rect_y0), float(rect_x1), float(rect_y1)],
+                [
+                    float(getattr(image_rect, "x0", 0.0)),
+                    float(getattr(image_rect, "y0", 0.0)),
+                    float(getattr(image_rect, "x1", 0.0)),
+                    float(getattr(image_rect, "y1", 0.0)),
+                ],
+            ):
+                overlap_ratio = min(overlap_ratio, 0.34)
             if overlap_ratio >= 0.01:
                 overlap_matches.append((overlap_ratio, xref))
             if overlap_ratio < 0.35:
@@ -552,6 +606,16 @@ def probe_pdf_original_asset(
         "materialized_via": "pdf_original_image",
         "availability": "single_embedded_image",
     }
+
+
+def _image_fills_crop(crop: list[float], image: list[float]) -> bool:
+    margin = _ORIGINAL_IMAGE_MAX_MARGIN_PT
+    return (
+        image[0] <= crop[0] + margin
+        and image[1] <= crop[1] + margin
+        and image[2] >= crop[2] - margin
+        and image[3] >= crop[3] - margin
+    )
 
 
 def extract_pdf_original_image(
