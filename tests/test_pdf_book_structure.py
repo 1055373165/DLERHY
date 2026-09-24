@@ -130,6 +130,15 @@ class PartedBookChapterTest(unittest.TestCase):
             for chapter in self.parsed.chapters
         ]
 
+    def test_chapters_nested_under_parts_become_chapters(self) -> None:
+        chapters = self._chapters()
+        by_title = {title: (start, end) for title, start, end in chapters}
+        self.assertEqual(by_title.get("1 Alpha basics"), (5, 6))
+        self.assertEqual(by_title.get("2 Beta design"), (7, 7))
+        self.assertEqual(by_title.get("3 Gamma methods"), (9, 9))
+        # The part's own opening page stays a small section of its own.
+        self.assertIn(4, [start for title, start, _end in chapters if title.startswith("Part 1")])
+
     def test_captions_crediting_a_source_do_not_make_a_references_section(self) -> None:
         caption_families = {
             block.metadata.get("pdf_page_family")
