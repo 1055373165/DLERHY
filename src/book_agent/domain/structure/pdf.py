@@ -1105,7 +1105,13 @@ class PdfStructureRecoveryService:
             or (heading_present and dense_toc_block_count >= 1)
             or dense_toc_block_count >= 2
         )
-        reference_like_count = sum(1 for text in content_texts if _looks_like_reference_entry(text))
+        # A figure caption that credits its source ("Figure 1.2 ... Source:
+        # https://...") has a reference's shape but is not a bibliography entry.
+        reference_like_count = sum(
+            1
+            for text in content_texts
+            if _looks_like_reference_entry(text) and not _looks_like_caption_text(text)
+        )
         index_like_count = sum(1 for text in content_texts if _looks_like_index_entry(text))
         index_like_ratio = (index_like_count / len(content_texts)) if content_texts else 0.0
         citation_marker_count = sum(len(_REFERENCE_CITATION_PATTERN.findall(text)) for text in content_texts)

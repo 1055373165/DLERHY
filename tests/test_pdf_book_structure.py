@@ -130,6 +130,16 @@ class PartedBookChapterTest(unittest.TestCase):
             for chapter in self.parsed.chapters
         ]
 
+    def test_captions_crediting_a_source_do_not_make_a_references_section(self) -> None:
+        caption_families = {
+            block.metadata.get("pdf_page_family")
+            for chapter in self.parsed.chapters
+            for block in chapter.blocks
+            if block.block_type == BlockType.CAPTION.value
+        }
+        self.assertEqual(caption_families, {"body"})
+        self.assertNotIn("References", [title for title, _start, _end in self._chapters()])
+
     def test_display_title_set_in_pieces_is_one_heading(self) -> None:
         headings = {
             block.metadata["source_page_start"]: " ".join(block.text.split())
