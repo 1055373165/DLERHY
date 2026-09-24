@@ -237,6 +237,21 @@ class PictureChecksTest(unittest.TestCase):
         self.assertEqual(result.breakdown, {"pages": 1})
         self.assertTrue(result.passed)  # two label blocks are within the 3 tolerated
 
+    def test_text_over_a_page_background_is_not_a_duplicated_label(self) -> None:
+        # The build-an-AI-agent back cover: a tinted panel printed from the top edge to the bottom edge.
+        blocks = [
+            block("panel", "[Image]", block_type="image", bbox=(315.0, 0.0, 531.0, 666.0)),
+            block("t1", "About the author Jungjun Hur is an independent AI engineer.", bbox=(327.0, 332.0, 503.0, 470.0)),
+            block("f1", "[Figure]", block_type="figure", bbox=(99.0, 285.0, 300.0, 570.0)),
+            block("l1", "Retriever", bbox=(134.0, 338.0, 200.0, 356.0)),
+        ]
+        result = ph.check_duplicated_labels(blocks, {1: (531.0, 666.0)})
+        self.assertEqual({sample.block_id for sample in result.samples}, {"l1"})
+        self.assertTrue(ph.is_page_background((315.0, 0.0, 531.0, 666.0), (531.0, 666.0)))
+        self.assertTrue(ph.is_page_background((0.0, 0.0, 531.0, 666.0), (531.0, 666.0)))  # a cover
+        self.assertFalse(ph.is_page_background((99.0, 285.0, 300.0, 570.0), (531.0, 666.0)))
+        self.assertFalse(ph.is_page_background((315.0, 0.0, 531.0, 666.0), None))
+
     def test_caption_folds(self) -> None:
         caption = "Figure 1.2 ChatGPT (GPT 3.5) response to the question."
         body = (

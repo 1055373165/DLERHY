@@ -121,6 +121,11 @@ FIGURE_REGION_CONTENT_EXTENT = "content_extent"
 measured from the figure's own paths, images and labels (not padded). The
 export renders such a region as-is."""
 
+PAGE_BACKGROUND_KEY = "pdf_page_background"
+"""``metadata`` flag of a picture printed to two opposite page edges
+(``geometry.bleeds_off_page``): the page's background, not a figure. Text over
+it is the page's text, so it anchors no figure cluster."""
+
 
 CAPTION_LEAD_PATTERN = re.compile(
     # English variant requires the body to look caption-shaped, not body-prose:
@@ -302,6 +307,8 @@ _TEXT_BLOCK_TYPES = frozenset(
 
 
 def _is_anchor(block: BlockLike) -> bool:
+    if (block.metadata or {}).get(PAGE_BACKGROUND_KEY):
+        return False
     if block.block_type in _ANCHOR_BLOCK_TYPES:
         return True
     image_type = block.metadata.get("image_type") if block.metadata else None

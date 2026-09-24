@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Sequence
 
+from book_agent.domain.structure.geometry import bleeds_off_page
+
 Bbox = tuple[float, float, float, float]
 
 # Paths and labels closer than this to a figure's drawing belong to it: an
@@ -357,6 +359,8 @@ def _is_candidate_path(bbox: Bbox, page_width: float, page_height: float) -> boo
         return False  # full-width rule
     if height >= page_height * 0.92 and width <= page_width * 0.035:
         return False  # full-height rule
+    if bleeds_off_page(bbox, page_width, page_height):
+        return False  # a panel printed to the page edges: the page's background
     return not in_margin_band(bbox, page_height)
 
 

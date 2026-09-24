@@ -24,6 +24,7 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.figure_clustering import (
+    PAGE_BACKGROUND_KEY,
     FigureClusterConfig,
     cluster_figure_regions,
     figure_cluster_config_from_settings,
@@ -139,6 +140,19 @@ class FigureRegionMembershipTests(unittest.TestCase):
         ]
         report = cluster_figure_regions(blocks)
         self.assertEqual(report.clusters[0].caption_index, 1)
+
+    def test_text_over_a_page_background_picture_stays_text(self) -> None:
+        """A back cover's tinted half is a picture printed to the page edges; its text is the page's text."""
+        panel = _image_block((315.0, 0.0, 531.0, 666.0), image_type="embedded_image", anchor="panel")
+        panel.metadata[PAGE_BACKGROUND_KEY] = True
+        blocks = [
+            panel,
+            _text_block("About the reader", (380.0, 230.0, 470.0, 245.0), anchor="head"),
+            _text_block("For Python developers", (340.0, 250.0, 500.0, 262.0), anchor="line"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(report.clusters, [])
+        self.assertEqual(list(iter_replaced_block_indices(report)), [])
 
 
 class FigureClusteringTests(unittest.TestCase):

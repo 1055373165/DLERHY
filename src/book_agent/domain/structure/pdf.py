@@ -24,6 +24,7 @@ from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.figure_clustering import (
     FIGURE_REGION_CONTENT_EXTENT,
+    PAGE_BACKGROUND_KEY,
     FigureClusterConfig,
     cluster_figure_regions,
 )
@@ -140,7 +141,7 @@ from book_agent.ingestion.text import (
     _safe_mean,
     _sorted_counter,
 )
-from book_agent.domain.structure.geometry import horizontal_overlap_ratio, union_bbox
+from book_agent.domain.structure.geometry import bleeds_off_page, horizontal_overlap_ratio, union_bbox
 
 _OUTLINED_BOOK_TOP_LEVEL_SPECIAL_TITLES = _OUTLINED_BOOK_FRONTMATTER_TITLES.union({"glossary"})
 _APPENDIX_SUBHEADING_PATTERN = re.compile(r"^(?P<label>[A-Z]\.\d+)\s+(?P<title>.+)$")
@@ -673,6 +674,8 @@ class PdfStructureRecoveryService:
                         "figure_region": FIGURE_REGION_CONTENT_EXTENT,
                     }
                 )
+                if bleeds_off_page(raw_image.bbox, page.width, page.height):
+                    metadata[PAGE_BACKGROUND_KEY] = True
                 if raw_image.materialized_path:
                     metadata["image_path"] = raw_image.materialized_path
                     metadata["image_xref"] = raw_image.xref

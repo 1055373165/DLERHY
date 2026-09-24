@@ -327,5 +327,55 @@ class RepeatedFigureLabelTests(unittest.TestCase):
         self.assertFalse(any("Step 1" in text for text in headers))
 
 
+def _parse(pdf_path: Path, tmpdir: str):
+    return PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+
+def _text_blocks(parsed) -> list:
+    return [
+        block
+        for chapter in parsed.chapters
+        for block in chapter.blocks
+        if block.block_type not in {BlockType.IMAGE.value, BlockType.FIGURE.value}
+    ]
+
+
+class PageBackgroundTests(unittest.TestCase):
+    """A panel printed to two opposite page edges is the page's background, not a figure.
+
+    The build-an-AI-agent back cover: the right half is a tinted picture from the top edge to
+    the bottom edge with the cover copy printed on it. Taken as a figure, its lines of copy were
+    labels to fold into the picture.
+    """
+
+    def test_panel_to_the_page_edges_is_not_a_figure_piece(self) -> None:
+        extents = vector_figure_extents(
+            [(315.0, 0.0, 531.0, 666.0)],
+            seed=lambda _bbox: True,
+            figure_sized=lambda _bbox: True,
+            page_width=531,
+            page_height=666,
+        )
+        self.assertEqual(extents, [])
+
+    def test_text_printed_on_a_background_picture_stays_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "cover.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_image(fitz.Rect(315, 0, 531, 666), stream=_solid_png((60, 80, 90)), keep_proportion=False)
+            page.insert_text((360, 120), "About the reader", fontsize=12)
+            page.insert_text((335, 140), "For Python developers", fontsize=11)
+            _body(page, 60, 300)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = " ".join(block.text for block in _text_blocks(parsed))
+        self.assertIn("About the reader", texts)
+        self.assertIn("For Python developers", texts)
+        panels = [block for block in _figure_blocks(parsed)]
+        self.assertTrue(panels)
+        self.assertTrue(all(block.metadata.get("pdf_page_background") for block in panels))
+
+
 if __name__ == "__main__":
     unittest.main()
