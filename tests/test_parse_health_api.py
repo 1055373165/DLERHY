@@ -145,8 +145,9 @@ class ParseHealthApiTests(unittest.TestCase):
         self.assertEqual(summary["status"], payload["status"])
         self.assertEqual(summary["check_count"], len(PDF_CHECKS))
         self.assertEqual(summary["needs_attention"], payload["status"] == "blocking")
-        # A finding never stops a translation from starting (that is the trial gate's job).
-        self.assertEqual(overview["primary_action"]["kind"], "start")
+        # A finding never stops a translation from starting (that is the trial gate's job); a new book
+        # starts with its free pilot.
+        self.assertEqual(overview["primary_action"]["kind"], "pilot")
 
     def test_a_structure_refresh_and_a_manual_run_add_reports(self) -> None:
         pdf_path = self.root / "parted.pdf"
