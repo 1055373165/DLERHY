@@ -1514,6 +1514,9 @@ class ApiWorkflowTests(unittest.TestCase):
         # A self-deadlock never finishes, so waiting longer only costs time on a loaded machine;
         # two seconds used to fail here while the stage was simply still working.
         worker.join(timeout=30)
+        # Seeding the stage also starts translation threads; let them finish before the test's
+        # temporary directory is removed under them (that, not a deadlock, was the flaky failure).
+        self.addCleanup(self._join_executor_threads, executor)
 
         self.assertFalse(
             worker.is_alive(),
@@ -1524,6 +1527,18 @@ class ApiWorkflowTests(unittest.TestCase):
         with self.session_factory() as session:
             translate_items = executor._list_stage_items(session, run_id, WorkItemStage.TRANSLATE)
             self.assertGreater(len(translate_items), 0)
+
+    @staticmethod
+    def _join_executor_threads(executor, timeout: float = 60.0) -> None:
+        import time as _time
+
+        deadline = _time.monotonic() + timeout
+        while _time.monotonic() < deadline:
+            threads = [t for m in executor._active_work_threads.values() for t in m.values() if t.is_alive()]
+            if not threads:
+                return
+            for thread in threads:
+                thread.join(timeout=1)
 
     def test_document_history_supports_search_and_filters(self) -> None:
         first_epub_path = self._write_epub_with_chapters(
