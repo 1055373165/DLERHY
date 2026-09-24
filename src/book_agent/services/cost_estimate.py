@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.core.config import Settings
 from book_agent.domain.models import Chapter, Document, Sentence
+from book_agent.domain.enums import PacketStatus
 from book_agent.domain.models.translation import TranslationPacket
 from book_agent.harness.kernel.messages import estimate_tokens
 
@@ -79,14 +80,19 @@ def estimate_document_cost(
     *,
     terminology: str = "sampled",
     model_review: str = "sampled",
+    pending_only: bool = False,
 ) -> CostEstimate:
+    """``pending_only`` estimates only packets not translated yet (the whole book after a free pilot)."""
     document = session.get(Document, document_id)
     if document is None:
         raise LookupError("document not found")
-    packets = list(
+    all_packets = list(
         session.scalars(
             select(TranslationPacket).join(Chapter, Chapter.id == TranslationPacket.chapter_id).where(Chapter.document_id == document_id)
         ).all()
+    )
+    packets = (
+        [packet for packet in all_packets if packet.status != PacketStatus.TRANSLATED] if pending_only else all_packets
     )
     source_tokens = sum(
         estimate_tokens(text)
@@ -99,6 +105,10 @@ def estimate_document_cost(
         )
     )
     packet_tokens = sum(estimate_tokens(json.dumps(packet.packet_json or {}, ensure_ascii=False)) for packet in packets)
+    if pending_only and len(packets) != len(all_packets):
+        # Sentences are not tied to packets here: scale the book's source by the share still to translate.
+        all_tokens = sum(estimate_tokens(json.dumps(packet.packet_json or {}, ensure_ascii=False)) for packet in all_packets)
+        source_tokens = int(source_tokens * (packet_tokens / all_tokens)) if all_tokens else 0
     translate_in = packet_tokens + PROMPT_SCAFFOLD_TOKENS_PER_PACKET * len(packets)
     translate_out = int(OUTPUT_TOKENS_PER_SOURCE_TOKEN * source_tokens)
     review_mode = model_review if model_review in REVIEW_INPUT_FACTOR else "sampled"

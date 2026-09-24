@@ -203,6 +203,12 @@ class PilotRunTests(unittest.TestCase):
         )
         self.assertEqual(refused.status_code, 422)
 
+        before = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertEqual(before["pilot"]["state"], "not_started")
+        self.assertEqual([c["title"] for c in before["pilot"]["chapters"]], ["1 Why agents", "2 The loop"])
+        self.assertEqual(before["primary_action"], {"kind": "pilot", "label": "免费试译前两章"})
+        self.assertIn("免费试译前两章", before["headline"])
+
         started = self.client.post(f"/v1/documents/{document_id}/pilot", json={"fast_reading": True})
         self.assertEqual(started.status_code, 202, started.text)
         pilot_id = started.json()["run_id"]
@@ -242,6 +248,27 @@ class PilotRunTests(unittest.TestCase):
         for stage in ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html"):
             self.assertEqual((cached.get(stage) or {}).get("status"), "succeeded", stage)
         self.assertEqual(int(cached["translate"].get("total_packet_count") or 0), len(pilot_packets))
+        ready = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertEqual((ready["pilot"]["state"], ready["pilot"]["readable"]), ("ready", True))
+        self.assertFalse(ready["readable"]["ready"])  # the whole book is not translated
+        self.assertEqual(ready["primary_action"]["kind"], "start_book")
+        self.assertEqual(ready["translation"]["scope"], "pilot")
+        self.assertEqual(ready["translation"]["progress"], {"done": len(pilot_packets), "total": len(pilot_packets)})
+        self.assertEqual(ready["pilot"]["problems"]["blocking"], 0)
+        self.assertEqual(ready["cost"]["spent_usd"], 0.0)
+        self.assertTrue(ready["headline"].startswith("试译完成"))
+        news = self.client.get("/v1/inbox", params={"since": "2000-01-01T00:00:00+00:00"}).json()
+        self.assertEqual([update["kind"] for update in news["updates"]], ["pilot_ready"])
+        with self.session_factory() as session:
+            from book_agent.core.config import get_settings
+            from book_agent.services.cost_estimate import estimate_document_cost
+
+            remaining = estimate_document_cost(session, document_id, get_settings(), terminology="skip", pending_only=True)
+            whole = estimate_document_cost(session, document_id, get_settings())
+        self.assertEqual(remaining.packet_count, whole.packet_count - len(pilot_packets))
+        self.assertEqual(remaining.breakdown["terminology"]["token_in"], 0)
+        self.assertLess(remaining.token_in, whole.token_in)
+
         merged_text = self.client.get(
             f"/v1/documents/{document_id}/exports/download", params={"export_type": "merged_html", "package": "preview"}
         ).text
@@ -277,6 +304,10 @@ class PilotRunTests(unittest.TestCase):
                     Export.status == ExportStatus.SUCCEEDED,
                 )
             ).one()
+        done = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertEqual((done["pilot"]["state"], done["translation"]["scope"]), ("book_started", "book"))
+        self.assertTrue(done["readable"]["ready"])
+        self.assertEqual(done["primary_action"]["kind"], "read")
         # Pilot packets were not translated again.
         self.assertEqual(set(pilot_runs), {str(packet_id) for packet_id in pilot_packets})
         self.assertEqual({packet_id: after[packet_id] for packet_id in pilot_runs}, pilot_runs)
@@ -284,6 +315,18 @@ class PilotRunTests(unittest.TestCase):
         book_cached = book_stages.get("_cached_pipeline_stages") or book_stages.get("stages") or {}
         self.assertNotIn("terminology", book_cached)
         self.assertIsNone(merged.input_version_bundle_json["chapter_scope"])
+
+    def test_translating_the_whole_book_directly_skips_the_pilot(self) -> None:
+        document_id = self._import()
+        created = self.client.post(
+            "/v1/runs",
+            json={"document_id": document_id, "run_type": "translate_full", "requested_by": "t", "status_detail_json": {}},
+        )
+        self.assertEqual(created.status_code, 201)
+        self.assertNotIn("after_pilot_run_id", created.json()["status_detail_json"]["run_request"])
+        overview = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertEqual((overview["pilot"]["state"], overview["translation"]["scope"]), ("skipped", "book"))
+        self.assertEqual(self.client.post(f"/v1/documents/{document_id}/pilot", json={}).status_code, 409)
 
     def test_a_pilot_with_blockers_left_still_finishes_and_exports_with_them_listed(self) -> None:
         book = [
@@ -310,6 +353,11 @@ class PilotRunTests(unittest.TestCase):
             ).one_or_none()
         self.assertGreaterEqual(blockers, 1)
         self.assertIsNotNone(merged)
+        overview = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertEqual(overview["pilot"]["state"], "ready")
+        self.assertGreaterEqual(overview["pilot"]["problems"]["blocking"], 1)
+        self.assertIn("OMISSION", [entry["type"] for entry in overview["pilot"]["problems"]["by_type"]])
+        self.assertIn("个问题没有解决", overview["headline"])
         stages = terminal["status_detail_json"]["pipeline"]
         review = (stages.get("_cached_pipeline_stages") or stages.get("stages") or {}).get("review") or {}
         self.assertGreaterEqual(int(review.get("blockers_left_for_reader") or 0), 1)
