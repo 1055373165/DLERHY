@@ -94,10 +94,23 @@ class ChapterLabelTests(unittest.TestCase):
         self.assertEqual(extract_main_chapter_number("CHAPTER 9: 20 POPULAR RSI TRADING STRATEGIES"), 9)
         self.assertEqual(extract_main_chapter_number("Chapter 2: Birth of RSI"), 2)
         self.assertIsNone(extract_main_chapter_number("Chapter 3 of this book explains the formula"))
+        # Manning outlines number a chapter without the word "Chapter"; the merged export folded the
+        # RAG book's chapter 2 into chapter 1 until this was read as a chapter number.
+        self.assertEqual(extract_main_chapter_number("2 RAG systems and their design"), 2)
+        self.assertEqual(extract_main_chapter_number("10 Progression of RAG systems"), 10)
+        self.assertIsNone(extract_main_chapter_number("1.2 Why RAG?"))
+        self.assertIsNone(extract_main_chapter_number("3 ways to split a document"))
         # Its introduction carries a subtitle; it is still front matter.
         self.assertTrue(looks_like_frontmatter_title("INTRODUCTION: WHY RSI IS SO MAGICAL?"))
         self.assertTrue(looks_like_frontmatter_title("Preface"))
         self.assertFalse(looks_like_frontmatter_title("Introduction to Momentum Trading"))
+
+    def test_part_pages_are_recognised(self) -> None:
+        from book_agent.export.titles import looks_like_part_title
+
+        self.assertTrue(looks_like_part_title("Part 1 Foundations"))
+        self.assertTrue(looks_like_part_title("PART II"))
+        self.assertFalse(looks_like_part_title("Partitioning a vector index"))
 
     def test_structural_chapter_names_have_chinese_labels(self) -> None:
         self.assertEqual(localized_structural_title_fallback("Front Matter"), "卷首")
