@@ -2,6 +2,7 @@
  * The server derives every state here (docs/specs/ui-ux-overhaul/SPEC.md, decision 3); the UI only renders it. */
 import { requestJson } from "./api";
 import type { ParseHealthSummary } from "./parseHealth";
+import type { PilotQualitySummary } from "./pilotQuality";
 
 export type TranslationState =
   | "never_started"
@@ -71,6 +72,8 @@ export interface PilotOverview {
   /** What the pilot's model calls cost us; the reader is not charged. */
   cost_usd: number;
   finished_at: string | null;
+  /** The pilot's layered QA (L1–L7); null before it ran, absent from older servers. */
+  quality?: PilotQualitySummary | null;
 }
 
 export interface BookOverview {

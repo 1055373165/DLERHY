@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { issueTypeCopy } from "../../lib/copy";
 import { type BookOverview, usd } from "../../lib/overview";
 import s from "./BookPage.module.css";
+import { PilotQualityStrip } from "./PilotQualityPanel";
 
 /** The pilot's chapter titles, in reading order. */
 export function pilotChapterTitles(book: BookOverview): string[] {
@@ -71,6 +72,7 @@ export function PilotResult({
       ) : (
         <p className={s.note}>自动复核和模型审校没有留下未解决的问题。</p>
       )}
+      {pilot.quality && <PilotQualityStrip documentId={book.document_id} summary={pilot.quality} />}
       {book.parse_health?.needs_attention && (
         <div className={s.attention}>
           解析体检发现了严重问题，全书会带着这些问题。可以先 <Link to={`/books/${book.document_id}/progress`}>看看体检报告</Link>。

@@ -330,6 +330,24 @@ class ExportService:
             manifest_path=manifest_path,
         )
 
+    @_within_render_model_scope
+    def reading_copy_view(
+        self, document_id: str, *, chapter_ids: Collection[str] | None = None
+    ) -> tuple[DocumentExportBundle, dict[str, list[MergedRenderBlock]], list[tuple[str, str | None]]]:
+        """What the Chinese reading copy (merged HTML) would hold, without writing it.
+
+        Returns the bundle, each chapter's render blocks, and the reading copy's chapter sections as
+        (first chapter id, title) in order: chapters the export folds into a neighbour have no section.
+        The pilot's layered QA (services/pilot_quality.py) checks these.
+        """
+        bundle = self.repository.load_document_bundle(document_id, chapter_ids=chapter_ids)
+        blocks = {chapter_bundle.chapter.id: self._render_blocks_for_chapter(chapter_bundle) for chapter_bundle in bundle.chapters}
+        sections = [
+            (chapter_bundle.chapter.id, title_text)
+            for _ordinal, chapter_bundle, _blocks, title_text in self._visible_merged_chapters(bundle)
+        ]
+        return bundle, blocks, sections
+
     def _sync_document_title_tgt(self, bundle: DocumentExportBundle) -> None:
         current_title_tgt = _normalize_render_text(bundle.document.title_tgt)
         if current_title_tgt:

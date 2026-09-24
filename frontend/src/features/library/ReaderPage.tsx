@@ -68,6 +68,8 @@ export function ReaderPage() {
       (!pilotView || PILOT_FORMATS.includes(item.key)),
   );
   const requested = params.get("format");
+  // A place in the book to open at: a chapter's anchor in the reading copy ("chapter-<id>").
+  const at = params.get("at");
   const format: FormatKey = formats.some((item) => item.key === requested)
     ? (requested as FormatKey)
     : isWebPage
@@ -166,7 +168,7 @@ export function ReaderPage() {
           <iframe
             title={`${title} · ${current.label}`}
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-            src={frameUrl}
+            src={at && /^[\w-]+$/.test(at) ? `${frameUrl}#${at}` : frameUrl}
             className={s.frame}
           />
         )}

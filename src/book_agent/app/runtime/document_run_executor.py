@@ -53,7 +53,14 @@ from book_agent.orchestrator.pipeline_stage_cache import (
     write_cached_stages,
 )
 from book_agent.orchestrator.reconciler import Reconciler
-from book_agent.orchestrator.run_plan import AGENT_STAGES, EXECUTABLE_RUN_TYPES, RunPlan, plan_for_run, translate_packet_scope
+from book_agent.orchestrator.run_plan import (
+    AGENT_STAGES,
+    EXECUTABLE_RUN_TYPES,
+    PILOT_QA_STAGE,
+    RunPlan,
+    plan_for_run,
+    translate_packet_scope,
+)
 from book_agent.orchestrator.stage_gate import StageGateKeeper
 from book_agent.orchestrator.stage_status import (
     StageStatus,
@@ -511,6 +518,8 @@ class DocumentRunExecutor:
                     self._process_export_stage(run_id, export_type=ExportType(stage), plan=plan)
                     for stage in plan.export_stages
                 ):
+                    continue
+                if plan.includes(PILOT_QA_STAGE) and self._process_pilot_qa_stage(run_id, plan):
                     continue
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
@@ -1173,6 +1182,42 @@ class DocumentRunExecutor:
                 current_stage=self._next_stage_label(plan, pipeline_key),
             )
         return False
+
+    def _process_pilot_qa_stage(self, run_id: str, plan: RunPlan) -> bool:
+        """A pilot's layered QA (services/pilot_quality.py), run on this thread: rules only, seconds.
+
+        Its report is the stage's physical state (``StageStatusCalculator``). A QA error is kept as
+        an "error" report, so the pilot still goes to the reader with its blocking issues listed.
+        """
+        from book_agent.services.pilot_quality import PilotQualityService, report_for_run
+
+        with session_scope(self.session_factory) as session:
+            run = RunControlRepository(session).get_run(run_id)
+            if report_for_run(session, run_id) is not None:
+                return False
+            if not StageGateKeeper(session).can_start(
+                run_id, run.document_id, PILOT_QA_STAGE, plan_stages=plan.stages, packet_ids=plan.packet_ids
+            ):
+                return False
+            self._update_pipeline_stage(run_id, PILOT_QA_STAGE, status="running", current_stage=PILOT_QA_STAGE, session=session)
+        with session_scope(self.session_factory) as session:
+            run = RunControlRepository(session).get_run(run_id)
+            report = PilotQualityService(session).run_for_pilot(run)
+            self._update_pipeline_stage(
+                run_id,
+                PILOT_QA_STAGE,
+                status="succeeded",
+                extra={
+                    "report_id": report.id,
+                    "qa_status": report.status,
+                    "blocking_count": report.blocking_count,
+                    "major_count": report.major_count,
+                    "minor_count": report.minor_count,
+                },
+                current_stage=self._next_stage_label(plan, PILOT_QA_STAGE),
+                session=session,
+            )
+        return True
 
     def _execute_translate_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         self._execute_claimed_work_item(

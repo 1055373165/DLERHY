@@ -137,6 +137,7 @@ STEPS: tuple[tuple[str, str], ...] = (
     ("merged_html", "生成中文版"),
     ("web_html", "生成中文网页"),
     ("export_review", "检查导出"),
+    ("pilot_qa", "试译质检"),
 )
 STEP_LABELS = dict(STEPS)
 
@@ -317,6 +318,8 @@ def _pilot_problems(session: Session, document_id: str, chapter_ids: list[str]) 
 def _pilot(session: Session, document: Document, pilot_run: DocumentRun | None, book_run: DocumentRun | None) -> dict[str, Any]:
     """The free pilot: whether it is offered, where it stands, its chapters and the problems it left."""
     from book_agent.services.billing_category import paid_by_us
+    from book_agent.services.pilot_quality import latest_report as latest_quality_report
+    from book_agent.services.pilot_quality import overview_summary as quality_summary
 
     if pilot_run is not None:
         request = (pilot_run.status_detail_json or {}).get(RUN_REQUEST_KEY) or {}
@@ -365,6 +368,8 @@ def _pilot(session: Session, document: Document, pilot_run: DocumentRun | None, 
         "readable": pilot_run is not None and state in {"ready", "book_started"} and _pilot_readable(session, document.id),
         # Only once there is something to judge: the review issues of the pilot's chapters.
         "problems": _pilot_problems(session, document.id, chapter_ids) if pilot_run is not None else None,
+        # The layered QA (L1–L7) of the pilot's chapters: its verdict and each layer's counts.
+        "quality": quality_summary(latest_quality_report(session, document.id)),
         # What the pilot's model calls cost us; the reader is never charged for them.
         "cost_usd": round(cost_usd, 4),
         "finished_at": pilot_run.finished_at.isoformat() if pilot_run is not None and pilot_run.finished_at else None,

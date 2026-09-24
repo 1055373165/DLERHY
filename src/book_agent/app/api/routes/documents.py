@@ -658,6 +658,34 @@ def run_parse_health(document_id: str, session: Session = Depends(get_db_session
     return report_payload(ParseHealthService(session).run(document_id, trigger="manual"))
 
 
+@router.get("/{document_id}/pilot-quality")
+def get_pilot_quality(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """The latest layered QA report (L1–L7) of the pilot's chapters: each layer's verdict, counts and findings."""
+    from book_agent.services.pilot_quality import latest_report, report_payload
+
+    _load_document_or_404(session, document_id)
+    report = latest_report(session, document_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no pilot quality report yet")
+    return report_payload(session, report)
+
+
+@router.post("/{document_id}/pilot-quality")
+def run_pilot_quality(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """Run the pilot's layered QA again now (rules only, no model call), e.g. after a repair."""
+    from book_agent.services.pilot import latest_pilot_run
+    from book_agent.services.pilot_quality import NoPilotChapters, PilotQualityService, report_payload
+
+    _load_document_or_404(session, document_id)
+    try:
+        report = PilotQualityService(session).run(
+            document_id, run=latest_pilot_run(session, document_id), trigger="manual"
+        )
+    except NoPilotChapters as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return report_payload(session, report)
+
+
 @router.get("/{document_id}/cost-estimate", response_model=CostEstimateResponse)
 def get_cost_estimate(
     document_id: str,

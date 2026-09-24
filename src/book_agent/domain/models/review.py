@@ -249,3 +249,36 @@ class ExportVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     byte_count: Mapped[int | None] = mapped_column(BigInteger)
     input_version_bundle_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
 
+
+
+class PilotQualityReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One run of the pilot's layered QA (domain/quality/pilot_qa.py) on the pilot's chapters.
+
+    A row per run, like parse health reports: a repair round writes a new report and the earlier
+    one stays, so the repair agent is judged by comparing the two. ``run_id`` is the pilot run whose
+    ``pilot_qa`` stage wrote it (None for a report asked for by hand on chapters translated otherwise).
+    ``layers_json`` holds L1–L7, each with its verdict, counts by severity, checks and findings.
+    """
+
+    __tablename__ = "pilot_quality_reports"
+    __table_args__ = (
+        CheckConstraint("status IN ('passed', 'warnings', 'blocking', 'error')", name="ck_pilot_quality_reports_status"),
+        Index("idx_pilot_quality_reports_document", "document_id", "created_at"),
+        Index("idx_pilot_quality_reports_run", "run_id"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_runs.id", ondelete="SET NULL"))
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    blocking_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    major_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    minor_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chapter_ids_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
+    layers_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    # Where the exported chapters came from: the reading copy's file, a render in memory, or nothing.
+    export_source: Mapped[str] = mapped_column(Text, nullable=False, default="none")
+    error_text: Mapped[str | None] = mapped_column(Text)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -1,0 +1,171 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
+
+import { queryClient } from "../../app/queryClient";
+import {
+  type PilotQualityFinding,
+  type PilotQualityLayer,
+  type PilotQualityReport,
+  type PilotQualitySummary,
+  SEVERITY_LABEL,
+  getPilotQuality,
+  layerVerdict,
+  qualityHeadline,
+  runPilotQuality,
+} from "../../lib/pilotQuality";
+import { formatDate } from "../../lib/workflow";
+import s from "./Tabs.module.css";
+
+// A reader wants the few problems that matter, not the whole work list the repair agent gets.
+const FINDINGS_SHOWN = 3;
+
+/** Where a finding is: its page and chapter, and a link into the Chinese copy at that chapter. */
+function FindingLocation({ documentId, finding, report }: { documentId: string; finding: PilotQualityFinding; report: PilotQualityReport }) {
+  const chapter = report.chapters.find((item) => item.chapter_id === finding.location.chapter_id);
+  const where = [finding.location.page ? `第 ${finding.location.page} 页` : null, chapter?.title ? `「${chapter.title}」` : null]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div className={s.findingWhere}>
+      {where && <span className={s.samplePage}>{where}</span>}
+      {finding.location.chapter_id && (
+        <Link to={`/books/${documentId}/read?format=zh&at=chapter-${encodeURIComponent(finding.location.chapter_id)}`}>在译文中查看</Link>
+      )}
+    </div>
+  );
+}
+
+function FindingItem({ documentId, finding, report }: { documentId: string; finding: PilotQualityFinding; report: PilotQualityReport }) {
+  const source = typeof finding.evidence.source === "string" ? finding.evidence.source : "";
+  const target = typeof finding.evidence.target === "string" ? finding.evidence.target : "";
+  return (
+    <li className={s.finding} data-severity={finding.severity}>
+      <div>
+        <span className={s.severityTag} data-severity={finding.severity}>
+          {SEVERITY_LABEL[finding.severity]}
+        </span>
+        {finding.message}
+      </div>
+      {(source || target) && (
+        <div className={s.findingExcerpt}>
+          {source && <div lang="en">原文：{source}</div>}
+          {target && <div>译文：{target}</div>}
+        </div>
+      )}
+      <FindingLocation documentId={documentId} finding={finding} report={report} />
+    </li>
+  );
+}
+
+function LayerRow({ documentId, layer, report }: { documentId: string; layer: PilotQualityLayer; report: PilotQualityReport }) {
+  const titles = new Map(layer.checks.map((check) => [check.check_id, check.title]));
+  const failing = layer.checks.filter((check) => check.count > 0);
+  const shown = layer.findings.slice(0, FINDINGS_SHOWN);
+  const total = failing.reduce((sum, check) => sum + check.count, 0);
+  return (
+    <li className={s.check} data-passed={layer.status === "passed"} data-severity={layer.status === "blocking" ? "blocking" : "major"}>
+      <div className={s.checkHead}>
+        <span className={s.checkLabel}>
+          {layer.layer} {layer.name}
+        </span>
+        <span className={s.checkMeta}>
+          <strong>{layerVerdict(layer.status, layer.counts)}</strong>
+        </span>
+      </div>
+      {failing.length > 0 && (
+        <>
+          <div className={s.checkMeaning}>{failing.map((check) => `${titles.get(check.check_id)} ${check.count} 处`).join("；")}</div>
+          {shown.length > 0 && (
+            // A layer with a blocking problem opens by itself: that is what the reader should see first.
+            <details className={s.samples} open={layer.status === "blocking"}>
+              <summary>
+                看看在哪里（先看最要紧的 {shown.length} 处{total > shown.length ? `，共 ${total} 处` : ""}）
+              </summary>
+              <ul className={s.findings}>
+                {shown.map((finding) => (
+                  <FindingItem key={finding.key} documentId={documentId} finding={finding} report={report} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
+/** The pilot's layered QA: seven layers of rule checks on what the reader of the two chapters gets. */
+export function PilotQualityPanel({ documentId, summary }: { documentId: string; summary: PilotQualitySummary | null }) {
+  const report = useQuery({
+    queryKey: ["pilot-quality", documentId, summary?.report_id ?? null],
+    queryFn: () => getPilotQuality(documentId),
+    enabled: Boolean(summary),
+    retry: false,
+  });
+  const run = useMutation({
+    mutationFn: () => runPilotQuality(documentId),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["overview", documentId] });
+      await queryClient.invalidateQueries({ queryKey: ["pilot-quality", documentId] });
+    },
+  });
+  const data = report.data;
+  const status = summary?.status ?? "none";
+  // Opened from the pilot result's "看质检报告": bring the report into view.
+  const { hash } = useLocation();
+  const section = useRef<HTMLElement>(null);
+  const loaded = Boolean(data);
+  useEffect(() => {
+    if (hash === "#pilot-quality") section.current?.scrollIntoView?.({ block: "start" });
+  }, [hash, loaded]);
+
+  return (
+    <section ref={section} id="pilot-quality" className={s.health} aria-label="试译质检" data-status={status === "error" ? "blocking" : status}>
+      <div className={s.healthHead}>
+        <h2 className={s.heading}>试译质检</h2>
+        <button className="btn btn-sm" disabled={run.isPending} onClick={() => run.mutate()}>
+          {run.isPending ? "质检中…" : summary ? "重新质检" : "立即质检"}
+        </button>
+      </div>
+      {!summary ? (
+        <div className={s.empty}>试译完成后会自动质检：按结构、图表、表格、代码与格式、术语、忠实度、排版七层检查试译的两章，只用规则，不花钱。</div>
+      ) : (
+        <>
+          <p className={s.healthStatus} role={summary.status === "blocking" ? "alert" : "status"}>
+            {qualityHeadline(summary)}
+            {summary.checked_at && <span className={s.meta}> · 质检于 {formatDate(summary.checked_at)}</span>}
+          </p>
+          {data?.error && <div className={s.error}>质检出错：{data.error}</div>}
+          {report.isError && <div className={s.error}>质检报告没能加载：{(report.error as Error).message}</div>}
+          {data && data.layers.length > 0 && (
+            <ul className={s.checks}>
+              {data.layers.map((layer) => (
+                <LayerRow key={layer.layer} documentId={documentId} layer={layer} report={data} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {run.isError && <div className={s.error}>质检没能完成：{(run.error as Error).message}</div>}
+    </section>
+  );
+}
+
+/** The pilot result's one-line view of the QA: each layer's verdict, and where the full report is. */
+export function PilotQualityStrip({ documentId, summary }: { documentId: string; summary: PilotQualitySummary }) {
+  return (
+    <div className={s.qualityStrip} data-status={summary.status} aria-label="试译质检结果">
+      <div className={s.qualityStripHead}>{qualityHeadline(summary)}</div>
+      <ul className={s.layerChips}>
+        {summary.layers.map((layer) => (
+          <li key={layer.layer} className={s.layerChip} data-status={layer.status}>
+            {layer.name}
+            <span>{layer.status === "passed" ? "通过" : layer.status === "blocking" ? `严重 ${layer.counts.blocking}` : `一般 ${layer.counts.major}`}</span>
+          </li>
+        ))}
+      </ul>
+      <Link to={`/books/${documentId}/progress#pilot-quality`}>看质检报告</Link>
+    </div>
+  );
+}
