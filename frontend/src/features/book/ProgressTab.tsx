@@ -5,6 +5,7 @@ import { getRunEvents } from "../../lib/api";
 import { usd } from "../../lib/overview";
 import { describeRunEvent, formatDate } from "../../lib/workflow";
 import { useBook } from "./BookPage";
+import { ParseHealthPanel } from "./ParseHealthPanel";
 import s from "./Tabs.module.css";
 
 const STEP_STATUS: Record<string, string> = {
@@ -30,8 +31,19 @@ function elapsed(from: string | null | undefined, to: string | null | undefined)
   return minutes < 60 ? `${minutes} 分 ${seconds % 60} 秒` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
 }
 
-/** This book's run, in one place: the steps, what happened, how long it took, and why it stopped. */
+/** This book's progress: how well it was read (parse health), then its run. */
 export function ProgressTab() {
+  const book = useBook();
+  return (
+    <div className={s.stack}>
+      <ParseHealthPanel documentId={book.document_id} summary={book.parse_health ?? null} />
+      <RunProgress />
+    </div>
+  );
+}
+
+/** This book's run, in one place: the steps, what happened, how long it took, and why it stopped. */
+function RunProgress() {
   const book = useBook();
   const runId = book.translation.run_id;
   const active = ["queued", "running", "draining"].includes(book.translation.state);

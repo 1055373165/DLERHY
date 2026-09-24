@@ -231,6 +231,12 @@ export function BookPage() {
                 {decision.reason} <Link to="/settings">修改自动开始上限</Link>
               </div>
             )}
+            {/* Not a gate yet: the reader may still start, but should know first. */}
+            {data.parse_health?.needs_attention && (
+              <div className={s.attention}>
+                解析体检发现了严重问题，译文会带着这些问题。建议先 <Link to={`/books/${documentId}/progress`}>看看体检报告</Link> 再开始翻译。
+              </div>
+            )}
           </div>
         )}
       </section>
