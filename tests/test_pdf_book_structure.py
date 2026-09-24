@@ -139,6 +139,21 @@ class PartedBookChapterTest(unittest.TestCase):
         # The part's own opening page stays a small section of its own.
         self.assertIn(4, [start for title, start, _end in chapters if title.startswith("Part 1")])
 
+    def test_contents_continuation_page_is_contents_not_chapters(self) -> None:
+        blocks_on_page_three = [
+            block
+            for chapter in self.parsed.chapters
+            for block in chapter.blocks
+            if block.metadata["source_page_start"] == 3
+        ]
+        self.assertTrue(blocks_on_page_three)
+        self.assertEqual({block.metadata.get("pdf_page_family") for block in blocks_on_page_three}, {"toc"})
+        self.assertEqual([start for _title, start, _end in self._chapters() if start == 3], [])
+        self.assertEqual(
+            [(title, start, end) for title, start, end in self._chapters() if title == "contents"],
+            [("contents", 2, 3)],
+        )
+
     def test_captions_crediting_a_source_do_not_make_a_references_section(self) -> None:
         caption_families = {
             block.metadata.get("pdf_page_family")

@@ -948,10 +948,24 @@ class PdfStructureRecoveryService:
                 seen_future_heading = True
 
         previous_family = "body"
+        previous_page_family: str | None = None
         for index, page in enumerate(sorted(pages, key=lambda item: item.page_number)):
             context = contexts[page.page_number]
             updated_context = context
-            if context.page_family == "body":
+            if (
+                previous_page_family == "toc"
+                and context.page_family == "body"
+                and context.content_family == "index"
+            ):
+                # "Title  page" lines right after a contents page continue the
+                # contents; an index never directly follows the contents.
+                updated_context = replace(
+                    context,
+                    is_toc_page=True,
+                    page_family="toc",
+                    family_source="toc_continuation",
+                )
+            elif context.page_family == "body":
                 if context.content_family == "references" and not context.has_strong_heading:
                     updated_context = replace(
                         context,
@@ -1000,6 +1014,7 @@ class PdfStructureRecoveryService:
                 ):
                     updated_context = replace(context, page_family=previous_family, family_source="continuation")
             contexts[page.page_number] = updated_context
+            previous_page_family = updated_context.page_family
             previous_family = updated_context.page_family if updated_context.page_family != "toc" else previous_family
         return contexts
 
