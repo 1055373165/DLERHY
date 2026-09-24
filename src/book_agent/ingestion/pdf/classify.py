@@ -92,7 +92,8 @@ _BOOK_SPECIAL_OUTLINE_TITLES = _FRONTMATTER_SIGNAL_TITLES.union(
     _REFERENCES_HEADING_TITLES,
     _INDEX_HEADING_TITLES,
     _BACKMATTER_HEADING_TITLES,
-    {"copyright", "glossary", "colophon"},
+    # "about the author" is a front-matter heading; a book by several people says "authors".
+    {"copyright", "glossary", "colophon", "about the authors"},
 )
 _REFERENCE_YEAR_PATTERN = re.compile(r"(?:\(|\b)(?:19|20)\d{2}[a-z]?(?:\)|\b)")
 _REFERENCE_CITATION_PATTERN = re.compile(r"\[\s*\d+\s*\]")

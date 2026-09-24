@@ -184,6 +184,216 @@ class PartedBookChapterTest(unittest.TestCase):
         self.assertEqual(stray_numbers, [])
 
 
+def _titled_page(document: fitz.Document, title: str, *, running_head: str | None = None) -> fitz.Page:
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    if running_head:
+        page.insert_text((72, 30), running_head, fontname="hebo", fontsize=9)
+    if title:
+        page.insert_text((72, 120), title, fontname="tiit", fontsize=26)
+    _body(page, 160)
+    return page
+
+
+def _write_front_matter_book(path: Path) -> None:
+    """Front matter, parts and an appendix as top-level outline entries; chapters nested in parts."""
+    document = fitz.open()
+    title_page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    title_page.insert_text((72, 200), "Synthetic Agents Book", fontname="tibo", fontsize=26)
+    for title in ("preface", "acknowledgements", "about this book", "about the authors", "about the cover illustration"):
+        _titled_page(document, title)
+    part_one = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    part_one.insert_text((72, 150), "Part 1", fontname="tiit", fontsize=30)
+    part_one.insert_text((72, 230), "Foundations", fontname="tiit", fontsize=30)
+    _chapter_opener(document, "1", "Alpha basics")
+    _titled_page(document, "", running_head="2 chapter 1 Alpha basics")
+    _chapter_opener(document, "2", "Beta design")
+    _titled_page(document, "appendix Setup")
+    # The appendix's second page repeats its title as a running head.
+    _titled_page(document, "", running_head="appendix Setup")
+    document.set_toc(
+        [
+            [1, "Synthetic Agents Book", 1],
+            [1, "preface", 2],
+            [1, "acknowledgements", 3],
+            [1, "about this book", 4],
+            [1, "about the authors", 5],
+            [1, "about the cover illustration", 6],
+            [1, "Part 1 Foundations", 7],
+            [2, "1 Alpha basics", 8],
+            [2, "2 Beta design", 10],
+            [1, "appendix Setup", 11],
+        ]
+    )
+    document.save(path)
+
+
+class FrontMatterOutlineTest(unittest.TestCase):
+    """Each top-level front-matter outline entry is its own section, whichever lane the book takes.
+
+    The outlined-book lane (chosen when a long book has a few multi-column
+    pages) used to keep only a handful of front-matter titles from the top of
+    the outline and fold the rest into their neighbours, so "about this book",
+    "about the authors" and the part page ended up inside "acknowledgements".
+    """
+
+    _EXPECTED = [
+        ("preface", 2, 2),
+        ("acknowledgements", 3, 3),
+        ("about this book", 4, 4),
+        ("about the authors", 5, 5),
+        ("about the cover illustration", 6, 6),
+        ("Part 1 Foundations", 7, 7),
+        ("1 Alpha basics", 8, 9),
+        ("2 Beta design", 10, 10),
+        ("appendix Setup", 11, 12),
+    ]
+
+    def _chapters(self, recovery_lane: str | None) -> list[tuple[str, int, int]]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "front-matter.pdf"
+            _write_front_matter_book(pdf_path)
+            parser = PDFParser(image_output_dir=Path(tmpdir) / "images")
+            profile = parser.profiler.profile(pdf_path).to_dict()
+            profile["recovery_lane"] = recovery_lane
+            parsed = parser.parse(pdf_path, profile=profile)
+        return [
+            (
+                " ".join(chapter.title.split()),
+                chapter.metadata["source_page_start"],
+                chapter.metadata["source_page_end"],
+            )
+            for chapter in parsed.chapters
+        ]
+
+    def test_outlined_book_lane_keeps_front_matter_entries_apart(self) -> None:
+        chapters = self._chapters("outlined_book")
+        self.assertEqual([chapter for chapter in chapters if chapter[1] >= 2], self._EXPECTED)
+
+    def test_default_lane_keeps_front_matter_entries_apart(self) -> None:
+        chapters = self._chapters(None)
+        self.assertEqual([chapter for chapter in chapters if chapter[1] >= 2], self._EXPECTED)
+
+    def test_only_an_outline_with_parts_skips_the_flat_outline_collapse(self) -> None:
+        from book_agent.ingestion.pdf.chapters import outline_groups_chapters_into_parts
+        from book_agent.ingestion.pdf.models import PdfOutlineEntry
+
+        parted = [
+            PdfOutlineEntry(level=1, title="preface", page_number=2),
+            PdfOutlineEntry(level=1, title="Part 1 Foundations", page_number=4),
+            PdfOutlineEntry(level=2, title="1 Alpha basics", page_number=5),
+        ]
+        flat = [
+            PdfOutlineEntry(level=1, title="Foreword", page_number=2),
+            PdfOutlineEntry(level=1, title="Chapter 1 Durable Products", page_number=5),
+            PdfOutlineEntry(level=1, title="Key Takeaways", page_number=6),
+            PdfOutlineEntry(level=2, title="1.1 Details", page_number=6),
+        ]
+        self.assertTrue(outline_groups_chapters_into_parts(parted))
+        self.assertFalse(outline_groups_chapters_into_parts(flat))
+        self.assertFalse(outline_groups_chapters_into_parts([]))
+
+
+_HYPHENATED_LINES = [
+    "Each model provider returns a snippet of text, and tool calling is how the pro-",
+    "vider sends back a snip-",
+    "pet of metadata. The service is fault-",
+    "tolerant, relies on tool-",
+    "calling, runs GPT-",
+    "4o and reported the Cricket World Cup tour­",
+    "nament results. A fault-tolerant design matters when the tournament ends.",
+]
+
+
+def _write_hyphenated_paragraph(path: Path) -> None:
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    writer = fitz.TextWriter(page.rect)
+    font = fitz.Font("tiro")
+    for index, line in enumerate(_HYPHENATED_LINES):
+        # TextWriter keeps a soft hyphen (U+00AD) in the text layer, as typeset books do.
+        writer.append((72, 100 + 13 * index), line, font=font, fontsize=10)
+    writer.write_text(page)
+    _body(page, 260, count=2)
+    document.save(path)
+
+
+class LineBreakHyphenTest(unittest.TestCase):
+    """A word broken over two lines is one word again; a compound keeps its hyphen."""
+
+    def test_line_break_hyphens_are_removed_and_compounds_kept(self) -> None:
+        parsed = _parse(_write_hyphenated_paragraph, "hyphens.pdf")
+        text = " ".join(block.text for chapter in parsed.chapters for block in chapter.blocks)
+        text = " ".join(text.split())
+        for joined in ("the provider sends", "a snippet of metadata", "Cricket World Cup tournament results"):
+            self.assertIn(joined, text)
+        for broken in ("pro-vider", "snip-pet", "tour nament", "tour-nament"):
+            self.assertNotIn(broken, text)
+        for compound in ("is fault-tolerant, relies", "on tool-calling, runs", "GPT-4o"):
+            self.assertIn(compound, text)
+
+    def test_evidence_comes_from_words_written_inside_a_line(self) -> None:
+        from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
+
+        counts = inline_word_counts(
+            [
+                "a model provider and a pro-",
+                "vider with a network of generated answers to question-and-answer pairs",
+                "we use tool calling in a state-of-the-art system",
+            ]
+        )
+        # Fragments cut off by a line-end hyphen are not words of the book.
+        self.assertEqual(counts["pro"], 0)
+        self.assertEqual(counts["vider"], 0)
+        self.assertEqual(counts["provider"], 1)
+        cases = {
+            "pro-vider": "provider",
+            "execu-tion": "execution",
+            "tool-calling": "tool-calling",
+            "state-of-the-art": "state-of-the-art",
+            "question-and-an-swer": "question-and-answer",
+            "Neural-net-work-gener-ated": "Neural-network-generated",
+            "LM-supervised": "LM-supervised",
+            "GPT-4o": "GPT-4o",
+            "see https://example.com/pro-vider": "see https://example.com/pro-vider",
+        }
+        for source, expected in cases.items():
+            self.assertEqual(rejoin_line_break_hyphens(source, counts), expected, source)
+
+    def test_table_rows_are_not_evidence_that_a_split_word_is_written_hyphenated(self) -> None:
+        from types import SimpleNamespace
+
+        from book_agent.domain.structure.pdf import _rejoin_line_break_hyphens_pass
+        from book_agent.ingestion.pdf.models import PdfTextBlock, _RecoveredBlock
+
+        def text_block(lines: list[str], *, ruled_table: bool = False) -> PdfTextBlock:
+            return PdfTextBlock(
+                page_number=1, block_number=0, text="\n".join(lines), bbox=(0, 0, 1, 1), line_texts=lines,
+                span_count=1, line_count=len(lines), font_size_min=10, font_size_max=10, font_size_avg=10,
+                ruled_table=ruled_table,
+            )
+
+        # A table cell joins its broken lines too, so its row reads "infor-mation" inside one line.
+        pages = [SimpleNamespace(blocks=[
+            text_block(["the flow of infor-", "mation matters, and information is data"]),
+            text_block(["| Kind | infor-mation |"], ruled_table=True),
+        ])]
+        body = _RecoveredBlock(
+            role="body", block_type=BlockType.PARAGRAPH, text="the flow of infor-mation matters", page_start=1,
+            page_end=1, bbox_regions=[], reading_order_index=0, parse_confidence=1.0, flags=[], font_size_avg=10,
+            source_path="x.pdf", anchor="p1",
+        )
+        context = SimpleNamespace(extraction=SimpleNamespace(pages=pages))
+        [result] = _rejoin_line_break_hyphens_pass(None, [body], context)
+        self.assertEqual(result.text, "the flow of information matters")
+        self.assertIn("dehyphenated", result.flags)
+
+    def test_word_broken_inside_a_table_cell_is_rejoined(self) -> None:
+        from book_agent.ingestion.pdf.extract import _table_cell_text
+
+        self.assertEqual(_table_cell_text("Stanford Ques­\ntion Answering\nDataset"), "Stanford Ques-tion Answering Dataset")
+        self.assertEqual(_table_cell_text("GPT-\n4o | mini"), "GPT-4o / mini")
+
+
 def _write_symbol_bullet_page(path: Path) -> None:
     document = fitz.open()
     page = document.new_page(width=_PAGE[0], height=_PAGE[1])

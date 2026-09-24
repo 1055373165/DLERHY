@@ -414,7 +414,7 @@ def render_block_html(
 ) -> str:
     notice_text = str(block.notice or "") if include_notice else ""
     source_html = format_inline_text(block.source_text)
-    target_html = format_inline_text(block.target_text or "")
+    target_html = format_inline_text(block.target_text or "", code_spans=True)
     if block.render_mode == "source_artifact_full_width":
         asset_src = ""
         if asset_path_by_block_id is not None:
@@ -549,7 +549,7 @@ def render_block_html(
         unbulleted = _LEADING_BULLET_GLYPH.sub(r"\1", display_text, count=1)
         if unbulleted != display_text:
             block_class = f"{block_class} bulleted"
-            display_html = format_inline_text(unbulleted)
+            display_html = format_inline_text(unbulleted, code_spans=bool(block.target_text))
     return (
         f"<section class='block {html.escape(block_class)}'>"
         f"<div class='zh'>{display_html}</div>"
@@ -558,17 +558,41 @@ def render_block_html(
     )
 
 
-def format_inline_text(text: str) -> str:
+# A Markdown code span: a run of backticks, content, the same run again ("`find_dotenv()`").
+_CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(?P<code>.*?[^`\s].*?)(?<!`)\1(?!`)")
+
+
+def _escape_inline(text: str) -> str:
+    return re.sub(
+        r"(&lt;/?[A-Za-z][^&]*?&gt;)",
+        r"<code class='inline-token'>\1</code>",
+        html.escape(text),
+    )
+
+
+def _escape_inline_with_code_spans(text: str) -> str:
+    parts: list[str] = []
+    position = 0
+    for match in _CODE_SPAN.finditer(text):
+        parts.append(_escape_inline(text[position : match.start()]))
+        parts.append(f"<code class='inline-token'>{html.escape(match.group('code').strip())}</code>")
+        position = match.end()
+    parts.append(_escape_inline(text[position:]))
+    return "".join(parts)
+
+
+def format_inline_text(text: str, *, code_spans: bool = False) -> str:
+    """Text as HTML lines. With ``code_spans``, a backtick-delimited span is inline code.
+
+    A translation marks inline code the Markdown way ("`find_dotenv()` 函数"); a
+    lone backtick stays as text.
+    """
+    escape = _escape_inline_with_code_spans if code_spans else _escape_inline
     formatted_lines: list[str] = []
     for raw_line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         expanded_line = raw_line.replace("\t", "    ")
         leading_spaces = _leading_whitespace_width(expanded_line)
-        escaped_line = html.escape(expanded_line[leading_spaces:])
-        escaped_line = re.sub(
-            r"(&lt;/?[A-Za-z][^&]*?&gt;)",
-            r"<code class='inline-token'>\1</code>",
-            escaped_line,
-        )
+        escaped_line = escape(expanded_line[leading_spaces:])
         if leading_spaces:
             escaped_line = ("&nbsp;" * leading_spaces) + escaped_line
         formatted_lines.append(escaped_line)
@@ -805,7 +829,7 @@ def render_block_rebuilt_epub_xhtml(
     asset_path_by_block_id: dict[str, str] | None = None,
 ) -> str:
     source_html = format_inline_text(block.source_text)
-    target_html = format_inline_text(block.target_text or "")
+    target_html = format_inline_text(block.target_text or "", code_spans=True)
     notice = html.escape(str(block.notice or "").strip())
     asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "").strip()
     if asset_src:

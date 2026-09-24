@@ -333,9 +333,16 @@ def _split_enumerated_line_blocks(
     return result
 
 
+_CELL_LINE_BREAK_HYPHEN_RE = re.compile(r"([A-Za-z])(?:\u00ad|-)[ \t]*\n[ \t]*(?=[A-Za-z0-9(])")
+
+
 def _table_cell_text(cell: Any) -> str:
-    # Merged cells come back as None; "|" would split the recovered row.
-    return " ".join(str(cell or "").split()).replace("|", "/")
+    # Merged cells come back as None; "|" would split the recovered row. A
+    # word broken over two lines of a cell ("Ques\u00ad\ntion") comes back as
+    # a line-end hyphen joined to the next line ("Ques-tion"), as body lines
+    # do; the recovery pass then removes the hyphen when it was a line break.
+    text = _CELL_LINE_BREAK_HYPHEN_RE.sub(r"\1-", str(cell or ""))
+    return " ".join(text.split()).replace("|", "/")
 
 
 def _looks_like_data_table(rows: list[list[str]]) -> bool:
@@ -457,7 +464,13 @@ class PyMuPDFTextExtractor:
                             if visible:
                                 size_weights[round(size, 1)] = size_weights.get(round(size, 1), 0) + visible
                                 line_bold = line_bold and _span_is_bold(span)
-                        normalized_line = _normalize_text("".join(parts))
+                        raw_line = "".join(parts)
+                        normalized_line = _normalize_text(raw_line)
+                        if normalized_line and raw_line.rstrip().endswith("\u00ad"):
+                            # A soft hyphen ending a line is where the typesetter broke a
+                            # word. Normalizing drops it, which left "tour" + "nament" as two
+                            # words; keep it as a line-end hyphen so the word is rejoined.
+                            normalized_line += "-"
                         if normalized_line:
                             lines.append(normalized_line)
                             dominant_size = max(size_weights, key=size_weights.__getitem__) if size_weights else 0.0

@@ -102,8 +102,8 @@
       "pdf_page_family_source": "body",
       "reading_order_index": 3,
       "recovery_flags": [
-       "dehyphenated",
-       "cross_page_repaired"
+       "cross_page_repaired",
+       "dehyphenated"
       ],
       "source_bbox_json": {
        "regions": [
