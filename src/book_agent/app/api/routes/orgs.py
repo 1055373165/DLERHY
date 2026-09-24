@@ -14,7 +14,7 @@ from book_agent.core.config import get_settings
 from book_agent.domain.models.auth import DEFAULT_ORG_ID
 from book_agent.schemas.common import BaseSchema
 from book_agent.services import org_budget, prepaid_credit
-from book_agent.services.usage_statement import usage_statement
+from book_agent.services.usage_statement import pilot_cost_statement, usage_statement
 
 router = APIRouter()
 
@@ -86,6 +86,22 @@ def get_current_org_usage(
 ):
     """The caller's organisation's model usage for a month, per book: what to charge it for."""
     return _usage_response(session, current_principal(request).org_id, month, format)
+
+
+@router.get("/pilot-costs")
+def get_pilot_costs(
+    request: Request,
+    month: str | None = Query(default=None, description="YYYY-MM (UTC); the current month when omitted."),
+    session: Session = Depends(get_db_session),
+):
+    """What the free two-chapter pilots cost us in a month, per book across organisations (instance admins)."""
+    principal = current_principal(request)
+    if principal.org_id != DEFAULT_ORG_ID or not principal.allows("admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only instance admins read pilot costs")
+    try:
+        return pilot_cost_statement(session, month=month).to_json()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
 @router.get("/{org_id}/usage")

@@ -121,6 +121,7 @@ class DocumentRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
                 "status IN ('queued','running','draining')"
             ),
         ),
+        CheckConstraint("billing_category IN ('customer', 'pilot')", name="ck_document_runs_billing_category"),
     )
 
     document_id: Mapped[str] = mapped_column(
@@ -153,6 +154,9 @@ class DocumentRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # correctness guard, ownership keeps N instances from all ticking one run.
     executor_owner: Mapped[str | None] = mapped_column(Text)
     executor_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who pays for the run's model calls (services/billing_category.py): "customer", charged to
+    # the organisation's prepaid credit and budget, or "pilot", the free trial translation we pay for.
+    billing_category: Mapped[str] = mapped_column(Text, nullable=False, default="customer", server_default="customer")
 
 
 class WorkItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
