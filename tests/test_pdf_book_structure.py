@@ -184,6 +184,115 @@ class PartedBookChapterTest(unittest.TestCase):
         self.assertEqual(stray_numbers, [])
 
 
+def _titled_page(document: fitz.Document, title: str, *, running_head: str | None = None) -> fitz.Page:
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    if running_head:
+        page.insert_text((72, 30), running_head, fontname="hebo", fontsize=9)
+    if title:
+        page.insert_text((72, 120), title, fontname="tiit", fontsize=26)
+    _body(page, 160)
+    return page
+
+
+def _write_front_matter_book(path: Path) -> None:
+    """Front matter, parts and an appendix as top-level outline entries; chapters nested in parts."""
+    document = fitz.open()
+    title_page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    title_page.insert_text((72, 200), "Synthetic Agents Book", fontname="tibo", fontsize=26)
+    for title in ("preface", "acknowledgements", "about this book", "about the authors", "about the cover illustration"):
+        _titled_page(document, title)
+    part_one = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    part_one.insert_text((72, 150), "Part 1", fontname="tiit", fontsize=30)
+    part_one.insert_text((72, 230), "Foundations", fontname="tiit", fontsize=30)
+    _chapter_opener(document, "1", "Alpha basics")
+    _titled_page(document, "", running_head="2 chapter 1 Alpha basics")
+    _chapter_opener(document, "2", "Beta design")
+    _titled_page(document, "appendix Setup")
+    # The appendix's second page repeats its title as a running head.
+    _titled_page(document, "", running_head="appendix Setup")
+    document.set_toc(
+        [
+            [1, "Synthetic Agents Book", 1],
+            [1, "preface", 2],
+            [1, "acknowledgements", 3],
+            [1, "about this book", 4],
+            [1, "about the authors", 5],
+            [1, "about the cover illustration", 6],
+            [1, "Part 1 Foundations", 7],
+            [2, "1 Alpha basics", 8],
+            [2, "2 Beta design", 10],
+            [1, "appendix Setup", 11],
+        ]
+    )
+    document.save(path)
+
+
+class FrontMatterOutlineTest(unittest.TestCase):
+    """Each top-level front-matter outline entry is its own section, whichever lane the book takes.
+
+    The outlined-book lane (chosen when a long book has a few multi-column
+    pages) used to keep only a handful of front-matter titles from the top of
+    the outline and fold the rest into their neighbours, so "about this book",
+    "about the authors" and the part page ended up inside "acknowledgements".
+    """
+
+    _EXPECTED = [
+        ("preface", 2, 2),
+        ("acknowledgements", 3, 3),
+        ("about this book", 4, 4),
+        ("about the authors", 5, 5),
+        ("about the cover illustration", 6, 6),
+        ("Part 1 Foundations", 7, 7),
+        ("1 Alpha basics", 8, 9),
+        ("2 Beta design", 10, 10),
+        ("appendix Setup", 11, 12),
+    ]
+
+    def _chapters(self, recovery_lane: str | None) -> list[tuple[str, int, int]]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "front-matter.pdf"
+            _write_front_matter_book(pdf_path)
+            parser = PDFParser(image_output_dir=Path(tmpdir) / "images")
+            profile = parser.profiler.profile(pdf_path).to_dict()
+            profile["recovery_lane"] = recovery_lane
+            parsed = parser.parse(pdf_path, profile=profile)
+        return [
+            (
+                " ".join(chapter.title.split()),
+                chapter.metadata["source_page_start"],
+                chapter.metadata["source_page_end"],
+            )
+            for chapter in parsed.chapters
+        ]
+
+    def test_outlined_book_lane_keeps_front_matter_entries_apart(self) -> None:
+        chapters = self._chapters("outlined_book")
+        self.assertEqual([chapter for chapter in chapters if chapter[1] >= 2], self._EXPECTED)
+
+    def test_default_lane_keeps_front_matter_entries_apart(self) -> None:
+        chapters = self._chapters(None)
+        self.assertEqual([chapter for chapter in chapters if chapter[1] >= 2], self._EXPECTED)
+
+    def test_only_an_outline_with_parts_skips_the_flat_outline_collapse(self) -> None:
+        from book_agent.ingestion.pdf.chapters import outline_groups_chapters_into_parts
+        from book_agent.ingestion.pdf.models import PdfOutlineEntry
+
+        parted = [
+            PdfOutlineEntry(level=1, title="preface", page_number=2),
+            PdfOutlineEntry(level=1, title="Part 1 Foundations", page_number=4),
+            PdfOutlineEntry(level=2, title="1 Alpha basics", page_number=5),
+        ]
+        flat = [
+            PdfOutlineEntry(level=1, title="Foreword", page_number=2),
+            PdfOutlineEntry(level=1, title="Chapter 1 Durable Products", page_number=5),
+            PdfOutlineEntry(level=1, title="Key Takeaways", page_number=6),
+            PdfOutlineEntry(level=2, title="1.1 Details", page_number=6),
+        ]
+        self.assertTrue(outline_groups_chapters_into_parts(parted))
+        self.assertFalse(outline_groups_chapters_into_parts(flat))
+        self.assertFalse(outline_groups_chapters_into_parts([]))
+
+
 def _write_symbol_bullet_page(path: Path) -> None:
     document = fitz.open()
     page = document.new_page(width=_PAGE[0], height=_PAGE[1])

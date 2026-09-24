@@ -263,7 +263,7 @@ def build_chapters(
         current_blocks.append(block)
 
     flush_current()
-    if chapters and profile.recovery_lane == "outlined_book":
+    if chapters and uses_flat_outline_collapse(outline_entries, profile):
         chapters = merge_outlined_book_auxiliary_chapters(chapters)
     if chapters:
         return chapters
@@ -295,7 +295,7 @@ def chapter_start_candidates(
         _ChapterStartCandidate(page_number=entry.page_number, title=entry.title, source="outline")
         for entry in top_level_outline_entries(outline_entries)
     ]
-    if profile.recovery_lane == "outlined_book":
+    if uses_flat_outline_collapse(outline_entries, profile):
         outline_candidates = [
             candidate
             for candidate in outline_candidates
@@ -606,6 +606,16 @@ def merge_chapter_start_candidates(
         key = (candidate.page_number, _normalize_outline_title(candidate.title))
         if key in seen:
             continue
+        if (
+            candidate.source.startswith("section_family")
+            and merged
+            and merged[-1].page_number < candidate.page_number
+            and _normalize_outline_title(merged[-1].title) == key[1]
+        ):
+            # A running head that repeats the title of the section already
+            # open ("appendix OpenAI API Key" atop the appendix's second page)
+            # does not start the section again.
+            continue
         seen.add(key)
         if candidate.section_family is not None:
             special_pages.add(candidate.page_number)
@@ -726,6 +736,28 @@ def chapter_level_outline_entries(outline_entries: list[PdfOutlineEntry]) -> lis
         ):
             selected.append(entry)
     return selected
+
+
+def outline_groups_chapters_into_parts(outline_entries: list[PdfOutlineEntry]) -> bool:
+    """Whether the outline nests its numbered chapters under "Part N" entries."""
+    if not outline_entries:
+        return False
+    top_level = min(entry.level for entry in outline_entries)
+    return any(entry.level > top_level for entry in chapter_level_outline_entries(outline_entries))
+
+
+def uses_flat_outline_collapse(outline_entries: list[PdfOutlineEntry], profile: PdfFileProfile) -> bool:
+    """Whether an outlined book's top-level outline entries are filtered and collapsed.
+
+    The outlined-book lane keeps only chapter, appendix, glossary and a few
+    front-matter titles from the outline's top level, and folds the other
+    top-level sections into their neighbours. That is for a flat outline, where
+    a chapter's own sections ("Key Takeaways", "References") sit at the top
+    level next to the chapters. When the outline nests its chapters under
+    parts, the top level holds only parts, front matter and back matter, each a
+    section of its own, so the outline is used as it stands.
+    """
+    return profile.recovery_lane == "outlined_book" and not outline_groups_chapters_into_parts(outline_entries)
 
 
 def top_level_outline_entries(outline_entries: list[PdfOutlineEntry]) -> list[PdfOutlineEntry]:
