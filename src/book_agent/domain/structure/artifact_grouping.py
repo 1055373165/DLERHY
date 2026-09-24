@@ -129,11 +129,26 @@ def is_academic_paper_document(document: object | None) -> bool:
     return str(profile.get("recovery_lane") or "").strip() == "academic_paper"
 
 
+_ARTIFACT_REFERENCE_PATTERN = re.compile(
+    r"\b(?:figure|fig\.|table|listing|equation|eq\.)\s*\(?([A-Z]?\d+(?:\.\d+)*)",
+    re.IGNORECASE,
+)
+_SENTENCE_END_PATTERN = re.compile(r"[.!?](?:[\"'\)\]\u201d\u2019])?(?:\s|$)")
+# A caption's explanation is a sentence or two; a paragraph of running prose
+# after a figure is the body text continuing.
+_MAX_BOOK_CONTEXT_SENTENCES = 2
+
+
+def _artifact_reference_numbers(text: str) -> set[str]:
+    return {match.casefold() for match in _ARTIFACT_REFERENCE_PATTERN.findall(text)}
+
+
 def looks_like_artifact_group_context_text(
     text: str,
     artifact_role: str,
     *,
     academic_paper: bool,
+    caption_text: str | None = None,
 ) -> bool:
     normalized = normalize_text(text)
     if len(normalized) < 48 or len(normalized) > 900:
@@ -142,6 +157,20 @@ def looks_like_artifact_group_context_text(
         return False
     if looks_like_codeish_text(normalized):
         return False
+    caption_label = _ARTIFACT_REFERENCE_PATTERN.match(normalize_text(caption_text)) if caption_text else None
+    referenced = _artifact_reference_numbers(normalized)
+    names_this_artifact = caption_label is not None and caption_label.group(1).casefold() in referenced
+    if caption_label is not None and referenced and not names_this_artifact:
+        # "See figure 1.3" under figure 1.2 talks about another artifact.
+        return False
+    if not academic_paper and caption_text is not None:
+        # In a book the text after a figure is the body carrying on. Only a
+        # short note that names this very artifact ("Table 1 reports ...")
+        # belongs with it; a topic word like "pipeline" is not enough.
+        if not names_this_artifact:
+            return False
+        if len(_SENTENCE_END_PATTERN.findall(normalized)) > _MAX_BOOK_CONTEXT_SENTENCES:
+            return False
 
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9'-]*", normalized.casefold())
     if len(tokens) < 8:
@@ -152,7 +181,7 @@ def looks_like_artifact_group_context_text(
         return True
 
     stopword_hits = sum(1 for token in tokens if token in _GENERIC_PROSE_STOPWORDS)
-    sentence_punctuation = len(re.findall(r"[.!?](?:[\"'\)\]\u201d\u2019])?(?:\s|$)", normalized))
+    sentence_punctuation = len(_SENTENCE_END_PATTERN.findall(normalized))
     if academic_paper and stopword_hits >= max(4, len(tokens) // 8) and (sentence_punctuation >= 1 or len(tokens) >= 18):
         return True
     return False
@@ -378,6 +407,7 @@ def _infer_adjacent_group_context_ids(
             str(getattr(candidate, "source_text", "") or ""),
             artifact_role,
             academic_paper=academic_paper,
+            caption_text=str(getattr(caption_block, "source_text", "") or getattr(caption_block, "text", "") or ""),
         ):
             break
         return [candidate_id]

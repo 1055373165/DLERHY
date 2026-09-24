@@ -1,6 +1,6 @@
 """Book- and publisher-specific PDF recovery passes as switchable skills.
 
-Most of the 22 block recovery passes are generic layout repair. A few encode
+Most of the 23 block recovery passes are generic layout repair. A few encode
 conventions of particular publishers or document kinds and misfire on books
 that do not follow them. Each such pass belongs to a named skill that a
 document can switch off (``documents.metadata_json["recovery_skills"]``);

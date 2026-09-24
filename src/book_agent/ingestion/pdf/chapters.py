@@ -697,6 +697,37 @@ def resolved_toc_page_number(
     return None, "unresolved", None
 
 
+_OUTLINE_PART_DIVIDER_RE = re.compile(r"^\s*part\s+(?:\d+|[ivxlc]+)\b", re.IGNORECASE)
+
+
+def _is_outline_chapter_child(title: str) -> bool:
+    return _extract_book_main_chapter_number(title) is not None or _looks_like_outlined_book_appendix_title(title)
+
+
+def chapter_level_outline_entries(outline_entries: list[PdfOutlineEntry]) -> list[PdfOutlineEntry]:
+    """The outline entries that stand for chapters.
+
+    Usually the top level. A book grouped into parts nests its chapters one
+    level below each "Part N" entry; there the part is a container, so its
+    numbered chapter children are chapters too (the part entry stays, for the
+    part's own opening pages).
+    """
+    top_level = min(entry.level for entry in outline_entries)
+    selected: list[PdfOutlineEntry] = []
+    current_part_is_divider = False
+    for entry in outline_entries:
+        if entry.level == top_level:
+            selected.append(entry)
+            current_part_is_divider = bool(_OUTLINE_PART_DIVIDER_RE.match(_normalize_text(entry.title)))
+        elif (
+            current_part_is_divider
+            and entry.level == top_level + 1
+            and _is_outline_chapter_child(entry.title)
+        ):
+            selected.append(entry)
+    return selected
+
+
 def top_level_outline_entries(outline_entries: list[PdfOutlineEntry]) -> list[PdfOutlineEntry]:
     if not outline_entries:
         return []
@@ -706,11 +737,10 @@ def top_level_outline_entries(outline_entries: list[PdfOutlineEntry]) -> list[Pd
         1 for entry in top_level_entries if _looks_like_book_primary_outline_title(entry.title)
     )
     filter_auxiliary_book_outline_entries = primary_outline_entry_count >= 2
+    chapter_entries = chapter_level_outline_entries(outline_entries)
     deduped: list[PdfOutlineEntry] = []
     seen: set[tuple[int, str]] = set()
-    for entry in sorted(outline_entries, key=lambda item: (item.page_number, item.level)):
-        if entry.level != top_level:
-            continue
+    for entry in sorted(chapter_entries, key=lambda item: (item.page_number, item.level)):
         if (
             filter_auxiliary_book_outline_entries
             and not _should_keep_book_top_level_outline_title(entry.title)

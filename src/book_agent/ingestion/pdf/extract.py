@@ -45,6 +45,99 @@ def _span_is_bold(span: dict[str, Any]) -> bool:
     return bool(int(span.get("flags", 0) or 0) & 16) or bool(_BOLD_FONT_NAME.search(str(span.get("font", ""))))
 
 
+_PICTOGRAPH_FONT_NAME = re.compile(r"wingding|dingbat|webding", re.IGNORECASE)
+_SYMBOL_FONT_NAME = re.compile(r"(?:^|[+,\-])symbol(?:mt|ps)?\b", re.IGNORECASE)
+_SYMBOL_FONT_MATH_GLYPHS = frozenset("+-=<>±×÷∑∏∫√∞≤≥≈≠∂∆∇∈∉∩∪⊂⊃")
+
+
+def _is_symbol_font_bullet(span: dict[str, Any]) -> bool:
+    """A lone glyph from a pictograph/symbol font that starts a line is a list bullet.
+
+    Such fonts have no Unicode mapping for their glyphs, so the text layer
+    decodes the bullet as whatever character shares its code (Wingdings 2's
+    square bullet arrives as "¡", ZapfDingbats' dot as "l").
+    """
+    glyph = str(span.get("text") or "").strip()
+    if len(glyph) != 1:
+        return False
+    font = str(span.get("font") or "")
+    if _PICTOGRAPH_FONT_NAME.search(font):
+        return True
+    return bool(_SYMBOL_FONT_NAME.search(font)) and not glyph.isalnum() and glyph not in _SYMBOL_FONT_MATH_GLYPHS
+
+
+def _line_spans_with_bullet_marker(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The line's spans, with a leading symbol-font bullet replaced by "• "."""
+    visible = [index for index, span in enumerate(spans) if str(span.get("text") or "").strip()]
+    if len(visible) < 2 or not _is_symbol_font_bullet(spans[visible[0]]):
+        return spans
+    marker = {**spans[visible[0]], "text": "• "}
+    return [*spans[: visible[0]], marker, *spans[visible[0] + 1 :]]
+
+
+_MIN_VISIBLE_IMAGE_SIDE = 2.0
+
+
+def _visible_image_bbox(
+    raw_bbox: Any,
+    page_width: float,
+    page_height: float,
+) -> tuple[float, float, float, float] | None:
+    """The on-page part of an image placement, or None when nothing visible is left.
+
+    Layout tools paste hairline image slivers to close gaps between tiles and
+    park images off the page; a crop of either is an empty picture.
+    """
+    try:
+        x0, y0, x1, y1 = (float(value) for value in raw_bbox)
+    except (TypeError, ValueError):
+        return None
+    left, right = sorted((x0, x1))
+    top, bottom = sorted((y0, y1))
+    left, top = max(left, 0.0), max(top, 0.0)
+    right, bottom = min(right, page_width), min(bottom, page_height)
+    if right - left < _MIN_VISIBLE_IMAGE_SIDE or bottom - top < _MIN_VISIBLE_IMAGE_SIDE:
+        return None
+    return (left, top, right, bottom)
+
+
+def _is_background_panel(
+    cluster_bbox: tuple[float, float, float, float],
+    drawings: list[dict[str, Any]],
+) -> bool:
+    """Whether a drawing cluster is only the tinted background of a text panel.
+
+    Sidebars and "This chapter covers" boxes are painted as one or more
+    borderless filled rectangles of one colour and one width stacked behind
+    the text. The text is extracted anyway; cropping the panel as a figure
+    shows the same text again as a picture.
+    """
+    members = []
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        x0, y0, x1, y1 = (float(value) for value in rect)
+        if x1 < cluster_bbox[0] or x0 > cluster_bbox[2] or y1 < cluster_bbox[1] or y0 > cluster_bbox[3]:
+            continue
+        members.append((drawing, (x0, x1)))
+    if not members:
+        return False
+    fills = set()
+    for drawing, _extent in members:
+        items = drawing.get("items") or ()
+        if drawing.get("color") is not None or drawing.get("fill") is None:
+            return False
+        if not items or any(item[0] != "re" for item in items):
+            return False
+        fills.add(tuple(round(float(channel), 3) for channel in drawing["fill"]))
+    if len(fills) != 1:
+        return False
+    left_edges = [extent[0] for _drawing, extent in members]
+    right_edges = [extent[1] for _drawing, extent in members]
+    return max(left_edges) - min(left_edges) <= 2.0 and max(right_edges) - min(right_edges) <= 2.0
+
+
 _MIN_RULED_TABLE_CELLS = 4
 _MAX_RULED_TABLE_AVG_CELL_CHARS = 80
 
@@ -296,7 +389,13 @@ class PyMuPDFTextExtractor:
                 image_blocks: list[PdfImageBlock] = []
                 for block_number, block in enumerate(text_dict.get("blocks", []), start=1):
                     if block.get("type") == 1:
-                        bbox = tuple(float(value) for value in block.get("bbox", (0, 0, 0, 0)))
+                        bbox = _visible_image_bbox(
+                            block.get("bbox", (0, 0, 0, 0)),
+                            float(page.rect.width),
+                            float(page.rect.height),
+                        )
+                        if bbox is None:
+                            continue
                         width_px = (
                             int(block["width"])
                             if isinstance(block.get("width"), (int, float))
@@ -340,7 +439,7 @@ class PyMuPDFTextExtractor:
                         parts: list[str] = []
                         size_weights: dict[float, int] = {}
                         line_bold = True
-                        for span in line.get("spans", []):
+                        for span in _line_spans_with_bullet_marker(list(line.get("spans", []))):
                             text = span.get("text", "")
                             if not text:
                                 continue
@@ -484,9 +583,12 @@ class PyMuPDFTextExtractor:
             drawing_bboxes.append(bbox)
 
         image_blocks: list[PdfImageBlock] = []
-        for offset, bbox in enumerate(
-            self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
-        ):
+        clusters = [
+            bbox
+            for bbox in self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
+            if not _is_background_panel(bbox, drawings)
+        ]
+        for offset, bbox in enumerate(clusters):
             image_blocks.append(
                 PdfImageBlock(
                     page_number=page_number,
