@@ -47,7 +47,7 @@ def render_block_markdown(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
     *,
-    include_notice: bool = True,
+    include_notice: bool = False,
     include_source_caption: bool = True,
 ) -> str:
     source_text = block.source_text or ""
@@ -409,7 +409,7 @@ def render_block_html(
     asset_path_by_block_id: dict[str, str] | None = None,
     *,
     include_source_toggle: bool = True,
-    include_notice: bool = True,
+    include_notice: bool = False,
     include_source_caption: bool = True,
 ) -> str:
     notice_text = str(block.notice or "") if include_notice else ""
@@ -830,7 +830,8 @@ def render_block_rebuilt_epub_xhtml(
 ) -> str:
     source_html = format_inline_text(block.source_text)
     target_html = format_inline_text(block.target_text or "", code_spans=True)
-    notice = html.escape(str(block.notice or "").strip())
+    # Readers see only the book's text: labels like 图片原样保留 are notes for reviewers, not translation.
+    notice = ""
     asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "").strip()
     if asset_src:
         asset_src = epub_relative_asset_path(asset_src)

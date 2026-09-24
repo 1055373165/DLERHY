@@ -7337,8 +7337,9 @@ class PdfApiWorkflowTests(unittest.TestCase):
         self.assertEqual(contract["source_only_block_count"], 1)
         html_path = Path(chapter_export["file_path"])
         html_text = html_path.read_text(encoding="utf-8")
-        self.assertIn("尾部资料页保留原样", html_text)
-        self.assertIn("artifact-note", html_text)
+        # The page is kept as it is (the manifest says so above); the reader sees the page, not a label.
+        self.assertNotIn("尾部资料页保留原样", html_text)
+        self.assertNotIn("<div class='artifact-note'>", html_text)
         self.assertNotIn("<table border='1'", html_text)
 
 
