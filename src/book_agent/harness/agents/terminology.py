@@ -75,6 +75,8 @@ class TerminologyAgent:
         mode: str = MODE_SAMPLED,
         run_id: str | None = None,
         work_item_id: str | None = None,
+        # A distributed-systems book locked 100 terms and ran out at 120 tool calls, pausing the
+        # run for a budget extension; the default now fits a technical book's glossary.
         budget: TurnBudget | None = None,
         max_sample_chars: int = 40_000,
     ) -> TerminologyTurnSeed:
@@ -92,7 +94,7 @@ class TerminologyAgent:
             run_id=run_id,
             work_item_id=work_item_id,
             model_name=model_name,
-            budget=(budget or TurnBudget(max_steps=30, max_tool_calls=120)).to_json(),
+            budget=(budget or TurnBudget(max_steps=40, max_tool_calls=300)).to_json(),
             skills=["terminology/default"],
         )
         self.ledger.append_item(turn.id, kind=AgentItemKind.SYSTEM, content={"text": SYSTEM_PROMPT})

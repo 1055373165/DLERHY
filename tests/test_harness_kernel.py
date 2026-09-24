@@ -398,6 +398,28 @@ class HarnessKernelTests(unittest.TestCase):
         outcome = runner.run(turn_id)
         self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
 
+    def test_a_granted_turn_doubles_its_own_budget_instead_of_pausing(self) -> None:
+        model = _FakeModel(
+            [
+                AgentStep(text=None, tool_calls=[ToolCall("c1", "lookup_term", {"term": "a"})], usage=_usage()),
+                AgentStep(text="Done.", usage=_usage()),
+            ]
+        )
+        turn_id = self._new_turn(budget=TurnBudget(max_steps=1))
+        runner = self._runner(model)
+        runner.auto_budget_grants = 1
+        outcome = runner.run(turn_id)
+
+        self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
+        with self.session_factory() as session:
+            ledger = AgentLedgerRepository(session)
+            self.assertEqual(ledger.list_approvals(self.document_id, status=ApprovalStatus.PENDING), [])
+            granted = ledger.list_approvals(self.document_id, status=ApprovalStatus.AUTO_APPROVED)
+            # The extension is on record, with the policy that granted it.
+            self.assertEqual([approval.kind for approval in granted], ["budget_extension"])
+            self.assertEqual(granted[0].decided_by, "auto.fast_reading_budget")
+            self.assertEqual(ledger.get_turn(turn_id).budget_json["max_steps"], 2)
+
     def test_crash_between_steps_resumes_from_the_ledger(self) -> None:
         # First runner dies after the tool ran (simulated by scripting only one step);
         # a fresh runner with the remaining script continues from the persisted items.

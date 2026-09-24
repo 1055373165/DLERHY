@@ -62,6 +62,20 @@ def singularize(word: str) -> str:
     return lowered
 
 
+def _token_spans(text: str) -> list[tuple[str, int, int]]:
+    """Tokens with the character span they came from, so callers can look at their neighbours."""
+    spans: list[tuple[str, int, int]] = []
+    for match in _TOKEN_RE.finditer(text or ""):
+        raw = match.group(0)
+        if raw == "&":
+            spans.append(("and", match.start(), match.end()))
+            continue
+        token = re.sub(r"['\u2019]", "", re.sub(r"['\u2019]s$", "", raw.lower()))
+        if token:
+            spans.append((token, match.start(), match.end()))
+    return spans
+
+
 def source_tokens(text: str) -> list[str]:
     tokens: list[str] = []
     for raw in _TOKEN_RE.findall(text or ""):
@@ -111,7 +125,8 @@ class SourceTermIndex:
         self._max_tokens = min(MAX_TERM_TOKENS, self._max_tokens + 1)
 
     def find(self, text: str) -> list[TermOccurrence]:
-        tokens = source_tokens(text)
+        spans = _token_spans(text)
+        tokens = [token for token, _start, _end in spans]
         occurrences: list[TermOccurrence] = []
         position = 0
         while position < len(tokens):
@@ -122,6 +137,10 @@ class SourceTermIndex:
                     matched = TermOccurrence(key=key, start_token=position, end_token=position + size)
                     break
             if matched is None:
+                position += 1
+                continue
+            if _inside_hyphenated_word(text or "", spans, matched):
+                # "fault" in "fault-tolerant" is part of another word, like "bull" in "bullish".
                 position += 1
                 continue
             occurrences.append(matched)
@@ -137,6 +156,17 @@ class SourceTermIndex:
             for occurrence in self.find(text):
                 counts[occurrence.key] = counts.get(occurrence.key, 0) + 1
         return counts
+
+
+def _inside_hyphenated_word(text: str, spans: Sequence[tuple[str, int, int]], occurrence: TermOccurrence) -> bool:
+    """True when the matched tokens are joined by a hyphen to a word outside the match."""
+    start = spans[occurrence.start_token][1]
+    end = spans[occurrence.end_token - 1][2]
+    before = text[:start].rstrip()
+    after = text[end:].lstrip() if text[end : end + 1] not in {"-", "\u2011"} else text[end:]
+    joined_before = before.endswith(("-", "\u2011")) and text[:start].rstrip("-\u2011")[-1:].isalnum()
+    joined_after = after.startswith(("-", "\u2011")) and after[1:2].isalnum()
+    return joined_before or joined_after
 
 
 def normalize_target(text: str) -> str:

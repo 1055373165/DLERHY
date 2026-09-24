@@ -52,6 +52,14 @@ class SourceTermIndexTest(unittest.TestCase):
         self.assertEqual(index.count(["Bullish traders are not bulls, but a bull is."]), {"bull": 2})
         self.assertEqual(index.count(["Weekly time frame versus daily time-frames."]), {"timeframe": 2})
 
+    def test_a_hyphen_joins_a_word_the_term_is_only_part_of(self) -> None:
+        index = SourceTermIndex(["fault", "time frame"])
+        # "fault-tolerant" is its own word, like "bullish"; a plain "fault" still counts.
+        self.assertEqual(index.count(["A fault-tolerant service handles a fault."]), {"fault": 1})
+        self.assertEqual(index.count(["Designing for fault-tolerance."]), {})
+        # A term written with a space still matches its hyphenated spelling.
+        self.assertEqual(index.count(["The time-frame is long."]), {source_term_key("time frame"): 1})
+
 
 class TargetMatchingTest(unittest.TestCase):
     def test_whitespace_punctuation_and_case_are_ignored(self) -> None:
