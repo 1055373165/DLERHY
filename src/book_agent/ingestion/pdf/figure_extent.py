@@ -1,4 +1,4 @@
-"""The page region a figure really occupies.
+"""The page region a figure really occupies, and a check of a figure region.
 
 A vector figure is painted as many paths: the large shapes that make it
 recognisable as a figure (panels, circles, long arrows) and many small ones
@@ -551,3 +551,81 @@ def _union(bboxes: Iterable[Bbox]) -> Bbox:
         max(bbox[2] for bbox in items),
         max(bbox[3] for bbox in items),
     )
+
+
+# ---------------------------------------------------------------------------
+# Region check
+
+
+@dataclass(frozen=True)
+class FigureRegionProblem:
+    kind: str
+    """``page_furniture`` (header/folio/footer inside), ``caption`` (the
+    caption inside), ``cut_path`` / ``cut_text`` (a path or text line crossing
+    or touching the region's edge: part of the figure left outside)."""
+    bbox: Bbox
+    text: str = ""
+
+
+def figure_region_problems(
+    page: Any,
+    region: Sequence[float],
+    *,
+    furniture_bboxes: Sequence[Bbox] | None = None,
+    touch_gap: float = 2.0,
+    tolerance: float = 1.0,
+) -> list[FigureRegionProblem]:
+    """What is wrong with ``region`` as the crop of a figure on ``page``.
+
+    A clean figure region covers every path and text line of the figure and
+    nothing of the page around it, so:
+
+    * no running header, folio or footer may intersect it. They are
+      ``furniture_bboxes`` when the caller knows them (recovered header/footer
+      blocks); otherwise the text lines in the page's margin bands;
+    * no caption line may intersect it;
+    * every path and text line that intersects it, or comes within
+      ``touch_gap`` of it, must lie inside it (within ``tolerance``).
+    """
+    x0, y0, x1, y1 = (float(value) for value in region)
+    box: Bbox = (x0, y0, x1, y1)
+    zone: Bbox = (x0 - touch_gap, y0 - touch_gap, x1 + touch_gap, y1 + touch_gap)
+    page_width = float(page.rect.width)
+    page_height = float(page.rect.height)
+    lines = page_text_lines(page.get_text("dict"), page_width, page_height)
+    problems: list[FigureRegionProblem] = []
+
+    furniture = list(furniture_bboxes) if furniture_bboxes is not None else [
+        line.bbox for line in lines if line.margin
+    ]
+    for bbox in furniture:
+        if _intersects(box, bbox):
+            problems.append(FigureRegionProblem("page_furniture", bbox, _text_at(lines, bbox)))
+    furniture_set = {tuple(bbox) for bbox in furniture}
+
+    for line in lines:
+        if line.bbox in furniture_set or not _intersects(zone, line.bbox):
+            continue
+        if line.caption:
+            if _intersects(box, line.bbox):
+                problems.append(FigureRegionProblem("caption", line.bbox, line.text))
+            continue
+        if not _contains(box, line.bbox, tolerance=tolerance):
+            problems.append(FigureRegionProblem("cut_text", line.bbox, line.text))
+
+    try:
+        _paths, visible = split_extended_drawings(page.get_drawings(extended=True))
+    except Exception:
+        visible = []
+    for bbox in visible:
+        if bbox is None:
+            continue
+        if not _is_candidate_path(bbox, page_width, page_height) or not _intersects(zone, bbox):
+            continue
+        if not _contains(box, bbox, tolerance=tolerance):
+            problems.append(FigureRegionProblem("cut_path", bbox))
+    return problems
+
+
+def _text_at(lines: Sequence[PageTextLine], bbox: Sequence[float]) -> str:
+    return " ".join(line.text.strip() for line in lines if _intersects(tuple(bbox), line.bbox))  # type: ignore[arg-type]
