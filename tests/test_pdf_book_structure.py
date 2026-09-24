@@ -359,6 +359,34 @@ class LineBreakHyphenTest(unittest.TestCase):
         for source, expected in cases.items():
             self.assertEqual(rejoin_line_break_hyphens(source, counts), expected, source)
 
+    def test_table_rows_are_not_evidence_that_a_split_word_is_written_hyphenated(self) -> None:
+        from types import SimpleNamespace
+
+        from book_agent.domain.structure.pdf import _rejoin_line_break_hyphens_pass
+        from book_agent.ingestion.pdf.models import PdfTextBlock, _RecoveredBlock
+
+        def text_block(lines: list[str], *, ruled_table: bool = False) -> PdfTextBlock:
+            return PdfTextBlock(
+                page_number=1, block_number=0, text="\n".join(lines), bbox=(0, 0, 1, 1), line_texts=lines,
+                span_count=1, line_count=len(lines), font_size_min=10, font_size_max=10, font_size_avg=10,
+                ruled_table=ruled_table,
+            )
+
+        # A table cell joins its broken lines too, so its row reads "infor-mation" inside one line.
+        pages = [SimpleNamespace(blocks=[
+            text_block(["the flow of infor-", "mation matters, and information is data"]),
+            text_block(["| Kind | infor-mation |"], ruled_table=True),
+        ])]
+        body = _RecoveredBlock(
+            role="body", block_type=BlockType.PARAGRAPH, text="the flow of infor-mation matters", page_start=1,
+            page_end=1, bbox_regions=[], reading_order_index=0, parse_confidence=1.0, flags=[], font_size_avg=10,
+            source_path="x.pdf", anchor="p1",
+        )
+        context = SimpleNamespace(extraction=SimpleNamespace(pages=pages))
+        [result] = _rejoin_line_break_hyphens_pass(None, [body], context)
+        self.assertEqual(result.text, "the flow of information matters")
+        self.assertIn("dehyphenated", result.flags)
+
     def test_word_broken_inside_a_table_cell_is_rejoined(self) -> None:
         from book_agent.ingestion.pdf.extract import _table_cell_text
 

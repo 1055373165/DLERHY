@@ -4587,8 +4587,13 @@ def _document_title_pass(service, blocks, context):
 
 def _rejoin_line_break_hyphens_pass(service, blocks, context):
     """Remove hyphens that only a line break put into a word, using the book's own words as evidence."""
+    # Ruled-table rows are not PDF lines: their cells were already joined across line breaks.
     inline_counts = inline_word_counts(
-        line for page in context.extraction.pages for block in page.blocks for line in (block.line_texts or [block.text])
+        line
+        for page in context.extraction.pages
+        for block in page.blocks
+        if not block.ruled_table
+        for line in (block.line_texts or [block.text])
     )
     for block in blocks:
         if block.block_type == BlockType.CODE or "-" not in block.text:
