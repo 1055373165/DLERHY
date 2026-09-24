@@ -31,6 +31,7 @@ from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export import pdf_crop
 from book_agent.ingestion.pdf.figure_extent import (
+    figure_label_blocks,
     figure_region_problems,
     page_text_lines,
     split_extended_drawings,
@@ -375,6 +376,100 @@ class PageBackgroundTests(unittest.TestCase):
         panels = [block for block in _figure_blocks(parsed)]
         self.assertTrue(panels)
         self.assertTrue(all(block.metadata.get("pdf_page_background") for block in panels))
+
+
+def _labelled_figure_page(page: fitz.Page) -> None:
+    """Figure 1.1's layout: body text in a column beside a two-panel diagram whose left panel
+    holds a long, sentence-like run of small labels."""
+    _body(page, 60, 150)
+    page.insert_textbox(fitz.Rect(102, 300, 300, 470), BODY + " " + BODY, fontsize=10)
+    page.draw_rect(fitz.Rect(310, 300, 390, 420), color=(0, 0, 0))
+    page.draw_rect(fitz.Rect(397, 300, 477, 420), color=(0, 0, 0))
+    page.insert_text((315, 310), "Few-shot learning", fontsize=7)
+    page.insert_text((402, 310), "Zero-shot learning", fontsize=7)
+    page.insert_textbox(
+        fitz.Rect(313, 318, 388, 415),
+        "Translate English to Korean. Apple becomes sagwa and orange becomes orenji in the examples. "
+        "Banana is the new word. The answer is banana in Korean, found from the two examples above.",
+        fontsize=6,
+    )
+    page.insert_text((402, 330), "Translate English to Korean.", fontsize=6)
+    page.insert_text((310, 440), "Figure 1.1 Example of a language model's generalization", fontsize=8)
+
+
+class MeasuredLabelTests(unittest.TestCase):
+    """Labels the extractor measured with a drawing are the figure's, however long or sentence-like.
+
+    Real books: 263 (RAG) and 49 (Agent) such label blocks stayed translatable paragraphs, because
+    clustering re-judged them by length (> 200 characters), sentence shape and prose density.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        pdf_path = Path(cls._tmp.name) / "labels.pdf"
+        document = fitz.open()
+        _labelled_figure_page(document.new_page(width=531, height=666))
+        document.save(pdf_path)
+        cls.parsed = _parse(pdf_path, cls._tmp.name)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def test_labels_are_not_body_text(self) -> None:
+        texts = " ".join(block.text for block in _text_blocks(self.parsed))
+        for label in ("Few-shot learning", "Zero-shot learning", "Banana is the new word", "Translate English"):
+            self.assertNotIn(label, texts)
+
+    def test_body_text_beside_the_figure_stays_body_text(self) -> None:
+        texts = " ".join(" ".join(block.text.split()) for block in _text_blocks(self.parsed))
+        self.assertGreaterEqual(texts.count("Body text of the chapter runs across the full width"), 3)
+        self.assertIn("Figure 1.1 Example", texts)
+        figures = [_region(block)[1] for block in _figure_blocks(self.parsed)]
+        self.assertEqual(len(figures), 1)
+        self.assertGreater(figures[0][0], 300.0)  # the text column ends at 300
+
+    def test_a_block_is_labels_only_when_all_its_lines_are(self) -> None:
+        document = fitz.open()
+        page = document.new_page(width=531, height=666)
+        _labelled_figure_page(page)
+        lines = page_text_lines(page.get_text("dict"), 531, 666)
+        paths, visible = split_extended_drawings(page.get_drawings(extended=True))
+        extents = vector_figure_extents(
+            [box for box in visible if box is not None],
+            seed=lambda bbox: (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) >= 1800,
+            figure_sized=lambda bbox: (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) >= 12000,
+            text_lines=lines,
+            page_width=531,
+            page_height=666,
+        )
+        self.assertEqual(len(extents), 1)
+        label_box = (313.0, 318.0, 388.0, 415.0)
+        column_box = (102.0, 300.0, 300.0, 470.0)
+        both = (102.0, 300.0, 388.0, 470.0)
+        self.assertEqual(figure_label_blocks([label_box, column_box, both], lines, extents), [True, False, False])
+        document.close()
+
+    def test_labels_and_body_text_are_not_joined_into_one_paragraph(self) -> None:
+        from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+        from book_agent.ingestion.pdf.models import PdfPage, _RecoveredBlock
+
+        def recovered(text, role, block_type, bbox, label):
+            region = {"page_number": 1, "bbox": list(bbox), **({"figure_label": True} if label else {})}
+            return _RecoveredBlock(
+                role=role, block_type=block_type, text=text, page_start=1, page_end=1, bbox_regions=[region],
+                reading_order_index=0, parse_confidence=0.9, flags=[], font_size_avg=8.5,
+                source_path="pdf://page/1", anchor="a",
+            )
+
+        service = PdfStructureRecoveryService()
+        pages = [PdfPage(page_number=1, width=531.0, height=666.0, blocks=[])]
+        body = recovered("there are disadvantages to this pattern as well.", "body", BlockType.PARAGRAPH, (93, 203, 279, 297), False)
+        plain = recovered("• 3 web searches • Result analysis", "list_item", BlockType.LIST_ITEM, (345, 176, 401, 202), False)
+        labels = recovered("• 3 web searches • Result analysis", "list_item", BlockType.LIST_ITEM, (345, 176, 401, 202), True)
+        self.assertEqual(service._merge_target_index([plain], body, pages), 0)
+        self.assertIsNone(service._merge_target_index([labels], body, pages))
 
 
 def _text_dict_line(text: str, bbox: tuple[float, float, float, float], size: float) -> dict:

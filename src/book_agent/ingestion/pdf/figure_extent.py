@@ -497,6 +497,42 @@ def _within_band(bbox: Bbox, band: tuple[float, float]) -> bool:
     return bbox[1] >= band[0] - 1.0 and bbox[3] <= band[1] + 1.0
 
 
+def figure_label_blocks(
+    block_bboxes: Sequence[Bbox],
+    text_lines: Sequence[PageTextLine],
+    extents: Sequence[VectorFigureExtent],
+) -> list[bool]:
+    """For each text block (by its bbox): whether it holds only one figure's labels.
+
+    A block is a figure's labels when every text line in it (by the line's
+    center) is a label line of the same measured figure. The measurement
+    already told labels from body prose (width, body font size, sentences,
+    enclosing shapes), so a block of labels is part of the picture however
+    long it is or however much its joined text reads like a sentence. A block
+    that mixes labels with a line of body text is not.
+    """
+    owner: dict[int, int] = {}
+    for number, extent in enumerate(extents):
+        for index in extent.label_line_indices:
+            owner.setdefault(index, number)
+    result: list[bool] = []
+    for bbox in block_bboxes:
+        members = [
+            index
+            for index, line in enumerate(text_lines)
+            if _contains(bbox, _center_box(line.bbox), tolerance=0.5)
+        ]
+        owners = {owner.get(index) for index in members}
+        result.append(bool(members) and None not in owners and len(owners) == 1)
+    return result
+
+
+def _center_box(bbox: Bbox) -> Bbox:
+    x = (bbox[0] + bbox[2]) / 2
+    y = (bbox[1] + bbox[3]) / 2
+    return (x, y, x, y)
+
+
 def _is_inline_glyph(bbox: Bbox, text_lines: Sequence[PageTextLine]) -> bool:
     """An image no taller than a text line, sitting on or against that line."""
     height = bbox[3] - bbox[1]

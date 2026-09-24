@@ -23,6 +23,8 @@ from book_agent.ingestion.pdf.classify import (
 )
 from book_agent.ingestion.pdf.figure_extent import (
     PageTextLine,
+    VectorFigureExtent,
+    figure_label_blocks,
     page_text_lines,
     starts_figure_caption,
     split_extended_drawings,
@@ -604,17 +606,23 @@ class PyMuPDFTextExtractor:
                 blocks = _split_enumerated_line_blocks(blocks, line_bboxes_by_block)
                 blocks = _split_mid_block_captions(blocks, line_bboxes_by_block)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
-                image_blocks.extend(
-                    self._extract_vector_drawing_blocks(
-                        page,
-                        page_number=page_index + 1,
-                        start_block_number=len(text_dict.get("blocks", [])) + 1,
-                        drawings=drawings,
-                        visible_rects=visible_drawing_rects,
-                        text_lines=page_text_lines(text_dict, float(page.rect.width), float(page.rect.height)),
-                        image_bboxes=[image_block.bbox for image_block in image_blocks],
-                    )
+                text_lines = page_text_lines(text_dict, float(page.rect.width), float(page.rect.height))
+                figure_blocks, extents = self._measure_vector_figures(
+                    page,
+                    page_number=page_index + 1,
+                    start_block_number=len(text_dict.get("blocks", [])) + 1,
+                    drawings=drawings,
+                    visible_rects=visible_drawing_rects,
+                    text_lines=text_lines,
+                    image_bboxes=[image_block.bbox for image_block in image_blocks],
                 )
+                image_blocks.extend(figure_blocks)
+                if extents:
+                    labels = figure_label_blocks([block.bbox for block in blocks], text_lines, extents)
+                    blocks = [
+                        replace(block, figure_label=True) if is_label and not block.ruled_table else block
+                        for block, is_label in zip(blocks, labels)
+                    ]
 
                 # Text-layer sanity assessment (PDF v2 M1.2). Runs per page
                 # over the concatenated text of all non-image blocks. A failure
@@ -660,7 +668,29 @@ class PyMuPDFTextExtractor:
         text_lines: list[PageTextLine] | None = None,
         image_bboxes: list[tuple[float, float, float, float]] | None = None,
     ) -> list[PdfImageBlock]:
-        """Blocks for the page regions of vector figures and of labelled images.
+        """Blocks for the page regions of vector figures and of labelled images (see ``_measure_vector_figures``)."""
+        return self._measure_vector_figures(
+            page,
+            page_number=page_number,
+            start_block_number=start_block_number,
+            drawings=drawings,
+            visible_rects=visible_rects,
+            text_lines=text_lines,
+            image_bboxes=image_bboxes,
+        )[0]
+
+    def _measure_vector_figures(
+        self,
+        page: Any,
+        *,
+        page_number: int,
+        start_block_number: int,
+        drawings: list[dict[str, Any]] | None = None,
+        visible_rects: list[tuple[float, float, float, float] | None] | None = None,
+        text_lines: list[PageTextLine] | None = None,
+        image_bboxes: list[tuple[float, float, float, float]] | None = None,
+    ) -> tuple[list[PdfImageBlock], list[VectorFigureExtent]]:
+        """Blocks for the page regions of vector figures and of labelled images, and the measured figures.
 
         A region covers the figure's paths, the embedded images they touch
         and the text labels on or beside them. A plain image with nothing
@@ -670,7 +700,7 @@ class PyMuPDFTextExtractor:
             try:
                 drawings = page.get_drawings()
             except Exception:
-                return []
+                return [], []
 
         page_width = float(page.rect.width)
         page_height = float(page.rect.height)
@@ -707,7 +737,7 @@ class PyMuPDFTextExtractor:
                     image_type="vector_drawing",
                 )
             )
-        return image_blocks
+        return image_blocks, extents
 
     def _merge_ruled_table_blocks(
         self,

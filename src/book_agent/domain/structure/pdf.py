@@ -23,6 +23,7 @@ from book_agent.domain.document_titles import (
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.figure_clustering import (
+    FIGURE_LABEL_REGION_KEY,
     FIGURE_REGION_CONTENT_EXTENT,
     PAGE_BACKGROUND_KEY,
     FigureClusterConfig,
@@ -645,6 +646,8 @@ class PdfStructureRecoveryService:
                             {
                                 "page_number": page.page_number,
                                 "bbox": _bbox_to_json(raw_block.bbox),
+                                # Kept per region: a block merged from labels and body text is not all labels.
+                                **({FIGURE_LABEL_REGION_KEY: True} if raw_block.figure_label else {}),
                             }
                         ],
                         reading_order_index=reading_order_index,
@@ -1517,6 +1520,10 @@ class PdfStructureRecoveryService:
         if index < 0:
             return None
         if any(block.role not in skipped_roles for block in recovered[index + 1 :]):
+            return None
+        # A figure's labels and the text around the figure are never one paragraph:
+        # joined, the labels could not be taken into the figure, nor the text left out.
+        if _is_figure_label_block(recovered[index]) != _is_figure_label_block(current):
             return None
         if self._should_merge(recovered[index], current, pages):
             return index
@@ -4446,6 +4453,12 @@ def build_default_recovery_service(
         ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
         figure_cluster_config=figure_config,
     )
+
+
+def _is_figure_label_block(block: _RecoveredBlock) -> bool:
+    """Whether every region of ``block`` holds only labels of a figure measured on its page."""
+    regions = block.bbox_regions or []
+    return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
 
 
 def _inside_page_figure(page: PdfPage, bbox: tuple[float, float, float, float]) -> bool:
