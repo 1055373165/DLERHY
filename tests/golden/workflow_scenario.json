@@ -115,6 +115,7 @@
     "document_status": "exported",
     "export_type": "bilingual_html",
     "file_path": null,
+    "gate_blocked": null,
     "manifest_path": null
   },
   "blocked_export": {
@@ -1564,6 +1565,7 @@
     "document_status": "exported",
     "export_type": "merged_html",
     "file_path": "<root>/exports/<id1>/merged-document.html",
+    "gate_blocked": null,
     "manifest_path": "<root>/exports/<id1>/merged-document.manifest.json"
   },
   "proposal_approval": {
@@ -1798,6 +1800,7 @@
     "document_status": "active",
     "export_type": "review_package",
     "file_path": null,
+    "gate_blocked": null,
     "manifest_path": null
   },
   "summary": {

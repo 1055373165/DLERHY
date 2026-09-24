@@ -6,6 +6,12 @@ executor, stage gates and terminal reconcile ask the plan which stages a run
 owns instead of assuming the full pipeline.
 
 Request parameters live in ``document_runs.status_detail_json["run_request"]``.
+
+A TRANSLATE_FULL run may be scoped to a few chapters (``scope: "pilot"``, the
+free two-chapter pilot of services/pilot.py): the same stages, but translate,
+rule review and exports own only those chapters, while the terminology stage
+still samples the whole book. Who pays for it is the run's billing category,
+not part of the plan.
 """
 
 from __future__ import annotations
@@ -58,6 +64,15 @@ FAST_READING_REQUEST_KEY = "fast_reading"
 WEB_EXPORT_STAGE = ExportType.WEB_HTML.value
 # Run request flag, set when a TRANSLATE_FULL run is created for a web page document.
 WEB_EXPORT_REQUEST_KEY = "web_export"
+# Run request scope of a TRANSLATE_FULL run: the whole book (default) or the pilot's chapters.
+SCOPE_REQUEST_KEY = "scope"
+SCOPE_BOOK = "book"
+SCOPE_PILOT = "pilot"
+# With scope "pilot": the chapters it owns, and their packets (chosen when the run is created).
+CHAPTER_IDS_REQUEST_KEY = "chapter_ids"
+PACKET_IDS_REQUEST_KEY = "packet_ids"
+# A whole-book run after a pilot: chapters the pilot's Reviewer Agent already read.
+MODEL_REVIEWED_CHAPTERS_REQUEST_KEY = "model_reviewed_chapter_ids"
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +103,20 @@ class RunPlan:
     structure_edits: bool = False
     # How many exported HTML artifacts the Export QA Agent reviews: sampled | full | skip (default).
     export_review_mode: str = DEFAULT_EXPORT_REVIEW_MODE
+    # "book", or "pilot": translate, rule review and exports own only ``chapter_ids``.
+    scope: str = SCOPE_BOOK
+    chapter_ids: frozenset[str] | None = None
+    # Chapters the Reviewer Agent leaves out (a pilot already reviewed them).
+    model_review_skip_chapter_ids: frozenset[str] = frozenset()
+
+    @property
+    def is_pilot(self) -> bool:
+        return self.scope == SCOPE_PILOT
+
+    @property
+    def tolerates_blockers(self) -> bool:
+        """A pilot finishes with its blocking issues listed for the reader instead of failing on them."""
+        return self.is_pilot
 
     def includes(self, stage: str) -> bool:
         return stage in self.stages
@@ -115,6 +144,12 @@ def _mode(value: Any, allowed: tuple[str, ...], default: str) -> str:
     return mode if mode in allowed else default
 
 
+def _ids(value: Any) -> frozenset[str] | None:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return None
+    return frozenset(str(item) for item in value if str(item))
+
+
 def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[str, Any] | None) -> RunPlan:
     run_type = DocumentRunType(run_type)
     request = run_request(status_detail_json)
@@ -136,7 +171,8 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         if not repair_agent:
             skipped.add(REPAIR_STAGE)
         stages = tuple(stage for stage in FULL_PIPELINE_STAGES if stage not in skipped)
-        if request.get(WEB_EXPORT_REQUEST_KEY):
+        pilot = str(request.get(SCOPE_REQUEST_KEY) or SCOPE_BOOK) == SCOPE_PILOT
+        if request.get(WEB_EXPORT_REQUEST_KEY) and not pilot:
             at = stages.index("merged_html") + 1
             stages = (*stages[:at], WEB_EXPORT_STAGE, *stages[at:])
         return RunPlan(
@@ -149,6 +185,11 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             structure_review_mode=structure_mode,
             structure_edits=structure_edits,
             export_review_mode=export_review_mode,
+            scope=SCOPE_PILOT if pilot else SCOPE_BOOK,
+            chapter_ids=_ids(request.get(CHAPTER_IDS_REQUEST_KEY)) if pilot else None,
+            # An empty set, not None: a pilot whose chapters have no packets translates nothing.
+            packet_ids=(_ids(request.get(PACKET_IDS_REQUEST_KEY)) or frozenset()) if pilot else None,
+            model_review_skip_chapter_ids=_ids(request.get(MODEL_REVIEWED_CHAPTERS_REQUEST_KEY)) or frozenset(),
         )
     if run_type == DocumentRunType.TRANSLATE_TARGETED:
         packet_ids = [str(packet_id) for packet_id in request.get("packet_ids") or [] if str(packet_id)]

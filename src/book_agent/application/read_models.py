@@ -299,6 +299,8 @@ class DocumentExportResult:
     auto_followup_attempt_count: int = 0
     auto_followup_attempt_limit: int | None = None
     auto_followup_executions: list["ExportAutoFollowupExecution"] | None = None
+    # Exported despite the gate (a pilot): what the gate still objected to, else None.
+    gate_blocked: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)

@@ -609,7 +609,7 @@ class DocumentRunExecutor:
             next_stage = self._next_stage_label(plan, "translate")
             document_id = run.document_id
             if plan.agent_stages and not StageGateKeeper(session).can_start(
-                run_id, document_id, "translate", plan_stages=plan.stages
+                run_id, document_id, "translate", plan_stages=plan.stages, packet_ids=packet_scope
             ):
                 return False
             if self._downstream_stage_in_flight(session, run_id):
@@ -749,7 +749,9 @@ class DocumentRunExecutor:
             execution = self._run_execution_service(session)
             run = repository.get_run(run_id)
             plan = plan or self._plan_for(run)
-            if not StageGateKeeper(session).can_start(run_id, run.document_id, stage_key, plan_stages=plan.stages):
+            if not StageGateKeeper(session).can_start(
+                run_id, run.document_id, stage_key, plan_stages=plan.stages, packet_ids=plan.packet_ids
+            ):
                 return False
             items = [
                 item
@@ -797,6 +799,14 @@ class DocumentRunExecutor:
                             "structure_edits": plan.structure_edits,
                             "fast_reading": plan.fast_reading,
                             "export_review_mode": plan.export_review_mode,
+                            # The Reviewer Agent reads the run's chapters only (a pilot's), minus
+                            # those a pilot already reviewed; the terminology stage reads the whole book.
+                            **({"chapter_ids": sorted(plan.chapter_ids)} if plan.chapter_ids is not None else {}),
+                            **(
+                                {"skip_chapter_ids": sorted(plan.model_review_skip_chapter_ids)}
+                                if plan.model_review_skip_chapter_ids
+                                else {}
+                            ),
                             **({"resume_turn_id": turn.id} if turn is not None else {}),
                         }
                     },
@@ -869,7 +879,7 @@ class DocumentRunExecutor:
             if outcome.status == AgentTurnStatus.SUCCEEDED and agent_kind == RepairAgent_KIND:
                 with session_scope(self.session_factory) as session:
                     left = remaining_blockers(session, str(input_bundle.get("document_id") or ""))
-                if left:
+                if left and not (plan is not None and plan.tolerates_blockers):
                     raise RuntimeError(
                         f"Document still has unresolved blocking review issues after the repair agent: {left} remaining "
                         f"(turn {turn_id})."
@@ -1002,6 +1012,8 @@ class DocumentRunExecutor:
                 mode=str(input_bundle.get("model_review_mode") or "sampled"),
                 run_id=run_id,
                 work_item_id=work_item_id,
+                chapter_ids=input_bundle.get("chapter_ids"),
+                skip_chapter_ids=input_bundle.get("skip_chapter_ids"),
             )
             return seed.turn_id
         if agent_kind == ExportReviewAgent_KIND:
@@ -1040,7 +1052,7 @@ class DocumentRunExecutor:
             run = repository.get_run(run_id)
             plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, "review", plan_stages=plan.stages
+                run_id, run.document_id, "review", plan_stages=plan.stages, packet_ids=plan.packet_ids
             ):
                 return False
             review_items = self._list_stage_items(session, run_id, WorkItemStage.REVIEW)
@@ -1104,7 +1116,7 @@ class DocumentRunExecutor:
             run = repository.get_run(run_id)
             plan = plan or self._plan_for(run)
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, pipeline_key, plan_stages=plan.stages
+                run_id, run.document_id, pipeline_key, plan_stages=plan.stages, packet_ids=plan.packet_ids
             ):
                 return False
 
@@ -1187,6 +1199,9 @@ class DocumentRunExecutor:
         repairs_blockers = plan.review_repairs_blockers if plan is not None else True
         # With the Repair Agent planned, blockers rule repair leaves are its job.
         hands_off_to_repair_agent = plan is not None and plan.includes("repair")
+        # A pilot reviews its own chapters, and ends with the blockers it could not repair listed.
+        chapter_ids = sorted(plan.chapter_ids) if plan is not None and plan.chapter_ids is not None else None
+        tolerates_blockers = plan is not None and plan.tolerates_blockers
         next_stage = self._next_stage_label(plan, "review") if plan is not None else "bilingual_html"
 
         def _run_review() -> dict[str, Any]:
@@ -1214,16 +1229,19 @@ class DocumentRunExecutor:
                     document_id,
                     auto_execute_packet_followups=True,
                     max_auto_followup_attempts=self._max_auto_followup_attempts(session, run_id),
+                    chapter_ids=chapter_ids,
                 )
                 repair_result = workflow.repair_document_blockers_until_exportable(
                     document_id,
                     max_rounds=self._max_blocker_repair_rounds(session, run_id),
+                    chapter_ids=chapter_ids,
                 )
                 result = initial_result
                 if repair_result.applied:
                     result = workflow.review_document(
                         document_id,
                         auto_execute_packet_followups=False,
+                        chapter_ids=chapter_ids,
                     )
                 remaining_blocking_issue_count = repair_result.blocking_issue_count_after
                 stop_reason = repair_result.stop_reason or "unknown"
@@ -1254,9 +1272,10 @@ class DocumentRunExecutor:
                     "blocker_repair_execution_count": len(repair_result.executions),
                     "remaining_blocking_issue_count": remaining_blocking_issue_count,
                     "handed_to_repair_agent": bool(remaining_blocking_issue_count and hands_off_to_repair_agent),
+                    **({"blockers_left_for_reader": remaining_blocking_issue_count} if tolerates_blockers else {}),
                 }
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
-            if remaining_blocking_issue_count > 0 and not hands_off_to_repair_agent:
+            if remaining_blocking_issue_count > 0 and not hands_off_to_repair_agent and not tolerates_blockers:
                 self._update_pipeline_stage(
                     run_id,
                     "review",
@@ -1320,6 +1339,9 @@ class DocumentRunExecutor:
         input_bundle = self._load_work_item_input_bundle(claimed.work_item_id)
         document_id = str(input_bundle.get("document_id") or "")
         auto_followup = plan.auto_followup_on_export_gate if plan is not None else True
+        # A pilot exports its own chapters, and still exports them when blockers are left (listed for the reader).
+        chapter_ids = sorted(plan.chapter_ids) if plan is not None and plan.chapter_ids is not None else None
+        despite_gate = plan is not None and plan.tolerates_blockers
         next_stage = (
             self._next_stage_label(plan, pipeline_key)
             if plan is not None
@@ -1343,6 +1365,8 @@ class DocumentRunExecutor:
                         export_type,
                         auto_execute_followup_on_gate=auto_followup,
                         max_auto_followup_attempts=max_attempts,
+                        chapter_ids=chapter_ids,
+                        despite_gate=despite_gate,
                     )
                 except ExportGateError:
                     # Keep the review issues and followup attempts the gate
@@ -1360,6 +1384,7 @@ class DocumentRunExecutor:
                 "chapter_export_count": len(result.chapter_results),
                 "chapter_export_ids": [chapter.export_id for chapter in result.chapter_results],
                 **({"qa": qa_summary} if qa_summary is not None else {}),
+                **({"gate_blocked": result.gate_blocked} if result.gate_blocked else {}),
             }
 
         def _on_success(payload: dict[str, Any], lease_token: str) -> None:

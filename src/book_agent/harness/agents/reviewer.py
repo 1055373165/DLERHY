@@ -13,6 +13,7 @@ already routes to repair actions. See docs/agent-upgrade/05.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -114,22 +115,35 @@ class _PacketCandidate:
 
 
 def select_review_packets(
-    session: Session, document_id: str, *, mode: str, per_chapter: int = DEFAULT_PACKETS_PER_CHAPTER
+    session: Session,
+    document_id: str,
+    *,
+    mode: str,
+    per_chapter: int = DEFAULT_PACKETS_PER_CHAPTER,
+    chapter_ids: Collection[str] | None = None,
+    skip_chapter_ids: Collection[str] | None = None,
 ) -> list[str]:
     """Translated packets to review, in reading order.
 
     ``full`` returns all of them. ``sampled`` keeps the ``per_chapter`` most
     suspicious packets of each chapter: a latest run carrying an output
     error code, then guardrail repairs, then low segment confidence.
+    ``chapter_ids`` limits the review to those chapters (a pilot's);
+    ``skip_chapter_ids`` leaves chapters out (a pilot already reviewed them).
     """
     if mode == MODE_SKIP:
         return []
-    rows = session.execute(
+    statement = (
         select(TranslationPacket.id, Chapter.ordinal, func.coalesce(Block.ordinal, 0))
         .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
         .outerjoin(Block, Block.id == TranslationPacket.block_start_id)
         .where(Chapter.document_id == document_id, TranslationPacket.status == PacketStatus.TRANSLATED)
-    ).all()
+    )
+    if chapter_ids is not None:
+        statement = statement.where(Chapter.id.in_([str(chapter_id) for chapter_id in chapter_ids]))
+    if skip_chapter_ids:
+        statement = statement.where(Chapter.id.not_in([str(chapter_id) for chapter_id in skip_chapter_ids]))
+    rows = session.execute(statement).all()
     if not rows:
         return []
     packet_ids = [str(row[0]) for row in rows]
@@ -448,11 +462,20 @@ class ReviewerAgent:
         work_item_id: str | None = None,
         per_chapter: int = DEFAULT_PACKETS_PER_CHAPTER,
         budget: TurnBudget | None = None,
+        chapter_ids: Collection[str] | None = None,
+        skip_chapter_ids: Collection[str] | None = None,
     ) -> ReviewerTurnSeed:
         document = self.session.get(Document, document_id)
         if document is None:
             raise ValueError(f"document not found: {document_id}")
-        queue = select_review_packets(self.session, document_id, mode=mode, per_chapter=per_chapter)
+        queue = select_review_packets(
+            self.session,
+            document_id,
+            mode=mode,
+            per_chapter=per_chapter,
+            chapter_ids=chapter_ids,
+            skip_chapter_ids=skip_chapter_ids,
+        )
         guide = load_book_guide(self.session, document_id)
         turn = self.ledger.create_turn(
             document_id=document_id,

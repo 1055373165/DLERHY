@@ -8,6 +8,7 @@ structure refresh, synchronous translation and deletion still live here.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -334,11 +335,13 @@ class DocumentWorkflowService:
         *,
         auto_execute_packet_followups: bool = False,
         max_auto_followup_attempts: int = 2,
+        chapter_ids: Collection[str] | None = None,
     ) -> DocumentReviewResult:
         return self.review_repair.review_document(
             document_id,
             auto_execute_packet_followups=auto_execute_packet_followups,
             max_auto_followup_attempts=max_auto_followup_attempts,
+            chapter_ids=chapter_ids,
         )
 
     def list_chapter_memory_proposals(
@@ -390,11 +393,13 @@ class DocumentWorkflowService:
         *,
         max_rounds: int = 4,
         max_actions_per_round: int = 64,
+        chapter_ids: Collection[str] | None = None,
     ) -> DocumentBlockerRepairResult:
         return self.review_repair.repair_document_blockers_until_exportable(
             document_id,
             max_rounds=max_rounds,
             max_actions_per_round=max_actions_per_round,
+            chapter_ids=chapter_ids,
         )
 
     def ensure_translated_title(self, document_id: str) -> str | None:
@@ -416,12 +421,16 @@ class DocumentWorkflowService:
         *,
         auto_execute_followup_on_gate: bool = False,
         max_auto_followup_attempts: int = 3,
+        chapter_ids: Collection[str] | None = None,
+        despite_gate: bool = False,
     ) -> DocumentExportResult:
         return self.exports.export_document(
             document_id,
             export_type,
             auto_execute_followup_on_gate=auto_execute_followup_on_gate,
             max_auto_followup_attempts=max_auto_followup_attempts,
+            chapter_ids=chapter_ids,
+            despite_gate=despite_gate,
         )
 
     def execute_action(self, action_id: str, run_followup: bool = False) -> ActionWorkflowResult:
