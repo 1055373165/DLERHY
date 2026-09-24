@@ -636,6 +636,27 @@ def refresh_document_structure(
     )
 
 
+@router.get("/{document_id}/parse-health")
+def get_parse_health(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """The latest parse health report: each rule check on the parsed book, its count, samples and verdict."""
+    from book_agent.services.parse_health import latest_report, report_payload
+
+    _load_document_or_404(session, document_id)
+    report = latest_report(session, document_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no parse health report yet")
+    return report_payload(report)
+
+
+@router.post("/{document_id}/parse-health")
+def run_parse_health(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """Run the parse health checks now (books imported before the checks existed have no report)."""
+    from book_agent.services.parse_health import ParseHealthService, report_payload
+
+    _load_document_or_404(session, document_id)
+    return report_payload(ParseHealthService(session).run(document_id, trigger="manual"))
+
+
 @router.get("/{document_id}/cost-estimate", response_model=CostEstimateResponse)
 def get_cost_estimate(
     document_id: str,

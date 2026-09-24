@@ -87,6 +87,15 @@
   color: var(--text-secondary);
 }
 
+/* Something the reader should see before starting, without being stopped by it. */
+.attention {
+  font-size: var(--text-sm);
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--red);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-panel-alt);
+}
+
 .errorText {
   color: var(--red);
   font-size: var(--text-sm);

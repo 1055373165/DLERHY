@@ -150,3 +150,121 @@
 .rawEvents summary {
   cursor: pointer;
 }
+
+/* Parse health: a card above the run, edged by what it found. */
+.health {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  min-width: 0;
+}
+
+.health[data-status="warnings"] {
+  border-left-color: var(--amber);
+}
+
+.health[data-status="blocking"] {
+  border-left-color: var(--red);
+}
+
+.health[data-status="none"] {
+  border-left-color: var(--border);
+}
+
+.healthHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.healthHead .heading {
+  flex: 1;
+}
+
+.healthStatus {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--text-base);
+}
+
+.health[data-status="blocking"] .healthStatus {
+  color: var(--red);
+}
+
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.check {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-base);
+}
+
+.check:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.checkHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.checkLabel {
+  font-weight: var(--weight-medium);
+}
+
+.checkMeta {
+  color: var(--text-muted);
+}
+
+.check[data-passed="true"] .checkMeta strong {
+  color: var(--green);
+}
+
+.check[data-passed="false"] .checkMeta strong {
+  color: var(--amber);
+}
+
+.check[data-passed="false"][data-severity="blocking"] .checkMeta strong {
+  color: var(--red);
+}
+
+.checkMeaning {
+  margin-top: var(--sp-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.samples {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+}
+
+.samples summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.samples ul {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-4);
+  overflow-wrap: anywhere;
+}
+
+.samples li {
+  margin-bottom: var(--sp-1);
+}
+
+.samplePage {
+  color: var(--text-muted);
+  margin-right: var(--sp-2);
+  white-space: nowrap;
+}

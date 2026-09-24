@@ -240,6 +240,35 @@ class StructureEdit(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reason: Mapped[str | None] = mapped_column(Text)
 
 
+class ParseHealthReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One run of the parse health checks on a document (domain/structure/parse_health.py).
+
+    A row per run, not a column on the document: a structure refresh writes a new report and the
+    old one stays, so a repair can be judged by comparing the two, and the samples do not ride along
+    on every load of the document.
+    """
+
+    __tablename__ = "parse_health_reports"
+    __table_args__ = (
+        CheckConstraint("status IN ('passed', 'warnings', 'blocking')", name="ck_parse_health_reports_status"),
+        Index("idx_parse_health_reports_document", "document_id", "created_at"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    parse_revision_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("document_parse_revisions.id", ondelete="SET NULL")
+    )
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    blocking_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    major_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    minor_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checks_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class BookProfile(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "book_profiles"
     __table_args__ = (UniqueConstraint("document_id", "version", name="uq_book_profiles_document_version"),)

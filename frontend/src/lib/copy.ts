@@ -164,3 +164,24 @@ export function issueExplanation(issueType: string, evidence: Record<string, unk
   if (typeof reason === "string" && EVIDENCE_REASON[reason]) return EVIDENCE_REASON[reason];
   return issueTypeCopy(issueType).meaning;
 }
+
+/** The parse health checks (backend domain/structure/parse_health.py), in a reader's words. */
+const PARSE_CHECKS: Record<string, IssueTypeCopy> = {
+  chapters_vs_outline: { label: "章节与书签一致", meaning: "按 PDF 书签，每一章都该单独成章；目录里的条目不该变成章节。" },
+  chapter_titles: { label: "章节命名", meaning: "「参考文献」「索引」这类标题下不该装着正文章节，章节标题里也不该带页码。" },
+  front_matter_sections: { label: "前言分节", meaning: "书签里的前言、致谢、关于本书等应各自成节，不并进相邻的一节。" },
+  stray_glyphs: { label: "异常字符", meaning: "段落开头的「¡」、乱码或私用区字符，通常是符号字体没有解码。" },
+  pseudo_headings: { label: "伪标题", meaning: "代码注释或等宽字体的行被当成了标题。" },
+  line_break_hyphens: { label: "断行单词", meaning: "行尾断开的单词没有接回来，例如「pro-vider」「evalua tion」。" },
+  figure_regions: { label: "图片区域", meaning: "图的裁剪范围压到页眉页脚、切断了线条或文字、框进了图注，或整张图没有识别出来。" },
+  image_fragments: { label: "碎片图片", meaning: "细条或空白的图片块，导出后是一张看不出内容的图。" },
+  caption_folds: { label: "正文混入图注", meaning: "导出时会把图后面的正文段落并进图里，正文里就少了这一段。" },
+  duplicated_labels: { label: "图中文字重复", meaning: "图里的标注又作为正文段落出现了一遍。" },
+};
+
+export function parseCheckCopy(name: string): IssueTypeCopy {
+  return PARSE_CHECKS[name] ?? { label: "其他检查", meaning: "一项解析检查，详情见样例。" };
+}
+
+const PARSE_SEVERITY: Record<string, string> = { blocking: "严重", major: "一般", minor: "轻微" };
+export const parseSeverityLabel = (value: string): string => fallback(value, PARSE_SEVERITY);

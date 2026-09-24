@@ -11,6 +11,9 @@ Four independent parts, because one book can be readable while a reader-started 
 - ``activity``: exports running in the background;
 - ``needs_you``: what waits on a person (pending approvals; pauses only a person can fix).
 
+``parse_health`` summarises the latest parse health report (services/parse_health.py): a blocking
+finding is shown as worth fixing before translation, but does not stop a translation from starting.
+
 ``inbox_items`` lists ``needs_you`` across the caller's books with the same code.
 """
 
@@ -42,6 +45,7 @@ from book_agent.domain.models.translation import TranslationPacket
 from book_agent.infra.repositories.run_control import RunControlRepository
 from book_agent.orchestrator.pipeline_stage_cache import read_cached_stages
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY, plan_for_run
+from book_agent.services.parse_health import latest_report, overview_summary
 from book_agent.services.run_control import RunControlService
 
 SETTINGS_LINK = {"target": "/settings", "label": "去设置"}
@@ -382,6 +386,7 @@ def build_overview(session: Session, document_id: str, context: OverviewContext,
         "activity": {"exporting": exporting},
         "needs_you": needs_you,
         "quality": {"open_issues": int(issues[0] or 0), "blocking": int(issues[1] or 0)},
+        "parse_health": overview_summary(latest_report(session, document.id)),
         # The estimate reads the whole book: skipped for lists of books (the home page's cards).
         "cost": _cost(session, document, context) if include_cost else None,
     }

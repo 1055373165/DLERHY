@@ -61,6 +61,7 @@ from book_agent.services.epub_structure_refresh import (
     EpubStructureRefreshService,
 )
 from book_agent.services.export import ExportService
+from book_agent.services.parse_health import ParseHealthService
 from book_agent.services.pdf_structure_refresh import (
     PdfStructureRefreshArtifacts,
     PdfStructureRefreshService,
@@ -173,6 +174,8 @@ class DocumentWorkflowService:
     def bootstrap_document(self, source_path: str | Path, *, org_id: str | None = None) -> DocumentSummary:
         artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path, org_id=org_id)
         self.bootstrap_repository.save(artifacts)
+        # Free rule checks on what was just parsed, before anyone spends money translating it.
+        ParseHealthService(self.session).run_quietly(artifacts.document.id, trigger="bootstrap")
         return self.documents.get_document_summary(artifacts.document.id)
 
     def _revalidate_export_gate(self, chapter_id: str) -> None:
@@ -200,6 +203,7 @@ class DocumentWorkflowService:
             block_ids=list(dict.fromkeys([*self.parse_revision_fork.stale_block_ids(document_id), *replay.block_ids])),
             reason="pdf structure refresh",
         )
+        ParseHealthService(self.session).run_quietly(document_id, trigger="structure_refresh")
         return artifacts
 
     def refresh_epub_structure(
@@ -228,6 +232,7 @@ class DocumentWorkflowService:
             ),
             reason="epub structure refresh",
         )
+        ParseHealthService(self.session).run_quietly(document_id, trigger="structure_refresh")
         return artifacts
 
     def get_document_summary(self, document_id: str) -> DocumentSummary:

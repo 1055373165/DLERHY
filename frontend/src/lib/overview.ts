@@ -1,6 +1,7 @@
 /** A book as a reader sees it, and what waits on the reader: GET /documents/{id}/overview, GET /inbox.
  * The server derives every state here (docs/specs/ui-ux-overhaul/SPEC.md, decision 3); the UI only renders it. */
 import { requestJson } from "./api";
+import type { ParseHealthSummary } from "./parseHealth";
 
 export type TranslationState =
   | "never_started"
@@ -57,6 +58,8 @@ export interface BookOverview {
   activity: { exporting: string[] };
   needs_you: NeedsYouItem[];
   quality: { open_issues: number; blocking: number };
+  /** The latest parse health report, summarised; null before the first report. */
+  parse_health?: ParseHealthSummary | null;
   // null in lists of books (GET /overviews skips the estimate).
   cost: { estimate_usd_range: [number, number] | null; max_charge_usd: number | null; prepaid: boolean; spent_usd: number } | null;
 }

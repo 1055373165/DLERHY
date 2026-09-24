@@ -18,7 +18,7 @@ from book_agent.domain.enums import (
     ExportType,
     SourceType,
 )
-from book_agent.domain.models import Document
+from book_agent.domain.models import Document, ParseHealthReport
 from book_agent.domain.models.agent import Approval
 from book_agent.domain.models.review import Export
 from book_agent.infra.db.base import Base
@@ -96,6 +96,40 @@ class BookOverviewTests(unittest.TestCase):
         self.assertEqual(overview["primary_action"]["kind"], "start")
         self.assertEqual(overview["readable"]["formats"][0], "web_html")
         self.assertNotIn("rebuilt_pdf", overview["readable"]["formats"])
+
+    def test_parse_health_is_summarised_worst_first_without_stopping_a_start(self) -> None:
+        self.assertIsNone(self._overview()["parse_health"])
+        with self.session_factory() as session:
+            session.add(
+                ParseHealthReport(
+                    document_id=self.document_id,
+                    trigger="bootstrap",
+                    status="blocking",
+                    blocking_failed=1,
+                    major_failed=1,
+                    minor_failed=0,
+                    checks_json=[
+                        {"name": "stray_glyphs", "severity": "blocking", "count": 0, "allowed": 4, "passed": True},
+                        {"name": "duplicated_labels", "severity": "major", "count": 49, "allowed": 46, "passed": False},
+                        {"name": "figure_regions", "severity": "blocking", "count": 4, "allowed": 0, "passed": False},
+                    ],
+                    duration_ms=1200,
+                )
+            )
+            session.commit()
+        overview = self._overview()
+        summary = overview["parse_health"]
+        self.assertEqual((summary["status"], summary["needs_attention"], summary["check_count"]), ("blocking", True, 3))
+        self.assertEqual(
+            summary["failed"],
+            [
+                {"name": "figure_regions", "severity": "blocking", "count": 4, "allowed": 0},
+                {"name": "duplicated_labels", "severity": "major", "count": 49, "allowed": 46},
+            ],
+        )
+        # Worth fixing before translating, but the reader may still start: the trial gate decides that later.
+        self.assertEqual(overview["primary_action"]["kind"], "start")
+        self.assertEqual(overview["needs_you"], [])
 
     def test_running_offers_stop_and_counts_segments(self) -> None:
         self._run(DocumentRunType.TRANSLATE_FULL, DocumentRunStatus.RUNNING, request={"fast_reading": "on", "auto_started": True})
