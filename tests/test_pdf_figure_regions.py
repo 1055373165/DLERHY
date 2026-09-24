@@ -457,5 +457,102 @@ class MidBlockCaptionTests(unittest.TestCase):
         self.assertNotIn("No tools", caption)
 
 
+def _arrow(page: fitz.Page, start: tuple[float, float], end: tuple[float, float]) -> None:
+    """A hairline connector with a small filled head, the way the books draw their arrows."""
+    page.draw_line(fitz.Point(*start), fitz.Point(*end), color=(0, 0, 0), width=0.5)
+    x, y = end
+    page.draw_polyline([fitz.Point(x - 5, y - 1.5), fitz.Point(x, y), fitz.Point(x - 5, y + 1.5)], color=None, fill=(0, 0, 0))
+
+
+def _hairline_figure(page: fitz.Page, *, caption: str | None, side_caption: bool = False) -> None:
+    """Figure 5.5's layout: labels joined by hairline arrows, a few tiny boxes; no large shape."""
+    _body(page, 60, 150)
+    page.insert_text((102, 196), "sofa is comfortable", fontsize=7)
+    page.insert_text((110, 256), "couch is large", fontsize=7)
+    _arrow(page, (170, 193), (196, 193))
+    _arrow(page, (170, 253), (196, 253))
+    for row in (186, 246):
+        for left in (200, 218, 236, 254):
+            page.draw_rect(fitz.Rect(left, row, left + 16, row + 12), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(272, 192), fitz.Point(290, 192), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(272, 252), fitz.Point(290, 252), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(290, 192), fitz.Point(290, 252), color=(0, 0, 0), width=0.5)
+    page.insert_text((296, 225), "Relevant", fontsize=7)
+    if caption and side_caption:
+        page.insert_text((350, 256), caption, fontsize=8)
+    elif caption:
+        page.insert_text((102, 280), caption, fontsize=8)
+    _body(page, 300, 400)
+
+
+class CaptionedDrawingTests(unittest.TestCase):
+    """A diagram drawn only in hairlines (or small icons) is a figure when a caption says so.
+
+    Real books: Agent Figures 5.4, 5.5 and 7.2 and RAG Figures 3.4, 3.8, 4.4 and 6.2 had no shape
+    large enough to count as a figure; they got no region, or a region made up from the text
+    blocks above the caption that took in the section heading and body text.
+    """
+
+    def _parse_page(self, **figure) -> tuple[list, list]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "hairline.pdf"
+            document = fitz.open()
+            _hairline_figure(document.new_page(width=531, height=666), **figure)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+            with fitz.open(pdf_path) as reopened:
+                regions = [_region(block)[1] for block in _figure_blocks(parsed)]
+                problems = [figure_region_problems(reopened[0], bbox, furniture_bboxes=[]) for bbox in regions]
+        return regions, [" ".join(block.text.split()) for block in _text_blocks(parsed)], problems
+
+    def test_captioned_hairline_diagram_gets_its_whole_region(self) -> None:
+        regions, texts, problems = self._parse_page(caption="Figure 5.5 Vector search determines relevance.")
+        self.assertEqual(len(regions), 1)
+        x0, y0, x1, y1 = regions[0]
+        self.assertLessEqual(x0, 102.0)  # "sofa is comfortable"
+        self.assertGreaterEqual(x1, 325.0)  # "Relevant"
+        self.assertGreater(y0, 150.0)  # below the body text above
+        self.assertLess(y1, 272.0)  # above the caption
+        self.assertEqual(problems, [[]])
+        joined = " ".join(texts)
+        self.assertNotIn("sofa is comfortable", joined)
+        self.assertNotIn("Relevant", joined)
+        self.assertIn("Figure 5.5 Vector search", joined)
+        self.assertGreaterEqual(joined.count("Body text of the chapter"), 2)
+
+    def test_side_caption_level_with_the_drawing_finds_it_too(self) -> None:
+        regions, texts, _problems = self._parse_page(caption="Figure 5.5 Vector search.", side_caption=True)
+        self.assertEqual(len(regions), 1)
+        self.assertLess(regions[0][2], 350.0)  # stops before the caption beside it
+        self.assertNotIn("couch is large", " ".join(texts))
+
+    def test_the_same_strokes_without_a_caption_are_not_a_figure(self) -> None:
+        regions, texts, _problems = self._parse_page(caption=None)
+        self.assertEqual(regions, [])
+        self.assertIn("sofa is comfortable", " ".join(texts))
+
+    def test_title_between_the_figure_and_its_caption_is_part_of_the_figure(self) -> None:
+        """RAG p39: "Small to Big Chunking" is set under the drawing, 13pt from it, above the caption."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "title.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            _body(page, 60, 150)
+            page.draw_rect(fitz.Rect(111, 180, 475, 300), color=(0, 0, 0))
+            page.draw_circle(fitz.Point(200, 240), 30, color=None, fill=ORANGE)
+            page.draw_circle(fitz.Point(380, 240), 30, color=None, fill=ORANGE)
+            page.insert_text((216, 312), "Dividing into compact units", fontsize=7)
+            page.insert_text((249, 336), "Small to Big Chunking", fontsize=9)
+            page.insert_text((102, 356), "Figure 3.2 Data-chunking process", fontsize=8)
+            _body(page, 380, 480)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        regions = [_region(block)[1] for block in _figure_blocks(parsed)]
+        self.assertEqual(len(regions), 1)
+        self.assertGreaterEqual(regions[0][3], 338.0)
+        self.assertLess(regions[0][3], 346.0)
+        self.assertNotIn("Small to Big Chunking", " ".join(block.text for block in _text_blocks(parsed)))
+
+
 if __name__ == "__main__":
     unittest.main()
