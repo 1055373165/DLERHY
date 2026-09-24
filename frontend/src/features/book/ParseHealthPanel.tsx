@@ -16,6 +16,23 @@ function headline(summary: ParseHealthSummary): string {
   return `有 ${others} 项一般问题，不影响开始翻译。`;
 }
 
+/** What a figure-region sample found, when it has no text of its own to show. */
+const REGION_KINDS: Record<string, string> = {
+  cut_path: "裁剪范围切断了图的线条",
+  cut_text: "裁剪范围切断了一行文字",
+  caption: "裁剪范围框进了图注",
+  page_furniture: "裁剪范围压到了页眉或页脚",
+  no_region: "这张图没有识别出区域",
+};
+
+function sampleText(text: string): string {
+  if (!/^[a-z_,]+$/.test(text)) return text;
+  return text
+    .split(",")
+    .map((kind) => REGION_KINDS[kind] ?? kind)
+    .join("；");
+}
+
 function CheckRow({ check }: { check: ParseHealthCheck }) {
   const copy = parseCheckCopy(check.name);
   const verdict = check.passed ? "通过" : "未通过";
@@ -38,7 +55,7 @@ function CheckRow({ check }: { check: ParseHealthCheck }) {
                 {check.samples.map((sample, index) => (
                   <li key={`${check.name}-${index}`}>
                     {sample.page ? <span className={s.samplePage}>第 {sample.page} 页</span> : null}
-                    <span>{sample.text}</span>
+                    <span>{sampleText(sample.text)}</span>
                   </li>
                 ))}
               </ul>
