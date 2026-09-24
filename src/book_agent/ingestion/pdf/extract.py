@@ -75,6 +75,32 @@ def _line_spans_with_bullet_marker(spans: list[dict[str, Any]]) -> list[dict[str
     return [*spans[: visible[0]], marker, *spans[visible[0] + 1 :]]
 
 
+_MIN_VISIBLE_IMAGE_SIDE = 2.0
+
+
+def _visible_image_bbox(
+    raw_bbox: Any,
+    page_width: float,
+    page_height: float,
+) -> tuple[float, float, float, float] | None:
+    """The on-page part of an image placement, or None when nothing visible is left.
+
+    Layout tools paste hairline image slivers to close gaps between tiles and
+    park images off the page; a crop of either is an empty picture.
+    """
+    try:
+        x0, y0, x1, y1 = (float(value) for value in raw_bbox)
+    except (TypeError, ValueError):
+        return None
+    left, right = sorted((x0, x1))
+    top, bottom = sorted((y0, y1))
+    left, top = max(left, 0.0), max(top, 0.0)
+    right, bottom = min(right, page_width), min(bottom, page_height)
+    if right - left < _MIN_VISIBLE_IMAGE_SIDE or bottom - top < _MIN_VISIBLE_IMAGE_SIDE:
+        return None
+    return (left, top, right, bottom)
+
+
 _MIN_RULED_TABLE_CELLS = 4
 _MAX_RULED_TABLE_AVG_CELL_CHARS = 80
 
@@ -326,7 +352,13 @@ class PyMuPDFTextExtractor:
                 image_blocks: list[PdfImageBlock] = []
                 for block_number, block in enumerate(text_dict.get("blocks", []), start=1):
                     if block.get("type") == 1:
-                        bbox = tuple(float(value) for value in block.get("bbox", (0, 0, 0, 0)))
+                        bbox = _visible_image_bbox(
+                            block.get("bbox", (0, 0, 0, 0)),
+                            float(page.rect.width),
+                            float(page.rect.height),
+                        )
+                        if bbox is None:
+                            continue
                         width_px = (
                             int(block["width"])
                             if isinstance(block.get("width"), (int, float))

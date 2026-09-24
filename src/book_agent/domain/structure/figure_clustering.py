@@ -322,8 +322,10 @@ def _merge_close_anchors(
     clusters: list[tuple[list[int], _Bbox, str]] = []
     sorted_entries = sorted(anchor_entries, key=lambda item: (round(item[1][1], 2), round(item[1][0], 2)))
     threshold = config.max_anchor_gap_pt
+    fragments: list[tuple[int, _Bbox, str]] = []
     for index, bbox, image_type in sorted_entries:
         if _bbox_area(bbox) < config.min_anchor_area_pt2:
+            fragments.append((index, bbox, image_type))
             continue
         merged_into: int | None = None
         for cluster_idx, (_, cluster_bbox, cluster_kind) in enumerate(clusters):
@@ -342,7 +344,61 @@ def _merge_close_anchors(
                 break
         if merged_into is None:
             clusters.append(([index], bbox, image_type))
+    # Pieces too small to be a figure on their own (a screenshot's title strip,
+    # the tiles of an icon grid) belong to the figure they touch. Left alone
+    # they would each render as a tiny or empty picture of their own.
+    # Pieces that touch no figure but together cover a figure-sized area (a
+    # diagram assembled from small image tiles) form a figure of their own.
+    fragment_groups: list[tuple[list[int], _Bbox, str]] = []
+    for index, bbox, image_type in fragments:
+        target = next(
+            (
+                (group_list, group_idx)
+                for group_list in (clusters, fragment_groups)
+                for group_idx, (_, group_bbox, _) in enumerate(group_list)
+                if all(gap <= threshold for gap in _bbox_gap(group_bbox, bbox))
+            ),
+            None,
+        )
+        if target is None:
+            fragment_groups.append(([index], bbox, image_type))
+            continue
+        group_list, group_idx = target
+        group_indices, group_bbox, group_kind = group_list[group_idx]
+        group_list[group_idx] = (
+            [*group_indices, index],
+            _bbox_union(group_bbox, bbox),
+            group_kind if group_kind == image_type else "mixed",
+        )
+    fragment_groups = _coalesce_touching_groups(fragment_groups, threshold)
+    clusters.extend(group for group in fragment_groups if _bbox_area(group[1]) >= config.min_anchor_area_pt2)
     return clusters
+
+
+def _coalesce_touching_groups(
+    groups: list[tuple[list[int], _Bbox, str]],
+    threshold: float,
+) -> list[tuple[list[int], _Bbox, str]]:
+    """Merge groups whose boxes came within ``threshold`` of each other as they grew."""
+    merged = list(groups)
+    changed = True
+    while changed:
+        changed = False
+        for left in range(len(merged)):
+            for right in range(left + 1, len(merged)):
+                if all(gap <= threshold for gap in _bbox_gap(merged[left][1], merged[right][1])):
+                    left_indices, left_bbox, left_kind = merged[left]
+                    right_indices, right_bbox, right_kind = merged.pop(right)
+                    merged[left] = (
+                        [*left_indices, *right_indices],
+                        _bbox_union(left_bbox, right_bbox),
+                        left_kind if left_kind == right_kind else "mixed",
+                    )
+                    changed = True
+                    break
+            if changed:
+                break
+    return merged
 
 
 def _separates_vertically(upper_or_lower: _Bbox, other: _Bbox, separator: _Bbox) -> bool:

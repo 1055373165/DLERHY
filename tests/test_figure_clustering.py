@@ -148,6 +148,29 @@ class FigureClusteringTests(unittest.TestCase):
         report = cluster_figure_regions(blocks)
         self.assertEqual(report.clusters, [])
 
+    def test_small_piece_touching_a_figure_joins_it(self) -> None:
+        """A screenshot's title strip, placed as its own small image, is part of the screenshot."""
+        blocks = [
+            _image_block((152.0, 354.0, 435.0, 576.0), image_type="embedded_image", anchor="shot"),
+            _image_block((138.0, 343.0, 183.0, 355.0), image_type="embedded_image", anchor="strip"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(len(report.clusters), 1)
+        self.assertEqual(sorted(report.clusters[0].anchor_indices), [0, 1])
+        self.assertEqual(report.clusters[0].bbox, (138.0, 343.0, 435.0, 576.0))
+
+    def test_small_tiles_covering_a_figure_sized_area_form_a_figure(self) -> None:
+        """An icon grid pasted as dozens of 10pt image tiles is one figure, not dozens of pictures."""
+        tiles = [
+            _image_block((100.0 + 10.5 * col, 480.0 + 10.5 * row, 110.0 + 10.5 * col, 490.0 + 10.5 * row),
+                         image_type="embedded_image", anchor=f"tile{row}-{col}")
+            for row in range(8)
+            for col in range(6)
+        ]
+        report = cluster_figure_regions(tiles)
+        self.assertEqual(len(report.clusters), 1)
+        self.assertEqual(len(report.clusters[0].anchor_indices), len(tiles))
+
     # ---- Step 2 + 3: text classification + ownership ----
 
     def test_short_label_inside_anchor_absorbed(self) -> None:
