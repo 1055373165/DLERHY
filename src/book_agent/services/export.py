@@ -1498,7 +1498,7 @@ class ExportService:
         block: MergedRenderBlock,
         asset_path_by_block_id: dict[str, str] | None = None,
         *,
-        include_notice: bool = True,
+        include_notice: bool = False,
         include_source_caption: bool = True,
     ) -> str:
         return markup.render_block_markdown(
@@ -2323,7 +2323,7 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
         *,
         include_source_toggle: bool = True,
-        include_notice: bool = True,
+        include_notice: bool = False,
         include_source_caption: bool = True,
     ) -> str:
         return markup.render_block_html(
