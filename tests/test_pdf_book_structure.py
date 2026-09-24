@@ -293,6 +293,79 @@ class FrontMatterOutlineTest(unittest.TestCase):
         self.assertFalse(outline_groups_chapters_into_parts([]))
 
 
+_HYPHENATED_LINES = [
+    "Each model provider returns a snippet of text, and tool calling is how the pro-",
+    "vider sends back a snip-",
+    "pet of metadata. The service is fault-",
+    "tolerant, relies on tool-",
+    "calling, runs GPT-",
+    "4o and reported the Cricket World Cup tour­",
+    "nament results. A fault-tolerant design matters when the tournament ends.",
+]
+
+
+def _write_hyphenated_paragraph(path: Path) -> None:
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    writer = fitz.TextWriter(page.rect)
+    font = fitz.Font("tiro")
+    for index, line in enumerate(_HYPHENATED_LINES):
+        # TextWriter keeps a soft hyphen (U+00AD) in the text layer, as typeset books do.
+        writer.append((72, 100 + 13 * index), line, font=font, fontsize=10)
+    writer.write_text(page)
+    _body(page, 260, count=2)
+    document.save(path)
+
+
+class LineBreakHyphenTest(unittest.TestCase):
+    """A word broken over two lines is one word again; a compound keeps its hyphen."""
+
+    def test_line_break_hyphens_are_removed_and_compounds_kept(self) -> None:
+        parsed = _parse(_write_hyphenated_paragraph, "hyphens.pdf")
+        text = " ".join(block.text for chapter in parsed.chapters for block in chapter.blocks)
+        text = " ".join(text.split())
+        for joined in ("the provider sends", "a snippet of metadata", "Cricket World Cup tournament results"):
+            self.assertIn(joined, text)
+        for broken in ("pro-vider", "snip-pet", "tour nament", "tour-nament"):
+            self.assertNotIn(broken, text)
+        for compound in ("is fault-tolerant, relies", "on tool-calling, runs", "GPT-4o"):
+            self.assertIn(compound, text)
+
+    def test_evidence_comes_from_words_written_inside_a_line(self) -> None:
+        from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
+
+        counts = inline_word_counts(
+            [
+                "a model provider and a pro-",
+                "vider with a network of generated answers to question-and-answer pairs",
+                "we use tool calling in a state-of-the-art system",
+            ]
+        )
+        # Fragments cut off by a line-end hyphen are not words of the book.
+        self.assertEqual(counts["pro"], 0)
+        self.assertEqual(counts["vider"], 0)
+        self.assertEqual(counts["provider"], 1)
+        cases = {
+            "pro-vider": "provider",
+            "execu-tion": "execution",
+            "tool-calling": "tool-calling",
+            "state-of-the-art": "state-of-the-art",
+            "question-and-an-swer": "question-and-answer",
+            "Neural-net-work-gener-ated": "Neural-network-generated",
+            "LM-supervised": "LM-supervised",
+            "GPT-4o": "GPT-4o",
+            "see https://example.com/pro-vider": "see https://example.com/pro-vider",
+        }
+        for source, expected in cases.items():
+            self.assertEqual(rejoin_line_break_hyphens(source, counts), expected, source)
+
+    def test_word_broken_inside_a_table_cell_is_rejoined(self) -> None:
+        from book_agent.ingestion.pdf.extract import _table_cell_text
+
+        self.assertEqual(_table_cell_text("Stanford Ques­\ntion Answering\nDataset"), "Stanford Ques-tion Answering Dataset")
+        self.assertEqual(_table_cell_text("GPT-\n4o | mini"), "GPT-4o / mini")
+
+
 def _write_symbol_bullet_page(path: Path) -> None:
     document = fitz.open()
     page = document.new_page(width=_PAGE[0], height=_PAGE[1])

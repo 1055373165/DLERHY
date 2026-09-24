@@ -92,6 +92,7 @@ from book_agent.ingestion.pdf.extract import (
     PdfFileProfiler,
     PdfTextExtractor,
 )
+from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
 from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
@@ -1522,8 +1523,9 @@ class PdfStructureRecoveryService:
             current_text = current.text.lstrip()
 
         if not code_merge and previous_text.endswith("-") and current_text[:1].islower():
-            merged_text = previous_text[:-1] + current_text
-            flags.append("dehyphenated")
+            # Keep the hyphen: whether it was a line break or a compound's own
+            # hyphen is decided once the whole book is read (rejoin_line_break_hyphens).
+            merged_text = previous_text + current_text
         else:
             separator = "\n" if line_merge else ("" if previous_text.endswith(" ") else " ")
             merged_text = previous_text + separator + current_text
@@ -4583,6 +4585,21 @@ def _document_title_pass(service, blocks, context):
     return service._recover_document_title_heading_blocks(blocks, context.extraction.title)
 
 
+def _rejoin_line_break_hyphens_pass(service, blocks, context):
+    """Remove hyphens that only a line break put into a word, using the book's own words as evidence."""
+    inline_counts = inline_word_counts(
+        line for page in context.extraction.pages for block in page.blocks for line in (block.line_texts or [block.text])
+    )
+    for block in blocks:
+        if block.block_type == BlockType.CODE or "-" not in block.text:
+            continue
+        rejoined = rejoin_line_break_hyphens(block.text, inline_counts)
+        if rejoined != block.text:
+            block.text = rejoined
+            block.flags = list(dict.fromkeys([*block.flags, "dehyphenated"]))
+    return blocks
+
+
 # Ordered block-shaping passes run by PdfStructureRecoveryService.recover after
 # the per-page block recovery and before chapters are built.
 _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
@@ -4616,4 +4633,5 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
+    BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
 )
