@@ -1187,6 +1187,15 @@ class PdfStructureRecoveryService:
             return "caption"
         if _normalize_outline_title(text) in outline_titles:
             return "heading"
+        if (
+            raw_block.font_size_max >= page_font_median * 1.25
+            and len(text) <= 150
+            and _is_outline_title_fragment(text, outline_titles)
+        ):
+            # Display titles are often set in pieces: a huge chapter number,
+            # then the title over two lines. Each piece of the page's outline
+            # title, in heading type, is part of that heading.
+            return "heading"
         if _HEADING_PATTERN.match(text) and len(text) <= 150:
             return "heading"
         if (
@@ -1524,6 +1533,46 @@ class PdfStructureRecoveryService:
             source_path=previous.source_path,
             anchor=previous.anchor,
         )
+
+    def _merge_outline_title_fragments(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        outline_entries: list[PdfOutlineEntry],
+    ) -> list[_RecoveredBlock]:
+        """Join consecutive heading pieces that together spell the page's outline title.
+
+        "Part 2" / "Creating RAG systems" or "7" / "Evolving RAGOps stack" are
+        one title typeset in two sizes; left apart, the number is lost from the
+        chapter title and the first piece falls into the previous chapter.
+        """
+        if not outline_entries:
+            return recovered_blocks
+        titles_by_page: dict[int, list[list[str]]] = defaultdict(list)
+        for entry in outline_entries:
+            tokens = _title_tokens(_normalize_outline_title(entry.title))
+            if tokens:
+                titles_by_page[entry.page_number].append(tokens)
+        merged: list[_RecoveredBlock] = []
+        for current in recovered_blocks:
+            previous_index = len(merged) - 1
+            while previous_index >= 0 and merged[previous_index].role in {"header", "footer"}:
+                previous_index -= 1
+            if previous_index >= 0 and current.role == "heading":
+                previous = merged[previous_index]
+                page_titles = titles_by_page.get(current.page_start, [])
+                joined_tokens = _title_tokens(f"{previous.text} {current.text}")
+                if (
+                    previous.role == "heading"
+                    and previous.page_end == current.page_start == current.page_end
+                    and any(_is_token_run(joined_tokens, title) for title in page_titles)
+                ):
+                    combined = self._merge_heading_blocks(previous, current)
+                    combined.text = " ".join(combined.text.split())
+                    combined.flags = list(dict.fromkeys([*combined.flags, "outline_title_fragments_merged"]))
+                    merged[previous_index] = combined
+                    continue
+            merged.append(current)
+        return merged
 
     def _merge_adjacent_heading_continuations(
         self,
@@ -4471,6 +4520,27 @@ def _is_styled_heading_line_continuation(
     return overlap > 0
 
 
+def _title_tokens(text: str) -> list[str]:
+    return re.findall(r"\w+", _normalize_text(text).casefold())
+
+
+def _is_token_run(tokens: list[str], title_tokens: list[str]) -> bool:
+    if not tokens or len(tokens) > len(title_tokens):
+        return False
+    width = len(tokens)
+    return any(title_tokens[start : start + width] == tokens for start in range(len(title_tokens) - width + 1))
+
+
+def _is_outline_title_fragment(text: str, outline_titles: list[str]) -> bool:
+    """Whether ``text`` is a contiguous word run of one of the page's outline titles."""
+    tokens = _title_tokens(text)
+    return any(_is_token_run(tokens, _title_tokens(title)) for title in outline_titles)
+
+
+def _merge_outline_title_fragment_pass(service, blocks, context):
+    return service._merge_outline_title_fragments(blocks, context.extraction.outline_entries)
+
+
 def _returning(method_name: str, *context_args: str, **context_kwargs: str) -> BlockPassFn:
     def run(service, blocks, context):
         return getattr(service, method_name)(
@@ -4490,6 +4560,7 @@ def _document_title_pass(service, blocks, context):
 # the per-page block recovery and before chapters are built.
 _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("link_footnotes", _in_place("_link_footnotes")),
+    BlockRecoveryPass("merge_outline_title_fragments", _merge_outline_title_fragment_pass),
     BlockRecoveryPass("promote_inline_book_headings", _returning("_promote_inline_book_heading_blocks")),
     BlockRecoveryPass("promote_contextual_image_legends", _returning("_promote_contextual_image_legend_blocks", "ordered_pages")),
     BlockRecoveryPass(
