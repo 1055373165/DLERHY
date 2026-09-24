@@ -24,6 +24,7 @@ from book_agent.ingestion.pdf.classify import (
 from book_agent.ingestion.pdf.figure_extent import (
     PageTextLine,
     page_text_lines,
+    starts_figure_caption,
     split_extended_drawings,
     vector_figure_extents,
 )
@@ -355,6 +356,55 @@ def _split_enumerated_line_blocks(
     return result
 
 
+def _split_mid_block_captions(
+    blocks: list[PdfTextBlock],
+    line_bboxes_by_block: dict[int, list[tuple[float, float, float, float]]],
+) -> list[PdfTextBlock]:
+    """Split a block at a line that starts a figure caption ("Figure 9.2 Four specialist ...").
+
+    A caption set beside a figure can come out in one text block with the
+    figure's last label; joined, the label reads as the caption's first words
+    and the caption covers the drawing.
+    """
+    result: list[PdfTextBlock] = []
+    for block in blocks:
+        line_bboxes = line_bboxes_by_block.get(id(block))
+        split = next(
+            (index for index in range(1, len(block.line_texts)) if starts_figure_caption(block.line_texts[index])),
+            None,
+        )
+        if split is None or not line_bboxes or len(line_bboxes) != len(block.line_texts):
+            result.append(block)
+            continue
+        for start, end in ((0, split), (split, len(block.line_texts))):
+            part_lines = list(block.line_texts[start:end])
+            part_bboxes = line_bboxes[start:end]
+            part_styles = block.line_styles[start:end]
+            sizes = [size for size, _bold in part_styles if size > 0]
+            part = replace(
+                block,
+                text=_normalize_multiline_text("\n".join(part_lines)),
+                bbox=(
+                    min(bbox[0] for bbox in part_bboxes),
+                    min(bbox[1] for bbox in part_bboxes),
+                    max(bbox[2] for bbox in part_bboxes),
+                    max(bbox[3] for bbox in part_bboxes),
+                ),
+                line_texts=part_lines,
+                line_count=len(part_lines),
+                line_styles=part_styles,
+                raw_text=None,
+                **(
+                    {"font_size_min": min(sizes), "font_size_max": max(sizes), "font_size_avg": _safe_mean(sizes)}
+                    if sizes
+                    else {}
+                ),
+            )
+            line_bboxes_by_block[id(part)] = list(part_bboxes)
+            result.append(part)
+    return result
+
+
 _CELL_LINE_BREAK_HYPHEN_RE = re.compile(r"([A-Za-z])(?:\u00ad|-)[ \t]*\n[ \t]*(?=[A-Za-z0-9(])")
 
 
@@ -552,6 +602,7 @@ class PyMuPDFTextExtractor:
                         drawings, visible_drawing_rects = [], None
                 blocks = _split_vector_bullet_blocks(blocks, line_bboxes_by_block, drawings)
                 blocks = _split_enumerated_line_blocks(blocks, line_bboxes_by_block)
+                blocks = _split_mid_block_captions(blocks, line_bboxes_by_block)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 image_blocks.extend(
                     self._extract_vector_drawing_blocks(

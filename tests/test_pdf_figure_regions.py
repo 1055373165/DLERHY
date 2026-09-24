@@ -377,5 +377,85 @@ class PageBackgroundTests(unittest.TestCase):
         self.assertTrue(all(block.metadata.get("pdf_page_background") for block in panels))
 
 
+def _text_dict_line(text: str, bbox: tuple[float, float, float, float], size: float) -> dict:
+    return {"bbox": bbox, "spans": [{"text": text, "size": size}]}
+
+
+class MidBlockCaptionTests(unittest.TestCase):
+    """A caption set beside a figure can share a text block with the figure's last label.
+
+    Agent p254: "No tools, optimized prompt for writing" (a label) and "Figure 9.2 Four specialist
+    agents ..." (the side caption) came out as one block; the caption was not seen as one, the
+    figure region took it in, and the block stayed a paragraph inside the figure.
+    """
+
+    LINES = [
+        ("No tools, optimized", (93.0, 547.0, 173.0, 557.0), 8.3),
+        ("prompt for writing", (93.0, 557.0, 160.0, 567.0), 8.3),
+        ("Figure 9.2 Four specialist", (333.0, 566.0, 450.0, 575.0), 8.0),
+        ("agents for technical blog writing.", (333.0, 576.0, 440.0, 585.0), 8.0),
+    ]
+
+    def test_caption_lines_start_at_the_caption(self) -> None:
+        text_dict = {"blocks": [{"type": 0, "lines": [_text_dict_line(*line) for line in self.LINES]}]}
+        lines = page_text_lines(text_dict, 531, 666)
+        self.assertEqual([line.caption for line in lines], [False, False, True, True])
+
+    def test_a_reference_in_running_text_does_not_split_a_block(self) -> None:
+        text_dict = {
+            "blocks": [
+                {
+                    "type": 0,
+                    "lines": [
+                        _text_dict_line("the generation suffers from hallucination and", (102, 100, 477, 112), 10.0),
+                        _text_dict_line("Figure 6.2 summarizes these drawbacks.", (102, 113, 300, 125), 10.0),
+                    ],
+                }
+            ]
+        }
+        self.assertEqual([line.caption for line in page_text_lines(text_dict, 531, 666)], [False, False])
+
+    def test_extracted_block_is_split_at_the_caption(self) -> None:
+        from book_agent.ingestion.pdf.extract import _split_mid_block_captions
+        from book_agent.ingestion.pdf.models import PdfTextBlock
+
+        block = PdfTextBlock(
+            page_number=1,
+            block_number=3,
+            text=" ".join(text for text, _bbox, _size in self.LINES),
+            bbox=(93.0, 547.0, 450.0, 585.0),
+            line_texts=[text for text, _bbox, _size in self.LINES],
+            span_count=4,
+            line_count=4,
+            font_size_min=8.0,
+            font_size_max=8.3,
+            font_size_avg=8.15,
+            line_styles=tuple((size, False) for _text, _bbox, size in self.LINES),
+        )
+        parts = _split_mid_block_captions([block], {id(block): [bbox for _text, bbox, _size in self.LINES]})
+        self.assertEqual([part.text for part in parts], ["No tools, optimized\nprompt for writing", "Figure 9.2 Four specialist\nagents for technical blog writing."])
+        self.assertEqual(parts[0].bbox, (93.0, 547.0, 173.0, 567.0))
+        self.assertEqual(parts[1].bbox, (333.0, 566.0, 450.0, 585.0))
+        self.assertEqual(parts[1].font_size_avg, 8.0)
+
+    def test_parsed_caption_is_its_own_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "side.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            _body(page, 60, 200)
+            page.insert_text(
+                (102, 400),
+                "No tools, optimized\nprompt for writing\nFigure 9.2 Four specialist agents\nfor technical blog writing.",
+                fontsize=8,
+            )
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = [" ".join(block.text.split()) for block in _text_blocks(parsed)]
+        caption = next(text for text in texts if "Four specialist" in text)
+        self.assertTrue(caption.startswith("Figure 9.2"), texts)
+        self.assertNotIn("No tools", caption)
+
+
 if __name__ == "__main__":
     unittest.main()

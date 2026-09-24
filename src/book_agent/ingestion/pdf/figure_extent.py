@@ -125,7 +125,7 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
         if block.get("type") != 0:
             continue
         block_lines: list[tuple[Bbox, str]] = []
-        block_sizes: dict[float, int] = {}
+        line_sizes: list[dict[float, int]] = []
         for line in block.get("lines", []) or []:
             spans = line.get("spans", []) or []
             text = "".join(str(span.get("text") or "") for span in spans)
@@ -138,14 +138,26 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
             if len(bbox) != 4 or bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 continue
             block_lines.append((bbox, text))  # type: ignore[arg-type]
+            sizes: dict[float, int] = {}
             for span in spans:
                 size = round(float(span.get("size") or 0.0), 1)
                 chars = len(str(span.get("text") or "").strip())
-                block_sizes[size] = block_sizes.get(size, 0) + chars
+                sizes[size] = sizes.get(size, 0) + chars
                 size_weights[size] = size_weights.get(size, 0) + chars
-        if block_lines:
+            line_sizes.append(sizes)
+        # A caption set beside a figure can share a text block with the
+        # figure's last label; the caption starts at its own line.
+        split = next((index for index in range(1, len(block_lines)) if starts_figure_caption(block_lines[index][1])), None)
+        parts = [(0, len(block_lines))] if split is None else [(0, split), (split, len(block_lines))]
+        for start, end in parts:
+            if start == end:
+                continue
+            block_sizes: dict[float, int] = {}
+            for sizes in line_sizes[start:end]:
+                for size, chars in sizes.items():
+                    block_sizes[size] = block_sizes.get(size, 0) + chars
             dominant = max(block_sizes, key=block_sizes.__getitem__) if block_sizes else 0.0
-            blocks.append((block_index, block_lines, dominant))
+            blocks.append((block_index, block_lines[start:end], dominant))
     # The body font size is the size of the page's full-width paragraphs; a
     # page of small-print figure text must not make that text "body".
     wide_sizes: dict[float, int] = {}
@@ -180,6 +192,20 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
                 )
             )
     return lines
+
+
+# A figure caption: "Figure 5.4 Although ..." (a capital after the number; "Figure 6.2 summarizes
+# these drawbacks." in running text is a reference, not a caption).
+_FIGURE_CAPTION_START = re.compile(
+    r"^\s*fig(?:ure|\.)\s*(?:\d+(?:[.\-–—]\d+)*|(?-i:[A-Z])(?:[.\-–—]\d+)+)[A-Za-z]?"
+    r"(?:[.:\-–—]?\s+(?-i:[A-Z(\"“‘'])|\s*$)",
+    re.IGNORECASE,
+)
+
+
+def starts_figure_caption(text: str) -> bool:
+    """Whether a line starts a figure caption ("Figure 9.2 Four specialist agents ...")."""
+    return bool(_FIGURE_CAPTION_START.match(text))
 
 
 def _is_sentence(text: str) -> bool:
