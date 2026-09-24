@@ -268,3 +268,121 @@
   margin-right: var(--sp-2);
   white-space: nowrap;
 }
+
+/* Pilot QA: the layer rows reuse the parse health card; a finding shows what, where, and a way in. */
+.findings {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.finding {
+  padding: var(--sp-2) 0 var(--sp-2) var(--sp-3);
+  border-left: 2px solid var(--border);
+  margin-bottom: var(--sp-2);
+  color: var(--text-primary);
+}
+
+.finding[data-severity="blocking"] {
+  border-left-color: var(--red);
+}
+
+.finding[data-severity="major"] {
+  border-left-color: var(--amber);
+}
+
+.severityTag {
+  display: inline-block;
+  margin-right: var(--sp-2);
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-panel-alt);
+  white-space: nowrap;
+}
+
+.severityTag[data-severity="blocking"] {
+  color: var(--red);
+  background: var(--red-light);
+}
+
+.severityTag[data-severity="major"] {
+  color: var(--amber);
+  background: var(--amber-light);
+}
+
+.findingExcerpt {
+  margin-top: var(--sp-1);
+  color: var(--text-secondary);
+}
+
+.findingWhere {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin-top: var(--sp-1);
+}
+
+/* The pilot result's line about its QA: a chip per layer, edged by the verdict. */
+.qualityStrip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-left: 3px solid var(--green);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-panel-alt);
+  font-size: var(--text-sm);
+}
+
+.qualityStrip[data-status="warnings"] {
+  border-left-color: var(--amber);
+}
+
+.qualityStrip[data-status="blocking"],
+.qualityStrip[data-status="error"] {
+  border-left-color: var(--red);
+}
+
+.qualityStripHead {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.layerChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.layerChip {
+  display: inline-flex;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.layerChip span {
+  color: var(--green);
+}
+
+.layerChip[data-status="warnings"] span {
+  color: var(--amber);
+}
+
+.layerChip[data-status="blocking"] {
+  border-color: var(--red);
+}
+
+.layerChip[data-status="blocking"] span {
+  color: var(--red);
+}

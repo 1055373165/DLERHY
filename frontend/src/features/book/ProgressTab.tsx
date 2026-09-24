@@ -6,6 +6,7 @@ import { usd } from "../../lib/overview";
 import { describeRunEvent, formatDate } from "../../lib/workflow";
 import { useBook } from "./BookPage";
 import { ParseHealthPanel } from "./ParseHealthPanel";
+import { PilotQualityPanel } from "./PilotQualityPanel";
 import s from "./Tabs.module.css";
 
 const STEP_STATUS: Record<string, string> = {
@@ -31,12 +32,14 @@ function elapsed(from: string | null | undefined, to: string | null | undefined)
   return minutes < 60 ? `${minutes} 分 ${seconds % 60} 秒` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
 }
 
-/** This book's progress: how well it was read (parse health), then its run. */
+/** This book's progress: how well it was read (parse health), how good the pilot came out (its QA), then its run. */
 export function ProgressTab() {
   const book = useBook();
+  const quality = book.pilot?.quality ?? null;
   return (
     <div className={s.stack}>
       <ParseHealthPanel documentId={book.document_id} summary={book.parse_health ?? null} />
+      {(quality || book.pilot?.state === "ready") && <PilotQualityPanel documentId={book.document_id} summary={quality} />}
       <RunProgress />
     </div>
   );
