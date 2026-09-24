@@ -131,8 +131,10 @@ CAPTION_LEAD_PATTERN = re.compile(
     # clustering pass mis-linked body paragraphs as captions and double-bound
     # the real caption to a different cluster.
     r"^\s*(?:"
-    r"(?:figure|fig\.?|table|tab\.?)\s*"
-    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|[A-Z])"
+    # No letter may follow the keyword ("Tables Time series" is a row of
+    # labels, not "Table s"), and a letter index is a capital ("Figure A").
+    r"(?:figure|fig\.?|table|tab\.?)(?![a-z])\s*"
+    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|(?-i:[A-Z]))"
     r"(?:[.:\-–—]\s+\S+|\s+(?-i:[A-Z])[^\n]{2,}|\s*$)"
     r"|"
     r"(?:图|表|示意图|插图)\s*[\d一-鿿]"  # Chinese (defensive — input is English here)

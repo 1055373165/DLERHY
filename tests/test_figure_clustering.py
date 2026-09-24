@@ -422,6 +422,7 @@ class CaptionPatternTests(unittest.TestCase):
             "FIG. 7 Some title",
             "fig 1",
             "Table 3.1: Tokenization metrics",
+            "Figure A The appendix layout",
             "图 2.4 分词流程",
             "示意图 1",
         ]
@@ -446,6 +447,8 @@ class CaptionPatternTests(unittest.TestCase):
             "The figure shows tokenization",  # leads with "The"
             "We see in figure 2.4",  # caption pattern not at start
             "table tennis is a sport",  # word "table" but not followed by digit
+            "Tables Time series Code Knowledge graph Genomic",  # a row of labels, not "Table s"
+            "Figures 3 and 4 show the same pipeline",
         ]
         anchor_bbox = (100.0, 100.0, 400.0, 300.0)
         for text in negatives:
