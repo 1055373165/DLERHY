@@ -602,10 +602,15 @@ class PdfStructureRecoveryService:
                         metadata["pdf_all_lines_bold"] = True
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
-                    emphasis_line_count = leading_emphasis_line_count(raw_block.line_styles)
+                    # Bold lines in a block set wholly in a monospace font are
+                    # emphasised code (a listing's comment lines), not headings.
+                    code_font_only = bool(raw_block.font_names) and all(
+                        _has_monospace_font(frozenset({name})) for name in raw_block.font_names
+                    )
+                    emphasis_line_count = 0 if code_font_only else leading_emphasis_line_count(raw_block.line_styles)
                     if emphasis_line_count:
                         metadata["pdf_leading_emphasis_text"] = "\n".join(raw_block.line_texts[:emphasis_line_count])
-                    elif len(raw_block.line_styles) == 1 and all_lines_bold:
+                    elif len(raw_block.line_styles) == 1 and all_lines_bold and not code_font_only:
                         # A one-line bold block may merge with the body block below it;
                         # remember the line so the heading can be split back out.
                         metadata["pdf_leading_emphasis_text"] = raw_block.line_texts[0]

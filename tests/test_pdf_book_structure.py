@@ -216,5 +216,30 @@ class SymbolFontBulletTest(unittest.TestCase):
         self.assertIn("Summary", [text for _block_type, text in blocks])
 
 
+def _write_code_listing_page(path: Path) -> None:
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    top = _body(page, 72, count=2)
+    for comment, code in [
+        ("#Installing bs4 package", "%pip install bs4==0.0.2 --quiet"),
+        ("#Importing the AsyncHtmlLoader", "from langchain_community.document_loaders import AsyncHtmlLoader"),
+    ]:
+        page.insert_text((72, top), comment, fontname="cobo", fontsize=9)
+        page.insert_text((72, top + 11), code, fontname="cour", fontsize=9)
+        top += 34
+    _body(page, top + 10, count=1)
+    document.save(path)
+
+
+class CodeCommentTest(unittest.TestCase):
+    def test_bold_comment_line_in_a_monospace_block_stays_code(self) -> None:
+        parsed = _parse(_write_code_listing_page, "code.pdf")
+        blocks = [block for chapter in parsed.chapters for block in chapter.blocks]
+        self.assertFalse([block.text for block in blocks if block.block_type == BlockType.HEADING.value])
+        code_texts = [block.text for block in blocks if block.block_type == BlockType.CODE.value]
+        self.assertTrue(any("#Installing bs4 package" in text and "%pip install" in text for text in code_texts))
+        self.assertTrue(any("#Importing the AsyncHtmlLoader" in text for text in code_texts))
+
+
 if __name__ == "__main__":
     unittest.main()
