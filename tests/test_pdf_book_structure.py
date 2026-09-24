@@ -308,13 +308,77 @@ class FigureGroupContextTest(unittest.TestCase):
         self.assertEqual(resolve_artifact_group_context_ids(blocks, academic_paper=False), {})
 
 
+def _png(width: int = 40, height: int = 40) -> bytes:
+    pixmap = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, width, height), False)
+    pixmap.set_rect(pixmap.irect, (40, 90, 160))
+    return pixmap.tobytes("png")
+
+
+def _write_image_edge_cases(path: Path) -> None:
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    top = _body(page, 60, count=2)
+    # A real picture, a hairline sliver pasted along its top edge and a second
+    # sliver pasted beside it: only the picture has anything to show.
+    page.insert_image(fitz.Rect(100, top + 20, 400, top + 200), stream=_png())
+    page.insert_image(fitz.Rect(100, top + 19.5, 400, top + 20), stream=_png(40, 2))
+    page.insert_image(fitz.Rect(401, top + 20, 401.4, top + 200), stream=_png(2, 40))
+    page.insert_textbox(
+        fitz.Rect(100, top + 206, 460, top + 230), "Figure 2.1 A picture with slivers.", fontname="hebo", fontsize=9
+    )
+    # A sidebar: a tinted panel painted as borderless strips behind its text.
+    panel_top = top + 260
+    for offset in (0, 28, 56):
+        page.draw_rect(
+            fitz.Rect(90, panel_top + offset, 460, panel_top + offset + 34), color=None, fill=(0.97, 0.96, 0.91)
+        )
+    page.insert_text((100, panel_top + 20), "Do you always need an indexing pipeline?", fontname="hebo", fontsize=11)
+    page.insert_textbox(
+        fitz.Rect(100, panel_top + 30, 450, panel_top + 90),
+        "Offline indexing pipelines are typically used when a knowledge base with a large amount of data is built.",
+        fontname="helv",
+        fontsize=9,
+    )
+    document.save(path)
+
+
 class ImageEdgeCaseTest(unittest.TestCase):
+    def test_slivers_and_panel_backgrounds_are_not_pictures(self) -> None:
+        parsed = _parse(_write_image_edge_cases, "images.pdf")
+        pictures = [
+            block
+            for chapter in parsed.chapters
+            for block in chapter.blocks
+            if block.block_type in {BlockType.IMAGE.value, BlockType.FIGURE.value}
+        ]
+        self.assertEqual(len(pictures), 1, [block.metadata.get("source_bbox_json") for block in pictures])
+        x0, y0, x1, y1 = pictures[0].metadata["source_bbox_json"]["regions"][0]["bbox"]
+        self.assertGreater(x1 - x0, 250)
+        self.assertGreater(y1 - y0, 150)
+        texts = [block.text for chapter in parsed.chapters for block in chapter.blocks]
+        self.assertTrue(any("Offline indexing pipelines" in text for text in texts))
+
     def test_visible_image_bbox_drops_hairlines_and_off_page_placements(self) -> None:
         from book_agent.ingestion.pdf.extract import _visible_image_bbox
 
         self.assertIsNone(_visible_image_bbox((183.43, 342.81, 183.45, 354.84), 531, 666))
         self.assertIsNone(_visible_image_bbox((0.0, 781.3, -3988.9, 666.0), 531, 666))
         self.assertEqual(_visible_image_bbox((-5, 10, 100, 700), 531, 666), (0.0, 10.0, 100.0, 666.0))
+
+    def test_background_panel_needs_borderless_same_colour_strips(self) -> None:
+        from book_agent.ingestion.pdf.extract import _is_background_panel
+
+        def rect(x0, y0, x1, y1, fill=(0.9, 0.9, 0.8), color=None, kind="re"):
+            return {"rect": (x0, y0, x1, y1), "fill": fill, "color": color, "items": [(kind,)]}
+
+        panel = [rect(77, 292, 329, 322), rect(77, 317, 329, 339), rect(77, 331, 329, 353)]
+        self.assertTrue(_is_background_panel((77, 292, 329, 353), panel))
+        bars = [rect(77, 292, 120, 353), rect(130, 310, 170, 353), rect(180, 330, 220, 353)]
+        self.assertFalse(_is_background_panel((77, 292, 220, 353), bars))
+        boxed = [*panel, rect(90, 300, 300, 340, fill=None, color=(0, 0, 0))]
+        self.assertFalse(_is_background_panel((77, 292, 329, 353), boxed))
+        drawn = [*panel, rect(90, 300, 200, 300, kind="l")]
+        self.assertFalse(_is_background_panel((77, 292, 329, 353), drawn))
 
 
 if __name__ == "__main__":

@@ -101,6 +101,43 @@ def _visible_image_bbox(
     return (left, top, right, bottom)
 
 
+def _is_background_panel(
+    cluster_bbox: tuple[float, float, float, float],
+    drawings: list[dict[str, Any]],
+) -> bool:
+    """Whether a drawing cluster is only the tinted background of a text panel.
+
+    Sidebars and "This chapter covers" boxes are painted as one or more
+    borderless filled rectangles of one colour and one width stacked behind
+    the text. The text is extracted anyway; cropping the panel as a figure
+    shows the same text again as a picture.
+    """
+    members = []
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        x0, y0, x1, y1 = (float(value) for value in rect)
+        if x1 < cluster_bbox[0] or x0 > cluster_bbox[2] or y1 < cluster_bbox[1] or y0 > cluster_bbox[3]:
+            continue
+        members.append((drawing, (x0, x1)))
+    if not members:
+        return False
+    fills = set()
+    for drawing, _extent in members:
+        items = drawing.get("items") or ()
+        if drawing.get("color") is not None or drawing.get("fill") is None:
+            return False
+        if not items or any(item[0] != "re" for item in items):
+            return False
+        fills.add(tuple(round(float(channel), 3) for channel in drawing["fill"]))
+    if len(fills) != 1:
+        return False
+    left_edges = [extent[0] for _drawing, extent in members]
+    right_edges = [extent[1] for _drawing, extent in members]
+    return max(left_edges) - min(left_edges) <= 2.0 and max(right_edges) - min(right_edges) <= 2.0
+
+
 _MIN_RULED_TABLE_CELLS = 4
 _MAX_RULED_TABLE_AVG_CELL_CHARS = 80
 
@@ -546,9 +583,12 @@ class PyMuPDFTextExtractor:
             drawing_bboxes.append(bbox)
 
         image_blocks: list[PdfImageBlock] = []
-        for offset, bbox in enumerate(
-            self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
-        ):
+        clusters = [
+            bbox
+            for bbox in self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
+            if not _is_background_panel(bbox, drawings)
+        ]
+        for offset, bbox in enumerate(clusters):
             image_blocks.append(
                 PdfImageBlock(
                     page_number=page_number,
