@@ -2405,25 +2405,23 @@ class ExportService:
             markup.render_block_html(block, asset_path_by_block_id)
             for block in body_blocks
         )
-        usage_html = self._build_usage_summary_html(list(bundle.translation_runs))
+        # A reader opens this file: the run's token and cost figures belong on the run page, not here.
         if not blocks_html:
-            blocks_html = "<div class='empty-state'>No renderable blocks in this chapter.</div>"
+            blocks_html = "<div class='empty-state'>这一章没有可显示的内容。</div>"
         return (
             "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
             f"<title>{html.escape(str(title_text))}</title>"
             "<style>"
             f"{stylesheets.load('bilingual_chapter.css')}"
-            f"{markup.usage_summary_css()}"
             "</style>"
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
             "</head><body>"
             "<main class='page'>"
             "<header class='hero'>"
-            "<div class='hero-kicker'>Chapter Export</div>"
+            "<div class='hero-kicker'>中英对照</div>"
             f"<h1>{html.escape(str(title_text))}</h1>"
             f"{source_title}"
             "</header>"
-            f"{usage_html}"
             "<section class='chapter'>"
             f"{blocks_html}"
             "</section>"

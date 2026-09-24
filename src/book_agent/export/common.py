@@ -311,7 +311,8 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # 4: the Markdown book has no translation statistics and a Chinese author line.
 # 5: web pages read as articles (no site menus, markers as words, titled by their own heading);
 #    PDF prints the reader copy and lets chapters run across pages.
-EXPORT_RENDERER_VERSION = 5
+# 6: a chapter's bilingual file is labelled 中英对照 and carries no run statistics.
+EXPORT_RENDERER_VERSION = 6
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",
