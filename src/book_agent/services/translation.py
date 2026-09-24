@@ -265,8 +265,14 @@ class TranslationService:
         post_translation_hooks: Sequence[PostTranslationHook] | None = None,
         output_validator: OutputValidator | None = None,
         max_output_repairs: int = 1,
+        polish: bool | None = None,
     ):
         self.repository = repository
+        if polish is None:
+            from book_agent.core.config import get_settings
+
+            polish = get_settings().translation_polish_enabled
+        self.polish_enabled = bool(polish)
         self.worker = worker or EchoTranslationWorker()
         self.chapter_memory_repository = chapter_memory_repository or ChapterTranslationMemoryRepository(
             repository.session
@@ -410,17 +416,57 @@ class TranslationService:
             result = self._coerce_worker_result(self.worker.translate(repair_task))
             usage = _merge_usage(usage, result.usage)
             report = self.output_validator.validate_task(task, result.output, locked_terms=prepared.locked_terms)
-        if not rejections:
+        if rejections:
+            result = result.model_copy(
+                update={
+                    "usage": usage,
+                    "rejected_outputs": [
+                        {"attempt": item.attempt, "token_in": item.token_in, "token_out": item.token_out, **item.report.to_json()}
+                        for item in rejections
+                    ],
+                }
+            )
+        if report.ok:
+            result = self._polish(prepared, result)
+        return result
+
+    def _polish(self, prepared: PreparedPacketTranslation, result: TranslationWorkerResult) -> TranslationWorkerResult:
+        """Run the Chinese editor over an accepted answer; keep the draft whenever the edit fails a check."""
+        client = getattr(self.worker, "client", None)
+        generate = getattr(client, "generate_structured_object", None)
+        if not self.polish_enabled or generate is None:
             return result
-        return result.model_copy(
-            update={
-                "usage": usage,
-                "rejected_outputs": [
-                    {"attempt": item.attempt, "token_in": item.token_in, "token_out": item.token_out, **item.report.to_json()}
-                    for item in rejections
+        from book_agent.translation.polish import polish_output
+
+        task = prepared.task
+        try:
+            outcome = polish_output(
+                generate,
+                model_name=self.worker.metadata().model_name,
+                output=result.output,
+                source_by_sentence_id={sentence.id: sentence.source_text or "" for sentence in task.current_sentences},
+                locked_terms=[
+                    (term.source_term, term.expected_target_term) for term in prepared.locked_terms if term.expected_target_term
                 ],
-            }
-        )
+            )
+        except Exception as exc:  # the draft already passed every check; a failed edit costs nothing but the edit
+            usage = getattr(exc, "usage", None)
+            return result.model_copy(
+                update={
+                    "usage": _merge_usage(result.usage, usage) if usage is not None else result.usage,
+                    "polish": {"applied": False, "changed_segments": 0, "reverted_reason": f"failed: {type(exc).__name__}", "draft": []},
+                }
+            )
+        usage = _merge_usage(result.usage, outcome.usage) if outcome.usage is not None else result.usage
+        if outcome.applied:
+            report = self.output_validator.validate_task(task, outcome.output, locked_terms=prepared.locked_terms)
+            if not report.ok:
+                outcome.applied = False
+                outcome.reverted_reason = "validation"
+                outcome.changed_segment_ids = []
+        if not outcome.applied:
+            return result.model_copy(update={"usage": usage, "polish": outcome.audit()})
+        return result.model_copy(update={"output": outcome.output, "usage": usage, "polish": outcome.audit()})
 
     def record_worker_failure(self, prepared: PreparedPacketTranslation, exc: Exception) -> None:
         """Record a failed attempt: a FAILED translation run with its error code, and the event."""
@@ -519,6 +565,8 @@ class TranslationService:
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code
+        if worker_result.polish is not None:
+            artifacts.translation_run.output_json = {**(artifacts.translation_run.output_json or {}), "polish": worker_result.polish}
         if worker_result.rejected_outputs:
             artifacts.translation_run.model_config_json = {
                 **(artifacts.translation_run.model_config_json or {}),
@@ -542,6 +590,10 @@ class TranslationService:
             translated_payload["output_validation"] = validation.to_json()
         if worker_result.rejected_outputs:
             translated_payload["output_repairs"] = len(worker_result.rejected_outputs)
+        if worker_result.polish is not None:
+            translated_payload["polish"] = {
+                key: worker_result.polish.get(key) for key in ("applied", "changed_segments", "reverted_reason")
+            }
         emit_event(
             self.repository.session,
             kind=PACKET_TRANSLATED,

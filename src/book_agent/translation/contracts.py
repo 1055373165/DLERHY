@@ -162,6 +162,8 @@ class TranslationWorkerResult(BaseSchema):
     # Filled by TranslationService.call_worker: outputs the guardrail rejected
     # before this one was accepted (or before the repair budget ran out).
     rejected_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    # Filled by TranslationService.call_worker when the polish pass ran (see translation.polish).
+    polish: dict[str, Any] | None = None
 
     @property
     def packet_id(self) -> str:
