@@ -213,6 +213,26 @@ def _block_bbox(block: BlockLike) -> _Bbox | None:
         return None
 
 
+def _block_page_bboxes(block: BlockLike, page_number: int) -> list[_Bbox]:
+    """Every region of ``block`` on ``page_number``.
+
+    Separate short labels of one diagram are often merged into a single
+    paragraph block; each keeps its own region.
+    """
+    bboxes: list[_Bbox] = []
+    for region in block.bbox_regions or []:
+        if not isinstance(region, dict) or region.get("page_number") != page_number:
+            continue
+        raw = region.get("bbox")
+        if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+            continue
+        try:
+            bboxes.append((float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3])))
+        except (TypeError, ValueError):
+            continue
+    return bboxes
+
+
 def _bbox_center(bbox: _Bbox) -> tuple[float, float]:
     return ((bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0)
 
@@ -280,8 +300,15 @@ def _is_anchor(block: BlockLike) -> bool:
     return image_type in {"embedded_image", "vector_drawing"}
 
 
+# Running headers, folios and footers repeat in the page margins; they are
+# never part of a figure however close a drawing comes to the margin.
+_PAGE_FURNITURE_ROLES = frozenset({"header", "footer"})
+
+
 def _is_text_candidate(block: BlockLike) -> bool:
     if block.block_type not in _TEXT_BLOCK_TYPES:
+        return False
+    if getattr(block, "role", None) in _PAGE_FURNITURE_ROLES:
         return False
     return bool(block.text and block.text.strip())
 
@@ -502,6 +529,9 @@ def _classify_text_for_anchor(
     if char_count > config.max_label_chars:
         return "reject_long", f"len={char_count} > {config.max_label_chars}"
 
+    if _is_scattered_labels_inside(block, anchor_bbox):
+        return "inline_label", "separate short labels inside anchor merged into one block"
+
     if _looks_like_prose_sentence(text):
         return "reject_sentence", "full prose sentence between or beside figure panels"
 
@@ -518,6 +548,41 @@ def _classify_text_for_anchor(
             return "reject_outside_anchor", "center outside anchor bbox (B requires inside)"
 
     return "inline_label", "inside anchor + short + non-caption"
+
+
+def _is_side_caption(block: BlockLike, text_bbox: _Bbox, anchor_bbox: _Bbox, pad: float) -> bool:
+    """A caption set in the margin beside the figure, level with it.
+
+    Manning-style layouts put a narrow figure's caption to its right,
+    bottom-aligned; its center is far outside the padded figure box.
+    """
+    if not _looks_like_caption_text(block.text or ""):
+        return False
+    side_gap = max(text_bbox[0] - anchor_bbox[2], anchor_bbox[0] - text_bbox[2])
+    level = text_bbox[1] < anchor_bbox[3] and text_bbox[3] > anchor_bbox[1]
+    return level and 0.0 <= side_gap <= pad
+
+
+def _is_scattered_labels_inside(block: BlockLike, anchor_bbox: _Bbox) -> bool:
+    """Whether ``block`` is several narrow text runs, all inside the anchor.
+
+    Reading-order merging joins a diagram's labels ("walks", "0.02",
+    "applauds", ...) into one block whose text can read like a sentence;
+    its regions still show it is a set of labels placed on the drawing.
+    """
+    page_number = _block_page_number(block)
+    if page_number is None:
+        return False
+    regions = _block_page_bboxes(block, page_number)
+    if len(regions) < 2 or len(regions) != len(block.bbox_regions or []):
+        return False
+    anchor_width = max(1.0, anchor_bbox[2] - anchor_bbox[0])
+    return all(
+        _bbox_contains_point(_bbox_pad(anchor_bbox, 2.0), bbox[0], bbox[1])
+        and _bbox_contains_point(_bbox_pad(anchor_bbox, 2.0), bbox[2], bbox[3])
+        and (bbox[2] - bbox[0]) <= anchor_width * 0.5
+        for bbox in regions
+    )
 
 
 def _count_prose_neighbors_in_zone(
@@ -645,7 +710,9 @@ def cluster_figure_regions(
 
             for text_idx, text_block, text_bbox in text_entries:
                 text_center = _bbox_center(text_bbox)
-                if not _bbox_contains_point(search_zone, text_center[0], text_center[1]):
+                if not _bbox_contains_point(search_zone, text_center[0], text_center[1]) and not _is_side_caption(
+                    text_block, text_bbox, cluster_bbox, cfg.label_search_pad_pt
+                ):
                     continue
 
                 owner = _owner_anchor_for_text(text_bbox, anchor_bboxes_only)
@@ -675,7 +742,8 @@ def cluster_figure_regions(
                     # be hundreds of pt away.
                     below_gap = max(0.0, text_bbox[1] - cluster_bbox[3])
                     above_gap = max(0.0, cluster_bbox[1] - text_bbox[3])
-                    edge_distance = min(below_gap, above_gap)
+                    side_gap = max(0.0, text_bbox[0] - cluster_bbox[2], cluster_bbox[0] - text_bbox[2])
+                    edge_distance = max(min(below_gap, above_gap), side_gap)
                     caption_candidates.append(
                         (text_idx, edge_distance, len(text_block.text or ""), reason, text_block.anchor)
                     )
@@ -732,8 +800,9 @@ def cluster_figure_regions(
 
             final_bbox = cluster_bbox
             for absorbed_idx in inline_label_indices:
-                absorbed_bbox = _block_bbox(blocks[absorbed_idx])
-                if absorbed_bbox is not None:
+                for absorbed_bbox in _block_page_bboxes(blocks[absorbed_idx], page_number):
+                    if max(_bbox_gap(search_zone, absorbed_bbox)) > 0.0:
+                        continue
                     final_bbox = _bbox_union(final_bbox, absorbed_bbox)
 
             anchor_anchors = [blocks[i].anchor for i in cluster_indices]
