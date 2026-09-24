@@ -56,6 +56,7 @@ PIPELINE_STAGES = (
     "merged_html",
     "web_html",
     "export_review",
+    "pilot_qa",
 )
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.
 AGENT_STAGE_KINDS: dict[str, str] = {
@@ -199,7 +200,26 @@ class StageStatusCalculator:
             return self._agent_stage_evidence(run_id, AGENT_STAGE_KINDS[stage], stage)
         if stage in {export_type.value for export_type in ExportType}:
             return self._export_stage_evidence(run_id, ExportType(stage), stage)
+        if stage == "pilot_qa":
+            return self._pilot_qa_evidence(run_id)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
+
+    def _pilot_qa_evidence(self, run_id: str) -> StageEvidence:
+        """The pilot's layered QA is done once its report exists (an "error" report included:
+        a QA failure is shown to the reader, it does not fail the pilot)."""
+        from book_agent.domain.models.review import PilotQualityReport
+
+        reports = self._session.scalar(
+            select(func.count(PilotQualityReport.id)).where(PilotQualityReport.run_id == run_id)
+        ) or 0
+        return StageEvidence(
+            stage="pilot_qa",
+            status=StageStatus.SUCCEEDED if reports else StageStatus.NOT_STARTED,
+            total_work_items=0,
+            succeeded_work_items=0,
+            failed_work_items=0,
+            running_work_items=0,
+        )
 
     def _agent_stage_evidence(self, run_id: str, agent_kind: str, stage_key: str) -> StageEvidence:
         """Work items of stage AGENT for this kind, judged by the agent turn they drive.

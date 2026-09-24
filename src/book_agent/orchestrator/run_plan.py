@@ -10,8 +10,9 @@ Request parameters live in ``document_runs.status_detail_json["run_request"]``.
 A TRANSLATE_FULL run may be scoped to a few chapters (``scope: "pilot"``, the
 free two-chapter pilot of services/pilot.py): the same stages, but translate,
 rule review and exports own only those chapters, while the terminology stage
-still samples the whole book. Who pays for it is the run's billing category,
-not part of the plan.
+still samples the whole book. A pilot ends with its layered QA
+(``pilot_qa``, services/pilot_quality.py); a whole-book run has no such stage.
+Who pays for it is the run's billing category, not part of the plan.
 """
 
 from __future__ import annotations
@@ -58,6 +59,8 @@ FULL_PIPELINE_STAGES: tuple[str, ...] = (
     EXPORT_REVIEW_STAGE,
 )
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
+# Pilot runs only, after their exports: the layered QA (L1–L7) of the pilot's chapters.
+PILOT_QA_STAGE = "pilot_qa"
 # Run request flag: approve the terminology agent's term locks without asking (see RunPlan.fast_reading).
 FAST_READING_REQUEST_KEY = "fast_reading"
 # Web page documents also get the Chinese page in the original layout, right after the reading copy.
@@ -175,6 +178,8 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
         if request.get(WEB_EXPORT_REQUEST_KEY) and not pilot:
             at = stages.index("merged_html") + 1
             stages = (*stages[:at], WEB_EXPORT_STAGE, *stages[at:])
+        if pilot:
+            stages = (*stages, PILOT_QA_STAGE)
         return RunPlan(
             run_type=run_type,
             stages=stages,

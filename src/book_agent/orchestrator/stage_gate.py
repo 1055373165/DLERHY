@@ -50,6 +50,8 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "merged_html": ("translate", "review", "repair", "bilingual_html"),
     "web_html": ("translate", "review", "repair", "merged_html"),
     "export_review": ("bilingual_html", "merged_html", "web_html"),
+    # A pilot's layered QA reads the finished translation and its reading copy.
+    "pilot_qa": ("translate", "review", "repair", "bilingual_html", "merged_html", "export_review"),
 }
 # Other export types (standalone export runs) follow translation and review.
 _DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")
