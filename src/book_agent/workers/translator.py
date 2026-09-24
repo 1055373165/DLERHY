@@ -303,6 +303,7 @@ PromptProfile = Literal[
     "cn-native-faithful-v2",
     "cn-native-faithful-v3",
     "tech-column-meta-v1",
+    "tech-column-meta-v2",
 ]
 
 

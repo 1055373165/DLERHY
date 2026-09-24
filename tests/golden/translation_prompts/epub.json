@@ -2415,6 +2415,185 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:84cb9479c3a444d7>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id5>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:84cb9479c3a444d7>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -4740,6 +4919,185 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:45743ff0979152f6>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id5>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:45743ff0979152f6>"
     }
    }
@@ -7174,6 +7532,186 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:e69844af91447d93>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id7>",
+      "S2": "<id8>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:e69844af91447d93>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -9512,6 +10050,186 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:ba8ae565bf6cb09b>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id7>",
+      "S2": "<id8>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:ba8ae565bf6cb09b>"
     }
    }
@@ -11949,6 +12667,185 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:0b80912d3752902a>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id12>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:0b80912d3752902a>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -14274,6 +15171,185 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:d1b092e3fd40d83f>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id12>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:d1b092e3fd40d83f>"
     }
    }
@@ -16694,6 +17770,185 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:9703027c0dcfb648>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id16>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:9703027c0dcfb648>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -19019,6 +20274,185 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:f8e122f882a130a2>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id16>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:f8e122f882a130a2>"
     }
    }
@@ -21489,6 +22923,188 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:94e6b6386f236b4b>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id18>",
+      "S2": "<id19>",
+      "S3": "<id20>",
+      "S4": "<id23>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:94e6b6386f236b4b>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -23853,6 +25469,188 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:ffd9b1279306d802>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id18>",
+      "S2": "<id19>",
+      "S3": "<id20>",
+      "S4": "<id23>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:ffd9b1279306d802>"
     }
    }
@@ -26271,6 +28069,185 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:5aacbdb91334b06b>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id27>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:5aacbdb91334b06b>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -28596,6 +30573,185 @@
      "system_prompt": "<text:c2c6f908228dce22>",
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
+     "user_prompt": "<text:d17cc875089bcf35>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id27>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
      "user_prompt": "<text:d17cc875089bcf35>"
     }
    }
@@ -31015,6 +33171,185 @@
      "system_prompt_static": "<text:96a2acc98df3bc6c>",
      "user_prompt": "<text:23271b3bdbd0828b>"
     },
+    "paragraph-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id29>"
+     },
+     "system_prompt": "<text:c58283fece6826e6>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:c58283fece6826e6>",
+     "user_prompt": "<text:23271b3bdbd0828b>"
+    },
     "sentence-led/cn-native-faithful-v1": {
      "response_schema": {
       "$defs": {
@@ -33341,6 +35676,185 @@
      "system_prompt_dynamic": "",
      "system_prompt_static": "<text:c2c6f908228dce22>",
      "user_prompt": "<text:0badaa2373e1cce8>"
+    },
+    "sentence-led/tech-column-meta-v2": {
+     "response_schema": {
+      "$defs": {
+       "AlignmentSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "target_temp_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Target Temp Ids",
+          "type": "array"
+         }
+        },
+        "required": [
+         "source_sentence_ids",
+         "target_temp_ids",
+         "relation_type"
+        ],
+        "title": "AlignmentSuggestion",
+        "type": "object"
+       },
+       "LowConfidenceFlag": {
+        "additionalProperties": false,
+        "properties": {
+         "reason": {
+          "title": "Reason",
+          "type": "string"
+         },
+         "sentence_id": {
+          "title": "Sentence Id",
+          "type": "string"
+         }
+        },
+        "required": [
+         "sentence_id",
+         "reason"
+        ],
+        "title": "LowConfidenceFlag",
+        "type": "object"
+       },
+       "TranslationNote": {
+        "additionalProperties": false,
+        "properties": {
+         "message": {
+          "title": "Message",
+          "type": "string"
+         },
+         "type": {
+          "title": "Type",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "message"
+        ],
+        "title": "TranslationNote",
+        "type": "object"
+       },
+       "TranslationTargetSegment": {
+        "additionalProperties": false,
+        "properties": {
+         "confidence": {
+          "anyOf": [
+           {
+            "type": "number"
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "default": null,
+          "title": "Confidence"
+         },
+         "segment_type": {
+          "title": "Segment Type",
+          "type": "string"
+         },
+         "source_sentence_ids": {
+          "items": {
+           "type": "string"
+          },
+          "title": "Source Sentence Ids",
+          "type": "array"
+         },
+         "temp_id": {
+          "title": "Temp Id",
+          "type": "string"
+         },
+         "text_zh": {
+          "title": "Text Zh",
+          "type": "string"
+         }
+        },
+        "required": [
+         "temp_id",
+         "text_zh",
+         "segment_type",
+         "source_sentence_ids"
+        ],
+        "title": "TranslationTargetSegment",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false,
+      "properties": {
+       "alignment_suggestions": {
+        "items": {
+         "$ref": "#/$defs/AlignmentSuggestion"
+        },
+        "title": "Alignment Suggestions",
+        "type": "array"
+       },
+       "low_confidence_flags": {
+        "items": {
+         "$ref": "#/$defs/LowConfidenceFlag"
+        },
+        "title": "Low Confidence Flags",
+        "type": "array"
+       },
+       "notes": {
+        "items": {
+         "$ref": "#/$defs/TranslationNote"
+        },
+        "title": "Notes",
+        "type": "array"
+       },
+       "packet_id": {
+        "title": "Packet Id",
+        "type": "string"
+       },
+       "target_segments": {
+        "items": {
+         "$ref": "#/$defs/TranslationTargetSegment"
+        },
+        "title": "Target Segments",
+        "type": "array"
+       }
+      },
+      "required": [
+       "packet_id",
+       "target_segments",
+       "alignment_suggestions"
+      ],
+      "title": "TranslationWorkerOutput",
+      "type": "object"
+     },
+     "sentence_alias_map": {
+      "S1": "<id29>"
+     },
+     "system_prompt": "<text:8c863610e6f039b9>",
+     "system_prompt_dynamic": "",
+     "system_prompt_static": "<text:8c863610e6f039b9>",
+     "user_prompt": "<text:0badaa2373e1cce8>"
     }
    }
   }
@@ -33401,6 +35915,7 @@
   "7692c125cc5b0e14": "Static Translation Contract:\nYou are a publication-grade English-to-Chinese translator and stylistic localizer for technical books and professional nonfiction.\nTranslate with two simultaneous goals: exact fidelity to source meaning and native Chinese readability that feels written, not translated.\nPreserve claims, logic, qualifiers, contrasts, and rhetorical force exactly; never add explanation, soften stance, or upgrade tone.\nFavor connected Chinese discourse, stable terminology, and natural sentence rhythm over sentence-by-sentence English mirroring.\nKeep the translated body free of translator commentary and keep alignment coverage complete.\n\nCore Translation Contract:\n- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Use the current sentences as the primary translation ledger and keep paragraph context coherent.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.\n\nDynamic Packet Guidance:\n- The current packet belongs to a business-document context. Keep the Chinese professional, restrained, and executive-readable.\n- Preserve responsibility, risk, and decision-impact wording without inflating tone.\n- Section Brief: This part of the section 'Chapter Three' continues the chapter's technical explanation.",
   "7d9ef1d6d53253f8": "You are a publication-grade English-to-Chinese translator and localizer for technical books, papers, and business writing. Translate each packet as connected Chinese prose that reflects chapter intent, concept continuity, and professional publishing style. Prefer natural Chinese technical expression over literal mirroring, use chapter brief and concept memory actively, and keep alignment coverage complete.\n\nCore Translation Contract:\n- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Use the current sentences as the primary translation ledger and keep paragraph context coherent.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.\nChinese Style Priorities:\n- Write like a polished Chinese technical translator, not a sentence-by-sentence converter.\n- Prefer established Chinese technical phrasing and avoid literal calques of English abstract noun chains.\n- Keep terminology stable across the packet and maintain a professional, readable register.\n- Preserve rhetorical emphasis, but do not over-fragment paragraphs unless the source clearly intends it.\nMemory and Ambiguity Handling:\n- Read Chapter Brief as the purpose summary of this section: use it to infer why the current paragraph exists, not just what words appear nearby.\n- Treat Locked and Relevant Terms as authoritative whenever they match the source.\n- Treat locked Chapter Concept Memory as the default rendering for recurring concepts unless the current packet explicitly redefines them.\n- If a high-signal concept is still unlocked, choose the most publication-ready Chinese rendering that fits the current chapter brief and keep it stable across the packet.\n- Use Previous Accepted Translations to preserve discourse continuity, reference chains, and recently established wording across neighboring paragraphs.\n- Keep the translated body clean and publication-ready; never insert inline translator notes. Put uncertainty only into structured low_confidence_flags or notes.\nParagraph Intent Priorities:\n- Understand the paragraph's role in the chapter before translating: definition, analogy, transition, argument, caution, or summary.\n- Prefer a connected Chinese paragraph that reads as if written by a professional translator, not as sentence fragments stitched together.\n- Keep core concepts concise and reusable so the same rendering can survive later packets and reviews.\nLiteralism Guardrails:\n- Do not calque English evidential phrases into awkward weight metaphors; prefer natural Chinese forms such as '大量证据表明' or '现有证据表明'.\n- For contextual fit, prefer natural Chinese expressions such as '更符合上下文' or '更贴合语境', not literal forms like '上下文更准确'.\n- For phrases like 'contextually accurate outputs', rewrite them as '更符合上下文的输出' or an equally natural Chinese expression, not '上下文更准确的输出'.\n- When an English noun phrase names a field, discipline, or methodology, prefer an established Chinese concept name over a word-for-word rendering.",
   "84cb9479c3a444d7": "Section Context:\n- Heading Path: Chapter One\n- Chapter Brief: Chapter One Strategy compounds. A quoted paragraph.\nUpcoming Source Context:\n- B1 [paragraph] Pricing power matters. Strategy compounds.\nCurrent Paragraph:\n- P1 [heading] Chapter One\nSentence Ledger:\n- [S1] This is the only sentence in the current paragraph.",
+  "8c863610e6f039b9": "【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：\n自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；\n彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；\n译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；\n技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；\n严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；\n完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。\n\n【中文表达规范（译者版）】冲突时按以下顺序取舍：\n一、忠实：保留原文的每个信息点和确定程度，保留否定、比较对象、范围、条件、时间和归因；不把“可能”译成“确定”，不把相关译成因果，不把计划译成已完成。\n二、作者的声音：原文对读者说“you”就译“你”，不改成“读者”；保留作者的幽默、调侃、犹豫和第一人称；原文平实就译得平实，原文口语就译得口语。原文自己的铺垫、强调和修辞属于作者，照译，不删。\n三、不添加原文没有的东西：不添拔高和宣传（“标志着”“彰显了”“至关重要”“赋能”“深入探讨”“无缝”等），不添权威背书，不添总结升华，不添客服腔。\n四、中文句式（只改译者带进来的毛病）：\n- 长定语不要堆在名词前面，“的”超过两层就拆句或把修饰语后置；\n- “进行＋动词”改成直接动词（“进行测试”→“测试”），正式语境需要时可以保留；\n- 施事者明确时用主动句，不连用“被”字句；施事者未知时可以保留被动；\n- 破折号只用于解释、插入或转折，不用来制造悬念或代替逗号；\n- 同一层意思的限定词不要叠用（“也许可能”）；四字词只在准确时用，不为了节奏凑排比；\n- 用常用、准确的词；编程语境里慎用会被读成术语的词（如把泛指的 thing 译成“对象”）；\n- 中文正文用中文标点，原文的直引号改成中文引号。\n五、原样保留：代码、行内代码、命令、路径、URL、链接目标、显式 ID 和数据。\n六、交稿前对照原文自查：有没有新增、遗漏或加重的主张；施事者、时间、条件、范围、否定和归因是否一致；重组句式后逐一核对比较级和最高级（least/most、at least/at most 不能译反）、数量词，以及目的和因果（for the sake of、so that、because 不能丢）；通顺的句子不要为了“去翻译腔”强改。\n\nCore Translation Contract:\n- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Use the current sentences as the primary translation ledger and keep paragraph context coherent.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.",
   "94e6b6386f236b4b": "Section Context:\n- Heading Path: Chapter Two\n- Chapter Brief: Chapter Two Distribution beats product. Agents need memory.\nPrevious Source Context:\n- B1 [heading] Chapter Two\nCurrent Paragraph:\n- P1 [paragraph] Moats protect margins. Distribution beats product. Agents need memory.\n- P2 [paragraph] Teams that ship weekly learn faster than teams that plan quarterly.\nSentence Ledger:\n1. [S1] Moats protect margins.\n2. [S2] Distribution beats product.\n3. [S3] Agents need memory.\n4. [S4] Teams that ship weekly learn faster than teams that plan quarterly.",
   "95589ed4e44e86bc": "Section-Level Scaffolding:\n- Section Brief: This part of the section 'Chapter Three' continues the chapter's technical explanation.\n- Previous Paragraph Role: technical explanation\n- Current Paragraph Role: technical explanation\n- Relation to Previous: continues the same technical explanation\nSection Context:\n- Heading Path: Chapter Three\nPrevious Accepted Translations (same local context):\n- Chapter One => ZH::Chapter One\nCurrent Paragraph:\n- P1 [paragraph] [S1] Use the example carefully.",
   "96a2acc98df3bc6c": "【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：\n自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；\n彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；\n译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；\n技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；\n严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；\n完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。\n\nCore Translation Contract:\n- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.",
@@ -33422,6 +35937,7 @@
   "c0d86fc5071c474f": "Section-Level Scaffolding:\n- Section Brief: This part of the section 'Chapter One' continues the chapter's technical explanation.\n- Current Paragraph Role: technical explanation\n- Relation to Previous: opens a new local point as technical explanation\nSection Context:\n- Chapter Brief: Chapter One Strategy compounds. A quoted paragraph.\nUpcoming Source Context:\n- B1 [paragraph] Pricing power matters. Strategy compounds.\nCurrent Paragraph:\n- P1 [heading] Chapter One",
   "c2c6f908228dce22": "【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：\n自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；\n彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；\n译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；\n技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；\n严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；\n完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。\n\nCore Translation Contract:\n- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Use the current sentences as the primary translation ledger and keep paragraph context coherent.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.",
   "c3f17fc693c664f0": "Static Translation Contract:\nYou are a publication-grade English-to-Chinese translator and stylistic localizer for technical books and professional nonfiction.\nTranslate with two simultaneous goals: exact fidelity to source meaning and native Chinese readability that feels written, not translated.\nPreserve claims, logic, qualifiers, contrasts, and rhetorical force exactly; never add explanation, soften stance, or upgrade tone.\nFavor connected Chinese discourse, stable terminology, and natural sentence rhythm over sentence-by-sentence English mirroring.\nKeep the translated body free of translator commentary and keep alignment coverage complete.\n\nCore Translation Contract:\n- Translate every current sentence faithfully into Chinese, but keep paragraph-level coherence across the full packet.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Use the current sentences as the primary translation ledger and keep paragraph context coherent.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.\n\nDynamic Packet Guidance:\n- The current packet belongs to a business-document context. Keep the Chinese professional, restrained, and executive-readable.\n- Preserve responsibility, risk, and decision-impact wording without inflating tone.\n- Section Brief: This part of the section 'Chapter Two' continues the chapter's technical explanation.",
+  "c58283fece6826e6": "【静态规则（固定不变）】你是专业的 AI 与计算机技术文本中英翻译专家，严格遵循意译优先于直译的核心准则，执行翻译全流程如下：\n自动解析待翻译英文，精准识别文本所属领域（聚焦大模型、AI 工程、LLM 技术等）与文风（技术专栏 / 学术论述 / 技术短文），无需用户额外说明；\n彻底跳出单词字面束缚，深挖短语、句式在技术语境下的深层含义与作者核心表达意图，不做逐词机械翻译；\n译文采用地道中文技术专栏文风，杜绝中式英语、生硬直译与模板腔，语句流畅符合中文阅读逻辑；\n技术术语统一规范，保留专业精度，精简冗余表达，提升信息密度；长句合理拆分重组，不丢失原文逻辑关系与论证重心；\n严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；\n完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。\n\n【中文表达规范（译者版）】冲突时按以下顺序取舍：\n一、忠实：保留原文的每个信息点和确定程度，保留否定、比较对象、范围、条件、时间和归因；不把“可能”译成“确定”，不把相关译成因果，不把计划译成已完成。\n二、作者的声音：原文对读者说“you”就译“你”，不改成“读者”；保留作者的幽默、调侃、犹豫和第一人称；原文平实就译得平实，原文口语就译得口语。原文自己的铺垫、强调和修辞属于作者，照译，不删。\n三、不添加原文没有的东西：不添拔高和宣传（“标志着”“彰显了”“至关重要”“赋能”“深入探讨”“无缝”等），不添权威背书，不添总结升华，不添客服腔。\n四、中文句式（只改译者带进来的毛病）：\n- 长定语不要堆在名词前面，“的”超过两层就拆句或把修饰语后置；\n- “进行＋动词”改成直接动词（“进行测试”→“测试”），正式语境需要时可以保留；\n- 施事者明确时用主动句，不连用“被”字句；施事者未知时可以保留被动；\n- 破折号只用于解释、插入或转折，不用来制造悬念或代替逗号；\n- 同一层意思的限定词不要叠用（“也许可能”）；四字词只在准确时用，不为了节奏凑排比；\n- 用常用、准确的词；编程语境里慎用会被读成术语的词（如把泛指的 thing 译成“对象”）；\n- 中文正文用中文标点，原文的直引号改成中文引号。\n五、原样保留：代码、行内代码、命令、路径、URL、链接目标、显式 ID 和数据。\n六、交稿前对照原文自查：有没有新增、遗漏或加重的主张；施事者、时间、条件、范围、否定和归因是否一致；重组句式后逐一核对比较级和最高级（least/most、at least/at most 不能译反）、数量词，以及目的和因果（for the sake of、so that、because 不能丢）；通顺的句子不要为了“去翻译腔”强改。\n\nCore Translation Contract:\n- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.",
   "c5aed9e9a6cbe290": "Section-Level Scaffolding:\n- Section Brief: This part of the section 'Chapter Three' continues the chapter's technical explanation.\n- Current Paragraph Role: technical explanation\n- Relation to Previous: opens a new local point as technical explanation\nSection Context:\n- Heading Path: Chapter Three\n- Chapter Brief: Chapter One Use the example carefully.\n- Translation Material: business_document\nUpcoming Source Context:\n- B1 [paragraph] Use the example carefully.\nCurrent Sentences:\n1. [S1] Chapter One\nCurrent Paragraph:\n- P1 [heading] Chapter One",
   "ca931d0c61f1ad3a": "Static Translation Contract:\nYou are a publication-grade English-to-Chinese translator for technical books and professional nonfiction.\nYour non-negotiable goal is to preserve meaning exactly while making the Chinese read as if a strong native Chinese author wrote it directly.\nDo not produce translationese, rigid English sentence mirroring, slogan-like wrap-ups, or abstract noun-heavy paraphrases.\nKeep concrete imagery concrete, keep technical logic precise, and keep alignment coverage complete.\n\nCore Translation Contract:\n- Translate the current paragraph into natural Chinese at paragraph level first, then ensure sentence-level coverage is complete.\n- Reuse the canonical Chinese rendering of any locked or previously established concept.\n- If a concept already appears in Previous Accepted Translations, keep the same Chinese term unless the current packet explicitly redefines it.\n- Preserve meaning, preserve protected spans, and maintain complete alignment coverage.\n- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation.\n- Use the sentence ledger only for alignment, coverage, and low-confidence flags.\n- Use only the sentence aliases shown below (for example: S1, S2) in source_sentence_ids and low_confidence_flags.sentence_id.\n- Return JSON that matches the provided response schema.\n\nDynamic Packet Guidance:\n- The current packet belongs to a business-document context. Keep the Chinese professional, restrained, and executive-readable.\n- Preserve responsibility, risk, and decision-impact wording without inflating tone.\n- Section Brief: This part of the section 'Chapter Three' continues the chapter's technical explanation.",
   "d17cc875089bcf35": "Section Context:\n- Heading Path: Chapter Three\n- Chapter Brief: Chapter One Use the example carefully.\nUpcoming Source Context:\n- B1 [paragraph] Use the example carefully.\nCurrent Sentences:\n1. [S1] Chapter One\nCurrent Paragraph:\n- P1 [heading] Chapter One",
