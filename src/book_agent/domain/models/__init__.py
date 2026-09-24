@@ -32,6 +32,7 @@ from book_agent.domain.models.review import (
     Export,
     ExportVersion,
     IssueAction,
+    PilotQualityReport,
     ReviewIssue,
     ReviewIssueEvent,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "MemorySnapshot",
     "PacketSentenceMap",
     "ParseHealthReport",
+    "PilotQualityReport",
     "ProviderCredential",
     "RunAuditEvent",
     "RunBudget",
