@@ -14,10 +14,11 @@ function dollars(amount: number): string {
 }
 
 /** Shown before a translation starts: what the run will take, from the book's size and the provider's prices. */
-export function CostEstimateNote({ documentId }: { documentId: string }) {
+export function CostEstimateNote({ documentId, remaining = false }: { documentId: string; remaining?: boolean }) {
   const query = useQuery({
-    queryKey: ["cost-estimate", documentId],
-    queryFn: () => getCostEstimate(documentId),
+    // remaining: the rest of the book after the free pilot.
+    queryKey: ["cost-estimate", documentId, remaining],
+    queryFn: () => getCostEstimate(documentId, { remaining }),
     retry: false,
     staleTime: 60_000,
   });

@@ -5,9 +5,10 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useOutletCon
 import { queryClient } from "../../app/queryClient";
 import { rememberBook } from "../../lib/currentBook";
 import { NotifyMe } from "../../components/NotifyMe";
-import { StartDialog } from "./StartDialog";
-import { createRun, decideApproval, pauseRun, resumeRun, retryRun } from "../../lib/api";
-import { decideAutoStart } from "../../lib/autoStart";
+import { PilotResult, pilotChapterTitles } from "./PilotResult";
+import { StartDialog, type StartMode } from "./StartDialog";
+import { createRun, decideApproval, pauseRun, resumeRun, retryRun, startPilot } from "../../lib/api";
+import { decideAutoStart, decideBookStart } from "../../lib/autoStart";
 import { type BookOverview, type NeedsYouItem, getOverview, usd } from "../../lib/overview";
 import { autoStartCapUsd, fastReadingPreferred } from "../../lib/preferences";
 import { useRunEventStream } from "../../lib/runEvents";
@@ -49,6 +50,25 @@ export function useBook(): BookOverview {
   return useOutletContext<BookOverview>();
 }
 
+const PILOT_DECLINED_KEY = "book-agent.pilot-declined.";
+
+/** 暂不翻译 after the pilot: a per-browser note, so the choice card folds away on the next visit too. */
+function pilotDeclined(documentId: string): boolean {
+  try {
+    return window.localStorage.getItem(PILOT_DECLINED_KEY + documentId) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberPilotDeclined(documentId: string): void {
+  try {
+    window.localStorage.setItem(PILOT_DECLINED_KEY + documentId, "1");
+  } catch {
+    /* folds away for this visit only */
+  }
+}
+
 async function refresh(documentId: string): Promise<void> {
   await queryClient.invalidateQueries({ queryKey: ["overview", documentId] });
   await queryClient.invalidateQueries({ queryKey: ["inbox"] });
@@ -68,22 +88,27 @@ export function BookPage() {
     rememberBook(documentId);
   }, [documentId]);
 
-  const [startDialogOpen, setStartDialogOpen] = useState(false);
+  const [dialog, setDialog] = useState<StartMode | null>(null);
+  const [declined, setDeclined] = useState(() => pilotDeclined(documentId));
   const act = useMutation({
-    mutationFn: async (kind: "start" | "autostart" | "resume" | "retry" | "stop") => {
+    mutationFn: async (kind: "start" | "autostart" | "pilot" | "book" | "resume" | "retry" | "stop") => {
       const runId = data?.translation.run_id ?? "";
-      if (kind === "start" || kind === "autostart") {
+      if (kind === "pilot") return startPilot(documentId, { fastReading: fastReadingPreferred() });
+      if (kind === "start" || kind === "autostart" || kind === "book") {
         const created = await createRun(documentId, { fastReading: fastReadingPreferred(), autoStarted: kind === "autostart" });
-        return resumeRun(created.run_id, { ...ACTOR, note: kind === "autostart" ? "auto-started within the cost cap" : "started by the reader" });
+        const note = kind === "autostart" ? "auto-started within the cost cap" : kind === "book" ? "whole book after the free pilot" : "started by the reader";
+        return resumeRun(created.run_id, { ...ACTOR, note });
       }
       if (kind === "resume") return resumeRun(runId, { ...ACTOR, note: "resumed by the reader" });
       if (kind === "retry") return retryRun(runId, { ...ACTOR, note: "retried by the reader" });
       return pauseRun(runId, { ...ACTOR, note: "stopped by the reader" });
     },
     onSuccess: (_result, kind) => {
-      setStartDialogOpen(false);
+      setDialog(null);
       // Straight into this book's progress, where the run tells its story.
-      if (kind === "start" || kind === "autostart") navigate(`/books/${documentId}/progress`, { replace: true });
+      if (kind === "start" || kind === "autostart" || kind === "pilot" || kind === "book") {
+        navigate(`/books/${documentId}/progress`, { replace: true });
+      }
     },
     onSettled: () => refresh(documentId),
   });
@@ -100,6 +125,17 @@ export function BookPage() {
     // flag, or coming back later, cannot start anything twice.
     if (decision?.auto) act.mutate("autostart");
   }, [justImported, data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the pilot finishes while the reader is on this book, open its result: the two chapters.
+  const pilotState = data?.pilot?.state;
+  const previousPilotState = useRef(pilotState);
+  useEffect(() => {
+    const before = previousPilotState.current;
+    previousPilotState.current = pilotState;
+    if (pilotState === "ready" && before && ACTIVE.has(before) && data?.pilot?.readable) {
+      navigate(`/books/${documentId}/read`, { replace: true });
+    }
+  }, [pilotState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (overview.isError) {
     return (
@@ -125,7 +161,17 @@ export function BookPage() {
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
   const primary = data.primary_action;
   const estimate = data.cost?.max_charge_usd ?? null;
-  const showStartPanel = primary.kind === "start" && !act.isPending && !(justImported && decision?.auto);
+  const showStartPanel =
+    (primary.kind === "start" || primary.kind === "pilot") && !act.isPending && !(justImported && decision?.auto);
+  const pilotReady = primary.kind === "start_book";
+  const onPilot = data.translation.scope === "pilot";
+
+  // 翻译全书 after the pilot: within the auto-start cap it starts at once, above it the dialog asks.
+  function startBook() {
+    if (!data) return;
+    if (decideBookStart(data, cap).auto) act.mutate("book");
+    else setDialog("rest");
+  }
 
   const bookHeader = (
     <header className={s.header}>
@@ -155,6 +201,7 @@ export function BookPage() {
   // on the 阅读 tab of a finished book that is a whole phone screen spent saying "it is ready".
   const hasSomethingToDo =
     showStartPanel ||
+    pilotReady ||
     showProgressBar ||
     act.isPending ||
     act.isError ||
@@ -192,6 +239,22 @@ export function BookPage() {
             <span className={s.progressFill} style={{ width: `${pct}%` }} />
           </div>
         )}
+        {ACTIVE.has(state) && onPilot && (
+          <div className={s.note}>试译免费，费用由我们承担。试译好了，这里会打开试译的两章，再由你决定是否翻译全书。</div>
+        )}
+        {pilotReady && (
+          <PilotResult
+            book={data}
+            onReader={onReader}
+            pending={act.isPending}
+            declined={declined}
+            onStartBook={startBook}
+            onDecline={() => {
+              rememberPilotDeclined(documentId);
+              setDeclined(true);
+            }}
+          />
+        )}
         {ACTIVE.has(state) && data.translation.auto_started && (
           <div className={s.note}>
             已自动开始{estimate !== null ? `：预计最多 ${usd(estimate)}，在你的自动开始上限 ${usd(cap)} 以内` : ""}。不想继续可以停止。
@@ -209,7 +272,7 @@ export function BookPage() {
           )}
           {(primary.kind === "resume" || primary.kind === "retry" || primary.kind === "stop") && (
             <button className={primary.kind === "stop" ? "btn" : "btn btn-primary"} disabled={act.isPending} onClick={() => act.mutate(primary.kind as "resume" | "retry" | "stop")}>
-              {primary.kind === "stop" ? "停止翻译" : primary.label}
+              {primary.kind === "stop" ? (onPilot ? "停止试译" : "停止翻译") : primary.label}
             </button>
           )}
           {primary.kind === "read" && ACTIVE.has(state) && (
@@ -221,11 +284,29 @@ export function BookPage() {
           {act.isError && <span className={s.errorText}>{act.error instanceof Error ? act.error.message : "操作失败"}</span>}
         </div>
 
-        {showStartPanel && (
+        {showStartPanel && primary.kind === "pilot" && (
           <div className={s.start}>
-            <button className="btn btn-primary" disabled={act.isPending} onClick={() => setStartDialogOpen(true)}>
+            <button className="btn btn-primary" disabled={act.isPending} onClick={() => setDialog("pilot")}>
+              免费试译前两章
+            </button>
+            <div className={s.note}>
+              先免费翻译前两章{pilotChapterTitles(data).length ? `（${pilotChapterTitles(data).map((title) => `「${title}」`).join("、")}）` : ""}
+              ，走完整流程，看过效果再决定是否翻译全书。
+            </div>
+            {data.parse_health?.needs_attention && (
+              <div className={s.attention}>
+                解析体检发现了严重问题，译文会带着这些问题。建议先 <Link to={`/books/${documentId}/progress`}>看看体检报告</Link> 再试译。
+              </div>
+            )}
+          </div>
+        )}
+
+        {showStartPanel && primary.kind === "start" && (
+          <div className={s.start}>
+            <button className="btn btn-primary" disabled={act.isPending} onClick={() => setDialog("book")}>
               {estimate !== null ? `开始翻译（约 ${usd(estimate)}）` : "开始翻译"}
             </button>
+            {data.pilot?.unavailable_text && <div className={s.note}>{data.pilot.unavailable_text}</div>}
             {decision && !decision.auto && decision.reason && (
               <div className={s.note}>
                 {decision.reason} <Link to="/settings">修改自动开始上限</Link>
@@ -241,13 +322,16 @@ export function BookPage() {
         )}
       </section>
 
-      {startDialogOpen && (
+      {dialog && (
         <StartDialog
           documentId={documentId}
+          mode={dialog}
           maxChargeUsd={estimate}
           pending={act.isPending}
-          onCancel={() => setStartDialogOpen(false)}
-          onStart={() => act.mutate("start")}
+          pilotChapters={pilotChapterTitles(data)}
+          onCancel={() => setDialog(null)}
+          onStart={() => act.mutate(dialog === "pilot" ? "pilot" : dialog === "rest" ? "book" : "start")}
+          onSkipPilot={dialog === "pilot" ? () => act.mutate("start") : undefined}
         />
       )}
 
@@ -364,8 +448,9 @@ function NeedsYou({ documentId, items }: { documentId: string; items: NeedsYouIt
   );
 }
 
-/** /books/:id: a readable book opens on reading, anything else on its progress. */
+/** /books/:id: a readable book opens on reading (a finished pilot on its two chapters), anything else on its progress. */
 export function BookIndex() {
   const data = useBook();
-  return <Navigate to={data.readable.ready ? "read" : "progress"} replace />;
+  const pilotToRead = data.pilot?.state === "ready" && data.pilot.readable;
+  return <Navigate to={data.readable.ready || pilotToRead ? "read" : "progress"} replace />;
 }

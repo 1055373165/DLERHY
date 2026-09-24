@@ -35,16 +35,60 @@ export interface InboxItem extends NeedsYouItem {
   document_title: string | null;
 }
 
+/** The free two-chapter pilot (services/pilot.py): offered or not, where it stands, what it left. */
+export type PilotState =
+  | "not_started"
+  | "unavailable"
+  | "queued"
+  | "running"
+  | "draining"
+  | "paused"
+  | "failed"
+  | "cancelled"
+  | "ready"
+  | "book_started"
+  | "skipped";
+
+export interface PilotProblems {
+  open: number;
+  blocking: number;
+  /** Issue types (codes; issueTypeCopy gives the words), blocking first. */
+  by_type: { type: string; count: number; blocking: number }[];
+}
+
+export interface PilotOverview {
+  available: boolean;
+  unavailable_reason: string | null;
+  /** Why this book has no pilot, in words (a web page, a short book). */
+  unavailable_text: string | null;
+  state: PilotState;
+  run_id: string | null;
+  chapters: { chapter_id: string; ordinal: number; title: string | null }[];
+  /** The pilot's reading copy exists. */
+  readable: boolean;
+  /** null until the pilot has run. */
+  problems: PilotProblems | null;
+  /** What the pilot's model calls cost us; the reader is not charged. */
+  cost_usd: number;
+  finished_at: string | null;
+}
+
 export interface BookOverview {
   document_id: string;
   title: string | null;
   source_type: string;
   source_url: string | null;
   headline: string;
-  primary_action: { kind: "start" | "resume" | "retry" | "stop" | "read" | "handle" | "none"; label: string; run_id?: string };
+  primary_action: {
+    kind: "start" | "pilot" | "start_book" | "resume" | "retry" | "stop" | "read" | "handle" | "none";
+    label: string;
+    run_id?: string;
+  };
   readable: { ready: boolean; formats: string[] };
   translation: {
     state: TranslationState;
+    /** Which run this is: the free pilot's, or the whole book's; null before either. */
+    scope?: "pilot" | "book" | null;
     run_id: string | null;
     stop_reason: string | null;
     stop_reason_text: string | null;
@@ -55,6 +99,8 @@ export interface BookOverview {
     started_at?: string | null;
     finished_at?: string | null;
   };
+  /** Absent from servers before the pilot existed. */
+  pilot?: PilotOverview;
   activity: { exporting: string[] };
   needs_you: NeedsYouItem[];
   quality: { open_issues: number; blocking: number };
@@ -68,9 +114,9 @@ export async function getOverview(documentId: string): Promise<BookOverview> {
   return requestJson<BookOverview>(`/documents/${encodeURIComponent(documentId)}/overview`);
 }
 
-/** A full translation that ended: ready to read, or failed. */
+/** A translation that ended: ready to read, a free pilot ready to review, or failed. */
 export interface InboxUpdate {
-  kind: "readable" | "failed";
+  kind: "readable" | "pilot_ready" | "failed";
   run_id: string;
   document_id: string;
   document_title: string | null;

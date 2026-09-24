@@ -268,6 +268,10 @@ class PilotRunTests(unittest.TestCase):
         self.assertEqual(remaining.packet_count, whole.packet_count - len(pilot_packets))
         self.assertEqual(remaining.breakdown["terminology"]["token_in"], 0)
         self.assertLess(remaining.token_in, whole.token_in)
+        rest = self.client.get(
+            f"/v1/documents/{document_id}/cost-estimate", params={"terminology": "skip", "pending_only": "true"}
+        ).json()
+        self.assertEqual(rest["packet_count"], remaining.packet_count)
 
         merged_text = self.client.get(
             f"/v1/documents/{document_id}/exports/download", params={"export_type": "merged_html", "package": "preview"}

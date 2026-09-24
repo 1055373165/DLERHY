@@ -663,6 +663,7 @@ def get_cost_estimate(
     document_id: str,
     terminology: Literal["skip", "sampled", "thorough"] = Query(default="sampled"),
     model_review: Literal["skip", "sampled", "full"] = Query(default="sampled"),
+    pending_only: bool = Query(default=False, description="Only what is not translated yet (the rest of the book after a pilot)."),
     session: Session = Depends(get_db_session),
 ) -> CostEstimateResponse:
     """Tokens (and cost, when the provider has prices) a full translation run of this book will take, as a range."""
@@ -671,7 +672,7 @@ def get_cost_estimate(
 
     try:
         estimate = estimate_document_cost(
-            session, document_id, get_settings(), terminology=terminology, model_review=model_review
+            session, document_id, get_settings(), terminology=terminology, model_review=model_review, pending_only=pending_only
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
