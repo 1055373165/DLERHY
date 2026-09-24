@@ -491,8 +491,10 @@ class RunExecutionService:
     def enforce_budget_guardrails(self, *, run_id: str) -> RunBudgetGuardrailResult:
         run = self.repository.get_run(run_id)
         from book_agent.services import org_budget
+        from book_agent.services.billing_category import PILOT
 
-        org_id = org_budget.org_id_for_run(self.repository.session, run_id)
+        # The free pilot is ours to pay: the organisation's budget and balance do not stop it.
+        org_id = None if run.billing_category == PILOT else org_budget.org_id_for_run(self.repository.session, run_id)
         exhausted = org_budget.cached_exhausted_status(self.repository.session, org_id) if org_id else None
         if exhausted is not None:
             summary = self.control_service.pause_run_system(

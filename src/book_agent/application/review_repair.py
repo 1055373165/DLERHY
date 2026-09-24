@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -77,8 +79,13 @@ class ReviewRepairService:
         *,
         auto_execute_packet_followups: bool = False,
         max_auto_followup_attempts: int = 2,
+        chapter_ids: Collection[str] | None = None,
     ) -> DocumentReviewResult:
+        """``chapter_ids`` reviews only those chapters (a pilot's); the others are not counted as skipped."""
         bundle = self.bootstrap_repository.load_document_bundle(document_id)
+        if chapter_ids is not None:
+            wanted = {str(chapter_id) for chapter_id in chapter_ids}
+            bundle = replace(bundle, chapters=[chapter for chapter in bundle.chapters if str(chapter.chapter.id) in wanted])
         return self._review_document_impl(
             bundle,
             chapter_results=[],
@@ -177,13 +184,15 @@ class ReviewRepairService:
         *,
         max_rounds: int = 4,
         max_actions_per_round: int = 64,
+        chapter_ids: Collection[str] | None = None,
     ) -> DocumentBlockerRepairResult:
+        """``chapter_ids`` repairs only the blockers of those chapters (a pilot's)."""
         round_limit = max(1, int(max_rounds))
         action_limit = max(1, int(max_actions_per_round))
         attempted_action_ids: set[str] = set()
         executions: list[DocumentBlockerRepairExecution] = []
 
-        blocking_issues = self._list_document_active_blocking_issues(document_id)
+        blocking_issues = self._list_document_active_blocking_issues(document_id, chapter_ids)
         blocking_issue_count_before = len(blocking_issues)
         if blocking_issue_count_before == 0:
             return DocumentBlockerRepairResult(
@@ -201,7 +210,7 @@ class ReviewRepairService:
         round_count = 0
 
         while round_count < round_limit:
-            blocking_issues = self._list_document_active_blocking_issues(document_id)
+            blocking_issues = self._list_document_active_blocking_issues(document_id, chapter_ids)
             if not blocking_issues:
                 break
             candidate_actions = self._document_blocker_candidate_actions(
@@ -266,7 +275,7 @@ class ReviewRepairService:
                     round_limit=round_limit,
                 )
 
-        blocking_issue_count_after = len(self._list_document_active_blocking_issues(document_id))
+        blocking_issue_count_after = len(self._list_document_active_blocking_issues(document_id, chapter_ids))
         if blocking_issue_count_after > 0 and stop_reason is None and round_count >= round_limit:
             stop_reason = "max_rounds_reached"
 
@@ -282,18 +291,21 @@ class ReviewRepairService:
             stop_reason=stop_reason,
         )
 
-    def _list_document_active_blocking_issues(self, document_id: str) -> list[ReviewIssue]:
-        return list(
-            self.session.scalars(
-                select(ReviewIssue)
-                .where(
-                    ReviewIssue.document_id == document_id,
-                    ReviewIssue.blocking.is_(True),
-                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
-                )
-                .order_by(ReviewIssue.created_at.asc(), ReviewIssue.id.asc())
-            ).all()
+    def _list_document_active_blocking_issues(
+        self, document_id: str, chapter_ids: Collection[str] | None = None
+    ) -> list[ReviewIssue]:
+        statement = (
+            select(ReviewIssue)
+            .where(
+                ReviewIssue.document_id == document_id,
+                ReviewIssue.blocking.is_(True),
+                ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+            )
+            .order_by(ReviewIssue.created_at.asc(), ReviewIssue.id.asc())
         )
+        if chapter_ids is not None:
+            statement = statement.where(ReviewIssue.chapter_id.in_(sorted(str(chapter_id) for chapter_id in chapter_ids)))
+        return list(self.session.scalars(statement).all())
 
     def _document_blocker_candidate_actions(
         self,

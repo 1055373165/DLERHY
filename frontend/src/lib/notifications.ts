@@ -23,7 +23,9 @@ export function pickNotifications(inbox: Inbox, seen: ReadonlySet<string>): Plan
     planned.push(
       update.kind === "readable"
         ? { key: `readable:${update.run_id}`, title: `可以阅读了：${title}`, body: update.text, path: `/books/${update.document_id}/read` }
-        : { key: `failed:${update.run_id}`, title: `翻译失败：${title}`, body: update.text, path: `/books/${update.document_id}` },
+        : update.kind === "pilot_ready"
+          ? { key: `pilot:${update.run_id}`, title: `试译好了：${title}`, body: update.text, path: `/books/${update.document_id}/read` }
+          : { key: `failed:${update.run_id}`, title: `翻译失败：${title}`, body: update.text, path: `/books/${update.document_id}` },
     );
   }
   for (const item of inbox.items) {

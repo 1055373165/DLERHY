@@ -3,7 +3,8 @@
 The balance is credits (top-ups, refunds, adjustments in ``credit_entries``)
 minus charged usage: the provider cost of the organisation's
 ``llm.call.completed`` events since it went prepaid (its first credit entry),
-times ``billing_price_multiplier``. Usage is read from the same ledger as the
+times ``billing_price_multiplier``. Calls of the free pilot run are left out
+(``services/billing_category.py``). Usage is read from the same ledger as the
 monthly budget and the usage statement, so the three agree; nothing is
 debited row by row, so a crash can never charge a call twice or not at all.
 
@@ -27,6 +28,7 @@ from sqlalchemy.orm import Session
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models.auth import CREDIT_ENTRY_KINDS, DEFAULT_ORG_ID, CreditEntry, Org
 from book_agent.domain.models.ops import Event
+from book_agent.services.billing_category import charged_to_customer, pilot_run_ids
 
 STOP_REASON = "billing.credit_exhausted"
 
@@ -92,6 +94,8 @@ def credit_status(session: Session, org_id: str, *, price_multiplier: float) -> 
                 select(func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)).where(
                     Event.kind == LLM_CALL_COMPLETED,
                     Event.org_id.in_(org_keys),
+                    # The free pilot is ours to pay (services/billing_category.py).
+                    charged_to_customer(pilot_run_ids(session, org_id)),
                     # Compared in SQL against the stored value, not a Python round trip of it.
                     Event.occurred_at >= select(Org.prepaid_since).where(Org.id == org_id).scalar_subquery(),
                 )

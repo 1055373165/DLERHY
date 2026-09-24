@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { marked } from "marked";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
 
 import {
   downloadDocumentExport,
@@ -10,6 +10,7 @@ import {
   previewDocumentExport,
   type ReadableExportType,
 } from "../../lib/api";
+import type { BookOverview } from "../../lib/overview";
 import { preferredTitle } from "../../lib/workflow";
 import s from "./ReaderPage.module.css";
 
@@ -22,6 +23,10 @@ const FORMATS = [
 ] as const satisfies readonly { key: string; label: string; exportType: ReadableExportType }[];
 
 type FormatKey = (typeof FORMATS)[number]["key"];
+
+// Before the whole book is translated, the free pilot is read as its two chapters: the Chinese
+// copy and the bilingual one. Other formats would ask for a whole-book export that cannot exist yet.
+const PILOT_FORMATS: readonly FormatKey[] = ["zh", "bi"];
 
 const MARKDOWN_PAGE_STYLE = `
   body { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; font: 17px/1.8 "Noto Serif SC", "Songti SC", serif; color: #1f2328; background: #fffdf8; }
@@ -47,6 +52,9 @@ export function ReaderPage() {
   const [showSource, setShowSource] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  // The book page's overview, when the reader is one of its tabs (standalone it is absent).
+  const book = useOutletContext<BookOverview | undefined>();
+  const pilotView = Boolean(book && !book.readable.ready && book.pilot?.readable);
   const document = useQuery({ queryKey: ["document", documentId], queryFn: () => getDocument(documentId), retry: false });
   const meta = useQuery({ queryKey: ["meta"], queryFn: getMeta, staleTime: 60_000, retry: false });
   // A web page reads first as itself in Chinese (the original layout); books have no such format.
@@ -54,7 +62,10 @@ export function ReaderPage() {
   // Offer PDF only where this deployment can print it (Playwright + Chromium); unknown counts as no.
   const pdfAvailable = meta.data?.capabilities?.pdf_renderer === true;
   const formats = FORMATS.filter(
-    (item) => (item.key !== "web" || isWebPage) && (item.key !== "pdf" || pdfAvailable),
+    (item) =>
+      (item.key !== "web" || isWebPage) &&
+      (item.key !== "pdf" || pdfAvailable) &&
+      (!pilotView || PILOT_FORMATS.includes(item.key)),
   );
   const requested = params.get("format");
   const format: FormatKey = formats.some((item) => item.key === requested)
@@ -64,7 +75,8 @@ export function ReaderPage() {
       : "zh";
   const current = formats.find((item) => item.key === format) ?? formats[0];
   const preview = useQuery({
-    queryKey: ["export-preview", documentId, current.exportType],
+    // The pilot's copy and the whole book's are the same export type: keep them apart.
+    queryKey: ["export-preview", documentId, current.exportType, pilotView ? "pilot" : "book"],
     queryFn: () => previewDocumentExport(documentId, current.exportType),
     retry: false,
     staleTime: 5 * 60_000,
@@ -126,6 +138,15 @@ export function ReaderPage() {
         </button>
       </div>
       {downloadError && <div className={s.error}>{downloadError}</div>}
+      {pilotView && book?.pilot && (
+        <div className={s.pilotNote} role="note">
+          这是免费试译的前两章
+          {book.pilot.chapters.length
+            ? `：${book.pilot.chapters.map((chapter) => `「${chapter.title ?? chapter.ordinal}」`).join("、")}`
+            : ""}
+          。翻译全书之后，这里会换成整本书。
+        </div>
+      )}
 
       <div className={s.viewer}>
         {preview.isPending ? (

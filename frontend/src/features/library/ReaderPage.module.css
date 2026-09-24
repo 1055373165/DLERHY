@@ -102,3 +102,13 @@
 .error {
   font-size: var(--text-sm);
 }
+
+/* Reading the free pilot: say it is two chapters, not the book. */
+.pilotNote {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--green);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-panel-alt);
+}

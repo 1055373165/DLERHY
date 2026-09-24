@@ -5,6 +5,10 @@ carrying the organisation), so the statement total equals the budget's
 ``spent_usd`` for that month. Each call is attributed to a book through its
 run, else the ``document_id`` it carries; calls tied to neither (a provider
 connection test) are listed as one line without a book.
+
+Calls of a book's free pilot run (services/billing_category.py) are listed as
+``pilot_cost_usd`` and never charged; ``pilot_cost_statement`` sums them over
+every organisation, which is what pilots cost us.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Document
 from book_agent.domain.models.auth import DEFAULT_ORG_ID, Org
 from book_agent.domain.models.ops import DocumentRun, Event
+from book_agent.services.billing_category import paid_by_us, pilot_run_ids
 
 
 @dataclass(slots=True)
@@ -34,6 +39,8 @@ class UsageLine:
     cost_usd: float = 0.0
     # What the organisation is charged: cost_usd times the price multiplier.
     charged_usd: float = 0.0
+    # Provider cost of the book's free pilot: ours, not in cost_usd or charged_usd.
+    pilot_cost_usd: float = 0.0
 
 
 @dataclass(slots=True)
@@ -52,6 +59,8 @@ class UsageStatement:
     # Calls whose provider had no price: their tokens are counted, their cost is not.
     unpriced_call_count: int
     documents: list[UsageLine] = field(default_factory=list)
+    # The free pilots' provider cost this month: paid by us, not charged.
+    pilot_cost_usd: float = 0.0
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -59,7 +68,9 @@ class UsageStatement:
     def to_csv(self) -> str:
         buffer = io.StringIO()
         writer = csv.writer(buffer)
-        writer.writerow(["month", "document_id", "title", "call_count", "token_in", "token_out", "cost_usd", "charged_usd"])
+        writer.writerow(
+            ["month", "document_id", "title", "call_count", "token_in", "token_out", "cost_usd", "charged_usd", "pilot_cost_usd"]
+        )
         for line in self.documents:
             writer.writerow(
                 [
@@ -71,10 +82,21 @@ class UsageStatement:
                     line.token_out,
                     f"{line.cost_usd:.6f}",
                     f"{line.charged_usd:.6f}",
+                    f"{line.pilot_cost_usd:.6f}",
                 ]
             )
         writer.writerow(
-            [self.month, "", "TOTAL", self.call_count, self.token_in, self.token_out, f"{self.cost_usd:.6f}", f"{self.charged_usd:.6f}"]
+            [
+                self.month,
+                "",
+                "TOTAL",
+                self.call_count,
+                self.token_in,
+                self.token_out,
+                f"{self.cost_usd:.6f}",
+                f"{self.charged_usd:.6f}",
+                f"{self.pilot_cost_usd:.6f}",
+            ]
         )
         return buffer.getvalue()
 
@@ -142,6 +164,7 @@ def usage_statement(
         if run_ids
         else {}
     )
+    pilot_runs = set(pilot_run_ids(session, org_id))
     lines: dict[str | None, UsageLine] = {}
     unpriced = 0
     for run_id, payload_document_id, calls, token_in, token_out, cost_usd, unpriced_calls in rows:
@@ -151,7 +174,10 @@ def usage_statement(
         line.call_count += int(calls)
         line.token_in += int(token_in or 0)
         line.token_out += int(token_out or 0)
-        line.cost_usd += float(cost_usd or 0.0)
+        if run_id is not None and str(run_id) in pilot_runs:
+            line.pilot_cost_usd += float(cost_usd or 0.0)
+        else:
+            line.cost_usd += float(cost_usd or 0.0)
         unpriced += int(unpriced_calls or 0)
 
     known = [key for key in lines if key is not None and _is_uuid(key)]
@@ -162,6 +188,7 @@ def usage_statement(
     for line in ordered:
         line.charged_usd = round(line.cost_usd * price_multiplier, 6)
         line.cost_usd = round(line.cost_usd, 6)
+        line.pilot_cost_usd = round(line.pilot_cost_usd, 6)
     return UsageStatement(
         org_id=str(org.id),
         org_name=org.name,
@@ -176,4 +203,93 @@ def usage_statement(
         price_multiplier=price_multiplier,
         unpriced_call_count=unpriced,
         documents=ordered,
+        pilot_cost_usd=round(sum(line.pilot_cost_usd for line in ordered), 6),
+    )
+
+
+@dataclass(slots=True)
+class PilotCostLine:
+    org_id: str
+    document_id: str
+    title: str | None
+    run_count: int = 0
+    call_count: int = 0
+    token_in: int = 0
+    token_out: int = 0
+    cost_usd: float = 0.0
+
+
+@dataclass(slots=True)
+class PilotCostStatement:
+    """What the free pilots of a month cost us, per book, across every organisation."""
+
+    month: str
+    period_start: str
+    period_end: str
+    pilot_count: int
+    call_count: int
+    cost_usd: float
+    pilots: list[PilotCostLine] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        return asdict(self)
+
+
+def pilot_cost_statement(session: Session, *, month: str | None = None) -> PilotCostStatement:
+    label, start, end = month_bounds(month)
+    pilot_ids = pilot_run_ids(session)
+    rows = (
+        session.execute(
+            select(
+                Event.run_id,
+                func.count(),
+                func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0),
+                func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0),
+                func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0),
+            )
+            .where(
+                Event.kind == LLM_CALL_COMPLETED,
+                paid_by_us(pilot_ids),
+                Event.occurred_at >= start,
+                Event.occurred_at < end,
+            )
+            .group_by(Event.run_id)
+        ).all()
+        if pilot_ids
+        else []
+    )
+    runs = {
+        str(run.id): run
+        for run in session.scalars(select(DocumentRun).where(DocumentRun.id.in_([row[0] for row in rows]))).all()
+    } if rows else {}
+    lines: dict[str, PilotCostLine] = {}
+    for run_id, calls, token_in, token_out, cost_usd in rows:
+        run = runs.get(str(run_id))
+        if run is None:
+            continue
+        document = session.get(Document, run.document_id)
+        line = lines.setdefault(
+            str(run.document_id),
+            PilotCostLine(
+                org_id=str(document.org_id) if document is not None else "",
+                document_id=str(run.document_id),
+                title=(document.title_tgt or document.title or document.title_src) if document is not None else None,
+            ),
+        )
+        line.run_count += 1
+        line.call_count += int(calls)
+        line.token_in += int(token_in or 0)
+        line.token_out += int(token_out or 0)
+        line.cost_usd += float(cost_usd or 0.0)
+    ordered = sorted(lines.values(), key=lambda line: -line.cost_usd)
+    for line in ordered:
+        line.cost_usd = round(line.cost_usd, 6)
+    return PilotCostStatement(
+        month=label,
+        period_start=start.isoformat(),
+        period_end=end.isoformat(),
+        pilot_count=len(ordered),
+        call_count=sum(line.call_count for line in ordered),
+        cost_usd=round(sum(line.cost_usd for line in ordered), 6),
+        pilots=ordered,
     )

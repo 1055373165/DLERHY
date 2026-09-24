@@ -793,6 +793,15 @@ export async function createRun(
   });
 }
 
+/** Start the free two-chapter pilot: the server chooses the chapters, and the reader is not charged. */
+export async function startPilot(documentId: string, options: { fastReading?: boolean } = {}): Promise<DocumentRunSummary> {
+  return requestJson<DocumentRunSummary>(`/documents/${encodeURIComponent(documentId)}/pilot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fast_reading: Boolean(options.fastReading) }),
+  });
+}
+
 export async function resumeRun(runId: string, payload: RunControlPayload): Promise<DocumentRunSummary> {
   return requestJson<DocumentRunSummary>(`/runs/${encodeURIComponent(runId)}/resume`, {
     method: "POST",
@@ -1121,6 +1130,8 @@ export async function deleteProvider(id: string): Promise<void> {
 }
 
 /** Tokens (and cost, when the provider has prices) a full run of this book will take, as a range. */
-export async function getCostEstimate(documentId: string): Promise<CostEstimate> {
-  return requestJson<CostEstimate>(`/documents/${encodeURIComponent(documentId)}/cost-estimate`);
+/** ``remaining``: what is left after the free pilot (its chapters and terminology are done). */
+export async function getCostEstimate(documentId: string, options: { remaining?: boolean } = {}): Promise<CostEstimate> {
+  const query = options.remaining ? "?terminology=skip&pending_only=true" : "";
+  return requestJson<CostEstimate>(`/documents/${encodeURIComponent(documentId)}/cost-estimate${query}`);
 }

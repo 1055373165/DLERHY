@@ -62,6 +62,16 @@ describe("What gets announced", () => {
     expect(planned).toMatchObject({ title: "可以阅读了：Harness", path: "/books/b1/read" });
   });
 
+  it("a free pilot ready to review, opening its two chapters", () => {
+    const pilot: Inbox = {
+      count: 0,
+      items: [],
+      updates: [{ kind: "pilot_ready", run_id: "p1", document_id: "b3", document_title: "Agents", text: "免费试译完成：前两章可以阅读了，看过再决定是否翻译全书。", at: "" }],
+    };
+    const [planned] = pickNotifications(pilot, new Set());
+    expect(planned).toMatchObject({ key: "pilot:p1", title: "试译好了：Agents", path: "/books/b3/read" });
+  });
+
   it("a failed translation, with its reason", () => {
     const [planned] = pickNotifications(failed, new Set());
     expect(planned).toMatchObject({ title: "翻译失败：Deep Work", body: "有一个必需步骤没有完成。", path: "/books/b2" });

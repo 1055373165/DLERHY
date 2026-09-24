@@ -7,6 +7,7 @@ from typing import Any
 from book_agent.domain.enums import ActorType, DocumentRunStatus, DocumentRunType, SourceType
 from book_agent.domain.models.ops import DocumentRun, RunAuditEvent, RunBudget
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.services.billing_category import BILLING_CATEGORIES, CUSTOMER, PILOT
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY, WEB_EXPORT_REQUEST_KEY, translate_packet_scope
 from book_agent.orchestrator.pipeline_stage_cache import (
     read_cached_stages,
@@ -154,13 +155,24 @@ class RunControlService:
         resume_from_run_id: str | None = None,
         status_detail_json: dict[str, Any] | None = None,
         budget: RunBudgetSummary | None = None,
+        billing_category: str = CUSTOMER,
     ) -> DocumentRunSummary:
+        """``billing_category`` "pilot" is for services/pilot.py only: its model calls are not charged."""
+        if billing_category not in BILLING_CATEGORIES:
+            raise ValueError(f"billing_category must be one of {', '.join(BILLING_CATEGORIES)}")
         document = self.repository.get_document(document_id)
         status_detail_json = dict(status_detail_json or {})
         if run_type == DocumentRunType.TRANSLATE_FULL and document.source_type == SourceType.WEB:
             request = dict(status_detail_json.get(RUN_REQUEST_KEY) or {})
             request.setdefault(WEB_EXPORT_REQUEST_KEY, True)
             status_detail_json[RUN_REQUEST_KEY] = request
+        if run_type == DocumentRunType.TRANSLATE_FULL and billing_category != PILOT:
+            # After a free pilot the whole-book run does not redo what the pilot did.
+            from book_agent.services.pilot import whole_book_request
+
+            status_detail_json[RUN_REQUEST_KEY] = whole_book_request(
+                self.repository.session, document_id, dict(status_detail_json.get(RUN_REQUEST_KEY) or {})
+            )
         if resume_from_run_id is not None:
             resume_from_run = self.repository.get_run(resume_from_run_id)
             if resume_from_run.document_id != document_id:
@@ -176,6 +188,7 @@ class RunControlService:
             priority=priority,
             resume_from_run_id=resume_from_run_id,
             status_detail_json=self._with_default_status_detail(status_detail_json),
+            billing_category=billing_category,
         )
         created_at = _utcnow()
         run_budget = self._to_budget_model(budget)
@@ -193,6 +206,7 @@ class RunControlService:
                 "model_name": model_name,
                 "priority": priority,
                 "resume_from_run_id": resume_from_run_id,
+                "billing_category": billing_category,
             },
         )
         self.repository.create_run(run, budget=run_budget, audit_event=audit_event)
@@ -393,7 +407,8 @@ class RunControlService:
     ) -> DocumentRunSummary:
         run = self.repository.get_run(run_id)
         current_status = run.status
-        if current_status in {DocumentRunStatus.QUEUED, DocumentRunStatus.PAUSED}:
+        # The free pilot is ours to pay: an empty balance or a spent monthly budget does not stop it.
+        if current_status in {DocumentRunStatus.QUEUED, DocumentRunStatus.PAUSED} and run.billing_category != PILOT:
             from book_agent.core.config import get_settings
             from book_agent.services.org_budget import OrgBudgetExhausted, ensure_budget_available, org_id_for_run
             from book_agent.services.prepaid_credit import OrgCreditExhausted, ensure_credit_available
@@ -462,6 +477,7 @@ class RunControlService:
             resume_from_run_id=run_id,
             status_detail_json=self._retry_status_detail(previous_run.status_detail_json or {}, run_id),
             budget=self._to_budget_summary(previous_budget),
+            billing_category=previous_run.billing_category or CUSTOMER,
         )
         previous_event = RunAuditEvent(
             run_id=previous_run.id,

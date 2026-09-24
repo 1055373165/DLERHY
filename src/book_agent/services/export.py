@@ -9,7 +9,7 @@ import re
 import filecmp
 import shutil
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -238,29 +238,59 @@ class ExportService:
     def export_bilingual_html(self, chapter_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
         return self.export_chapter(chapter_id, ExportType.BILINGUAL_HTML, enforce_gate=enforce_gate)
 
-    def export_document_merged_html(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML], enforce_gate=enforce_gate)
+    def export_document_merged_html(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_HTML], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
-    def export_document_merged_markdown(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_MARKDOWN], enforce_gate=enforce_gate)
+    def export_document_merged_markdown(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.MERGED_MARKDOWN], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
-    def export_document_rebuilt_epub(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_EPUB], enforce_gate=enforce_gate)
+    def export_document_rebuilt_epub(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_EPUB], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
-    def export_document_zh_epub(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB], enforce_gate=enforce_gate)
+    def export_document_zh_epub(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.ZH_EPUB], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
-    def export_document_web_html(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.WEB_HTML], enforce_gate=enforce_gate)
+    def export_document_web_html(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.WEB_HTML], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
-    def export_document_rebuilt_pdf(self, document_id: str, *, enforce_gate: bool = True) -> ExportArtifacts:
-        return self._export_document(document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF], enforce_gate=enforce_gate)
+    def export_document_rebuilt_pdf(
+        self, document_id: str, *, enforce_gate: bool = True, chapter_ids: Collection[str] | None = None
+    ) -> ExportArtifacts:
+        return self._export_document(
+            document_id, _DOCUMENT_RENDERERS[ExportType.REBUILT_PDF], enforce_gate=enforce_gate, chapter_ids=chapter_ids
+        )
 
     @_within_render_model_scope
     def _export_document(
-        self, document_id: str, renderer: DocumentRenderer, *, enforce_gate: bool = True
+        self,
+        document_id: str,
+        renderer: DocumentRenderer,
+        *,
+        enforce_gate: bool = True,
+        chapter_ids: Collection[str] | None = None,
     ) -> ExportArtifacts:
-        bundle = self.repository.load_document_bundle(document_id)
+        """``chapter_ids`` renders only those chapters (a pilot's), recorded as the export's chapter scope."""
+        bundle = self.repository.load_document_bundle(document_id, chapter_ids=chapter_ids)
         if renderer.source_only_error is not None and bundle.document.source_type != renderer.required_source_type:
             raise ExportUnavailableError(renderer.source_only_error, reason="source_type_not_supported")
         for chapter_bundle in bundle.chapters if enforce_gate else ():
@@ -268,7 +298,7 @@ class ExportService:
         upstream_exports: dict[ExportType, ExportArtifacts] = {}
         if renderer.uses_upstream_exports:
             upstream_exports = self._ensure_rebuilt_upstream_exports(document_id)
-            bundle = self.repository.load_document_bundle(document_id)
+            bundle = self.repository.load_document_bundle(document_id, chapter_ids=chapter_ids)
         if renderer.syncs_document_title:
             self._sync_document_title_tgt(bundle)
         output_dir = self.output_root / bundle.document.id
@@ -283,10 +313,16 @@ class ExportService:
                 manifest_path,
                 json.dumps(renderer.manifest(self, bundle, file_path, upstream_exports), ensure_ascii=False, indent=2),
             )
-            export = self._record_document_export(bundle, renderer.export_type, file_path, manifest_path)
+            export = self._record_document_export(
+                bundle, renderer.export_type, file_path, manifest_path, chapter_scope=chapter_ids
+            )
             export = self.repository.save_export(export, manifest_path=manifest_path)
         if renderer.apply_status_updates is not None:
             renderer.apply_status_updates(self, bundle)
+            if chapter_ids is not None:
+                # Some chapters only: the book as a whole is not exported yet.
+                bundle.document.status = DocumentStatus.PARTIALLY_EXPORTED
+                self.repository.session.merge(bundle.document)
         self.repository.session.flush()
         return ExportArtifacts(
             export_record=export,
@@ -514,6 +550,8 @@ class ExportService:
         export_type: ExportType,
         file_path: Path,
         manifest_path: Path | None,
+        *,
+        chapter_scope: Collection[str] | None = None,
     ) -> Export:
         now = _utcnow()
         chapter_issue_count = sum(len(chapter.review_issues) for chapter in bundle.chapters)
@@ -525,6 +563,8 @@ class ExportService:
             input_version_bundle_json={
                 "renderer_version": EXPORT_RENDERER_VERSION,
                 "chapter_id": None,
+                # The chapters a scoped export (the pilot's) holds; None for the whole book.
+                "chapter_scope": sorted(chapter_scope) if chapter_scope is not None else None,
                 "chapter_count": len(visible_chapters),
                 "issue_count": chapter_issue_count,
                 "document_parser_version": bundle.document.parser_version,

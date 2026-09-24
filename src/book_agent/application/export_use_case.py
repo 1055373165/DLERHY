@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -73,12 +75,19 @@ class DocumentExportUseCase:
         *,
         auto_execute_followup_on_gate: bool = False,
         max_auto_followup_attempts: int = 3,
+        chapter_ids: Collection[str] | None = None,
+        despite_gate: bool = False,
     ) -> DocumentExportResult:
+        """``chapter_ids`` exports only those chapters (a pilot's). ``despite_gate`` writes the export
+        even when the gate still blocks after its followups, and says what it objected to
+        (``gate_blocked``): a pilot is shown to the reader with its problems listed."""
         result = self._write_document_export(
             document_id,
             export_type,
             auto_execute_followup_on_gate=auto_execute_followup_on_gate,
             max_auto_followup_attempts=max_auto_followup_attempts,
+            chapter_ids=chapter_ids,
+            despite_gate=despite_gate,
         )
         self._stamp_export_blobs(document_id, export_type)
         return result
@@ -105,21 +114,38 @@ class DocumentExportUseCase:
         *,
         auto_execute_followup_on_gate: bool,
         max_auto_followup_attempts: int,
+        chapter_ids: Collection[str] | None = None,
+        despite_gate: bool = False,
     ) -> DocumentExportResult:
-        bundle, executions = self._pass_export_gate(
-            document_id,
-            export_type,
-            auto_execute_followup_on_gate=auto_execute_followup_on_gate,
-            max_auto_followup_attempts=max_auto_followup_attempts,
-        )
+        gate_blocked: dict[str, Any] | None = None
+        try:
+            bundle, executions = self._pass_export_gate(
+                document_id,
+                export_type,
+                auto_execute_followup_on_gate=auto_execute_followup_on_gate,
+                max_auto_followup_attempts=max_auto_followup_attempts,
+                chapter_ids=chapter_ids,
+            )
+        except ExportGateError as exc:
+            if not despite_gate:
+                raise
+            gate_blocked = {
+                "chapter_id": exc.chapter_id,
+                "issue_ids": list(exc.issue_ids or []),
+                "reason": str(exc)[:500],
+                "auto_followup_stop_reason": getattr(exc, "auto_followup_stop_reason", None),
+            }
+            bundle, executions = self._scoped_bundle(document_id, chapter_ids), []
 
         chapter_results: list[ChapterExportResult] = []
         file_path: str | None = None
         manifest_path: str | None = None
         document_exporter = _DOCUMENT_LEVEL_EXPORTERS.get(export_type)
         if document_exporter is not None:
-            # The gate just passed for every chapter in _pass_export_gate.
-            artifacts = getattr(self.export_service, document_exporter)(document_id, enforce_gate=False)
+            # The gate just passed for every chapter in _pass_export_gate (or was overridden: despite_gate).
+            artifacts = getattr(self.export_service, document_exporter)(
+                document_id, enforce_gate=False, chapter_ids=chapter_ids
+            )
             file_path = str(artifacts.file_path)
             manifest_path = _optional_path(artifacts.manifest_path)
         else:
@@ -149,7 +175,15 @@ class DocumentExportUseCase:
             auto_followup_attempt_count=len(executions),
             auto_followup_attempt_limit=(max_auto_followup_attempts if auto_execute_followup_on_gate else None),
             auto_followup_executions=executions,
+            gate_blocked=gate_blocked,
         )
+
+    def _scoped_bundle(self, document_id: str, chapter_ids: Collection[str] | None):
+        bundle = self.bootstrap_repository.load_document_bundle(document_id)
+        if chapter_ids is None:
+            return bundle
+        wanted = {str(chapter_id) for chapter_id in chapter_ids}
+        return replace(bundle, chapters=[chapter for chapter in bundle.chapters if str(chapter.chapter.id) in wanted])
 
     def _pass_export_gate(
         self,
@@ -158,6 +192,7 @@ class DocumentExportUseCase:
         *,
         auto_execute_followup_on_gate: bool,
         max_auto_followup_attempts: int,
+        chapter_ids: Collection[str] | None = None,
     ) -> tuple[Any, list[ExportAutoFollowupExecution]]:
         """Check every chapter against the export gate, auto-executing followups if asked.
 
@@ -188,7 +223,7 @@ class DocumentExportUseCase:
             )
 
         while True:
-            bundle = self.bootstrap_repository.load_document_bundle(document_id)
+            bundle = self._scoped_bundle(document_id, chapter_ids)
             try:
                 for chapter_bundle in bundle.chapters:
                     self.export_service.assert_chapter_exportable(chapter_bundle.chapter.id, export_type)

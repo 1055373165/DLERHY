@@ -1,15 +1,19 @@
-"""The reader's main path in a real browser: paste a link -> ... -> read the Chinese version.
+"""The reader's main path in a real browser: bring a book -> ... -> read the Chinese version.
 
 Measures what the UI/UX spec (docs/specs/ui-ux-overhaul/SPEC.md §2.3) sets targets for: clicks
-from pasting the link to the first Chinese text, and how often the reader leaves the book's page;
+from bringing the book to the first Chinese text, and how often the reader leaves the book's page;
 and checks that a "ready to read" browser notification is sent (Notification is mocked in the page).
+
+A book (``--source file``, an EPUB of five chapters) goes the pilot way (docs/agent-upgrade/08):
+upload -> 免费试译前两章 -> read the two chapters the page opens on -> 翻译全书 -> read the book.
+A web page (``--source link``) has no pilot: it translates straight away.
 
 Everything is local and costs nothing: a throwaway SQLite database, the echo translation model,
 a local article (e2e/fixtures/article.html) and this repo's frontend built into a temp directory
 and served by the API itself. The dev servers on 8999/4173 are not touched.
 
     uv run python frontend/e2e/core_path.py                        # a pasted link
-    uv run python frontend/e2e/core_path.py --source file          # an EPUB, the main way in
+    uv run python frontend/e2e/core_path.py --source file          # an EPUB, the main way in: the free pilot first
     uv run python frontend/e2e/core_path.py --max-clicks 3 --max-leaves 0   # fail above the targets
     uv run python frontend/e2e/core_path.py --priced               # provider has prices: auto-start path
 
@@ -45,14 +49,30 @@ EPUB_CHAPTERS = [
 ]
 
 
-def _write_epub(path: Path) -> Path:
-    """A two-chapter EPUB, the smallest thing the ingest path accepts."""
+def _body(topic: str, sentences: int = 24) -> str:
+    return " ".join(f"{topic} sentence {index} says one more thing about momentum." for index in range(1, sentences + 1))
+
+
+# A book long enough to have a pilot: front matter, then five numbered chapters. The pilot is
+# chapters 1 and 2; the words "Carry", "Decay" and "Crowding" appear only in chapters 3-5.
+PILOT_EPUB_CHAPTERS = [
+    ("Preface", "preface.xhtml", f"<h1>Preface</h1><p>{_body('Preface', 8)}</p>"),
+    ("1 Why Momentum Matters", "chapter1.xhtml", f"<h1>1 Why Momentum Matters</h1><p>{_body('Trend')}</p>"),
+    ("2 What the evidence says", "chapter2.xhtml", f"<h1>2 What the evidence says</h1><p>{_body('Evidence')}</p>"),
+    ("3 Carry", "chapter3.xhtml", f"<h1>3 Carry</h1><p>{_body('Carry')}</p>"),
+    ("4 Decay", "chapter4.xhtml", f"<h1>4 Decay</h1><p>{_body('Decay')}</p>"),
+    ("5 Crowding", "chapter5.xhtml", f"<h1>5 Crowding</h1><p>{_body('Crowding')}</p>"),
+]
+
+
+def _write_epub(path: Path, chapters=EPUB_CHAPTERS, title: str = "Momentum Handbook") -> Path:
+    """An EPUB of the given chapters; by default two, the smallest thing the ingest path accepts (and too short for a pilot)."""
     manifest = " ".join(
         ['<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />']
-        + [f'<item id="c{i}" href="{href}" media-type="application/xhtml+xml" />' for i, (_, href, _) in enumerate(EPUB_CHAPTERS, 1)]
+        + [f'<item id="c{i}" href="{href}" media-type="application/xhtml+xml" />' for i, (_, href, _) in enumerate(chapters, 1)]
     )
-    spine = " ".join(f'<itemref idref="c{i}" />' for i, _ in enumerate(EPUB_CHAPTERS, 1))
-    links = "".join(f'<li><a href="{href}">{title}</a></li>' for title, href, _ in EPUB_CHAPTERS)
+    spine = " ".join(f'<itemref idref="c{i}" />' for i, _ in enumerate(chapters, 1))
+    links = "".join(f'<li><a href="{href}">{title_}</a></li>' for title_, href, _ in chapters)
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("mimetype", "application/epub+zip")
         archive.writestr(
@@ -63,7 +83,7 @@ def _write_epub(path: Path) -> Path:
         archive.writestr(
             "OEBPS/content.opf",
             '<?xml version="1.0" encoding="UTF-8"?><package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">'
-            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Momentum Handbook</dc:title>'
+            f'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title>'
             "<dc:creator>Test Author</dc:creator><dc:language>en</dc:language></metadata>"
             f"<manifest>{manifest}</manifest><spine>{spine}</spine></package>",
         )
@@ -72,7 +92,7 @@ def _write_epub(path: Path) -> Path:
             '<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
             f'<body><nav epub:type="toc"><ol>{links}</ol></nav></body></html>',
         )
-        for _title, href, body in EPUB_CHAPTERS:
+        for _title, href, body in chapters:
             archive.writestr(
                 f"OEBPS/{href}",
                 f'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>{body}</body></html>',
@@ -175,6 +195,54 @@ def _first_visible(page, locators, timeout_ms: int):
     return None
 
 
+def _frame_text(page, *, timeout_ms: int = 120_000) -> str:
+    frame = page.frame_locator("iframe").first
+    frame.locator("body").wait_for(timeout=timeout_ms)
+    return frame.locator("body").inner_text(timeout=60_000)
+
+
+def _pilot_path(page, click, shots: Path | None) -> dict:
+    """The free pilot, from the button after import to reading its two chapters and choosing the whole book."""
+    started = time.time()
+    offer = _first_visible(page, [page.get_by_role("button", name="免费试译前两章")], timeout_ms=30_000)
+    if offer is None:
+        raise AssertionError("no free pilot offered after import: " + page.locator("main, body").first.inner_text()[:400].replace("\n", " | "))
+    if shots:
+        page.screenshot(path=str(shots / "pilot-1-offered.png"))
+    click(offer, "free pilot")
+    dialog = page.get_by_role("dialog", name="免费试译")
+    dialog.wait_for(timeout=20_000)
+    if shots:
+        page.screenshot(path=str(shots / "pilot-2-dialog.png"))
+    click(dialog.get_by_role("button", name="开始免费试译"), "confirm free pilot")
+    page.wait_for_timeout(1_200)
+    if shots:
+        page.screenshot(path=str(shots / "pilot-3-running.png"))
+
+    # When the pilot is done the page opens by itself on its result: the two chapters, the problems, the choice.
+    result = page.get_by_role("group", name="试译结果")
+    result.wait_for(timeout=300_000)
+    _wait_until(lambda: page.url.split("?")[0].endswith("/read"), page, timeout_ms=20_000)
+    opened_by_itself = True
+    text = _frame_text(page)
+    if "Trend sentence" not in text or "Carry sentence" in text:
+        raise AssertionError("the pilot's reading copy is not its two chapters: " + text[:300].replace("\n", " | "))
+    page.wait_for_timeout(400)
+    if shots:
+        page.screenshot(path=str(shots / "pilot-4-result.png"))
+        page.screenshot(path=str(shots / "pilot-4-result-full.png"), full_page=True)
+    pilot_seconds = round(time.time() - started, 1)
+
+    click(result.get_by_role("button", name=re.compile("^翻译全书")), "translate whole book")
+    confirm = _first_visible(page, [page.get_by_role("dialog", name="翻译全书")], timeout_ms=5_000)
+    if confirm is not None:
+        # Above the auto-start cap (or without prices) the whole book asks once.
+        if shots:
+            page.screenshot(path=str(shots / "pilot-5-whole-book-dialog.png"))
+        click(confirm.get_by_role("button", name="翻译全书"), "confirm whole book")
+    return {"opened_by_itself": opened_by_itself, "pilot_text_sample": text[:80], "seconds_to_pilot": pilot_seconds}
+
+
 def run(*, base: str, article_url: str, epub: Path, source: str, headed: bool, shots: Path | None) -> dict:
     from playwright.sync_api import sync_playwright
 
@@ -219,19 +287,26 @@ def run(*, base: str, article_url: str, epub: Path, source: str, headed: bool, s
             _wait_until(lambda: fetch_button.is_enabled(), page, timeout_ms=10_000)
             click(fetch_button, "fetch")
 
-        # Either the run starts by itself, or there is one button to start it.
-        start = _first_visible(
-            page,
-            [page.get_by_role("button", name=re.compile(r"^开始翻译|^开始整书转换"))],
-            timeout_ms=20_000,
-        )
-        auto_started = start is None
-        if start is not None:
-            click(start, "start")
-            # Starting by hand asks once: cost, fast reading mode, notifications.
-            dialog = page.get_by_role("dialog", name="开始翻译")
-            dialog.wait_for(timeout=20_000)
-            click(dialog.get_by_role("button", name="开始翻译"), "confirm start")
+        pilot: dict | None = None
+        if source == "file":
+            # A book: the free pilot first, then the whole book.
+            pilot = _pilot_path(page, click, shots)
+            pilot["clicks_to_pilot"] = clicks.index("translate whole book")
+            auto_started = False
+        else:
+            # A web page has no pilot. Either the run starts by itself, or there is one button to start it.
+            start = _first_visible(
+                page,
+                [page.get_by_role("button", name=re.compile(r"^开始翻译|^开始整书转换"))],
+                timeout_ms=20_000,
+            )
+            auto_started = start is None
+            if start is not None:
+                click(start, "start")
+                # Starting by hand asks once: cost, fast reading mode, notifications.
+                dialog = page.get_by_role("dialog", name="开始翻译")
+                dialog.wait_for(timeout=20_000)
+                click(dialog.get_by_role("button", name="开始翻译"), "confirm start")
 
         read = _first_visible(
             page,
@@ -279,8 +354,10 @@ def run(*, base: str, article_url: str, epub: Path, source: str, headed: bool, s
                 + json.dumps({k: (overview.get("translation") or {}).get(k) for k in ("state", "steps")}, ensure_ascii=False)
             )
         text = frame.locator("body").inner_text(timeout=60_000)
+        if source == "file" and "Carry sentence" not in text:
+            raise AssertionError("the whole book's reading copy lacks chapter 3: " + text[:300].replace("\n", " | "))
         if shots:
-            page.screenshot(path=str(shots / "core-path-read.png"))
+            page.screenshot(path=str(shots / ("pilot-6-whole-book-read.png" if source == "file" else "core-path-read.png")))
         # The inbox is polled every 30 s: the "ready to read" notification comes within one poll.
         page.wait_for_function(
             "window.__notifications.some((n) => n.title.startsWith('可以阅读了'))", timeout=45_000
@@ -305,6 +382,7 @@ def run(*, base: str, article_url: str, epub: Path, source: str, headed: bool, s
         "auto_started": auto_started,
         "read_text_sample": text[:80],
         "notifications": notifications,
+        **({"pilot": pilot} if pilot is not None else {}),
     }
 
 
@@ -329,7 +407,7 @@ def main() -> int:
             result = run(
                 base=f"http://127.0.0.1:{port}",
                 article_url=f"http://127.0.0.1:{fixtures_port}/article.html",
-                epub=_write_epub(work / "momentum.epub"),
+                epub=_write_epub(work / "momentum.epub", PILOT_EPUB_CHAPTERS),
                 source=args.source,
                 headed=args.headed,
                 shots=args.screenshots,

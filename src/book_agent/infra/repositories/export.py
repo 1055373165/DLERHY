@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -271,9 +272,13 @@ class ExportRepository:
             audit_events=audit_events,
         )
 
-    def load_document_bundle(self, document_id: str) -> DocumentExportBundle:
+    def load_document_bundle(self, document_id: str, *, chapter_ids: Collection[str] | None = None) -> DocumentExportBundle:
+        """``chapter_ids`` keeps only those chapters (a pilot's scoped export)."""
         document = self.get_document(document_id)
         chapters = self.list_document_chapters(document_id)
+        if chapter_ids is not None:
+            wanted = {str(chapter_id) for chapter_id in chapter_ids}
+            chapters = [chapter for chapter in chapters if str(chapter.id) in wanted]
         book_profile = self.session.scalars(
             select(BookProfile)
             .where(BookProfile.document_id == document_id)

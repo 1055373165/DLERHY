@@ -28,6 +28,7 @@ from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Document
 from book_agent.domain.models.auth import DEFAULT_ORG_ID, Org
 from book_agent.domain.models.ops import DocumentRun, Event
+from book_agent.services.billing_category import charged_to_customer, pilot_run_ids
 
 STOP_REASON = "budget.org_monthly_exhausted"
 
@@ -85,6 +86,8 @@ def budget_status(session: Session, org_id: str, *, now: datetime | None = None)
                 Event.kind == LLM_CALL_COMPLETED,
                 Event.org_id.in_(org_keys),
                 Event.occurred_at >= start,
+                # The free pilot is ours to pay, not the organisation's spend.
+                charged_to_customer(pilot_run_ids(session, org_id)),
             )
         )
         or 0.0

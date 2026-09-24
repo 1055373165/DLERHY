@@ -8,6 +8,19 @@ export function decideAutoStart(overview: BookOverview, capUsd: number): StartDe
   if (overview.translation.state !== "never_started") {
     return { auto: false, reason: "" };
   }
+  // With a free pilot on offer, nothing paid starts by itself: the reader tries the pilot first.
+  if (overview.pilot?.state === "not_started") {
+    return { auto: false, reason: "" };
+  }
+  return withinCap(overview, capUsd);
+}
+
+/** After the free pilot: 翻译全书 starts at once when the most it may cost is within the cap, else asks. */
+export function decideBookStart(overview: BookOverview, capUsd: number): StartDecision {
+  return withinCap(overview, capUsd);
+}
+
+function withinCap(overview: BookOverview, capUsd: number): StartDecision {
   const maxCharge = overview.cost?.max_charge_usd ?? null;
   if (maxCharge === null) {
     return { auto: false, reason: "服务商没有设置单价，估算不出费用，所以没有自动开始。" };

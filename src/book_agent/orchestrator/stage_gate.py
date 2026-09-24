@@ -110,8 +110,9 @@ class StageGateKeeper:
         stage: str,
         *,
         plan_stages: tuple[str, ...] | None = None,
+        packet_ids: frozenset[str] | None = None,
     ) -> bool:
-        return self.evaluate(run_id, document_id, stage, plan_stages=plan_stages).can_start
+        return self.evaluate(run_id, document_id, stage, plan_stages=plan_stages, packet_ids=packet_ids).can_start
 
     def evaluate(
         self,
@@ -120,11 +121,14 @@ class StageGateKeeper:
         stage: str,
         *,
         plan_stages: tuple[str, ...] | None = None,
+        packet_ids: frozenset[str] | None = None,
     ) -> GateDecision:
         """``plan_stages`` limits gating to upstream stages the run itself owns.
 
         A standalone review or export run does not wait for stages another
         run performed; the review and export services apply their own checks.
+        ``packet_ids`` is the run's translate scope (a pilot's chapters): the
+        translate stage is judged on those packets only.
         """
         upstream_stages = _dependencies_for(stage)
         if plan_stages is not None:
@@ -134,7 +138,9 @@ class StageGateKeeper:
             # they cannot be required upstream.
             upstream_stages = tuple(upstream for upstream in upstream_stages if upstream not in AGENT_STAGE_KINDS)
         upstream_statuses: dict[str, StageStatus] = {
-            upstream: self._calculator.stage_status(run_id, document_id, upstream)
+            upstream: self._calculator.stage_status(
+                run_id, document_id, upstream, packet_ids=packet_ids if upstream == "translate" else None
+            )
             for upstream in upstream_stages
         }
         blocked_by = tuple(

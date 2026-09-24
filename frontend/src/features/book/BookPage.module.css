@@ -230,3 +230,43 @@
   margin-top: var(--sp-1);
   color: var(--amber);
 }
+
+/* The pilot's result: what was translated, what it left, and the choice about the whole book. */
+.pilot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.pilotLine {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.free {
+  color: var(--green);
+  font-weight: var(--weight-semibold);
+}
+
+.pilotProblems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-left: 3px solid var(--amber);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-panel-alt);
+  font-size: var(--text-sm);
+}
+
+.pilotProblemsTitle {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.pilotProblemList {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-secondary);
+}
