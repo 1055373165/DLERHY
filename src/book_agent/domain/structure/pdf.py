@@ -4352,6 +4352,7 @@ class PdfStructureRecoveryService:
                 candidate.text,
                 artifact_role,
                 academic_paper=academic_paper,
+                caption_text=caption_block.text,
             ):
                 break
             return candidate_index

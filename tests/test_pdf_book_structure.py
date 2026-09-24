@@ -241,5 +241,72 @@ class CodeCommentTest(unittest.TestCase):
         self.assertTrue(any("#Importing the AsyncHtmlLoader" in text for text in code_texts))
 
 
+class FigureGroupContextTest(unittest.TestCase):
+    """Body text after a figure stays body text; export must not fold it into the figure."""
+
+    _CAPTION = "Figure 1.2 ChatGPT (GPT 3.5) response to the question. Source: Screenshot of the author's account."
+    _FOLLOWING_BODY = (
+        "ChatGPT does not have any memory of the 2023 Cricket World Cup, and it tells you to check the "
+        "information from other sources. This is not ideal, but at least ChatGPT is honest in its response. "
+        "The same question asked again might also provide a factually inaccurate result. Look at the response "
+        "in figure 1.3. ChatGPT falsely responds that India was the winner of the tournament."
+    )
+
+    def test_body_paragraph_about_another_figure_is_not_figure_context(self) -> None:
+        from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
+
+        for academic_paper in (False, True):
+            self.assertFalse(
+                looks_like_artifact_group_context_text(
+                    self._FOLLOWING_BODY, "image", academic_paper=academic_paper, caption_text=self._CAPTION
+                )
+            )
+
+    def test_book_body_needs_to_name_the_artifact_to_join_it(self) -> None:
+        from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
+
+        topic_word_only = "The retrieval pipeline shown here is what we will build step by step in this chapter."
+        self.assertFalse(
+            looks_like_artifact_group_context_text(
+                topic_word_only, "image", academic_paper=False, caption_text=self._CAPTION
+            )
+        )
+        explanation = "Table 1 reports the main translation results and highlights the compute gap between models."
+        self.assertTrue(
+            looks_like_artifact_group_context_text(
+                explanation, "table", academic_paper=False, caption_text="Table 1. Translation quality and cost."
+            )
+        )
+
+    def test_export_keeps_following_body_paragraph_out_of_the_figure(self) -> None:
+        from types import SimpleNamespace
+
+        from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
+
+        def block(block_id, block_type, text, bbox, order, **extra):
+            return SimpleNamespace(
+                id=block_id,
+                ordinal=order,
+                block_type=block_type,
+                source_text=text,
+                source_span_json={
+                    "source_page_start": 25,
+                    "source_page_end": 25,
+                    "reading_order_index": order,
+                    "source_bbox_json": {"regions": [{"page_number": 25, "bbox": list(bbox)}]},
+                    **extra,
+                },
+            )
+
+        blocks = [
+            block("fig", BlockType.FIGURE, "[Figure]", (60, 101, 508, 322), 1, pdf_block_role="figure",
+                  linked_caption_block_id="cap"),
+            block("cap", BlockType.CAPTION, self._CAPTION, (102, 293, 456, 312), 2, pdf_block_role="caption",
+                  caption_for_block_id="fig"),
+            block("body", BlockType.PARAGRAPH, self._FOLLOWING_BODY, (102, 336, 477, 400), 3, pdf_block_role="body"),
+        ]
+        self.assertEqual(resolve_artifact_group_context_ids(blocks, academic_paper=False), {})
+
+
 if __name__ == "__main__":
     unittest.main()
