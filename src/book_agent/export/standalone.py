@@ -170,7 +170,7 @@ def assemble_bilingual_book(*, title: str, subtitle: str | None, chapters: list[
             if script not in scripts:
                 scripts.append(script)
         body = _SCRIPTS.sub("", body)
-        # Inside a book the chapter heading speaks for itself; the "Chapter Export" label goes.
+        # Inside a book the chapter heading speaks for itself; the chapter file's own label goes.
         body = _CHAPTER_KICKER.sub("", body, count=1)
         anchor = f"chapter-{index}"
         # The chapter export's own banner heading is the translated title; the stored one may be empty.
