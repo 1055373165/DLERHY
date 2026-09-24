@@ -147,13 +147,20 @@ def source_title_for_chapter(
     return str(chapter_bundle.chapter.title_src or title_text or "").strip()
 
 
+# Manning-style outlines title a chapter "2 RAG systems and their design": a bare number, then the
+# name. A section number ("1.2 Why…") has a dot after its first digits, so it never matches.
+_BARE_CHAPTER_NUMBER_PATTERN = re.compile(r"^\s*(\d{1,3})\s+(?=[A-Z])")
+_PART_TITLE_PATTERN = re.compile(r"^\s*part\s+(?:\d+|[ivxlc]+|one|two|three|four|five|six|seven|eight|nine|ten)\b", re.IGNORECASE)
+
+
 def extract_main_chapter_number(title: str | None) -> int | None:
     if not title:
         return None
     stripped = title.strip()
     match = _MAIN_CHAPTER_TITLE_PATTERN.match(stripped)
     if not match:
-        return None
+        bare = _BARE_CHAPTER_NUMBER_PATTERN.match(stripped)
+        return int(bare.group(1)) if bare else None
     remainder = stripped[match.end():]
     normalized_remainder = remainder.lstrip(" .:_-/\\)\u2013\u2014")
     # "Chapter 3 of this book explains…" is prose, not a title. A title continues with a
@@ -166,6 +173,10 @@ def extract_main_chapter_number(title: str | None) -> int | None:
         return int(match.group(1))
     except ValueError:
         return None
+
+
+def looks_like_part_title(title: str | None) -> bool:
+    return bool(title and _PART_TITLE_PATTERN.match(title.strip()))
 
 
 def looks_like_appendix_title(title: str | None) -> bool:

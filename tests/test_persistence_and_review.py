@@ -2766,7 +2766,7 @@ class PersistenceAndReviewTests(unittest.TestCase):
             book_profile=None,
             chapters=[],
         )
-        repository = SimpleNamespace(load_document_bundle=lambda _document_id: bundle)
+        repository = SimpleNamespace(load_document_bundle=lambda _document_id, **_kwargs: bundle)
         service = ExportService(repository, output_root="/tmp/book-agent-exports")
 
         with self.assertRaises(ExportUnavailableError) as exc_info:

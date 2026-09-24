@@ -1785,6 +1785,7 @@ class ExportService:
             source_title = titles.source_title_for_chapter(chapter_bundle, title_text)
             main_chapter_number = titles.extract_main_chapter_number(source_title)
             starts_appendix = titles.looks_like_appendix_title(source_title)
+            starts_part = titles.looks_like_part_title(source_title)
             starts_frontmatter = titles.looks_like_frontmatter_title(source_title)
 
             start_new_group = False
@@ -1793,7 +1794,7 @@ class ExportService:
                     start_new_group = main_chapter_number == 1 or not grouped
                 elif main_chapter_number >= next_expected_main_chapter:
                     start_new_group = True
-            elif starts_appendix:
+            elif starts_appendix or starts_part:
                 start_new_group = True
             elif not grouped:
                 start_new_group = True
