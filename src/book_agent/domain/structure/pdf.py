@@ -556,6 +556,8 @@ class PdfStructureRecoveryService:
                 zone = self._page_zone(block.bbox, page.height)
                 if zone not in {"top", "bottom"}:
                     continue
+                if _inside_page_figure(page, block.bbox):
+                    continue
                 signature = _header_footer_signature(block.text)
                 if signature:
                     counts[(zone, signature)] += 1
@@ -1196,6 +1198,11 @@ class PdfStructureRecoveryService:
         signature = _header_footer_signature(text)
         if raw_block.ruled_table:
             return "table_like"
+        if zone in {"top", "bottom"} and _inside_page_figure(page, raw_block.bbox):
+            # A figure's own label near the top or bottom of the page ("Step 1"
+            # on every pipeline diagram) repeats like a running header but is
+            # part of the figure, not page furniture.
+            zone = "middle"
         if zone == "top" and ((zone, signature) in repeated_edge_text):
             return "header"
         if zone == "bottom" and (_is_page_number_text(text) or (zone, signature) in repeated_edge_text):
@@ -4429,6 +4436,24 @@ def build_default_recovery_service(
         ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
         figure_cluster_config=figure_config,
     )
+
+
+def _inside_page_figure(page: PdfPage, bbox: tuple[float, float, float, float]) -> bool:
+    """Whether ``bbox`` lies inside one of the page's figure regions.
+
+    Page-sized pictures (a scanned page, a full-page background) are not
+    figure regions for this purpose: everything on the page is inside them.
+    """
+    center_x = (bbox[0] + bbox[2]) / 2.0
+    center_y = (bbox[1] + bbox[3]) / 2.0
+    page_area = max(1.0, page.width * page.height)
+    for image in page.image_blocks:
+        x0, y0, x1, y1 = image.bbox
+        if (x1 - x0) * (y1 - y0) >= page_area * 0.8:
+            continue
+        if x0 <= center_x <= x1 and y0 <= center_y <= y1:
+            return True
+    return False
 
 
 def _default_settings() -> Any | None:
