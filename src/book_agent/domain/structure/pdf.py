@@ -3975,6 +3975,10 @@ class PdfStructureRecoveryService:
                 text_len = len((block.text or "").strip())
                 if text_len == 0 or text_len > 240:
                     continue
+                # Full sentences are the body text above the figure (the end of a
+                # paragraph, a lead-in), never one of its labels.
+                if _is_running_prose(block.text):
+                    continue
                 candidates.append((idx, block, bbox))
 
             candidate_threshold = 2 if orphan_figure else 3
@@ -4453,6 +4457,15 @@ def build_default_recovery_service(
         ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
         figure_cluster_config=figure_config,
     )
+
+
+_FULL_SENTENCE_RE = re.compile(r"[^.!?]*?[A-Za-z][^.!?]*[.!?][\"”’)]?(?=\s+[A-Z“\"(]|\s*$)")
+
+
+def _is_running_prose(text: str) -> bool:
+    """Whether ``text`` reads as body text: two full sentences of four or more words, or one of twelve or more."""
+    sentences = [len(sentence.split()) for sentence in _FULL_SENTENCE_RE.findall(" ".join((text or "").split()))]
+    return sum(1 for words in sentences if words >= 4) >= 2 or any(words >= 12 for words in sentences)
 
 
 def _is_figure_label_block(block: _RecoveredBlock) -> bool:

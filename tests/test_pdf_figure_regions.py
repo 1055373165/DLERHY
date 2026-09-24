@@ -649,5 +649,39 @@ class CaptionedDrawingTests(unittest.TestCase):
         self.assertNotIn("Small to Big Chunking", " ".join(block.text for block in _text_blocks(parsed)))
 
 
+class TextOnlyFigureProseTests(unittest.TestCase):
+    """A figure made up from text blocks above its caption never takes in body text.
+
+    Agent p120 at 63639db: with no drawing found for Figure 5.5, the blocks above its caption were
+    taken as the figure, including the paragraph ending "... this semantic connection can't be
+    recognized automatically." and the section heading.
+    """
+
+    def test_body_paragraphs_above_the_caption_stay_text(self) -> None:
+        paragraph = (
+            "Keyword search won't find documents containing couch. Without a synonym dictionary, "
+            "this connection can't be recognized automatically."
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "orphan.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_textbox(fitz.Rect(102, 60, 477, 100), paragraph, fontsize=10)
+            _body(page, 100, 140)  # one long sentence
+            page.insert_text((150, 150), "Capital", fontsize=7)
+            page.insert_text((300, 150), "Debt", fontsize=7)
+            page.insert_text((150, 200), "Stock", fontsize=7)
+            page.insert_text((300, 200), "Rare", fontsize=7)
+            page.insert_text((102, 230), "Figure 3.3 Word relations in a vector space", fontsize=8)
+            _body(page, 260, 360)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = " ".join(" ".join(block.text.split()) for block in _text_blocks(parsed))
+        self.assertIn("Without a synonym dictionary", texts)
+        self.assertIn("Body text of the chapter", texts)
+        for block in _figure_blocks(parsed):
+            self.assertGreater(_region(block)[1][1], 100.0)
+
+
 if __name__ == "__main__":
     unittest.main()
