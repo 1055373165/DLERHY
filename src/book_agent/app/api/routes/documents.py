@@ -46,6 +46,7 @@ from book_agent.schemas.workflow import (
     ExportDetailResponse,
     DocumentSummaryResponse,
     ExportDocumentRequest,
+    StartPilotRequest,
     TranslateDocumentRequest,
 )
 from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY
@@ -884,6 +885,7 @@ def _enqueue_document_run(
     document_id: str,
     run_type: DocumentRunType,
     run_request: dict[str, Any],
+    billing_category: str = "customer",
 ) -> DocumentRunSummaryResponse:
     from sqlalchemy.exc import IntegrityError
 
@@ -894,6 +896,7 @@ def _enqueue_document_run(
             run_type=run_type,
             requested_by="api.documents",
             status_detail_json={"source": "api.documents", RUN_REQUEST_KEY: run_request},
+            billing_category=billing_category,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -932,6 +935,42 @@ def translate_document(
         document_id=document_id,
         run_type=DocumentRunType.TRANSLATE_TARGETED,
         run_request={"packet_ids": list(payload.packet_ids)},
+    )
+
+
+@router.post(
+    "/{document_id}/pilot",
+    response_model=DocumentRunSummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def start_pilot(
+    document_id: str,
+    request: Request,
+    payload: StartPilotRequest | None = None,
+    session: Session = Depends(get_db_session),
+) -> DocumentRunSummaryResponse:
+    """Start the free pilot: the first two chapters through the full pipeline, not charged (services/pilot.py)."""
+    from book_agent.services.billing_category import PILOT
+    from book_agent.services.pilot import PilotAlreadyRun, PilotUnavailable, pilot_request
+    from book_agent.workers.factory import UnconfiguredTranslationWorker
+
+    _load_document_or_404(session, document_id)
+    worker = request.app.state.resolve_translation_worker(current_principal(request).org_id)
+    if isinstance(worker, UnconfiguredTranslationWorker):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=worker.reason)
+    try:
+        run_request = pilot_request(session, document_id, fast_reading=bool(payload and payload.fast_reading))
+    except PilotAlreadyRun as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except PilotUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    return _enqueue_document_run(
+        request,
+        session,
+        document_id=document_id,
+        run_type=DocumentRunType.TRANSLATE_FULL,
+        run_request=run_request,
+        billing_category=PILOT,
     )
 
 

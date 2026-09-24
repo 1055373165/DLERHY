@@ -119,6 +119,10 @@ class TranslateDocumentRequest(BaseSchema):
     packet_ids: list[str] = Field(default_factory=list)
 
 
+class StartPilotRequest(BaseSchema):
+    fast_reading: bool = Field(default=False, description="Lock the terminology agent's terms without asking.")
+
+
 class TranslateDocumentResponse(BaseSchema):
     document_id: str
     translated_packet_count: int

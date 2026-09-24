@@ -166,6 +166,13 @@ class RunControlService:
             request = dict(status_detail_json.get(RUN_REQUEST_KEY) or {})
             request.setdefault(WEB_EXPORT_REQUEST_KEY, True)
             status_detail_json[RUN_REQUEST_KEY] = request
+        if run_type == DocumentRunType.TRANSLATE_FULL and billing_category != PILOT:
+            # After a free pilot the whole-book run does not redo what the pilot did.
+            from book_agent.services.pilot import whole_book_request
+
+            status_detail_json[RUN_REQUEST_KEY] = whole_book_request(
+                self.repository.session, document_id, dict(status_detail_json.get(RUN_REQUEST_KEY) or {})
+            )
         if resume_from_run_id is not None:
             resume_from_run = self.repository.get_run(resume_from_run_id)
             if resume_from_run.document_id != document_id:

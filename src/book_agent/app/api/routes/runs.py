@@ -7,6 +7,7 @@ from book_agent.app.runtime.document_run_executor import ensure_document_run_exe
 from book_agent.domain.enums import DocumentRunType
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.infra.repositories.run_control import RunControlRepository
+from book_agent.orchestrator.run_plan import RUN_REQUEST_KEY, SCOPE_PILOT, SCOPE_REQUEST_KEY
 from book_agent.schemas.run_control import (
     CreateDocumentRunRequest,
     DocumentRunSummaryResponse,
@@ -153,6 +154,13 @@ def create_run(
     session: Session = Depends(get_db_session),
 ) -> DocumentRunSummaryResponse:
     require_document_in_org(session, request, payload.document_id)
+    run_request = (payload.status_detail_json or {}).get(RUN_REQUEST_KEY) or {}
+    if isinstance(run_request, dict) and run_request.get(SCOPE_REQUEST_KEY) == SCOPE_PILOT:
+        # The free pilot chooses its own chapters and is not charged: only its endpoint makes one.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"start the free pilot with POST /v1/documents/{payload.document_id}/pilot",
+        )
     _require_provider(request, session, payload.run_type)
     service = _service(session)
     try:
