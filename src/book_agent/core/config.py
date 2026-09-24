@@ -122,6 +122,8 @@ class Settings(BaseSettings):
     # the model for correction within the same packet turn. 0 disables repair;
     # the last answer is then persisted with its error_code as before.
     translation_max_output_repairs: int = 1
+    # Second pass over each accepted packet: a source-anchored Chinese editor (translation.polish).
+    translation_polish_enabled: bool = True
     translation_input_cache_hit_cost_per_1m_tokens: float | None = None
     translation_input_cost_per_1m_tokens: float | None = None
     translation_output_cost_per_1m_tokens: float | None = None

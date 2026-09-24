@@ -39,6 +39,27 @@ TECH_COLUMN_META_V1_SYSTEM_PROMPT = """【静态规则（固定不变）】你�
 严格忠于原文语义，禁止添加无关解读、扩写臆测，不输出正确废话与伪深度，保持技术写作理性克制的调性；
 完成初稿后进行元迭代润色，确保译文精准传递深层语义、贴合技术语境、简洁专业。"""
 
+# Translator's edition of the editing philosophy in op7418/humanizer-zh (MIT): its priority order
+# (information and certainty, then the author's voice, then expression) and its Chinese-specific
+# checks, recast for translation. Its deletions of padding do not carry over: in a translation the
+# padding is the author's, and only what the translator introduces may be removed.
+CHINESE_EXPRESSION_RULES = """【中文表达规范（译者版）】冲突时按以下顺序取舍：
+一、忠实：保留原文的每个信息点和确定程度，保留否定、比较对象、范围、条件、时间和归因；不把“可能”译成“确定”，不把相关译成因果，不把计划译成已完成。
+二、作者的声音：原文对读者说“you”就译“你”，不改成“读者”；保留作者的幽默、调侃、犹豫和第一人称；原文平实就译得平实，原文口语就译得口语。原文自己的铺垫、强调和修辞属于作者，照译，不删。
+三、不添加原文没有的东西：不添拔高和宣传（“标志着”“彰显了”“至关重要”“赋能”“深入探讨”“无缝”等），不添权威背书，不添总结升华，不添客服腔。
+四、中文句式（只改译者带进来的毛病）：
+- 长定语不要堆在名词前面，“的”超过两层就拆句或把修饰语后置；
+- “进行＋动词”改成直接动词（“进行测试”→“测试”），正式语境需要时可以保留；
+- 施事者明确时用主动句，不连用“被”字句；施事者未知时可以保留被动；
+- 破折号只用于解释、插入或转折，不用来制造悬念或代替逗号；
+- 同一层意思的限定词不要叠用（“也许可能”）；四字词只在准确时用，不为了节奏凑排比；
+- 用常用、准确的词；编程语境里慎用会被读成术语的词（如把泛指的 thing 译成“对象”）；
+- 中文正文用中文标点，原文的直引号改成中文引号。
+五、原样保留：代码、行内代码、命令、路径、URL、链接目标、显式 ID 和数据。
+六、交稿前对照原文自查：有没有新增、遗漏或加重的主张；施事者、时间、条件、范围、否定和归因是否一致；重组句式后逐一核对比较级和最高级（least/most、at least/at most 不能译反）、数量词，以及目的和因果（for the sake of、so that、because 不能丢）；通顺的句子不要为了“去翻译腔”强改。"""
+
+TECH_COLUMN_META_V2_SYSTEM_PROMPT = TECH_COLUMN_META_V1_SYSTEM_PROMPT + "\n\n" + CHINESE_EXPRESSION_RULES
+
 COMPACT_SYSTEM_PROMPT = (
     "You are a professional English-to-Chinese technical translator. "
     "Produce accurate, natural Chinese for the current paragraph and keep alignment coverage complete."
@@ -192,5 +213,9 @@ PROMPT_PROFILES: dict[str, PromptProfileSpec] = {
     "tech-column-meta-v1": PromptProfileSpec(
         name="tech-column-meta-v1",
         fixed_system_prompt=TECH_COLUMN_META_V1_SYSTEM_PROMPT,
+    ),
+    "tech-column-meta-v2": PromptProfileSpec(
+        name="tech-column-meta-v2",
+        fixed_system_prompt=TECH_COLUMN_META_V2_SYSTEM_PROMPT,
     ),
 }
