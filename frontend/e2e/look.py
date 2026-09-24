@@ -21,7 +21,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core_path import FRONTEND, ROOT, _build_frontend, _start_api, _wait_until, _write_epub  # noqa: E402
+from core_path import (  # noqa: E402
+    FRONTEND,
+    PILOT_EPUB_CHAPTERS,
+    ROOT,
+    _build_frontend,
+    _start_api,
+    _wait_until,
+    _write_epub,
+)
 
 AXE = FRONTEND / "node_modules" / "axe-core" / "axe.min.js"
 
@@ -260,6 +268,8 @@ ALLOWED_ENGLISH = {
 # in the reader, in the issue list's chapter line and in the library. Those words are the book.
 ALLOWED_ENGLISH |= set(re.findall(r"[A-Za-z]{2,}", LONG_TITLE))
 ALLOWED_ENGLISH |= {"Momentum", "Handbook", "What", "the", "evidence", "says"}
+# The pilot's book: its chapter titles are shown as the pilot's chapters.
+ALLOWED_ENGLISH |= {"Pilot", "Why", "Matters", "Preface", "Carry", "Decay", "Crowding"}
 
 # The book's own text is the book, not the interface: the reader and the source/target pair show it.
 BOOK_TEXT_SELECTORS = "iframe, ._pairText, ._markdown, [class*='pairText'], [class*='markdown'], [class*='readerBody']"
@@ -324,7 +334,7 @@ def _sidebar_checks(page) -> list[str]:
 WIDTHS = [420, 768, 1024, 1280, 1440]
 
 # Whatever the book's state, the status card offers exactly one obvious next move.
-PRIMARY_ACTION = re.compile("阅读中文版|开始翻译|继续|重试|停止翻译")
+PRIMARY_ACTION = re.compile("阅读中文版|开始翻译|继续|重试|停止翻译|停止试译|免费试译前两章|翻译全书")
 
 
 def _overflow(page) -> list[str]:
@@ -614,7 +624,103 @@ def _keyboard_walk(page, base: str, epub: Path, shots: Path) -> list[str]:
     return problems
 
 
-def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
+def _seed_pilot_problems(db: Path, document_id: str) -> None:
+    """Problems left in the pilot's first chapter, so its result shows the list (the echo model leaves none)."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from book_agent.domain.enums import Detector, IssueStatus, RootCauseLayer, Severity
+    from book_agent.domain.models.document import Block, Chapter
+    from book_agent.domain.models.review import ReviewIssue
+    from book_agent.infra.db.session import build_engine
+
+    engine = build_engine(f"sqlite+pysqlite:///{db}")
+    with Session(engine) as session:
+        chapter = session.scalars(
+            select(Chapter).where(Chapter.document_id == document_id, Chapter.title_src.like("1 %"))
+        ).first()
+        block = session.scalars(select(Block).where(Block.chapter_id == chapter.id)).first() if chapter else None
+        for issue_type, severity, blocking in (
+            ("OMISSION", Severity.CRITICAL, True),
+            ("OMISSION", Severity.HIGH, False),
+            ("STYLE_DRIFT", Severity.LOW, False),
+        ):
+            session.add(
+                ReviewIssue(
+                    document_id=document_id,
+                    chapter_id=chapter.id if chapter else None,
+                    block_id=block.id if block else None,
+                    issue_type=issue_type,
+                    severity=severity,
+                    blocking=blocking,
+                    detector=Detector.RULE,
+                    root_cause_layer=RootCauseLayer.TRANSLATION,
+                    status=IssueStatus.OPEN,
+                    confidence=0.8,
+                    version=1,
+                    evidence_json={"reason": "试译留下的问题（样例）"},
+                )
+            )
+        session.commit()
+    engine.dispose()
+
+
+def _pilot_pass(browser, base: str, pilot_epub: Path, shots: Path, db: Path) -> tuple[list[dict], list[str]]:
+    """The free pilot's screens: offered, its dialog, and its result with problems, in both themes."""
+    findings: list[dict] = []
+    problems: list[str] = []
+    context = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="light")
+    page = context.new_page()
+    page.goto(f"{base}/")
+    _settle(page)
+    page.get_by_label("选择书稿文件").set_input_files(str(pilot_epub))
+    offer = page.get_by_role("button", name="免费试译前两章")
+    offer.wait_for(timeout=60_000)
+    document_id = re.search(r"/books/([^/]+)", page.url).group(1)
+    pages = [("pilot-offered", f"/books/{document_id}/progress")]
+    for name, path in pages:
+        findings += _visit(page, base, path, name=name, shots=shots, theme="light", check=True)
+        problems += _chinese_check(page, name=name)
+    page.get_by_role("button", name="免费试译前两章").click()
+    dialog = page.get_by_role("dialog", name="免费试译")
+    dialog.wait_for(timeout=20_000)
+    page.wait_for_timeout(300)
+    page.screenshot(path=str(shots / "pilot-dialog-light.png"))
+    findings += [{**violation, "page": "pilot-dialog"} for violation in _axe(page)]
+    problems += _chinese_check(page, name="pilot-dialog")
+    dialog.get_by_role("button", name="开始免费试译").click()
+    overview: dict = {}
+    for _ in range(150):
+        overview = page.request.get(f"{base}/v1/documents/{document_id}/overview").json()
+        if (overview.get("pilot") or {}).get("state") == "ready":
+            break
+        page.wait_for_timeout(2_000)
+    if (overview.get("pilot") or {}).get("state") != "ready":
+        raise AssertionError("试译没有跑完：" + json.dumps(overview.get("pilot"), ensure_ascii=False)[:600])
+    _seed_pilot_problems(db, document_id)
+    ready_pages = [("pilot-ready-read", f"/books/{document_id}/read"), ("pilot-ready-progress", f"/books/{document_id}/progress")]
+    for name, path in ready_pages:
+        findings += _visit(page, base, path, name=name, shots=shots, theme="light", check=True)
+        problems += [f"{name}: {problem}" for problem in _style_checks(page, name=name)]
+        problems += _chinese_check(page, name=name)
+    context.close()
+
+    dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark")
+    dark_page = dark.new_page()
+    for name, path in ready_pages:
+        findings += _visit(dark_page, base, path, name=name, shots=shots, theme="dark", check=True)
+    dark.close()
+
+    # Every width, both themes: nothing sideways, the choice always reachable.
+    problems += _responsive_checks(browser, base, ready_pages, shots, reseed=lambda: None)
+    narrow = browser.new_context(viewport={"width": 420, "height": 860}, color_scheme="light")
+    narrow_page = narrow.new_page()
+    findings += _visit(narrow_page, base, f"/books/{document_id}/read", name="pilot-ready-read-narrow", shots=shots, theme="light", check=True)
+    narrow.close()
+    return findings, problems
+
+
+def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path, pilot_epub: Path | None = None) -> dict:
     from playwright.sync_api import sync_playwright
 
     findings: list[dict] = []
@@ -714,6 +820,12 @@ def run(*, base: str, epub: Path, shots: Path, headed: bool, db: Path) -> dict:
 
         responsive_problems = _responsive_checks(browser, base, destinations, shots, reseed=lambda: _seed_issues(db, document_id))
 
+        # ── The free pilot: a book long enough to have one ──
+        if pilot_epub is not None:
+            pilot_findings, pilot_problems = _pilot_pass(browser, base, pilot_epub, shots, db)
+            findings += pilot_findings
+            responsive_problems += pilot_problems
+
         context.close()
         browser.close()
 
@@ -754,6 +866,7 @@ def main() -> int:
             shots=args.screenshots.resolve(),
             headed=args.headed,
             db=work / "e2e.db",
+            pilot_epub=_write_epub(work / "pilot.epub", PILOT_EPUB_CHAPTERS, title="Pilot Handbook"),
         )
     finally:
         if api is not None:
