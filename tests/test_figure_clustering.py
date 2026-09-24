@@ -24,6 +24,8 @@ os.environ.setdefault("BOOK_AGENT_TRANSLATION_MODEL", "echo-worker")
 
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.figure_clustering import (
+    FIGURE_LABEL_REGION_KEY,
+    PAGE_BACKGROUND_KEY,
     FigureClusterConfig,
     cluster_figure_regions,
     figure_cluster_config_from_settings,
@@ -139,6 +141,19 @@ class FigureRegionMembershipTests(unittest.TestCase):
         ]
         report = cluster_figure_regions(blocks)
         self.assertEqual(report.clusters[0].caption_index, 1)
+
+    def test_text_over_a_page_background_picture_stays_text(self) -> None:
+        """A back cover's tinted half is a picture printed to the page edges; its text is the page's text."""
+        panel = _image_block((315.0, 0.0, 531.0, 666.0), image_type="embedded_image", anchor="panel")
+        panel.metadata[PAGE_BACKGROUND_KEY] = True
+        blocks = [
+            panel,
+            _text_block("About the reader", (380.0, 230.0, 470.0, 245.0), anchor="head"),
+            _text_block("For Python developers", (340.0, 250.0, 500.0, 262.0), anchor="line"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(report.clusters, [])
+        self.assertEqual(list(iter_replaced_block_indices(report)), [])
 
 
 class FigureClusteringTests(unittest.TestCase):
@@ -422,6 +437,7 @@ class CaptionPatternTests(unittest.TestCase):
             "FIG. 7 Some title",
             "fig 1",
             "Table 3.1: Tokenization metrics",
+            "Figure A The appendix layout",
             "图 2.4 分词流程",
             "示意图 1",
         ]
@@ -446,6 +462,8 @@ class CaptionPatternTests(unittest.TestCase):
             "The figure shows tokenization",  # leads with "The"
             "We see in figure 2.4",  # caption pattern not at start
             "table tennis is a sport",  # word "table" but not followed by digit
+            "Tables Time series Code Knowledge graph Genomic",  # a row of labels, not "Table s"
+            "Figures 3 and 4 show the same pipeline",
         ]
         anchor_bbox = (100.0, 100.0, 400.0, 300.0)
         for text in negatives:
@@ -459,6 +477,112 @@ class CaptionPatternTests(unittest.TestCase):
                 report.clusters[0].caption_index,
                 f"non-caption text {text!r} was misclassified as caption",
             )
+
+
+@dataclass
+class _LabelledBlock(_MultiRegionBlock):
+    """A block whose regions the extractor marked (or not) as measured figure labels, one flag per region."""
+
+    flags: list[bool] = field(default_factory=list)
+
+    @property
+    def bbox_regions(self) -> list[dict[str, Any]]:
+        regions = super().bbox_regions
+        flags = self.flags or [True] * len(regions)
+        return [{**region, **({FIGURE_LABEL_REGION_KEY: True} if flag else {})} for region, flag in zip(regions, flags)]
+
+
+def _labelled(block: _StubBlock, *flags: bool) -> _LabelledBlock:
+    regions = list(getattr(block, "regions", None) or [block.bbox])
+    return _LabelledBlock(
+        role=block.role,
+        block_type=block.block_type,
+        text=block.text,
+        bbox=regions[0],
+        page_number=block.page_number,
+        font_size_avg=block.font_size_avg,
+        anchor=block.anchor,
+        regions=regions,
+        flags=list(flags),
+    )
+
+
+class MeasuredFigureLabelTests(unittest.TestCase):
+    """Text the extractor measured as a figure's labels is part of the figure.
+
+    Real books: RAG p41 ("The prompt with the user question is augmented with the retrieved
+    information..."), p225 (a requirements document of 500+ characters of bullets), Agent p37
+    ("Chapters 2-4 Chapters 5-9 Building the basic agent loop ..." over 200 characters). The
+    length, sentence and prose-density guards kept them as translatable paragraphs.
+    """
+
+    ANCHOR = (99.0, 295.0, 427.0, 517.0)
+
+    def test_long_sentence_like_label_block_is_absorbed(self) -> None:
+        text = (
+            "Use case: Customer support system A multi-lingual, multi-geography customer support system that "
+            "provides instant and accurate responses to customer queries, thus reducing dependency on human agents. "
+            "Business objectives User needs."
+        )
+        self.assertGreater(len(text), 200)
+        labels = _labelled(_text_block(text, (107.0, 299.0, 395.0, 344.0), font_size=7.0, anchor="lbl"))
+        report = cluster_figure_regions([_image_block(self.ANCHOR), labels])
+        self.assertEqual(report.clusters[0].inline_label_indices, (1,))
+
+    def test_measured_labels_do_not_count_as_prose_around_the_figure(self) -> None:
+        long_labels = "• Ask questions in natural language • Ask questions using voice input " * 4
+        blocks = [
+            _image_block(self.ANCHOR),
+            _labelled(_text_block(long_labels, (109.0, 350.0, 235.0, 376.0), font_size=7.0, anchor="a")),
+            _labelled(_text_block(long_labels, (280.0, 406.0, 397.0, 432.0), font_size=7.0, anchor="b")),
+            _text_block("Constraints", (283.0, 440.0, 330.0, 450.0), font_size=7.0, anchor="c"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(sorted(report.clusters[0].inline_label_indices), [1, 2, 3])
+
+    def test_label_block_typed_as_code_is_absorbed(self) -> None:
+        numbers = _labelled(
+            _text_block("[-0.0147, 0.0179, 0.0119 ... -0.0047]", (125.0, 485.0, 414.0, 503.0),
+                        block_type=BlockType.CODE, font_size=7.0, anchor="num")
+        )
+        report = cluster_figure_regions([_image_block((97.0, 463.0, 420.0, 585.0)), numbers])
+        self.assertEqual(report.clusters[0].inline_label_indices, (1,))
+
+    def test_block_joining_a_label_and_body_text_is_not_absorbed(self) -> None:
+        body = (
+            "There are disadvantages to this pattern as well. The orchestrator only sees the summary, so it "
+            "cannot check how the child agent reached it, and every call pays for a second model context."
+        )
+        mixed = _labelled(
+            _MultiRegionBlock(
+                role="list_item",
+                block_type=BlockType.LIST_ITEM,
+                text="• 3 web searches • Result analysis • Summary writing " + body,
+                bbox=(345.0, 176.0, 401.0, 202.0),
+                font_size_avg=8.5,
+                anchor="mixed",
+                regions=[(345.0, 176.0, 401.0, 202.0), (93.0, 219.0, 279.0, 297.0)],
+            ),
+            True,
+            False,
+        )
+        report = cluster_figure_regions([_image_block((294.0, 50.0, 464.0, 269.0)), mixed])
+        self.assertEqual(report.clusters[0].inline_label_indices, ())
+
+    def test_short_block_with_a_piece_outside_the_figure_is_not_absorbed(self) -> None:
+        """"or go to .../freebook" merged with "(continued on last page)" from the text column beside it."""
+        merged = _MultiRegionBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="or go to https://www.manning.com/freebook (continued on last page)",
+            bbox=(337.0, 534.0, 489.0, 556.0),
+            font_size_avg=9.4,
+            anchor="merged",
+            regions=[(337.0, 534.0, 489.0, 556.0), (204.0, 554.0, 301.0, 565.0)],
+        )
+        report = cluster_figure_regions([_image_block((334.0, 484.0, 492.0, 635.0)), merged])
+        self.assertEqual(report.clusters[0].inline_label_indices, ())
+        self.assertEqual(report.clusters[0].bbox, (334.0, 484.0, 492.0, 635.0))  # not stretched into the column
 
 
 class SettingsBridgeTests(unittest.TestCase):

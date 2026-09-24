@@ -23,7 +23,9 @@ This module adds a post-recovery clustering pass that:
 * Uses retain-pdf's center-distance ownership rule to disambiguate
   text blocks that fall inside multiple search zones.
 * Applies four guards before absorbing any text: length, caption
-  pattern, font-size ratio, and prose-neighbor density.
+  pattern, font-size ratio, and prose-neighbor density. Text the extractor
+  measured as a figure's labels (``FIGURE_LABEL_REGION_KEY`` on every
+  region) skips them: the measurement already told labels from prose.
 * Keeps caption-pattern text (``Figure 2.4 ...``) as a separately
   translatable CAPTION block linked to the figure — translation
   completeness is part of the production-grade contract.
@@ -121,6 +123,16 @@ FIGURE_REGION_CONTENT_EXTENT = "content_extent"
 measured from the figure's own paths, images and labels (not padded). The
 export renders such a region as-is."""
 
+PAGE_BACKGROUND_KEY = "pdf_page_background"
+"""``metadata`` flag of a picture printed to two opposite page edges
+(``geometry.bleeds_off_page``): the page's background, not a figure. Text over
+it is the page's text, so it anchors no figure cluster."""
+
+FIGURE_LABEL_REGION_KEY = "figure_label"
+"""Set (True) on a text block's ``bbox_regions`` entry when every line of that
+region is a label of a vector figure measured on the page. The measurement
+already told labels from body prose, so such text is part of the picture."""
+
 
 CAPTION_LEAD_PATTERN = re.compile(
     # English variant requires the body to look caption-shaped, not body-prose:
@@ -131,8 +143,10 @@ CAPTION_LEAD_PATTERN = re.compile(
     # clustering pass mis-linked body paragraphs as captions and double-bound
     # the real caption to a different cluster.
     r"^\s*(?:"
-    r"(?:figure|fig\.?|table|tab\.?)\s*"
-    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|[A-Z])"
+    # No letter may follow the keyword ("Tables Time series" is a row of
+    # labels, not "Table s"), and a letter index is a capital ("Figure A").
+    r"(?:figure|fig\.?|table|tab\.?)(?![a-z])\s*"
+    r"(?:[A-Z]\d+(?:[.\-–—]\d+)*[A-Za-z]?|\d+(?:[.\-–—]\d+)*[A-Za-z]?|(?-i:[A-Z]))"
     r"(?:[.:\-–—]\s+\S+|\s+(?-i:[A-Z])[^\n]{2,}|\s*$)"
     r"|"
     r"(?:图|表|示意图|插图)\s*[\d一-鿿]"  # Chinese (defensive — input is English here)
@@ -300,6 +314,8 @@ _TEXT_BLOCK_TYPES = frozenset(
 
 
 def _is_anchor(block: BlockLike) -> bool:
+    if (block.metadata or {}).get(PAGE_BACKGROUND_KEY):
+        return False
     if block.block_type in _ANCHOR_BLOCK_TYPES:
         return True
     image_type = block.metadata.get("image_type") if block.metadata else None
@@ -312,7 +328,9 @@ _PAGE_FURNITURE_ROLES = frozenset({"header", "footer"})
 
 
 def _is_text_candidate(block: BlockLike) -> bool:
-    if block.block_type not in _TEXT_BLOCK_TYPES:
+    # A block of measured figure labels is a candidate whatever it was typed as
+    # (a label row of numbers reads as code, a formula as an equation).
+    if block.block_type not in _TEXT_BLOCK_TYPES and not _all_regions_labelled(block):
         return False
     if getattr(block, "role", None) in _PAGE_FURNITURE_ROLES:
         return False
@@ -532,6 +550,12 @@ def _classify_text_for_anchor(
     if block.block_type == BlockType.HEADING and _REAL_SECTION_HEADING_PATTERN.match(text):
         return "reject_real_heading", "looks like genuine section title (N.M ...)"
 
+    # Labels measured with the drawing are the figure's own text however long
+    # their joined text is or however much it reads like a sentence (a
+    # diagram's text panels, a row of labels merged into one block).
+    if _is_measured_label(block, anchor_bbox):
+        return "inline_label", "every line is a label of the figure measured with its drawing"
+
     if char_count > config.max_label_chars:
         return "reject_long", f"len={char_count} > {config.max_label_chars}"
 
@@ -549,11 +573,38 @@ def _classify_text_for_anchor(
             pass
 
     if config.inline_absorb_requires_inside_anchor:
-        text_center = _bbox_center(text_bbox)
-        if not _bbox_contains_point(anchor_bbox, text_center[0], text_center[1]):
-            return "reject_outside_anchor", "center outside anchor bbox (B requires inside)"
+        # Every piece of the block: a block merged from a label and a line of
+        # the text column beside the figure is not a label.
+        page_number = _block_page_number(block)
+        pieces = _block_page_bboxes(block, page_number) if page_number is not None else []
+        if not pieces or len(pieces) != len(block.bbox_regions or []):
+            pieces = [text_bbox]
+        for piece in pieces:
+            center = _bbox_center(piece)
+            if not _bbox_contains_point(anchor_bbox, center[0], center[1]):
+                return "reject_outside_anchor", "center outside anchor bbox (B requires inside)"
 
     return "inline_label", "inside anchor + short + non-caption"
+
+
+def _all_regions_labelled(block: BlockLike) -> bool:
+    regions = block.bbox_regions or []
+    return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
+
+
+def _is_measured_label(block: BlockLike, anchor_bbox: _Bbox) -> bool:
+    """Whether every region of ``block`` is a measured figure label lying inside ``anchor_bbox``."""
+    page_number = _block_page_number(block)
+    regions = block.bbox_regions or []
+    if page_number is None or not _all_regions_labelled(block):
+        return False
+    bboxes = _block_page_bboxes(block, page_number)
+    if len(bboxes) != len(regions):
+        return False
+    zone = _bbox_pad(anchor_bbox, 2.0)
+    return all(
+        _bbox_contains_point(zone, bbox[0], bbox[1]) and _bbox_contains_point(zone, bbox[2], bbox[3]) for bbox in bboxes
+    )
 
 
 def _is_side_caption(block: BlockLike, text_bbox: _Bbox, anchor_bbox: _Bbox, pad: float) -> bool:
@@ -613,6 +664,9 @@ def _count_prose_neighbors_in_zone(
             continue
         text = (block.text or "").strip()
         if _looks_like_caption_text(text):
+            continue
+        # The figure's own measured labels are not prose around it.
+        if _is_measured_label(block, search_zone):
             continue
         if len(text) > config.max_label_chars:
             count += 1

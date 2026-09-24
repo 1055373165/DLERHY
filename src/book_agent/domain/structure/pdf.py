@@ -23,7 +23,9 @@ from book_agent.domain.document_titles import (
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.artifact_grouping import looks_like_artifact_group_context_text
 from book_agent.domain.structure.figure_clustering import (
+    FIGURE_LABEL_REGION_KEY,
     FIGURE_REGION_CONTENT_EXTENT,
+    PAGE_BACKGROUND_KEY,
     FigureClusterConfig,
     cluster_figure_regions,
 )
@@ -140,7 +142,7 @@ from book_agent.ingestion.text import (
     _safe_mean,
     _sorted_counter,
 )
-from book_agent.domain.structure.geometry import horizontal_overlap_ratio, union_bbox
+from book_agent.domain.structure.geometry import bleeds_off_page, horizontal_overlap_ratio, union_bbox
 
 _OUTLINED_BOOK_TOP_LEVEL_SPECIAL_TITLES = _OUTLINED_BOOK_FRONTMATTER_TITLES.union({"glossary"})
 _APPENDIX_SUBHEADING_PATTERN = re.compile(r"^(?P<label>[A-Z]\.\d+)\s+(?P<title>.+)$")
@@ -644,6 +646,8 @@ class PdfStructureRecoveryService:
                             {
                                 "page_number": page.page_number,
                                 "bbox": _bbox_to_json(raw_block.bbox),
+                                # Kept per region: a block merged from labels and body text is not all labels.
+                                **({FIGURE_LABEL_REGION_KEY: True} if raw_block.figure_label else {}),
                             }
                         ],
                         reading_order_index=reading_order_index,
@@ -673,6 +677,8 @@ class PdfStructureRecoveryService:
                         "figure_region": FIGURE_REGION_CONTENT_EXTENT,
                     }
                 )
+                if bleeds_off_page(raw_image.bbox, page.width, page.height):
+                    metadata[PAGE_BACKGROUND_KEY] = True
                 if raw_image.materialized_path:
                     metadata["image_path"] = raw_image.materialized_path
                     metadata["image_xref"] = raw_image.xref
@@ -1514,6 +1520,10 @@ class PdfStructureRecoveryService:
         if index < 0:
             return None
         if any(block.role not in skipped_roles for block in recovered[index + 1 :]):
+            return None
+        # A figure's labels and the text around the figure are never one paragraph:
+        # joined, the labels could not be taken into the figure, nor the text left out.
+        if _is_figure_label_block(recovered[index]) != _is_figure_label_block(current):
             return None
         if self._should_merge(recovered[index], current, pages):
             return index
@@ -3965,6 +3975,10 @@ class PdfStructureRecoveryService:
                 text_len = len((block.text or "").strip())
                 if text_len == 0 or text_len > 240:
                     continue
+                # Full sentences are the body text above the figure (the end of a
+                # paragraph, a lead-in), never one of its labels.
+                if _is_running_prose(block.text):
+                    continue
                 candidates.append((idx, block, bbox))
 
             candidate_threshold = 2 if orphan_figure else 3
@@ -4443,6 +4457,21 @@ def build_default_recovery_service(
         ocr_reextraction_adapter=SuryaOcrReextractionAdapter(),
         figure_cluster_config=figure_config,
     )
+
+
+_FULL_SENTENCE_RE = re.compile(r"[^.!?]*?[A-Za-z][^.!?]*[.!?][\"”’)]?(?=\s+[A-Z“\"(]|\s*$)")
+
+
+def _is_running_prose(text: str) -> bool:
+    """Whether ``text`` reads as body text: two full sentences of four or more words, or one of twelve or more."""
+    sentences = [len(sentence.split()) for sentence in _FULL_SENTENCE_RE.findall(" ".join((text or "").split()))]
+    return sum(1 for words in sentences if words >= 4) >= 2 or any(words >= 12 for words in sentences)
+
+
+def _is_figure_label_block(block: _RecoveredBlock) -> bool:
+    """Whether every region of ``block`` holds only labels of a figure measured on its page."""
+    regions = block.bbox_regions or []
+    return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
 
 
 def _inside_page_figure(page: PdfPage, bbox: tuple[float, float, float, float]) -> bool:

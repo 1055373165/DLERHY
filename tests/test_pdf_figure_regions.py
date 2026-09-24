@@ -31,6 +31,7 @@ from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export import pdf_crop
 from book_agent.ingestion.pdf.figure_extent import (
+    figure_label_blocks,
     figure_region_problems,
     page_text_lines,
     split_extended_drawings,
@@ -325,6 +326,361 @@ class RepeatedFigureLabelTests(unittest.TestCase):
         ]
         self.assertTrue(headers)
         self.assertFalse(any("Step 1" in text for text in headers))
+
+
+def _parse(pdf_path: Path, tmpdir: str):
+    return PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+
+def _text_blocks(parsed) -> list:
+    return [
+        block
+        for chapter in parsed.chapters
+        for block in chapter.blocks
+        if block.block_type not in {BlockType.IMAGE.value, BlockType.FIGURE.value}
+    ]
+
+
+class PageBackgroundTests(unittest.TestCase):
+    """A panel printed to two opposite page edges is the page's background, not a figure.
+
+    The build-an-AI-agent back cover: the right half is a tinted picture from the top edge to
+    the bottom edge with the cover copy printed on it. Taken as a figure, its lines of copy were
+    labels to fold into the picture.
+    """
+
+    def test_panel_to_the_page_edges_is_not_a_figure_piece(self) -> None:
+        extents = vector_figure_extents(
+            [(315.0, 0.0, 531.0, 666.0)],
+            seed=lambda _bbox: True,
+            figure_sized=lambda _bbox: True,
+            page_width=531,
+            page_height=666,
+        )
+        self.assertEqual(extents, [])
+
+    def test_text_printed_on_a_background_picture_stays_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "cover.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_image(fitz.Rect(315, 0, 531, 666), stream=_solid_png((60, 80, 90)), keep_proportion=False)
+            page.insert_text((360, 120), "About the reader", fontsize=12)
+            page.insert_text((335, 140), "For Python developers", fontsize=11)
+            _body(page, 60, 300)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = " ".join(block.text for block in _text_blocks(parsed))
+        self.assertIn("About the reader", texts)
+        self.assertIn("For Python developers", texts)
+        panels = [block for block in _figure_blocks(parsed)]
+        self.assertTrue(panels)
+        self.assertTrue(all(block.metadata.get("pdf_page_background") for block in panels))
+
+
+def _labelled_figure_page(page: fitz.Page) -> None:
+    """Figure 1.1's layout: body text in a column beside a two-panel diagram whose left panel
+    holds a long, sentence-like run of small labels."""
+    _body(page, 60, 150)
+    page.insert_textbox(fitz.Rect(102, 300, 300, 470), BODY + " " + BODY, fontsize=10)
+    page.draw_rect(fitz.Rect(310, 300, 390, 420), color=(0, 0, 0))
+    page.draw_rect(fitz.Rect(397, 300, 477, 420), color=(0, 0, 0))
+    page.insert_text((315, 310), "Few-shot learning", fontsize=7)
+    page.insert_text((402, 310), "Zero-shot learning", fontsize=7)
+    page.insert_textbox(
+        fitz.Rect(313, 318, 388, 415),
+        "Translate English to Korean. Apple becomes sagwa and orange becomes orenji in the examples. "
+        "Banana is the new word. The answer is banana in Korean, found from the two examples above.",
+        fontsize=6,
+    )
+    page.insert_text((402, 330), "Translate English to Korean.", fontsize=6)
+    page.insert_text((310, 440), "Figure 1.1 Example of a language model's generalization", fontsize=8)
+
+
+class MeasuredLabelTests(unittest.TestCase):
+    """Labels the extractor measured with a drawing are the figure's, however long or sentence-like.
+
+    Real books: 263 (RAG) and 49 (Agent) such label blocks stayed translatable paragraphs, because
+    clustering re-judged them by length (> 200 characters), sentence shape and prose density.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        pdf_path = Path(cls._tmp.name) / "labels.pdf"
+        document = fitz.open()
+        _labelled_figure_page(document.new_page(width=531, height=666))
+        document.save(pdf_path)
+        cls.parsed = _parse(pdf_path, cls._tmp.name)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def test_labels_are_not_body_text(self) -> None:
+        texts = " ".join(block.text for block in _text_blocks(self.parsed))
+        for label in ("Few-shot learning", "Zero-shot learning", "Banana is the new word", "Translate English"):
+            self.assertNotIn(label, texts)
+
+    def test_body_text_beside_the_figure_stays_body_text(self) -> None:
+        texts = " ".join(" ".join(block.text.split()) for block in _text_blocks(self.parsed))
+        self.assertGreaterEqual(texts.count("Body text of the chapter runs across the full width"), 3)
+        self.assertIn("Figure 1.1 Example", texts)
+        figures = [_region(block)[1] for block in _figure_blocks(self.parsed)]
+        self.assertEqual(len(figures), 1)
+        self.assertGreater(figures[0][0], 300.0)  # the text column ends at 300
+
+    def test_a_block_is_labels_only_when_all_its_lines_are(self) -> None:
+        document = fitz.open()
+        page = document.new_page(width=531, height=666)
+        _labelled_figure_page(page)
+        lines = page_text_lines(page.get_text("dict"), 531, 666)
+        paths, visible = split_extended_drawings(page.get_drawings(extended=True))
+        extents = vector_figure_extents(
+            [box for box in visible if box is not None],
+            seed=lambda bbox: (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) >= 1800,
+            figure_sized=lambda bbox: (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) >= 12000,
+            text_lines=lines,
+            page_width=531,
+            page_height=666,
+        )
+        self.assertEqual(len(extents), 1)
+        label_box = (313.0, 318.0, 388.0, 415.0)
+        column_box = (102.0, 300.0, 300.0, 470.0)
+        both = (102.0, 300.0, 388.0, 470.0)
+        self.assertEqual(figure_label_blocks([label_box, column_box, both], lines, extents), [True, False, False])
+        document.close()
+
+    def test_labels_and_body_text_are_not_joined_into_one_paragraph(self) -> None:
+        from book_agent.domain.structure.pdf import PdfStructureRecoveryService
+        from book_agent.ingestion.pdf.models import PdfPage, _RecoveredBlock
+
+        def recovered(text, role, block_type, bbox, label):
+            region = {"page_number": 1, "bbox": list(bbox), **({"figure_label": True} if label else {})}
+            return _RecoveredBlock(
+                role=role, block_type=block_type, text=text, page_start=1, page_end=1, bbox_regions=[region],
+                reading_order_index=0, parse_confidence=0.9, flags=[], font_size_avg=8.5,
+                source_path="pdf://page/1", anchor="a",
+            )
+
+        service = PdfStructureRecoveryService()
+        pages = [PdfPage(page_number=1, width=531.0, height=666.0, blocks=[])]
+        body = recovered("there are disadvantages to this pattern as well.", "body", BlockType.PARAGRAPH, (93, 203, 279, 297), False)
+        plain = recovered("• 3 web searches • Result analysis", "list_item", BlockType.LIST_ITEM, (345, 176, 401, 202), False)
+        labels = recovered("• 3 web searches • Result analysis", "list_item", BlockType.LIST_ITEM, (345, 176, 401, 202), True)
+        self.assertEqual(service._merge_target_index([plain], body, pages), 0)
+        self.assertIsNone(service._merge_target_index([labels], body, pages))
+
+
+def _text_dict_line(text: str, bbox: tuple[float, float, float, float], size: float) -> dict:
+    return {"bbox": bbox, "spans": [{"text": text, "size": size}]}
+
+
+class MidBlockCaptionTests(unittest.TestCase):
+    """A caption set beside a figure can share a text block with the figure's last label.
+
+    Agent p254: "No tools, optimized prompt for writing" (a label) and "Figure 9.2 Four specialist
+    agents ..." (the side caption) came out as one block; the caption was not seen as one, the
+    figure region took it in, and the block stayed a paragraph inside the figure.
+    """
+
+    LINES = [
+        ("No tools, optimized", (93.0, 547.0, 173.0, 557.0), 8.3),
+        ("prompt for writing", (93.0, 557.0, 160.0, 567.0), 8.3),
+        ("Figure 9.2 Four specialist", (333.0, 566.0, 450.0, 575.0), 8.0),
+        ("agents for technical blog writing.", (333.0, 576.0, 440.0, 585.0), 8.0),
+    ]
+
+    def test_caption_lines_start_at_the_caption(self) -> None:
+        text_dict = {"blocks": [{"type": 0, "lines": [_text_dict_line(*line) for line in self.LINES]}]}
+        lines = page_text_lines(text_dict, 531, 666)
+        self.assertEqual([line.caption for line in lines], [False, False, True, True])
+
+    def test_a_reference_in_running_text_does_not_split_a_block(self) -> None:
+        text_dict = {
+            "blocks": [
+                {
+                    "type": 0,
+                    "lines": [
+                        _text_dict_line("the generation suffers from hallucination and", (102, 100, 477, 112), 10.0),
+                        _text_dict_line("Figure 6.2 summarizes these drawbacks.", (102, 113, 300, 125), 10.0),
+                    ],
+                }
+            ]
+        }
+        self.assertEqual([line.caption for line in page_text_lines(text_dict, 531, 666)], [False, False])
+
+    def test_extracted_block_is_split_at_the_caption(self) -> None:
+        from book_agent.ingestion.pdf.extract import _split_mid_block_captions
+        from book_agent.ingestion.pdf.models import PdfTextBlock
+
+        block = PdfTextBlock(
+            page_number=1,
+            block_number=3,
+            text=" ".join(text for text, _bbox, _size in self.LINES),
+            bbox=(93.0, 547.0, 450.0, 585.0),
+            line_texts=[text for text, _bbox, _size in self.LINES],
+            span_count=4,
+            line_count=4,
+            font_size_min=8.0,
+            font_size_max=8.3,
+            font_size_avg=8.15,
+            line_styles=tuple((size, False) for _text, _bbox, size in self.LINES),
+        )
+        parts = _split_mid_block_captions([block], {id(block): [bbox for _text, bbox, _size in self.LINES]})
+        self.assertEqual([part.text for part in parts], ["No tools, optimized\nprompt for writing", "Figure 9.2 Four specialist\nagents for technical blog writing."])
+        self.assertEqual(parts[0].bbox, (93.0, 547.0, 173.0, 567.0))
+        self.assertEqual(parts[1].bbox, (333.0, 566.0, 450.0, 585.0))
+        self.assertEqual(parts[1].font_size_avg, 8.0)
+
+    def test_parsed_caption_is_its_own_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "side.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            _body(page, 60, 200)
+            page.insert_text(
+                (102, 400),
+                "No tools, optimized\nprompt for writing\nFigure 9.2 Four specialist agents\nfor technical blog writing.",
+                fontsize=8,
+            )
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = [" ".join(block.text.split()) for block in _text_blocks(parsed)]
+        caption = next(text for text in texts if "Four specialist" in text)
+        self.assertTrue(caption.startswith("Figure 9.2"), texts)
+        self.assertNotIn("No tools", caption)
+
+
+def _arrow(page: fitz.Page, start: tuple[float, float], end: tuple[float, float]) -> None:
+    """A hairline connector with a small filled head, the way the books draw their arrows."""
+    page.draw_line(fitz.Point(*start), fitz.Point(*end), color=(0, 0, 0), width=0.5)
+    x, y = end
+    page.draw_polyline([fitz.Point(x - 5, y - 1.5), fitz.Point(x, y), fitz.Point(x - 5, y + 1.5)], color=None, fill=(0, 0, 0))
+
+
+def _hairline_figure(page: fitz.Page, *, caption: str | None, side_caption: bool = False) -> None:
+    """Figure 5.5's layout: labels joined by hairline arrows, a few tiny boxes; no large shape."""
+    _body(page, 60, 150)
+    page.insert_text((102, 196), "sofa is comfortable", fontsize=7)
+    page.insert_text((110, 256), "couch is large", fontsize=7)
+    _arrow(page, (170, 193), (196, 193))
+    _arrow(page, (170, 253), (196, 253))
+    for row in (186, 246):
+        for left in (200, 218, 236, 254):
+            page.draw_rect(fitz.Rect(left, row, left + 16, row + 12), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(272, 192), fitz.Point(290, 192), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(272, 252), fitz.Point(290, 252), color=(0, 0, 0), width=0.5)
+    page.draw_line(fitz.Point(290, 192), fitz.Point(290, 252), color=(0, 0, 0), width=0.5)
+    page.insert_text((296, 225), "Relevant", fontsize=7)
+    if caption and side_caption:
+        page.insert_text((350, 256), caption, fontsize=8)
+    elif caption:
+        page.insert_text((102, 280), caption, fontsize=8)
+    _body(page, 300, 400)
+
+
+class CaptionedDrawingTests(unittest.TestCase):
+    """A diagram drawn only in hairlines (or small icons) is a figure when a caption says so.
+
+    Real books: Agent Figures 5.4, 5.5 and 7.2 and RAG Figures 3.4, 3.8, 4.4 and 6.2 had no shape
+    large enough to count as a figure; they got no region, or a region made up from the text
+    blocks above the caption that took in the section heading and body text.
+    """
+
+    def _parse_page(self, **figure) -> tuple[list, list]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "hairline.pdf"
+            document = fitz.open()
+            _hairline_figure(document.new_page(width=531, height=666), **figure)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+            with fitz.open(pdf_path) as reopened:
+                regions = [_region(block)[1] for block in _figure_blocks(parsed)]
+                problems = [figure_region_problems(reopened[0], bbox, furniture_bboxes=[]) for bbox in regions]
+        return regions, [" ".join(block.text.split()) for block in _text_blocks(parsed)], problems
+
+    def test_captioned_hairline_diagram_gets_its_whole_region(self) -> None:
+        regions, texts, problems = self._parse_page(caption="Figure 5.5 Vector search determines relevance.")
+        self.assertEqual(len(regions), 1)
+        x0, y0, x1, y1 = regions[0]
+        self.assertLessEqual(x0, 102.0)  # "sofa is comfortable"
+        self.assertGreaterEqual(x1, 325.0)  # "Relevant"
+        self.assertGreater(y0, 150.0)  # below the body text above
+        self.assertLess(y1, 272.0)  # above the caption
+        self.assertEqual(problems, [[]])
+        joined = " ".join(texts)
+        self.assertNotIn("sofa is comfortable", joined)
+        self.assertNotIn("Relevant", joined)
+        self.assertIn("Figure 5.5 Vector search", joined)
+        self.assertGreaterEqual(joined.count("Body text of the chapter"), 2)
+
+    def test_side_caption_level_with_the_drawing_finds_it_too(self) -> None:
+        regions, texts, _problems = self._parse_page(caption="Figure 5.5 Vector search.", side_caption=True)
+        self.assertEqual(len(regions), 1)
+        self.assertLess(regions[0][2], 350.0)  # stops before the caption beside it
+        self.assertNotIn("couch is large", " ".join(texts))
+
+    def test_the_same_strokes_without_a_caption_are_not_a_figure(self) -> None:
+        regions, texts, _problems = self._parse_page(caption=None)
+        self.assertEqual(regions, [])
+        self.assertIn("sofa is comfortable", " ".join(texts))
+
+    def test_title_between_the_figure_and_its_caption_is_part_of_the_figure(self) -> None:
+        """RAG p39: "Small to Big Chunking" is set under the drawing, 13pt from it, above the caption."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "title.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            _body(page, 60, 150)
+            page.draw_rect(fitz.Rect(111, 180, 475, 300), color=(0, 0, 0))
+            page.draw_circle(fitz.Point(200, 240), 30, color=None, fill=ORANGE)
+            page.draw_circle(fitz.Point(380, 240), 30, color=None, fill=ORANGE)
+            page.insert_text((216, 312), "Dividing into compact units", fontsize=7)
+            page.insert_text((249, 336), "Small to Big Chunking", fontsize=9)
+            page.insert_text((102, 356), "Figure 3.2 Data-chunking process", fontsize=8)
+            _body(page, 380, 480)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        regions = [_region(block)[1] for block in _figure_blocks(parsed)]
+        self.assertEqual(len(regions), 1)
+        self.assertGreaterEqual(regions[0][3], 338.0)
+        self.assertLess(regions[0][3], 346.0)
+        self.assertNotIn("Small to Big Chunking", " ".join(block.text for block in _text_blocks(parsed)))
+
+
+class TextOnlyFigureProseTests(unittest.TestCase):
+    """A figure made up from text blocks above its caption never takes in body text.
+
+    Agent p120 at 63639db: with no drawing found for Figure 5.5, the blocks above its caption were
+    taken as the figure, including the paragraph ending "... this semantic connection can't be
+    recognized automatically." and the section heading.
+    """
+
+    def test_body_paragraphs_above_the_caption_stay_text(self) -> None:
+        paragraph = (
+            "Keyword search won't find documents containing couch. Without a synonym dictionary, "
+            "this connection can't be recognized automatically."
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "orphan.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_textbox(fitz.Rect(102, 60, 477, 100), paragraph, fontsize=10)
+            _body(page, 100, 140)  # one long sentence
+            page.insert_text((150, 150), "Capital", fontsize=7)
+            page.insert_text((300, 150), "Debt", fontsize=7)
+            page.insert_text((150, 200), "Stock", fontsize=7)
+            page.insert_text((300, 200), "Rare", fontsize=7)
+            page.insert_text((102, 230), "Figure 3.3 Word relations in a vector space", fontsize=8)
+            _body(page, 260, 360)
+            document.save(pdf_path)
+            parsed = _parse(pdf_path, tmpdir)
+        texts = " ".join(" ".join(block.text.split()) for block in _text_blocks(parsed))
+        self.assertIn("Without a synonym dictionary", texts)
+        self.assertIn("Body text of the chapter", texts)
+        for block in _figure_blocks(parsed):
+            self.assertGreater(_region(block)[1][1], 100.0)
 
 
 if __name__ == "__main__":

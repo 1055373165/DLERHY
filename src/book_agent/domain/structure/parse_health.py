@@ -42,6 +42,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
+from book_agent.domain.structure.geometry import bleeds_off_page
 
 BLOCKING = "blocking"
 MAJOR = "major"
@@ -623,12 +624,31 @@ def _overlap(a: Bbox, b: Bbox) -> float:
 _LABEL_BLOCK_TYPES = frozenset({"paragraph", "list_item", "heading"})
 
 
-def check_duplicated_labels(blocks: Sequence[HealthBlock]) -> CheckResult:
-    """Text blocks lying inside a figure's region: the figure's labels, kept a second time as text."""
+FULL_PAGE_AREA_RATIO = 0.7
+
+
+def is_page_background(bbox: Bbox | None, page_size: tuple[float, float] | None) -> bool:
+    """A picture that is its page (a cover) or the page's background: most of the page, or printed to two opposite edges.
+
+    It is not a figure: nothing on it is a figure label and its region has no crop to check.
+    """
+    if bbox is None or page_size is None:
+        return False
+    return _area(bbox) >= FULL_PAGE_AREA_RATIO * page_size[0] * page_size[1] or bleeds_off_page(bbox, *page_size)
+
+
+def check_duplicated_labels(blocks: Sequence[HealthBlock], page_sizes: dict[int, tuple[float, float]] | None = None) -> CheckResult:
+    """Text blocks lying inside a figure's region: the figure's labels, kept a second time as text.
+
+    Text over a page-background picture (a cover's panel) is the page's own text.
+    """
     figures_by_page: dict[int, list[HealthBlock]] = defaultdict(list)
     for block in picture_blocks(blocks):
-        if block.region_page is not None and image_fragment_kind(block.bbox) is None:
-            figures_by_page[block.region_page].append(block)
+        if block.region_page is None or image_fragment_kind(block.bbox) is not None:
+            continue
+        if is_page_background(block.bbox, (page_sizes or {}).get(block.region_page)):
+            continue
+        figures_by_page[block.region_page].append(block)
     samples: list[Sample] = []
     count = 0
     pages: set[int] = set()
@@ -650,7 +670,6 @@ FigureProblemFinder = Callable[[int, Bbox, list[Bbox]], list[Any]]
 
 
 _FIGURE_CAPTION_RE = re.compile(r"^\s*fig(?:ure|\.)\s*[A-Z]?\d+(?:[.\-]\d+)*\b", re.IGNORECASE)
-FULL_PAGE_AREA_RATIO = 0.7
 
 
 def check_figure_regions(
@@ -661,8 +680,9 @@ def check_figure_regions(
     """Every figure region against its page: ``find_problems(page, bbox, furniture)`` is ``figure_region_problems``.
 
     Furniture is the running headers, folios and footers the parser recognised on that page. A
-    full-page picture (a cover) is its page and is not checked. A "Figure N" caption no figure
-    claims is a figure the parser found no region for at all (``no_region``).
+    full-page picture (a cover) or a page-background panel is its page and is not checked
+    (``is_page_background``). A "Figure N" caption no figure claims is a figure the parser found
+    no region for at all (``no_region``).
     """
     furniture: dict[int, list[Bbox]] = defaultdict(list)
     for block in blocks:
@@ -670,8 +690,7 @@ def check_figure_regions(
             furniture[block.region_page].append(block.bbox)
 
     def full_page(block: HealthBlock) -> bool:
-        size = (page_sizes or {}).get(int(block.region_page or 0))
-        return bool(size and block.bbox and _area(block.bbox) >= FULL_PAGE_AREA_RATIO * size[0] * size[1])
+        return is_page_background(block.bbox, (page_sizes or {}).get(int(block.region_page or 0)))
 
     figures = [
         block
@@ -802,5 +821,5 @@ def run_checks(
         results.append(check_image_fragments(blocks, page_sizes))
     results.append(check_caption_folds(blocks, academic_paper=academic_paper))
     if is_pdf:
-        results.append(check_duplicated_labels(blocks))
+        results.append(check_duplicated_labels(blocks, page_sizes))
     return [result for result in results if result is not None]

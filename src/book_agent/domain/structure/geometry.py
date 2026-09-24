@@ -27,3 +27,21 @@ def union_bbox(left: list[float] | None, right: list[float] | None) -> list[floa
         max(left[2], right[2]),
         max(left[3], right[3]),
     ]
+
+
+PAGE_EDGE_TOLERANCE_PT = 2.0
+
+
+def bleeds_off_page(bbox, page_width: float, page_height: float, tolerance: float = PAGE_EDGE_TOLERANCE_PT) -> bool:
+    """Whether ``bbox`` reaches two opposite edges of the page: page decoration, not a figure.
+
+    Figures sit inside the text block, clear of the margins. A picture or panel
+    running from the top edge to the bottom edge (the tinted half of a back
+    cover) or from the left edge to the right edge (a chapter-opener band) is
+    the page's background; text printed over it is the page's text, not a
+    figure's labels.
+    """
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    spans_height = y0 <= tolerance and y1 >= page_height - tolerance
+    spans_width = x0 <= tolerance and x1 >= page_width - tolerance
+    return spans_height or spans_width

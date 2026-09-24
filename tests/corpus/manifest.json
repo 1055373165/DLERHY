@@ -1,5 +1,5 @@
 {
-  "about": "Real books that exposed parse problems. The PDFs stay on the owner's disk (copyright) and are never committed; this file records where they are and what parsing them must give. Run with BOOK_AGENT_RUN_CORPUS_TESTS=1 uv run python -m pytest tests/test_parse_health_corpus.py -q -p no:cacheprovider. A missing file skips its book. Every change to parsing code must keep this passing (docs/agent-upgrade/08-pilot-quality-gate.md §9). Expected values recorded from main at 1767bd5 (2026-09-25).",
+  "about": "Real books that exposed parse problems. The PDFs stay on the owner's disk (copyright) and are never committed; this file records where they are and what parsing them must give. Run with BOOK_AGENT_RUN_CORPUS_TESTS=1 uv run python -m pytest tests/test_parse_health_corpus.py -q -p no:cacheprovider. A missing file skips its book. Every change to parsing code must keep this passing (docs/agent-upgrade/08-pilot-quality-gate.md §9). Expected values recorded from main at 1767bd5 (2026-09-25); figure_regions, duplicated_labels and the RAG book's line_break_hyphens lowered on fix/figure-labels (2026-09-25). The test also fails when a body paragraph lies inside a figure region.",
   "books": [
     {
       "id": "rag-simple-guide",
@@ -37,16 +37,14 @@
         "front_matter_sections": 0,
         "stray_glyphs": 0,
         "pseudo_headings": 0,
-        "line_break_hyphens": 4,
-        "figure_regions": 4,
+        "line_break_hyphens": 2,
+        "figure_regions": 0,
         "image_fragments": 0,
         "caption_folds": 0,
-        "duplicated_labels": 263
+        "duplicated_labels": 0
       },
       "known_residuals": {
-        "line_break_hyphens": "4 words split by ligature extraction, not by hyphens: 'Applic ation' (p174), 'fi rst' x2 and 'diff erence' (index, p258).",
-        "figure_regions": "Figures 3.4 (p66) and 3.8 (p71) get no region at all; Figure 4.4 (p83) is split into separate regions that cut its formula and labels; Figure 6.2's region (p143) swallows the bullet list above it and cuts its bottom icon.",
-        "duplicated_labels": "263 label blocks on 48 pages: labels of vector diagrams (e.g. p41 'Step 4 Step 5 Convert these small pieces...', 'Retriever User Question') stay translatable body paragraphs inside the figure's region."
+        "line_break_hyphens": "2 words split by ligature extraction, not by hyphens: 'fi rst' x2 on the back cover (p258). ('Applic ation' p174 and 'diff erence' p258 were figure labels and are now part of their figures.)"
       }
     },
     {
@@ -85,15 +83,13 @@
         "stray_glyphs": 0,
         "pseudo_headings": 0,
         "line_break_hyphens": 11,
-        "figure_regions": 4,
+        "figure_regions": 0,
         "image_fragments": 0,
         "caption_folds": 0,
-        "duplicated_labels": 49
+        "duplicated_labels": 0
       },
       "known_residuals": {
-        "line_break_hyphens": "10 compounds broken at their own hyphen keep a space after it ('general- purpose' p23, 'decision- making' p24/p38, 'domain- specific' p66, 'acid- free' p3) and 1 split word.",
-        "figure_regions": "Figure 5.4 (p138) is drawn with hairlines only and gets no region (its labels merge into the paragraph beside it); Figure 5.5's region (p139) swallows the section above it; Figure 6.7's region (p203) cuts the diagram; Figure 7.2's region (p232) swallows the paragraph beside and above it.",
-        "duplicated_labels": "49 label blocks on 29 pages (e.g. p24 'Few-shot learning Zero-shot learning', p37/p40 'Chapters 2-4 Chapters 5-9 ...')."
+        "line_break_hyphens": "10 compounds broken at their own hyphen keep a space after it ('general- purpose' p23, 'decision- making' p24/p38, 'domain- specific' p66, 'acid- free' p3) and 1 split word."
       }
     }
   ]

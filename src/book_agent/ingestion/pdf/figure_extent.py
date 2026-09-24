@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Sequence
 
+from book_agent.domain.structure.geometry import bleeds_off_page
+
 Bbox = tuple[float, float, float, float]
 
 # Paths and labels closer than this to a figure's drawing belong to it: an
@@ -123,7 +125,7 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
         if block.get("type") != 0:
             continue
         block_lines: list[tuple[Bbox, str]] = []
-        block_sizes: dict[float, int] = {}
+        line_sizes: list[dict[float, int]] = []
         for line in block.get("lines", []) or []:
             spans = line.get("spans", []) or []
             text = "".join(str(span.get("text") or "") for span in spans)
@@ -136,14 +138,26 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
             if len(bbox) != 4 or bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 continue
             block_lines.append((bbox, text))  # type: ignore[arg-type]
+            sizes: dict[float, int] = {}
             for span in spans:
                 size = round(float(span.get("size") or 0.0), 1)
                 chars = len(str(span.get("text") or "").strip())
-                block_sizes[size] = block_sizes.get(size, 0) + chars
+                sizes[size] = sizes.get(size, 0) + chars
                 size_weights[size] = size_weights.get(size, 0) + chars
-        if block_lines:
+            line_sizes.append(sizes)
+        # A caption set beside a figure can share a text block with the
+        # figure's last label; the caption starts at its own line.
+        split = next((index for index in range(1, len(block_lines)) if starts_figure_caption(block_lines[index][1])), None)
+        parts = [(0, len(block_lines))] if split is None else [(0, split), (split, len(block_lines))]
+        for start, end in parts:
+            if start == end:
+                continue
+            block_sizes: dict[float, int] = {}
+            for sizes in line_sizes[start:end]:
+                for size, chars in sizes.items():
+                    block_sizes[size] = block_sizes.get(size, 0) + chars
             dominant = max(block_sizes, key=block_sizes.__getitem__) if block_sizes else 0.0
-            blocks.append((block_index, block_lines, dominant))
+            blocks.append((block_index, block_lines[start:end], dominant))
     # The body font size is the size of the page's full-width paragraphs; a
     # page of small-print figure text must not make that text "body".
     wide_sizes: dict[float, int] = {}
@@ -178,6 +192,20 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
                 )
             )
     return lines
+
+
+# A figure caption: "Figure 5.4 Although ..." (a capital after the number; "Figure 6.2 summarizes
+# these drawbacks." in running text is a reference, not a caption).
+_FIGURE_CAPTION_START = re.compile(
+    r"^\s*fig(?:ure|\.)\s*(?:\d+(?:[.\-–—]\d+)*|(?-i:[A-Z])(?:[.\-–—]\d+)+)[A-Za-z]?"
+    r"(?:[.:\-–—]?\s+(?-i:[A-Z(\"“‘'])|\s*$)",
+    re.IGNORECASE,
+)
+
+
+def starts_figure_caption(text: str) -> bool:
+    """Whether a line starts a figure caption ("Figure 9.2 Four specialist agents ...")."""
+    return bool(_FIGURE_CAPTION_START.match(text))
 
 
 def _is_sentence(text: str) -> bool:
@@ -227,6 +255,10 @@ def vector_figure_extents(
     picture is a figure by itself; it gets a region here only when something
     joined it (a picture alone is its own image block). An inline icon does
     not turn the text beside it into a figure.
+
+    A drawing with no large shape (hairline arrows, small icons) is a figure
+    when a figure caption claims it (``_captioned_drawings``). Text between a
+    figure and its caption is the figure's (``_take_text_up_to_caption``).
     """
     path_count = len(path_bboxes)
     # An image set inside a line of text (an emoji, an icon glyph) is part of
@@ -265,7 +297,8 @@ def vector_figure_extents(
             groups = merged
             changed = True
 
-    extents: list[VectorFigureExtent] = []
+    figures: list[_Group] = []
+    unclaimed: list[_Group] = []
     for group in groups:
         paths = [index for index in group.paths if index < path_count]
         pictures = [index for index in group.paths if index >= path_count and seed(all_bboxes[index])]
@@ -277,7 +310,16 @@ def vector_figure_extents(
             if not (seeds and figure_sized(_union(seeds))) and not (
                 _assembled_from_pieces(group, all_bboxes, path_count, solid) and figure_sized(group.drawing)
             ):
+                unclaimed.append(group)
                 continue
+        figures.append(group)
+    figures.extend(
+        _captioned_drawings(unclaimed, figures, text_lines, figure_sized=figure_sized, join_gap=join_gap, page_height=page_height)
+    )
+    _take_text_up_to_caption(figures, text_lines)
+
+    extents: list[VectorFigureExtent] = []
+    for group in figures:
         extent = group.extent(text_lines)
         region = _pad_clear_of_text(extent, pad, text_lines, set(group.labels), page_width, page_height)
         extents.append(
@@ -290,6 +332,205 @@ def vector_figure_extents(
             )
         )
     return extents
+
+
+# A caption with no figure within this distance has not found its drawing yet.
+FIGURE_CAPTION_GAP_PT = 36.0
+# A figure's title or legend can sit between its drawing and its caption: up to
+# this far, with nothing but such lines in between.
+FIGURE_TITLE_GAP_PT = 60.0
+
+
+def _captioned_drawings(
+    unclaimed: list[_Group],
+    figures: Sequence[_Group],
+    text_lines: Sequence[PageTextLine],
+    *,
+    figure_sized: Callable[[Bbox], bool],
+    join_gap: float,
+    page_height: float,
+) -> list[_Group]:
+    """Figures drawn without a large shape, found through their caption.
+
+    A diagram drawn only in hairlines (arrows between labels, a number line
+    with tick marks, two outlined boxes) or from small icons has no shape
+    large enough to count as a figure by itself, and a few arrows beside a
+    code listing must not count as one. A figure caption says a figure is
+    there: the drawings between the caption and the body text (or other
+    caption) above it, or else below it, are that figure together with their
+    labels, when together they are figure-sized. Drawings that cross a line
+    of body text are not part of it.
+    """
+    if not unclaimed:
+        return []
+    found: list[_Group] = []
+    claimed = list(figures)
+    remaining = list(unclaimed)
+    for block_index, caption in _figure_captions(text_lines):
+        if not remaining:
+            break
+        if any(_gap(group.extent(text_lines), caption) <= FIGURE_CAPTION_GAP_PT for group in claimed):
+            continue
+        for above in (True, False):
+            band = _caption_band(caption, block_index, text_lines, above=above, page_height=page_height)
+            if band is None:
+                continue
+            members = [
+                group
+                for group in remaining
+                if _within_band(group.extent(text_lines), band)
+                and not _intersects(group.extent(text_lines), caption)
+                and not any(
+                    line.prose and index not in group.labels and _intersects(group.drawing, line.bbox)
+                    for index, line in enumerate(text_lines)
+                )
+            ]
+            if not members:
+                continue
+            figure = _Group(
+                paths=[index for group in members for index in group.paths],
+                drawing=_union(group.drawing for group in members),
+                labels=set().union(*(group.labels for group in members)),
+                containers=[box for group in members for box in group.containers],
+            )
+            # The band is the figure's space: text in it over the drawing's width
+            # is its labels (a title above the first arrow, a note beside an axis),
+            # however far from a stroke.
+            span = _union(group.extent(text_lines) for group in members)
+            for index, line in enumerate(text_lines):
+                if line.prose or line.caption or line.margin or not _within_band(line.bbox, band):
+                    continue
+                if line.bbox[0] < span[2] and line.bbox[2] > span[0]:
+                    figure.labels.add(index)
+            _absorb_labels(figure, text_lines, join_gap)
+            if not figure_sized(figure.extent(text_lines)):
+                continue
+            found.append(figure)
+            claimed.append(figure)
+            remaining = [group for group in remaining if all(group is not member for member in members)]
+            break
+    return found
+
+
+def _figure_captions(text_lines: Sequence[PageTextLine]) -> list[tuple[int, Bbox]]:
+    """(block index, box) of each figure caption on the page, top to bottom."""
+    captions: dict[int, list[PageTextLine]] = {}
+    for line in text_lines:
+        if line.caption and not line.margin:
+            captions.setdefault(line.block_index, []).append(line)
+    found = [
+        (block_index, _union(line.bbox for line in lines))
+        for block_index, lines in captions.items()
+        if starts_figure_caption(lines[0].text)
+    ]
+    return sorted(found, key=lambda item: item[1][1])
+
+
+def _take_text_up_to_caption(figures: Sequence[_Group], text_lines: Sequence[PageTextLine]) -> None:
+    """Give a figure the text between its drawing and its caption (a title set under the drawing).
+
+    Nothing but the figure sits between a figure and its caption: a line there
+    that is not body text, over the figure's width, belongs to the figure
+    however far it is from a stroke.
+    """
+    for _block_index, caption in _figure_captions(text_lines):
+        best: tuple[float, _Group, Bbox] | None = None
+        for group in figures:
+            extent = group.extent(text_lines)
+            if extent[0] >= caption[2] or extent[2] <= caption[0]:
+                continue
+            gap = caption[1] - extent[3] if extent[3] <= caption[1] + 1.0 else extent[1] - caption[3]
+            if 0.0 <= gap <= FIGURE_TITLE_GAP_PT and (best is None or gap < best[0]):
+                best = (gap, group, extent)
+        if best is None:
+            continue
+        _gap_size, group, extent = best
+        top, bottom = (extent[3], caption[1]) if extent[3] <= caption[1] + 1.0 else (caption[3], extent[1])
+        between = [
+            index
+            for index, line in enumerate(text_lines)
+            if index not in group.labels
+            and line.bbox[1] >= top - 1.0
+            and line.bbox[3] <= bottom + 1.0
+            and line.bbox[0] < extent[2]
+            and line.bbox[2] > extent[0]
+        ]
+        # Body text or another caption in between: the caption is not this figure's.
+        if any(text_lines[index].prose or text_lines[index].caption or text_lines[index].margin for index in between):
+            continue
+        group.labels.update(
+            index for index in between if text_lines[index].bbox[0] >= extent[0] - 1.0 and text_lines[index].bbox[2] <= extent[2] + 1.0
+        )
+
+
+def _caption_band(
+    caption: Bbox,
+    caption_block: int,
+    text_lines: Sequence[PageTextLine],
+    *,
+    above: bool,
+    page_height: float,
+) -> tuple[float, float] | None:
+    """The vertical span from the nearest body text or caption above ``caption`` down to its bottom (or up).
+
+    The span keeps the caption's own lines, so a caption set beside its figure,
+    level with the figure's bottom (or top), bounds it too. Only lines
+    overlapping the caption horizontally bound the span: body text in a
+    column beside a side-by-side figure does not.
+    """
+    band = page_height * MARGIN_BAND_RATIO
+    limit = band if above else page_height - band
+    for line in text_lines:
+        if line.block_index == caption_block or not (line.prose or line.caption or line.margin):
+            continue
+        if line.bbox[0] >= caption[2] or line.bbox[2] <= caption[0]:
+            continue
+        if above and line.bbox[3] <= caption[1] + 1.0:
+            limit = max(limit, line.bbox[3])
+        elif not above and line.bbox[1] >= caption[3] - 1.0:
+            limit = min(limit, line.bbox[1])
+    top, bottom = (limit, caption[3]) if above else (caption[1], limit)
+    return (top, bottom) if bottom > top else None
+
+
+def _within_band(bbox: Bbox, band: tuple[float, float]) -> bool:
+    return bbox[1] >= band[0] - 1.0 and bbox[3] <= band[1] + 1.0
+
+
+def figure_label_blocks(
+    block_bboxes: Sequence[Bbox],
+    text_lines: Sequence[PageTextLine],
+    extents: Sequence[VectorFigureExtent],
+) -> list[bool]:
+    """For each text block (by its bbox): whether it holds only one figure's labels.
+
+    A block is a figure's labels when every text line in it (by the line's
+    center) is a label line of the same measured figure. The measurement
+    already told labels from body prose (width, body font size, sentences,
+    enclosing shapes), so a block of labels is part of the picture however
+    long it is or however much its joined text reads like a sentence. A block
+    that mixes labels with a line of body text is not.
+    """
+    owner: dict[int, int] = {}
+    for number, extent in enumerate(extents):
+        for index in extent.label_line_indices:
+            owner.setdefault(index, number)
+    result: list[bool] = []
+    for bbox in block_bboxes:
+        members = [
+            index
+            for index, line in enumerate(text_lines)
+            if _contains(bbox, _center_box(line.bbox), tolerance=0.5)
+        ]
+        owners = {owner.get(index) for index in members}
+        result.append(bool(members) and None not in owners and len(owners) == 1)
+    return result
+
+
+def _center_box(bbox: Bbox) -> Bbox:
+    x = (bbox[0] + bbox[2]) / 2
+    y = (bbox[1] + bbox[3]) / 2
+    return (x, y, x, y)
 
 
 def _is_inline_glyph(bbox: Bbox, text_lines: Sequence[PageTextLine]) -> bool:
@@ -357,6 +598,8 @@ def _is_candidate_path(bbox: Bbox, page_width: float, page_height: float) -> boo
         return False  # full-width rule
     if height >= page_height * 0.92 and width <= page_width * 0.035:
         return False  # full-height rule
+    if bleeds_off_page(bbox, page_width, page_height):
+        return False  # a panel printed to the page edges: the page's background
     return not in_margin_band(bbox, page_height)
 
 
