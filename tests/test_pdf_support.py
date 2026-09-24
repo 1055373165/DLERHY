@@ -9419,7 +9419,7 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                 refreshed_asset = output_dir / asset_map[block_id]
                 self.assertEqual(refreshed_asset.read_bytes(), b"fresh-hires-pdf-crop")
                 self.assertEqual(Path(reloaded_bundle.document_images[0].storage_path).read_bytes(), b"fresh-hires-pdf-crop")
-                self.assertEqual(reloaded_bundle.document_images[0].metadata_json["materialized_version"], 3)
+                self.assertEqual(reloaded_bundle.document_images[0].metadata_json["materialized_version"], 4)
                 self.assertGreaterEqual(reloaded_bundle.document_images[0].metadata_json["materialized_render_scale"], 2.0)
         finally:
             if original_fitz is None:
@@ -9568,7 +9568,7 @@ class PdfDocumentImagePersistenceTests(unittest.TestCase):
                     reloaded_image.metadata_json["original_asset_availability"],
                     "single_embedded_image",
                 )
-                self.assertEqual(reloaded_image.metadata_json["materialized_version"], 3)
+                self.assertEqual(reloaded_image.metadata_json["materialized_version"], 4)
                 self.assertNotIn("materialized_render_scale", reloaded_image.metadata_json)
         finally:
             if original_fitz is None:

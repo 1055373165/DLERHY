@@ -49,6 +49,17 @@ class _StubBlock:
         return [{"page_number": self.page_number, "bbox": list(self.bbox)}]
 
 
+@dataclass
+class _MultiRegionBlock(_StubBlock):
+    """A block merged from several separate text runs, each with its region."""
+
+    regions: list[tuple[float, float, float, float]] = field(default_factory=list)
+
+    @property
+    def bbox_regions(self) -> list[dict[str, Any]]:
+        return [{"page_number": self.page_number, "bbox": list(region)} for region in self.regions]
+
+
 def _image_block(
     bbox: tuple[float, float, float, float],
     *,
@@ -86,6 +97,48 @@ def _text_block(
         font_size_avg=font_size,
         anchor=anchor,
     )
+
+
+class FigureRegionMembershipTests(unittest.TestCase):
+    """What a figure takes in and what it leaves to the page."""
+
+    def test_running_header_inside_the_figure_box_is_not_a_label(self) -> None:
+        header = _text_block("7 Curse of the models", (200.0, 25.0, 474.0, 36.0), anchor="hdr")
+        header.role = "header"
+        blocks = [
+            _image_block((73.0, 14.0, 490.0, 300.0), anchor="img"),
+            header,
+            _text_block("Causal Language Modeling", (133.0, 110.0, 237.0, 122.0), anchor="lbl"),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(report.clusters[0].inline_label_indices, (2,))
+
+    def test_labels_merged_into_one_sentence_like_block_are_still_labels(self) -> None:
+        regions = [(309.0, 379.0, 326.0, 389.0), (254.0, 380.0, 268.0, 389.0), (108.0, 423.0, 180.0, 433.0)]
+        labels = _MultiRegionBlock(
+            role="body",
+            block_type=BlockType.PARAGRAPH,
+            text="walks 0.02 0.1 applauds 0.4 teaches The teacher ?",
+            bbox=regions[0],
+            anchor="labels",
+            regions=regions,
+        )
+        report = cluster_figure_regions([_image_block((99.0, 370.0, 463.0, 486.0)), labels])
+        self.assertEqual(report.clusters[0].inline_label_indices, (1,))
+        self.assertLessEqual(report.clusters[0].bbox[0], 108.0)
+
+    def test_caption_in_the_margin_beside_the_figure_is_linked(self) -> None:
+        blocks = [
+            _image_block((99.0, 362.0, 321.0, 488.0), anchor="img"),
+            _text_block(
+                "Figure 9.7 Sequential Workflow: All processes accumulate in context.",
+                (335.0, 455.0, 457.0, 485.0),
+                block_type=BlockType.CAPTION,
+                anchor="cap",
+            ),
+        ]
+        report = cluster_figure_regions(blocks)
+        self.assertEqual(report.clusters[0].caption_index, 1)
 
 
 class FigureClusteringTests(unittest.TestCase):

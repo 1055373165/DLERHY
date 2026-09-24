@@ -21,6 +21,12 @@ from book_agent.ingestion.pdf.classify import (
     _page_has_title_overlap_signal,
     _trailing_reference_page_count,
 )
+from book_agent.ingestion.pdf.figure_extent import (
+    PageTextLine,
+    page_text_lines,
+    split_extended_drawings,
+    vector_figure_extents,
+)
 from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
@@ -99,6 +105,22 @@ def _visible_image_bbox(
     if right - left < _MIN_VISIBLE_IMAGE_SIDE or bottom - top < _MIN_VISIBLE_IMAGE_SIDE:
         return None
     return (left, top, right, bottom)
+
+
+def _is_closed_shape(drawing: dict[str, Any]) -> bool:
+    """A filled path or a rectangle, as opposed to an open stroked line."""
+    if drawing.get("fill") is not None or drawing.get("closePath"):
+        return True
+    return any(item and item[0] in {"re", "qu"} for item in drawing.get("items") or ())
+
+
+def _union_bbox(bboxes: list[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    return (
+        min(bbox[0] for bbox in bboxes),
+        min(bbox[1] for bbox in bboxes),
+        max(bbox[2] for bbox in bboxes),
+        max(bbox[3] for bbox in bboxes),
+    )
 
 
 def _is_background_panel(
@@ -520,10 +542,14 @@ class PyMuPDFTextExtractor:
                     )
                     line_bboxes_by_block[id(blocks[-1])] = line_bboxes
 
+                visible_drawing_rects: list[tuple[float, float, float, float] | None] | None
                 try:
-                    drawings = page.get_drawings()
+                    drawings, visible_drawing_rects = split_extended_drawings(page.get_drawings(extended=True))
                 except Exception:
-                    drawings = []
+                    try:
+                        drawings, visible_drawing_rects = page.get_drawings(), None
+                    except Exception:
+                        drawings, visible_drawing_rects = [], None
                 blocks = _split_vector_bullet_blocks(blocks, line_bboxes_by_block, drawings)
                 blocks = _split_enumerated_line_blocks(blocks, line_bboxes_by_block)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
@@ -533,6 +559,9 @@ class PyMuPDFTextExtractor:
                         page_number=page_index + 1,
                         start_block_number=len(text_dict.get("blocks", [])) + 1,
                         drawings=drawings,
+                        visible_rects=visible_drawing_rects,
+                        text_lines=page_text_lines(text_dict, float(page.rect.width), float(page.rect.height)),
+                        image_bboxes=[image_block.bbox for image_block in image_blocks],
                     )
                 )
 
@@ -576,7 +605,16 @@ class PyMuPDFTextExtractor:
         page_number: int,
         start_block_number: int,
         drawings: list[dict[str, Any]] | None = None,
+        visible_rects: list[tuple[float, float, float, float] | None] | None = None,
+        text_lines: list[PageTextLine] | None = None,
+        image_bboxes: list[tuple[float, float, float, float]] | None = None,
     ) -> list[PdfImageBlock]:
+        """Blocks for the page regions of vector figures and of labelled images.
+
+        A region covers the figure's paths, the embedded images they touch
+        and the text labels on or beside them. A plain image with nothing
+        around it needs no extra block: its own image block is its region.
+        """
         if drawings is None:
             try:
                 drawings = page.get_drawings()
@@ -585,28 +623,36 @@ class PyMuPDFTextExtractor:
 
         page_width = float(page.rect.width)
         page_height = float(page.rect.height)
-        drawing_bboxes: list[tuple[float, float, float, float]] = []
-        for drawing in drawings:
-            rect = drawing.get("rect")
+        path_bboxes: list[tuple[float, float, float, float]] = []
+        path_drawings: list[dict[str, Any]] = []
+        for index, drawing in enumerate(drawings):
+            rect = visible_rects[index] if visible_rects is not None and index < len(visible_rects) else drawing.get("rect")
             if rect is None:
                 continue
-            bbox = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
-            if not self._looks_like_vector_drawing_figure_bbox(bbox, page_width, page_height):
-                continue
-            drawing_bboxes.append(bbox)
+            path_bboxes.append((float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])))
+            path_drawings.append(drawing)
 
+        extents = vector_figure_extents(
+            path_bboxes,
+            seed=lambda bbox: self._looks_like_vector_drawing_figure_bbox(bbox, page_width, page_height),
+            figure_sized=lambda bbox: self._is_figure_sized_drawing(bbox, page_width, page_height),
+            is_background=lambda indices: _is_background_panel(
+                _union_bbox([path_bboxes[index] for index in indices]),
+                [path_drawings[index] for index in indices],
+            ),
+            solid=[_is_closed_shape(drawing) for drawing in path_drawings],
+            image_bboxes=image_bboxes or (),
+            text_lines=text_lines or (),
+            page_width=page_width,
+            page_height=page_height,
+        )
         image_blocks: list[PdfImageBlock] = []
-        clusters = [
-            bbox
-            for bbox in self._cluster_vector_drawing_bboxes(drawing_bboxes, page_width, page_height)
-            if not _is_background_panel(bbox, drawings)
-        ]
-        for offset, bbox in enumerate(clusters):
+        for extent in sorted(extents, key=lambda item: (round(item.region[1], 2), round(item.region[0], 2))):
             image_blocks.append(
                 PdfImageBlock(
                     page_number=page_number,
-                    block_number=start_block_number + offset,
-                    bbox=self._expand_vector_drawing_bbox(bbox, page_width, page_height),
+                    block_number=start_block_number + len(image_blocks),
+                    bbox=extent.region,
                     image_type="vector_drawing",
                 )
             )
@@ -690,58 +736,17 @@ class PyMuPDFTextExtractor:
             return False
         return True
 
-    def _cluster_vector_drawing_bboxes(
-        self,
-        bboxes: list[tuple[float, float, float, float]],
-        page_width: float,
-        page_height: float,
-    ) -> list[tuple[float, float, float, float]]:
-        if not bboxes:
-            return []
-
-        clusters: list[tuple[float, float, float, float]] = []
-        x_threshold = max(24.0, page_width * 0.08)
-        y_threshold = max(24.0, page_height * 0.08)
-
-        for bbox in sorted(bboxes, key=lambda item: (round(item[1], 2), round(item[0], 2))):
-            merged = False
-            for index, cluster in enumerate(clusters):
-                horizontal_gap = max(cluster[0] - bbox[2], bbox[0] - cluster[2], 0.0)
-                vertical_gap = max(cluster[1] - bbox[3], bbox[1] - cluster[3], 0.0)
-                center_delta_x = abs(((cluster[0] + cluster[2]) / 2.0) - ((bbox[0] + bbox[2]) / 2.0))
-                if horizontal_gap <= x_threshold and vertical_gap <= y_threshold and center_delta_x <= page_width * 0.45:
-                    clusters[index] = self._union_drawing_bbox(cluster, bbox)
-                    merged = True
-                    break
-            if not merged:
-                clusters.append(bbox)
-
-        filtered_clusters: list[tuple[float, float, float, float]] = []
-        min_cluster_area = max(12000.0, page_width * page_height * 0.018)
-        for cluster in clusters:
-            width = max(0.0, cluster[2] - cluster[0])
-            height = max(0.0, cluster[3] - cluster[1])
-            if width * height < min_cluster_area:
-                continue
-            if width < page_width * 0.22 and height < page_height * 0.12:
-                continue
-            filtered_clusters.append(cluster)
-        return filtered_clusters
-
-    def _expand_vector_drawing_bbox(
+    def _is_figure_sized_drawing(
         self,
         bbox: tuple[float, float, float, float],
         page_width: float,
         page_height: float,
-    ) -> tuple[float, float, float, float]:
-        x_pad = min(48.0, page_width * 0.08)
-        y_pad = min(40.0, page_height * 0.06)
-        return (
-            max(0.0, bbox[0] - x_pad),
-            max(0.0, bbox[1] - y_pad),
-            min(page_width, bbox[2] + x_pad),
-            min(page_height, bbox[3] + y_pad),
-        )
+    ) -> bool:
+        width = max(0.0, bbox[2] - bbox[0])
+        height = max(0.0, bbox[3] - bbox[1])
+        if width * height < max(12000.0, page_width * page_height * 0.018):
+            return False
+        return not (width < page_width * 0.22 and height < page_height * 0.12)
 
     def _union_drawing_bbox(
         self,
