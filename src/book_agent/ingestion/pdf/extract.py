@@ -45,6 +45,36 @@ def _span_is_bold(span: dict[str, Any]) -> bool:
     return bool(int(span.get("flags", 0) or 0) & 16) or bool(_BOLD_FONT_NAME.search(str(span.get("font", ""))))
 
 
+_PICTOGRAPH_FONT_NAME = re.compile(r"wingding|dingbat|webding", re.IGNORECASE)
+_SYMBOL_FONT_NAME = re.compile(r"(?:^|[+,\-])symbol(?:mt|ps)?\b", re.IGNORECASE)
+_SYMBOL_FONT_MATH_GLYPHS = frozenset("+-=<>±×÷∑∏∫√∞≤≥≈≠∂∆∇∈∉∩∪⊂⊃")
+
+
+def _is_symbol_font_bullet(span: dict[str, Any]) -> bool:
+    """A lone glyph from a pictograph/symbol font that starts a line is a list bullet.
+
+    Such fonts have no Unicode mapping for their glyphs, so the text layer
+    decodes the bullet as whatever character shares its code (Wingdings 2's
+    square bullet arrives as "¡", ZapfDingbats' dot as "l").
+    """
+    glyph = str(span.get("text") or "").strip()
+    if len(glyph) != 1:
+        return False
+    font = str(span.get("font") or "")
+    if _PICTOGRAPH_FONT_NAME.search(font):
+        return True
+    return bool(_SYMBOL_FONT_NAME.search(font)) and not glyph.isalnum() and glyph not in _SYMBOL_FONT_MATH_GLYPHS
+
+
+def _line_spans_with_bullet_marker(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The line's spans, with a leading symbol-font bullet replaced by "• "."""
+    visible = [index for index, span in enumerate(spans) if str(span.get("text") or "").strip()]
+    if len(visible) < 2 or not _is_symbol_font_bullet(spans[visible[0]]):
+        return spans
+    marker = {**spans[visible[0]], "text": "• "}
+    return [*spans[: visible[0]], marker, *spans[visible[0] + 1 :]]
+
+
 _MIN_RULED_TABLE_CELLS = 4
 _MAX_RULED_TABLE_AVG_CELL_CHARS = 80
 
@@ -340,7 +370,7 @@ class PyMuPDFTextExtractor:
                         parts: list[str] = []
                         size_weights: dict[float, int] = {}
                         line_bold = True
-                        for span in line.get("spans", []):
+                        for span in _line_spans_with_bullet_marker(list(line.get("spans", []))):
                             text = span.get("text", "")
                             if not text:
                                 continue

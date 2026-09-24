@@ -184,5 +184,37 @@ class PartedBookChapterTest(unittest.TestCase):
         self.assertEqual(stray_numbers, [])
 
 
+def _write_symbol_bullet_page(path: Path) -> None:
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    page.insert_text((72, 80), "Summary", fontname="hebo", fontsize=12.5)
+    items = ["RAG gives a model facts it was never trained on.", "Chunking splits long documents into passages."]
+    for index, item in enumerate(items):
+        y = 104 + 20 * index
+        # Wingdings-style bullet: a symbol-font glyph that decodes to an unrelated character.
+        page.insert_text((80, y), "¡", fontname="symb", fontsize=8.5)
+        page.insert_text((92, y), item, fontname="tiro", fontsize=10)
+    page.insert_text((80, 164), "l", fontname="zadb", fontsize=8.5)
+    page.insert_text((92, 164), "Dingbat bullets are list markers as well.", fontname="tiro", fontsize=10)
+    _body(page, 200, count=2)
+    document.save(path)
+
+
+class SymbolFontBulletTest(unittest.TestCase):
+    def test_symbol_font_bullet_becomes_a_list_marker(self) -> None:
+        parsed = _parse(_write_symbol_bullet_page, "bullets.pdf")
+        blocks = [(block.block_type, block.text) for chapter in parsed.chapters for block in chapter.blocks]
+        self.assertEqual(
+            [text for block_type, text in blocks if block_type == BlockType.LIST_ITEM.value],
+            [
+                "• RAG gives a model facts it was never trained on.",
+                "• Chunking splits long documents into passages.",
+                "• Dingbat bullets are list markers as well.",
+            ],
+        )
+        self.assertFalse([text for _block_type, text in blocks if "¡" in text])
+        self.assertIn("Summary", [text for _block_type, text in blocks])
+
+
 if __name__ == "__main__":
     unittest.main()
